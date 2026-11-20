@@ -89,7 +89,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         } catch (error) {
           result = error;
         }
-        if (result.success || !this.isRetryableOperationPersistError(result)) {
+        if (result.success === true || !this.isRetryableOperationPersistError(result)) {
           return result;
         }
         const elapsedMs = this.timeSource.now() - startedAt;
@@ -229,7 +229,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       while (true) {
         const result = await this.executeReplicaOperationGatewayMutationAttempt(
           mutation, options, fallback, retryAttempt);
-        if (result.success) {
+        if (result.success === true) {
           return result;
         }
         const step = await this.resolveOperationMutationRetryableStep(result, {
@@ -722,13 +722,22 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     extractMutationChangeCount(result) {
-      const candidate = Number(
-        result?.changes ??
-          result?.affectedRows ??
-          result?.partitionResult?.changes ??
-          result?.partitionResult?.affectedRows,
-      );
-      return Number.isFinite(candidate) ? candidate : null;
+      if (!result || typeof result !== 'object') return null;
+      const partitionDescriptor = Object.getOwnPropertyDescriptor(result, 'partitionResult');
+      if (partitionDescriptor && !Object.hasOwn(partitionDescriptor, 'value')) return null;
+      const records = [result, partitionDescriptor?.value];
+      const counts = [];
+      for (const record of records) {
+        if (!record || typeof record !== 'object') continue;
+        for (const field of ['changes', 'affectedRows']) {
+          const descriptor = Object.getOwnPropertyDescriptor(record, field);
+          if (!descriptor) continue;
+          if (!Object.hasOwn(descriptor, 'value') ||
+              !Number.isSafeInteger(descriptor.value) || descriptor.value < 0) return null;
+          counts.push(descriptor.value);
+        }
+      }
+      return counts.length > 0 && counts.every((count) => count === counts[0]) ? counts[0] : null;
     }
   }
 

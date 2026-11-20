@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
+import {buildOperationTransitionOutcome, terminalOperationReconcileOutcome} from './operation-workflow-transition-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
@@ -49,9 +51,6 @@ import {
 } from './operation-workflow-recovery-reconcile-dispatch-pending.js';
 
 import {
-  releaseOperationLedgerSelfMoveHoldAfterTerminal,
-} from './operation-workflow-dispatch-ledger-self-move-gate.js';
-import {
   completeGrowthPromoteOperation,
   reconcileGrowthPromoteLifecycle,
 } from './operation-workflow-growth-promote.js';
@@ -96,16 +95,9 @@ function recordIntentOnCurrentStoppingEntry(stepsHistory, stepMetadata) {
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
   constructor(options) {
     super(options);
-    this.releasePlacementHold = options?.releasePlacementHold || null;
     // A new owner instance begins its REPLACE-owner session: an operation
     // whose step began earlier may have lost its attempt state (BR10).
     startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
-  }
-
-  async releasePlacementHoldIfNeeded(operation) {
-    if (!operation) return;
-    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
-    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
   }
 
   async completeOperation(operation) {
@@ -597,7 +589,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     try {
       if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
           await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-            undefined, {stepMetadata, requireDurable: true}) &&
+            undefined, {stepMetadata, requireDurable: true}) ===
+              OPERATION_RECONCILE_OUTCOME.ADVANCED &&
           replaceIntentEntryOf(operation)) {
         // This owner's own durable transition committed the intent entry.
         return true;
@@ -630,7 +623,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         return false;
       }
       if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
-        undefined, {stepMetadata, requireDurable: true}) &&
+        undefined, {stepMetadata, requireDurable: true}) === OPERATION_RECONCILE_OUTCOME.ADVANCED &&
           replaceIntentEntryOf(durable)) {
         adoptDurableReplaceIntent(operation, durable);
         return true;
@@ -649,9 +642,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     const persisted = await this.repository.persistOperationUpdate(recorded, {
       ...this.buildOperationTransitionPersistOptions(),
       expectedWorkflowStep: WORKFLOW_STEP.STOPPING,
-      returnDisposition: true,
     });
-    if (persisted?.persisted === false) {
+    const outcome = buildOperationTransitionOutcome(persisted,
+      {repository: this.repository, requestedOperation: recorded});
+    if (!outcome.committed) {
       return false;
     }
     adoptDurableReplaceIntent(operation, recorded);
@@ -666,18 +660,27 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @return {Promise<Object>}
    */
   async runReplaceStoppingOwner(operation) {
+    if (this.repository.isOperationTerminal(operation)) {
+      return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation),
+        {operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED});
+    }
     const entryLevel = captureReplaceOwnerLevel(this, operation);
     const outcome = await reconcileReplaceStoppingOwner(
       this, operation, {entryLevel});
     if (outcome && typeof outcome === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
       return outcome;
     }
-    // Progress completed or failed the operation; a wait keeps its source
-    // removal in progress under the same owner.
+    if (this.repository.isOperationTerminal(operation)) {
+      if (terminalOperationReconcileOutcome(operation) === OPERATION_RECONCILE_OUTCOME.FAILED) {
+        return this.buildFailedOperationResult(operation.operationId, operation.errorMessage,
+          {reconcileOutcome: OPERATION_RECONCILE_OUTCOME.FAILED});
+      }
+      return this.buildSuccessfulOperationResult(operation.operationId,
+        {status: ReplicaOperationResponseStatus.COMPLETED,
+          reconcileOutcome: OPERATION_RECONCILE_OUTCOME.COMPLETED});
+    }
     return this.buildSuccessfulOperationResult(operation.operationId, {
-      status: outcome === true ?
-        ReplicaOperationResponseStatus.COMPLETED :
-        OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+      status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
     });
   }
 

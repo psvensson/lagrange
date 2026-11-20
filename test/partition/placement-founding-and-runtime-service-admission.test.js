@@ -1,3 +1,6 @@
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
 // Witness tests for WP-F (FOUND, RUNTIME_SERVICE, and ordinary PARTITION
 // production routing through PLACEMENT_ADMIT on replica_operations-p1) and
 // WP-C/WP-D partition/workflow membership administration wiring.
@@ -157,7 +160,9 @@ function attachAutoCommitLoop(leader, proposed) {
 
 function createAuthoritativeLedgerRepository(leader) {
   let casCounter = 0;
-  return {
+  // Retain the repository owner's exact projection comparison.
+  return Object.assign(Object.create(ReplicaOperationRepository.prototype), {
+    nodeId: NODE.A,
     getInFlightOperations: async () => [],
     getExistingReplicaRows: async () => [],
     queryIncompleteOperations: async () => [],
@@ -179,10 +184,10 @@ function createAuthoritativeLedgerRepository(leader) {
       if (!current ||
           current.workflow_step !== WORKFLOW_STEP.PENDING ||
           current.steps_history !== expectedSerialized) {
-        return {
-          released: false,
-          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.CONFLICT,
-        };
+        return buildOperationUpdateOutcome({
+          persisted: false, operation: null,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+        });
       }
       casCounter += 1;
       commitLedgerStatement(
@@ -198,18 +203,20 @@ function createAuthoritativeLedgerRepository(leader) {
           expectedSerialized,
         ],
       );
-      return {
-        released: true,
+      const row = leader.db.prepare(
+        'SELECT * FROM replica_operations WHERE operation_id = ?').get(released.operationId);
+      return buildOperationUpdateOutcome({
+        persisted: true, operation: mapLedgerRowToOperation(row),
         disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-      };
+      });
     },
     async persistOperationUpdate(released, options = {}) {
       return this.compareAndSetPendingBootstrapTopologyRelease(
         released,
-        options.expectedStepsHistory || [],
+        options.expectedStepsHistory,
       );
     },
-  };
+  });
 }
 
 function createCoordinatorWithLedger(leader, options = {}) {

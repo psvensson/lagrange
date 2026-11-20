@@ -1,3 +1,8 @@
+import {isDeepStrictEqual} from 'node:util';
+import {
+  assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
+  invalidOperationPersistenceOutcome,
+} from './replica-operation-update-outcome.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
@@ -34,12 +39,6 @@ const EXPECTED_STEPS_HISTORY_REQUIRES_STEP_CAS =
   'expectedStepsHistory refines a non-terminal expected-step CAS';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
-function buildOperationUpdatePersistResult(options, persisted, disposition, operation) {
-  if (options?.returnDisposition !== true) {
-    return persisted;
-  }
-  return Object.freeze({persisted, disposition, operation: operation || null});
-}
 
 // A losing terminal write adopts the winning terminal outcome (audit
 // finding 6): the in-memory projection mirrors the durable winner so no
@@ -48,13 +47,9 @@ function adoptWinningTerminalOperationOutcome(operation, winningTerminal) {
   if (!operation || !winningTerminal) {
     return;
   }
-  operation.status = winningTerminal.status;
-  operation.workflowStep = winningTerminal.workflowStep;
-  operation.completedAt = winningTerminal.completedAt;
-  operation.errorMessage = winningTerminal.errorMessage;
-  if (Number.isFinite(winningTerminal.updatedAt)) {
-    operation.updatedAt = winningTerminal.updatedAt;
-  }
+  assertOperationUpdateRecord(winningTerminal, {terminal: true});
+  assertOperationUpdateSubject(operation, winningTerminal);
+  Object.assign(operation, structuredClone(winningTerminal));
 }
 
 // The observed-history CAS operand, serialized exactly as the row's
@@ -101,6 +96,35 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
   } = options;
 
   class ReplicaOperationRepositoryMutationUpdateMethods {
+    isReplicaOperationUpdateSatisfied(expected, observed) {
+      return this.isReplicaOperationVisibilitySatisfied(expected, observed) &&
+        isDeepStrictEqual(this.buildReplicaOperationUpdateData(expected),
+          this.buildReplicaOperationUpdateData(observed));
+    }
+
+    /** Resolve existing durable truth before a workflow prepares a new effect. */
+    async observeOperationTransition(operation, step, options = {}) {
+      const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(
+        operation, {requireAbsenceConfirmation: true});
+      const durable = observation.operation;
+      if (!durable) return {...observation, outcome: null};
+      assertOperationUpdateRecord(durable);
+      assertOperationUpdateSubject(operation, durable);
+      const terminal = durable.completedAt !== null;
+      const exact = durable.workflowStep === step && (options.exactRequest === true ?
+        this.isReplicaOperationUpdateSatisfied(operation, durable) :
+        options.terminalTransition !== true || options.stepMetadata === undefined &&
+          durable.errorMessage === options.terminalErrorMessage);
+      const replay = exact && (options.terminalTransition !== true || terminal);
+      const disposition = replay ? REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY :
+        REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED;
+      const unresolvedSameStep = options.exactRequest === true && durable.workflowStep === step;
+      return {...observation, outcome: terminal || replay ? buildOperationUpdateOutcome({
+        persisted: replay, disposition, operation: durable,
+      }) : unresolvedSameStep ? buildOperationUpdateOutcome({persisted: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null}) : null};
+    }
+
     // Post-write witness + (optional) authoritative visibility confirmation
     // for a persisted update that changed rows.
     // Record the owner-persisted-transition witness, confirm persistence
@@ -138,6 +162,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     }
 
     async persistOperationUpdate(operation, options = {}) {
+      assertOperationUpdateRecord(operation, {terminal: options.terminalTransition === true});
       const expectedWorkflowStep = this.normalizeExpectedWorkflowStep(options);
       // Terminal-transition writes deliberately carry NO expected-step CAS: the
       // owner's terminal truth must overwrite any lagging non-terminal durable
@@ -164,12 +189,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             operation,
             conflictingTerminal,
           );
-          return buildOperationUpdatePersistResult(
-            options,
-            false,
-            REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
-            conflictingTerminal,
-          );
+          return buildOperationUpdateOutcome({
+            persisted: false,
+            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+            operation: conflictingTerminal,
+          });
         }
       }
       if (
@@ -178,12 +202,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           expectedWorkflowStep,
         )
       ) {
-        return buildOperationUpdatePersistResult(
-          options,
-          false,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-          null,
-        );
+        return buildOperationUpdateOutcome({
+          persisted: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+          operation: null,
+        });
       }
       const result = await this.executeReplicaOperationGatewayMutationWithRetry(
         {
@@ -209,7 +232,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           disableSystemWriteSession: options.disableSystemWriteSession === true,
           mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
           onRetryableFailure: (errorResult) =>
-            this.recoverPersistedReplicaOperationMutation(
+            this.recoverPersistedReplicaOperationUpdate(
               operation,
               errorResult,
             ),
@@ -232,14 +255,13 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         },
       );
       if (result.admissionRefused === true) {
-        return buildOperationUpdatePersistResult(
-          options,
-          false,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-          null,
-        );
+        return buildOperationUpdateOutcome({
+          persisted: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+          operation: null,
+        });
       }
-      if (!result.success) {
+      if (result.success !== true) {
         return this.resolveFailedOperationUpdateResult(
           operation,
           result,
@@ -248,30 +270,38 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       }
       if (result.recoveredAfterRetryableFailure === true) {
         this.syncIncompleteOperationObservation(operation);
-        return buildOperationUpdatePersistResult(
-          options,
-          true,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED,
+        return buildOperationUpdateOutcome({
+          persisted: true,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED,
           operation,
-        );
+        });
       }
       const changeCount = this.extractMutationChangeCount(result);
-      if (changeCount !== null && changeCount <= 0) {
+      if (changeCount === null) return this.resolveUncountedOperationUpdate(operation);
+      if (changeCount <= 0) {
         if (expectedWorkflowStep || terminalTransition) {
           return this.resolveZeroChangeOperationUpdate(
             operation,
             expectedWorkflowStep,
-            {terminalTransition, resultOptions: options},
+            {terminalTransition},
           );
         }
-        return buildOperationUpdatePersistResult(
-          options,
-          false,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-          null,
-        );
+        return buildOperationUpdateOutcome({
+          persisted: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+          operation: null,
+        });
       }
       return this.confirmPersistedOperationUpdate(operation, options);
+    }
+
+    async resolveUncountedOperationUpdate(operation) {
+      const observation = await this.observeOperationTransition(operation, operation.workflowStep,
+        {exactRequest: true});
+      // An absent count proves no new write. A separate authority observation
+      // may prove replay or another winner; uncertainty retains the obligation.
+      return observation.outcome || buildOperationUpdateOutcome({persisted: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
     }
 
     // An expected-step CAS write pins the step in the WHERE clause (and the
@@ -300,25 +330,39 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     }
 
     async confirmPersistedOperationUpdate(operation, options) {
-      if (options.confirmPersistence === false) {
-        this.recordOwnerPersistedTransitionVisibilityWitness(operation);
-        this.syncIncompleteOperationObservation(operation);
+      // The changed-row result proves a write occurred. Its returned winner
+      // must come from authority, including fields not changed by this UPDATE.
+      try {
         await this.touchOperationOwnerLeaseWhenRequested(operation, options);
-        return buildOperationUpdatePersistResult(
-          options,
-          true,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-          operation,
-        );
+        const visibility = await this.confirmPersistenceThroughWitness(operation);
+        const observed = visibility?.operation;
+        if (!observed || visibility.confirmationState !==
+            REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED) {
+          const error = new Error('Committed operation update confirmation is unresolved');
+          error.code = 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED';
+          error.deferredOutcome = visibility?.deferredOutcome;
+          error.deferRetry = true;
+          error.retryAfterMs = visibility?.deferredOutcome?.retryAfterMs;
+          throw error;
+        }
+        assertOperationUpdateRecord(observed);
+        assertOperationUpdateSubject(operation, observed);
+        const exact = this.isReplicaOperationUpdateSatisfied(operation, observed);
+        if (!exact && observed.completedAt === null) {
+          throw invalidOperationPersistenceOutcome('confirmation does not prove the requested write');
+        }
+        return buildOperationUpdateOutcome({
+          persisted: exact,
+          disposition: exact ? REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED :
+            REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+          operation: observed,
+        });
+      } catch (error) {
+        // Preserve this fact separately from whether its resulting state is
+        // currently observable. The workflow retains the unresolved obligation.
+        error.operationWriteCommitted = true;
+        throw error;
       }
-      await this.confirmPersistenceThroughWitness(operation);
-      await this.touchOperationOwnerLeaseWhenRequested(operation, options);
-      return buildOperationUpdatePersistResult(
-        options,
-        true,
-        REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-        operation,
-      );
     }
 
     // The owner-lease touch is opt-in per write (renewOwnerLease: true): only
@@ -380,11 +424,24 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       }
     }
 
+    async recoverPersistedReplicaOperationUpdate(operation, errorResult) {
+      const observation =
+        await this.observeRetryableReplicaOperationMutation(operation, errorResult);
+      const observed = observation?.operation;
+      if (!observed) return false;
+      assertOperationUpdateRecord(observed);
+      assertOperationUpdateSubject(operation, observed);
+      if (!this.isReplicaOperationUpdateSatisfied(operation, observed)) return false;
+      this.emitReplicaOperationPersistenceDivergence(observed);
+      Object.assign(operation, structuredClone(observed));
+      return true;
+    }
+
     // A failed gateway mutation either recovers through the already-applied
     // witness (the write landed despite the retryable failure) or escalates.
-    async resolveFailedOperationUpdateResult(operation, result, options = {}) {
+    async resolveFailedOperationUpdateResult(operation, result) {
       const recoveredPersistedMutation =
-        await this.recoverPersistedReplicaOperationMutation(
+        await this.recoverPersistedReplicaOperationUpdate(
           operation,
           result,
         );
@@ -397,12 +454,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         throw persistError;
       }
       this.syncIncompleteOperationObservation(operation);
-      return buildOperationUpdatePersistResult(
-        options,
-        true,
-        REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED,
+      return buildOperationUpdateOutcome({
+        persisted: true,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED,
         operation,
-      );
+      });
     }
 
     // Guarded (expected-step or terminal) update that changed zero rows: the
@@ -417,21 +473,19 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       options = {},
     ) {
       const terminalTransition = options.terminalTransition === true;
-      const resultOptions = options.resultOptions || {};
       const authoritativeOperation =
         await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
-      const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
+      const visibilitySatisfied = this.isReplicaOperationUpdateSatisfied(
         operation,
         authoritativeOperation,
       );
       if (visibilitySatisfied) {
         this.syncIncompleteOperationObservation(operation);
-        return buildOperationUpdatePersistResult(
-          resultOptions,
-          true,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
-          authoritativeOperation,
-        );
+        return buildOperationUpdateOutcome({
+          persisted: true,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+          operation: authoritativeOperation,
+        });
       }
       if (hasWinningTerminalOperation(
         this,
@@ -444,12 +498,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // terminal-repair down instead of re-arming it.
         adoptWinningTerminalOperationOutcome(operation, authoritativeOperation);
         this.syncIncompleteOperationObservation(operation);
-        return buildOperationUpdatePersistResult(
-          resultOptions,
-          false,
-          REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
-          authoritativeOperation,
-        );
+        return buildOperationUpdateOutcome({
+          persisted: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+          operation: authoritativeOperation,
+        });
       }
       // CL-017(b): the UPDATE committed but affected zero rows AND the
       // authoritative read cannot see the row the owner created — the
@@ -478,23 +531,21 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           operationCarriesReplicaCreateAdmission(operation) ||
           operationCarriesMessageGroupMembership(operation)
         ) {
-          return buildOperationUpdatePersistResult(
-            resultOptions,
-            false,
-            REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-            null,
-          );
+          return buildOperationUpdateOutcome({
+            persisted: false,
+            disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+            operation: null,
+          });
         }
         try {
           const reinserted = await this.persistNewOperationUnlocked(operation);
           if (reinserted) {
             this.syncIncompleteOperationObservation(operation);
-            return buildOperationUpdatePersistResult(
-              resultOptions,
-              true,
-              REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
+            return buildOperationUpdateOutcome({
+              persisted: true,
+              disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
               operation,
-            );
+            });
           }
         } catch (reinsertError) {
           this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
@@ -504,12 +555,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           });
         }
       }
-      return buildOperationUpdatePersistResult(
-        resultOptions,
-        false,
-        REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-        null,
-      );
+      return buildOperationUpdateOutcome({
+        persisted: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+        operation: null,
+      });
     }
 
     // A terminal write is idempotent against its own durable state and must
@@ -525,7 +575,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         return null;
       }
       if (
-        this.isReplicaOperationVisibilitySatisfied(
+        this.isReplicaOperationUpdateSatisfied(
           operation,
           authoritativeOperation,
         )
@@ -579,10 +629,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     }
 
     isAuthoritativeOperationTerminal(authoritativeOperation) {
-      return (
-        Number.isFinite(authoritativeOperation?.completedAt) ||
-        Number.isFinite(authoritativeOperation?.completed_at)
-      );
+      if (!authoritativeOperation) return false;
+      assertOperationUpdateRecord(authoritativeOperation);
+      return authoritativeOperation.completedAt !== null;
     }
   }
 

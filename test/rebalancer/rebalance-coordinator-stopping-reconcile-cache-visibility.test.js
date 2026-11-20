@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION, PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
@@ -645,6 +647,7 @@ test('RebalanceCoordinator guards terminal priority REPLACE rows from stale ' +
     partitionId: TEST_PARTITION_ID,
     replicaId: TEST_TARGET_REPLICA_ID,
     sourceNodeId: TEST_SOURCE_NODE_ID,
+    sourceReplicaId: TEST_SOURCE_REPLICA_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
     status: ReplicaStatus.ACTIVE,
     workflowStep: WORKFLOW_STEP.ACTIVE,
@@ -703,7 +706,7 @@ test('RebalanceCoordinator guards terminal priority REPLACE rows from stale ' +
   });
 
   try {
-    const transitionCommitted = await coordinator.workflowOwner.updateStep(
+    const transitionOutcome = await coordinator.workflowOwner.updateStep(
       TEST_STALE_OPERATION,
       WORKFLOW_STEP.STOPPING,
     );
@@ -711,8 +714,8 @@ test('RebalanceCoordinator guards terminal priority REPLACE rows from stale ' +
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
-      transitionCommitted,
-      false,
+      transitionOutcome,
+      OPERATION_RECONCILE_OUTCOME.COMPLETED,
       PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION,
     );
     t.equal(

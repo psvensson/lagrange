@@ -1,5 +1,5 @@
-// Shared fixture: a real RebalanceCoordinator backed by an in-memory SQL engine (a Map of
-// replica_operations rows), used to exercise the real timeout -> FAILED transition. Extracted from
+// Shared fixture: a real RebalanceCoordinator backed by a production-schema SQLite store with an observable
+// replica_operations Map, used to exercise the real timeout -> FAILED transition. Extracted from
 // timeout-triggers-failure.property.test.js so the DT6 convergence harness can reuse it to drive the
 // real reconcileTimeoutOperation -> failOperation mutation on a virtual clock (options.timeSource).
 //
@@ -12,31 +12,59 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {
   buildMockPolicyAuthorityWitness,
   createMockCache,
+  createCoordinatorSqlStore,
   createMockPolicyService,
   createMockMessageRouter,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
-function buildInsertedRow(sql, params) {
-  const columnList = String(sql).match(
-    /INSERT\s+INTO\s+replica_operations\s*\(([^)]+)\)/i,
-  )?.[1];
-  if (!columnList) {
-    throw new Error(
-      'Replica-operation fixture requires an explicit INSERT column list',
-    );
-  }
-  const columns = columnList.split(',').map((column) => column.trim());
-  if (columns.length !== params.length) {
-    throw new Error(
-      'Replica-operation fixture column/value mismatch: ' +
-      `${columns.length} columns, ${params.length} values`,
-    );
-  }
-  return Object.fromEntries(
-    columns.map((column, index) => [column, params[index]]),
-  );
+// Multiple simulated nodes share one durable store. The map is the declared
+// failure/clock injection boundary: external row edits are committed through
+// the existing gateway SQL planner before the next production statement.
+const SHARED_LEDGER_STORES = new WeakMap();
+const OPERATIONS_TABLE = 'replica_operations';
+
+function createTrackedLedgerStore(rows) {
+  const published = new Map();
+  const cache = {
+    getAll: (table) => table === OPERATIONS_TABLE ? [...rows.values()] : [],
+    upsert(_table, row) {
+      const current = rows.get(row.operation_id);
+      if (current) Object.assign(current, row);
+      else rows.set(row.operation_id, row);
+      published.set(row.operation_id, JSON.stringify(rows.get(row.operation_id)));
+    },
+    delete(_table, id) {
+      rows.delete(id);
+      published.delete(id);
+    },
+  };
+  const store = createCoordinatorSqlStore(cache);
+  for (const [id, row] of rows) published.set(id, JSON.stringify(row));
+  const commitFixtureChange = (mutation) => {
+    const result = store.submitMutation(mutation);
+    if (!result.success) throw new Error(`Invalid injected ledger row: ${result.error}`);
+  };
+  return {
+    suspend: store.suspend,
+    execute(sql, params) {
+      for (const id of [...published.keys()]) {
+        if (!rows.has(id)) {
+          commitFixtureChange({operation: 'delete', tableName: OPERATIONS_TABLE,
+            whereClause: {operation_id: id}});
+        }
+      }
+      for (const [id, row] of rows) {
+        if (published.get(id) === JSON.stringify(row)) continue;
+        commitFixtureChange(published.has(id) ?
+          {operation: 'update', tableName: OPERATIONS_TABLE,
+            whereClause: {operation_id: id}, data: row} :
+          {operation: 'insert', tableName: OPERATIONS_TABLE, row});
+      }
+      return store.execute(sql, params);
+    },
+  };
 }
 
 function createTimeoutTestCoordinator(options = {}) {
@@ -52,7 +80,10 @@ function createTimeoutTestCoordinator(options = {}) {
     options.trackedOperations instanceof Map ?
       options.trackedOperations :
       new Map();
-  const trackedReservations = new Map();
+  if (!SHARED_LEDGER_STORES.has(trackedOperations)) {
+    SHARED_LEDGER_STORES.set(trackedOperations, createTrackedLedgerStore(trackedOperations));
+  }
+  const ledgerStore = SHARED_LEDGER_STORES.get(trackedOperations);
 
   // Mock CDC service (not used for persistence in the current architecture).
   const cdcService = {
@@ -63,109 +94,6 @@ function createTimeoutTestCoordinator(options = {}) {
   // SQL engine that tracks operations via INSERT/UPDATE queries.
   const sqlEngine = {
     executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const row = buildInsertedRow(sql, params);
-        // The canonical insert is OR-IGNORE idempotent: an existing row is
-        // never overwritten and the insert lands zero changes.
-        if (trackedOperations.has(row.operation_id)) {
-          return {success: true, changes: 0};
-        }
-        trackedOperations.set(row.operation_id, row);
-        return {success: true, changes: 1};
-      }
-
-      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
-        const [
-          reservationId, operationId, entityType, entityId, partitionId,
-          targetNodeId, estimatedBytes, amplificationFactor, status,
-          reasonCode, createdAt, updatedAt, expiresAt,
-        ] = params;
-        if (trackedReservations.has(reservationId)) {
-          return {success: true, changes: 0};
-        }
-        trackedReservations.set(reservationId, {
-          reservation_id: reservationId,
-          operation_id: operationId,
-          entity_type: entityType,
-          entity_id: entityId,
-          partition_id: partitionId,
-          target_node_id: targetNodeId,
-          estimated_bytes: estimatedBytes,
-          amplification_factor: amplificationFactor,
-          status,
-          reason_code: reasonCode,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          expires_at: expiresAt,
-          released_at: null,
-        });
-        return {success: true, changes: 1};
-      }
-
-      if (sql.includes('UPDATE storage_reservations')) {
-        const [status, updatedAt, releasedAt, reservationId, expectedStatus] =
-          params;
-        const existing = trackedReservations.get(reservationId);
-        if (!existing || existing.status !== expectedStatus) {
-          return {success: true, changes: 0};
-        }
-        trackedReservations.set(reservationId, {
-          ...existing,
-          status,
-          updated_at: updatedAt,
-          released_at: releasedAt,
-        });
-        return {success: true, changes: 1};
-      }
-
-      if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId, expectedWorkflowStep,
-        ] = params;
-
-        const existing = trackedOperations.get(operationId);
-        // The durable row's own guards (replica-operation-repository.js
-        // UPDATE_OPERATION_EXPECTING_STEP / UPDATE_OPERATION_TERMINAL): an
-        // expected-step compare-and-set and the first-terminal-wins guard
-        // change zero rows instead of clobbering, exactly as the SQL does.
-        if (
-          existing &&
-          ((sql.includes('AND workflow_step = ?') &&
-            existing.workflow_step !== expectedWorkflowStep) ||
-            (sql.includes('AND completed_at IS NULL') &&
-              existing.completed_at !== null &&
-              existing.completed_at !== undefined))
-        ) {
-          return {success: true, changes: 0};
-        }
-        if (existing) {
-          trackedOperations.set(operationId, {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
-        return {success: true};
-      }
-
-      if (sql.includes('FROM storage_reservations')) {
-        let rows = Array.from(trackedReservations.values());
-        if (sql.includes('operation_id = ?')) {
-          rows = rows.filter((row) => row.operation_id === params[0]);
-        }
-        if (sql.includes('status = ?')) {
-          const status = params[sql.includes('operation_id = ?') ? 1 : 0];
-          rows = rows.filter((row) => row.status === status);
-        }
-        return {success: true, rows, rowSetComplete: true};
-      }
-
       if (sql.includes('FROM services')) {
         let serviceRows = readServiceRows();
         let paramIndex = 0;
@@ -208,84 +136,7 @@ function createTimeoutTestCoordinator(options = {}) {
         };
       }
 
-      if (sql.includes('replica_operations')) {
-        const allOps = Array.from(trackedOperations.values());
-
-        // Point read (SELECT_OPERATION_BY_ID): must resolve the EXACT row, not
-        // fall through to the catch-all that returns every operation.
-        if (sql.includes('operation_id = ?')) {
-          const [operationId] = params;
-          const operation = trackedOperations.get(operationId);
-          return {
-            success: true,
-            rows: operation ? [operation] : [],
-            rowSetComplete: true,
-          };
-        }
-
-        if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
-          const [partitionId, targetNodeId] = params;
-          const matching = allOps.filter((op) =>
-            op.partition_id === partitionId &&
-            op.target_node_id === targetNodeId &&
-            !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: matching, rowSetComplete: true};
-        }
-
-        if (sql.includes('SELECT * FROM replica_operations') &&
-            sql.includes('WHERE type = ?')) {
-          const [type] = params;
-          return {
-            success: true,
-            rows: allOps.filter((op) => op.type === type),
-            rowSetComplete: true,
-          };
-        }
-
-        // Entity-scoped read (SELECT_OPERATIONS_BY_ENTITY): match the canonical
-        // typed identity so a per-entity observation cannot leak another owner.
-        if (sql.includes('entity_type = ?') && sql.includes('entity_id = ?')) {
-          const [entityType, entityId] = params;
-          const matching = allOps.filter((op) =>
-            op.entity_type === entityType && op.entity_id === entityId);
-          return {success: true, rows: matching, rowSetComplete: true};
-        }
-
-        if (sql.includes('source_node_id = ?') &&
-            sql.includes('workflow_step IN')) {
-          const [
-            sourceNodeId,
-            pendingStep,
-            sendingStep,
-            creatingStep,
-            syncingStep,
-            stoppingStep,
-            activeStep,
-            replaceType,
-          ] = params;
-          const inFlightSteps = new Set([
-            pendingStep,
-            sendingStep,
-            creatingStep,
-            syncingStep,
-            stoppingStep,
-          ]);
-          const incompleteOps = allOps.filter((op) => {
-            if (op.source_node_id !== sourceNodeId) {
-              return false;
-            }
-            if (inFlightSteps.has(op.workflow_step)) {
-              return true;
-            }
-            return op.workflow_step === activeStep && op.type === replaceType;
-          });
-          return {success: true, rows: incompleteOps, rowSetComplete: true};
-        }
-
-        return {success: true, rows: allOps, rowSetComplete: true};
-      }
-
-      return {success: true, rows: [], rowSetComplete: true};
+      return ledgerStore.execute(sql, params);
     },
   };
 
@@ -325,6 +176,11 @@ function createTimeoutTestCoordinator(options = {}) {
   });
 
   coordinator.initialize();
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    await shutdown();
+    ledgerStore.suspend();
+  };
   // Every create is armed by the coordinator's workflow owner (the durable
   // dispatch hold, not a request flag, gates dispatch). A fixture that drives
   // the timeout owner over an unclaimed PENDING row isolates that owner from

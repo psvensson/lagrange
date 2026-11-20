@@ -1,3 +1,4 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CDC_OPERATION,
@@ -43,10 +44,6 @@ const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_SOURCE_NODE_ID = 'active-cache-handoff-source';
 const TEST_REPLACE_OPERATION_ID =
   'active-cache-handoff-replace-operation';
-const TEST_COMMITTED_OUTCOME = Object.freeze({
-  committed: true,
-  disposition: 'updated',
-});
 
 class ActiveCacheRefreshHost {}
 applyCDCIntegrationServiceCacheVisibilityWait(ActiveCacheRefreshHost);
@@ -60,6 +57,8 @@ function buildSyncingAddOperation() {
     sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_NODE_ID,
   });
+  operation.entityType = UNIFIED_SERVICE_TYPE.PARTITION;
+  operation.entityId = TEST_PARTITION_ID;
   operation.status = ReplicaStatus.SYNCING;
   operation.workflowStep = WORKFLOW_STEP.SYNCING;
   operation.stepsHistory.push({
@@ -79,6 +78,8 @@ function buildSyncingReplaceOperation() {
     sourceNodeId: TEST_SOURCE_NODE_ID,
     targetNodeId: TEST_NODE_ID,
   });
+  operation.entityType = UNIFIED_SERVICE_TYPE.PARTITION;
+  operation.entityId = TEST_PARTITION_ID;
   operation.status = ReplicaStatus.SYNCING;
   operation.workflowStep = WORKFLOW_STEP.SYNCING;
   operation.stepsHistory.push({
@@ -238,7 +239,7 @@ async function assertFailureSupersedesBlockedActive(
     };
   coordinator.workflowOwner.completeOperation = async (completedOperation) => {
     completedOperationIds.push(completedOperation.operationId);
-    return TEST_COMMITTED_OUTCOME;
+    return buildTerminalOperationFixtureOutcome(completedOperation);
   };
   coordinator.workflowOwner.reconcileReplaceActualActive =
     async (replaceOperation) => {
@@ -247,7 +248,7 @@ async function assertFailureSupersedesBlockedActive(
     };
   coordinator.workflowOwner.failOperation = async (failedOperation) => {
     failedOperationIds.push(failedOperation.operationId);
-    return TEST_COMMITTED_OUTCOME;
+    return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
   };
 
   try {
@@ -482,7 +483,7 @@ test(
       });
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
 
     try {
@@ -607,11 +608,11 @@ test(
       };
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
     };
     const activeOutcome = buildCreateOutcome(
       TEST_OPERATION_ID,
@@ -702,7 +703,7 @@ test(
     const scheduledOperationIds = [];
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.scheduleObservedProgressRetry =
       (operationId) => {
@@ -803,7 +804,7 @@ test(
     const scheduledOperationIds = [];
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.scheduleObservedProgressRetry = (operationId) => {
       scheduledOperationIds.push(operationId);
@@ -867,7 +868,7 @@ test(
     const completedOperationIds = [];
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
 
     try {
@@ -1006,7 +1007,7 @@ test(
     const scheduledOperationIds = [];
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.scheduleObservedProgressRetry = (operationId) => {
       scheduledOperationIds.push(operationId);
@@ -1048,7 +1049,7 @@ test(
     const scheduledOperationIds = [];
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.scheduleObservedProgressRetry =
       (operationId) => {
@@ -1197,7 +1198,7 @@ test(
     const sourceRetirementOperationIds = [];
     coordinator.workflowOwner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
-      return TEST_COMMITTED_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
     };
     coordinator.workflowOwner.reconcileReplaceActualActive = async (
       replaceOperation,
@@ -1308,7 +1309,7 @@ async function driveHandoffOverCachedTarget(
   const completedOperationIds = [];
   coordinator.workflowOwner.completeOperation = async (completedOperation) => {
     completedOperationIds.push(completedOperation.operationId);
-    return TEST_COMMITTED_OUTCOME;
+    return buildTerminalOperationFixtureOutcome(completedOperation);
   };
   try {
     await coordinator.workflowOwner

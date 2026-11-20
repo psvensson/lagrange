@@ -98,6 +98,9 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {ExecutorOutcomeEmitter, buildExecutorOutcome} from
@@ -115,7 +118,8 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
-import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {createMockControlPlaneSystemTableGateway, createCoordinatorSqlStore}
+  from './test-helpers.js';
 
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
@@ -133,8 +137,6 @@ const TEST_EXPECTED_RECONCILE_COUNT = 2;
 const TEST_CAS_SQL_FRAGMENT = 'AND workflow_step = ?';
 const TEST_UPDATE_SQL_FRAGMENT = 'UPDATE replica_operations';
 const TEST_INSERT_SQL_FRAGMENT = 'INSERT INTO replica_operations';
-const TEST_SELECT_BY_ID_SQL_FRAGMENT = 'operation_id = ?';
-const TEST_REPLICA_OPERATIONS_SQL_FRAGMENT = 'replica_operations';
 const TEST_REMOVE_REPLICA_MESSAGE_TYPE = 'REMOVE_REPLICA';
 const TEST_RETRYABLE_CAS_FAILURE = Object.freeze({
   success: false,
@@ -257,82 +259,57 @@ function createCasBackedReplicaOperationStore(initialOperation) {
     })),
   });
 
+  const mapper = Object.create(ReplicaOperationRepository.prototype);
+  const sqlStore = createCoordinatorSqlStore({
+    getAll: (table) => table === 'replica_operations' ? [operationToRow(initialOperation)] : [],
+    upsert(_table, row) {
+      state.authoritative = mapper.rowToOperation(row);
+    },
+  });
+
   async function executeQuery(sql, params = []) {
     if (sql.includes(TEST_UPDATE_SQL_FRAGMENT)) {
+      // Instrument the existing repository UPDATE port; SQLite alone decides
+      // whether the conditional write applied, including terminal guards.
       const isCas = sql.includes(TEST_CAS_SQL_FRAGMENT);
-      const [
-        status,
-        workflowStep,
-        updatedAt,
-        completedAt,
-        errorMessage,
-        stepsHistoryJson,
-        replicaId,
-        operationId,
-        expectedWorkflowStep,
-      ] = params;
+      const [, workflowStep, , , , , , , expectedWorkflowStep] = params;
       const attempt = {
-        isCas,
-        workflowStep,
+        isCas, workflowStep,
         expectedWorkflowStep: isCas ? expectedWorkflowStep : null,
         authoritativeStepAtWrite: state.authoritative.workflowStep,
-        applied: false,
-        injectedFailure: false,
+        applied: false, injectedFailure: false,
       };
       state.updateAttempts.push(attempt);
-      if (
-        isCas &&
-        state.failCasUpdateResult &&
-        workflowStep === state.failCasUpdateForStep
-      ) {
+      if (isCas && state.failCasUpdateResult && workflowStep === state.failCasUpdateForStep) {
         const failure = state.failCasUpdateResult;
         state.failCasUpdateResult = null;
         state.failCasUpdateForStep = null;
         attempt.injectedFailure = true;
         return failure;
       }
-      if (operationId !== state.authoritative.operationId) {
-        return {success: true, affectedRows: 0};
-      }
-      if (
-        isCas &&
-        state.authoritative.workflowStep !== expectedWorkflowStep
-      ) {
-        // CAS lost: the write path sees the true (newer) row.
-        return {success: true, affectedRows: 0};
-      }
-      state.authoritative.status = status;
-      state.authoritative.workflowStep = workflowStep;
-      state.authoritative.updatedAt = updatedAt;
-      state.authoritative.completedAt = completedAt;
-      state.authoritative.errorMessage = errorMessage;
-      state.authoritative.stepsHistory =
-        typeof stepsHistoryJson === 'string' ?
-          JSON.parse(stepsHistoryJson) :
-          state.authoritative.stepsHistory;
-      state.authoritative.replicaId = replicaId;
-      attempt.applied = true;
-      return {success: true, affectedRows: 1};
+      const result = sqlStore.execute(sql, params);
+      attempt.applied = result.changes > 0;
+      return result;
     }
-    if (sql.includes(TEST_INSERT_SQL_FRAGMENT)) {
-      state.insertAttempts.push({params});
-      return {success: true, affectedRows: 1};
-    }
-    if (
-      sql.includes(TEST_REPLICA_OPERATIONS_SQL_FRAGMENT) &&
-      sql.includes(TEST_SELECT_BY_ID_SQL_FRAGMENT)
-    ) {
-      const visible = state.readView || state.authoritative;
-      if (params?.[0] === visible.operationId) {
-        return {success: true, rows: [operationToRow(visible)]};
+    if (sql.includes(TEST_INSERT_SQL_FRAGMENT)) state.insertAttempts.push({params});
+    if (state.readView && /^SELECT /iu.test(sql)) {
+      // Substitute delivery of a stale row only; execute the real query on
+      // that snapshot so predicates and identity still belong to SQLite.
+      const stale = createCoordinatorSqlStore({
+        getAll: (table) => table === 'replica_operations' ? [operationToRow(state.readView)] : [],
+      });
+      try {
+        return stale.execute(sql, params);
+      } finally {
+        stale.suspend();
       }
-      return {success: true, rows: []};
     }
-    return {success: true, rows: []};
+    return sqlStore.execute(sql, params);
   }
 
   return {
     state,
+    suspend: sqlStore.suspend,
     executeQuery,
     snapshotAuthoritative,
     engageStaleReadView(snapshot) {
@@ -860,6 +837,7 @@ test(
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -910,6 +888,7 @@ test(
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -1023,7 +1002,7 @@ test(
             ).length,
             0,
             'exit (b) path (observed-target replay) never ran — ' +
-            'updateStep returned false instead of throwing',
+            'updateStep returned REFUSED instead of throwing',
           );
 
           // --- GUARD fix piece 2: the evidence SURVIVES the failed
@@ -1184,6 +1163,7 @@ test(
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -1276,6 +1256,7 @@ test(
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -1390,6 +1371,7 @@ test(
           owner.clearExecutorOutcomeRetry(TEST_OPERATION_ID);
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -1408,6 +1390,7 @@ test(
         // needs dispatchRetryableWorkflowStep: for a critical-partition
         // REPLACE that includes the CREATING re-arm dispatch phase.
         operation.workflowStep = WORKFLOW_STEP.CREATING;
+        operation.status = ReplicaStatus.CREATING;
         operation.stepsHistory.push({
           step: WORKFLOW_STEP.CREATING,
           timestamp: operation.createdAt,
@@ -1511,6 +1494,7 @@ test(
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -1527,6 +1511,7 @@ test(
         // the not-local path is also wake-inert (SYNCING is not a
         // dispatch-retryable step for a REPLACE).
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
+        operation.status = ReplicaStatus.SYNCING;
         operation.stepsHistory.push({
           step: WORKFLOW_STEP.SYNCING,
           timestamp: operation.createdAt,
@@ -1616,6 +1601,7 @@ test(
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );
@@ -1629,13 +1615,14 @@ test(
       'the operation with no owner at all)',
       async (t) => {
         const operation = buildReplaceOperation();
-        // The drain/reaper-side shape: the REPLACE is at REMOVING when a
+        // The drain/reaper-side shape: the REPLACE is at STOPPING when a
         // level-triggered path decides to terminate it while the
         // executor-outcome visibility retry is still armed and backing
         // off.
-        operation.workflowStep = WORKFLOW_STEP.REMOVING;
+        operation.workflowStep = WORKFLOW_STEP.STOPPING;
+        operation.status = ReplicaStatus.REMOVING;
         operation.stepsHistory.push({
-          step: WORKFLOW_STEP.REMOVING,
+          step: WORKFLOW_STEP.STOPPING,
           timestamp: operation.createdAt,
           sourceReplicaId: TEST_SOURCE_REPLICA_ID,
         });
@@ -1667,9 +1654,7 @@ test(
           armedTimerHandle,
         );
 
-        // Refuse ONLY the terminal write, through the repository's typed
-        // disposition contract (the repository-level REFUSED reality is
-        // proven in replica-operation-terminal-cas.test.js).
+        // Typed terminal refusal; real CAS proof: replica-operation-terminal-cas.test.js.
         const refusedTerminalWrites = [];
         const originalPersist =
           owner.repository.persistOperationUpdate.bind(owner.repository);
@@ -1679,11 +1664,11 @@ test(
         ) => {
           if (options.terminalTransition === true) {
             refusedTerminalWrites.push(projection.operationId);
-            return {
+            return buildOperationUpdateOutcome({
               persisted: false,
               disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
               operation: null,
-            };
+            });
           }
           return originalPersist(projection, options);
         };
@@ -1752,11 +1737,12 @@ test(
           );
           t.equal(
             store.state.authoritative.workflowStep,
-            WORKFLOW_STEP.REMOVING,
+            WORKFLOW_STEP.STOPPING,
             'the durable row is still non-terminal (the refusal was real)',
           );
         } finally {
           await harness.coordinator.shutdown();
+          store.suspend();
         }
       },
     );

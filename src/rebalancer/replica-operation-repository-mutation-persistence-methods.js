@@ -457,6 +457,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         return Object.freeze({operation: null, deferredOutcome: null});
       }
       const observationOptions = {
+        requireAbsenceConfirmation: options.requireAbsenceConfirmation === true,
         allowPriorityRecoveryDeferredVisibility:
           options.allowPriorityRecoveryDeferredVisibility === true,
         allowOwnerPersistedTransitionDeferredVisibility:
@@ -526,23 +527,27 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       return visibility;
     }
 
-    async recoverPersistedReplicaOperationMutation(operation, errorResult) {
+    async observeRetryableReplicaOperationMutation(operation, errorResult) {
       if (
         !operation?.operationId ||
         !this.isRetryableOperationPersistError(errorResult) ||
         !this.shouldShortCircuitDeferredMutationRetry(errorResult)
       ) {
-        return false;
+        return null;
       }
+      return this.queryAuthoritativeOperationVisibilityObservation(
+        operation.operationId,
+        {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          allowPriorityRecoveryDeferredVisibility: false,
+        },
+      );
+    }
+
+    async recoverPersistedReplicaOperationMutation(operation, errorResult) {
       const observation =
-        await this.queryAuthoritativeOperationVisibilityObservation(
-          operation.operationId,
-          {
-            authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            allowPriorityRecoveryDeferredVisibility: false,
-          },
-        );
+        await this.observeRetryableReplicaOperationMutation(operation, errorResult);
       if (
         !this.isReplicaOperationVisibilitySatisfied(
           operation,

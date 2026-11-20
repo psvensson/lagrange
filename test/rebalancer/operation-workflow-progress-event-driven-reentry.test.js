@@ -1,3 +1,4 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -42,20 +43,15 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {createMockCache} from './test-helpers.js';
 
-// completeOperation/failOperation report a typed transition outcome
-// ({committed, disposition}); the termination stubs return the
-// committed shape so the drain's truthful-progress propagation sees a
-// settled terminal (quest terminal-write-refusal-retry-ownership).
-const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
-  committed: true,
-  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-});
-// The refused shape: the terminal write changed zero rows against a live
-// non-terminal authority row — the termination did NOT settle.
-const TEST_REFUSED_TRANSITION_OUTCOME = Object.freeze({
-  committed: false,
-  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
-});
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {buildOperationTransitionOutcome} from
+  '../../src/rebalancer/operation-workflow-transition-outcome.js';
+
+const TEST_REFUSED_TRANSITION_OUTCOME = buildOperationTransitionOutcome(
+  buildOperationUpdateOutcome({persisted: false, operation: null,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED}),
+);
 const {OPERATION_LIFECYCLE_ACTION: TEST_OPERATION_LIFECYCLE_ACTION} =
   OPERATION_WORKFLOW_OWNER_SHARED;
 const {
@@ -944,7 +940,7 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
     coordinator.initialize();
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_TRANSITION_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.repository
       .getOperationsByEntityAuthoritativeObservation = async () => {
@@ -1369,11 +1365,11 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     coordinator.initialize();
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_TRANSITION_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     coordinator.workflowOwner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
-      return TEST_COMMITTED_TRANSITION_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
     };
     coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
       () => true;
@@ -1479,12 +1475,12 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
         coordinator.workflowOwner.completeOperation =
           async (completedOperation) => {
             completedOperationIds.push(completedOperation.operationId);
-            return TEST_COMMITTED_TRANSITION_OUTCOME;
+            return buildTerminalOperationFixtureOutcome(completedOperation);
           };
         coordinator.workflowOwner.failOperation =
           async (failedOperation) => {
             failedOperationIds.push(failedOperation.operationId);
-            return TEST_COMMITTED_TRANSITION_OUTCOME;
+            return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
           };
         coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
           () => true;
@@ -1604,12 +1600,12 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
     coordinator.workflowOwner.completeOperation =
       async (completedOperation) => {
         completedOperationIds.push(completedOperation.operationId);
-        return TEST_COMMITTED_TRANSITION_OUTCOME;
+        return buildTerminalOperationFixtureOutcome(completedOperation);
       };
     coordinator.workflowOwner.failOperation =
       async (failedOperation) => {
         failedOperationIds.push(failedOperation.operationId);
-        return TEST_COMMITTED_TRANSITION_OUTCOME;
+        return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
       };
     coordinator.workflowOwner.buildPriorityRecoveryCompletionForOperation =
       () => completion;
@@ -2602,9 +2598,8 @@ test(
     try {
       coordinator.initialize();
       const owner = coordinator.workflowOwner;
-      let terminationOutcome = TEST_REFUSED_TRANSITION_OUTCOME;
-      owner.completeOperation = async () => terminationOutcome;
-      owner.failOperation = async () => terminationOutcome;
+      owner.completeOperation = async () => TEST_REFUSED_TRANSITION_OUTCOME;
+      owner.failOperation = async () => TEST_REFUSED_TRANSITION_OUTCOME;
 
       const settleSnapshots = [
         {
@@ -2641,7 +2636,8 @@ test(
           'that never landed',
       );
 
-      terminationOutcome = TEST_COMMITTED_TRANSITION_OUTCOME;
+      owner.completeOperation = async (op) => buildTerminalOperationFixtureOutcome(op);
+      owner.failOperation = async (op) => buildTerminalOperationFixtureOutcome(op, {failed: true});
       const committedProgress = [];
       for (const drainSnapshot of settleSnapshots) {
         committedProgress.push(
@@ -2724,11 +2720,11 @@ async function runIntermediateAddDrain(
     });
     owner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return TEST_COMMITTED_TRANSITION_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(completedOperation);
     };
     owner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
-      return TEST_COMMITTED_TRANSITION_OUTCOME;
+      return buildTerminalOperationFixtureOutcome(failedOperation, {failed: true});
     };
     owner.isPriorityRecoveryOperationDrainCandidate = () => true;
     owner.buildPriorityRecoveryCompletionForOperation = () => completion;

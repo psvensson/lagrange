@@ -1,3 +1,7 @@
+import {buildOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED as SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
@@ -284,3 +288,60 @@ test('PENDING REPLACE keeps create-phase dispatch-wake target shortcut',
       await coordinator.shutdown();
     }
   });
+
+// A retained malformed row has a narrow owner recovery path; it cannot be
+// used as a successful persistence result at the generic contract boundary.
+test('REMOVE ACTIVE is never an admitted operation-update result', async (t) => {
+  const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+    workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+  const {coordinator} = createRemoveCoordinator({operationRow});
+  try {
+    const operation = coordinator.repository.rowToOperation(operationRow);
+    t.throws(() => buildOperationUpdateOutcome({persisted: true,
+      disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED, operation}),
+    {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'},
+    'stranded durable input does not weaken the result validator');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('stranded REMOVE correction preserves a competing durable terminal failure', async (t) => {
+  const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+    workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+  const {coordinator, deliveries} = createRemoveCoordinator({operationRow,
+    removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND});
+  const repository = coordinator.repository;
+  const persist = repository.persistOperationUpdate.bind(repository);
+  let winner = null;
+  let correctionAttempts = 0;
+  repository.persistOperationUpdate = async (projection, options) => {
+    if (projection.workflowStep === WORKFLOW_STEP.STOPPING) {
+      correctionAttempts += 1;
+      const now = Date.now();
+      const failed = {...repository.rowToOperation(operationRow),
+        workflowStep: WORKFLOW_STEP.FAILED, status: ReplicaStatus.FAILED,
+        updatedAt: now, completedAt: now, errorMessage: 'competing terminal writer',
+        stepsHistory: [...JSON.parse(operationRow.steps_history),
+          {step: WORKFLOW_STEP.FAILED, timestamp: now}]};
+      const result = await persist(failed, {terminalTransition: true});
+      t.equal(result.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+        'competing failure is a real SQLite commit');
+      winner = result.operation;
+    }
+    return persist(projection, options);
+  };
+  try {
+    await coordinator.reconcileOrphanedOperations();
+    const durable = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+    t.equal(removeDeliveries(deliveries).length, 1,
+      'recovery still requires the accepted REMOVE response');
+    t.equal(correctionAttempts, 1, 'race meets the correction persistence boundary');
+    t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED, 'terminal failure remains failure');
+    t.equal(durable.completedAt, winner?.completedAt, 'winning completion identity retained');
+    t.equal(durable.errorMessage, 'competing terminal writer', 'winning failure retained');
+    t.same(durable.stepsHistory, winner?.stepsHistory, 'correction never overwrites winner history');
+  } finally {
+    await coordinator.shutdown();
+  }
+});

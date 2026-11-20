@@ -1,3 +1,4 @@
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
@@ -177,13 +178,13 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       return null;
     }
 
-    await this.updateStep(
+    const outcome = await this.updateStep(
       operation,
       WORKFLOW_STEP.SENDING,
       OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
     );
 
-    return operation;
+    return outcome === OPERATION_RECONCILE_OUTCOME.ADVANCED ? operation : null;
   }
 
   /**

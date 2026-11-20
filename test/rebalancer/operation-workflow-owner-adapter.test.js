@@ -1,4 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {
   OPERATION_WORKFLOW_OUTCOME_VALUES,
   OPERATION_WORKFLOW_COMMAND_STATE,
@@ -256,7 +258,7 @@ function buildOwnerPortHarness() {
         OPERATION_WORKFLOW_EFFECT_COMMANDS
           .ADVANCE_EXISTING_OPERATION_COMMAND,
       );
-      return true;
+      return OPERATION_RECONCILE_OUTCOME.ADVANCED;
     },
   };
   return {
