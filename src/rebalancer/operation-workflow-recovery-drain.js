@@ -1,3 +1,5 @@
+import {AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE} from
+  './replica-operation-repository-observation-methods.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {
@@ -45,7 +47,6 @@ const {
 } = SHARED;
 
 const HAND_BACK_VERDICT_SEPARATOR = '|';
-const AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE = 'authoritative';
 const UNAVAILABLE_ADD_TARGET_OBSERVATION = Object.freeze({
   state: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
   source: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,

@@ -43,6 +43,7 @@ function createRepository(overrides = {}) {
       async readAuthoritativeRows() {
         return {
           success: true,
+          rowSetComplete: true,
           rows: [],
         };
       },
@@ -163,6 +164,7 @@ test('unavailable-and-wrong-identity-refused', async () => {
       async readAuthoritativeRows() {
         return {
           success: true,
+          rowSetComplete: true,
           rows: [{
             service_id: SIBLING_REPLICA_ID,
             replica_id: SIBLING_REPLICA_ID,
@@ -191,6 +193,7 @@ test('unavailable-and-wrong-identity-refused', async () => {
       async readAuthoritativeRows() {
         return {
           success: true,
+          rowSetComplete: true,
           rows: [{
             service_id: TEST_REPLICA_ID,
             replica_id: 'mismatched-replica-id',
@@ -306,7 +309,7 @@ test('exact-generation-completion', async () => {
   const exactRepo = createRepository({
     controlPlaneSystemTableGateway: {
       async readAuthoritativeRows() {
-        return {success: true, rows: [exactRow]};
+        return {success: true, rowSetComplete: true, rows: [exactRow]};
       },
     },
   });
@@ -396,11 +399,12 @@ test('deleted-fallback-cannot-be-reactivated', async () => {
     controlPlaneSystemTableGateway: {
       async readAuthoritativeRows(tableName, sql, params = []) {
         if (params[0] === TEST_REPLICA_ID) {
-          return {success: true, rows: []};
+          return {success: true, rowSetComplete: true, rows: []};
         }
         if (params[0] === TEST_PARTITION_ID && params[1] === TEST_NODE_ID) {
           return {
             success: true,
+            rowSetComplete: true,
             rows: [{
               service_id: SIBLING_REPLICA_ID,
               replica_id: SIBLING_REPLICA_ID,
@@ -411,7 +415,7 @@ test('deleted-fallback-cannot-be-reactivated', async () => {
             }],
           };
         }
-        return {success: true, rows: []};
+        return {success: true, rowSetComplete: true, rows: []};
       },
     },
   });
