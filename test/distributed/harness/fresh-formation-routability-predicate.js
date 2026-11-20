@@ -776,6 +776,10 @@ function evaluateUserTableRoutability(input) {
     unmet(PREDICATE.USER_TABLE_ROUTABLE, reasons, detail);
 }
 
+function expiredUserTableRoutability(lastObservation) {
+  return unmet(PREDICATE.USER_TABLE_ROUTABLE, ['routability_bound_spent'], {lastObservation});
+}
+
 /**
  * Predicate (e).
  * @param {Object} input {clusterNodeIds, insert: {rowCount|error},
@@ -947,6 +951,7 @@ export {
   evaluateProjectionAgreement,
   evaluateUserTableRoutability,
   evaluateWriteReadback,
+  expiredUserTableRoutability,
   firstUnmetPredicate,
   scanFormationLogLines,
 };

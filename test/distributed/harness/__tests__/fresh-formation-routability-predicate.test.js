@@ -1156,6 +1156,7 @@ test('formation and routability bounds include time spent awaiting successful re
   const lateFormation = await observeScenarioTiming({snapshotDelay: 201, countDelay: 0});
   assert.equal(lateFormation.report.formationSatisfied, false);
   assert.equal(lateFormation.passed, false);
+  assert.equal(lateFormation.report.firstUnmet.id, 'formation-bound-spent');
   const lateRoute = await observeScenarioTiming({snapshotDelay: 0, countDelay: 101});
   assert.equal(lateRoute.report.formationSatisfied, true);
   assert.equal(lateRoute.report.firstUnmet?.id, PREDICATE.USER_TABLE_ROUTABLE);

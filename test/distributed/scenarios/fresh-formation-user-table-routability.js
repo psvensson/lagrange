@@ -60,6 +60,7 @@ import {
   evaluateProjectionAgreement,
   evaluateUserTableRoutability,
   evaluateWriteReadback,
+  expiredUserTableRoutability,
   firstUnmetPredicate,
   scanFormationLogLines,
 } from '../harness/fresh-formation-routability-predicate.js';
@@ -87,7 +88,9 @@ const PROBE_ID = 'ffr-probe-1';
 const PROBE_VALUE = 1;
 const MAX_RECORDED_READ_FAILURES = 50;
 const REPORT_SCHEMA_VERSION = 1;
+const FORMATION_BOUND_SPENT = 'formation-bound-spent';
 const ZERO = 0;
+const min = Math.min;
 
 const SQL = Object.freeze({
   CREATE_TABLE: `CREATE TABLE IF NOT EXISTS ${TABLE_NAME} ` +
@@ -263,6 +266,11 @@ function compactPoll(evaluation, startedAtMs) {
   };
 }
 
+async function sleepUntilNextPoll(deps, deadline) {
+  const remainingMs = deadline - deps.now();
+  if (remainingMs > ZERO) await deps.sleep(min(FORMATION_POLL_MS, remainingMs));
+}
+
 // Polls a-c until they hold together for the quiet window or the bound is
 // spent. Every poll is recorded; nothing is retried into a pass.
 async function observeFormationUntilSettled(context) {
@@ -270,7 +278,9 @@ async function observeFormationUntilSettled(context) {
   const deadline = startedAtMs + deps.formationBoundMs;
   let jointSinceMs = null;
   while (deps.now() < deadline) {
-    const observation = await observeFormation(nodes, seedNode, timeoutMs,
+    const remainingMs = deadline - deps.now();
+    if (remainingMs <= ZERO) break;
+    const observation = await observeFormation(nodes, seedNode, min(timeoutMs, remainingMs),
       deps.now);
     collectReadFailures(observation, state.readFailures);
     const evaluation = evaluateFormationObservation(observation);
@@ -279,6 +289,7 @@ async function observeFormationUntilSettled(context) {
     state.polls.push(compactPoll(evaluation, startedAtMs));
     tallyReasonCodes(state.reasonCodeTally, evaluation);
     state.lastFormation = evaluation;
+    if (evaluation.capturedAtMs > deadline) break;
     for (const predicate of evaluation.predicates) {
       if (predicate.met && state.firstMetAtMs[predicate.id] === undefined) {
         state.firstMetAtMs[predicate.id] = evaluation.capturedAtMs;
@@ -291,7 +302,7 @@ async function observeFormationUntilSettled(context) {
         evaluation.capturedAtMs - jointSinceMs >= deps.quietWindowMs) {
       return {satisfied: true, satisfiedAtMs: evaluation.capturedAtMs};
     }
-    await deps.sleep(FORMATION_POLL_MS);
+    await sleepUntilNextPoll(deps, deadline);
   }
   return {satisfied: false, satisfiedAtMs: null};
 }
@@ -303,11 +314,13 @@ async function observeFormationUntilSettled(context) {
 // (run 1, 2026-11-01: a 15 s control-read bound cut a slower CREATE answer).
 async function createProbeTable(seedNode, deps, deadline) {
   const attempts = [];
-  while (deps.now() < deadline) {
+  for (;;) {
+    const remainingMs = deadline - deps.now();
+    if (remainingMs <= ZERO) break;
     let outcome;
     try {
       const result = await seedNode.queryWithTimeout(SQL.CREATE_TABLE, [],
-        {timeoutMs: deadline - deps.now()});
+        {timeoutMs: remainingMs});
       outcome = {contractState: result.contractState ?? null,
         nextAction: result.nextAction ?? null,
         reasonCodes: result.reasonCodes ?? []};
@@ -320,44 +333,50 @@ async function createProbeTable(seedNode, deps, deadline) {
     const pending = outcome.contractState === CONTRACT_STATE_PENDING &&
       outcome.nextAction === NEXT_ACTION_RETRY;
     if (!pending) return {attempts, final: outcome};
-    await deps.sleep(FORMATION_POLL_MS);
+    await sleepUntilNextPoll(deps, deadline);
   }
   return {attempts, final: attempts[attempts.length - 1] || null};
 }
 
-async function observeRoutability(seedNode, create, timeoutMs) {
+async function observeRoutability(context, create, deadline) {
+  const {seedNode, deps} = context;
+  const timeoutMs = min(context.timeoutMs, deadline - deps.now());
+  if (timeoutMs <= ZERO) return expiredUserTableRoutability(null);
   const [tables, partitions, services] = await Promise.all([
     readRows(seedNode, SQL.TABLES, timeoutMs),
     readRows(seedNode, SQL.PARTITIONS, timeoutMs),
     readRows(seedNode, SQL.SERVICES, timeoutMs),
   ]);
-  const countProbe = await readRows(seedNode, SQL.COUNT, timeoutMs);
+  const countBudgetMs = min(context.timeoutMs, deadline - deps.now());
+  if (countBudgetMs <= ZERO) return expiredUserTableRoutability(null);
+  const countProbe = await readRows(seedNode, SQL.COUNT, countBudgetMs);
   return evaluateUserTableRoutability({countProbe, create, partitions,
     services, tableName: TABLE_NAME, tables});
 }
 
 async function observeUserTable(context) {
-  const {deps, seedNode, timeoutMs, state} = context;
+  const {deps, seedNode, state} = context;
   const issuedAtMs = deps.now();
   const deadline = issuedAtMs + deps.routabilityBoundMs;
   const create = await createProbeTable(seedNode, deps, deadline);
   state.createAttempts = create.attempts;
   let result = null;
   while (deps.now() < deadline) {
-    result = await observeRoutability(seedNode, create.final, timeoutMs);
+    result = await observeRoutability(context, create.final, deadline);
     state.routabilityPolls += 1;
+    const observedAtMs = deps.now();
+    if (observedAtMs > deadline) return {issuedAtMs, result: expiredUserTableRoutability(result)};
     if (result.met) {
-      state.routableAtMs = deps.now();
+      state.routableAtMs = observedAtMs;
       break;
     }
     if (create.final?.error && create.final.contractState !==
         CONTRACT_STATE_PENDING) {
       break;
     }
-    await deps.sleep(FORMATION_POLL_MS);
+    await sleepUntilNextPoll(deps, deadline);
   }
-  return {issuedAtMs, result: result ??
-    await observeRoutability(seedNode, create.final, timeoutMs)};
+  return {issuedAtMs, result: result ?? expiredUserTableRoutability(null)};
 }
 
 async function writeAndReadBack(context) {
@@ -453,7 +472,9 @@ function newState() {
 
 function buildReport(context, results) {
   const {state, startedAtMs, seedNode, logScan, userTable} = context;
-  const firstUnmet = firstUnmetPredicate(results);
+  const formationUnmet = firstUnmetPredicate(state.lastFormation?.predicates ?? []);
+  const firstUnmet = state.formation.satisfied ? firstUnmetPredicate(results) :
+    formationUnmet ?? {id: FORMATION_BOUND_SPENT, reasonCodes: [FORMATION_BOUND_SPENT]};
   return {
     bounds: {formationBoundMs: context.deps.formationBoundMs,
       formationPollMs: FORMATION_POLL_MS,
