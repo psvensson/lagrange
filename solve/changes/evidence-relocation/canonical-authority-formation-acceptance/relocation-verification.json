@@ -1,0 +1,22 @@
+{
+  "schema": "solve-relocation-verification/1",
+  "bundles": [
+    {
+      "bundle": "canonical-authority-formation-acceptance--sealed-overflow-audit-originals-nov20-b217da7ec-2026-11-20.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/canonical-authority-formation-acceptance--sealed-overflow-audit-originals-nov20-b217da7ec-2026-11-20.tar.gz",
+      "bundleSha256": "8935fdb49c436875f7f27e061bffd63a45ea3bfdaa5edf6554ece03226e9b441",
+      "sourceCommit": "b217da7ec18cf7fe3e3869ea1538fcf41bf1032a",
+      "shard": "relocation-inventory/canonical-authority-formation-acceptance--sealed-overflow-audit-originals-nov20-b217da7ec-2026-11-20.json",
+      "shardSha256": "6b350204b0d84952c7b4eca3a47a15dd2e12ac2754e964ecb9077a6474c10ab5",
+      "verifiedAt": "2026-11-20T21:02:43.786Z",
+      "downloadedSha256": "8935fdb49c436875f7f27e061bffd63a45ea3bfdaa5edf6554ece03226e9b441",
+      "extracted": true,
+      "manifestMatches": true,
+      "unexpectedMembers": [],
+      "members": 69,
+      "results": "111111111111111111111111111111111111111111111111111111111111111111111",
+      "mismatches": [],
+      "verified": true
+    }
+  ]
+}

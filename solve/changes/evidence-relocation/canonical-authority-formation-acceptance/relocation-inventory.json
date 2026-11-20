@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "canonical-authority-formation-acceptance--sealed-overflow-audit-originals-nov20-b217da7ec-2026-11-20.tar.gz",
+      "bundleSha256": "8935fdb49c436875f7f27e061bffd63a45ea3bfdaa5edf6554ece03226e9b441",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/canonical-authority-formation-acceptance--sealed-overflow-audit-originals-nov20-b217da7ec-2026-11-20.tar.gz",
+      "sourceCommit": "b217da7ec18cf7fe3e3869ea1538fcf41bf1032a",
+      "root": "solve/epics/formation-seed-decoupling/evidence/overflow-budget-audit-verified-packet-2026-09-20/",
+      "files": 69,
+      "shard": "relocation-inventory/canonical-authority-formation-acceptance--sealed-overflow-audit-originals-nov20-b217da7ec-2026-11-20.json"
+    }
+  ]
+}
