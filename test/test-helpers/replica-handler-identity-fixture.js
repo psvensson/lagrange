@@ -70,8 +70,8 @@ function createIdentityTransport() {
 // cutover, supply that external effect at the registered responder. Exercise
 // actual route selection, accepted delivery, and result decoding. Native
 // release witnesses use the production responder without this decorator.
-function registerCompletedFreshCreateReleaseFixture(handler, options = {}) {
-  const transport = createInProcessMockTransport();
+function registerCompletedFreshCreateReleaseFixture(handler,
+  {transport = createInProcessMockTransport(), rpcClient} = {}) {
   const handleMessage = handler.handleMessage.bind(handler);
   handler.handleMessage = (envelope) => {
     const request = envelope.payload;
@@ -90,7 +90,7 @@ function registerCompletedFreshCreateReleaseFixture(handler, options = {}) {
     assert.equal(identity.attemptToken, service.createAttemptToken);
     return {[PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER}};
   };
-  handler.registerWithRouter(transport, options);
+  handler.registerWithRouter(transport, {rpcClient});
   return transport;
 }
 
