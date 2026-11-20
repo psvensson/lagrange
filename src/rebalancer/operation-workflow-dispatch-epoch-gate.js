@@ -1,3 +1,4 @@
+import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 // Dispatch-time membership epoch gate (audit finding 7). The creation-time
 // assert only fences the moment of persistence; a queued ADD/REPLACE can sit
 // PENDING across a membership epoch advance and then dispatch stale work
@@ -133,17 +134,12 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
     },
   );
   if (terminalOutcome?.createAdmissionWon === true) {
-    Object.assign(operation, terminalOutcome.operation);
+    Object.assign(operation, terminalOutcome.createAdmissionOperation);
     return null;
   }
-  if (
-    typeof owner.repository?.applyLocalPriorityOperationProgressRow ===
-    'function'
-  ) {
-    owner.repository.applyLocalPriorityOperationProgressRow(operation);
-  }
-  if (typeof owner.clearTerminalOperationRetryState === 'function') {
-    owner.clearTerminalOperationRetryState(operation);
+  if (!isTerminalTransitionOutcomeSettled(terminalOutcome)) {
+    return owner.buildSkippedOperationResult(terminalOutcome.reconcileOutcome,
+      operation.operationId, {terminal: false});
   }
   return owner.buildFailedOperationResult(
     operation.operationId,

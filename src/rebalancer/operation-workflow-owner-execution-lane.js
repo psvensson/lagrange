@@ -1,3 +1,4 @@
+import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -714,10 +715,9 @@ class OperationWorkflowOwnerExecutionLane
     if (!operation || !winningOperation) {
       return;
     }
-    operation.status = winningOperation.status;
-    operation.workflowStep = winningOperation.workflowStep;
-    operation.completedAt = winningOperation.completedAt;
-    operation.errorMessage = winningOperation.errorMessage;
+    assertOperationUpdateRecord(winningOperation, {terminal: true});
+    assertOperationUpdateSubject(operation, winningOperation);
+    Object.assign(operation, structuredClone(winningOperation));
   }
 }
 

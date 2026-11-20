@@ -1,3 +1,10 @@
+import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
+import {admitReplaceTerminalRepair} from '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
+import {
+  armTerminalTransitionRepair, runTerminalTransitionRepairAttempt,
+  TERMINAL_TRANSITION_REPAIR_CAUSE,
+} from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
+import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 // Initial item 02 witness: the production coordinator constructs the repository
 // and workflow owner. Their SQL executes in SQLite using production schemas and
 // the gateway's mutation planner. Only persistence reply delivery is corrupted.
@@ -131,7 +138,7 @@ function createFixture(t) {
   };
 }
 
-async function seedOperation(t, fixture, operationId) {
+async function seedOperation(t, fixture, operationId, overrides = {}) {
   const operation = createOperation({
     operationId,
     type: OperationType.ADD,
@@ -139,6 +146,7 @@ async function seedOperation(t, fixture, operationId) {
     replicaId: `${PARTITION_ID}-${operationId}`,
     sourceNodeId: 'test-node-1',
     targetNodeId: TARGET_NODE_ID,
+    ...overrides,
   });
   operation.entityType = SERVICE_TYPE.PARTITION;
   operation.entityId = PARTITION_ID;
@@ -187,7 +195,8 @@ test('strict outcomes positive: real nonterminal update and terminal release', a
   const operation = await seedOperation(t, fixture, 'strict-positive');
   const owner = fixture.coordinator.workflowOwner;
   const progressed = await owner.updateStep(operation, WORKFLOW_STEP.CREATING);
-  t.equal(progressed, true, 'ordinary nonterminal update still progresses');
+  t.equal(progressed, OPERATION_RECONCILE_OUTCOME.ADVANCED,
+    'ordinary nonterminal update still progresses');
   const intermediate =
     await owner.repository.queryAuthoritativeOperationById(operation.operationId);
   t.equal(intermediate.workflowStep, WORKFLOW_STEP.CREATING);
@@ -216,6 +225,19 @@ const MALFORMED_REPLIES = [
   ['missing operation', (result) => ({persisted: result.persisted, disposition: result.disposition})],
   ['unknown disposition', (result) => ({...result, disposition: 'unrecognized-disposition'})],
   ['contradictory updated', (result) => ({...result, persisted: false})],
+  ['failed without completion', (result) => ({...result, operation: {...result.operation,
+    workflowStep: WORKFLOW_STEP.FAILED, status: ReplicaStatus.FAILED, completedAt: null}})],
+  ['terminal on creating', (result) => ({...result, operation: {...result.operation,
+    workflowStep: WORKFLOW_STEP.CREATING, status: ReplicaStatus.CREATING}})],
+  ['wrong status', (result) => ({...result, operation: {...result.operation,
+    status: ReplicaStatus.FAILED}})],
+  ['wrong entity', (result) => ({...result, operation: {...result.operation,
+    entityId: 'different-entity'}})],
+  ['wrong requested replica', (result) => ({...result, operation: {...result.operation,
+    replicaId: 'different-replica'}})],
+  ['refusal with payload', (result) => ({...result, persisted: false,
+    disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED})],
+
 ];
 
 for (const [label, corrupt] of MALFORMED_REPLIES) {
@@ -243,9 +265,16 @@ for (const [label, corrupt] of MALFORMED_REPLIES) {
     const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
     t.equal(durable.workflowStep, WORKFLOW_STEP.ACTIVE,
       'the write happened: uncertainty must not be misreported as rollback');
+    let authorityReads = 0;
+    const observe = owner.repository.observeOperationTransition.bind(owner.repository);
+    owner.repository.observeOperationTransition = async (...args) => {
+      authorityReads++;
+      return observe(...args);
+    };
     const retried = await observeAttempt(() => owner.completeOperation(operation));
     t.equal(retried.error, null, 'the same owner recovers after reply corruption ends');
-    t.ok(calls > 1, 'same-step retry re-enters persistence instead of trusting the deferred mirror');
+    t.equal(authorityReads, 1, 'same-step retry reconsults the real authoritative repository');
+    t.equal(calls, 1, 'proved replay performs no second write');
     const winner = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
     t.same(winner, durable, 'retry adopts the exact durable winner without rewriting it');
     t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED,
@@ -273,7 +302,7 @@ test('strict outcomes thrown post-write reply: same-owner retry re-enters reposi
   const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId);
   const retried = await observeAttempt(() => owner.completeOperation(operation));
   t.equal(retried.error, null);
-  t.ok(calls > 1, 'a thrown attempt cannot make the same-step retry skip persistence');
+  t.equal(calls, 1, 'authoritative replay after a thrown reply performs no second write');
   t.same(await owner.repository.queryAuthoritativeOperationById(operation.operationId), durable);
   t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.RELEASED);
 });
@@ -307,9 +336,107 @@ test('strict outcomes reopened SQLite: fresh owner recovers exact terminal and r
     t.equal(recovered.workflowStep, WORKFLOW_STEP.ACTIVE);
     t.equal(recovered.status, ReplicaStatus.ACTIVE);
     t.ok(Number.isFinite(recovered.completedAt));
-    await reopened.coordinator.reconcileReservations();
+    const outcome = await reopened.coordinator.workflowOwner.completeOperation(recovered);
+    t.equal(outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+    t.same(await reopened.coordinator.repository.queryAuthoritativeOperationById(operationId),
+      durable, 'fresh complete entry does not invent history or timestamps');
     t.equal(reservationStatus(reopened, operationId), RESERVATION_STATUS.RELEASED,
-      'existing reservation recovery owner discharges the interrupted terminal release');
+      'fresh terminal entry discharges the interrupted terminal release');
     t.equal(reservationStatus(reopened, unrelatedId), RESERVATION_STATUS.ACTIVE,
       'fresh recovery retains the unrelated nonterminal operation obligation');
   });
+
+// Terminal witnesses seed the decision through the real conditional UPDATE;
+// only the release interruption is injected. No workflow or SQL authority is
+// replaced during replay, competing-intent adoption or owner reconstruction.
+async function persistTerminalWitness(fixture, operation, {failed = false} = {}) {
+  const now = Date.now();
+  const step = failed ? WORKFLOW_STEP.FAILED : WORKFLOW_STEP.ACTIVE;
+  const projected = {...operation, workflowStep: step,
+    status: failed ? ReplicaStatus.FAILED : ReplicaStatus.ACTIVE,
+    updatedAt: now, completedAt: now, errorMessage: failed ? 'durable winner' : null,
+    stepsHistory: [...operation.stepsHistory, {step, timestamp: now}]};
+  const answer = await fixture.coordinator.repository.persistOperationUpdate(projected,
+    {terminalTransition: true, confirmPersistence: false});
+  return buildOperationTransitionOutcome(answer,
+    {repository: fixture.coordinator.repository, requestedOperation: projected});
+}
+
+for (const type of [OperationType.ADD, OperationType.GROWTH_PROMOTE]) {
+  test(`strict outcomes fresh ${type} completion adopts exact reopened winner`, async (t) => {
+    const fixture = createFixture(t);
+    const operation = await seedOperation(t, fixture.current, `strict-reopen-${type}`, {type});
+    const original = await persistTerminalWitness(fixture.current, operation);
+    const reopened = await fixture.reopen();
+    const outcome = await reopened.coordinator.workflowOwner.completeOperation({...operation});
+    t.equal(outcome.committed, false, 'reconstruction makes no new terminal write');
+    t.equal(outcome.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+    t.same(outcome.operation, original.operation, 'exact terminal history and timestamp survive');
+    t.equal(reservationStatus(reopened, operation.operationId), RESERVATION_STATUS.RELEASED);
+  });
+}
+
+test('strict outcomes failed REPLACE repair releases before now-refused write admission',
+  async (t) => {
+    const fixture = createFixture(t);
+    let operation = await seedOperation(t, fixture.current, 'strict-failed-replace',
+      {type: OperationType.REPLACE, sourceReplicaId: 'strict-old-replica'});
+    const stale = structuredClone(operation);
+    const committed = await persistTerminalWitness(fixture.current, operation, {failed: true});
+    let owner = fixture.current.coordinator.workflowOwner;
+    const persistOptions = {expectedWorkflowStep: WORKFLOW_STEP.PENDING};
+    const refusal = await admitReplaceTerminalRepair(owner, committed.operation, persistOptions);
+    t.equal(refusal.admitted, false, 'new write admission refuses the old expected-step intent');
+    let placementAttempts = 0;
+    owner.releasePlacementHold = async () => {
+      placementAttempts++;
+      throw new Error('interrupted placement release');
+    };
+    armTerminalTransitionRepair(owner, committed.operation,
+      TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
+    const interrupted = await observeAttempt(() =>
+      runTerminalTransitionRepairAttempt(owner, operation.operationId));
+    t.equal(interrupted.error?.message, 'interrupted placement release');
+    t.equal(placementAttempts, 1, 'committed terminal reaches release despite admission refusal');
+    const held = owner.terminalTransitionRepairStateByOperationId.get(operation.operationId);
+    t.equal(held.phase, TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
+    t.same(held.projectedOperation, committed.operation);
+    t.same(held.persistOptions, {}, 'release debt carries no stale new-write admission');
+    t.equal(reservationStatus(fixture.current, operation.operationId), RESERVATION_STATUS.ACTIVE);
+    owner.releasePlacementHold = async () => { placementAttempts++; };
+    await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+    t.equal(placementAttempts, 2);
+    t.equal(owner.terminalTransitionRepairStateByOperationId.has(operation.operationId), false);
+    t.equal(reservationStatus(fixture.current, operation.operationId), RESERVATION_STATUS.RELEASED);
+    // Reopening and a different attempted failure still adopt the same failure;
+    // neither asks new terminal admission nor rewrites the winner's explanation.
+    owner = null;
+    operation = null;
+    const reopened = await fixture.reopen();
+    const adopted = await reopened.coordinator.workflowOwner.failOperation(stale, 'other failure');
+    t.equal(adopted.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED);
+    t.equal(adopted.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+    t.same(adopted.operation, committed.operation);
+    t.same(await reopened.coordinator.repository.queryAuthoritativeOperationById(stale.operationId),
+      committed.operation);
+  });
+
+test('strict outcomes accessor corruption is rejected without evaluating the getter', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'strict-getter');
+  const owner = fixture.coordinator.workflowOwner;
+  const persist = owner.repository.persistOperationUpdate.bind(owner.repository);
+  let getterCalls = 0;
+  owner.repository.persistOperationUpdate = async (...args) => {
+    const result = await persist(...args);
+    const corrupted = {...result.operation};
+    Object.defineProperty(corrupted, 'targetNodeBootIncarnation', {
+      enumerable: true, get() { getterCalls++; return 1; },
+    });
+    return {...result, operation: corrupted};
+  };
+  const attempt = await observeAttempt(() => owner.completeOperation(operation));
+  t.equal(attempt.error?.code, INVALID_OUTCOME_CODE);
+  t.equal(getterCalls, 0, 'validation rejects accessor before clone or identity comparison');
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+});

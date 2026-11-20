@@ -1,3 +1,4 @@
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {AddressManager} from '../address/address-manager.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
@@ -715,21 +716,13 @@ const operationCreationSupportMethods = {
       stamp,
       this.timeSource ? this.timeSource.now() : Date.now(),
     );
-    const persistResult =
-      this.repository.compareAndSetPendingBootstrapTopologyRelease ?
-        await this.repository.compareAndSetPendingBootstrapTopologyRelease(
-          released,
-          durableOperation.stepsHistory,
-        ) :
-        await this.repository.persistOperationUpdate(released, {
-          expectedWorkflowStep: WORKFLOW_STEP.PENDING,
-          expectedStepsHistory: durableOperation.stepsHistory,
-          returnDisposition: true,
-        });
-    if (
-      persistResult?.disposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED &&
-      persistResult?.released !== true
-    ) {
+    const persistResult = await this.repository.persistOperationUpdate(released, {
+      expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+      expectedStepsHistory: durableOperation.stepsHistory,
+    });
+    const outcome = buildOperationTransitionOutcome(persistResult,
+      {repository: this.repository, requestedOperation: released});
+    if (!outcome.committed) {
       return buildBootstrapTopologyHoldReleaseOutcome(
         false,
         await this.repository.queryAuthoritativeOperationById(operationId),

@@ -33,8 +33,8 @@ async function reconcileTimeoutOperation(coordinator, operation, now) {
   return coordinator.workflowOwner.reconcileTimeoutOperation(operation, now);
 }
 
-async function reconcileOperationProgress(coordinator, operation) {
-  return coordinator.workflowOwner.reconcileOperationProgress(operation);
+async function reconcileOperationLifecycle(coordinator, operation) {
+  return coordinator.workflowOwner.reconcileOperationLifecycle(operation);
 }
 
 function handleExecutorOutcome(coordinator, outcome) {
@@ -229,7 +229,7 @@ export {
   reconcileOrphanedOperations,
   getTimeoutForStep,
   reconcileTimeoutOperation,
-  reconcileOperationProgress,
+  reconcileOperationLifecycle,
   handleExecutorOutcome,
   reconcileExecutorOutcome,
   handleRecovery,

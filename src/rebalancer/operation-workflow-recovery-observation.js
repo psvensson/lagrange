@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
+import {assertOperationTransitionOutcome, terminalOperationReconcileOutcome} from './operation-workflow-transition-outcome.js';
 import {PriorityRecoverySupersededTarget} from './priority-recovery-superseded-target.js';
 import {isUnclaimedPreRuntimeFailedCreateRow} from './failed-create-cleanup-token.js';
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
@@ -424,7 +426,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       this.clearObservedProgressRetry(operationId);
       return woken;
     }
-    const progressed = await this.reconcileOperationProgress(operation, {
+    const progressed = await this.reconcileOperationLifecycle(operation, {
       cause: 'observed_progress',
     });
     this.clearObservedProgressRetry(operationId);
@@ -646,8 +648,9 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
 
   async reconcileStoppingOperationProgress(operation) {
     if (isReplaceRemovalIntentDurable(operation)) {
-      const result = await this.runReplaceStoppingOwner(operation);
-      return result?.success === true;
+      await this.runReplaceStoppingOwner(operation);
+      return this.repository.isOperationTerminal(operation) ?
+        terminalOperationReconcileOutcome(operation) : OPERATION_RECONCILE_OUTCOME.WAITING;
     }
     const removingReplicaId =
       operation.type === OperationType.REPLACE ?
@@ -658,11 +661,9 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         operation.sourceNodeId :
         operation.targetNodeId;
     if (!removingReplicaId) {
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_MISSING_DURING_STOPPING_RECONCILIATION,
-      );
-      return true;
+      const outcome = await this.failOperation(operation,
+        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_MISSING_DURING_STOPPING_RECONCILIATION);
+      return assertOperationTransitionOutcome(outcome).reconcileOutcome;
     }
 
     const stoppingReplicaObservation = await this.observeStoppingReplicaProgress(
@@ -691,43 +692,38 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         operation.type === OperationType.REPLACE &&
         !await this.confirmActiveReplicaTerminalHandoff(operation)
       ) {
-        return false;
+        return OPERATION_RECONCILE_OUTCOME.WAITING;
       }
-      return isTerminalPersistSettled(await this.completeOperation(operation));
+      return assertOperationTransitionOutcome(
+        await this.completeOperation(operation)).reconcileOutcome;
     }
 
     if (
       stoppingReplicaObservation.state ===
       STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE
     ) {
-      return handleUnavailableStoppingObservation(
+      await handleUnavailableStoppingObservation(
         this,
         operation,
         (candidate) =>
           classifySystemPartition({partitionId: candidate.partitionId})
             .systemTable,
       );
+      return OPERATION_RECONCILE_OUTCOME.WAITING;
     }
 
     if (actualStatus === ReplicaStatus.FAILED) {
-      return isTerminalPersistSettled(
+      return assertOperationTransitionOutcome(
         await this.failOperation(
           operation,
           OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_REMOVE_RECONCILIATION,
         ),
-      );
+      ).reconcileOutcome;
     }
 
-    const replayResult =
-      await this.executeOperationFromReconcilePath(operation);
-    if (
-      replayResult?.success === true &&
-      replayResult.status !== ReplicaOperationResponseStatus.IN_PROGRESS
-    ) {
-      return true;
-    }
-
-    return false;
+    await this.executeOperationFromReconcilePath(operation);
+    return this.repository.isOperationTerminal(operation) ?
+      terminalOperationReconcileOutcome(operation) : OPERATION_RECONCILE_OUTCOME.WAITING;
   }
 
   // BR7: the effect is observed without a recorded intent; record it and
@@ -780,8 +776,8 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     }
 
     if (actualStatus === ReplicaStatus.REMOVING) {
-      await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
-      return true;
+      return didOperationReconcileAdvanceOrComplete(
+        await this.updateStep(operation, WORKFLOW_STEP.STOPPING));
     }
 
     return false;

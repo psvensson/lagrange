@@ -21,9 +21,11 @@ import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {
-  applyGrowthPromoteRequestFields, didOperationReconcileAdvanceOrComplete,
-  isHeldGrowthPromoteOperation, reconcileGrowthPromoteDispatchResponse,
+  applyGrowthPromoteRequestFields,
+  isHeldGrowthPromoteOperation,
+  reconcileGrowthPromoteDispatchResponse,
   resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 const {

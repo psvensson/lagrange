@@ -1,7 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {
-  didOperationReconcileAdvanceOrComplete,
-} from './operation-workflow-growth-promote.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
 } from './replica-operation-step-policy.js';
@@ -102,7 +100,7 @@ function buildDispatchWakeProgressPreemptEvidence(
       ),
     dispatchWakeInput,
     progressReconcilerAvailable:
-      typeof context.reconcileOperationProgress === 'function',
+      typeof context.reconcileOperationLifecycle === 'function',
     observedPreemptStatus:
       DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES.has(observedTargetStatus),
     boundedPendingWakeReconcile:
@@ -169,18 +167,8 @@ async function reconcileDispatchWakeOperationProgress(context, operation) {
   ) {
     return true;
   }
-  if (typeof context.reconcileOperationLifecycle === 'function') {
-    return didOperationReconcileAdvanceOrComplete(
-      await context.reconcileOperationLifecycle(operation, {
-        cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-      }),
-    );
-  }
-  if (typeof context.reconcileOperationProgress !== 'function') {
-    return false;
-  }
   return didOperationReconcileAdvanceOrComplete(
-    await context.reconcileOperationProgress(operation, {
+    await context.reconcileOperationLifecycle(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
     }),
   );
@@ -238,16 +226,19 @@ async function reconcileDispatchWakePendingTargetProgress(
   );
 
   if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_PENDING) {
-    await context.updateStep(operation, WORKFLOW_STEP.CREATING);
-    return true;
+    return didOperationReconcileAdvanceOrComplete(
+      await context.updateStep(operation, WORKFLOW_STEP.CREATING));
+
   }
   if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_SYNCING) {
-    await context.updateStep(operation, WORKFLOW_STEP.SYNCING);
-    return true;
+    return didOperationReconcileAdvanceOrComplete(
+      await context.updateStep(operation, WORKFLOW_STEP.SYNCING));
+
   }
   if (state === DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE.TARGET_ACTIVE) {
-    await context.updateStep(operation, WORKFLOW_STEP.ACTIVE);
-    return true;
+    return didOperationReconcileAdvanceOrComplete(
+      await context.updateStep(operation, WORKFLOW_STEP.ACTIVE));
+
   }
   return false;
 }

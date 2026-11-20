@@ -457,6 +457,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         return Object.freeze({operation: null, deferredOutcome: null});
       }
       const observationOptions = {
+        requireAbsenceConfirmation: options.requireAbsenceConfirmation === true,
         allowPriorityRecoveryDeferredVisibility:
           options.allowPriorityRecoveryDeferredVisibility === true,
         allowOwnerPersistedTransitionDeferredVisibility:

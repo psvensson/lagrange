@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
@@ -597,7 +599,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     try {
       if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
           await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-            undefined, {stepMetadata, requireDurable: true}) &&
+            undefined, {stepMetadata, requireDurable: true}) === OPERATION_RECONCILE_OUTCOME.ADVANCED &&
           replaceIntentEntryOf(operation)) {
         // This owner's own durable transition committed the intent entry.
         return true;
@@ -630,7 +632,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         return false;
       }
       if (await this.updateStep(durable, WORKFLOW_STEP.STOPPING,
-        undefined, {stepMetadata, requireDurable: true}) &&
+        undefined, {stepMetadata, requireDurable: true}) === OPERATION_RECONCILE_OUTCOME.ADVANCED &&
           replaceIntentEntryOf(durable)) {
         adoptDurableReplaceIntent(operation, durable);
         return true;
@@ -649,9 +651,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     const persisted = await this.repository.persistOperationUpdate(recorded, {
       ...this.buildOperationTransitionPersistOptions(),
       expectedWorkflowStep: WORKFLOW_STEP.STOPPING,
-      returnDisposition: true,
     });
-    if (persisted?.persisted === false) {
+    const outcome = buildOperationTransitionOutcome(persisted,
+      {repository: this.repository, requestedOperation: recorded});
+    if (!outcome.committed) {
       return false;
     }
     adoptDurableReplaceIntent(operation, recorded);
