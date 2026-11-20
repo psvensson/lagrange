@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "independent-portability-q1-partition-observation",
+  "epic": "core-architecture-convergence",
+  "statement": "Specify and independently reproduce the first Q1 portable logical representation for PartitionService retained committed-statement observations: exact signed SQLite 64-bit decimal strings, opaque committed entry identity, typed settled/unsettled/unavailable/unknown outcomes, nullable retained results, and exact positive safe descriptor-epoch equality. A second-language Python decoder must match explicit accepted, refused and comparison vectors plus independent mutated inverse controls. This is a bounded Q1a specification slice; no runtime, HLC full-domain, finite-JSON Call Cell, public service, native Raft u64, or cold-recovery conformance is claimed.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/q1-partition-observation-conformance.js --metric",
+      "target": 0,
+      "artifacts": [
+        "test/partition/portability-observation-v1.vectors.json",
+        "test/partition/portability-observation-reference.py"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-partition-owner",
+      "statement": "Normative semantics remain in the established PartitionService committed-outcome and descriptor-epoch owners; the vectors and Python decoder are a language-neutral observation witness, not a new runtime owner."
+    },
+    {
+      "id": "representation-only",
+      "statement": "No src changes, new public wire protocol, same-disk/mixed-node format, Raft rewrite, new persistence store or extension of predecessor correctness/release gates."
+    },
+    {
+      "id": "typed-holds-survive",
+      "statement": "Full HLC lexical/locale agreement, Call Cell finite-JSON float canonicalization, native Raft u64 overflow and crash/recovery remain held under their existing semantic owners."
+    }
+  ],
+  "sealedAt": "01b9ab54a04ff0c733baa74b7c07602107185967"
+}
