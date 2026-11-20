@@ -121,21 +121,20 @@ function isCurrentReplicaCreateService(handler, replicaId, service) {
     service.isShutdown !== true;
 }
 
-async function retireStaleReplicaCreate(handler, request, service, progress,
+function retireStaleReplicaCreate(handler, request, service, progress,
   trackedOperation) {
   const {replicaId, partitionId, operationId, createPhysicalWorkerClaim} = request;
-  try {
-    await handler.fenceFailedReplicaCreateRuntime(replicaId, partitionId, service);
-  } finally {
-    if (handler.creationProgressByReplica?.get(replicaId) === progress) {
-      handler.clearReplicaCreationProgress(progress);
-    }
-    if (handler.inProgressOperations.get(operationId) === trackedOperation) {
-      handler.inProgressOperations.delete(operationId);
-    }
-    handler.getReplicaCreateAdmissionOwner().releasePhysicalWorker(
-      createPhysicalWorkerClaim);
+  const retirement = handler.fenceFailedReplicaCreateRuntime(
+    replicaId, partitionId, service);
+  if (handler.creationProgressByReplica?.get(replicaId) === progress) {
+    handler.clearReplicaCreationProgress(progress);
   }
+  if (handler.inProgressOperations.get(operationId) === trackedOperation) {
+    handler.inProgressOperations.delete(operationId);
+  }
+  handler.getReplicaCreateAdmissionOwner().releasePhysicalWorker(
+    createPhysicalWorkerClaim);
+  return retirement;
 }
 
 function learnerAdmissionWaitError(replicaId, outcome) {
@@ -572,6 +571,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           return retireStaleReplicaCreate(
             this, request, partitionService, progress, trackedOperation);
         }
+        this.throwIfShuttingDown();
         if (admissionWaitFailure) throw admissionWaitFailure;
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same
@@ -813,7 +813,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // fails, but its physical CREATE worker claim must never remain held.
         // Existing success/error paths delete tracking first; this is the
         // fail-safe for a cleanup rejection that exits before those paths.
-        if (operationId && this.inProgressOperations.has(operationId)) {
+        if (operationId && trackedOperation &&
+            this.inProgressOperations.get(operationId) === trackedOperation) {
           this.inProgressOperations.delete(operationId);
           this.getReplicaCreateAdmissionOwner()
             .releasePhysicalWorker(request.createPhysicalWorkerClaim);
