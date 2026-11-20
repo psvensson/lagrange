@@ -545,6 +545,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           this.seedLocalPriorityServiceRow(replicaId, partitionId, ReplicaStatus.FAILED);
         }
         this.failReplicaCreationProgress(work.progress, error);
+        releaseReplicaCreateWork(this, work);
         this.emitExecutorOutcome(
           EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
           operationId,
@@ -836,6 +837,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               });
             }
             this.finishReplicaCreationProgress(progress, ReplicaStatus.ACTIVE);
+            releaseReplicaCreateWork(this, work);
             this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_COMPLETED, {
               operationId,
               replicaId,

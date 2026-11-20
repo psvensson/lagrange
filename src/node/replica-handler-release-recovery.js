@@ -291,15 +291,16 @@ function createParticipantReleaseRecovery(handler) {
       if (createAdmissionIdentity === null) {
         throw new Error(RELEASE_RECOVERY_ERROR.FRESH_AUTHORITY);
       }
-      const {answer, completed} = await completeParticipantRelease(handler, {partitionId,
-        targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
-        deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
+      const {answer, completed, outcome, retryAfterMs} =
+        await completeParticipantRelease(handler, {partitionId,
+          targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
+          deadlineAtMs: deadline, createAdmissionIdentity}, {now, sleep});
       if (completed) return answer;
       const error = new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED +
         JSON.stringify({partitionId, answer}));
       error.participantReleaseAnswer = answer;
-      if (answer.outcome === OUTCOME.UNAVAILABLE || answer.outcome === OUTCOME.NOT_LEADER ||
-          (Number.isSafeInteger(answer.retryAfterMs) && answer.retryAfterMs >= 0)) {
+      if (outcome === OUTCOME.UNAVAILABLE || outcome === OUTCOME.NOT_LEADER ||
+          (Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0)) {
         error.code = FRESH_CREATE_RELEASE_UNAVAILABLE;
       }
       throw error;
