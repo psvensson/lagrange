@@ -1,3 +1,4 @@
+import {performance} from 'node:perf_hooks';
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
 import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
 import {requestDiagnosticMarker, requestPostgresWireScale, requestTablePolicyUpdate} from
