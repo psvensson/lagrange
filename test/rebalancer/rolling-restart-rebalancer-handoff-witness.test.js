@@ -146,6 +146,7 @@ function createHandoffOwner() {
  */
 async function persistOperationNearBudgetEnd(hosts, repository, nowMs) {
   const budgetMs = TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+  const stepStartedAt = nowMs - STEP_AGE_MS;
   const row = {
     operation_id: OPERATION_ID,
     partition_id: PARTITION_ID,
@@ -158,7 +159,13 @@ async function persistOperationNearBudgetEnd(hosts, repository, nowMs) {
     target_node_id: REMOTE_OWNER_NODE_ID,
     replica_id: `${PARTITION_ID}-r2`,
     created_at: nowMs - budgetMs + BUDGET_REMAINING_MS,
-    updated_at: nowMs - STEP_AGE_MS,
+    updated_at: stepStartedAt,
+    completed_at: null,
+    error_message: null,
+    steps_history: JSON.stringify([{
+      step: WORKFLOW_STEP_PENDING,
+      timestamp: stepStartedAt,
+    }]),
   };
   const written = await hosts.cdcIntegrationService.insertSystemTableRow(
     REPLICA_OPERATIONS_TABLE, row);

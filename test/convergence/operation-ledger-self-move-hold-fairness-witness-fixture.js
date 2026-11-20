@@ -391,7 +391,8 @@ function injectLedgerAnswers({
       ) {
         return {success: true, rows: []};
       }
-      if (control.reservationRowsVisible && String(sql).includes(STORAGE_RESERVATIONS_TABLE_MARKER)) {
+      if (control.reservationRowsVisible &&
+          String(sql).includes(STORAGE_RESERVATIONS_TABLE_MARKER)) {
         return reservationGateway[method](...args);
       }
       return original(...args);
