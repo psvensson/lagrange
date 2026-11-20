@@ -89,7 +89,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         } catch (error) {
           result = error;
         }
-        if (result.success || !this.isRetryableOperationPersistError(result)) {
+        if (result.success === true || !this.isRetryableOperationPersistError(result)) {
           return result;
         }
         const elapsedMs = this.timeSource.now() - startedAt;
@@ -229,7 +229,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       while (true) {
         const result = await this.executeReplicaOperationGatewayMutationAttempt(
           mutation, options, fallback, retryAttempt);
-        if (result.success) {
+        if (result.success === true) {
           return result;
         }
         const step = await this.resolveOperationMutationRetryableStep(result, {

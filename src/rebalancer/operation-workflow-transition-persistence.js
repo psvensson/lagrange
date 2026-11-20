@@ -345,6 +345,7 @@ class OperationWorkflowTransitionPersistence
     armTerminalTransitionRepair(this, outcome.operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
     const releaseState = this.terminalTransitionRepairStateByOperationId.get(operation.operationId);
+    if (!releaseState) throw new Error('Terminal release owner is shutting down');
     if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
       if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
       else this.stats.operationsCompleted++;

@@ -32,7 +32,7 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  ControlPlaneSystemTableGateway,
+  ControlPlaneSystemTableGateway, CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   createOperation, OperationType, ReplicaStatus,
@@ -754,3 +754,58 @@ for (const deferred of [false, true]) {
         'neither expiry nor orphan sweep discharges unproved terminal evidence');
     });
 }
+
+
+test('strict outcomes owner-unavailable release cannot consume a local empty fallback', async (t) => {
+  const fixture = createFixture(t).current;
+  const operation = await seedOperation(t, fixture, 'strict-required-release');
+  const read = fixture.gateway.readAuthoritativeRows.bind(fixture.gateway);
+  let fallbackReads = 0;
+  fixture.gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+    if (table !== SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS) return read(table, sql, params, options);
+    if (options.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
+      return {success: false, error: 'reservation authority unavailable'};
+    }
+    fallbackReads++;
+    return {success: true, rows: []};
+  };
+  const attempted = await observeAttempt(() =>
+    fixture.coordinator.workflowOwner.completeOperation(operation));
+  t.equal(attempted.error?.code, 'RESERVATION_RELEASE_UNCONFIRMED');
+  t.equal(fallbackReads, 0);
+  t.equal(reservationStatus(fixture, operation.operationId), RESERVATION_STATUS.ACTIVE);
+  t.ok(fixture.coordinator.workflowOwner.terminalTransitionRepairStateByOperationId
+    .has(operation.operationId));
+});
+
+test('strict outcomes crash after release before notification resumes through owner rebind', async (t) => {
+  const fixture = createFixture(t);
+  const partitionId = 'replica_operations-p1';
+  const operation = await seedOperation(t, fixture.current, 'strict-post-release-crash',
+    {partitionId, entityId: partitionId});
+  const committed = await persistTerminalWitness(fixture.current, operation);
+  // Commit and actual storage release exist, but no terminal workflow notification
+  // was delivered before discarding the coordinator and reopening its SQLite file.
+  await fixture.current.coordinator.releaseReservationForOperation(committed.operation);
+  const rebalancer = createTestRebalancer({entityId: partitionId,
+    entityType: SERVICE_TYPE.PARTITION, rebalanceCoordinator: fixture.current.coordinator});
+  rebalancer.isLeader = true;
+  const wakes = [];
+  rebalancer.enqueueRebalanceCheck = (reason) => {
+    wakes.push(['rebalance', reason]);
+  };
+  rebalancer.enqueueMembershipPublicationReconcile = (reason) => {
+    wakes.push(['membership', reason]);
+  };
+  t.teardown(() => rebalancer.unbindCoordinatorProgressListeners());
+  const reopened = await fixture.reopen();
+  rebalancer.setRebalanceCoordinator(reopened.coordinator);
+  t.same(wakes.map(([kind]) => kind), ['rebalance', 'membership'],
+    'existing coordinator attachment wakes both dependent owners without a terminal event replay');
+  t.equal(reservationStatus(reopened, operation.operationId), RESERVATION_STATUS.RELEASED);
+  t.equal(readPlacementCensus(reopened.database)
+    .find((row) => row.operationId === operation.operationId).incomplete, false);
+  t.equal(reopened.coordinator.recentOperationIntents.size, 0,
+    'the volatile intent cache is empty after process reconstruction');
+});

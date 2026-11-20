@@ -105,6 +105,7 @@ const RESERVATION_BIRTH_VERB = 'birth';
 const RESERVATION_RELEASE_READ_QUERY_OPTIONS = Object.freeze({
   ...STORAGE_RESERVATION_READ_QUERY_OPTIONS,
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
 const RESERVATION_RELEASE_UNCONFIRMED = 'RESERVATION_RELEASE_UNCONFIRMED';
 const RESERVATION_RELEASE_WITNESS_SQL =
@@ -230,7 +231,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         timeoutBudget: options.timeoutBudget,
       },
     );
-    if (!result.success) {
+    if (result.success !== true) {
       return {
         success: false,
         changed: false,
@@ -556,7 +557,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
   async getReservationOperationVisibilityObservation(operationId) {
     return this.repository.getOperationByIdVisibilityObservation(operationId, {
       authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
       allowPriorityRecoveryDeferredVisibility: false,
       allowOwnerPersistedTransitionDeferredVisibility: false,
       requireAbsenceConfirmation: true,

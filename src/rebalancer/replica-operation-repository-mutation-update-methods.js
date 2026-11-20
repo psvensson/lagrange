@@ -261,7 +261,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           operation: null,
         });
       }
-      if (!result.success) {
+      if (result.success !== true) {
         return this.resolveFailedOperationUpdateResult(
           operation,
           result,
