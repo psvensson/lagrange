@@ -1,3 +1,6 @@
+import {
+  assertSingleOperationLedgerReadPressure, injectOperationLedgerReadPressure,
+} from './operation-ledger-read-pressure-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -199,8 +202,6 @@ const RETRYABLE_SKIP_REASONS = Object.freeze(new Set([
   REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
   REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
 ]));
-const INCOMPLETE_OPERATIONS_QUERY_MARKER = 'workflow_step IN';
-const REPLICA_OPERATIONS_TABLE_MARKER = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 
 const EVENT = Object.freeze({
   SIBLING_REFUSED: 'sibling_refused',
@@ -391,30 +392,6 @@ function isTypedRetryableSkip(error) {
 // control-plane pressure (run: 1.0-1.7 s per in-flight owner query). Only the
 // incomplete-operations authoritative query is delayed; row point reads and
 // writes stay immediate.
-function injectLedgerReadLatency({coordinator, timeSource}) {
-  const gateway = coordinator.controlPlaneSystemTableGateway;
-  const isIncompleteOperationsRead = (sql) =>
-    String(sql).includes(REPLICA_OPERATIONS_TABLE_MARKER) &&
-    String(sql).includes(INCOMPLETE_OPERATIONS_QUERY_MARKER);
-  const delay = () =>
-    new Promise((resolve) =>
-      timeSource.setTimeout(resolve, LEDGER_AUTHORITATIVE_READ_LATENCY_MS),
-    );
-  for (const [method, sqlIndex] of [
-    ['readAuthoritativeRows', 1],
-    ['readRows', 1],
-    ['executeQuery', 0],
-  ]) {
-    const original = gateway[method].bind(gateway);
-    gateway[method] = async (...args) => {
-      if (isIncompleteOperationsRead(args[sqlIndex])) {
-        await delay();
-      }
-      return original(...args);
-    };
-  }
-}
-
 // Boundary injection: the replica handler acknowledges CREATE_REPLICA after the
 // run's observed dispatch round trip; an acknowledged INITIATED response is
 // what the owner maps to CREATING
@@ -602,7 +579,11 @@ async function runFormationCadenceScenario() {
     refreshStartupAuthority();
   };
 
-  injectLedgerReadLatency({coordinator, timeSource});
+  const ledgerReadPressure = injectOperationLedgerReadPressure({
+    gateway: coordinator.controlPlaneSystemTableGateway,
+    timeSource,
+    pressureMs: LEDGER_AUTHORITATIVE_READ_LATENCY_MS,
+  });
   observeBudgetAdmissions({
     coordinator,
     onBudgetChecked: ({partitionId}) => {
@@ -788,6 +769,7 @@ async function runFormationCadenceScenario() {
 
   return {
     events,
+    ledgerReadPressure,
     siblings: [...siblings.values()].map((sibling) => ({
       tableId: sibling.tableId,
       refusals: sibling.refusals,
@@ -1087,6 +1069,7 @@ test(
       'REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS is unchanged',
     );
     const m = await runFormationCadenceScenario();
+    assertSingleOperationLedgerReadPressure(m.ledgerReadPressure, CLOCK_STEP_MS);
     assert.equal(
       m.budget.maxConcurrentAdds,
       HEAD_MAX_CONCURRENT_ADDS,
