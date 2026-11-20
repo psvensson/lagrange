@@ -496,39 +496,41 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           await partitionService.requestReplicaAdmission(operationId);
         }
         this.throwIfShuttingDown();
-        if (
-          this.shouldGateActivationOnVoterReadiness(
-            partitionId,
-            operationId,
-            isJoiningExistingGroup,
-            explicitOperationType,
-          )
-        ) {
+        const createStartedAt =
+          this.inProgressOperations.get(operationId)?.startedAt;
+        const createDeadlineAtMs = Number.isSafeInteger(createStartedAt) ?
+          createStartedAt + this.syncTimeoutMs : null;
+        if (this.shouldGateActivationOnVoterReadiness(
+          partitionId, operationId, isJoiningExistingGroup, explicitOperationType,
+        )) {
           this.updateReplicaCreationProgress(progress, {
             stage: REPLICA_HANDLER_PROGRESS.STAGE_WAITING_VOTER_READY,
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
         } else if (isJoiningExistingGroup && !skipLifecycleStatusPersistence) {
-          await this.waitForLearnerAdmissionActivation(replicaId, partitionId);
+          const nowMs = this.timeSource?.now ? this.timeSource.now() : Date.now();
+          const admissionWait = await this.waitForLearnerAdmissionActivation(
+            replicaId, partitionId, {
+              deadlineAtMs: createDeadlineAtMs ?? nowMs + this.syncTimeoutMs,
+            },
+          );
+          if (admissionWait?.ready !== true) {
+            throw new Error(
+              `Learner admission wait failed for replica ${replicaId}: ${admissionWait?.outcome}`,
+            );
+          }
         }
         // CREATE cannot publish an ACTIVE service whose participant runtime
         // is still default closed. The lifecycle owner performs the same
         // cohort proof used at startup, including control group first,
         // before the operation exposes the replica as active.
-        if (
-          canReleaseFreshCreateOnActivation(this, partitionService, {
-            skipLifecycleStatusPersistence,
-            existed,
-            createAdmissionEvidence,
-          })
-        ) {
-          const createStartedAt =
-            this.inProgressOperations.get(operationId)?.startedAt;
+        if (canReleaseFreshCreateOnActivation(this, partitionService, {
+          skipLifecycleStatusPersistence, existed, createAdmissionEvidence,
+        })) {
           await this.participantReleaseRecovery.releaseFreshCreate(partitionId, {
             createAdmissionEvidence,
             identityExisted: existed,
-            deadlineAtMs: Number.isSafeInteger(createStartedAt) ?
-              createStartedAt + this.syncTimeoutMs : null,
+            deadlineAtMs: createDeadlineAtMs,
           });
         }
         // Voter readiness is executor evidence, not permission to complete

@@ -69,6 +69,7 @@ const IPC_MSG_TYPE = Object.freeze({
   INGEST_CHUNK: 'INGEST_CHUNK',
   INGEST_ACK: 'INGEST_ACK',
   EXECUTE_MERGE: 'EXECUTE_MERGE',
+  MERGE_EXECUTION_STARTED: 'MERGE_EXECUTION_STARTED',
   MERGE_RESULT: 'MERGE_RESULT',
   ABORT_SESSION: 'ABORT_SESSION',
   ERROR: 'ERROR',
@@ -129,13 +130,37 @@ async function handleWorkerIngestChunk(activeSession, message) {
   process.send({type: IPC_MSG_TYPE.INGEST_ACK});
 }
 
-function handleWorkerExecuteMerge(activeSession, message) {
+function sendMergeExecutionStartedObservation({sqliteBusy, firstRowStepped}) {
+  return new Promise((resolve) => {
+    if (!process.connected) {
+      resolve();
+      return;
+    }
+    process.send(
+      {
+        type: IPC_MSG_TYPE.MERGE_EXECUTION_STARTED,
+        pid: process.pid,
+        sqliteBusy,
+        firstRowStepped,
+      },
+      () => resolve(),
+    );
+  });
+}
+
+async function handleWorkerExecuteMerge(activeSession, message) {
   const params = message.typedParams ?
     decodeTypedParams(message.typedParams) :
     [];
-  const result = activeSession.executeMergeSql(message.sql, params, {
-    expectedColumns: message.expectedColumns || null,
-  });
+  const expectedColumns = message.expectedColumns || null;
+  const result = message.notifyExecutionStarted === true ?
+    await activeSession.executeMergeSqlWithObservation(message.sql, params, {
+      expectedColumns,
+      onSqliteExecutionEntered: sendMergeExecutionStartedObservation,
+    }) :
+    activeSession.executeMergeSql(message.sql, params, {
+      expectedColumns,
+    });
   process.send({
     type: IPC_MSG_TYPE.MERGE_RESULT,
     rowSet: result.rowSet,
@@ -173,7 +198,7 @@ function startMergeWorkerLoop() {
       }
       if (msgType === IPC_MSG_TYPE.EXECUTE_MERGE) {
         try {
-          handleWorkerExecuteMerge(activeSession, message);
+          await handleWorkerExecuteMerge(activeSession, message);
         } finally {
           closeActiveSession();
         }
@@ -537,6 +562,10 @@ class CoordinatorMergeProcessPool {
 
       onMessage = (response) => {
         if (settled) return;
+        if (response?.type === IPC_MSG_TYPE.MERGE_EXECUTION_STARTED) {
+          sessionOptions?.onMergeExecutionStarted?.(response);
+          return;
+        }
         settled = true;
         cleanup();
         if (response?.type === IPC_MSG_TYPE.ERROR) {
@@ -652,6 +681,7 @@ class CoordinatorMergeProcessPool {
         sql: request.sql,
         typedParams,
         expectedColumns: request.expectedColumns || null,
+        notifyExecutionStarted: Boolean(sessionOptions.onMergeExecutionStarted),
       }, mergeTimeoutMs, sessionOptions);
 
       const decoded = decodeTypedRowSet(response.rowSet);

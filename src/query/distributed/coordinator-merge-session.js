@@ -535,22 +535,115 @@ class CoordinatorMergeSession {
    *   byteLength: number
    * }}
    */
-  executeMergeSql(sql, params = [], options = {}) {
+  prepareMergeStatement(sql, params, options) {
     this.assertActiveAndWithinDeadline();
     assertCoordinatorStatementAdmitted(sql, this.db);
     const typedParams = decodeTypedParams(encodeTypedParams(params));
+    const stmt = this.db.prepare(sql).raw(true).safeIntegers(true);
+    const sqliteColumns = stmt.columns().map((column) => column.name);
+    const columns = Array.isArray(options.expectedColumns) &&
+      options.expectedColumns.length === sqliteColumns.length ?
+      options.expectedColumns :
+      sqliteColumns;
+    return {stmt, typedParams, columns};
+  }
+
+  executeMergeSql(sql, params = [], options = {}) {
     const partialAggregate = options.partialAggregate === true;
     try {
-      const stmt = this.db.prepare(sql).raw(true).safeIntegers(true);
-      const sqliteColumns = stmt.columns().map((column) => column.name);
-      const columns = Array.isArray(options.expectedColumns) &&
-        options.expectedColumns.length === sqliteColumns.length ?
-        options.expectedColumns :
-        sqliteColumns;
+      const {stmt, typedParams, columns} = this.prepareMergeStatement(
+        sql,
+        params,
+        options,
+      );
       return this.collectMergeRows(stmt, typedParams, columns);
     } catch (error) {
       throw mapSqliteMergeError(error, {partialAggregate});
     }
+  }
+
+  async executeMergeSqlWithObservation(sql, params = [], options = {}) {
+    const partialAggregate = options.partialAggregate === true;
+    try {
+      const {stmt, typedParams, columns} = this.prepareMergeStatement(
+        sql,
+        params,
+        options,
+      );
+      const iterator = stmt.iterate(...typedParams);
+      try {
+        const firstStep = iterator.next();
+        await options.onSqliteExecutionEntered?.({
+          sqliteBusy: Boolean(stmt.busy),
+          firstRowStepped: !firstStep.done,
+        });
+        const rawRows = [];
+        const encodedRows = [];
+        let totalBytes = 0;
+        if (!firstStep.done) {
+          totalBytes = this.appendCollectedMergeRow(
+            firstStep.value,
+            columns,
+            rawRows,
+            encodedRows,
+            totalBytes,
+          );
+          for (
+            let step = iterator.next();
+            !step.done;
+            step = iterator.next()
+          ) {
+            totalBytes = this.appendCollectedMergeRow(
+              step.value,
+              columns,
+              rawRows,
+              encodedRows,
+              totalBytes,
+            );
+          }
+        }
+        this.assertActiveAndWithinDeadline();
+        return {
+          columns,
+          rawRows,
+          rows: materializeRowObjects(columns, rawRows),
+          rowSet: assembleTypedRowSet(columns, encodedRows),
+          byteLength: totalBytes,
+        };
+      } finally {
+        iterator.return?.();
+      }
+    } catch (error) {
+      throw mapSqliteMergeError(error, {partialAggregate});
+    }
+  }
+
+  appendCollectedMergeRow(rawRow, columns, rawRows, encodedRows, totalBytes) {
+    this.assertActiveAndWithinDeadline();
+    const nextRowCount = rawRows.length + 1;
+    if (nextRowCount > this.resultMaxRows) {
+      throw createMergeError(
+        QUERY_ERROR_CODE.QUERY_RESULT_ROWS_EXCEEDED,
+        MERGE_ERROR_MSG.RESULT_ROWS_EXCEEDED,
+        {actual: nextRowCount, limit: this.resultMaxRows},
+      );
+    }
+    const {encoded, byteLength} = encodeAndMeasureTypedRow(
+      rawRow,
+      columns.length,
+      rawRows.length,
+    );
+    const nextBytes = totalBytes + byteLength;
+    if (nextBytes > this.resultMaxBytes) {
+      throw createMergeError(
+        QUERY_ERROR_CODE.QUERY_RESULT_SIZE_EXCEEDED,
+        MERGE_ERROR_MSG.RESULT_BYTES_EXCEEDED,
+        {actual: nextBytes, limit: this.resultMaxBytes},
+      );
+    }
+    rawRows.push(rawRow);
+    encodedRows.push(encoded);
+    return nextBytes;
   }
 
   collectMergeRows(stmt, params, columns) {
@@ -558,31 +651,13 @@ class CoordinatorMergeSession {
     const encodedRows = [];
     let totalBytes = 0;
     for (const rawRow of stmt.iterate(...params)) {
-      this.assertActiveAndWithinDeadline();
-      const nextRowCount = rawRows.length + 1;
-      if (nextRowCount > this.resultMaxRows) {
-        throw createMergeError(
-          QUERY_ERROR_CODE.QUERY_RESULT_ROWS_EXCEEDED,
-          MERGE_ERROR_MSG.RESULT_ROWS_EXCEEDED,
-          {actual: nextRowCount, limit: this.resultMaxRows},
-        );
-      }
-      const {encoded, byteLength} = encodeAndMeasureTypedRow(
+      totalBytes = this.appendCollectedMergeRow(
         rawRow,
-        columns.length,
-        rawRows.length,
+        columns,
+        rawRows,
+        encodedRows,
+        totalBytes,
       );
-      const nextBytes = totalBytes + byteLength;
-      if (nextBytes > this.resultMaxBytes) {
-        throw createMergeError(
-          QUERY_ERROR_CODE.QUERY_RESULT_SIZE_EXCEEDED,
-          MERGE_ERROR_MSG.RESULT_BYTES_EXCEEDED,
-          {actual: nextBytes, limit: this.resultMaxBytes},
-        );
-      }
-      rawRows.push(rawRow);
-      encodedRows.push(encoded);
-      totalBytes = nextBytes;
     }
     this.assertActiveAndWithinDeadline();
     return {

@@ -843,3 +843,145 @@ t.test('dial handles error-before-abort, abort-before-error, post-OPEN abort, ' 
   }
 });
 
+t.test('sendChunkFrame settles exceptional ws.send throws and tokenBucket ' +
+  'rejections cleanly without stranding pendingSends or the drain loop',
+async (t) => {
+  const wsSendErrorMessage = 'simulated ws.send synchronous write failure';
+  const acquireErrorMessage = 'simulated tokenBucket.acquire rejection';
+  let shouldRejectAcquire = false;
+  let shouldThrowSend = false;
+  let headBlocked = true;
+  let unblockHead = null;
+
+  const customBucket = {
+    acquire() {
+      if (shouldRejectAcquire) {
+        shouldRejectAcquire = false;
+        return Promise.reject(new Error(acquireErrorMessage));
+      }
+      if (headBlocked) {
+        return new Promise((resolve) => {
+          unblockHead = () => {
+            headBlocked = false;
+            resolve(Object.freeze({acquired: true}));
+          };
+        });
+      }
+      return Promise.resolve(Object.freeze({acquired: true}));
+    },
+    depthBytes: () => 0,
+    pendingCount: () => 0,
+    dispose() {
+      if (unblockHead) {
+        unblockHead();
+      }
+    },
+  };
+
+  const mockSocket = createControllableMockWebSocket();
+  const baseSend = mockSocket.send.bind(mockSocket);
+  mockSocket.send = (payload) => {
+    if (shouldThrowSend) {
+      shouldThrowSend = false;
+      throw new Error(wsSendErrorMessage);
+    }
+    baseSend(payload);
+  };
+
+  const registry = createBulkTransferChannelRegistry({
+    nodeId: TEST_LOCAL_NODE_ID,
+    tokenBucket: customBucket,
+    maxPendingSends: TEST_MAX_PENDING_SENDS,
+  });
+  const channel = registry.adoptIncomingSocket({
+    nodeId: TEST_PEER_NODE_ID,
+    ws: mockSocket,
+  });
+
+  try {
+    // 1. Active send throws inside ws.send() while a second send is queued:
+    shouldThrowSend = true;
+    const failingSendPromise = channel.sendChunkFrame(Buffer.from('fail-send'));
+    const survivorAfterSendThrowPromise = channel.sendChunkFrame(
+      Buffer.from('after-send-throw'),
+    );
+    t.equal(channel.getStats().pendingSends, 2, 'two sends pending before unblock');
+    t.equal(
+      channel.getStats().retainedQueueEntries,
+      2,
+      'two entries retained before unblock',
+    );
+
+    unblockHead();
+    await t.rejects(
+      failingSendPromise,
+      {message: wsSendErrorMessage},
+      'ws.send() throw rejects caller sendChunkFrame promise',
+    );
+    const survivor1Outcome = await survivorAfterSendThrowPromise;
+    t.same(
+      survivor1Outcome,
+      {outcome: BULK_CHANNEL_SEND_OUTCOME.SENT, delivered: true},
+      'queued send after ws.send() failure still drains and succeeds',
+    );
+    t.equal(
+      channel.getStats().pendingSends,
+      0,
+      'pendingSends returns to 0 after ws.send() throw and survivor drain',
+    );
+    t.equal(
+      channel.getStats().inFlightBytes,
+      0,
+      'inFlightBytes returns to 0 after ws.send() throw',
+    );
+    t.equal(
+      channel.getStats().retainedQueueEntries,
+      0,
+      'retainedQueueEntries returns to 0 after ws.send() throw',
+    );
+
+    // 2. Active send rejects inside tokenBucket.acquire() followed by normal send:
+    shouldRejectAcquire = true;
+    const failingAcquirePromise = channel.sendChunkFrame(
+      Buffer.from('fail-acquire'),
+    );
+    const survivorAfterAcquireRejectPromise = channel.sendChunkFrame(
+      Buffer.from('after-acquire-reject'),
+    );
+    await t.rejects(
+      failingAcquirePromise,
+      {message: acquireErrorMessage},
+      'tokenBucket.acquire() rejection rejects caller sendChunkFrame promise',
+    );
+    const survivor2Outcome = await survivorAfterAcquireRejectPromise;
+    t.same(
+      survivor2Outcome,
+      {outcome: BULK_CHANNEL_SEND_OUTCOME.SENT, delivered: true},
+      'subsequent send after tokenBucket.acquire() rejection drains and succeeds',
+    );
+    t.equal(
+      channel.getStats().pendingSends,
+      0,
+      'pendingSends returns to 0 after acquire rejection and survivor drain',
+    );
+    t.equal(
+      channel.getStats().inFlightBytes,
+      0,
+      'inFlightBytes returns to 0 after acquire rejection',
+    );
+    t.equal(
+      channel.getStats().retainedQueueEntries,
+      0,
+      'retainedQueueEntries returns to 0 after acquire rejection',
+    );
+    t.same(
+      mockSocket.sentFrames.map((buf) => Buffer.from(buf).toString('utf8')),
+      ['after-send-throw', 'after-acquire-reject'],
+      'only the two surviving frames were transmitted in FIFO order',
+    );
+  } finally {
+    registry.closeAll();
+  }
+});
+
+

@@ -11,43 +11,19 @@ const COL_TOTAL = 'total';
 const COL_COUNT = 'n';
 const COL_TYPE_INTEGER = 'INTEGER';
 const SUM_SQL = 'SELECT SUM(id) AS total FROM t';
-const HEAVY_JOIN_SQL =
-  'SELECT COUNT(*) AS n FROM t a ' +
-  'JOIN t b ON 1 = 1 ' +
-  'JOIN t c ON 1 = 1 ' +
-  'JOIN t d ON 1 = 1 ' +
-  'JOIN t e ON 1 = 1';
+const STREAMING_HEAVY_JOIN_SQL =
+  'SELECT a.id + (' +
+  'SELECT COUNT(*) FROM t c JOIN t d ON 1 = 1 JOIN t e ON 1 = 1 ' +
+  'WHERE c.id >= a.id + b.id' +
+  ') AS n FROM t a JOIN t b ON 1 = 1';
 const HEAVY_ROW_COUNT = 80;
 const LONG_DEADLINE_OFFSET_MS = 10000;
-const SHORT_WAIT_MS = 25;
 const SAMPLE_ROW_A = 10n;
 const SAMPLE_ROW_B = 20n;
 const SAMPLE_SUM = 30n;
 const INIT_SESSION_MSG_TYPE = 'INIT_SESSION';
-const EXECUTE_MERGE_MSG_TYPE = 'EXECUTE_MERGE';
+const MERGE_EXECUTION_STARTED_MSG_TYPE = 'MERGE_EXECUTION_STARTED';
 const SEND_FAIL_MESSAGE = 'IPC channel already closed';
-
-function waitForExecuteMergeEntered(pool) {
-  const originalSendAndWait = pool.sendAndWait.bind(pool);
-  let resolveEntered = null;
-  const enteredPromise = new Promise((resolve) => {
-    resolveEntered = resolve;
-  });
-  pool.sendAndWait = function(child, payload, timeoutMs, sessionOptions) {
-    const resultPromise = originalSendAndWait(
-      child,
-      payload,
-      timeoutMs,
-      sessionOptions,
-    );
-    if (payload?.type === EXECUTE_MERGE_MSG_TYPE) {
-      pool.sendAndWait = originalSendAndWait;
-      setTimeout(resolveEntered, SHORT_WAIT_MS);
-    }
-    return resultPromise;
-  };
-  return enteredPromise;
-}
 
 function buildSimpleSumRequest(sessionOptions = {}) {
   return {
@@ -80,7 +56,7 @@ function buildHeavyJoinRequest(sessionOptions = {}) {
         rowSet: encodeTypedRowSet([COL_ID], rows),
       }],
     }],
-    sql: HEAVY_JOIN_SQL,
+    sql: STREAMING_HEAVY_JOIN_SQL,
     params: [],
     expectedColumns: [COL_COUNT],
     sessionOptions,
@@ -244,18 +220,44 @@ test('CoordinatorMergeProcessPool - active execution cancellation kills busy wor
     const warmWorker = pool.idleWorkers[0];
     const initialPid = warmWorker.pid;
 
-    const executeMergeEntered = waitForExecuteMergeEntered(pool);
+    let resolveExecutionStarted = null;
+    const executionStartedPromise = new Promise((resolve) => {
+      resolveExecutionStarted = resolve;
+    });
     const controller = new AbortController();
     const heavyPromise = pool.execute(
       buildHeavyJoinRequest({
         signal: controller.signal,
         deadlineMs: Date.now() + LONG_DEADLINE_OFFSET_MS,
+        onMergeExecutionStarted: (observation) => {
+          resolveExecutionStarted(observation);
+        },
       }),
     );
 
-    // Wait until INIT_SESSION + INGEST_CHUNK have been ACKed by the warm
-    // worker and EXECUTE_MERGE has been dispatched into SQLite execution:
-    await executeMergeEntered;
+    // Wait for the worker-originated observation emitted after the real
+    // SQLite VDBE iterator stepped row 1 inside sqlite3_step():
+    const observation = await executionStartedPromise;
+    t.equal(
+      observation.type,
+      MERGE_EXECUTION_STARTED_MSG_TYPE,
+      'worker emitted MERGE_EXECUTION_STARTED observation',
+    );
+    t.equal(
+      observation.pid,
+      initialPid,
+      'observation originated from the active child worker process',
+    );
+    t.equal(
+      observation.sqliteBusy,
+      true,
+      'SQLite statement VDBE cursor is actively busy in sqlite3_step',
+    );
+    t.equal(
+      observation.firstRowStepped,
+      true,
+      'SQLite stepped the first result row before emitting the observation',
+    );
     controller.abort();
 
     await t.rejects(
@@ -319,14 +321,25 @@ test('CoordinatorMergeProcessPool - shutdown() with active and queued work settl
   const pool = new CoordinatorMergeProcessPool({maxWorkers: 1});
   try {
     await pool.execute(buildSimpleSumRequest());
-    const executeMergeEntered = waitForExecuteMergeEntered(pool);
+    let resolveExecutionStarted = null;
+    const executionStartedPromise = new Promise((resolve) => {
+      resolveExecutionStarted = resolve;
+    });
     const activePromise = pool.execute(
       buildHeavyJoinRequest({
         deadlineMs: Date.now() + LONG_DEADLINE_OFFSET_MS,
+        onMergeExecutionStarted: (observation) => {
+          resolveExecutionStarted(observation);
+        },
       }),
     );
 
-    await executeMergeEntered;
+    const observation = await executionStartedPromise;
+    t.equal(
+      observation.sqliteBusy,
+      true,
+      'active worker is mid-execution inside SQLite before shutdown()',
+    );
     const [activeChild] = [...pool.activeWorkers];
 
     const queuedToken = createManualCancellationToken(false);

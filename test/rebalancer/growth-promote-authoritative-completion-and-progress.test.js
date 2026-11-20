@@ -3,6 +3,14 @@ import {
   CDC_OPERATION,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {
+  assignReplicaHandlerCreateMethods,
+} from '../../src/node/replica-handler-create-methods.js';
+import {
+  LEARNER_ADMISSION_WAIT_OUTCOME,
+  assignReplicaHandlerVoterReadinessMethods,
+} from '../../src/node/replica-handler-voter-readiness-methods.js';
+import {PartitionService} from '../../src/partition/partition-service-assembly.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -42,15 +50,20 @@ const TEST_LEARNER_2 = 'user_orders-p1-r3';
 const TEST_LEADER_REPLICA_2 = 'user_orders-p1-r1-n2';
 
 function buildGrowthPromoteOperation(overrides = {}) {
+  const partitionId = overrides.partitionId || TEST_PARTITION_ID;
   const operation = createOperation({
     operationId: overrides.operationId || 'op-growth-promote-1',
     type: OperationType.GROWTH_PROMOTE,
-    partitionId: overrides.partitionId || TEST_PARTITION_ID,
+    partitionId,
+    entityType: 'partition',
+    entityId: partitionId,
     replicaId: overrides.replicaId || TEST_LEARNER_1,
     sourceNodeId: overrides.sourceNodeId || TEST_LEADER_NODE_1,
     targetNodeId: overrides.targetNodeId ?? TEST_LEADER_NODE_1,
     sourceReplicaId: overrides.sourceReplicaId || TEST_LEARNER_2,
   });
+  operation.entityType = 'partition';
+  operation.entityId = partitionId;
   operation.sourceReplicaId = overrides.sourceReplicaId || TEST_LEARNER_2;
   operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] =
     overrides.promoteReplicaIds || [TEST_LEARNER_1, TEST_LEARNER_2];
@@ -462,6 +475,12 @@ test(
         ),
         false,
       );
+      t.equal(
+        didOperationReconcileAdvanceOrComplete(
+          OPERATION_RECONCILE_OUTCOME.FAILED,
+        ),
+        false,
+      );
       t.equal(didOperationReconcileAdvanceOrComplete(false), false);
       t.equal(didOperationReconcileAdvanceOrComplete(null), false);
 
@@ -475,7 +494,8 @@ test(
         OPERATION_RECONCILE_OUTCOME.HELD,
       );
 
-      // 2. Already terminal operation before reconcile returns WAITING
+      // 2. Already terminal ACTIVE operation before reconcile discharges obligations
+      // and returns COMPLETED; already terminal FAILED operation returns FAILED
       const terminalOp = buildGrowthPromoteOperation({
         status: ReplicaStatus.ACTIVE,
         workflowStep: WORKFLOW_STEP.ACTIVE,
@@ -483,7 +503,17 @@ test(
       });
       t.equal(
         await reconcileGrowthPromoteLifecycle(owner, terminalOp),
-        OPERATION_RECONCILE_OUTCOME.WAITING,
+        OPERATION_RECONCILE_OUTCOME.COMPLETED,
+      );
+      const failedTerminalOp = buildGrowthPromoteOperation({
+        operationId: 'op-growth-promote-terminal-failed',
+        status: ReplicaStatus.FAILED,
+        workflowStep: WORKFLOW_STEP.FAILED,
+        completedAt: Date.now(),
+      });
+      t.equal(
+        await reconcileGrowthPromoteLifecycle(owner, failedTerminalOp),
+        OPERATION_RECONCILE_OUTCOME.FAILED,
       );
 
       // 3. In-place SYNCING retry (no step change, not terminal) returns WAITING
@@ -795,5 +825,533 @@ test(
     } finally {
       await coordinator.shutdown();
     }
+  },
+);
+
+test(
+  'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+    '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+    'IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate ' +
+    'reconciliation, and interrupted releasePlacementHold recovery',
+  async (t) => {
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_LEADER_NODE_1,
+      enableTimeouts: false,
+    });
+    const owner = coordinator.workflowOwner;
+
+    let releasedHoldIds = [];
+    let failNextHoldRelease = false;
+    owner.releasePlacementHold = async (op) => {
+      if (failNextHoldRelease) {
+        failNextHoldRelease = false;
+        throw new Error('transient placement hold release failure');
+      }
+      releasedHoldIds.push(op.operationId);
+    };
+
+    const releasedReservationIds = [];
+    const baseReleaseReservation =
+      owner.releaseReservationForOperation.bind(owner);
+    owner.releaseReservationForOperation = async (op) => {
+      releasedReservationIds.push(op.operationId);
+      return baseReleaseReservation(op);
+    };
+
+    const scheduledProgressRetryIds = [];
+    const baseScheduleObservedProgressRetry =
+      owner.scheduleObservedProgressRetry.bind(owner);
+    owner.scheduleObservedProgressRetry = (opId, tableName, opType) => {
+      scheduledProgressRetryIds.push(opId);
+      return baseScheduleObservedProgressRetry(opId, tableName, opType);
+    };
+
+    const validCommittedResponse = {
+      committedVotersReached: true,
+      partitionId: TEST_PARTITION_ID,
+      [ReplicaOperationField.PROPOSAL]: {
+        outcome: 'CORE_OK',
+        promotedReplicaIds: [TEST_LEARNER_1, TEST_LEARNER_2],
+      },
+    };
+
+    const seedDurableGrowthOperation = async (operationId, extra = {}) => {
+      const op = buildGrowthPromoteOperation({
+        operationId,
+        status: ReplicaStatus.SYNCING,
+        workflowStep: WORKFLOW_STEP.SYNCING,
+        completedAt: null,
+        ...extra,
+      });
+      if (extra.stepsHistory) op.stepsHistory = extra.stepsHistory;
+      const persisted = await coordinator.repository.persistNewOperation(op);
+      t.equal(persisted, true, `seed ${operationId} into real SQLite repository`);
+      return op;
+    };
+
+    try {
+      // Phase 1 (RECONCILING) check: unconfirmed response stays in RECONCILING/WAITING
+      const op1 = await seedDurableGrowthOperation('op-real-repo-updated');
+      const reconcilingSettlement = await settleGrowthPromoteCompletion(
+        owner, op1, {
+          response: {
+            committedVotersReached: false,
+            partitionId: TEST_PARTITION_ID,
+          },
+        },
+      );
+      t.equal(reconcilingSettlement.phase, GROWTH_SETTLEMENT_PHASE.RECONCILING);
+      t.equal(reconcilingSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+      t.equal(reconcilingSettlement.committed, false);
+      t.equal(reconcilingSettlement.disposition, null);
+
+      // Witness 1: Successful terminal persistence (UPDATED -> SETTLED, COMPLETED)
+      const updatedResult = await reconcileGrowthPromoteDispatchResponse(
+        owner, op1, validCommittedResponse,
+      );
+      t.equal(updatedResult.status, ReplicaOperationResponseStatus.COMPLETED);
+      t.equal(updatedResult.settlementPhase, GROWTH_SETTLEMENT_PHASE.SETTLED);
+      t.equal(updatedResult.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+      t.equal(updatedResult.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED);
+      t.ok(releasedHoldIds.includes(op1.operationId));
+      t.ok(releasedReservationIds.includes(op1.operationId));
+      const durableOp1 =
+        await coordinator.repository.queryAuthoritativeOperationById(op1.operationId);
+      t.equal(durableOp1.workflowStep, WORKFLOW_STEP.ACTIVE);
+      t.equal(durableOp1.status, ReplicaStatus.ACTIVE);
+      t.ok(Number.isFinite(durableOp1.completedAt));
+
+      // Witness 2: Identical terminal replay (IDEMPOTENT_REPLAY -> SETTLED, COMPLETED)
+      const staleCopyOfOp1 = buildGrowthPromoteOperation({
+        operationId: op1.operationId,
+        status: ReplicaStatus.SYNCING,
+        workflowStep: WORKFLOW_STEP.SYNCING,
+        completedAt: null,
+      });
+      const replayFromLaggingMemory = await settleGrowthPromoteCompletion(
+        owner, staleCopyOfOp1, {response: validCommittedResponse},
+      );
+      t.equal(replayFromLaggingMemory.phase, GROWTH_SETTLEMENT_PHASE.SETTLED);
+      t.equal(replayFromLaggingMemory.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+      t.equal(replayFromLaggingMemory.committed, false);
+      t.equal(
+        replayFromLaggingMemory.disposition,
+        REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      );
+      t.equal(staleCopyOfOp1.workflowStep, WORKFLOW_STEP.ACTIVE);
+      t.equal(staleCopyOfOp1.status, ReplicaStatus.ACTIVE);
+
+      const replayFromSettledInstance = await settleGrowthPromoteCompletion(
+        owner, op1, {response: validCommittedResponse},
+      );
+      t.equal(replayFromSettledInstance.phase, GROWTH_SETTLEMENT_PHASE.SETTLED);
+      t.equal(replayFromSettledInstance.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+      t.equal(replayFromSettledInstance.committed, false);
+      t.equal(
+        replayFromSettledInstance.disposition,
+        REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      );
+
+      // Witness 3: Competing durable failure winning the conditional write (TERMINAL_ADOPTED)
+      const opCompeting = await seedDurableGrowthOperation('op-real-repo-terminal-adopted');
+      await coordinator.sqlQueryEngine.executeQuery(
+        `UPDATE replica_operations
+            SET status = ?, workflow_step = ?, completed_at = ?, error_message = ?
+          WHERE operation_id = ?`,
+        [
+          ReplicaStatus.FAILED,
+          WORKFLOW_STEP.FAILED,
+          99_000,
+          'competing step timeout failure',
+          opCompeting.operationId,
+        ],
+      );
+      releasedHoldIds = [];
+      releasedReservationIds.length = 0;
+      scheduledProgressRetryIds.length = 0;
+
+      const adoptedDispatchResult = await reconcileGrowthPromoteDispatchResponse(
+        owner, opCompeting, validCommittedResponse,
+      );
+      t.equal(adoptedDispatchResult.status, ReplicaOperationResponseStatus.FAILED);
+      t.equal(adoptedDispatchResult.settlementPhase, GROWTH_SETTLEMENT_PHASE.SETTLED);
+      t.equal(adoptedDispatchResult.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+      t.equal(
+        adoptedDispatchResult.disposition,
+        REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+      );
+      t.equal(opCompeting.status, ReplicaStatus.FAILED);
+      t.equal(opCompeting.workflowStep, WORKFLOW_STEP.FAILED);
+      t.equal(opCompeting.completedAt, 99_000);
+      t.equal(opCompeting.errorMessage, 'competing step timeout failure');
+      t.same(scheduledProgressRetryIds, []);
+      t.same(releasedHoldIds, [opCompeting.operationId]);
+      t.same(releasedReservationIds, [opCompeting.operationId]);
+      const durableCompeting =
+        await coordinator.repository.queryAuthoritativeOperationById(opCompeting.operationId);
+      t.equal(durableCompeting.status, ReplicaStatus.FAILED);
+      t.equal(durableCompeting.workflowStep, WORKFLOW_STEP.FAILED);
+      t.equal(durableCompeting.completedAt, 99_000);
+
+      // Witness 4: Refused or reinserted persistence (REFUSED / REINSERTED -> stays in PERSISTING)
+      const opReinserted = await seedDurableGrowthOperation('op-real-repo-reinserted');
+      await coordinator.sqlQueryEngine.executeQuery(
+        'DELETE FROM replica_operations WHERE operation_id = ?',
+        [opReinserted.operationId],
+      );
+      coordinator.systemTableCache.delete(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, opReinserted.operationId,
+      );
+      releasedHoldIds = [];
+      releasedReservationIds.length = 0;
+
+      const reinsertedSettlement = await settleGrowthPromoteCompletion(
+        owner, opReinserted, {response: validCommittedResponse},
+      );
+      t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+      t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+      t.equal(reinsertedSettlement.committed, false);
+      t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+      t.same(releasedHoldIds, []);
+      t.same(releasedReservationIds, []);
+
+      const opRefused = await seedDurableGrowthOperation('op-real-repo-refused', {
+        stepsHistory: [
+          {
+            step: WORKFLOW_STEP.PENDING,
+            timestamp: 1000,
+            placementAdmission: {
+              entryId: 'placement-owner:test',
+              transitionKind: 'GROWTH_PROMOTE',
+            },
+          },
+          {step: WORKFLOW_STEP.SYNCING, timestamp: 2000},
+        ],
+      });
+      await coordinator.sqlQueryEngine.executeQuery(
+        'DELETE FROM replica_operations WHERE operation_id = ?',
+        [opRefused.operationId],
+      );
+      coordinator.systemTableCache.delete(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, opRefused.operationId,
+      );
+      releasedHoldIds = [];
+      releasedReservationIds.length = 0;
+
+      const refusedSettlement = await settleGrowthPromoteCompletion(
+        owner, opRefused, {response: validCommittedResponse},
+      );
+      t.equal(refusedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+      t.equal(refusedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.REFUSED);
+      t.equal(refusedSettlement.committed, false);
+      t.equal(refusedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED);
+      t.same(releasedHoldIds, []);
+      t.same(releasedReservationIds, []);
+
+      // Witness 5: Duplicate reconciliation after settlement preserves terminal status
+      t.equal(
+        await reconcileGrowthPromoteLifecycle(owner, op1),
+        OPERATION_RECONCILE_OUTCOME.COMPLETED,
+      );
+      t.equal(op1.status, ReplicaStatus.ACTIVE);
+      t.equal(op1.workflowStep, WORKFLOW_STEP.ACTIVE);
+
+      t.equal(
+        await reconcileGrowthPromoteLifecycle(owner, opCompeting),
+        OPERATION_RECONCILE_OUTCOME.FAILED,
+      );
+      t.equal(opCompeting.status, ReplicaStatus.FAILED);
+      t.equal(opCompeting.workflowStep, WORKFLOW_STEP.FAILED);
+
+      // Witness 6: Interrupted placement-hold release and recovery
+      const opInterruptedHold = await seedDurableGrowthOperation(
+        'op-real-repo-interrupted-hold',
+      );
+      releasedHoldIds = [];
+      failNextHoldRelease = true;
+
+      await t.rejects(
+        reconcileGrowthPromoteDispatchResponse(
+          owner, opInterruptedHold, validCommittedResponse,
+        ),
+        /transient placement hold release failure/,
+      );
+      t.same(releasedHoldIds, []);
+      const durableAfterInterruptedRelease =
+        await coordinator.repository.queryAuthoritativeOperationById(
+          opInterruptedHold.operationId,
+        );
+      t.equal(durableAfterInterruptedRelease.workflowStep, WORKFLOW_STEP.ACTIVE);
+      t.equal(durableAfterInterruptedRelease.status, ReplicaStatus.ACTIVE);
+      t.ok(Number.isFinite(durableAfterInterruptedRelease.completedAt));
+
+      const recoveredOutcome = await reconcileGrowthPromoteLifecycle(
+        owner, opInterruptedHold,
+      );
+      t.equal(recoveredOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+      t.same(releasedHoldIds, [opInterruptedHold.operationId]);
+      const recoveredSettlement = await settleGrowthPromoteCompletion(
+        owner, opInterruptedHold,
+      );
+      t.equal(recoveredSettlement.phase, GROWTH_SETTLEMENT_PHASE.SETTLED);
+      t.equal(recoveredSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.COMPLETED);
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'Step 2 learner-admission wait witnesses: real PartitionService prototype ' +
+    'interface drives pending admission, detects memberRole=LEARNER, enforces ' +
+    'DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, ' +
+    'and preserves remaining original CREATE budget',
+  async (t) => {
+    t.equal(typeof PartitionService.prototype.driveReplicaAdmission, 'function');
+    t.equal(typeof PartitionService.prototype.drivePendingReplicaAdmission, 'function');
+
+    class TestLearnerWaitReplicaHandler {
+      constructor(options = {}) {
+        this.nodeId = TEST_LEADER_NODE_2;
+        this.syncTimeoutMs = options.syncTimeoutMs ?? 5000;
+        this.realRaftMode = true;
+        this.messageRouter = {deliver: async () => ({acknowledged: true})};
+        this.localServices = new Map();
+        this.inProgressOperations = new Map();
+        this.timeSource = options.timeSource || null;
+        this.systemTableCache = new SystemTableCache();
+        this.logger = {info: () => {}, warn: () => {}, error: () => {}, debug: () => {}};
+      }
+      throwIfShuttingDown() {}
+      getTrackedService(id) {
+        return this.localServices.get(id) || null;
+      }
+      getTrackedReplicaRole(id) {
+        return this.getTrackedService(id)?.raft?.readStatus?.()?.role ?? null;
+      }
+    }
+    assignReplicaHandlerVoterReadinessMethods(TestLearnerWaitReplicaHandler);
+    assignReplicaHandlerCreateMethods(TestLearnerWaitReplicaHandler);
+
+    let nowMs = 10_000;
+    const virtualTimeSource = {
+      now: () => nowMs,
+      setTimeout: (fn, delayMs) => {
+        nowMs += delayMs;
+        queueMicrotask(fn);
+        return 1;
+      },
+      clearTimeout: () => {},
+    };
+    const handler = new TestLearnerWaitReplicaHandler({
+      syncTimeoutMs: 5000,
+      timeSource: virtualTimeSource,
+    });
+
+    const makePrototypeService = (replicaId, opId) => {
+      const svc = Object.create(PartitionService.prototype);
+      svc.partitionId = TEST_PARTITION_ID;
+      svc.replicaId = replicaId;
+      svc.isShutdown = false;
+      svc.learnerPromotionTimer = null;
+      svc.learnerPromotionWake = null;
+      svc.logger = handler.logger;
+      svc.replicaAdmissionRequest = {
+        operationId: opId,
+        state: 'pending',
+        lastOutcome: 'authority_unavailable',
+        rereadStamp: false,
+        leaderHint: null,
+      };
+      return svc;
+    };
+
+    const realPrototypeService = makePrototypeService(TEST_LEARNER_1, 'op-admit-learner-1');
+    let sendAdmissionCalls = 0;
+    let currentRaftStatus = {
+      role: 'follower', memberRole: 'UNKNOWN', leaderAddress: '', peers: [],
+    };
+    realPrototypeService.raft = {readStatus: () => currentRaftStatus};
+    realPrototypeService.sendReplicaAdmissionRequest = async () => {
+      sendAdmissionCalls += 1;
+      nowMs += 300;
+      currentRaftStatus = {
+        role: 'follower',
+        memberRole: 'LEARNER',
+        leaderAddress: '127.0.0.1:19001',
+        peers: [],
+      };
+      return {outcome: 'proposed', nodeId: TEST_LEADER_NODE_2};
+    };
+    handler.localServices.set(TEST_LEARNER_1, realPrototypeService);
+
+    const readyOutcome = await handler.waitForLearnerAdmissionActivation(
+      TEST_LEARNER_1, TEST_PARTITION_ID, {deadlineAtMs: 15_000},
+    );
+    t.equal(sendAdmissionCalls, 1);
+    t.equal(readyOutcome.ready, true);
+    t.equal(readyOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.READY);
+    t.equal(readyOutcome.remainingBudgetMs, 4700);
+    t.equal(realPrototypeService.replicaAdmissionRequest.lastOutcome, 'proposed');
+
+    // 2. Service disappearance returns SERVICE_DISAPPEARED (ready: false)
+    const disappearingService = makePrototypeService(
+      'user_orders-p1-r-disappear', 'op-admit-disappear',
+    );
+    disappearingService.raft = {
+      readStatus: () => ({
+        role: 'follower', memberRole: 'UNKNOWN', leaderAddress: '', peers: [],
+      }),
+    };
+    disappearingService.sendReplicaAdmissionRequest = async () => {
+      handler.localServices.delete(disappearingService.replicaId);
+      return {outcome: 'authority_unavailable'};
+    };
+    handler.localServices.set(disappearingService.replicaId, disappearingService);
+
+    const disappearedOutcome = await handler.waitForLearnerAdmissionActivation(
+      disappearingService.replicaId, TEST_PARTITION_ID, {deadlineAtMs: nowMs + 5000},
+    );
+    t.equal(disappearedOutcome.ready, false);
+    t.equal(disappearedOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.SERVICE_DISAPPEARED);
+
+    // 3. Deadline expiry returns DEADLINE_EXCEEDED (ready: false, remainingBudgetMs: 0)
+    const timedOutService = makePrototypeService(
+      'user_orders-p1-r-timeout', 'op-admit-timeout',
+    );
+    timedOutService.raft = {
+      readStatus: () => ({
+        role: 'follower', memberRole: 'UNKNOWN', leaderAddress: '', peers: [],
+      }),
+    };
+    timedOutService.sendReplicaAdmissionRequest = async () => ({
+      outcome: 'authority_unavailable',
+    });
+    handler.localServices.set(timedOutService.replicaId, timedOutService);
+
+    const startTimeoutWaitMs = nowMs;
+    const deadlineOutcome = await handler.waitForLearnerAdmissionActivation(
+      timedOutService.replicaId, TEST_PARTITION_ID, {deadlineAtMs: startTimeoutWaitMs + 120},
+    );
+    t.equal(deadlineOutcome.ready, false);
+    t.equal(deadlineOutcome.outcome, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
+    t.equal(deadlineOutcome.remainingBudgetMs, 0);
+
+    // 4. End-to-end createReplicaAsync integration: timeout fails before releaseFreshCreate;
+    // success preserves remaining original CREATE budget into releaseFreshCreate
+    const releaseFreshCreateCalls = [];
+    let simulateAdmissionTimeoutInCreate = true;
+    nowMs = 20_000;
+
+    const createHandler = new TestLearnerWaitReplicaHandler({
+      syncTimeoutMs: 5000,
+      timeSource: virtualTimeSource,
+    });
+    createHandler.inProgressOperations.set('op-create-budget', {startedAt: 20_000});
+    createHandler.startReplicaCreationProgress = () => ({});
+    createHandler.clearReplicaCreationProgress = () => {};
+    createHandler.finishReplicaCreationProgress = () => {};
+    createHandler.failReplicaCreationProgress = () => {};
+    createHandler.settlePendingReplicaRuntimeCleanup = async () => {};
+    createHandler.dropGroupRetiredTombstoneBeforeBirth = () => {};
+    createHandler.persistReplicaCreateInitialStatus = async () => true;
+    createHandler.applyBootstrapMetadataPayload = () => {};
+    createHandler.resolveReplicaContextWithRetry = async () => ({
+      tableName: 'user_orders',
+      tableId: 'user_orders',
+      schema: {columns: []},
+      keyRange: {},
+      replicaIds: [TEST_LEADER_REPLICA_2, TEST_LEARNER_2],
+      existingReplicaCount: 1,
+      bootstrapMembership: null,
+    });
+    createHandler.getPartitionDbPath = () => ':memory:';
+    createHandler.getReplicaCreateAdmissionOwner = () => ({
+      revalidatePhysicalWorker: async () => true,
+      releasePhysicalWorker: () => {},
+    });
+    createHandler.shouldGateActivationOnVoterReadiness = () => false;
+    createHandler.updateReplicaCreationProgress = () => {};
+    createHandler.setLocalReplica = (id, record) => {
+      if (record?.service) createHandler.localServices.set(id, record.service);
+    };
+    createHandler.emitExecutorOutcome = () => {};
+    createHandler.persistReplicaStatusWithRetry = async () => {};
+    createHandler.fenceFailedReplicaCreateRuntime = async () => {};
+    createHandler.persistOrConfirmReplicaCreateFailed = async () => true;
+    createHandler.shouldUsePriorityReplicaCreateStatusFallback = () => false;
+    createHandler.emit = () => {};
+    createHandler.replicaIdentityRepository = {
+      observeIdentity: async () => ({existed: false, record: {recorded: true}}),
+      recordIdentity: async () => ({recorded: true}),
+    };
+    createHandler.participantReleaseRecovery = {
+      releaseFreshCreate: async (partitionId, opts) => {
+        releaseFreshCreateCalls.push({
+          partitionId,
+          deadlineAtMs: opts.deadlineAtMs,
+          remainingBudgetAtReleaseEntryMs: opts.deadlineAtMs - nowMs,
+        });
+      },
+    };
+    createHandler.createPartitionService = async () => {
+      const svc = makePrototypeService(TEST_LEARNER_2, 'op-create-budget');
+      svc.participantTransactionCoordinator = {};
+      svc.requestReplicaAdmission = async (opId) => {
+        svc.replicaAdmissionRequest = {
+          operationId: opId,
+          state: 'pending',
+          lastOutcome: 'authority_unavailable',
+          rereadStamp: false,
+          leaderHint: null,
+        };
+      };
+      let admitted = false;
+      svc.raft = {
+        readStatus: () => ({
+          role: 'follower',
+          memberRole: admitted ? 'LEARNER' : 'UNKNOWN',
+          leaderAddress: admitted ? '127.0.0.1:19001' : '',
+          peers: [],
+        }),
+      };
+      svc.sendReplicaAdmissionRequest = async () => {
+        if (simulateAdmissionTimeoutInCreate) {
+          return {outcome: 'authority_unavailable'};
+        }
+        nowMs += 1200;
+        admitted = true;
+        return {outcome: 'proposed', nodeId: TEST_LEADER_NODE_2};
+      };
+      return svc;
+    };
+
+    await t.rejects(
+      createHandler.createReplicaAsync({
+        operationId: 'op-create-budget',
+        explicitOperationType: OperationType.ADD,
+        partitionId: TEST_PARTITION_ID,
+        replicaId: TEST_LEARNER_2,
+      }),
+      /Learner admission wait failed for replica user_orders-p1-r3: deadline_exceeded/,
+    );
+    t.equal(releaseFreshCreateCalls.length, 0);
+
+    simulateAdmissionTimeoutInCreate = false;
+    nowMs = 30_000;
+    createHandler.inProgressOperations.set('op-create-budget-ok', {startedAt: 30_000});
+    await createHandler.createReplicaAsync({
+      operationId: 'op-create-budget-ok',
+      explicitOperationType: OperationType.ADD,
+      partitionId: TEST_PARTITION_ID,
+      replicaId: TEST_LEARNER_2,
+      createAdmissionEvidence: {
+        operationId: 'op-create-budget-ok',
+        admissionToken: 'token-1',
+      },
+    });
+    t.equal(releaseFreshCreateCalls.length, 1);
+    t.equal(releaseFreshCreateCalls[0].deadlineAtMs, 35_000);
+    t.equal(releaseFreshCreateCalls[0].remainingBudgetAtReleaseEntryMs, 3800);
   },
 );

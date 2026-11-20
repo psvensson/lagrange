@@ -1,4 +1,7 @@
-import {readStateField} from '../utils/state-field-read.js';
+import {
+  readLowerStateField,
+  readStateField,
+} from '../utils/state-field-read.js';
 /**
  * ReplicaHandler voter-readiness gating methods.
  *
@@ -30,41 +33,69 @@ const LEARNER_ADMISSION_WAIT_TOKEN = Object.freeze({
   ROLE_LEADER: 'leader',
   STATE_ADMITTED: 'admitted',
   STATE_PENDING: 'pending',
-  OUTCOME_IN_FLIGHT: 'in_flight',
-  OUTCOME_PROPOSED: 'proposed',
+  STATE_REFUSED: 'refused',
 });
+const LEARNER_ADMISSION_WAIT_OUTCOME = Object.freeze({
+  READY: 'ready',
+  NOT_APPLICABLE: 'not_applicable',
+  DEADLINE_EXCEEDED: 'deadline_exceeded',
+  SERVICE_DISAPPEARED: 'service_disappeared',
+  ADMISSION_REFUSED: 'admission_refused',
+});
+const ADMITTED_RAFT_MEMBER_ROLES = Object.freeze(
+  new Set(['learner', 'voter']),
+);
 const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
   wait: 'REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS',
   awaited: 'local replica promoted to a routable voter (voter-ready activation)',
 });
 
+function readHandlerNowMs(handler) {
+  return handler?.timeSource?.now ? handler.timeSource.now() : Date.now();
+}
+
+function sleepHandlerMs(handler, delayMs) {
+  return new Promise((resolve) => {
+    if (handler?.timeSource?.setTimeout) {
+      handler.timeSource.setTimeout(resolve, delayMs);
+    } else {
+      setTimeout(resolve, delayMs);
+    }
+  });
+}
+
+function buildLearnerAdmissionWaitOutcome(
+  ready,
+  outcome,
+  deadlineAtMs,
+  nowMs,
+) {
+  return Object.freeze({
+    ready,
+    outcome,
+    remainingBudgetMs: Math.max(0, deadlineAtMs - nowMs),
+  });
+}
+
 function isLearnerAdmittedToGroup(service, replicaId) {
   const raftSnapshot = service?.raft?.readStatus?.();
   const hasLeader =
-    raftSnapshot?.role === LEARNER_ADMISSION_WAIT_TOKEN.ROLE_LEADER ||
+    readLowerStateField(raftSnapshot?.role) ===
+      LEARNER_ADMISSION_WAIT_TOKEN.ROLE_LEADER ||
     (typeof raftSnapshot?.leaderAddress === REPLICA_HANDLER_TYPEOF.STRING &&
       raftSnapshot.leaderAddress.length > 0);
   if (!hasLeader) return false;
+  const normalizedMemberRole = readLowerStateField(raftSnapshot?.memberRole);
   const inCohort =
-    Array.isArray(raftSnapshot?.peers) &&
-    raftSnapshot.peers.some((peer) => peer?.replicaIdentity === replicaId);
+    ADMITTED_RAFT_MEMBER_ROLES.has(normalizedMemberRole) ||
+    (Array.isArray(raftSnapshot?.peers) &&
+      raftSnapshot.peers.some((peer) => peer?.replicaIdentity === replicaId));
   const requestRecord = service?.replicaAdmissionRequest;
-  const currentState = readStateField(requestRecord?.state);
+  const currentState = readLowerStateField(requestRecord?.state);
   return (
     inCohort ||
     currentState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_ADMITTED ||
     !requestRecord
-  );
-}
-
-function shouldRedrivePendingLearnerAdmission(service) {
-  const requestRecord = service?.replicaAdmissionRequest;
-  const currentState = readStateField(requestRecord?.state);
-  const lastOutcome = readStateField(requestRecord?.lastOutcome);
-  return (
-    currentState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_PENDING &&
-    lastOutcome !== LEARNER_ADMISSION_WAIT_TOKEN.OUTCOME_IN_FLIGHT &&
-    lastOutcome !== LEARNER_ADMISSION_WAIT_TOKEN.OUTCOME_PROPOSED
   );
 }
 
@@ -310,29 +341,138 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
      * discover the group leader before releasing fresh-create activation.
      * @param {string} replicaId - Replica ID.
      * @param {string} _partitionId - Partition ID.
-     * @return {Promise<void>}
+     * @param {Object} [options={}] - Wait options ({deadlineAtMs}).
+     * @return {Promise<{ready: boolean, outcome: string, remainingBudgetMs: number}>}
      * @private
      */
-    async waitForLearnerAdmissionActivation(replicaId, _partitionId) {
-      if (!this.isRealRaftMode(replicaId)) return;
+    async waitForLearnerAdmissionActivation(
+      replicaId,
+      _partitionId,
+      options = {},
+    ) {
+      const initialNowMs = readHandlerNowMs(this);
+      const deadline = Number.isFinite(options?.deadlineAtMs) ?
+        options.deadlineAtMs :
+        initialNowMs + this.syncTimeoutMs;
+      if (!this.isRealRaftMode()) {
+        return buildLearnerAdmissionWaitOutcome(
+          true,
+          LEARNER_ADMISSION_WAIT_OUTCOME.NOT_APPLICABLE,
+          deadline,
+          initialNowMs,
+        );
+      }
       this.throwIfShuttingDown();
-      const deadline = Date.now() + this.syncTimeoutMs;
-      while (Date.now() <= deadline) {
+      const expectedService = this.getTrackedService(replicaId);
+      if (!expectedService || expectedService.isShutdown === true) {
+        return buildLearnerAdmissionWaitOutcome(
+          false,
+          LEARNER_ADMISSION_WAIT_OUTCOME.SERVICE_DISAPPEARED,
+          deadline,
+          readHandlerNowMs(this),
+        );
+      }
+      if (!expectedService.raft) {
+        return buildLearnerAdmissionWaitOutcome(
+          true,
+          LEARNER_ADMISSION_WAIT_OUTCOME.NOT_APPLICABLE,
+          deadline,
+          readHandlerNowMs(this),
+        );
+      }
+      while (true) {
         this.throwIfShuttingDown();
         const service = this.getTrackedService(replicaId);
-        if (!service || service.isShutdown === true) return;
+        if (
+          !service ||
+          service !== expectedService ||
+          service.isShutdown === true
+        ) {
+          return buildLearnerAdmissionWaitOutcome(
+            false,
+            LEARNER_ADMISSION_WAIT_OUTCOME.SERVICE_DISAPPEARED,
+            deadline,
+            readHandlerNowMs(this),
+          );
+        }
+        const requestState = readLowerStateField(
+          service.replicaAdmissionRequest?.state,
+        );
+        if (requestState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_REFUSED) {
+          return buildLearnerAdmissionWaitOutcome(
+            false,
+            LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED,
+            deadline,
+            readHandlerNowMs(this),
+          );
+        }
         if (
           isLearnerAdmittedToGroup(service, replicaId) ||
           this.isReplicaVoterReady(replicaId)
         ) {
-          return;
+          return buildLearnerAdmissionWaitOutcome(
+            true,
+            LEARNER_ADMISSION_WAIT_OUTCOME.READY,
+            deadline,
+            readHandlerNowMs(this),
+          );
         }
-        if (shouldRedrivePendingLearnerAdmission(service)) {
-          await service.drivePendingReplicaAdmission?.();
+        if (
+          requestState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_PENDING &&
+          !service.learnerPromotionTimer &&
+          !service.learnerPromotionWake?.checkInFlight
+        ) {
+          await service.driveReplicaAdmission();
+          const currentService = this.getTrackedService(replicaId);
+          if (
+            !currentService ||
+            currentService !== expectedService ||
+            currentService.isShutdown === true
+          ) {
+            return buildLearnerAdmissionWaitOutcome(
+              false,
+              LEARNER_ADMISSION_WAIT_OUTCOME.SERVICE_DISAPPEARED,
+              deadline,
+              readHandlerNowMs(this),
+            );
+          }
+          if (
+            readLowerStateField(currentService.replicaAdmissionRequest?.state) ===
+            LEARNER_ADMISSION_WAIT_TOKEN.STATE_REFUSED
+          ) {
+            return buildLearnerAdmissionWaitOutcome(
+              false,
+              LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED,
+              deadline,
+              readHandlerNowMs(this),
+            );
+          }
+          if (
+            isLearnerAdmittedToGroup(currentService, replicaId) ||
+            this.isReplicaVoterReady(replicaId)
+          ) {
+            return buildLearnerAdmissionWaitOutcome(
+              true,
+              LEARNER_ADMISSION_WAIT_OUTCOME.READY,
+              deadline,
+              readHandlerNowMs(this),
+            );
+          }
         }
-        await new Promise((resolve) => {
-          setTimeout(resolve, VOTER_READY_CHECK_INTERVAL_MS);
-        });
+        const nowAfterCheckMs = readHandlerNowMs(this);
+        if (nowAfterCheckMs >= deadline) {
+          return buildLearnerAdmissionWaitOutcome(
+            false,
+            LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED,
+            deadline,
+            deadline,
+          );
+        }
+        const sleepMs = Math.min(
+          VOTER_READY_CHECK_INTERVAL_MS,
+          Math.max(1, deadline - nowAfterCheckMs),
+        );
+        await sleepHandlerMs(this, sleepMs);
       }
     }
     /**
@@ -439,4 +579,7 @@ function isLearnerFirstGrowthAdd(
   );
 }
 
-export {assignReplicaHandlerVoterReadinessMethods};
+export {
+  LEARNER_ADMISSION_WAIT_OUTCOME,
+  assignReplicaHandlerVoterReadinessMethods,
+};

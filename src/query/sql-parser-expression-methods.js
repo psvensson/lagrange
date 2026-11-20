@@ -527,7 +527,10 @@ const sqlParserExpressionMethods = {
   convertFunction(expr) {
     const {firstPart, funcName, argValues} = extractFunctionCallParts(expr, this.dialect);
     if (funcName.toUpperCase() === PG_EXISTS_NAME) {
-      convertWindowOrOrderOver(this, expr.over);
+      if (carriesValue(expr.over)) {
+        throw unsupportedFeature(PARSER_ERROR_MSG.UNREAD_SYNTAX_PREFIX + OVER_KEY +
+          PARSER_ERROR_MSG.UNREAD_SYNTAX_SUFFIX + PG_EXISTS_NAME);
+      }
       return convertExistsSubquery(this, argValues[0]);
     }
     const lowerFunc = funcName.toLowerCase();
@@ -562,7 +565,10 @@ const sqlParserExpressionMethods = {
         translated;
     }
     if (firstPart?.type === KEYWORD_FUNCTION_NAME_TYPE && !expr.args) {
-      convertWindowOrOrderOver(this, expr.over);
+      if (carriesValue(expr.over)) {
+        throw unsupportedFeature(PARSER_ERROR_MSG.UNREAD_SYNTAX_PREFIX + OVER_KEY +
+          PARSER_ERROR_MSG.UNREAD_SYNTAX_SUFFIX + funcName.toUpperCase());
+      }
       return {type: PG_EXPR_TYPE.FUNCTION_CALL, name: funcName.toUpperCase(), args: [],
         keyword: true};
     }

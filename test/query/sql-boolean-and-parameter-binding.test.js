@@ -578,6 +578,21 @@ test('Finding 1 regression: aggregate-local ORDER BY binds argument parameters b
       db.prepare('SELECT val FROM t WHERE id = 1').get().val,
       'a!:b!:c!',
     );
+
+    // 6. EXISTS(...) OVER (...) and keyword functions with OVER (...) are refused, never dropped
+    assert.throws(
+      () => new SQLParser('SELECT EXISTS(SELECT 1 FROM t WHERE id = ?) OVER (ORDER BY id + ?) FROM t').parse(),
+      (err) => err?.code === 'UNSUPPORTED_SQL_FEATURE',
+    );
+    assert.throws(
+      () => new SQLParser('SELECT 1').convertExpression({
+        type: 'function',
+        name: {name: [{type: 'origin', value: 'CURRENT_TIME'}]},
+        args: null,
+        over: {orderby: [{expr: {type: 'number', value: 1}, type: 'ASC'}]},
+      }),
+      (err) => err?.code === 'UNSUPPORTED_SQL_FEATURE',
+    );
   } finally {
     db.close();
   }

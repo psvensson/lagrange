@@ -1,22 +1,22 @@
 import {PriorityRecoverySupersededTarget} from './priority-recovery-superseded-target.js';
-import {isUnclaimedPreRuntimeFailedCreateRow} from
-  './failed-create-cleanup-token.js';
+import {isUnclaimedPreRuntimeFailedCreateRow} from './failed-create-cleanup-token.js';
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
-  clearStoppingObservationDeferrals,
-  handleUnavailableStoppingObservation,
+  clearStoppingObservationDeferrals, handleUnavailableStoppingObservation,
   shouldClearStoppingObservationDeferrals,
 } from './operation-workflow-stopping-starvation.js';
-
 import {
-  adoptObservedReplaceSourceRetirement,
-  isPartitionReplace,
+  adoptObservedReplaceSourceRetirement, isPartitionReplace,
   isReplaceRemovalIntentDurable,
 } from './operation-workflow-replace-owner.js';
-import {
-  observeGrowthPromoteIncompleteState,
-} from './operation-workflow-growth-promote.js';
+import {observeGrowthPromoteIncompleteState} from './operation-workflow-growth-promote.js';
+import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
+
+function isTerminalPersistSettled(transitionOutcome) {
+  return transitionOutcome === undefined || transitionOutcome === true ||
+    isTerminalTransitionOutcomeSettled(transitionOutcome);
+}
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -29,8 +29,7 @@ const {
   OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
   OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
   OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS,
-  OBSERVED_PROGRESS_TABLE_STATE,
-  OBSERVED_PROGRESS_TABLE_STATE_BY_NAME,
+  OBSERVED_PROGRESS_TABLE_STATE, OBSERVED_PROGRESS_TABLE_STATE_BY_NAME,
   OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -693,10 +692,9 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         operation.type === OperationType.REPLACE &&
         !await this.confirmActiveReplicaTerminalHandoff(operation)
       ) {
-        return true;
+        return false;
       }
-      await this.completeOperation(operation);
-      return true;
+      return isTerminalPersistSettled(await this.completeOperation(operation));
     }
 
     if (
@@ -713,11 +711,12 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     }
 
     if (actualStatus === ReplicaStatus.FAILED) {
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_REMOVE_RECONCILIATION,
+      return isTerminalPersistSettled(
+        await this.failOperation(
+          operation,
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_REMOVE_RECONCILIATION,
+        ),
       );
-      return true;
     }
 
     const replayResult =
@@ -776,10 +775,9 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     }
     if (sourceRetirementObserved) {
       if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
-        return true;
+        return false;
       }
-      await this.completeOperation(operation);
-      return true;
+      return isTerminalPersistSettled(await this.completeOperation(operation));
     }
 
     if (actualStatus === ReplicaStatus.REMOVING) {

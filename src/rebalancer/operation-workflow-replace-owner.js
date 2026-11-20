@@ -54,6 +54,17 @@ import {
 } from './operation-workflow-replace-surviving-membership.js';
 import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
+  isTerminalTransitionOutcomeSettled,
+} from './operation-workflow-terminal-reservation-release.js';
+
+function isReplaceTerminalPersistSettled(transitionOutcome) {
+  return (
+    transitionOutcome === undefined ||
+    transitionOutcome === true ||
+    isTerminalTransitionOutcomeSettled(transitionOutcome)
+  );
+}
+import {
   deliverToReplaceWitness, deliveryUnavailableReason, replaceAnswerStatus,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
@@ -508,13 +519,13 @@ function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
 async function handleReplaceTargetDeath(owner, operation, decision, context) {
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.STILL_VOTER) {
     // D2: a real premise change - fail safely and retain the source.
-    await owner.failOperation(
+    const outcome = await owner.failOperation(
       operation,
       REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED,
       {replacePostIntentFailure:
         REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED},
     );
-    return true;
+    return isReplaceTerminalPersistSettled(outcome);
   }
   // The witness is the dead target: its configuration cannot be read, so
   // nothing is concluded - the REPLACE waits visibly (never a rollback).
@@ -552,9 +563,7 @@ async function recordAdoptedReplaceIntent(owner, operation) {
  *   execute result for a T5' re-send; false while it waits.
  */
 async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
-  if (owner.repository.isOperationTerminal(operation)) {
-    return false;
-  }
+  if (owner.repository.isOperationTerminal(operation)) return false;
   if (replaceIntentEntryOf(operation) === null &&
       !await recordAdoptedReplaceIntent(owner, operation)) {
     return waitForReplaceOwner(owner, operation,
@@ -563,8 +572,7 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   const decision = await decideReplaceCompletion(owner, operation);
   const waitContext = {...context, observation: decision.observation};
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
-    await owner.completeOperation(operation);
-    return true;
+    return isReplaceTerminalPersistSettled(await owner.completeOperation(operation));
   }
   if (isReplaceTargetGone(owner, operation)) {
     return handleReplaceTargetDeath(owner, operation, decision, context);

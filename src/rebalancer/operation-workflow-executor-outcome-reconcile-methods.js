@@ -9,22 +9,19 @@ import {
   EXECUTOR_OUTCOME_VISIBILITY_ABSENCE,
   applyOperationWorkflowExecutorOutcomeVisibility,
 } from './operation-workflow-executor-outcome-visibility.js';
+import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
+
+function isExecutorTerminalPersistSettled(transitionOutcome) {
+  return transitionOutcome === undefined || transitionOutcome === true ||
+    isTerminalTransitionOutcomeSettled(transitionOutcome);
+}
 
 const {
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
-  EXECUTOR_OUTCOME_TYPE,
-  EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
-  NUM,
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
-  OPERATION_TRANSITION_REASON,
-  OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
-  REBALANCE_COORDINATOR_EVENT,
-  REBALANCE_COORDINATOR_LOG_MSG,
-  WORKFLOW_STEP,
-  classifySystemPartition,
+  EXECUTOR_OUTCOME_ACTION, EXECUTOR_OUTCOME_ACTION_MAP, EXECUTOR_OUTCOME_FIELD,
+  EXECUTOR_OUTCOME_TYPE, EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS, NUM,
+  OBSERVED_PROGRESS_RETRY_DELAY_MS, OPERATION_TRANSITION_REASON,
+  OPERATION_WORKFLOW_OWNER_LITERAL, OperationType, REBALANCE_COORDINATOR_EVENT,
+  REBALANCE_COORDINATOR_LOG_MSG, WORKFLOW_STEP, classifySystemPartition,
   isRetryableControlPlaneError,
 } = SHARED;
 
@@ -549,35 +546,27 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         // CL-029: completion evidence that could not be applied (stale-CAS
         // updateStep + replay found nothing actionable) keeps its retry
         // owner; a later attempt re-reads fresh visibility and applies.
-        this.scheduleRetainedExecutorOutcomeRetry(
-          outcome,
-          visibilityObservation,
-        );
+        this.scheduleRetainedExecutorOutcomeRetry(outcome, visibilityObservation);
         return;
       }
       this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
       return;
     }
-    await this.completeOperation(operation);
+    const completionOutcome = await this.completeOperation(operation);
+    if (!isExecutorTerminalPersistSettled(completionOutcome)) {
+      this.scheduleRetainedExecutorOutcomeRetry(outcome, visibilityObservation);
+      return;
+    }
     this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
   }
 
-  requiresActiveReplicaTerminalHandoff(
-    operation,
-    outcomeType,
-    workflowStep,
-  ) {
+  requiresActiveReplicaTerminalHandoff(operation, outcomeType, workflowStep) {
     return (
-      (
-        outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ||
-        outcomeType ===
-          EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE
-      ) &&
+      (outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ||
+        outcomeType === EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE) &&
       workflowStep === WORKFLOW_STEP.ACTIVE &&
-      (
-        operation.type === OperationType.ADD ||
-        operation.type === OperationType.REPLACE
-      )
+      (operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE)
     );
   }
 
@@ -717,10 +706,17 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
         return true;
       }
-      await this.failOperation(
+      const failureOutcome = await this.failOperation(
         operation,
         errorLike?.message || errorMessage || outcomeType,
       );
+      if (!isExecutorTerminalPersistSettled(failureOutcome)) {
+        this.scheduleRetainedExecutorOutcomeRetry(
+          outcome,
+          visibilityObservation,
+        );
+        return true;
+      }
       this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
     } else {
       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_UNKNOWN_ACTION, {

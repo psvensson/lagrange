@@ -326,7 +326,7 @@ function createBulkTransferConnection(context) {
         return Promise.resolve(SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT]);
       }
       state.pendingSends += 1;
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         let payloadFrame = frame;
         let onQueueAbort = null;
         const entry = {
@@ -349,6 +349,18 @@ function createBulkTransferConnection(context) {
             entry.cleanup();
             state.pendingSends -= 1;
             resolve(result);
+          },
+          fail(error) {
+            if (
+              entry.state === ENTRY_STATE.SETTLED ||
+              entry.state === ENTRY_STATE.CANCELLED
+            ) {
+              return;
+            }
+            entry.state = ENTRY_STATE.SETTLED;
+            entry.cleanup();
+            state.pendingSends -= 1;
+            reject(error);
           },
           async execute() {
             if (entry.state !== ENTRY_STATE.QUEUED) {
@@ -399,6 +411,8 @@ function createBulkTransferConnection(context) {
                 ENTRY_STATE.SETTLED,
                 SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT],
               );
+            } catch (error) {
+              entry.fail(error);
             } finally {
               state.inFlightBytes = 0;
             }

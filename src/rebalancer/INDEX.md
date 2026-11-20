@@ -106,7 +106,7 @@ documentClass: generated
 - [operation-workflow-replace-witness.js](operation-workflow-replace-witness.js) - Owner contract: Owner: the REPLACE owner's transport to its witness replica (quest replace-source-removal-owner,... (importers: few)
 - [operation-workflow-reservation-recovery.js](operation-workflow-reservation-recovery.js) - No leading comment; first export: reconcileReservationBackedPendingOperation. (importers: one)
 - [operation-workflow-stopping-starvation.js](operation-workflow-stopping-starvation.js) - Bounded STOPPING-observation starvation escalation (quest formation-barrier-spread-release-oscillation): an... (importers: one)
-- [operation-workflow-terminal-reservation-release.js](operation-workflow-terminal-reservation-release.js) - Terminal-persistence reservation release policy (audit findings 3+11). (importers: few)
+- [operation-workflow-terminal-reservation-release.js](operation-workflow-terminal-reservation-release.js) - Terminal-persistence reservation release policy (audit findings 3+11). (importers: many)
 - [operation-workflow-terminal-transition-repair.js](operation-workflow-terminal-transition-repair.js) - Arm (or re-arm) the repair for one unconfirmed terminal transition. (importers: many)
 - [operation-workflow-transition-orchestration.js](operation-workflow-transition-orchestration.js) - Execute one guarded durable step mutation under the operation owner lane. (importers: few)
 - [operation-workflow-transition-persistence.js](operation-workflow-transition-persistence.js) - Claim one priority control-plane operation for dispatch without relying on a transition-scoped distributed transaction. (importers: few)

@@ -59,6 +59,9 @@ class PartitionService extends PartitionServiceSplitAccessorBase {
   driveReplicaAdmission() {
     return replicaAdmission.driveReplicaAdmission(this);
   }
+  drivePendingReplicaAdmission() {
+    return replicaAdmission.drivePendingReplicaAdmission(this);
+  }
   sendReplicaAdmissionRequest(request) {
     return replicaAdmission.sendReplicaAdmissionRequest(this, request);
   }

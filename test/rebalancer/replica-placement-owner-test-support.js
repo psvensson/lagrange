@@ -9,6 +9,7 @@ import {EventEmitter} from 'node:events';
 import {
   ControlPlaneSetup,
 } from '../../src/bootstrap/shared/control-plane-setup.js';
+import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {
   CDC_OPERATION,
@@ -255,23 +256,34 @@ export async function runGrowthPromoteProductionWitness({
       execute: async (sql, params = []) => {
         const stmt = leaderService.db.prepare(sql);
         if (/^\s*SELECT/iu.test(sql)) {
-          return {rows: stmt.all(...params)};
+          return {
+            success: true,
+            rows: stmt.all(...params),
+            rowSetComplete: true,
+          };
         }
         const info = stmt.run(...params);
         syncCacheFromDb();
-        return {rows: [], changes: info.changes};
+        return {
+          success: true,
+          rows: [],
+          changes: info.changes,
+          rowsAffected: info.changes,
+        };
       },
+      executeQuery: async (sql, params = []) =>
+        sqlQueryEngine.execute(sql, params),
     };
     const createTestCoordinator = () => {
       const instance = new RebalanceCoordinator({
         nodeId: 'n1',
         systemTableCache: cache,
         messageRouter,
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: readinessServiceFake({
           serveEligibilityOwner: nodeAuthority,
           getNodeReadinessSync: () => ({ready: true}),
           getPriorityRecoveryPlanningSnapshotSync: () => null,
-        },
+        }),
         cdcIntegrationService: {
           sqlQueryEngine,
           registerTableChangeCallback: () => {},
@@ -287,44 +299,6 @@ export async function runGrowthPromoteProductionWitness({
           }),
         },
       });
-      instance.repository.persistOperationUpdate = async (projected, options = {}) => {
-        const expectedStep = options.expectedCurrentStep ?? null;
-        const result = expectedStep ?
-          leaderService.db.prepare(
-            `UPDATE replica_operations
-                SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-                    error_message = ?, steps_history = ?
-              WHERE operation_id = ? AND workflow_step = ?`,
-          ).run(
-            projected.status,
-            projected.workflowStep,
-            projected.updatedAt ?? NOW_MS,
-            projected.completedAt ?? null,
-            projected.errorMessage ?? null,
-            JSON.stringify(projected.stepsHistory ?? []),
-            projected.operationId,
-            expectedStep,
-          ) :
-          leaderService.db.prepare(
-            `UPDATE replica_operations
-                SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-                    error_message = ?, steps_history = ?
-              WHERE operation_id = ?`,
-          ).run(
-            projected.status,
-            projected.workflowStep,
-            projected.updatedAt ?? NOW_MS,
-            projected.completedAt ?? null,
-            projected.errorMessage ?? null,
-            JSON.stringify(projected.stepsHistory ?? []),
-            projected.operationId,
-          );
-        syncCacheFromDb();
-        const applied = result.changes > 0;
-        return options.returnDisposition ?
-          {persisted: applied, disposition: applied ? 'applied' : 'stale_or_missing'} :
-          applied;
-      };
       instance.initialize();
       instance.workflowOwner.releasePlacementHold = async () => {
         releasedHoldCount += 1;
@@ -824,22 +798,33 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
       execute: async (sql, params = []) => {
         const stmt = leaderService.db.prepare(sql);
         if (/^\s*SELECT/iu.test(sql)) {
-          return {rows: stmt.all(...params)};
+          return {
+            success: true,
+            rows: stmt.all(...params),
+            rowSetComplete: true,
+          };
         }
         const info = stmt.run(...params);
         syncCacheFromDb();
-        return {rows: [], changes: info.changes};
+        return {
+          success: true,
+          rows: [],
+          changes: info.changes,
+          rowsAffected: info.changes,
+        };
       },
+      executeQuery: async (sql, params = []) =>
+        sqlQueryEngine.execute(sql, params),
     };
     const coordinator = new RebalanceCoordinator({
       nodeId: 'n2',
       systemTableCache: cache,
       messageRouter,
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: readinessServiceFake({
         serveEligibilityOwner: nodeAuthority,
         getNodeReadinessSync: () => ({ready: true}),
         getPriorityRecoveryPlanningSnapshotSync: () => null,
-      },
+      }),
       cdcIntegrationService: {
         sqlQueryEngine,
         registerTableChangeCallback: () => {},
@@ -855,26 +840,6 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
         }),
       },
     });
-    coordinator.repository.persistOperationUpdate = async (projected, options = {}) => {
-      leaderService.db.prepare(
-        `UPDATE replica_operations
-            SET status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-                error_message = ?, steps_history = ?
-          WHERE operation_id = ?`,
-      ).run(
-        projected.status,
-        projected.workflowStep,
-        projected.updatedAt ?? NOW_MS,
-        projected.completedAt ?? null,
-        projected.errorMessage ?? null,
-        JSON.stringify(projected.stepsHistory ?? []),
-        projected.operationId,
-      );
-      syncCacheFromDb();
-      return options.returnDisposition ?
-        {persisted: true, disposition: 'applied'} :
-        true;
-    };
     coordinator.initialize();
     coordinator.workflowOwner.releasePlacementHold = async () => {
       releasedHoldCount += 1;

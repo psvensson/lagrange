@@ -24,6 +24,7 @@ import {raftRsMembershipAdministration} from
   './raft-rs-membership-administration.js';
 import {RAFT_ROLE} from './constants.js';
 import {
+  RAFT_FOUNDING_GROWTH_OUTCOME,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME,
   RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
@@ -90,11 +91,21 @@ function deferredByPort(answered) {
  * @param {Object} answered - The port's settled answer.
  * @return {Object} {outcome, portOutcome, reason, leaderReplicaId?}.
  */
+const ALREADY_MEMBER_FOUNDING_OUTCOMES = Object.freeze(new Set([
+  RAFT_FOUNDING_GROWTH_OUTCOME.LEARNER_ADMITTED,
+  RAFT_FOUNDING_GROWTH_OUTCOME.ALREADY_VOTER,
+]));
+
 function admissionOfPortAnswer(answered) {
   const portOutcome = answered?.outcome;
   let outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED;
   if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_OK) {
-    outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED;
+    const alreadyMember =
+      ALREADY_MEMBER_FOUNDING_OUTCOMES.has(answered?.reason) ||
+      ALREADY_MEMBER_FOUNDING_OUTCOMES.has(answered?.promotionOutcome);
+    outcome = alreadyMember ?
+      RAFT_MEMBERSHIP_ADMISSION_OUTCOME.ALREADY_MEMBER :
+      RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED;
   } else if (portOutcome !== undefined && deferredByPort(answered)) {
     outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED;
   } else if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED &&
@@ -267,8 +278,19 @@ function reserveAndAdmitGroupPeer(port, group, peer) {
 function admitGroupLearner(port, group, peer) {
   const admission = proposeAdmission(
     port, group, peer, RAFT_MEMBERSHIP_OPERATION.ADMIT);
-  recordAdmission(group, peer, admission);
-  return Object.freeze(admission);
+  const alreadyInStatusPeers =
+    admission.outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED &&
+    (port?.readStatus?.()?.peers || []).some(
+      (member) => member?.replicaIdentity === peer?.replicaIdentity,
+    );
+  const resolved = alreadyInStatusPeers ?
+    {
+      ...admission,
+      outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.ALREADY_MEMBER,
+    } :
+    admission;
+  recordAdmission(group, peer, resolved);
+  return Object.freeze(resolved);
 }
 
 function reserveAndAdmitGroupLearner(port, group, peer) {
