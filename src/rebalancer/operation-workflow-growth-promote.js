@@ -6,6 +6,7 @@
  */
 
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
@@ -48,15 +49,29 @@ const GROWTH_PROMOTE_RETRYABLE_REASONS = Object.freeze(
 const NOT_LEADER_REASONS = Object.freeze(
   new Set(['not_leader', 'membership-change-not-leader']),
 );
-const VOTER_ROLES = Object.freeze(new Set(['follower', 'candidate', 'leader']));
 const GROWTH_PROMOTE_OBSERVED_STATE = Object.freeze({
   UNAPPLICABLE: 'UNAPPLICABLE',
   COMPLETE_ACTIVE: 'COMPLETE_ACTIVE',
   REPLAY_DISPATCH: 'REPLAY_DISPATCH',
 });
+const OPERATION_RECONCILE_OUTCOME = Object.freeze({
+  COMPLETED: 'completed',
+  ADVANCED: 'advanced',
+  WAITING: 'waiting',
+  HELD: 'held',
+  REFUSED: 'refused',
+});
 const LOCAL_STR_CORE_OK = 'CORE_OK';
 const LOCAL_STR_GROWTH_PROMOTE_REFUSED = 'growth_promote_refused';
 const LOCAL_STR_LEADER = 'leader';
+
+function didOperationReconcileAdvanceOrComplete(outcome) {
+  return (
+    outcome === OPERATION_RECONCILE_OUTCOME.COMPLETED ||
+    outcome === OPERATION_RECONCILE_OUTCOME.ADVANCED ||
+    outcome === true
+  );
+}
 
 function isHeldGrowthPromoteOperation(operation) {
   return (
@@ -158,12 +173,36 @@ function readNodeIdFromRow(row) {
   return typeof nodeId === 'string' && nodeId.length > 0 ? nodeId : '';
 }
 
-function resolveLeaderNodeFromResponse(cache, partitionId, response) {
-  const directNodeId = response?.leaderNodeId || '';
+function readLeaderNodeIdFromResponse(response) {
+  const directNodeId = response?.leaderNodeId;
   if (typeof directNodeId === 'string' && directNodeId.length > 0) {
     return directNodeId;
   }
-  const leaderReplicaId = response?.leaderId || '';
+  const proposalNodeId =
+    response?.[ReplicaOperationField.PROPOSAL]?.leaderNodeId;
+  return typeof proposalNodeId === 'string' && proposalNodeId.length > 0 ?
+    proposalNodeId :
+    '';
+}
+
+function readLeaderReplicaIdFromResponse(response) {
+  const directReplicaId = response?.leaderId;
+  if (typeof directReplicaId === 'string' && directReplicaId.length > 0) {
+    return directReplicaId;
+  }
+  const proposalReplicaId =
+    response?.[ReplicaOperationField.PROPOSAL]?.leaderId;
+  return typeof proposalReplicaId === 'string' && proposalReplicaId.length > 0 ?
+    proposalReplicaId :
+    '';
+}
+
+function resolveLeaderNodeFromResponse(cache, partitionId, response) {
+  const directNodeId = readLeaderNodeIdFromResponse(response);
+  if (directNodeId.length > 0) {
+    return directNodeId;
+  }
+  const leaderReplicaId = readLeaderReplicaIdFromResponse(response);
   if (!leaderReplicaId) {
     return '';
   }
@@ -210,7 +249,7 @@ function resolveLeaderNodeFromCache(cache, partitionId, excludedNodeIds) {
     const role = readLowerStateField(row?.raft_role);
     const nodeId = readNodeIdFromRow(row);
     return (
-      VOTER_ROLES.has(role) &&
+      isVoterRaftRole(role) &&
       nodeId.length > 0 &&
       !excludedNodeIds.has(nodeId)
     );
@@ -218,11 +257,31 @@ function resolveLeaderNodeFromCache(cache, partitionId, excludedNodeIds) {
   return readNodeIdFromRow(alternateVoterRow);
 }
 
+function readCurrentGrowthPromoteAdministrationRoute(operation) {
+  const explicitRoute = operation?.administrationRouteNodeId;
+  if (typeof explicitRoute === 'string' && explicitRoute.length > 0) {
+    return explicitRoute;
+  }
+  const targetNodeId = operation?.targetNodeId;
+  return typeof targetNodeId === 'string' && targetNodeId.length > 0 ?
+    targetNodeId :
+    '';
+}
+
+function recordGrowthPromoteAdministrationRoute(operation, routeNodeId) {
+  operation.administrationRouteNodeId = routeNodeId;
+  operation.targetNodeId = routeNodeId;
+  return routeNodeId;
+}
+
 function redirectGrowthPromoteTargetNode(owner, operation, response = null) {
   if (!operation || operation.type !== OperationType.GROWTH_PROMOTE) {
     return '';
   }
-  const currentTarget = String(operation.targetNodeId || '');
+  const currentTarget = readCurrentGrowthPromoteAdministrationRoute(operation);
+  if (currentTarget.length > 0) {
+    operation.administrationRouteNodeId = currentTarget;
+  }
   const cache = resolveOwnerSystemTableCache(owner);
   const proposal = response?.[ReplicaOperationField.PROPOSAL] || null;
   const normalizedReason = readLowerStateField(proposal?.reason);
@@ -233,8 +292,7 @@ function redirectGrowthPromoteTargetNode(owner, operation, response = null) {
     response,
   );
   if (fromResponse.length > 0 && fromResponse !== currentTarget) {
-    operation.targetNodeId = fromResponse;
-    return fromResponse;
+    return recordGrowthPromoteAdministrationRoute(operation, fromResponse);
   }
   if (!isNotLeaderRefusal) {
     return currentTarget;
@@ -263,8 +321,7 @@ function redirectGrowthPromoteTargetNode(owner, operation, response = null) {
     );
   }
   if (nextTarget.length > 0) {
-    operation.targetNodeId = nextTarget;
-    return nextTarget;
+    return recordGrowthPromoteAdministrationRoute(operation, nextTarget);
   }
   return currentTarget;
 }
@@ -273,9 +330,14 @@ function resolveGrowthPromoteTargetNodeId(owner, operation) {
   if (!operation) {
     return '';
   }
-  const currentTarget = String(operation.targetNodeId || '');
+  if (operation.type !== OperationType.GROWTH_PROMOTE) {
+    return typeof operation.targetNodeId === 'string' ?
+      operation.targetNodeId :
+      '';
+  }
+  const currentTarget = readCurrentGrowthPromoteAdministrationRoute(operation);
   if (currentTarget.length > 0) {
-    return currentTarget;
+    return recordGrowthPromoteAdministrationRoute(operation, currentTarget);
   }
   const cache = resolveOwnerSystemTableCache(owner);
   const resolved = resolveLeaderNodeFromCache(
@@ -284,10 +346,73 @@ function resolveGrowthPromoteTargetNodeId(owner, operation) {
     new Set(),
   );
   if (resolved.length > 0) {
-    operation.targetNodeId = resolved;
-    return resolved;
+    return recordGrowthPromoteAdministrationRoute(operation, resolved);
   }
   return currentTarget;
+}
+
+function replicaListIncludesExpectedIds(candidateList, expectedIds) {
+  if (!Array.isArray(candidateList)) {
+    return true;
+  }
+  if (expectedIds.length === 0) {
+    return candidateList.length > 0;
+  }
+  const normalizedCandidates = new Set();
+  for (const item of candidateList) {
+    const raw = String(item || '');
+    if (raw.length > 0) {
+      normalizedCandidates.add(raw);
+      normalizedCandidates.add(String(deriveRaftRsPeerId(raw)));
+    }
+  }
+  return expectedIds.every(
+    (expectedId) =>
+      normalizedCandidates.has(expectedId) ||
+      normalizedCandidates.has(String(deriveRaftRsPeerId(expectedId))),
+  );
+}
+
+function hasValidGrowthPromoteCompletionProvenance(operation, response) {
+  if (!operation || !response || typeof response !== 'object') {
+    return false;
+  }
+  const proposal = response[ReplicaOperationField.PROPOSAL];
+  const expectedPartitionId = String(operation.partitionId || '');
+  const responsePartitionId = String(response.partitionId || '');
+  if (
+    responsePartitionId.length > 0 &&
+    expectedPartitionId.length > 0 &&
+    responsePartitionId !== expectedPartitionId
+  ) {
+    return false;
+  }
+  const proposalPartitionId = String(proposal?.partitionId || '');
+  if (
+    proposalPartitionId.length > 0 &&
+    expectedPartitionId.length > 0 &&
+    proposalPartitionId !== expectedPartitionId
+  ) {
+    return false;
+  }
+  const expectedReplicaIds = resolveGrowthPromoteReplicaIds(operation);
+  const candidateLists = [
+    response[ReplicaOperationField.PROMOTE_REPLICA_IDS],
+    response.promotedReplicaIds,
+    response.promotedPeerIds,
+    response.voterReplicaIds,
+    proposal?.[ReplicaOperationField.PROMOTE_REPLICA_IDS],
+    proposal?.promotedReplicaIds,
+    proposal?.promotedPeerIds,
+    proposal?.voterReplicaIds,
+  ];
+  const presentCandidateLists = candidateLists.filter(Array.isArray);
+  if (expectedReplicaIds.length > 0 && presentCandidateLists.length === 0) {
+    return false;
+  }
+  return presentCandidateLists.every((candidateList) =>
+    replicaListIncludesExpectedIds(candidateList, expectedReplicaIds),
+  );
 }
 
 async function reconcileGrowthPromoteDispatchResponse(
@@ -297,16 +422,16 @@ async function reconcileGrowthPromoteDispatchResponse(
 ) {
   const proposal = response?.[ReplicaOperationField.PROPOSAL] || null;
   if (response?.committedVotersReached === true) {
+    if (!hasValidGrowthPromoteCompletionProvenance(operation, response)) {
+      return deferGrowthPromoteToSyncing(owner, operation);
+    }
     return completeAndBuildGrowthPromoteResult(owner, operation);
   }
   if (proposal && typeof proposal === 'object') {
     const normalizedOutcome = readLowerStateField(proposal.outcome).toUpperCase();
     const normalizedReason = readLowerStateField(proposal.reason);
     if (normalizedOutcome === LOCAL_STR_CORE_OK) {
-      if (response?.committedVotersReached === false) {
-        return deferGrowthPromoteToSyncing(owner, operation);
-      }
-      return completeAndBuildGrowthPromoteResult(owner, operation);
+      return deferGrowthPromoteToSyncing(owner, operation);
     }
     if (
       proposal.retryable === true ||
@@ -329,51 +454,46 @@ async function reconcileGrowthPromoteDispatchResponse(
   return null;
 }
 
-function readObservedServiceRow(owner, cache, replicaId, partitionId) {
-  if (cache?.get) {
-    const direct = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
-    if (direct) return direct;
-  }
-  if (cache?.getAll) {
-    const all = cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
-    const match = all.find(
-      (row) => (row?.replica_id || row?.service_id) === replicaId,
-    );
-    if (match) return match;
-  }
-  if (owner.repository?.getObservedReplicaRowFromCache) {
-    return owner.repository.getObservedReplicaRowFromCache(
-      replicaId,
-      partitionId,
-      null,
-    );
-  }
-  return null;
+function isNormalizedGrowthPromoteCompleted(operation) {
+  const completedAt = operation?.completedAt;
+  return (
+    readLowerStateField(operation?.workflowStep) ===
+      readLowerStateField(WORKFLOW_STEP.ACTIVE) &&
+    readLowerStateField(operation?.status) === ReplicaStatus.ACTIVE &&
+    completedAt !== null &&
+    completedAt !== undefined &&
+    Number.isFinite(Number(completedAt))
+  );
+}
+
+function isCachedRowGrowthPromoteCompleted(row) {
+  const completedAt = row?.completed_at;
+  return (
+    readLowerStateField(row?.workflow_step) ===
+      readLowerStateField(WORKFLOW_STEP.ACTIVE) &&
+    readLowerStateField(row?.status) === ReplicaStatus.ACTIVE &&
+    completedAt !== null &&
+    completedAt !== undefined &&
+    Number.isFinite(Number(completedAt))
+  );
 }
 
 function observeGrowthPromoteIncompleteState(owner, operation) {
   if (!operation || operation.type !== OperationType.GROWTH_PROMOTE) {
     return GROWTH_PROMOTE_OBSERVED_STATE.UNAPPLICABLE;
   }
-  const promoteIds = resolveGrowthPromoteReplicaIds(operation);
-  if (promoteIds.length === 0) {
-    return GROWTH_PROMOTE_OBSERVED_STATE.REPLAY_DISPATCH;
+  if (isNormalizedGrowthPromoteCompleted(operation)) {
+    return GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE;
   }
-  let cache = owner.systemTableCache || null;
-  if (!cache && owner.repository?.systemTableCache) {
-    cache = owner.repository.systemTableCache;
+  const cache = resolveOwnerSystemTableCache(owner);
+  const cachedOperationRow =
+    cache?.get && operation.operationId ?
+      cache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operation.operationId) :
+      null;
+  if (isCachedRowGrowthPromoteCompleted(cachedOperationRow)) {
+    return GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE;
   }
-  const allPromotedActiveVoters = promoteIds.every((replicaId) => {
-    const row = readObservedServiceRow(owner, cache, replicaId, operation.partitionId);
-    if (!row) return false;
-    const status = readLowerStateField(row.status);
-    if (status !== ReplicaStatus.ACTIVE) return false;
-    const role = readLowerStateField(row.raft_role) || readLowerStateField(row.raftRole);
-    return VOTER_ROLES.has(role);
-  });
-  return allPromotedActiveVoters ?
-    GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE :
-    GROWTH_PROMOTE_OBSERVED_STATE.REPLAY_DISPATCH;
+  return GROWTH_PROMOTE_OBSERVED_STATE.REPLAY_DISPATCH;
 }
 
 async function completeGrowthPromoteOperation(owner, operation) {
@@ -476,11 +596,11 @@ async function completeGrowthPromoteOperation(owner, operation) {
 }
 
 async function reconcileGrowthPromoteLifecycle(owner, operation) {
-  if (
-    owner.repository.isOperationTerminal(operation) ||
-    isHeldGrowthPromoteOperation(operation)
-  ) {
-    return false;
+  if (isHeldGrowthPromoteOperation(operation)) {
+    return OPERATION_RECONCILE_OUTCOME.HELD;
+  }
+  if (owner.repository.isOperationTerminal(operation)) {
+    return OPERATION_RECONCILE_OUTCOME.WAITING;
   }
   const previousStep = operation.workflowStep;
   const replayResult = await owner.executeOperationFromReconcilePath(operation);
@@ -488,18 +608,25 @@ async function reconcileGrowthPromoteLifecycle(owner, operation) {
     owner.repository.isOperationTerminal(operation) ||
     replayResult?.status === ReplicaOperationResponseStatus.COMPLETED
   ) {
-    return true;
+    return OPERATION_RECONCILE_OUTCOME.COMPLETED;
   }
-  return operation.workflowStep !== previousStep;
+  if (operation.workflowStep !== previousStep) {
+    return OPERATION_RECONCILE_OUTCOME.ADVANCED;
+  }
+  return OPERATION_RECONCILE_OUTCOME.WAITING;
 }
 
 export {
+  OPERATION_RECONCILE_OUTCOME,
   applyGrowthPromoteRequestFields,
   completeGrowthPromoteOperation,
+  didOperationReconcileAdvanceOrComplete,
+  hasValidGrowthPromoteCompletionProvenance,
   isHeldGrowthPromoteOperation,
   observeGrowthPromoteIncompleteState,
   reconcileGrowthPromoteDispatchResponse,
   reconcileGrowthPromoteLifecycle,
+  redirectGrowthPromoteTargetNode,
   resolveGrowthPromoteReplicaIds,
   resolveGrowthPromoteTargetNodeId,
 };

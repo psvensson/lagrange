@@ -1,22 +1,15 @@
 import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {
-  DISPATCH_PENDING_WORKFLOW_STEPS,
-  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+  DISPATCH_PENDING_WORKFLOW_STEPS, REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
 } from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
-  captureReplaceOwnerLevel,
-  registerReplaceOwnerWaiter,
-  resolveReplaceOwnerEntryLevel,
+  captureReplaceOwnerLevel, registerReplaceOwnerWaiter, resolveReplaceOwnerEntryLevel,
 } from './operation-workflow-replace-owner-wake.js';
 import {
-  REPLACE_EFFECT_ADMISSION,
-  REPLACE_WAIT_REASON,
-  admitReplaceSourceRemovalEffect,
-  isPartitionReplace,
-  isReplaceRemovalIntentDurable,
-  recordReplaceOwnerWait,
+  REPLACE_EFFECT_ADMISSION, REPLACE_WAIT_REASON, admitReplaceSourceRemovalEffect,
+  isPartitionReplace, isReplaceRemovalIntentDurable, recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
 } from './operation-workflow-replace-owner.js';
 import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
@@ -25,13 +18,13 @@ import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
 import {bindReplaceCreateTargetReplicaId} from './operation-workflow-replace-target-binding.js';
 import {
-  isRetainedCreateDeliveryResolution,
-  resolveAmbiguousCreateDeliveryFailure,
+  isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
 import {
-  applyGrowthPromoteRequestFields, isHeldGrowthPromoteOperation,
-  reconcileGrowthPromoteDispatchResponse, resolveGrowthPromoteTargetNodeId,
+  applyGrowthPromoteRequestFields, didOperationReconcileAdvanceOrComplete,
+  isHeldGrowthPromoteOperation, reconcileGrowthPromoteDispatchResponse,
+  resolveGrowthPromoteTargetNodeId,
 } from './operation-workflow-growth-promote.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
@@ -1191,8 +1184,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
       },
     );
+    const didAdvanceOrComplete =
+      didOperationReconcileAdvanceOrComplete(reconciled);
     if (
-      reconciled === true &&
+      didAdvanceOrComplete &&
       CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES.has(observedTargetStatus)
     ) {
       this.scheduleObservedProgressRetry(
@@ -1201,7 +1196,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
       );
     }
-    return reconciled;
+    return didAdvanceOrComplete;
   },
   resolveCreateInProgressDispatchResponseStatus(operation, response) {
     const responseReplicaStatus =

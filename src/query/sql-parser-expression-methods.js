@@ -547,8 +547,19 @@ const sqlParserExpressionMethods = {
       };
     }
     if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
-      convertWindowOrOrderOver(this, expr.over);
-      return translateFunctionCall(funcName, argValues, this.convertExpression.bind(this));
+      const translated = translateFunctionCall(
+        funcName,
+        argValues,
+        this.convertExpression.bind(this),
+      );
+      const {over, orderBy} = convertWindowOrOrderOver(this, expr.over);
+      return over || orderBy ?
+        {
+          ...translated,
+          ...(orderBy ? {orderBy} : {}),
+          ...(over ? {over} : {}),
+        } :
+        translated;
     }
     if (firstPart?.type === KEYWORD_FUNCTION_NAME_TYPE && !expr.args) {
       convertWindowOrOrderOver(this, expr.over);

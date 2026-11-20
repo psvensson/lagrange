@@ -47,10 +47,15 @@ implementation and integration with its existing candidate work.
 ## Current summary
 
 - **Planning base:** main `3f5a67599e5b91138e34977934703c9af2eaee15` (PR #229),
+  refreshed at WP0 to main `5edfcadb508f9a82783159026364d3005836cc5c` (PR #234),
   rule-set revision 5. Loaded authorities: AGENTS, rules, router, Quest workflow,
   Solver runbook, roadmap policy, feature map and documentation-only proof policy.
 - **Integration base:** candidate `0970ab012f65456cad34cfadfa92fb420f7f09ef`
-  on `candidate/reconciliation-20261119`.
+  -> `d66a533196b53c2193e8c2baf6e68655d8493e2a` ->
+  `5a5f8baf554129fd7bb335ea837b851106c3683a` on
+  `candidate/reconciliation-20261119` (composed with the 20 November 2026
+  WP0–WP10 ES6 strengthening and integration programme coordinated in
+  [`operation-integrity-and-reliable-formation.md`](operation-integrity-and-reliable-formation.md)).
 - **State:** packages P1 (`committed-batch-recovery-witness`), P2
   (`durable-prepared-conflict-authority`), P3 (`production-construction-and-binding`),
   P4 (`proposal-attempt-replay`), and P5 (`runtime-contracts-and-owner-navigation`)

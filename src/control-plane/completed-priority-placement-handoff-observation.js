@@ -14,6 +14,7 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../rebalancer/replica-status.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 
 const COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES = new Set([
   ReplicaStatus.PENDING,
@@ -21,12 +22,11 @@ const COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES = new Set([
   ReplicaStatus.SYNCING,
 ]);
 
-const COMPLETED_PLACEMENT_VOTER_RAFT_ROLES = new Set([
-  'leader',
-  'follower',
-  'candidate',
-  'pre_candidate',
-]);
+const PRE_CANDIDATE_RAFT_ROLE = 'pre_candidate';
+
+function isCompletedPlacementVoterRole(role) {
+  return isVoterRaftRole(role) || role === PRE_CANDIDATE_RAFT_ROLE;
+}
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -45,7 +45,7 @@ function normalizeServiceRaftRole(serviceRow) {
 
 function isVoterReadyActiveTargetServiceRow(serviceRow) {
   return normalizeServiceStatus(serviceRow) === ReplicaStatus.ACTIVE &&
-    COMPLETED_PLACEMENT_VOTER_RAFT_ROLES.has(
+    isCompletedPlacementVoterRole(
       normalizeServiceRaftRole(serviceRow),
     );
 }
@@ -56,7 +56,7 @@ function isTransitionalPriorityPlacementTargetRow(serviceRow) {
     return true;
   }
   return status === ReplicaStatus.ACTIVE &&
-    !COMPLETED_PLACEMENT_VOTER_RAFT_ROLES.has(
+    !isCompletedPlacementVoterRole(
       normalizeServiceRaftRole(serviceRow),
     );
 }

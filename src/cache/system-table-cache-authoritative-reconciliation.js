@@ -8,8 +8,7 @@ import {
   TABLES,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
-import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {isExplicitNonLeaderRaftRole} from '../raft/replica-voter-readiness.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
 import {tryParseHLCTimestamp} from './system-table-cache-row-merge.js';
 import {
@@ -240,8 +239,7 @@ function hasDifferentServiceIdentity(existing, authoritative) {
 }
 
 function isNonLeaderVoterRole(role) {
-  return isVoterRaftRole(role) &&
-    String(role).toLowerCase() !== RAFT_ROLE.LEADER;
+  return isExplicitNonLeaderRaftRole(role);
 }
 
 function isActiveServiceStatus(row) {

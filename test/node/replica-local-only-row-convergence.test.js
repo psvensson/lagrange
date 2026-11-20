@@ -759,6 +759,41 @@ test('shared incarnation rule governs both durable role persistence and local pr
     null,
     'buildAuthoritativeSystemTableCacheReplacement never preserves leader raft_role when authoritative row clears raft_role',
   );
+  handler.getTrackedReplicaRole = () => 'learner';
+  stateMachine.resolveLiveReplicaRole = (serviceId) =>
+    handler.getTrackedReplicaRole(serviceId) === 'learner' ? 'learner' : null;
+  handler.systemTableCache.applySystemTableChange('services', 'UPSERT', {
+    ...seededFromLiveRole,
+    status: ReplicaStatus.SYNCING,
+    raft_role: null,
+  });
+  t.equal(
+    stateMachine._buildUpdateCdcData(
+      stateMachine.getState(REPLICA_ID),
+      REPLICA_ID,
+      ReplicaStatus.SYNCING,
+      null,
+    ).raft_role,
+    'learner',
+    'ReplicaStateMachine resolves live learner role on SYNCING -> ACTIVE transition when cached raft_role is null',
+  );
+  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.ACTIVE, {
+    markLocalOnly: false,
+  });
+  const seededLearnerRow = handler.systemTableCache.get('services', REPLICA_ID);
+  t.equal(
+    seededLearnerRow?.raft_role,
+    'learner',
+    'seedLocalPriorityServiceRow resolves live learner role when cached raft_role is null',
+  );
+  t.equal(
+    buildAuthoritativeSystemTableCacheReplacement(
+      seededLearnerRow,
+      {...seededLearnerRow, raft_role: null},
+    ).raft_role,
+    'learner',
+    'buildAuthoritativeSystemTableCacheReplacement preserves active learner raft_role against in-flight null authoritative read',
+  );
   const olderCachedRowWithHlc = {
     ...seededFromLiveRole,
     status: ReplicaStatus.CREATING,

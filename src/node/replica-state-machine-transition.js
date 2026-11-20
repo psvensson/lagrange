@@ -674,10 +674,10 @@ function buildUpdateCdcData(replicaState, previousState, stateMachine = null) {
     cdcData.error_message = replicaState.errorMessage;
   }
   const serviceId = replicaState.serviceId || replicaState.replicaId;
-  const preservedVoterRole = resolvePreservedReplicaRaftRole(
-    stateMachine, replicaState, serviceId, {voterOnly: true});
-  if (preservedVoterRole) {
-    cdcData.raft_role = preservedVoterRole;
+  const preservedRole = resolvePreservedReplicaRaftRole(
+    stateMachine, replicaState, serviceId, {voterOnly: false});
+  if (preservedRole) {
+    cdcData.raft_role = preservedRole;
   }
   return cdcData;
 }

@@ -19,6 +19,7 @@
 import {EXPR_TYPE, SQL_DEFAULT_COLLATION} from '../parser-constants.js';
 import {PG_EXPR_TYPE} from '../pg/pg-compat-constants.js';
 import {QUERY_ERROR_CODE, QUERY_JOIN_TYPE, QUERY_OPERATOR} from '../query-constants.js';
+import {renderExpressionWithParameters} from '../sql-statement-renderer.js';
 import {
   createParameterResolver,
   extractCatalogSchema,
@@ -488,23 +489,8 @@ function canonicalizeQualifiers(conjunct, index) {
 }
 
 function collectOrderedParameterValues(expr, resolveParam) {
-  const values = [];
-  const walk = (node) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    if (node.type === EXPR_TYPE.PARAMETER) {
-      values.push(resolveParam(node));
-      return;
-    }
-    for (const val of Object.values(node)) {
-      walk(val);
-    }
-  };
-  walk(expr);
-  return values;
+  if (!expr) return [];
+  return renderExpressionWithParameters(expr, resolveParam).params;
 }
 
 function hasAggregatesOrGroupOrHaving(ast) {

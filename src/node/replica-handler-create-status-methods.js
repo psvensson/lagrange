@@ -7,25 +7,18 @@
  * Requirements: 10.2, 3.1
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
-import {
-  isRetryableControlPlaneError,
-} from '../control-plane/control-plane-error-classification.js';
-import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
+import {isCatchupLearnerRaftRole, isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {buildFailedCreateCleanupToken} from
-  '../rebalancer/failed-create-cleanup-token.js';
+import {buildFailedCreateCleanupToken} from '../rebalancer/failed-create-cleanup-token.js';
 import {CREATE_ADMISSION_STATE} from './replica-create-admission-owner.js';
 import {expiredCreateInitialStatusError, persistFailedCreateLifecycle} from
   './replica-handler-failed-create-publication.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
-import {
-  isConflictingCachedReplicaIdentity,
-  resolvePreservedReplicaRaftRole,
-} from './replica-state-machine-lifecycle-observation.js';
+import {isConflictingCachedReplicaIdentity, resolvePreservedReplicaRaftRole} from
+  './replica-state-machine-lifecycle-observation.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-constants.js';
 import {
@@ -577,8 +570,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
             systemTableCache: this.systemTableCache,
             resolveLiveReplicaRole: (serviceId) => {
               const role = this.getTrackedReplicaRole(serviceId);
-              return isVoterRaftRole(role) ? normalizePublishedRaftRole(
-                role, {collapseLeaderToFollower: true}) : null;
+              return isVoterRaftRole(role) || isCatchupLearnerRaftRole(role) ?
+                normalizePublishedRaftRole(
+                  role, {collapseLeaderToFollower: true}) :
+                null;
             },
           },
           {

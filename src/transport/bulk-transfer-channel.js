@@ -116,7 +116,7 @@ function createByteRateTokenBucket(options = {}) {
     while (waiters.length > 0 && waiters[0].bytes <= availableBytes) {
       const waiter = waiters.shift();
       availableBytes -= waiter.bytes;
-      waiter.resolve(Object.freeze({acquired: true}));
+      waiter.settle(true);
     }
     scheduleDrain();
   }
@@ -136,17 +136,31 @@ function createByteRateTokenBucket(options = {}) {
         return Promise.resolve(Object.freeze({acquired: true}));
       }
       return new Promise((resolve) => {
-        const waiter = {bytes: want, resolve};
-        waiters.push(waiter);
+        let onAbort = null;
+        const detachAbort = () => {
+          if (onAbort !== null) {
+            signal?.removeEventListener(SIGNAL_ABORT_EVENT, onAbort);
+            onAbort = null;
+          }
+        };
+        const waiter = {
+          bytes: want,
+          settle(acquired) {
+            detachAbort();
+            resolve(Object.freeze({acquired}));
+          },
+        };
         if (signal) {
-          signal.addEventListener(SIGNAL_ABORT_EVENT, () => {
+          onAbort = () => {
             const index = waiters.indexOf(waiter);
             if (index >= 0) {
               waiters.splice(index, 1);
-              resolve(Object.freeze({acquired: false}));
             }
-          }, {once: true});
+            waiter.settle(false);
+          };
+          signal.addEventListener(SIGNAL_ABORT_EVENT, onAbort, {once: true});
         }
+        waiters.push(waiter);
         scheduleDrain();
       });
     },
@@ -163,7 +177,7 @@ function createByteRateTokenBucket(options = {}) {
         drainTimer = null;
       }
       while (waiters.length > 0) {
-        waiters.shift().resolve(Object.freeze({acquired: false}));
+        waiters.shift().settle(false);
       }
     },
   });
@@ -250,6 +264,9 @@ function createBulkTransferConnection(context) {
     },
     async sendChunkFrame(frame, sendOptions = {}) {
       const signal = sendOptions.signal;
+      if (signal?.aborted) {
+        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
+      }
       if (!state.open) {
         return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
       }
@@ -257,8 +274,41 @@ function createBulkTransferConnection(context) {
         return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT];
       }
       state.pendingSends += 1;
-      const run = sendChain.then(async () => {
-        if (signal?.aborted) {
+      let startedTurn = false;
+      let resolveQueueWait = null;
+      let onQueueAbort = null;
+      const detachQueueAbort = () => {
+        if (onQueueAbort !== null) {
+          signal?.removeEventListener(SIGNAL_ABORT_EVENT, onQueueAbort);
+          onQueueAbort = null;
+        }
+      };
+      const queueTurnReady = new Promise((resolve) => {
+        resolveQueueWait = resolve;
+        if (signal) {
+          onQueueAbort = () => {
+            detachQueueAbort();
+            resolve(false);
+          };
+          signal.addEventListener(SIGNAL_ABORT_EVENT, onQueueAbort, {once: true});
+        }
+      });
+      const prevChain = sendChain;
+      let releaseTurn = null;
+      const turnDone = new Promise((resolve) => {
+        releaseTurn = resolve;
+      });
+      sendChain = turnDone;
+      prevChain.then(() => {
+        detachQueueAbort();
+        resolveQueueWait(true);
+      });
+      try {
+        const turnGranted = await queueTurnReady;
+        if (turnGranted) {
+          startedTurn = true;
+        }
+        if (!turnGranted || signal?.aborted) {
           return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
         }
         if (!state.open) {
@@ -278,12 +328,14 @@ function createBulkTransferConnection(context) {
         } finally {
           state.inFlightBytes = 0;
         }
-      });
-      sendChain = run.then(() => {}, () => {});
-      try {
-        return await run;
       } finally {
+        detachQueueAbort();
         state.pendingSends -= 1;
+        if (startedTurn) {
+          releaseTurn();
+        } else {
+          prevChain.then(releaseTurn);
+        }
       }
     },
     close() {
@@ -448,6 +500,11 @@ function createBulkTransferChannelRegistry(options = {}) {
         ws.once(TRANSPORT_EVENT.ERROR, failDial);
         signal?.addEventListener(SIGNAL_ABORT_EVENT, onAbort, {once: true});
       });
+      if (signal?.aborted) {
+        ws.on(TRANSPORT_EVENT.ERROR, ignorePostAbortSocketError);
+        ws.terminate();
+        throw new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED);
+      }
       // Pre-claim frame discipline (load-bearing): the IDENTIFY frame with
       // the bulk channel marker is the FIRST and ONLY frame on this socket
       // until the receiver's claim completes.

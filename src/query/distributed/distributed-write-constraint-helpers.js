@@ -89,9 +89,10 @@ function throwUniqueConstraintViolation(tableName, colNames) {
 }
 
 function extractParameterValue(expr, params) {
-  const index = typeof expr.index === 'number' ? expr.index : 0;
+  const index = expr?.index;
   if (
     !Array.isArray(params) ||
+    !Number.isInteger(index) ||
     index < 0 ||
     index >= params.length ||
     params[index] === undefined

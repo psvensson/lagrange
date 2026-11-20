@@ -1232,17 +1232,17 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
 
     // 3. P5 dependency-cruiser witness: production apply/decision/store modules pass,
     // and synthetic direct + indirect (reachable: true) forbidden imports fail:
-    const prodResult = await cruise(
-      [
-        'src/partition/partition-participant-transaction-apply.js',
-        'src/partition/partition-participant-transaction-store.js',
-        'src/partition/partition-placement-admission-decision.js',
-      ],
-      {ruleSet: depcruiseConfig, validate: true},
-    );
-    const prodErrors = prodResult.output.summary.violations.filter(
-      (v) => v.rule.severity === 'error',
-    );
+    const prodModules = [
+      'src/partition/partition-participant-transaction-apply.js',
+      'src/partition/partition-participant-transaction-store.js',
+      'src/partition/partition-placement-admission-decision.js',
+      'src/query/sql-statement-renderer.js', 'src/query/sql-table-definition.js',
+      'src/query/sql-value-codec.js', 'src/rebalancer/replica-placement-owner-deficits.js',
+      'src/rebalancer/replica-placement-owner-order.js', 'src/rebalancer/placement-owner-decision.js',
+      'src/rebalancer/operation-lifecycle.js',
+    ];
+    const prodResult = await cruise(prodModules, {ruleSet: depcruiseConfig, validate: true});
+    const prodErrors = prodResult.output.summary.violations.filter((v) => v.rule.severity === 'error');
     assert.deepEqual(prodErrors, []);
 
     const writeSynth = (rel, code) => {
@@ -1252,28 +1252,23 @@ test('P2 & P5: contradictory historical PREPARED rows on reopen fence conflictin
     };
     writeSynth('src/transport/transport-semantic-outcome.js', 'export const x = 1;\n');
     writeSynth('src/time/time-source.js', 'export const now = () => 0;\n');
-    writeSynth(
-      'src/partition/indirect-bridge.js',
-      'import "../time/time-source.js";\nexport const bridge = 1;\n',
-    );
-    writeSynth(
-      'src/partition/partition-participant-transaction-apply.js',
-      'import "../transport/transport-semantic-outcome.js";\nexport const apply = 1;\n',
-    );
-    writeSynth(
-      'src/partition/partition-placement-admission-decision.js',
-      'import "./indirect-bridge.js";\nexport const decide = 1;\n',
-    );
+    writeSynth('src/query/distributed/coordinator-merge-process.js', 'export const pool = 1;\n');
+    writeSynth('src/partition/indirect-bridge.js', 'import "../time/time-source.js";\nexport const bridge = 1;\n');
+    writeSynth('src/partition/partition-participant-transaction-apply.js',
+      'import "../transport/transport-semantic-outcome.js";\nexport const apply = 1;\n');
+    writeSynth('src/partition/partition-placement-admission-decision.js',
+      'import "./indirect-bridge.js";\nexport const decide = 1;\n');
+    writeSynth('src/query/sql-statement-renderer.js',
+      'import "./distributed/coordinator-merge-process.js";\nexport const render = 1;\n');
     const negResult = await cruise(['src'], {
-      ...depcruiseConfig.options,
-      baseDir: directory,
-      validate: true,
+      ...depcruiseConfig.options, baseDir: directory, validate: true,
       ruleSet: {forbidden: depcruiseConfig.forbidden},
     });
     const negRules = negResult.output.summary.violations.map((v) => v.rule.name).sort();
     assert.deepEqual(negRules, [
       'partition-apply-no-transport-cache-or-planner',
       'partition-decision-and-store-no-indirect-nondeterministic-capabilities',
+      'pure-sql-render-and-placement-decision-no-nondeterministic-capabilities',
     ]);
   } finally {
     await shutdownAll(leader1, leader2);

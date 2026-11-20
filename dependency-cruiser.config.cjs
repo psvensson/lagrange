@@ -6,6 +6,8 @@ const DEPENDENCY_RULE = Object.freeze({
     'partition-apply-no-transport-cache-or-planner',
   PARTITION_DECISION_AND_STORE_NO_INDIRECT_NONDETERMINISTIC_CAPABILITIES:
     'partition-decision-and-store-no-indirect-nondeterministic-capabilities',
+  PURE_SQL_RENDER_AND_PLACEMENT_DECISION_NO_NONDETERMINISTIC_CAPABILITIES:
+    'pure-sql-render-and-placement-decision-no-nondeterministic-capabilities',
 });
 const DEPENDENCY_RULE_COMMENT = Object.freeze({
   NO_CIRCULAR: 'Disallow circular dependencies.',
@@ -21,6 +23,10 @@ const DEPENDENCY_RULE_COMMENT = Object.freeze({
     'Pure decision, store, bytes and command modules must not transitively ' +
     'reach transport, volatile cache, CDC delivery, wall-clock time sources, ' +
     'query engines, or rebalancer workflow/planner execution.',
+  PURE_SQL_RENDER_AND_PLACEMENT_DECISION_NO_NONDETERMINISTIC_CAPABILITIES:
+    'Pure SQL AST/rendering and pure placement/reconciliation decision modules ' +
+    'must not directly or transitively import transport, mutable caches, ' +
+    'wall-clock timers, or worker/process managers.',
 });
 const DEPENDENCY_RULE_SEVERITY = Object.freeze({
   ERROR: 'error',
@@ -58,6 +64,15 @@ const DEPENDENCY_PATH = Object.freeze({
     'src/rebalancer/(replica-placement-owner(-deficits|-order)?\\.js$|' +
     'operation-workflow-|unified-rebalancer|move-planner|' +
     'replica-operation-executor|replica-operation-repository\\.js$))|' +
+    '(^(node:)?(http|https|net|tls|dgram|dns|child_process|worker_threads|fs)(/|$))',
+  PURE_SQL_RENDER_AND_PLACEMENT_DECISION_MODULES:
+    '(^|/)src/(query/(sql-statement-renderer|sql-table-definition|sqlite-identifier|sql-value-codec)|' +
+    'rebalancer/(replica-placement-owner-(deficits|order)|placement-owner-decision|operation-lifecycle))\\.js$',
+  PURE_SQL_RENDER_AND_PLACEMENT_DECISION_FORBIDDEN_REACHABLE:
+    '(^|/)(src/(transport|cache|cdc|time|api|cli|admin)/|' +
+    'src/query/distributed/coordinator-merge-process\\.js$|' +
+    'src/rebalancer/(operation-workflow-(?!owner-(constants|evidence|state|effects)\\.js)|' +
+    'unified-rebalancer|move-planner|replica-operation-executor|replica-operation-repository\\.js$))|' +
     '(^(node:)?(http|https|net|tls|dgram|dns|child_process|worker_threads|fs)(/|$))',
   REQUEST_CELL_WORKER_ENTRY:
     '(^|/)src/runtime/wasi-component-cell-worker\\.js$',
@@ -112,6 +127,21 @@ module.exports = {
       to: {
         reachable: true,
         path: DEPENDENCY_PATH.PARTITION_DECISION_FORBIDDEN_REACHABLE,
+      },
+    },
+    {
+      name: DEPENDENCY_RULE
+        .PURE_SQL_RENDER_AND_PLACEMENT_DECISION_NO_NONDETERMINISTIC_CAPABILITIES,
+      comment: DEPENDENCY_RULE_COMMENT
+        .PURE_SQL_RENDER_AND_PLACEMENT_DECISION_NO_NONDETERMINISTIC_CAPABILITIES,
+      severity: DEPENDENCY_RULE_SEVERITY.ERROR,
+      from: {
+        path: DEPENDENCY_PATH.PURE_SQL_RENDER_AND_PLACEMENT_DECISION_MODULES,
+      },
+      to: {
+        reachable: true,
+        path: DEPENDENCY_PATH
+          .PURE_SQL_RENDER_AND_PLACEMENT_DECISION_FORBIDDEN_REACHABLE,
       },
     },
     {

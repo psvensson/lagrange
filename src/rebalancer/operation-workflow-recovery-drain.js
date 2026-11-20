@@ -1,5 +1,8 @@
 import {readStateField} from '../utils/state-field-read.js';
 import {
+  didOperationReconcileAdvanceOrComplete,
+} from './operation-workflow-growth-promote.js';
+import {
   admitReplaceOwnerHandBack,
 } from './operation-workflow-replace-owner-state.js';
 import {OperationWorkflowRecoveryTimeout} from './operation-workflow-recovery-timeout.js';
@@ -778,7 +781,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     const progressed = await this.reconcileOperationLifecycle(operation, {
       cause: 'recovery',
     });
-    if (!progressed) {
+    if (!didOperationReconcileAdvanceOrComplete(progressed)) {
       this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_IN_PROGRESS, {
         operationId: operation.operationId,
         partitionId: operation.partitionId,

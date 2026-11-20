@@ -1,45 +1,25 @@
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-growth-promote.js';
 import {readStateField} from '../utils/state-field-read.js';
+import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+import {ReplicaStatus, REPLICA_OPERATION_SEMANTIC_PHASE} from './replica-status.js';
+import {WORKFLOW_STEP} from '../constants/index.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
+import {attachPriorityRecoveryOperationOwnerProgressContract} from
+  '../control-plane/priority-recovery-operation-owner-progress-contract.js';
 import {
-  REBALANCER_SKIP_REASON,
-} from './rebalancer-constants.js';
-import {
-  ReplicaStatus,
-  REPLICA_OPERATION_SEMANTIC_PHASE,
-} from './replica-status.js';
-import {
-  WORKFLOW_STEP,
-} from '../constants/index.js';
-import {
-  ReplicaOperationField,
-} from './replica-operation-constants.js';
-import {
-  attachPriorityRecoveryOperationOwnerProgressContract,
-} from '../control-plane/priority-recovery-operation-owner-progress-contract.js';
-import {
-  OPERATION_WORKFLOW_COMMAND_STATE,
-  OPERATION_WORKFLOW_DISPATCH_STATE,
-  OPERATION_WORKFLOW_DURABLE_OPERATION_STATE,
-  OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE,
-  OPERATION_WORKFLOW_IDENTIFIER_VARIANTS,
-  OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
-  OPERATION_WORKFLOW_RETRY_BUDGET_STATE,
-  OPERATION_WORKFLOW_RETRY_DEADLINE_STATE,
-  OPERATION_WORKFLOW_REVISION_VARIANTS,
-  OPERATION_WORKFLOW_SERIAL_DEPENDENCY_STATE,
-  OPERATION_WORKFLOW_STALE_PROGRESS_STATE,
-  OPERATION_WORKFLOW_TERMINAL_STATE,
-  OPERATION_WORKFLOW_TIMEOUT_STATE,
-  OPERATION_WORKFLOW_TRANSITION_STATE,
-  OPERATION_WORKFLOW_TYPE,
-  OPERATION_WORKFLOW_WAKE_STATE,
+  OPERATION_WORKFLOW_COMMAND_STATE, OPERATION_WORKFLOW_DISPATCH_STATE,
+  OPERATION_WORKFLOW_DURABLE_OPERATION_STATE, OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE,
+  OPERATION_WORKFLOW_IDENTIFIER_VARIANTS, OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
+  OPERATION_WORKFLOW_RETRY_BUDGET_STATE, OPERATION_WORKFLOW_RETRY_DEADLINE_STATE,
+  OPERATION_WORKFLOW_REVISION_VARIANTS, OPERATION_WORKFLOW_SERIAL_DEPENDENCY_STATE,
+  OPERATION_WORKFLOW_STALE_PROGRESS_STATE, OPERATION_WORKFLOW_TERMINAL_STATE,
+  OPERATION_WORKFLOW_TIMEOUT_STATE, OPERATION_WORKFLOW_TRANSITION_STATE,
+  OPERATION_WORKFLOW_TYPE, OPERATION_WORKFLOW_WAKE_STATE,
 } from './operation-workflow-owner-constants.js';
-import {
-  createOperationProgressStore,
-} from './operation-progress-store.js';
-import {
-  OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS,
-} from './replica-operation-step-policy.js';
+import {createOperationProgressStore} from './operation-progress-store.js';
+import {OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS} from
+  './replica-operation-step-policy.js';
 import {
   resolveOperationWorkflowOwnerLeaseFreshnessState,
   resolveOperationWorkflowPublicationFenceState,
@@ -820,7 +800,9 @@ async function reconcileOperationWorkflowStaleProgress(
   ) {
     return wakeOperationWorkflowRemoteOwner(owner, operation);
   }
-  return owner.reconcileOperationLifecycle(operation, context);
+  return didOperationReconcileAdvanceOrComplete(
+    await owner.reconcileOperationLifecycle(operation, context),
+  );
 }
 
 function createOperationWorkflowOwnerPorts(owner) {
@@ -909,8 +891,10 @@ function createOperationWorkflowOwnerPorts(owner) {
     wakeRemoteOwner(operation, context) {
       return wakeOperationWorkflowRemoteOwner(owner, operation, context);
     },
-    advanceExistingOperation(operation, context) {
-      return owner.reconcileOperationLifecycle(operation, context);
+    async advanceExistingOperation(operation, context) {
+      return didOperationReconcileAdvanceOrComplete(
+        await owner.reconcileOperationLifecycle(operation, context),
+      );
     },
     reconcileStaleProgress(operation, context) {
       return reconcileOperationWorkflowStaleProgress(
@@ -919,8 +903,10 @@ function createOperationWorkflowOwnerPorts(owner) {
         context,
       );
     },
-    retainPublicationForRetry(operation, context) {
-      return owner.reconcileOperationLifecycle(operation, context);
+    async retainPublicationForRetry(operation, context) {
+      return didOperationReconcileAdvanceOrComplete(
+        await owner.reconcileOperationLifecycle(operation, context),
+      );
     },
     markActiveGateVisible() {
       return true;

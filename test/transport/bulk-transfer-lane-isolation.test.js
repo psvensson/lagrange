@@ -1,3 +1,4 @@
+import {EventEmitter} from 'node:events';
 import net from 'node:net';
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -397,3 +398,316 @@ t.test('aborting an in-flight CONNECTING bulk dial rejects with CANCELLED ' +
     await new Promise((resolve) => holdServer.close(resolve));
   }
 });
+
+function createTrackedAbortSignal() {
+  const controller = new AbortController();
+  const realSignal = controller.signal;
+  const activeListeners = new Set();
+  const trackedSignal = {
+    get aborted() {
+      return realSignal.aborted;
+    },
+    addEventListener(type, listener, options) {
+      activeListeners.add(listener);
+      realSignal.addEventListener(type, listener, options);
+    },
+    removeEventListener(type, listener) {
+      activeListeners.delete(listener);
+      realSignal.removeEventListener(type, listener);
+    },
+  };
+  return {
+    controller,
+    signal: trackedSignal,
+    activeListenerCount: () => activeListeners.size,
+  };
+}
+
+function createControllableMockWebSocket() {
+  const emitter = new EventEmitter();
+  const sentFrames = [];
+  let terminated = false;
+  let closed = false;
+  return {
+    sentFrames,
+    isTerminated: () => terminated,
+    isClosed: () => closed,
+    on: emitter.on.bind(emitter),
+    once: emitter.once.bind(emitter),
+    removeListener: emitter.removeListener.bind(emitter),
+    emit: emitter.emit.bind(emitter),
+    send(payload) {
+      sentFrames.push(payload);
+    },
+    terminate() {
+      terminated = true;
+    },
+    close() {
+      closed = true;
+    },
+  };
+}
+
+t.test('tokenBucket.acquire removes its abort listener from a reused signal ' +
+  'after normal grant and after dispose()', async (t) => {
+  let currentTimeMs = 1000;
+  const bucketBytesPerSec = 100000;
+  const bucketCapacity = 100;
+  const advanceStepMs = 100;
+  const drainSettleWaitMs = 15;
+  const bucket = createByteRateTokenBucket({
+    bytesPerSecond: bucketBytesPerSec,
+    capacityBytes: bucketCapacity,
+    now: () => currentTimeMs,
+  });
+  try {
+    // Drain initial capacity immediately:
+    const initial = await bucket.acquire(bucketCapacity);
+    t.equal(initial.acquired, true, 'initial capacity drained');
+
+    const tracked = createTrackedAbortSignal();
+    const parkedGrantPromise = bucket.acquire(bucketCapacity, {
+      signal: tracked.signal,
+    });
+    t.equal(
+      tracked.activeListenerCount(),
+      1,
+      'parked acquire attaches one abort listener',
+    );
+
+    // Advance clock and keep event loop referenced while unref'd drainTimer fires:
+    currentTimeMs += advanceStepMs;
+    await new Promise((resolve) => setTimeout(resolve, drainSettleWaitMs));
+    const granted = await parkedGrantPromise;
+    t.equal(granted.acquired, true, 'parked acquire is granted after refill');
+    t.equal(
+      tracked.activeListenerCount(),
+      0,
+      'normal grant removes abort listener from reused signal',
+    );
+
+    // Park a second waiter on the same reused signal, then dispose() the bucket:
+    const disposedPromise = bucket.acquire(bucketCapacity, {
+      signal: tracked.signal,
+    });
+    t.equal(
+      tracked.activeListenerCount(),
+      1,
+      'second parked acquire attaches one abort listener',
+    );
+    bucket.dispose();
+    const disposedGrant = await disposedPromise;
+    t.equal(disposedGrant.acquired, false, 'dispose() settles waiter as not acquired');
+    t.equal(
+      tracked.activeListenerCount(),
+      0,
+      'dispose() removes abort listener from reused signal',
+    );
+  } finally {
+    bucket.dispose();
+  }
+});
+
+t.test('sendChunkFrame settles pre-start and queued sendChain cancellation ' +
+  'immediately without leaking pendingSends or abort listeners', async (t) => {
+  const bucket = await createDrainedBucket();
+  const registry = createBulkTransferChannelRegistry({
+    nodeId: TEST_LOCAL_NODE_ID,
+    tokenBucket: bucket,
+    maxPendingSends: TEST_MAX_PENDING_SENDS,
+  });
+  const pair = createInProcWebSocketPair();
+  const connection = registry.adoptIncomingSocket({
+    nodeId: TEST_PEER_NODE_ID,
+    ws: pair.b,
+  });
+  const frame = Buffer.alloc(TEST_CHUNK_FRAME_BYTES);
+  try {
+    // 1. Pre-start aborted signal returns CANCELLED without occupying pendingSends:
+    const preAborted = new AbortController();
+    preAborted.abort();
+    const preResult = await connection.sendChunkFrame(frame, {
+      signal: preAborted.signal,
+    });
+    t.equal(
+      preResult.outcome,
+      BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+      'pre-aborted signal returns CANCELLED immediately',
+    );
+    t.equal(
+      connection.getStats().pendingSends,
+      0,
+      'pre-aborted sendChunkFrame does not increment pendingSends',
+    );
+
+    // 2. First send parks inside tokenBucket.acquire; second send parks behind
+    // sendChain and is aborted while waiting on sendChain:
+    const firstSend = connection.sendChunkFrame(frame);
+    await Promise.resolve();
+    const trackedSecond = createTrackedAbortSignal();
+    const secondSend = connection.sendChunkFrame(frame, {
+      signal: trackedSecond.signal,
+    });
+    t.equal(
+      connection.getStats().pendingSends,
+      2,
+      'both sends are counted in pendingSends before abort',
+    );
+    t.equal(
+      trackedSecond.activeListenerCount(),
+      1,
+      'queued sendChain waiter attaches one abort listener',
+    );
+
+    trackedSecond.controller.abort();
+    const secondResult = await secondSend;
+    t.equal(
+      secondResult.outcome,
+      BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+      'queued send waiting on sendChain resolves CANCELLED immediately on abort',
+    );
+    t.equal(
+      connection.getStats().pendingSends,
+      1,
+      'cancelled queued send releases its pendingSends slot immediately',
+    );
+    t.equal(
+      trackedSecond.activeListenerCount(),
+      0,
+      'cancelled queued send detaches its abort listener',
+    );
+
+    registry.closeAll();
+    const firstResult = await firstSend;
+    t.equal(
+      firstResult.outcome,
+      BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+      'first parked send settles when bucket is disposed',
+    );
+  } finally {
+    registry.closeAll();
+  }
+});
+
+t.test('dial handles error-before-abort, abort-before-error, post-OPEN abort, ' +
+  'and replacement dial without evicting live replacement', async (t) => {
+  const dialFailureMessage = 'ECONNREFUSED simulated dial error';
+  const identifyPayload = {
+    nodeId: TEST_LOCAL_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    bootIncarnation: TEST_BOOT_INCARNATION,
+  };
+  const createdSockets = [];
+  const registry = createBulkTransferChannelRegistry({
+    nodeId: TEST_LOCAL_NODE_ID,
+    createWebSocket: () => {
+      const mockSocket = createControllableMockWebSocket();
+      createdSockets.push(mockSocket);
+      return mockSocket;
+    },
+  });
+
+  try {
+    // 1. Error before abort:
+    const trackedErrFirst = createTrackedAbortSignal();
+    const errFirstPromise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: TEST_PEER_ADDRESS,
+      identify: identifyPayload,
+      signal: trackedErrFirst.signal,
+    });
+    const sock1 = createdSockets[0];
+    sock1.emit(TRANSPORT_EVENT.ERROR, new Error(dialFailureMessage));
+    trackedErrFirst.controller.abort();
+    await t.rejects(
+      errFirstPromise,
+      {message: dialFailureMessage},
+      'error before abort rejects with the socket error',
+    );
+    t.equal(
+      trackedErrFirst.activeListenerCount(),
+      0,
+      'abort listener is cleaned up when dial fails with error first',
+    );
+    // Late error after failDial is absorbed without throwing:
+    sock1.emit(TRANSPORT_EVENT.ERROR, new Error('late post-error socket event'));
+
+    // 2. Abort before error:
+    const trackedAbortFirst = createTrackedAbortSignal();
+    const abortFirstPromise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: TEST_PEER_ADDRESS,
+      identify: identifyPayload,
+      signal: trackedAbortFirst.signal,
+    });
+    const sock2 = createdSockets[1];
+    trackedAbortFirst.controller.abort();
+    // Late socket error after abort is absorbed cleanly:
+    sock2.emit(TRANSPORT_EVENT.ERROR, new Error(dialFailureMessage));
+    await t.rejects(
+      abortFirstPromise,
+      {message: BULK_CHANNEL_SEND_OUTCOME.CANCELLED},
+      'abort before error rejects with CANCELLED and absorbs late socket error',
+    );
+    t.equal(sock2.isTerminated(), true, 'aborted dial terminates socket');
+
+    // 3. Post-OPEN abort in the same turn before attach completes:
+    const postOpenController = new AbortController();
+    const postOpenPromise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: TEST_PEER_ADDRESS,
+      identify: identifyPayload,
+      signal: postOpenController.signal,
+    });
+    const sock3 = createdSockets[2];
+    sock3.emit(TRANSPORT_EVENT.OPEN);
+    postOpenController.abort();
+    await t.rejects(
+      postOpenPromise,
+      {message: BULK_CHANNEL_SEND_OUTCOME.CANCELLED},
+      'post-OPEN abort before attach rejects with CANCELLED',
+    );
+    t.equal(sock3.isTerminated(), true, 'post-OPEN aborted socket is terminated');
+    t.equal(sock3.sentFrames.length, 0, 'no IDENTIFY frame sent after post-OPEN abort');
+    t.equal(
+      registry.hasConnection(TEST_PEER_NODE_ID),
+      false,
+      'post-OPEN aborted socket is never attached to registry',
+    );
+
+    // 4. Replacement dial not evicted by stale socket late error + close events:
+    const dial1Promise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: TEST_PEER_ADDRESS,
+      identify: identifyPayload,
+    });
+    const staleDialSocket = createdSockets[3];
+    staleDialSocket.emit(TRANSPORT_EVENT.OPEN);
+    const conn1 = await dial1Promise;
+    t.equal(registry.getConnection(TEST_PEER_NODE_ID), conn1, 'first dial attached');
+
+    const dial2Promise = registry.dial({
+      nodeId: TEST_PEER_NODE_ID,
+      address: TEST_PEER_ADDRESS,
+      identify: identifyPayload,
+    });
+    const replacementDialSocket = createdSockets[4];
+    replacementDialSocket.emit(TRANSPORT_EVENT.OPEN);
+    const conn2 = await dial2Promise;
+    t.not(conn1, conn2, 'replacement dial created distinct connection');
+    t.equal(staleDialSocket.isClosed(), true, 'stale dial socket was closed on attach');
+
+    // Emit late error and close on staleDialSocket:
+    staleDialSocket.emit(TRANSPORT_EVENT.ERROR, new Error('stale socket error'));
+    staleDialSocket.emit(TRANSPORT_EVENT.CLOSE);
+    t.equal(
+      registry.getConnection(TEST_PEER_NODE_ID),
+      conn2,
+      'late error/close on stale dial socket does not evict replacement connection',
+    );
+    t.equal(conn2.isOpen(), true, 'replacement connection remains open');
+  } finally {
+    registry.closeAll();
+  }
+});
+

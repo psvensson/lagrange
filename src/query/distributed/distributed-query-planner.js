@@ -17,7 +17,10 @@ import {
 } from './distributed-query-plan-constants.js';
 import {renderSqliteIdentifier} from '../sqlite-identifier.js';
 import {resolveDeclaredPrimaryKeyColumns} from '../../partition/partition-boundary-representation.js';
-import {renderExpression} from '../sql-statement-renderer.js';
+import {
+  renderExpression,
+  renderExpressionWithParameters,
+} from '../sql-statement-renderer.js';
 import {
   collectProjectedColumns,
   expressionReferencesAlias,
@@ -483,13 +486,14 @@ class DistributedQueryPlanner {
     const fragments = [];
     for (const [tableAlias, tablePlan] of tablePlans) {
       const fragmentSql = this.buildFragmentSql(tablePlan);
+      const fragmentParams = this.resolveFragmentParams(tablePlan, params);
       for (const partitionId of tablePlan.partitions) {
         fragments.push({
           fragmentId: `${tableAlias}:${partitionId}`,
           tableAlias,
           partitionId,
           sql: fragmentSql,
-          params,
+          params: fragmentParams,
           roleHint: DISTRIBUTED_ROLE_HINT.FOLLOWER_OK,
           pushdown: {
             predicatePushedDown: Boolean(tablePlan.localPredicate),
@@ -499,6 +503,37 @@ class DistributedQueryPlanner {
       }
     }
     return fragments;
+  }
+
+  /**
+   * Collect bound parameter values for one fragment's local predicate in exact
+   * emitted placeholder order.
+   * @param {Object} tablePlan - Table access plan.
+   * @param {Array} params - Statement bound parameters.
+   * @return {Array} Fragment-scoped parameter values.
+   * @private
+   */
+  resolveFragmentParams(tablePlan, params) {
+    if (!tablePlan?.localPredicate) {
+      return [];
+    }
+    const paramNodes = renderExpressionWithParameters(
+      tablePlan.localPredicate,
+      (paramNode) => paramNode,
+    ).params;
+    if (paramNodes.length === 0) {
+      return [];
+    }
+    const allBound = Array.isArray(params) && paramNodes.every(
+      (node) =>
+        Number.isInteger(node?.index) &&
+        node.index >= 0 &&
+        node.index < params.length &&
+        params[node.index] !== undefined,
+    );
+    return allBound ?
+      paramNodes.map((node) => params[node.index]) :
+      params;
   }
 
   /**

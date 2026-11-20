@@ -1,5 +1,8 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  didOperationReconcileAdvanceOrComplete,
+} from './operation-workflow-growth-promote.js';
+import {
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
 } from './replica-operation-step-policy.js';
 import {
@@ -167,16 +170,20 @@ async function reconcileDispatchWakeOperationProgress(context, operation) {
     return true;
   }
   if (typeof context.reconcileOperationLifecycle === 'function') {
-    return context.reconcileOperationLifecycle(operation, {
-      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-    });
+    return didOperationReconcileAdvanceOrComplete(
+      await context.reconcileOperationLifecycle(operation, {
+        cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+      }),
+    );
   }
   if (typeof context.reconcileOperationProgress !== 'function') {
     return false;
   }
-  return context.reconcileOperationProgress(operation, {
-    cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
-  });
+  return didOperationReconcileAdvanceOrComplete(
+    await context.reconcileOperationProgress(operation, {
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+    }),
+  );
 }
 
 /**

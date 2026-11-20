@@ -17,6 +17,9 @@ import {
 import {
   decideOperationWorkflowProgress,
 } from './operation-workflow-owner-decision.js';
+import {
+  didOperationReconcileAdvanceOrComplete,
+} from './operation-workflow-growth-promote.js';
 
 const OPERATION_WORKFLOW_ADAPTER_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
@@ -91,9 +94,10 @@ function buildOperationWorkflowAdapterCommandResultEvidence({
         operation?.operationId,
         OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE,
       ),
-    [OPERATION_WORKFLOW_RECORD_FIELDS.COMMAND_STATE]: applied === true ?
-      OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.APPLIED :
-      OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.SKIPPED,
+    [OPERATION_WORKFLOW_RECORD_FIELDS.COMMAND_STATE]:
+      didOperationReconcileAdvanceOrComplete(applied) ?
+        OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.APPLIED :
+        OPERATION_WORKFLOW_ADAPTER_COMMAND_RESULT_STATE.SKIPPED,
     effectCommand: command.effectCommand,
   });
 }

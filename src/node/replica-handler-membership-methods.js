@@ -17,6 +17,7 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
 } from '../raft/raft-committed-membership-constants.js';
@@ -87,7 +88,7 @@ function transitionLocalPromotedLearners(handler, promoteReplicaIds) {
   }
   for (const replicaId of promoteReplicaIds) {
     const svc = handler.localServices.get(replicaId);
-    if (svc && svc.role === RAFT_ROLE.LEARNER) {
+    if (svc && isCatchupLearnerRaftRole(svc.role)) {
       svc.role = RAFT_ROLE.FOLLOWER;
       svc.isJoiningExistingGroup = false;
       svc.learnerBootstrapped = true;
@@ -304,6 +305,7 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
         {
           [ReplicaOperationField.PROPOSAL]: proposal,
           committedVotersReached,
+          promotedReplicaIds: Object.freeze([...promoteReplicaIds]),
           leaderId,
           partitionId: target.fields.partitionId,
           replicaId: target.service.replicaId,

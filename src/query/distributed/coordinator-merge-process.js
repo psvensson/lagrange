@@ -322,7 +322,8 @@ function isFatalWorkerCondition(error, child) {
   return (
     error?.code === QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED ||
     !child.connected ||
-    Boolean(child.killed)
+    Boolean(child.killed) ||
+    child.exitCode !== null
   );
 }
 
@@ -340,6 +341,7 @@ class CoordinatorMergeProcessPool {
       options.spillDir :
       os.tmpdir();
     this.idleWorkers = [];
+    this.activeWorkers = new Set();
     this.activeCount = 0;
     this.waitQueue = [];
   }
@@ -367,6 +369,7 @@ class CoordinatorMergeProcessPool {
       const candidate = this.idleWorkers.pop();
       if (candidate.connected && candidate.exitCode === null && !candidate.killed) {
         this.activeCount += 1;
+        this.activeWorkers.add(candidate);
         refChild(candidate);
         return Promise.resolve(candidate);
       }
@@ -374,6 +377,7 @@ class CoordinatorMergeProcessPool {
     if (this.activeCount < this.maxWorkers) {
       this.activeCount += 1;
       const child = this.spawnWorker();
+      this.activeWorkers.add(child);
       refChild(child);
       return Promise.resolve(child);
     }
@@ -392,55 +396,83 @@ class CoordinatorMergeProcessPool {
         }
       };
       const entry = {
+        settled: false,
+        isCancelled: () => isCancellationRequested(sessionOptions),
+        abortWait: () => {
+          if (entry.settled) return;
+          entry.settled = true;
+          const idx = this.waitQueue.indexOf(entry);
+          if (idx >= 0) this.waitQueue.splice(idx, 1);
+          clearWaiters();
+          reject(createMergeError(
+            QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
+            PROCESS_ERROR_MSG.DEADLINE_KILLED,
+          ));
+        },
         resolve: (worker) => {
+          if (entry.settled) return false;
+          entry.settled = true;
           clearWaiters();
           resolve(worker);
+          return true;
         },
         reject: (err) => {
+          if (entry.settled) return false;
+          entry.settled = true;
           clearWaiters();
           reject(err);
+          return true;
         },
       };
-      const abortWait = () => {
-        const idx = this.waitQueue.indexOf(entry);
-        if (idx >= 0) this.waitQueue.splice(idx, 1);
-        clearWaiters();
-        reject(createMergeError(
-          QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
-          PROCESS_ERROR_MSG.DEADLINE_KILLED,
-        ));
-      };
-      detachCancel = attachCancellationWatcher(sessionOptions, abortWait);
-      if (isCancellationRequested(sessionOptions)) {
-        abortWait();
+      detachCancel = attachCancellationWatcher(sessionOptions, entry.abortWait);
+      if (entry.isCancelled()) {
+        entry.abortWait();
         return;
       }
       if (Number.isSafeInteger(deadlineMs) && deadlineMs > 0) {
         const waitMs = Math.max(0, deadlineMs - Date.now());
-        timer = setTimeout(abortWait, waitMs);
+        timer = setTimeout(entry.abortWait, waitMs);
       }
       this.waitQueue.push(entry);
     });
   }
 
+  dequeueNextLiveWaiter() {
+    while (this.waitQueue.length > 0) {
+      const next = this.waitQueue.shift();
+      if (next.settled) {
+        continue;
+      }
+      if (next.isCancelled()) {
+        next.abortWait();
+        continue;
+      }
+      return next;
+    }
+    return null;
+  }
+
   releaseWorker(child, usable) {
+    const next = this.dequeueNextLiveWaiter();
     if (usable && child.connected && child.exitCode === null && !child.killed) {
-      if (this.waitQueue.length > 0) {
-        const next = this.waitQueue.shift();
+      if (next !== null) {
+        this.activeWorkers.add(child);
         next.resolve(child);
         return;
       }
+      this.activeWorkers.delete(child);
       this.activeCount = Math.max(0, this.activeCount - 1);
       unrefChild(child);
       this.idleWorkers.push(child);
       return;
     }
+    this.activeWorkers.delete(child);
     if (!child.killed && child.exitCode === null) {
       child.kill(KILL_SIGNAL);
     }
-    if (this.waitQueue.length > 0) {
-      const next = this.waitQueue.shift();
+    if (next !== null) {
       const replacement = this.spawnWorker();
+      this.activeWorkers.add(replacement);
       refChild(replacement);
       next.resolve(replacement);
       return;
@@ -453,6 +485,7 @@ class CoordinatorMergeProcessPool {
       let settled = false;
       let timer = null;
       let detachCancel = null;
+      let listenersAttached = false;
       let onMessage = null;
       let onExit = null;
       let onError = null;
@@ -467,17 +500,11 @@ class CoordinatorMergeProcessPool {
           detachCancel = null;
           detach();
         }
-        if (onMessage !== null) {
+        if (listenersAttached) {
+          listenersAttached = false;
           child.removeListener(PROCESS_EVENT.MESSAGE, onMessage);
-          onMessage = null;
-        }
-        if (onExit !== null) {
           child.removeListener(PROCESS_EVENT.EXIT, onExit);
-          onExit = null;
-        }
-        if (onError !== null) {
           child.removeListener(PROCESS_EVENT.ERROR, onError);
-          onError = null;
         }
       };
 
@@ -496,6 +523,15 @@ class CoordinatorMergeProcessPool {
 
       if (isCancellationRequested(sessionOptions)) {
         abortChildForDeadlineOrCancel();
+        return;
+      }
+
+      if (child.killed || !child.connected || child.exitCode !== null) {
+        settled = true;
+        reject(createMergeError(
+          QUERY_ERROR_CODE.INTERNAL_ERROR,
+          PROCESS_ERROR_MSG.CHILD_EXITED,
+        ));
         return;
       }
 
@@ -540,10 +576,19 @@ class CoordinatorMergeProcessPool {
         timer = setTimeout(abortChildForDeadlineOrCancel, timeoutMs);
       }
 
+      listenersAttached = true;
       child.on(PROCESS_EVENT.MESSAGE, onMessage);
       child.once(PROCESS_EVENT.EXIT, onExit);
       child.once(PROCESS_EVENT.ERROR, onError);
-      child.send(payload);
+      try {
+        child.send(payload, (sendErr) => {
+          if (sendErr) {
+            onError(sendErr);
+          }
+        });
+      } catch (sendErr) {
+        onError(sendErr);
+      }
     });
   }
 
@@ -675,12 +720,23 @@ class CoordinatorMergeProcessPool {
   }
 
   shutdown() {
+    while (this.waitQueue.length > 0) {
+      const entry = this.waitQueue.shift();
+      entry.abortWait();
+    }
     while (this.idleWorkers.length > 0) {
       const worker = this.idleWorkers.pop();
       if (!worker.killed && worker.exitCode === null) {
         worker.kill(KILL_SIGNAL);
       }
     }
+    for (const worker of this.activeWorkers) {
+      if (!worker.killed && worker.exitCode === null) {
+        worker.kill(KILL_SIGNAL);
+      }
+    }
+    this.activeWorkers.clear();
+    this.activeCount = 0;
   }
 
   close() {

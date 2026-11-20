@@ -557,7 +557,7 @@ export async function runGrowthPromoteProductionWitness({
       decodedInterruptedOp,
       {cause: 'recovery'},
     );
-    assert.equal(jointReconciled, false);
+    assert.equal(jointReconciled, 'waiting');
     assert.equal(learnerSvc1.role, RAFT_ROLE.LEARNER);
     assert.equal(learnerSvc2.role, RAFT_ROLE.LEARNER);
     syncCacheFromDb();
@@ -580,7 +580,7 @@ export async function runGrowthPromoteProductionWitness({
         ),
         {cause: 'recovery'},
       );
-    assert.equal(jointWithFollowerServices, false);
+    assert.equal(jointWithFollowerServices, 'waiting');
     syncCacheFromDb();
     const stillJointRow = cache.get(
       TABLES.REPLICA_OPERATIONS,
@@ -598,7 +598,7 @@ export async function runGrowthPromoteProductionWitness({
       coordinator.repository.rowToOperation(stillJointRow),
       {cause: 'recovery'},
     );
-    assert.equal(reconciled, true);
+    assert.equal(reconciled, 'completed');
     syncCacheFromDb();
 
     assert.equal(learnerSvc1.role, RAFT_ROLE.FOLLOWER);
@@ -902,7 +902,7 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
       op1,
       {cause: 'observed_progress'},
     );
-    assert.equal(secondAttempt, true);
+    assert.equal(secondAttempt, 'completed');
     assert.equal(dispatchedTargets[1], 'n2/service/replica-handler');
     assert.equal(op1.workflowStep, WORKFLOW_STEP.ACTIVE);
     assert.equal(op1.status, ReplicaStatus.ACTIVE);
@@ -954,8 +954,8 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
     );
     assert.equal(
       inPlaceProgress,
-      false,
-      'in-place SYNCING retry deferral must not report workflow progress to timeout reconciliation',
+      'waiting',
+      'in-place SYNCING retry deferral must report waiting (not progress) to timeout reconciliation',
     );
     await coordinator.workflowOwner.reconcileTimeoutOperation(op2, NOW_MS);
     syncCacheFromDb();

@@ -4,6 +4,7 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
 import {
   renderExpression,
+  renderExpressionWithParameters,
   renderResultColumn,
   renderSelect,
 } from './sql-statement-renderer.js';
@@ -26,6 +27,7 @@ const LOCAL_STR_BOOLEAN = 'boolean';
 const SQLITE_INT64_MIN = -9223372036854775808n;
 const SQLITE_INT64_MIN_TEXT = '-9223372036854775808';
 const SQLITE_TYPE_INTEGER = 'INTEGER';
+const UNBOUND_PARAM_PREFIX = 'Unbound parameter index: ';
 
 const {
   QUERY_AST_TYPE,
@@ -106,7 +108,8 @@ function buildDistributedMutationResult(
 function toStorageClassLiteralAst(val) {
   encodeTypedParams([val]);
   if (typeof val === LOCAL_STR_BIGINT || typeof val === LOCAL_STR_BOOLEAN) {
-    if (val === SQLITE_INT64_MIN) {
+    const integerValue = typeof val === LOCAL_STR_BOOLEAN ? (val ? 1n : 0n) : val;
+    if (integerValue === SQLITE_INT64_MIN) {
       return {
         type: PG_EXPR_TYPE.CAST,
         expression: {
@@ -119,7 +122,7 @@ function toStorageClassLiteralAst(val) {
     }
     return {
       type: EXPR_TYPE.LITERAL,
-      value: val,
+      value: integerValue,
       sqlType: SQL_STORAGE_CLASS.INTEGER,
     };
   }
@@ -130,7 +133,41 @@ function toStorageClassLiteralAst(val) {
   };
 }
 
-function bindWriteParametersInAst(node, inputParams, outParams, cursor) {
+function createUnboundParameterError(index) {
+  const error = new Error(`${UNBOUND_PARAM_PREFIX}${index}`);
+  error.code = QUERY_ERROR_CODE.SYNTAX_ERROR;
+  error.errorCode = QUERY_ERROR_CODE.SYNTAX_ERROR;
+  return error;
+}
+
+function isBoundParameterIndex(idx, inputParams) {
+  return (
+    Array.isArray(inputParams) &&
+    typeof idx === LOCAL_STR_NUMBER &&
+    Number.isInteger(idx) &&
+    idx >= 0 &&
+    idx < inputParams.length &&
+    inputParams[idx] !== undefined
+  );
+}
+
+function resolveWriteParameterValue(paramNode, inputParams) {
+  const idx = paramNode?.index;
+  if (!isBoundParameterIndex(idx, inputParams)) {
+    throw createUnboundParameterError(idx);
+  }
+  return inputParams[idx];
+}
+
+function isInlinedWriteStorageClassValue(val) {
+  return (
+    typeof val === LOCAL_STR_BIGINT ||
+    typeof val === LOCAL_STR_BOOLEAN ||
+    val instanceof Uint8Array
+  );
+}
+
+function inlineWriteStorageClassLiterals(node, inputParams) {
   if (
     !node ||
     typeof node !== LOCAL_STR_OBJECT ||
@@ -140,39 +177,38 @@ function bindWriteParametersInAst(node, inputParams, outParams, cursor) {
     return node;
   }
   if (Array.isArray(node)) {
-    return node.map((item) => bindWriteParametersInAst(item, inputParams, outParams, cursor));
+    return node.map((item) => inlineWriteStorageClassLiterals(item, inputParams));
   }
   if (node.type === EXPR_TYPE.PARAMETER) {
-    const idx = typeof node.index === LOCAL_STR_NUMBER ? node.index : cursor.next;
-    cursor.next = idx + 1;
-    if (idx >= 0 && idx < inputParams.length && inputParams[idx] !== undefined) {
-      const val = inputParams[idx];
-      if (
-        typeof val === LOCAL_STR_BIGINT ||
-        typeof val === LOCAL_STR_BOOLEAN ||
-        val instanceof Uint8Array
-      ) {
-        return toStorageClassLiteralAst(val);
-      }
-      outParams.push(val);
-    }
-    return node;
+    const val = resolveWriteParameterValue(node, inputParams);
+    return isInlinedWriteStorageClassValue(val) ?
+      toStorageClassLiteralAst(val) :
+      node;
   }
   const cloned = {};
   for (const [key, value] of Object.entries(node)) {
     cloned[key] = value && typeof value === LOCAL_STR_OBJECT ?
-      bindWriteParametersInAst(value, inputParams, outParams, cursor) :
+      inlineWriteStorageClassLiterals(value, inputParams) :
       value;
   }
   return cloned;
 }
 
-function renderWriteExpression(executor, expr, inputParams, outParams, cursor) {
+function renderWriteExpression(executor, expr, inputParams, outParams) {
   if (inputParams === null) {
     return executor.buildExpressionSQL(expr);
   }
-  const boundExpr = bindWriteParametersInAst(expr, inputParams, outParams, cursor);
-  return executor.buildExpressionSQL(boundExpr);
+  const resolveParam = (paramNode) =>
+    resolveWriteParameterValue(paramNode, inputParams);
+  const rendered = renderExpressionWithParameters(expr, resolveParam);
+  if (!rendered.params.some(isInlinedWriteStorageClassValue)) {
+    outParams.push(...rendered.params);
+    return rendered.sql;
+  }
+  const boundExpr = inlineWriteStorageClassLiterals(expr, inputParams);
+  const inlinedRendered = renderExpressionWithParameters(boundExpr, resolveParam);
+  outParams.push(...inlinedRendered.params);
+  return inlinedRendered.sql;
 }
 
 const queryExecutorSqlCommandMethods = {
@@ -347,7 +383,6 @@ const queryExecutorSqlCommandMethods = {
     if (inputParams !== null) {
       params.length = 0;
     }
-    const cursor = {next: 0};
     let sql;
     if (ast.orReplace) {
       sql = `${SQL.INSERT_OR_REPLACE_INTO} `;
@@ -363,7 +398,7 @@ const queryExecutorSqlCommandMethods = {
     sql += ` ${SQL.VALUES} `;
     const rows = ast.values.map((row) => {
       const vals = row.map((value) =>
-        renderWriteExpression(this, value, inputParams, params, cursor),
+        renderWriteExpression(this, value, inputParams, params),
       );
       return `(${vals.join(', ')})`;
     });
@@ -449,7 +484,6 @@ const queryExecutorSqlCommandMethods = {
     if (inputParams !== null) {
       params.length = 0;
     }
-    const cursor = {next: 0};
     let sql = `UPDATE ${renderSqliteIdentifier(ast.table)} SET `;
     const assignments = ast.assignments || ast.set || [];
     const sets = assignments.map((assignment) => {
@@ -459,13 +493,12 @@ const queryExecutorSqlCommandMethods = {
         assignment.value,
         inputParams,
         params,
-        cursor,
       );
       return `${colSql} = ${valSql}`;
     });
     sql += sets.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14);
     if (ast.where) {
-      sql += ` WHERE ${renderWriteExpression(this, ast.where, inputParams, params, cursor)}`;
+      sql += ` WHERE ${renderWriteExpression(this, ast.where, inputParams, params)}`;
     }
     return this.appendReturning(sql, ast.returning);
   },
@@ -502,10 +535,9 @@ const queryExecutorSqlCommandMethods = {
     if (inputParams !== null) {
       params.length = 0;
     }
-    const cursor = {next: 0};
     let sql = `DELETE FROM ${renderSqliteIdentifier(ast.table)}`;
     if (ast.where) {
-      sql += ` WHERE ${renderWriteExpression(this, ast.where, inputParams, params, cursor)}`;
+      sql += ` WHERE ${renderWriteExpression(this, ast.where, inputParams, params)}`;
     }
     return this.appendReturning(sql, ast.returning);
   },

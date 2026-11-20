@@ -10,7 +10,10 @@
 
 import {v4 as uuidv4} from 'uuid';
 
-import {assertLiveQueryGroupAdmissible} from '../query/coordinator-sql-admission.js';
+import {
+  assertLiveQueryGroupAdmissible,
+  assertLiveQueryPredicateAdmissible,
+} from '../query/coordinator-sql-admission.js';
 import {EXPR_TYPE} from '../query/parser-constants.js';
 import {PG_EXPR_TYPE} from '../query/pg/pg-compat-constants.js';
 import {renderSelect} from '../query/sql-statement-renderer.js';
@@ -22,6 +25,7 @@ import {
 } from './live-query-constants.js';
 import {
   compilePredicate,
+  createClosedNoOpPredicate,
   extractReferencedTables,
   extractTableBindings,
   isComplexWhereNode,
@@ -306,23 +310,41 @@ function resolveSchemasForTables(tables, resolveTableSchema) {
 
 /**
  * Compile WHERE clause predicate from parsed AST using in-memory SQLite.
+ * For Tier 2 complex queries (`isComplexQuery(parsedAst) === true`), validates
+ * admissibility and WHERE compilation while immediately closing the temporary
+ * SQLite database so no unused `:memory:` connection remains open.
  * @param {Object} parsedAst
  * @param {Array|Object} [params]
  * @param {Function|null} [resolveTableSchema]
+ * @param {Object} [options]
  * @return {{whereClause: Object|null, predicate: Function}}
  */
-function resolveWhereInfo(parsedAst, params = [], resolveTableSchema = null) {
+function resolveWhereInfo(parsedAst, params = [], resolveTableSchema = null, options = {}) {
   assertLiveQueryGroupAdmissible(parsedAst);
-  const whereClause = parsedAst?.where ?? null;
+  const rawWhere = parsedAst?.where ?? null;
+  assertLiveQueryPredicateAdmissible(rawWhere);
+  const whereClause = rawWhere ? normalizeWhereAstForRenderer(rawWhere) : null;
   const tables = extractReferencedTables(parsedAst);
   const schemas = resolveSchemasForTables(tables, resolveTableSchema);
+  const isComplex = options?.isComplex ?? isComplexQuery(parsedAst);
+  const compileOptions = {
+    tableName: tables[0] || null,
+    tableBindings: extractTableBindings(parsedAst),
+    parsedQuery: parsedAst,
+  };
+  if (isComplex) {
+    if (whereClause) {
+      const compiled = compilePredicate(whereClause, params, schemas, compileOptions);
+      compiled.close?.();
+    }
+    return {
+      whereClause,
+      predicate: createClosedNoOpPredicate(),
+    };
+  }
   return {
     whereClause,
-    predicate: compilePredicate(whereClause, params, schemas, {
-      tableName: tables[0] || null,
-      tableBindings: extractTableBindings(parsedAst),
-      parsedQuery: parsedAst,
-    }),
+    predicate: compilePredicate(whereClause, params, schemas, compileOptions),
   };
 }
 

@@ -19,6 +19,10 @@ import {NODE_HOST_IDENTITY_STATE, readNodeHostIdentity} from
   '../topology/node-host-identity.js';
 import {COLUMN, SERVICE_STATUS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  isCatchupLearnerRaftRole,
+  isLoadRoutableRaftRole,
+} from '../raft/replica-voter-readiness.js';
 import {OperationType} from './replica-operation-progress.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
@@ -95,11 +99,11 @@ function readPlacementNodeInputs(nodeAuthority, nowMs) {
 }
 
 function isLearnerReplica(replica) {
-  return replica.isLearner === true || replica.role === RAFT_ROLE.LEARNER;
+  return replica.isLearner === true || isCatchupLearnerRaftRole(replica.role);
 }
 
 function isVoterRole(role) {
-  return role === RAFT_ROLE.LEADER || role === RAFT_ROLE.FOLLOWER;
+  return isLoadRoutableRaftRole(role);
 }
 
 function shouldSkipServiceRow(row, isBusy) {
@@ -108,7 +112,7 @@ function shouldSkipServiceRow(row, isBusy) {
     return true;
   }
   const role = row[COLUMN.RAFT_ROLE];
-  return isBusy && (role === RAFT_ROLE.LEARNER || IN_FLIGHT_LEARNER_STATUSES.has(status));
+  return isBusy && (isCatchupLearnerRaftRole(role) || IN_FLIGHT_LEARNER_STATUSES.has(status));
 }
 
 function classifyServiceRow(row) {
@@ -117,7 +121,7 @@ function classifyServiceRow(row) {
   if (typeof replicaId !== 'string' || typeof nodeId !== 'string') return null;
   const role = row[COLUMN.RAFT_ROLE];
   const status = row[COLUMN.STATUS];
-  const isLearner = role === RAFT_ROLE.LEARNER;
+  const isLearner = isCatchupLearnerRaftRole(role);
   const activeVoter = status === SERVICE_STATUS.ACTIVE && isVoterRole(role);
   const caughtUp = isLearner && status === SERVICE_STATUS.ACTIVE &&
     row.caught_up !== false && row.caughtUp !== false;

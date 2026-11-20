@@ -403,8 +403,14 @@ test('aliased live query preserves declared COLLATE NOCASE and affinity on compi
 
   t.same(
     extractTableBindings(aliasedAst),
-    [{tableName: 'users', alias: 'u'}],
-    'extractTableBindings records base table and alias',
+    [{
+      occurrenceId: 'root:0:users:u',
+      queryScope: 'root',
+      tableName: 'users',
+      alias: 'u',
+      effectiveName: 'u',
+    }],
+    'extractTableBindings records base table, alias, scope, and occurrence identity',
   );
 
   const directAliasedPred = compilePredicate(aliasedAst.where, [], schema);
@@ -457,10 +463,22 @@ test('aliased live query preserves declared COLLATE NOCASE and affinity on compi
   t.same(
     extractTableBindings(selfJoinAst),
     [
-      {tableName: 'users', alias: 'u1'},
-      {tableName: 'users', alias: 'u2'},
+      {
+        occurrenceId: 'root:0:users:u1',
+        queryScope: 'root',
+        tableName: 'users',
+        alias: 'u1',
+        effectiveName: 'u1',
+      },
+      {
+        occurrenceId: 'root:1:users:u2',
+        queryScope: 'root',
+        tableName: 'users',
+        alias: 'u2',
+        effectiveName: 'u2',
+      },
     ],
-    'extractTableBindings preserves both self-join aliases',
+    'extractTableBindings preserves both self-join aliases with distinct occurrence identities',
   );
   const selfJoinService = new LiveQueryService({parsedQuery: selfJoinAst, systemCache});
   t.equal(

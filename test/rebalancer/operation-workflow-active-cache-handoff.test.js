@@ -710,8 +710,8 @@ test(
 
       t.equal(
         deferred,
-        true,
-        'the unresolved cache handoff remains owned progress',
+        'waiting',
+        'the unresolved cache handoff reports waiting while retaining retry ownership',
       );
       t.same(
         refreshCalls,
@@ -747,7 +747,7 @@ test(
       const completed = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
 
-      t.equal(completed, true, 'aligned ACTIVE evidence completes normally');
+      t.equal(completed, 'completed', 'aligned ACTIVE evidence completes normally');
       t.same(
         completedOperationIds,
         [TEST_OPERATION_ID],
@@ -808,7 +808,7 @@ test(
     try {
       const deferred = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-      t.equal(deferred, true, 'wrong-node authority remains owned progress');
+      t.equal(deferred, 'waiting', 'wrong-node authority reports waiting');
       t.same(completedOperationIds, [], 'terminal state remains blocked');
       t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
       t.same(refreshCalls[0]?.options, {
@@ -870,7 +870,7 @@ test(
       const completed = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
       const cachedRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID);
-      t.equal(completed, true);
+      t.equal(completed, 'completed');
       t.same(completedOperationIds, [TEST_OPERATION_ID]);
       t.equal(cachedRow.status, 'active');
       t.equal(cachedRow.state_entered_at, 2000);
@@ -1013,7 +1013,7 @@ test(
     try {
       const deferred = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-      t.equal(deferred, true, 'a dropped repair remains owned progress');
+      t.equal(deferred, 'waiting', 'a dropped repair reports waiting');
       t.same(completedOperationIds, []);
       t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
       t.equal(
@@ -1056,7 +1056,7 @@ test(
     try {
       const deferred = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
-      t.equal(deferred, true, 'missing repair remains owned progress');
+      t.equal(deferred, 'waiting', 'missing repair reports waiting');
       t.same(completedOperationIds, []);
       t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
     } finally {

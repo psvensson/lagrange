@@ -300,9 +300,12 @@ class SQLQueryEngineStatementExecution extends
         this.parseCache.set(sql, dialect, ast);
         ast = this.parseCache.cloneAst(ast);
       }
-      // If PG mode produced param mapping, reorder params
+      // If PG mode produced param mapping, reorder params once for this
+      // execution AST copy and remove _paramMapping so downstream consumers
+      // do not apply the mapping a second time.
       if (ast._paramMapping && ast._paramMapping.length > 0) {
         params = reorderParams(params, ast._paramMapping);
+        delete ast._paramMapping;
       }
     } catch (parseError) {
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
@@ -571,6 +574,7 @@ class SQLQueryEngineStatementExecution extends
       ast = parser.parse();
       if (ast._paramMapping && ast._paramMapping.length > 0) {
         normalizedParams = reorderParams(params, ast._paramMapping);
+        delete ast._paramMapping;
       }
     } catch (error) {
       return {

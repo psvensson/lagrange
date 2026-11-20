@@ -38,8 +38,7 @@ import {assignReplicaHandlerMembershipMethods} from
 import {assignReplicaHandlerCommittedMembershipMethods} from
   './replica-handler-committed-membership-methods.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {RAFT_ROLE} from '../raft/constants.js';
-import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {isExplicitNonLeaderRaftRole} from '../raft/replica-voter-readiness.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   REPLICA_HANDLER_ADDRESS,
@@ -96,10 +95,7 @@ import {
 function createLiveReplicaRoleResolver(handler) {
   return (serviceId) => {
     const trackedRole = handler.getTrackedReplicaRole(serviceId);
-    if (
-      !isVoterRaftRole(trackedRole) ||
-      String(trackedRole).toLowerCase() === RAFT_ROLE.LEADER
-    ) {
+    if (!isExplicitNonLeaderRaftRole(trackedRole)) {
       return null;
     }
     return normalizePublishedRaftRole(trackedRole, {

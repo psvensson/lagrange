@@ -56,6 +56,7 @@ import {
 
 const LOCAL_NUM_THIRTY_TWO = 32;
 const WILDCARD_COLUMN = '*';
+const ROOT_QUERY_SCOPE = 'root';
 
 /**
  * QueryGroup manages clients with identical queries sharing CDC subscriptions.
@@ -98,6 +99,7 @@ class QueryGroup extends EventEmitter {
       this.parsedQuery,
       this.params,
       (tableName) => this.getTableInfo(tableName),
+      {isComplex: this.isComplex},
     );
     this.whereClause = whereClause;
     this.predicate = predicate;
@@ -316,7 +318,9 @@ class QueryGroup extends EventEmitter {
     const lowerTarget = String(tableName).toLowerCase();
     const matchingBindings = extractTableBindings(this.parsedQuery)
       .filter((b) => b.tableName.toLowerCase() === lowerTarget);
-    const whereClauseForRouting = matchingBindings.length > 1 ? null : this.whereClause;
+    const hasMultipleOrNested = matchingBindings.length > 1 ||
+      matchingBindings.some((b) => b.queryScope && b.queryScope !== ROOT_QUERY_SCOPE);
+    const whereClauseForRouting = hasMultipleOrNested ? null : this.whereClause;
     const tableAliases = [
       tableName,
       ...matchingBindings

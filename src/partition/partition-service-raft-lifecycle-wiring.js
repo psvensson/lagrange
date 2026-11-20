@@ -1,6 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
 import {
   PARTITION_WRITE_RELEASE_CAUSE,
@@ -153,7 +154,7 @@ function isPromotedLearnerVoterObservation(service, observation) {
     service?.rebalanceCoordinator?.placementAdmissionEnabled === true;
   if (
     !growthPromoteOwned ||
-    service?.role !== RaftRole.LEARNER ||
+    !isCatchupLearnerRaftRole(service?.role) ||
     isJointConfStateObservation(observation)
   ) {
     return false;
