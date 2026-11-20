@@ -327,6 +327,17 @@ physical investigation. The 420-second three-host predicate still has a
 passing streak of zero.
 [Original managed result, three node logs and guards](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-embedded-public-sql-dc021-nov20.tar.gz).
 
+The same public journey on composed source `af9fd5d0a` failed after
+265 seconds on tv-dator. The probe table had three service rows, zero
+active addressed services, and two remote ADD operations timed out in
+CREATING. The reported write failure followed the routing failure. A
+November 5 trial of this same probe also failed to provision its partition.
+The creation and workflow owners must account for the first missing state
+transition on one identified replica before changing admission or release.
+The management guard recorded zero calls on each node. Physical formation,
+the subsequent smoke and the Lagrange GCP measurement remain open.
+[Original failed public journey and worker logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--e8-public-formation-af9-nov20.tar.gz).
+
 After repairing startup, run `e068cbdc` first observed six-partition spread at
 36.629 seconds; run `57e4db30` observed it at 90.548 seconds. Each run
 started 46 system partitions with a configured replica count of three. For
