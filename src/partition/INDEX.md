@@ -104,7 +104,7 @@ documentClass: generated
 - [partition-raft-storage.js](partition-raft-storage.js) - Partition Raft Storage - SQLite-backed Raft log storage for partitions. (importers: many)
 - [partition-read-statement-owner.js](partition-read-statement-owner.js) - Retain one most-recent SELECT statement per SQLite database handle. (importers: one)
 - [partition-reopen-options.js](partition-reopen-options.js) - A replacement of an existing local replica opens its durable membership record. (importers: one)
-- [partition-replica-admission.js](partition-replica-admission.js) - Replica admission from the committed replica operation (quest replica-admission-from-committed-operation; R2 request... (importers: few)
+- [partition-replica-admission.js](partition-replica-admission.js) - Replica admission from the committed replica operation (quest replica-admission-from-committed-operation; R2 request... (importers: many)
 - [partition-replica-membership-constants.js](partition-replica-membership-constants.js) - What a replica's own committed configuration says about one voter (quest replace-source-removal-owner, amendment-1... (importers: many)
 - [partition-retained-store-observation.js](partition-retained-store-observation.js) - Read-only SQLite mechanics shared by the existing retained application stores. (importers: many)
 - [partition-service-assembly.js](partition-service-assembly.js) - No leading comment; first export: PartitionService. (importers: few)
