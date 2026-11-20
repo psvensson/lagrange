@@ -6,7 +6,8 @@ audience: development
 
 ## Assignment and status
 
-Proposed witness, not a reproduced failure or accepted repair. Base is
+Original native replay failure measured; bounded correction implemented and
+awaiting independent review and managed green execution. Initial base is
 `0115084f7c37d798521e6c4080d143bb95ddc272`, rule-set revision 5. The integration
 owner assigned this isolated checkout after source inspection of repeated control
 pauses; it owns Git preservation, independent review and managed submission.
@@ -101,11 +102,11 @@ run. First red admission requires the intended terminal-authority assertion,
 passing healthy control, real setup and clean teardown. Import, setup, timeout
 or infrastructure failures are non-proofs and remain preserved separately.
 
-The first request's actual ID and exact source/output manifest will be appended
-after submission; none exists yet. The existing execution manifest, raw output
+The first placement identity and source/output hashes are recorded below; the
+original submission and custody remain in the append-only log. The existing execution manifest, raw output
 and process/native identity owners are reused. No successful receipt is created
-before original execution. After a measuring red, review the causal interaction,
-seal the bounded unit, then assign its necessary runtime scope. Full physical
+before original execution. The bounded unit was sealed against the measured original red before the
+runtime correction; the scoped assignment is in the append-only log. Full physical
 formation/drain and the unchanged 420-second bound stay with item 09.
 
 
@@ -141,3 +142,13 @@ Writable implementation extension is only
 original witness remains unchanged. Independent source review and a pinned
 managed run of the same three files are required before repaired behavior is
 claimed. No locally executed native test or new successful receipt is implied.
+
+
+The red-only adapter at
+`scripts/quest-evidence/participant-release-current-control-replay.js` admits only
+the pinned original and current matching source. It uses tap-parser, checks the
+intended assertion and effect diagnostics, and cross-checks the ledger with raw
+placement output. Missing/corrupt inputs replace the fixed output with unavailable.
+Solver sealed the four-receipt predicate at `bd2c33ec50d93a70a65d2c06b8f0a527df4523cd`
+with measuring red metric 4/target 0. Its red receipt intentionally becomes
+inapplicable after the production correction; no green receipt is inferred.
