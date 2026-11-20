@@ -74,7 +74,7 @@ async function withAdmissionGroup(t) {
     purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
   assert.ok(stamp, 'the leader serves its actual committed membership stamp');
   const learner = create(LEARNER, {replicaIds: [LEADER, LEARNER],
-    bootstrapMembership: stamp});
+    bootstrapMembership: stamp, isJoiningExistingGroup: true});
   await learner.initialize();
   assert.equal(learner.role, RAFT_ROLE.LEARNER);
   return {leader, learner};
