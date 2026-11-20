@@ -263,6 +263,8 @@ test('Unit: NodeHandle encoding failure only rejects the malformed request',
 test('Unit: NodeHandle reads process memory from the node diagnostics owner',
   async () => {
     const capturedAt = 123456;
+    let responseTimestamp = capturedAt;
+    let responseStatus = 200;
     const processSnapshot = {
       rssBytes: 900,
       heapUsedBytes: 400,
@@ -272,12 +274,13 @@ test('Unit: NodeHandle reads process memory from the node diagnostics owner',
     };
     let responseNodeId = TEST_NODE_ID;
     const server = createServer((_request, response) => {
+      response.statusCode = responseStatus;
       response.end(JSON.stringify({
         nodeId: responseNodeId,
         diagnostics: {
           resources: {
             latest: {
-              timestamp: capturedAt,
+              timestamp: responseTimestamp,
               process: processSnapshot,
             },
           },
@@ -309,6 +312,19 @@ test('Unit: NodeHandle reads process memory from the node diagnostics owner',
         node.getProcessResourceDiagnostics(),
         /node identity/u,
       );
+      responseNodeId = TEST_NODE_ID;
+      const positiveBytes = processSnapshot.rssBytes;
+      processSnapshot.rssBytes = 0;
+      assert.equal((await node.getProcessResourceDiagnostics()).process.rssBytes, 0);
+      for (const invalid of [null, undefined, false, '0']) {
+        processSnapshot.rssBytes = invalid;
+        await assert.rejects(node.getProcessResourceDiagnostics(), /rssBytes/u);
+      }
+      processSnapshot.rssBytes = positiveBytes;
+      responseTimestamp = null;
+      await assert.rejects(node.getProcessResourceDiagnostics(), /timestamp/u);
+      responseStatus = 503;
+      await assert.rejects(node.getProcessResourceDiagnostics(), /unavailable.*503/u);
     } finally {
       await new Promise((resolve, reject) => {
         server.close((error) => error ? reject(error) : resolve());
