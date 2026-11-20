@@ -6,7 +6,9 @@
  * back-to-back runs cannot cook a machine. The classified test runner asks it
  * before every lane batch on every host it runs on, lab hosts included; the
  * CLI below serves the callers that are not runner runs (a formation, the
- * push hook's staging).
+ * push hook's staging). When a commissioned native thermal endpoint is bound
+ * in the environment (`LAGRANGE_NATIVE_THERMAL_ENDPOINT`), observation and
+ * policy verification delegate to that endpoint's observer contract.
  *
  * Policy (session thermal policy, 2026-08-04): hold while CPU package
  * >= 75C (high 80, crit 100) OR NVMe Sensor 2 >= 78C - the NVMe is the
@@ -23,23 +25,32 @@
  * LAGRANGE_SKIP_THERMAL_GATE=1.
  */
 
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import {performance} from 'node:perf_hooks';
 import process from 'node:process';
+import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 
 // Module-load intrinsic captures (adversarial-js-intrinsics guideline).
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const regExpExec = Function.call.bind(RegExp.prototype.exec);
+const regExpTest = Function.call.bind(RegExp.prototype.test);
 const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
+const mathMin = Math.min;
 const mathRound = Math.round;
 const numberParseInt = Number.parseInt;
 const numberIsFinite = Number.isFinite;
+const numberIsSafeInteger = Number.isSafeInteger;
+const dateNow = Date.now;
 const atomicsWait = Atomics.wait;
 
 const SENSORS_BINARY = 'sensors';
@@ -50,7 +61,12 @@ const POLL_INTERVAL_MS = 30000;
 const MS_PER_SECOND = 1000;
 const MAX_POLL_ATTEMPTS = 20;
 const SKIP_ENV = 'LAGRANGE_SKIP_THERMAL_GATE';
+const THERMAL_ENDPOINT_ENV = 'LAGRANGE_NATIVE_THERMAL_ENDPOINT';
+const THERMAL_DEADLINE_ENV = 'LAGRANGE_THERMAL_DEADLINE_MS';
+const TEST_EXECUTION_CONTEXT_ENV = 'LAGRANGE_TEST_EXECUTION_CONTEXT';
 const TEXT_ENCODING = 'utf8';
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
 const SYS_ROOT = '/sys';
 const SYSFS_THERMAL = 'class/thermal';
 const SYSFS_ZONE_PREFIX = 'thermal_zone';
@@ -72,6 +88,41 @@ const INT32_BYTES = 4;
 const THERMAL_REFUSAL_EXIT = 75;
 const CLI_EXHAUSTED_EXIT = 1;
 const NEWLINE = '\n';
+const ENDPOINT_SCHEMA = 'native-thermal-endpoint/v1';
+const OBSERVATION_SCHEMA = 'lab3-thermal-observation/v1';
+const SENSOR_REQUIRED = 'sensor-required';
+const OPERATOR_PACED = 'operator-paced';
+const NATIVE_OBSERVER_TIMEOUT_MS = 5000;
+const NATIVE_OBSERVER_OUTPUT_BYTES = 65536;
+const NATIVE_POLL_MS = 5000;
+const NATIVE_POLICY_KEY_COUNT = 3;
+const NATIVE_OPERATOR_MAX_CONCURRENCY = 1;
+const NATIVE_UNAVAILABLE_EXIT = 2;
+const NATIVE_OK_EXIT = 0;
+const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+const ENDPOINT_PATH_KEYS = objectFreeze(['python', 'entry', 'config']);
+const OBSERVATION_REASON_KEYS = objectFreeze(['cooling_reason', 'abort_reason', 'reason']);
+const OBSERVATION_SENSOR_KEYS = objectFreeze(['cpu', 'ssd']);
+const POLICY_MODES = objectFreeze([SENSOR_REQUIRED, OPERATOR_PACED]);
+const PYTHON_ISOLATED_FLAGS = objectFreeze(['-E', '-s', '-B']);
+const THERMAL_OBSERVE_COMMAND = 'thermal-observe';
+const CONFIG_FLAG = '--config';
+const SIGKILL = 'SIGKILL';
+const STDIO_IGNORE_PIPE = objectFreeze(['ignore', 'pipe', 'pipe']);
+const EVENT_DATA = 'data';
+const EVENT_ERROR = 'error';
+const EVENT_CLOSE = 'close';
+const NATIVE_REASON = objectFreeze({
+  INVALID_ENDPOINT: 'invalid native thermal endpoint',
+  CONTRACT_REFUSED: 'native observation identity or contract refused',
+  TIMED_OUT: 'native thermal observation timed out',
+  OUTPUT_EXCEEDED: 'native thermal observation output exceeded bound',
+  INVALID_DEADLINE: 'missing or invalid owned thermal deadline',
+  ADMISSION_CANCELLED: 'thermal admission cancelled',
+  DEADLINE_EXPIRED: 'owned execution deadline expired',
+  ENDPOINT_BYTES_CHANGED: 'native thermal endpoint bytes changed',
+  EXHAUSTED_DEADLINE: 'cancelled or owned deadline expired',
+});
 
 // Where a reading comes from.
 const ORIGIN = objectFreeze({
@@ -122,7 +173,14 @@ const HEADROOM = objectFreeze({
   UNMEASURABLE: 'headroom-unmeasurable',
   EXHAUSTED: 'headroom-exhausted',
   SKIPPED: 'headroom-skipped',
+  READY: 'READY',
+  HOLD: 'HOLD',
+  UNAVAILABLE: 'UNAVAILABLE',
+  OPERATOR_PACED: 'OPERATOR_PACED',
 });
+const NATIVE_OUTCOMES = objectFreeze([
+  HEADROOM.READY, HEADROOM.HOLD, HEADROOM.UNAVAILABLE,
+]);
 // The outcome the last reading of a wait decides: a hold still standing once
 // every poll is spent is exhausted headroom.
 const HEADROOM_OF_STATE = objectFreeze({
@@ -329,6 +387,168 @@ function holdReason({cpuCelsius, nvmeCelsius}) {
   return REASON.OK;
 }
 
+function unavailable(reason) {
+  return {outcome: HEADROOM.UNAVAILABLE, reason, execution_policy: null};
+}
+
+export function parseThermalEndpoint(text) {
+  const value = JSON.parse(text);
+  const validPaths = arrayEvery(ENDPOINT_PATH_KEYS, (key) =>
+    typeof value?.[key] === 'string' && path.isAbsolute(value[key]));
+  if (value?.schema !== ENDPOINT_SCHEMA || !validPaths ||
+      !regExpTest(DIGEST_PATTERN, value.sourceSha256) ||
+      !regExpTest(DIGEST_PATTERN, value.configSha256) ||
+      typeof value.bootId !== 'string' || value.bootId.length === 0) {
+    throw new Error(NATIVE_REASON.INVALID_ENDPOINT);
+  }
+  return value;
+}
+
+function fileDigest(file) {
+  return createHash(HASH_ALGORITHM).update(fs.readFileSync(file)).digest(HASH_ENCODING);
+}
+
+function policyValid(policy) {
+  if (!isRecord(policy) || !arrayIncludes(POLICY_MODES, policy.mode)) return false;
+  if (!numberIsSafeInteger(policy.cadence_ms) || policy.cadence_ms < 0) return false;
+  if (!numberIsSafeInteger(policy.max_concurrency) || policy.max_concurrency <= 0) return false;
+  if (objectKeys(policy).length !== NATIVE_POLICY_KEY_COUNT) return false;
+  return policy.mode !== OPERATOR_PACED ||
+    (policy.cadence_ms === NATIVE_POLL_MS &&
+      policy.max_concurrency === NATIVE_OPERATOR_MAX_CONCURRENCY);
+}
+
+export function thermalPermits(result) {
+  return result?.outcome === HEADROOM.READY || result?.outcome === HEADROOM.OPERATOR_PACED;
+}
+
+function observationSensorRowValid(row) {
+  return isRecord(row) && numberIsSafeInteger(row.millidegrees) &&
+    typeof row.path === 'string' && path.isAbsolute(row.path);
+}
+
+function observationShape(value) {
+  if (!numberIsSafeInteger(value.observed_at) || value.observed_at < 0) return false;
+  const reasonsValid = arrayEvery(OBSERVATION_REASON_KEYS, (key) =>
+    value[key] === null || typeof value[key] === 'string');
+  if (!reasonsValid) return false;
+  if (value.outcome === HEADROOM.UNAVAILABLE) {
+    return value.observations === null && typeof value.reason === 'string' &&
+      value.reason.length > 0 && value.cooling_reason === null && value.abort_reason === null;
+  }
+  const observations = value.observations;
+  if (!isRecord(observations) || !arrayEvery(OBSERVATION_SENSOR_KEYS, (name) =>
+    observationSensorRowValid(observations[name]))) {
+    return false;
+  }
+  return value.reason === null && (value.outcome === HEADROOM.READY ?
+    value.cooling_reason === null && value.abort_reason === null :
+    typeof value.cooling_reason === 'string' && value.cooling_reason.length > 0);
+}
+
+export function checkedThermalObservation(value, endpoint, status) {
+  const expectedStatus = value?.outcome === HEADROOM.UNAVAILABLE ?
+    NATIVE_UNAVAILABLE_EXIT : NATIVE_OK_EXIT;
+  if (value?.schema !== OBSERVATION_SCHEMA ||
+      value.source_sha256 !== endpoint.sourceSha256 ||
+      value.config_sha256 !== endpoint.configSha256 || value.boot_id !== endpoint.bootId ||
+      !observationShape(value) || !policyValid(value.execution_policy) ||
+      !arrayIncludes(NATIVE_OUTCOMES, value.outcome) || status !== expectedStatus) {
+    return unavailable(NATIVE_REASON.CONTRACT_REFUSED);
+  }
+  if (value.execution_policy.mode === OPERATOR_PACED) {
+    return {...value, outcome: HEADROOM.OPERATOR_PACED, observation_outcome: value.outcome};
+  }
+  return value;
+}
+
+function invokeNativeObserver(endpoint, timeout, signal) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let bytes = 0;
+    let problem = null;
+    const args = [...PYTHON_ISOLATED_FLAGS, endpoint.entry, THERMAL_OBSERVE_COMMAND,
+      CONFIG_FLAG, endpoint.config];
+    const child = spawn(endpoint.python, args, {stdio: STDIO_IGNORE_PIPE, signal});
+    const timer = setTimeout(() => {
+      problem = NATIVE_REASON.TIMED_OUT;
+      child.kill(SIGKILL);
+    }, timeout);
+    child.stdout.on(EVENT_DATA, (chunk) => {
+      bytes += chunk.length;
+      if (bytes > NATIVE_OBSERVER_OUTPUT_BYTES) {
+        problem = NATIVE_REASON.OUTPUT_EXCEEDED;
+        child.kill(SIGKILL);
+      } else stdout += String(chunk);
+    });
+    child.stderr.on(EVENT_DATA, (chunk) => {
+      bytes += chunk.length;
+      if (bytes > NATIVE_OBSERVER_OUTPUT_BYTES) {
+        problem = NATIVE_REASON.OUTPUT_EXCEEDED;
+        child.kill(SIGKILL);
+      }
+    });
+    child.on(EVENT_ERROR, (error) => {
+      problem = error.message;
+    });
+    child.on(EVENT_CLOSE, (status, killedBy) => {
+      clearTimeout(timer);
+      if (problem || killedBy) resolve(unavailable(problem ?? `observer signal ${killedBy}`));
+      else {
+        try {
+          resolve(checkedThermalObservation(JSON.parse(stdout), endpoint, status));
+        } catch (error) {
+          resolve(unavailable(`invalid native observation: ${error.message}`));
+        }
+      }
+    });
+  });
+}
+
+function nativeThermalDeadline(env) {
+  const value = Number(env[THERMAL_DEADLINE_ENV]);
+  if (!numberIsSafeInteger(value) || value <= 0) {
+    throw new Error(NATIVE_REASON.INVALID_DEADLINE);
+  }
+  return performance.now() + value - dateNow();
+}
+
+async function readNativeThermalHeadroom({env = process.env, signal,
+  deadline = performance.now() + NATIVE_OBSERVER_TIMEOUT_MS} = {}) {
+  try {
+    if (signal?.aborted) return unavailable(NATIVE_REASON.ADMISSION_CANCELLED);
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) return unavailable(NATIVE_REASON.DEADLINE_EXPIRED);
+    const endpoint = parseThermalEndpoint(env[THERMAL_ENDPOINT_ENV]);
+    if (fileDigest(endpoint.entry) !== endpoint.sourceSha256 ||
+        fileDigest(endpoint.config) !== endpoint.configSha256) {
+      return unavailable(NATIVE_REASON.ENDPOINT_BYTES_CHANGED);
+    }
+    return await invokeNativeObserver(
+      endpoint, mathMin(remaining, NATIVE_OBSERVER_TIMEOUT_MS), signal);
+  } catch (error) {
+    return unavailable(error.message);
+  }
+}
+
+async function waitForNativeThermalHeadroom({env = process.env, signal,
+  deadline = nativeThermalDeadline(env),
+  read = () => readNativeThermalHeadroom({env, signal, deadline}),
+  sleep = delay} = {}) {
+  while (true) {
+    if (signal?.aborted || performance.now() >= deadline) {
+      return {outcome: HEADROOM.EXHAUSTED, reason: NATIVE_REASON.EXHAUSTED_DEADLINE};
+    }
+    const result = await read();
+    if (result.outcome !== HEADROOM.HOLD) return result;
+    try {
+      await sleep(mathMin(NATIVE_POLL_MS, deadline - performance.now()), undefined, {signal});
+    } catch (error) {
+      return {outcome: HEADROOM.EXHAUSTED, reason: error.message};
+    }
+  }
+}
+
 /**
  * One reading of this host's thermal headroom, each temperature from the
  * first source in its table that answers, and named by it.
@@ -367,13 +587,20 @@ function readingText(reading) {
 
 /**
  * Wait, bounded, for thermal headroom. A hold is logged and waited out with
- * the poll; the result is a named outcome, never an inference.
+ * the poll; the result is a named outcome, never an inference. When
+ * `env[THERMAL_ENDPOINT_ENV]` is defined, runs the commissioned native thermal
+ * endpoint wait loop and returns a Promise resolving to its observation.
  * @param {{poll?: number, attempts?: number, log?: Function, read?: Function,
- *   sleep?: Function, env?: Object}} [options]
- * @return {{outcome: string, reading: Object, attempts: number, poll: number}}
+ *   sleep?: Function, env?: Object, signal?: AbortSignal, deadline?: number}} [options]
+ * @return {Object|Promise<Object>}
  */
-export function waitForThermalHeadroom({poll = POLL_INTERVAL_MS, attempts = MAX_POLL_ATTEMPTS,
-  log = () => {}, read = readThermalHeadroom, sleep = sleepSync, env = process.env} = {}) {
+export function waitForThermalHeadroom(options = {}) {
+  const {poll = POLL_INTERVAL_MS, attempts = MAX_POLL_ATTEMPTS,
+    log = () => {}, read = readThermalHeadroom, sleep = sleepSync,
+    env = process.env} = options;
+  if (env[THERMAL_ENDPOINT_ENV] !== undefined) {
+    return waitForNativeThermalHeadroom(options);
+  }
   let reading = env[SKIP_ENV] ? SKIPPED_READING : read();
   let polls = 0;
   while (reading.state === THERMAL_STATE.HOLD && polls < attempts) {
@@ -400,8 +627,16 @@ export function formatThermalOutcome({outcome, reading, attempts, poll}) {
   return `${LINE.PREFIX}${reading.state} (${reading.reason})`;
 }
 
-export {HEADROOM, SKIP_ENV as THERMAL_SKIP_ENV, THERMAL_REFUSAL, THERMAL_REFUSAL_EXIT,
-  THERMAL_REFUSAL_LINE};
+export {
+  HEADROOM,
+  SKIP_ENV as THERMAL_SKIP_ENV,
+  TEST_EXECUTION_CONTEXT_ENV,
+  THERMAL_DEADLINE_ENV,
+  THERMAL_ENDPOINT_ENV,
+  THERMAL_REFUSAL,
+  THERMAL_REFUSAL_EXIT,
+  THERMAL_REFUSAL_LINE,
+};
 
 // It takes no argument: anything given is refused, never waited on.
 const USAGE_LINE = 'usage: node scripts/checks/wait-for-thermal-headroom.js ' +
