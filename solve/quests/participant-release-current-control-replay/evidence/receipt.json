@@ -1,0 +1,108 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-current-control-replay",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "current-control-loss-before-replay-resume",
+      "passed": false,
+      "failure": "Original red admitted; repair and complete current interaction await proof."
+    },
+    {
+      "id": "healthy-current-replay-and-retained-origin",
+      "passed": false,
+      "failure": "Original red admitted; repair and complete current interaction await proof."
+    },
+    {
+      "id": "original-control-loss-and-release-lifetime-composition",
+      "passed": false,
+      "failure": "Original red admitted; repair and complete current interaction await proof."
+    },
+    {
+      "id": "independent-contract-and-execution-review",
+      "passed": false,
+      "failure": "Original red admitted; repair and complete current interaction await proof."
+    }
+  ],
+  "sourceCommit": "bd2c33ec50d93a70a65d2c06b8f0a527df4523cd",
+  "generatedAt": "2026-11-20T20:43:20.937Z",
+  "placementId": "bd2c33ec50d9-mwpfxueq-3402077",
+  "host": "adams-gamla",
+  "testFileDigests": {
+    "test/partition/participant-release-current-control-replay.test.js": "ccc7d26cf95bfb89d6fe5d2f51d4a9b42945517422bd126ee092e901159b00a8",
+    "test/partition/participant-release-caller-lifetimes.test.js": "aba1dc65fafee97ecaec8b23ddc22bc19b319e544bf2f06fae7af2685f3430e4",
+    "test/partition/participant-release-protocol.test.js": "8c0a6af1b02b41d66213fc4831bb3ff036dc4d7c3113c418f4c7194537916227"
+  },
+  "productionFileDigests": {
+    "src/node/replica-handler-participant-cutover.js": "42ac876fbd18f2adc17128162d5bb78d761a8b4b6435f8cfe0815689196b0de1",
+    "src/node/replica-handler-participant-release.js": "55f827b55f45448e4d2f31f2cdbc82e669ee53f1be22758c860e9d42a1879408",
+    "src/node/participant-release-client.js": "b1355e2397af1fdf139a163d7831757781161f844a44611bb850ef007a29467c",
+    "src/partition/partition-participant-transaction-pause.js": "9a446e144890fcf0e76a39fb00262e477ecbea91920ae2b4df706594fa89801d"
+  },
+  "originalDigests": {
+    "bd2c33ec50d9-mwpfxueq-3402077-adams-gamla.log": "529e1a1ce6ffc5a7303e42b1031279fe2653aa7fd54fb4d72b1dae7263a2e19a",
+    "selection.json": "dd39a7fb8f7fa34f511628250880c85879e128246bb44d433f5d83b7fb5c73ed",
+    "test-results.ndjson": "3c223cb4821755803ab50284d4784f8b8ce20a63a2616d8ce3d0a094056908fe"
+  },
+  "provenance": {
+    "selection": {
+      "sha": "bd2c33ec50d93a70a65d2c06b8f0a527df4523cd",
+      "host": "adams-gamla",
+      "files": [
+        "test/partition/participant-release-current-control-replay.test.js",
+        "test/partition/participant-release-protocol.test.js",
+        "test/partition/participant-release-caller-lifetimes.test.js"
+      ],
+      "plan": [
+        {
+          "files": [
+            "test/partition/participant-release-caller-lifetimes.test.js",
+            "test/partition/participant-release-current-control-replay.test.js",
+            "test/partition/participant-release-protocol.test.js"
+          ],
+          "jobs": 4,
+          "resourceClass": "ordinary"
+        }
+      ]
+    },
+    "ledger": [
+      {
+        "file": "test/partition/participant-release-current-control-replay.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 7559,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - current dependent replay refuses control loss after real PAUSE before RESUME"
+      },
+      {
+        "file": "test/partition/participant-release-caller-lifetimes.test.js",
+        "attempt": 1,
+        "ok": true,
+        "assertions": 4,
+        "durationMs": 7735,
+        "retriedOnce": false,
+        "firstFailureLine": null
+      },
+      {
+        "file": "test/partition/participant-release-protocol.test.js",
+        "attempt": 1,
+        "ok": true,
+        "assertions": 19,
+        "durationMs": 9257,
+        "retriedOnce": false,
+        "firstFailureLine": null
+      }
+    ]
+  },
+  "measured": {
+    "tests": 2,
+    "passed": 1,
+    "failed": 1
+  },
+  "observations": {
+    "count": 2,
+    "effectSuffix": "\"admission\":\"open\",\"dependentActions\":[\"release\",\"inspect\",\"pause\",\"resume\"],\"controlOutcomes\":[\"cut_over\"]}"
+  },
+  "ceiling": "Original native in-process replay divergence on an identified physical host. Native build/process hashes were not captured. No green repair, automatic recovery, physical formation or task-3823 causal attribution."
+}

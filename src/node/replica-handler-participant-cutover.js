@@ -113,6 +113,10 @@ function normalizeMemberRefusal(request, answer) {
 
 async function resumeCohort(handler, service, request, release, attempt, census,
   fields = {}) {
+  // Both first-origin and current-origin releases must re-establish control
+  // authority after their own paused census, before any member can reopen.
+  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
+  if (currentControlOwner !== null) return currentControlOwner;
   const followers = census.filter((facts) =>
     facts.generation.replicaId !== service.replicaId);
   if (followers.length > 0) {
@@ -420,8 +424,6 @@ async function finishEnabledCutover(handler, service, request, release, attempt,
   const finalDefect = releaseCensusDefect(release, census, finalLocal,
     {attempt, queryDrainProof: finalQueryDrainProof});
   if (finalDefect !== null) return attemptRefusal({...request, release}, finalDefect);
-  const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
-  if (currentControlOwner !== null) return currentControlOwner;
   return resumeCohort(handler, service, request, release, attempt, census,
     {census, queryDrainProof: finalQueryDrainProof});
 }

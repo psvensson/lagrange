@@ -33,5 +33,6 @@
       "id": "bounded-claim",
       "statement": "The native in-process schedule can establish this owner interaction only. It cannot attribute task-3823 timeout chains or READY lease dips, certify physical formation, quantify time saved, or close the historical broad control amortization Quest."
     }
-  ]
+  ],
+  "sealedAt": "bd2c33ec50d93a70a65d2c06b8f0a527df4523cd"
 }

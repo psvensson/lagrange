@@ -107,3 +107,37 @@ and process/native identity owners are reused. No successful receipt is created
 before original execution. After a measuring red, review the causal interaction,
 seal the bounded unit, then assign its necessary runtime scope. Full physical
 formation/drain and the unchanged 420-second bound stay with item 09.
+
+
+## Original managed red and bounded correction
+
+The integration owner executed original source
+`bd2c33ec50d93a70a65d2c06b8f0a527df4523cd` on registered `adams-gamla` through the
+existing explicit-placement classified runner. Original placement identity is
+`bd2c33ec50d9-mwpfxueq-3402077`; raw log SHA256 is
+`529e1a1ce6ffc5a7303e42b1031279fe2653aa7fd54fb4d72b1dae7263a2e19a`.
+The retained selection and ledger bind three files, retry disabled, 25 root
+assertions: the healthy replay passed, the intended negative failed at line 157
+with actual CUT_OVER, dependent OPEN, and actions RELEASE/INSPECT/PAUSE/RESUME
+after the real control shutdown. The protocol's 19 and caller-lifetime's four
+cases passed. This establishes the narrow replay divergence, not physical
+formation or task-3823 pause attribution. Originals remain under
+`/tmp/lagrange-takeover-20261120/control-current-red`; custody/admission and any
+seal are recorded separately in the append-only log by the integration owner.
+
+The authorized correction moves the existing final `releaseControlOwnerFirst`
+check into `resumeCohort`, the shared pre-RESUME effect boundary, and removes its
+old single-path copy from `finishEnabledCutover`. Both clean replay and ordinary
+release therefore consume one algorithm. `releaseControlOwnerFirst` immediately
+returns null for the control partition itself, so this does not recurse or repeat
+its self-proof. It forwards the same original request/deadline and typed refusal.
+Recipient generation, lifecycle, membership and full census revalidation remain
+at their existing RESUME owner; the nested await cannot authorize a replacement.
+This is the existing pre/post control contract, not a new atomic cluster-wide
+barrier or permission cached between requests. No acceptance bounds change.
+
+Writable implementation extension is only
+`src/node/replica-handler-participant-cutover.js`, plus this existing Quest. The
+original witness remains unchanged. Independent source review and a pinned
+managed run of the same three files are required before repaired behavior is
+claimed. No locally executed native test or new successful receipt is implied.
