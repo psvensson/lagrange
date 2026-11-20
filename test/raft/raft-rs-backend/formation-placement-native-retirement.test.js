@@ -29,6 +29,7 @@ import {
 const SECOND_LEARNER = 'contexts-p1-race-learner';
 const GROWTH_OPERATION = 'formation-placement-late-growth';
 const DELIVERY_BOUND_ROUNDS = 40;
+const CONTROL_OBSERVATION_BOUND_MS = 2000;
 const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}});
 
 function nodeIdOf(replicaId) {
@@ -220,6 +221,22 @@ test('guarded disconnect can clear the exact learner on the leader while its hos
     }
   }, {createCluster: addressedCluster}));
 
+async function seeRejoinedCleanup(context, t) {
+  const {first, rejoinDelivery, coordinator, removal, nodes, deliveries} = context;
+  const bounded = Promise.withResolvers();
+  const timeout = setTimeout(() => bounded.reject(new Error(
+    'same-boot committed rejoin did not wake the retained cleanup')),
+  CONTROL_OBSERVATION_BOUND_MS);
+  try {
+    return await Promise.race([rejoinDelivery.promise, bounded.promise]);
+  } finally {
+    clearTimeout(timeout);
+    const state = await coordinator.getOperation(removal.operation_id);
+    t.diagnostic(JSON.stringify({first, step: state?.workflowStep, node: nodes.nodeRow(),
+      deliveries}));
+  }
+}
+
 test('the workflow clears a lost learner before its captured generation can clean up on rejoin',
   {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
     const {cluster, initial, nodes, clock} = context;
@@ -251,7 +268,9 @@ test('the workflow clears a lost learner before its captured generation can clea
       await context.observeCommittedPlacement();
       // Virtual retry timers do not advance. This turn has to come from the
       // committed owner event after the genuine same-boot READY publication.
-      const retried = await rejoinDelivery.promise;
+      const retried = await seeRejoinedCleanup({
+        first, rejoinDelivery, coordinator, removal, nodes, deliveries,
+      }, t);
       assert.equal(retried.status, ReplicaOperationResponseStatus.INITIATED);
       const cleanup = await deliverCommittedSourceChange(source, cluster);
       t.diagnostic(JSON.stringify({first, retried, cleanup, deliveries}));

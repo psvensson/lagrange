@@ -1,7 +1,7 @@
 // A placement REMOVE that was authorized for a learner has two effects.
 // The current partition leader must first commit removal of that learner.
 // The target runtime can be cleaned only for the captured service generation.
-import {COLUMN, SERVICE_STATUS, TABLES} from '../constants/index.js';
+import {COLUMN, SERVICE_STATUS, STATE, TABLES} from '../constants/index.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
@@ -100,7 +100,12 @@ async function evaluatePlacementLearnerRetirement(owner, operation, handlerType)
   const canPropose = isCatchupLearnerRaftRole(member[COLUMN.RAFT_ROLE]) &&
     (observesCommittedNodeLoss(node) || status === ReplicaStatus.FAILED ||
       status === SERVICE_STATUS.STOPPED);
-  return reachMembershipOwner(owner, operation, handlerType, scoped, canPropose);
+  const membership = await reachMembershipOwner(owner, operation, handlerType, scoped, canPropose);
+  if (membership.state === LEARNER_RETIREMENT_OUTCOME.CLEARED &&
+      node[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED) {
+    return verdict(LEARNER_RETIREMENT_OUTCOME.DEFERRED);
+  }
+  return membership;
 }
 
 function isScopedPlacementLearnerRetirement(operation) {
