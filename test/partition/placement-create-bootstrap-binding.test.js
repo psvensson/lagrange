@@ -1,3 +1,4 @@
+import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -238,6 +239,7 @@ for (const partitionId of [PARTITION_ID, 'nodes-p1']) {
       const stamp = committedStampFor([sourceReplicaId]);
       let membershipAvailable = false;
       let deliveries = 0;
+      let sendingAtDelivery;
       const coordinator = createBindingCoordinator(leader, () => {
         if (!membershipAvailable) {
           throw new Error('Committed membership temporarily unavailable');
@@ -246,6 +248,7 @@ for (const partitionId of [PARTITION_ID, 'nodes-p1']) {
       }, (_address, request) => {
         deliveries += 1;
         const [sending] = ledgerRows(leader);
+        sendingAtDelivery = sending;
         assert.equal(sending.workflow_step, WORKFLOW_STEP.SENDING);
         assert.deepEqual(
           JSON.parse(sending.steps_history)[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP],
@@ -274,11 +277,22 @@ for (const partitionId of [PARTITION_ID, 'nodes-p1']) {
         assert.equal(pendingBound, owner.getTimeoutForStep(WORKFLOW_STEP.SENDING, pending),
           'both phases currently use the same configured step bound');
         assert.equal(owner.isOperationStepTimedOut(pending, row.created_at + pendingBound),
-          'PENDING by itself does not protect authority work across this bound');
+          false, 'the held bootstrap can spend the operation budget');
+        assert.equal(owner.isPriorityRecoveryOperationDrainStepStale(
+          pending, row.created_at + pendingBound), false,
+        'the priority drain cannot independently expire the held bootstrap');
+        const deadline = row.created_at + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+        assert.equal(owner.isOperationStepTimedOut(pending, deadline), true);
+        assert.equal(owner.isPriorityRecoveryOperationDrainStepStale(pending, deadline), true);
+        owner.timeSource = {now: () => row.created_at + pendingBound + 1};
 
         membershipAvailable = true;
         await dispatch(coordinator.repository.rowToOperation(blocked));
         assert.equal(deliveries, 1, 'the recovered authority permits the original CREATE');
+        const ready = coordinator.repository.rowToOperation(sendingAtDelivery);
+        const sendingDeadline = sendingAtDelivery.updated_at + pendingBound;
+        assert.equal(owner.isOperationStepTimedOut(ready, sendingDeadline),
+          true, 'a claimed ready operation retains its 30-second SENDING bound');
       } finally {
         await coordinator.shutdown();
       }
@@ -311,6 +325,64 @@ test('native placement claim must compare the exact source history used for boot
       assert.deepEqual(JSON.parse(durable.steps_history), winner,
         'the competing history is preserved');
       assert.equal(durable.completed_at, null);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+});
+
+test('an authority response at the original deadline cannot stamp or claim a placement', async () => {
+  await withNativeCreate(async (leader, row) => {
+    const deadline = row.created_at + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+    let now = deadline - 1;
+    let reads = 0;
+    let deliveries = 0;
+    const coordinator = createBindingCoordinator(leader, () => {
+      reads += 1;
+      now = deadline;
+      return committedStampFor([VOTER_ID]);
+    }, () => {
+      deliveries += 1;
+      throw new Error('expired bootstrap should never reach CREATE');
+    });
+    const owner = coordinator.workflowOwner;
+    owner.timeSource = {now: () => now};
+    try {
+      await owner.advanceReservationClearedDispatch(
+        row.operation_id, coordinator.repository.rowToOperation(row));
+      assert.equal(reads, 1, 'the committed membership read began under the original budget');
+      assert.deepEqual(ledgerRows(leader), [row], 'late success changes no durable effect');
+      await owner.advanceReservationClearedDispatch(
+        row.operation_id, coordinator.repository.rowToOperation(row));
+      assert.equal(reads, 1, 'expiry refuses a new bootstrap authority read');
+      assert.equal(deliveries, 0);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+});
+
+test('stale placement dispatch cannot put a progressed ADD back in SENDING', async () => {
+  await withNativeCreate(async (leader, row) => {
+    const requests = [];
+    const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]),
+      (_address, request) => requests.push(request));
+    try {
+      await bind(coordinator, coordinator.repository.rowToOperation(row));
+      const [bound] = ledgerRows(leader);
+      const step = WORKFLOW_STEP.CREATING;
+      const at = bound.updated_at + 1;
+      assert.equal(commitLedgerStatement(leader, 'bootstrap:target-progress',
+        `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?,
+         steps_history = json_insert(steps_history, '$[#]', json(?)) WHERE operation_id = ?`,
+        [step, WORKFLOW_STEP_TO_STATUS[step], at, JSON.stringify({step, timestamp: at}),
+          row.operation_id]), null);
+      const [progressed] = ledgerRows(leader);
+      await coordinator.workflowOwner.executeOperationInternal(
+        {...coordinator.repository.rowToOperation(bound), workflowStep: WORKFLOW_STEP.SENDING}, {},
+      );
+      assert.deepEqual(ledgerRows(leader), [progressed]);
+      assert.deepEqual(requests, []);
     } finally {
       await coordinator.shutdown();
     }

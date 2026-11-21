@@ -1,3 +1,6 @@
+import {
+  isPlacementBootstrapAwaitingAuthority, isPlacementBootstrapBeforeDeadline,
+} from './operation-workflow-placement-bootstrap-phase.js';
 import {AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE} from
   './replica-operation-repository-observation-methods.js';
 import {readStateField} from '../utils/state-field-read.js';
@@ -746,6 +749,15 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   }
 
   async reconcileRecoveryOperation(op) {
+    if (isPlacementBootstrapAwaitingAuthority(op)) {
+      const now = this.resolveTimeoutCheckNowMs();
+      if (isPlacementBootstrapBeforeDeadline(op, now)) {
+        await this.dispatchOperationInternal(op);
+      } else {
+        await this.reconcileTimeoutOperation(op, now);
+      }
+      return OPERATION_RESERVATION_RECOVERY_OUTCOME.LIFECYCLE_RECONCILED;
+    }
     const reservationRecoveryOutcome =
       await reconcileReservationBackedPendingOperation(this, op);
     if (

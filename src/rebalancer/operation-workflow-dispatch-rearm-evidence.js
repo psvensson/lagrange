@@ -1,4 +1,8 @@
 import {
+  isPlacementBootstrapAwaitingAuthority, isPlacementBootstrapBeforeDeadline,
+  PLACEMENT_BOOTSTRAP_WAIT,
+} from './operation-workflow-placement-bootstrap-phase.js';
+import {
   isReplaceRemoveDispatchPhase,
   readOperationRecordWorkflowStep,
 } from './replica-operation-progress.js';
@@ -184,6 +188,10 @@ function isRemovalDispatchOperation(operation) {
 function shouldDeferRetryableDispatchFailure(_owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
+  }
+  if (errorLike.code === PLACEMENT_BOOTSTRAP_WAIT &&
+      isPlacementBootstrapAwaitingAuthority(operation)) {
+    return isPlacementBootstrapBeforeDeadline(operation, _owner.resolveTimeoutCheckNowMs());
   }
   return (
     isRetryableControlPlaneOperationTarget(operation) ||
@@ -712,6 +720,9 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
 function isOperationStepTimedOut(owner, operation, now = Date.now()) {
   if (!operation) {
     return false;
+  }
+  if (isPlacementBootstrapAwaitingAuthority(operation)) {
+    return !isPlacementBootstrapBeforeDeadline(operation, now);
   }
   if (owner.hasActiveTransitionRetryGrace(operation.operationId, now)) {
     return false;
