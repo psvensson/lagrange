@@ -6,19 +6,19 @@ import {REPAIR_PREPARATION_STATE as PREPARATION, PLACEMENT_ADMISSION_ERROR,
   PLACEMENT_REPAIR_PREPARE_TYPE} from '../partition/partition-placement-admission-constants.js';
 import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
 import {PLACEMENT_STATEMENT_VALIDITY} from './replica-placement-owner-admission-statement.js';
-import {wrapPlacementTransport} from './replica-placement-owner-transport.js';
+import {resolvePlacementLedgerDelivery} from './replica-placement-owner-transport.js';
 
 // ends-on: PLACEMENT_REPAIR_PREPARE owner reply
 const PREPARATION_TIMEOUT_MS = 5000;
 const OWNER_FIELDS = Object.freeze(['nodeId', 'replicaId']);
 
 async function readRemotePreparation(coordinator, operation) {
-  const owner = coordinator.resolveRemoteLedgerLeader();
-  const transport = wrapPlacementTransport(coordinator.messageRouter);
-  if (!owner?.address || !transport) {
-    return {owner,
+  const delivery = resolvePlacementLedgerDelivery(coordinator);
+  if (delivery === null) {
+    return {owner: null,
       answer: unavailableRepairPreparation(PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE)};
   }
+  const {owner, transport} = delivery;
   let answer;
   try {
     answer = deliveryReadingOf(await transport.deliver(owner.address,

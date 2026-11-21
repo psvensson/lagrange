@@ -79,6 +79,7 @@ import {attachAutoCommitLoop, createCoordinatorWithLedger} from
   './placement-create-with-ledger-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
 import {createRouterEnvelopeFixture} from '../transport/router-envelope-witness-fixture.js';
 
@@ -86,6 +87,26 @@ const SERVICE_ID = 'transaction_coordinator';
 const USER_PARTITION_ID = 'orders-p1';
 const SCHEMA_JOB_ID = 'schema-job-found-1';
 const REMOTE_TIMEOUT_MS = 1_000;
+
+function unknownPlacementDelivery() {
+  return buildDeliveryEnvelope({acknowledged: true, errorCode: 'TRANSPORT_TIMEOUT',
+    error: 'Request timeout'});
+}
+
+function remotePlacementCoordinator(leader, messageRouter) {
+  const coordinator = createCoordinatorWithLedger(leader, {
+    registerLocalLeader: false, messageRouter,
+  });
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT,
+    {partition_id: leader.partitionId, leader_node_id: leader.nodeId});
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
+    PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
+      replicaId: leader.replicaId, nodeId: leader.nodeId, service: leader,
+      status: SERVICE_STATUS.ACTIVE}));
+  coordinator.systemTableCache = cache;
+  return coordinator;
+}
 
 async function withRemotePlacementWire(scenario) {
   const network = createRouterEnvelopeFixture(import.meta.url, NODE.A);
@@ -335,28 +356,17 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
       try {
         const routedAddresses = [];
         const messageRouter = {
-          async sendToAddress(address, message) {
+          async deliver(address, message) {
             routedAddresses.push({address, type: message.type});
             assert.equal(
               message.type,
               PARTITION_SERVICE_MESSAGE_TYPE.PLACEMENT_ADMIT,
             );
-            return requestPlacementAdmission(leader, message);
+            return buildDeliveryEnvelope({acknowledged: true},
+              await requestPlacementAdmission(leader, message));
           },
         };
-        const coordinator = createCoordinatorWithLedger(leader, {
-          registerLocalLeader: false,
-          messageRouter,
-          servicesRows: [{
-            partition_id: LEDGER_PARTITION_ID,
-            entity_id: LEDGER_PARTITION_ID,
-            node_id: NODE.B,
-            replica_id: `${LEDGER_PARTITION_ID}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-            raft_role: RAFT_ROLE.LEADER,
-            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-          }],
-        });
+        const coordinator = remotePlacementCoordinator(leader, messageRouter);
 
         const addOp = await coordinator.createOperation({
           type: OperationType.ADD,
@@ -369,7 +379,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         assert.equal(routedAddresses.length, 1);
         assert.equal(
           routedAddresses[0].address,
-          `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
+          `${leader.nodeId}/partition/${leader.replicaId}`,
         );
         assert.ok(addOp.operationId.startsWith(`pl-${SERVICE_ID}-`));
       } finally {
@@ -761,7 +771,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         let firstCall = true;
         const sentEntries = [];
         const messageRouter = {
-          async sendToAddress(_address, message) {
+          async deliver(_address, message) {
             sentEntries.push({
               entryId: message.entryId,
               targets: message.body.moves.map((m) => m.targetNodeId),
@@ -769,29 +779,12 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
             const answer = await requestPlacementAdmission(leader, message);
             if (firstCall) {
               firstCall = false;
-              return {
-                success: false,
-                failureCode:
-                  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
-                error: 'Simulated transport timeout after commit of REFUSED attempt A',
-              };
+              return unknownPlacementDelivery();
             }
-            return answer;
+            return buildDeliveryEnvelope({acknowledged: true}, answer);
           },
         };
-        const coordinator = createCoordinatorWithLedger(leader, {
-          registerLocalLeader: false,
-          messageRouter,
-          servicesRows: [{
-            partition_id: LEDGER_PARTITION_ID,
-            entity_id: LEDGER_PARTITION_ID,
-            node_id: NODE.B,
-            replica_id: `${LEDGER_PARTITION_ID}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-            raft_role: RAFT_ROLE.LEADER,
-            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-          }],
-        });
+        const coordinator = remotePlacementCoordinator(leader, messageRouter);
 
         const engine = Object.create(SQLQueryEngine.prototype);
         engine.nodeId = NODE.A;
@@ -836,14 +829,14 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
     });
   });
 
-  it('preserves retained placement attempt across real router timeout and transient NOT_LEADER refusal (Review 3 Item 1) and never synthesizes or overlays mismatched retry topology onto recovered FOUND cohort (Review 3 Item 2)', async () => {
+  it('preserves retained placement attempt across a delivery timeout and transient NOT_LEADER refusal (Review 3 Item 1) and never synthesizes or overlays mismatched retry topology onto recovered FOUND cohort (Review 3 Item 2)', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
       try {
         let callCount = 0;
         const sentEntries = [];
         const messageRouter = {
-          async sendToAddress(_address, message) {
+          async deliver(_address, message) {
             callCount += 1;
             sentEntries.push({
               entryId: message.entryId,
@@ -851,40 +844,24 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
             });
             if (callCount === 1) {
               // Call 1: commit attempt A ([NODE.A, NODE.B, NODE.C]) on the
-              // leader, then lose the reply through the real router timeout
-              // path (delivered: false -> deliveryReadingOf transport failure).
+              // leader, then return the canonical delivery failure to this caller.
               await requestPlacementAdmission(leader, message);
-              return {
-                delivered: false,
-                error: 'Request timeout',
-                errorCode: 'TRANSPORT_TIMEOUT',
-              };
+              return unknownPlacementDelivery();
             }
             if (callCount === 2) {
               // Call 2: transient NOT_LEADER refusal before leadership settles.
-              return {
+              return buildDeliveryEnvelope({acknowledged: true}, {
                 success: false,
                 admitted: false,
                 partitionId: LEDGER_PARTITION_ID,
                 failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
-              };
+              });
             }
-            return requestPlacementAdmission(leader, message);
+            return buildDeliveryEnvelope({acknowledged: true},
+              await requestPlacementAdmission(leader, message));
           },
         };
-        const coordinator = createCoordinatorWithLedger(leader, {
-          registerLocalLeader: false,
-          messageRouter,
-          servicesRows: [{
-            partition_id: LEDGER_PARTITION_ID,
-            entity_id: LEDGER_PARTITION_ID,
-            node_id: NODE.B,
-            replica_id: `${LEDGER_PARTITION_ID}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-            raft_role: RAFT_ROLE.LEADER,
-            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-          }],
-        });
+        const coordinator = remotePlacementCoordinator(leader, messageRouter);
 
         const engine = Object.create(SQLQueryEngine.prototype);
         engine.nodeId = NODE.A;
