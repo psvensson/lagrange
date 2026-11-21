@@ -452,14 +452,42 @@ function concurrentRemoveRow(world) {
   };
 }
 
-// The claim (section 3.2, check 5; CL-043 serialization): no REMOVE_REPLICA
-// leaves while another non-terminal operation is active on the partition,
-// whether it appeared before SAFE or between SAFE and the effect. The
-// decide-first cell is red on the frozen production SHA (finding F3, the
-// evidence record): the revalidation answers WAIT, but the immediate
-// redrive re-enters at STOPPING, where the remove-safety evaluator answers
-// SAFE without a check (isReplaceRemovePhase is ACTIVE only), and the T5'
-// re-send leaves.
+async function readConcurrentRemove(world) {
+  const rows = await world.coordinator.repository.getRequiredOperationsByEntity(
+    'partition', world.partitionId);
+  return rows.find((row) => row.operationId === CONCURRENT_OPERATION_ID);
+}
+
+async function commitConcurrentRemove(t, world) {
+  const result = await world.coordinator.controlPlaneSystemTableGateway.submitMutation({
+    tableName: 'replica_operations', operation: 'insert', row: concurrentRemoveRow(world),
+  });
+  t.match(result, {success: true, partitionResult: {affectedRows: 1}},
+    'competing REMOVE is committed through the ledger ingress');
+  t.equal((await readConcurrentRemove(world))?.workflowStep, WORKFLOW_STEP.PENDING,
+    'the complete entity read sees the live ledger holder');
+}
+
+async function failConcurrentRemove(t, world) {
+  const current = await readConcurrentRemove(world);
+  const nowMs = Date.now() + world.clockOffsetMs;
+  const result = await world.coordinator.controlPlaneSystemTableGateway.submitMutation({
+    tableName: 'replica_operations', operation: 'update',
+    whereClause: {operation_id: CONCURRENT_OPERATION_ID,
+      workflow_step: WORKFLOW_STEP.PENDING, completed_at: null},
+    data: {status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
+      updated_at: nowMs, completed_at: nowMs,
+      steps_history: JSON.stringify([...current.stepsHistory,
+        {step: WORKFLOW_STEP.FAILED, timestamp: nowMs}])},
+  });
+  t.match(result, {success: true, partitionResult: {affectedRows: 1}},
+    'the exact competing REMOVE settles in the ledger');
+  t.equal((await readConcurrentRemove(world))?.workflowStep, WORKFLOW_STEP.FAILED,
+    'the complete entity read sees the released holder');
+}
+
+// CL-043 serializes both orders: no REMOVE_REPLICA leaves while the exact
+// competing partition operation remains active in the ledger.
 test('S11: a concurrent operation between SAFE and the effect (section ' +
   '3.2 check 5) - the effect waits; before SAFE it defers; equal outputs',
 async (t) => {
@@ -483,7 +511,8 @@ async (t) => {
     const baseEvaluate = owner.evaluateRemoveSafety.bind(owner);
     owner.evaluateRemoveSafety = async (operation) => {
       const evaluation = await baseEvaluate(operation);
-      first.cache.upsert('replica_operations', concurrentRemoveRow(first));
+      t.notOk(evaluation.error, 'decide-first: the initial evaluation is SAFE');
+      await commitConcurrentRemove(t, first);
       owner.evaluateRemoveSafety = baseEvaluate;
       return evaluation;
     };
@@ -492,14 +521,12 @@ async (t) => {
     t.equal(first.removeEffects.length, 0,
       'decide-first: the effect is withheld (WAIT)');
     // Process-first: the REMOVE is there before SAFE.
-    second.cache.upsert('replica_operations', concurrentRemoveRow(second));
+    await commitConcurrentRemove(t, second);
     await second.coordinator.executeOperation(await readPersisted(second));
     await settleTurns();
     t.equal(second.removeEffects.length, 0, 'process-first: deferred');
     for (const world of [first, second]) {
-      world.cache.upsert('replica_operations', {...concurrentRemoveRow(world),
-        status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
-        completed_at: Date.now()});
+      await failConcurrentRemove(t, world);
       await world.coordinator.executeOperation(await readPersisted(world));
       await settleTurns();
       t.equal(world.removeEffects.length, 1,
@@ -523,12 +550,16 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
     world.clockOffsetMs += 61_000;
-    world.cache.upsert('replica_operations', concurrentRemoveRow(world));
+    await commitConcurrentRemove(t, world);
     await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     t.equal(world.removeEffects.length, 1,
       'no re-send while a concurrent partition operation is active');
+    await failConcurrentRemove(t, world);
+    await entry(world);
+    t.equal(world.removeEffects.length, 2,
+      'the pending removal is re-sent once after the holder settles');
   } finally {
     await disposeWorld(world);
   }
