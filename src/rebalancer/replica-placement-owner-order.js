@@ -6,7 +6,7 @@
 // partitions. Within a class: deficit severity, then the fewest distinct
 // declared hosts holding voters, then the fewest voters, then partition id.
 import {resolveVoterTarget} from '../bootstrap/replication-target-authority.js';
-import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {classifyPlacementClass} from '../bootstrap/system-partition-classification.js';
 import {
   PLACEMENT_CLASS,
   PLACEMENT_CLASS_ORDER,
@@ -18,22 +18,6 @@ import {
 } from './replica-placement-owner-constants.js';
 
 const AFTER_SYSTEM_FIRST = PLACEMENT_SYSTEM_FIRST_PARTITION_IDS.length;
-
-/**
- * The placement class of a partition, from the system-partition owner's
- * classification.
- * @param {string} partitionId - The partition.
- * @return {string} A PLACEMENT_CLASS.
- */
-function classifyPlacementClass(partitionId) {
-  const classification = classifySystemPartition({partitionId});
-  if (classification.operationLedger) return PLACEMENT_CLASS.LEDGER;
-  if (classification.priorityControlPlane) return PLACEMENT_CLASS.PRIORITY;
-  if (classification.formationLivenessDependency) {
-    return PLACEMENT_CLASS.FORMATION_DEPENDENCY;
-  }
-  return classification.systemTable ? PLACEMENT_CLASS.SYSTEM : PLACEMENT_CLASS.USER;
-}
 
 /**
  * Why a class waits on the formation answer, or null when it may be

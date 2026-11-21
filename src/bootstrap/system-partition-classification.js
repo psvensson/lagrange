@@ -183,6 +183,26 @@ function resolvePartitionTableId(options = {}) {
   return resolvePartitionTableIdFromPartitionId(options.partitionId);
 }
 
+// Shared deterministic placement cohorts, consumed by apply and by planning.
+const PLACEMENT_CLASS = Object.freeze({
+  LEDGER: 'LEDGER',
+  PRIORITY: 'PRIORITY',
+  FORMATION_DEPENDENCY: 'FORMATION_DEPENDENCY',
+  SYSTEM: 'SYSTEM',
+  USER: 'USER',
+});
+
+function classifyPlacementClass(partitionId) {
+  const classification = classifySystemPartition({partitionId});
+  if (classification.operationLedger) return PLACEMENT_CLASS.LEDGER;
+  if (classification.priorityControlPlane) return PLACEMENT_CLASS.PRIORITY;
+  if (classification.formationLivenessDependency) {
+    return PLACEMENT_CLASS.FORMATION_DEPENDENCY;
+  }
+  return classification.systemTable ? PLACEMENT_CLASS.SYSTEM : PLACEMENT_CLASS.USER;
+}
+
+
 const SYSTEM_PARTITION_CLASS = Object.freeze({
   BOOTSTRAP_CRITICAL: 'bootstrap_critical',
   PRIORITY_CONTROL_PLANE: 'priority_control_plane',
@@ -616,6 +636,8 @@ export {
   CRITICAL_TRANSPORT_TARGET_REASON,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   SYSTEM_PARTITION_CLASS,
+  PLACEMENT_CLASS,
+  classifyPlacementClass,
   SYSTEM_PARTITION_CLASS_ROWS,
   classifySystemPartition,
   getPartitionRowFromCache,
