@@ -475,7 +475,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
     );
   });
 
-test('checkTimeouts does not fail a stale operation while a deferred transition retry is still armed',
+test('the timeout owner retains a stale operation while a deferred transition retry is armed',
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
@@ -529,7 +529,12 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
     let committed;
     try {
       const owner = coordinator.workflowOwner;
-      const operation = owner.repository.rowToOperation(ledger.read());
+      const {operation} = await owner.repository.queryAuthoritativeOperationVisibilityObservation(
+        operationRow.operation_id, {
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          requireCompleteExactKey: true,
+        });
+      t.equal(operation.workflowStep, 'PENDING', 'complete owner RPC observes the retained step');
       t.ok(owner.deferTransitionRetry(operation.operationId, {
         deferRetry: true, retryAfterMs: 1000,
       }, {
@@ -538,7 +543,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
         partitionId: operation.partitionId, operationSnapshot: operation,
       }), 'the owner arms a real transition retry');
       t.ok(owner.hasActiveTransitionRetryGrace(operation.operationId));
-      await coordinator.checkTimeouts();
+      await owner.reconcileTimeoutOperation(operation, Date.now());
       committed = ledger.read();
     } finally {
       try {
@@ -549,7 +554,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
     }
 
     t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === operationRow.operation_id),
-      'the sweep reaches the real pending owner row with retry grace active');
+      'the timeout decision uses the exact durable operation with retry grace active');
     t.same(ledger.terminalChanges, [],
       'timeout reconciliation does not submit failure while the transition retry is armed');
     t.equal(
@@ -825,7 +830,13 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       const retry = owner.observedProgressRetryTimerByOperationId.get(TEST_OPERATION_ID);
       t.ok(retry, 'the existing terminal-handoff wake stays armed');
 
-      targetAuthority = {...targetServiceRow, node_id: TEST_SOURCE_NODE_ID, updated_at: nowMs};
+      targetAuthority = {
+        ...targetServiceRow,
+        node_id: TEST_SOURCE_NODE_ID,
+        address: [TEST_SOURCE_NODE_ID, TEST_ENTITY_TYPE_PARTITION, TEST_REPLICA_ID]
+          .join(TEST_ADDRESS_SEPARATOR),
+        updated_at: nowMs,
+      };
       await coordinator.checkTimeouts();
       t.same(ledger.read(), original, 'an ACTIVE row belonging to another host is inconclusive');
       t.same(ledger.terminalChanges, [], 'wrong target authority cannot terminalize the operation');
