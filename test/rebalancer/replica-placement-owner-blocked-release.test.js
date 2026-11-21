@@ -12,7 +12,10 @@
 //    blocked work and stops only its own partition.
 // 3. F4 residue: an uncertain RELEASE attempt whose hold another leader
 //    released retires as its own named outcome (superseded by ledger state),
-//    never as a settlement of its own command, and is listed once.
+//    never as a settlement of its own command, and is listed once; also when
+//    the hold is lifted during the tenure, on the next pass (4).
+// 5. A re-drive survives a crash between its durable replacement and its
+//    proposal: the restarted owner re-drives the fresh entry, never the dead.
 //
 // REAL: the replica_operations-p1 PartitionService and its committed apply
 // path, the native admission and release requests, the outcome owner, the
@@ -32,6 +35,8 @@ import {PARTITION_COMMITTED_RECORD_CLASS as RECORD_CLASS,
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {PLACEMENT_RESULT_FIELD} from
   '../../src/partition/partition-placement-admission-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {requestPlacementAdmission, requestPlacementHoldRelease} from
   '../../src/partition/partition-placement-admission.js';
 import {readPlacementCensus} from
@@ -137,6 +142,21 @@ function shortPartitionsCache() {
     [TABLES.REPLICA_OPERATIONS, []]]);
   return {getAll: (tableName) => [...(rows.get(tableName) ?? [])],
     onCacheApplyChange() {}, offCacheApplyChange() {}};
+}
+
+// The answer of a proposal lost before it reached the log.
+const OUTCOME_UNKNOWN = Object.freeze({success: false,
+  failureCode: WRITE_REFUSAL.OUTCOME_UNKNOWN});
+
+// Record each pass's triggers (the owner's own drain calls this.runPass).
+function recordPasses(owner) {
+  const passes = [];
+  const run = owner.runPass.bind(owner);
+  owner.runPass = (triggers) => {
+    passes.push([...triggers]);
+    return run(triggers);
+  };
+  return passes;
 }
 
 async function idle(owner) {
@@ -286,5 +306,110 @@ test('F4 residue: an uncertain release whose hold another leader released retire
         'reported once when it retires');
     } finally {
       owner.shutdown();
+    }
+  }));
+
+test('F4 residue within a tenure: an uncertain release whose hold is lifted after ' +
+  'leadership start retires on the next pass, with no leadership change', () =>
+  onLedgerLeader(async (leader, proposed) => {
+    const operationId = await admitHeldLedgerMove(leader, proposed);
+    const attemptKey = `release:${operationId}`;
+    const submitted = [];
+    // Every proposal of this owner's release is lost before the log.
+    const owner = createReplicaPlacementOwner({nodeId: 'n1', ledgerPartitionService: leader,
+      nodeAuthority: unavailableNodeAuthority(), systemTableCache: shortPartitionsCache(),
+      now: () => NOW_MS, logger: recordingLogger().logger,
+      admitPlacement: committing(leader, proposed, requestPlacementAdmission),
+      releasePlacementHold: async (payload) => {
+        submitted.push(payload.entryId);
+        return OUTCOME_UNKNOWN;
+      }});
+    const passes = recordPasses(owner);
+    try {
+      owner.setLeader(true);
+      await idle(owner);
+      const [lostEntryId] = submitted;
+      assert.equal(typeof lostEntryId, 'string', 'the owner proposed its release');
+      assert.equal(attemptRowOf(leader, attemptKey)?.entry_id, lostEntryId,
+        'the release is uncertain and durable');
+      assert.notEqual(holdOf(leader, operationId), null, 'the hold is still engaged');
+      const startPasses = passes.length;
+      // During this tenure the hold is lifted under another entry.
+      const lifted = await releaseOnLeader(leader, proposed, 'tenure-release', operationId);
+      assert.equal(resultOf(lifted)?.outcome, PLACEMENT_OUTCOME.RELEASED);
+      owner.notify(PLACEMENT_TRIGGER.RESYNC);
+      await idle(owner);
+      assert.equal(owner.isLeader, true, 'no leadership change');
+      assert.ok(passes.length > startPasses, 'a later pass ran');
+      assert.deepEqual(passes.slice(startPasses).filter((triggers) =>
+        triggers.includes(PLACEMENT_TRIGGER.LEADERSHIP_START)), [],
+      'no later pass is a leadership start');
+      assert.equal(attemptRowOf(leader, attemptKey), null,
+        'the release obligation is reached: the attempt retires on the next pass');
+      assert.equal(owner.uncertainEntryIds.has(attemptKey), false);
+      assert.deepEqual(owner.lastPassSnapshot?.supersededAttempts, [{
+        state: attempts.PLACEMENT_ATTEMPT_RETIREMENT?.SUPERSEDED_BY_LEDGER,
+        attemptKey, entryId: lostEntryId, operationId,
+      }], 'retired as its own named outcome');
+      assert.equal(readCommittedStatementOutcome(leader, `entry:${lostEntryId}`).state,
+        RECORD.UNSETTLED, 'its own command is not counted as applied');
+    } finally {
+      owner.shutdown();
+    }
+  }));
+
+test('a re-drive survives a crash between its durable replacement and its proposal: ' +
+  'the restarted owner re-drives the fresh entry, never the dead one', () =>
+  onLedgerLeader(async (leader, proposed) => {
+    const operationId = await admitHeldLedgerMove(leader, proposed);
+    const attemptKey = `release:${operationId}`;
+    const first = [];
+    // Owner 1: the first release meets a foreign record; the process dies
+    // before the re-driven release reaches the log.
+    const owner1 = createReplicaPlacementOwner({nodeId: 'n1', ledgerPartitionService: leader,
+      nodeAuthority: unavailableNodeAuthority(), systemTableCache: shortPartitionsCache(),
+      now: () => NOW_MS, logger: recordingLogger().logger,
+      admitPlacement: committing(leader, proposed, requestPlacementAdmission),
+      releasePlacementHold: async (payload) => {
+        first.push(payload.entryId);
+        if (first.length === 1) {
+          assert.equal(commitLedgerStatement(leader, payload.entryId, FOREIGN_SQL,
+            [...FOREIGN_PARAMS]), null);
+          return committing(leader, proposed, requestPlacementHoldRelease)(payload);
+        }
+        return OUTCOME_UNKNOWN;
+      }});
+    owner1.setLeader(true);
+    await idle(owner1);
+    owner1.shutdown();
+    const [deadEntryId, freshEntryId] = first;
+    assert.equal(typeof freshEntryId, 'string', 'the blocked release was re-driven');
+    assert.notEqual(freshEntryId, deadEntryId);
+    assert.equal(attemptRowOf(leader, attemptKey)?.entry_id, freshEntryId,
+      'the durable attempt names the fresh entry before its proposal');
+    assert.notEqual(holdOf(leader, operationId), null, 'the hold is still engaged');
+    // Owner 2 on the same store: hydrates the fresh entry and proposes it.
+    const second = [];
+    const owner2 = createReplicaPlacementOwner({nodeId: 'n1', ledgerPartitionService: leader,
+      nodeAuthority: unavailableNodeAuthority(), systemTableCache: shortPartitionsCache(),
+      now: () => NOW_MS, logger: recordingLogger().logger,
+      admitPlacement: committing(leader, proposed, requestPlacementAdmission),
+      releasePlacementHold: async (payload) => {
+        second.push(payload.entryId);
+        return committing(leader, proposed, requestPlacementHoldRelease)(payload);
+      }});
+    try {
+      owner2.setLeader(true);
+      await idle(owner2);
+      assert.deepEqual(second, [freshEntryId], 'only the fresh entry is proposed');
+      assert.equal(holdOf(leader, operationId), null, 'the hold was released');
+      assert.equal(attemptRowOf(leader, attemptKey), null, 'the attempt settled');
+      const fresh = readCommittedStatementOutcome(leader, `entry:${freshEntryId}`);
+      assert.equal(JSON.parse(fresh.ownerResultText ?? 'null')?.outcome,
+        PLACEMENT_OUTCOME.RELEASED);
+      assert.equal(readCommittedStatementOutcome(leader, `entry:${deadEntryId}`)
+        .ownerResultText ?? null, null, 'the dead entry still holds only the foreign record');
+    } finally {
+      owner2.shutdown();
     }
   }));
