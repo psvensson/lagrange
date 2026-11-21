@@ -51,6 +51,8 @@ import {
   READ_MODEL_DIVERGENCE_TYPE,
   SQL_RECONCILIATION_REASON,
 } from '../../src/control-plane/read-model-contract.js';
+import {PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER} from
+  '../../src/rebalancer/replica-operation-step-policy.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
@@ -97,13 +99,19 @@ const TEST_REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE =
 const TEST_REPLICA_OPERATION_MUTATION_REPLACE_PENDING_KEY =
   TEST_REPLICA_OPERATION_MUTATION_COALESCING_KEY;
 const TEST_REPLICA_OPERATION_READ_COALESCING_KEY =
-  'replica-operation:op-1';
+  `replica-operation:${JSON.stringify([TEST_OPERATION_ID])}`;
 const TEST_REPLICA_OPERATION_READ_DELIVERY_SOURCE =
-  'control-plane:read:replica_operations:replica-operation:op-1';
+  `control-plane:read:replica_operations:${TEST_REPLICA_OPERATION_READ_COALESCING_KEY}`;
 const TEST_REPLICA_OPERATION_OWNER_READ_COALESCING_KEY =
-  'replica-operation-owner:test-node-1';
+  `replica-operation-owner:${JSON.stringify([
+    TEST_NODE_ID,
+    TEST_NODE_ID,
+    ...PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
+    OperationType.REPLACE,
+    OperationType.REMOVE,
+  ])}`;
 const TEST_REPLICA_OPERATION_OWNER_READ_DELIVERY_SOURCE =
-  'control-plane:read:replica_operations:replica-operation-owner:test-node-1';
+  `control-plane:read:replica_operations:${TEST_REPLICA_OPERATION_OWNER_READ_COALESCING_KEY}`;
 
 /**
  * Create a minimal repository for testing.

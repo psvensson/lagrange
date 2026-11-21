@@ -54,7 +54,7 @@ export function registerReplicaOperationRepositoryTailTests({
   createTestCoordinator,
 }) {
   const TEST_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY =
-    `replica-operation:${TEST_OPERATION_ID}`;
+    `replica-operation:${JSON.stringify([TEST_OPERATION_ID])}`;
 
   test('getReplaceTargetReplicaId returns null when same as source', async (t) => {
     const repo = createTestRepository();
