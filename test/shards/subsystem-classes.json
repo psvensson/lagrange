@@ -28,7 +28,7 @@
   "censusSize": 2714,
   "digest": "fnv1a32-2108589c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8d1b0a5b",
+  "observationDigest": "fnv1a32-ee5f0bdc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18409,6 +18409,7 @@
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/operation-workflow-terminal-transition-repair.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/transport/transport-semantic-outcome.js",
         "test/rebalancer/rebalance-coordinator-stopping-reconcile-fixtures.js",
@@ -19129,7 +19130,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "test/rebalancer/rebalance-coordinator-timeout-cache-visibility-fixture.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-topology-guard.test.js": {

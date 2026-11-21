@@ -1,3 +1,7 @@
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
@@ -63,4 +67,48 @@ export function createCoordinator(overrides = {}) {
       },
     },
   })));
+}
+
+export function createCommittedTimeoutLedger(initial, {readServices} = {}) {
+  const store = createCoordinatorSqlStore({
+    getAll: (table) => table === 'replica_operations' ? [initial] : [],
+  });
+  const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
+  const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+  const terminalChanges = [];
+  const pointReads = [];
+  const readAuthoritatively = gateway.readAuthoritativeRows.bind(gateway);
+  gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+    if (table === 'services' && readServices) {
+      return readServices(sql, params, options);
+    }
+    const result = await readAuthoritatively(table, sql, params, options);
+    if (table === 'replica_operations' && sql.includes('WHERE operation_id = ?') &&
+        params[0] === initial.operation_id &&
+        options.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
+      pointReads.push(result);
+    }
+    return result;
+  };
+  gateway.submitMutation = async (mutation) => {
+    const result = store.submitMutation(mutation);
+    if (mutation.tableName === 'replica_operations' && mutation.data?.workflow_step === 'FAILED') {
+      terminalChanges.push(result.partitionResult?.affectedRows);
+    }
+    return result;
+  };
+  installCommittedOperationMutationFixture(gateway);
+  return {
+    options: {
+      sqlQueryEngine,
+      controlPlaneSystemTableGateway: gateway,
+      cdcIntegrationService: gateway.cdcIntegrationService,
+    },
+    terminalChanges,
+    pointReads,
+    read: () => store.execute('SELECT * FROM replica_operations WHERE operation_id = ?',
+      [initial.operation_id]).rows[0],
+    close: store.suspend,
+  };
 }

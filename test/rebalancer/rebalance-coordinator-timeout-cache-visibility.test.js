@@ -1,9 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway,
-} from './test-helpers.js';
-import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
+import {createCoordinatorSqlStore} from './test-helpers.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
@@ -23,6 +20,7 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {
   buildTransactionCoordinator,
+  createCommittedTimeoutLedger,
   createCoordinator,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
 import {
@@ -36,34 +34,6 @@ const EMERGENCY_PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
 const PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS = 1000;
 const STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME =
   'checkTimeouts reconciles stale priority PENDING from cached active target without unsafe trim';
-
-function createCommittedTimeoutLedger(initial) {
-  const store = createCoordinatorSqlStore({
-    getAll: (table) => table === 'replica_operations' ? [initial] : [],
-  });
-  const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
-  const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
-  const terminalChanges = [];
-  gateway.submitMutation = async (mutation) => {
-    const result = store.submitMutation(mutation);
-    if (mutation.tableName === 'replica_operations' && mutation.data?.workflow_step === 'FAILED') {
-      terminalChanges.push(result.partitionResult?.affectedRows);
-    }
-    return result;
-  };
-  installCommittedOperationMutationFixture(gateway);
-  return {
-    options: {
-      sqlQueryEngine,
-      controlPlaneSystemTableGateway: gateway,
-      cdcIntegrationService: gateway.cdcIntegrationService,
-    },
-    terminalChanges,
-    read: () => store.execute('SELECT * FROM replica_operations WHERE operation_id = ?',
-      [initial.operation_id]).rows[0],
-    close: store.suspend,
-  };
-}
 
 test('checkTimeouts settles STOPPING from confirmed source absence without cache waits',
   async (t) => {
@@ -508,7 +478,6 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
-    let updateCalls = 0;
     const operationRow = {
       operation_id: 'op-deferred-transition-retry-timeout',
       type: 'ADD',
@@ -529,6 +498,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       ]),
     };
 
+    const ledger = createCommittedTimeoutLedger(operationRow);
     const coordinator = createCoordinator({
       nodeId: 'node-local',
       transactionCoordinator: buildTransactionCoordinator(),
@@ -540,9 +510,6 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
           return [];
         },
       },
-      cdcIntegrationService: {
-        refreshAuthoritativeCacheRow: async () => true,
-      },
       messageRouter: {
         async deliver() {
           return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
@@ -553,62 +520,44 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
           return {targetReplicaCount: 3, minReplicaCount: 3};
         },
       },
-      sqlQueryEngine: {
-        async executeQuery(sql, params) {
-          if (String(sql).includes('FROM replica_operations')) {
-            return {
-              success: true,
-              rows: [{...operationRow}],
-            };
-          }
-          if (String(sql).startsWith('UPDATE replica_operations SET')) {
-            updateCalls += 1;
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[3];
-            operationRow.error_message = params[4];
-            operationRow.steps_history = params[5];
-            operationRow.replica_id = params[6];
-            return {
-              success: true,
-              affectedRows: 1,
-            };
-          }
-          return {
-            success: true,
-            rows: [],
-            affectedRows: 0,
-          };
-        },
-      },
+      ...ledger.options,
       enableTimeouts: false,
     });
 
     coordinator.initialize();
+    let committed;
     try {
-      coordinator.workflowOwner.transitionRetryTimerByOperationId.set(
-        operationRow.operation_id,
-        {armed: true},
-      );
-
+      const owner = coordinator.workflowOwner;
+      const operation = owner.repository.rowToOperation(ledger.read());
+      t.ok(owner.deferTransitionRetry(operation.operationId, {
+        deferRetry: true, retryAfterMs: 1000,
+      }, {
+        workflowStep: operation.workflowStep,
+        updatedAt: operation.updatedAt, createdAt: operation.createdAt,
+        partitionId: operation.partitionId, operationSnapshot: operation,
+      }), 'the owner arms a real transition retry');
+      t.ok(owner.hasActiveTransitionRetryGrace(operation.operationId));
       await coordinator.checkTimeouts();
+      committed = ledger.read();
     } finally {
-      await coordinator.shutdown();
+      try {
+        await coordinator.shutdown();
+      } finally {
+        ledger.close();
+      }
     }
 
+    t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === operationRow.operation_id),
+      'the sweep reaches the real pending owner row with retry grace active');
+    t.same(ledger.terminalChanges, [],
+      'timeout reconciliation does not submit failure while the transition retry is armed');
     t.equal(
-      updateCalls,
-      0,
-      'timeout reconciliation should not fail an operation while the deferred transition retry lane is still armed',
-    );
-    t.equal(
-      operationRow.status,
+      committed.status,
       'pending',
       'the stale operation should remain pending until the deferred retry is allowed to run',
     );
     t.equal(
-      operationRow.workflow_step,
+      committed.workflow_step,
       'PENDING',
       'timeout handling should preserve the current step while the deferred retry is active',
     );
@@ -752,15 +701,11 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
     const TEST_SERVICES_TABLE = 'services';
     const TEST_RAFT_ROLE_FOLLOWER = 'follower';
-    const TEST_LOCAL_SOURCE = 'local_partition_replica';
-    const TEST_UPDATE_OPERATION_SQL_PREFIX =
-      'UPDATE replica_operations SET';
     const TEST_ADDRESS_SEPARATOR = '/';
     const TEST_STEP_STALE_MS = 65_000;
     const TEST_CREATED_LAG_MS = 5_000;
     const TEST_STEP_HISTORY_LAG_MS = 1_000;
     const TEST_MIN_REPLICA_COUNT = 3;
-    const TEST_AFFECTED_ROW_COUNT = 1;
     const TEST_EMPTY_AFFECTED_ROW_COUNT = 0;
     const TEST_EMPTY_VALUE = null;
     const TEST_ASSERT_NO_TIMEOUT_FAILURE =
@@ -832,89 +777,12 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     const serviceCacheReadKeys = [];
     const dispatchedMessages = [];
 
-    const cdcIntegrationService = {
-      refreshAuthoritativeCacheRow: async () => true,
-      async executeAuthoritativeSystemTableRead(
-        tableName,
-        sql,
-        params = [],
-        _options = {},
-      ) {
-        if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
-          return {
-            success: true,
-            source: TEST_LOCAL_SOURCE,
-            rows: [],
-          };
-        }
-        if (tableName === TEST_SERVICES_TABLE) {
-          const result = {
-            success: true,
-            source: TEST_LOCAL_SOURCE,
-            rows: [],
-          };
-          authoritativeServiceReadResults.push({
-            sql: String(sql),
-            params: [...params],
-            success: result.success,
-            rowCount: result.rows.length,
-          });
-          return result;
-        }
-        return {
-          success: true,
-          source: TEST_LOCAL_SOURCE,
-          rows: [],
-        };
+    const ledger = createCommittedTimeoutLedger(operationRow, {
+      readServices(sql, params) {
+        authoritativeServiceReadResults.push({sql, params, rowCount: 0});
+        return {success: true, rows: [], rowSetComplete: false};
       },
-    };
-    const controlPlaneSystemTableGateway = {
-      async readRows(tableName, sql, params = [], options = {}) {
-        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-          options,
-        );
-      },
-      async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
-        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-          options,
-        );
-      },
-      async executeQuery(sql, params = []) {
-        if (String(sql).startsWith(TEST_UPDATE_OPERATION_SQL_PREFIX)) {
-          const [
-            nextStatus,
-            nextWorkflowStep,
-            nextUpdatedAt,
-            nextCompletedAt,
-            nextErrorMessage,
-            nextStepsHistory,
-            nextReplicaId,
-          ] = params;
-          operationRow.status = nextStatus;
-          operationRow.workflow_step = nextWorkflowStep;
-          operationRow.updated_at = nextUpdatedAt;
-          operationRow.completed_at = nextCompletedAt;
-          operationRow.error_message = nextErrorMessage;
-          operationRow.steps_history = nextStepsHistory;
-          operationRow.replica_id = nextReplicaId;
-          return {
-            success: true,
-            affectedRows: TEST_AFFECTED_ROW_COUNT,
-          };
-        }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: TEST_EMPTY_AFFECTED_ROW_COUNT,
-        };
-      },
-    };
+    });
     const coordinator = createCoordinator({
       nodeId: TEST_TARGET_NODE_ID,
       transactionCoordinator: buildTransactionCoordinator(),
@@ -946,8 +814,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
           return this.getAll(tableName).filter(predicate);
         },
       },
-      cdcIntegrationService,
-      controlPlaneSystemTableGateway,
+      ...ledger.options,
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
@@ -963,11 +830,20 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     });
 
     coordinator.initialize();
+    let committed;
     try {
       await coordinator.checkTimeouts();
+      committed = ledger.read();
     } finally {
-      await coordinator.shutdown();
+      try {
+        await coordinator.shutdown();
+      } finally {
+        ledger.close();
+      }
     }
+
+    t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === TEST_OPERATION_ID),
+      'the sweep reads the exact committed operation before consulting services');
 
     t.ok(
       authoritativeServiceReadResults.length > TEST_EMPTY_AFFECTED_ROW_COUNT,
@@ -984,12 +860,12 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       TEST_ASSERT_TARGET_CACHE_READ,
     );
     t.equal(
-      operationRow.error_message,
+      committed.error_message,
       TEST_EMPTY_VALUE,
       TEST_ASSERT_NO_TIMEOUT_FAILURE,
     );
     t.equal(
-      operationRow.workflow_step,
+      committed.workflow_step,
       TEST_WORKFLOW_STEP_ACTIVE,
       TEST_ASSERT_ACTIVE_STEP,
     );
