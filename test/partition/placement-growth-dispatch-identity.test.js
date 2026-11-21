@@ -18,6 +18,9 @@ import {
 import {
   OperationType, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
+import {ensureOperationLedgerSelfMoveDispatchIdleOrSkip} from
+  '../../src/rebalancer/operation-workflow-dispatch-ledger-self-move-gate.js';
+import {createOperation} from '../../src/rebalancer/replica-status.js';
 import {applyGrowthPromoteRequestFields} from
   '../../src/rebalancer/operation-workflow-growth-promote.js';
 import {assertOperationUpdateSubject} from
@@ -423,4 +426,56 @@ test('membership-publication authoritative retry retains the actual native subje
     assert.equal(rows[0].operation_id, row.operation_id);
     assert.equal(rows[0].source_replica_id, SECOND_LEARNER);
     assert.equal(rows[0].lease_expires_at, leaseExpiresAt);
+  }));
+
+function clearOriginalGrowthCohort(leader, row) {
+  const history = JSON.parse(row.steps_history);
+  delete history[0].promoteReplicaIds;
+  commitGrowthHistory(leader, row, history);
+}
+
+test('copy admission ignores an unresolved growth that occupies no target copy slot', async () => {
+  await withNativeGrowth(async ({coordinator}, incumbent, leader) => {
+    clearOriginalGrowthCohort(leader, incumbent);
+    const decision = await coordinator.ensureSystemPartitionTargetNodeSlotAllowed(
+      OperationType.ADD, {partitionId: 'sql_transactions-p1', targetNodeId: NODE.A},
+    );
+    assert.equal(decision.allowed, true);
+    assert.equal(decision.occupiedCount, 0);
+    assert.equal(ledgerRows(leader)[0].operation_id, incumbent.operation_id);
+    assert.ok(readPlacementCensus(leader.db)[0].incomplete);
+  });
+});
+
+test('an unresolved native growth is still the exact competing ledger writer', async () => {
+  await withNativeGrowth(async ({coordinator}, incumbent, leader) => {
+    clearOriginalGrowthCohort(leader, incumbent);
+    const selfMove = createOperation({
+      operationId: 'ledger-waiter', type: OperationType.REPLACE, sourceNodeId: NODE.B,
+      targetNodeId: NODE.A, partitionId: 'replica_operations-p1',
+      replicaId: 'ledger-next', sourceReplicaId: 'ledger-current',
+    });
+    selfMove.entityType = 'partition';
+    selfMove.entityId = selfMove.partitionId;
+    const owner = coordinator.workflowOwner;
+    const parked = await ensureOperationLedgerSelfMoveDispatchIdleOrSkip(owner, selfMove);
+    assert.equal(parked.deferReason, 'operation_ledger_self_move_waiting_for_idle_ledger');
+    assert.match(parked.error, new RegExp(incumbent.operation_id, 'u'));
+    assert.deepEqual(
+      owner.operationLedgerSelfMoveParkEvidenceByOperationId.get(selfMove.operationId)
+        .incumbentOperationIds,
+      [incumbent.operation_id],
+    );
+  });
+});
+
+test('a completed growth row with contradictory partition and entity gives no voter credit',
+  async () => withNativeGrowth(async (_world, incumbent, leader) => {
+    const history = JSON.parse(incumbent.steps_history);
+    commitGrowthHistory(leader, incumbent, history, WORKFLOW_STEP.ACTIVE);
+    assert.equal(commitLedgerStatement(leader, 'growth:wrong-partition-entity',
+      'UPDATE replica_operations SET entity_id = ? WHERE operation_id = ?',
+      ['different-growth-p1', incumbent.operation_id]), null);
+    const observed = readPlacementCensus(leader.db)[0];
+    assert.equal(observed.promoteReplicaIds, null);
   }));
