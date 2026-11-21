@@ -28,7 +28,7 @@
   "censusSize": 2721,
   "digest": "fnv1a32-0ce7104a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1c770b4c",
+  "observationDigest": "fnv1a32-9bde8820",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4906,6 +4906,7 @@
     },
     "test/control-plane/control-plane-write-identity.test.js": {
       "files": [
+        "src/control-plane/control-plane-named-write-wait.js",
         "src/partition/partition-write-kernel.js"
       ]
     },
@@ -4960,6 +4961,8 @@
     "test/control-plane/endpoint-incarnation-authority.test.js": {
       "files": [
         "src/bootstrap/shared/node-registration-owner.js",
+        "src/control-plane/control-plane-write-identity.js",
+        "src/partition/partition-write-kernel.js",
         "src/transport/node-address-resolution.js"
       ]
     },
@@ -18525,6 +18528,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/control-plane-write-identity.js",
+        "src/partition/partition-write-kernel.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
