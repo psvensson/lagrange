@@ -430,6 +430,88 @@ async function queryInitialPartition(t, gateway, fixture) {
   return {answer: await query(), attempts};
 }
 
+for (const {replicaCount, members, targetNodeIds, expected} of [
+  {replicaCount: 3, members: ['serve-e', 'serve-b', 'serve-a', 'serve-d', 'serve-c'],
+    expected: ['serve-a', 'serve-b', 'serve-c']},
+  {members: ['serve-c', 'serve-a', 'serve-b'], expected: ['serve-a']},
+  {replicaCount: 3, members: ['serve-c', 'serve-a', 'serve-b'],
+    targetNodeIds: ['serve-c', 'serve-a'], expected: ['serve-c', 'serve-a']},
+]) {
+  test(`founding uses the ordered requested width (RF ${replicaCount ?? 1}, ` +
+    `explicit: ${Boolean(targetNodeIds)})`, async (t) => {
+    const fixture = createServeRefreshFixture(t, createGateway());
+    const {state, readiness, engine} = fixture;
+    state.nodes = members.map((nodeId) => ({
+      ...state.nodes[0], node_id: nodeId,
+    }));
+    state.publications = [serveRefreshPublication(3, members)];
+    await readiness.readServeEligibility();
+    t.equal(readiness.answerServeCohort().eligibleNodeIds.length, members.length);
+
+    const native = captureFoundingAdmission(engine);
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'width-probe-p1', replicaCount, targetNodeIds,
+      assertProvisioningOwnership: async () => native.events.push('ownership'),
+    }), {message: 'the founding admission reached the native boundary'});
+
+    t.same(native.checked, expected, 'admission reaches only the required healthy targets');
+    t.same(native.proposals[0]?.moves.map(({targetNodeId}) => targetNodeId), expected);
+    t.same(native.events, [...expected, 'ownership', 'found'],
+      'the job fence is checked after admission and before FOUND');
+    t.equal(native.proposals.length, 1);
+  });
+}
+
+test('admission outlasting the parent deadline cannot found a healthy cohort',
+  async (t) => {
+    const {clock, engine, readiness} =
+      createServeRefreshFixture(t, createGateway());
+    await readiness.readServeEligibility();
+    engine.nowFn = () => clock.now;
+    const native = captureFoundingAdmission(engine, () => {
+      clock.now += 50;
+    });
+    const timeoutBudget = createTimeoutBudget({
+      configuredBudgetMs: 20, now: engine.nowFn,
+    });
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'deadline-probe-p1', replicaCount: 3, timeoutBudget,
+      assertProvisioningOwnership: async () => native.events.push('ownership'),
+    }), {errorCode: 'TIMEOUT'});
+    t.same(readiness.answerServeCohort().eligibleNodeIds,
+      ['serve-a', 'serve-b', 'serve-c'], 'lease time and job budget are independent');
+    t.same(native.checked, ['serve-a'], 'later prechecks cannot start after the budget');
+    t.same(native.proposals, [], 'a spent budget cannot reach the founding owner');
+  });
+
+function captureFoundingAdmission(engine, duringPrecheck = () => {}) {
+  const events = [];
+  const checked = [];
+  const proposals = [];
+  engine.rebalanceCoordinator = {
+    placementAdmissionEnabled: true,
+    resolveFormationLatchEpochForPlacement: () => 7,
+    async checkProvisioningAdmission({nodeId}) {
+      checked.push(nodeId);
+      events.push(nodeId);
+      duringPrecheck();
+      return {allowed: true};
+    },
+    async admitPlacementStatement({statement}) {
+      proposals.push(statement);
+      events.push('found');
+      throw new Error('the founding admission reached the native boundary');
+    },
+    async createOperation() {
+      throw new Error('founding must submit the native statement');
+    },
+    async executeOperation() {
+      throw new Error('the witness pauses before native materialization');
+    },
+  };
+  return {events, checked, proposals};
+}
+
 // Real public SQL -> schema custody -> provisioning cohort -> readiness owner
 // -> SystemTableCache source events. Storage and native replica dispatch are
 // the explicit seams; no test supplies a serve decision or a retry outcome.
