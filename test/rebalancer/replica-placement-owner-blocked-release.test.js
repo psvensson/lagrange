@@ -273,7 +273,7 @@ test('F4 residue: an uncertain release whose hold another leader released retire
       assert.equal(attemptRowOf(leader, attemptKey), null,
         'the release obligation is reached: the attempt retires');
       assert.equal(owner.uncertainEntryIds.has(attemptKey), false);
-      assert.deepEqual(owner.lastPassSnapshot?.retiredAttempts, [{
+      assert.deepEqual(owner.lastPassSnapshot?.supersededAttempts, [{
         state: attempts.PLACEMENT_ATTEMPT_RETIREMENT?.SUPERSEDED_BY_LEDGER,
         attemptKey, entryId: lostEntryId, operationId,
       }], 'retired as its own named outcome');
@@ -281,7 +281,7 @@ test('F4 residue: an uncertain release whose hold another leader released retire
         RECORD.UNSETTLED, 'its own command is not counted as applied');
       owner.notify(PLACEMENT_TRIGGER.RESYNC);
       await idle(owner);
-      assert.equal(owner.lastPassSnapshot.retiredAttempts.length, 1, 'listed once');
+      assert.equal(owner.lastPassSnapshot.supersededAttempts.length, 1, 'listed once');
       assert.equal(lines.info.filter(({fields}) => fields?.entryId === lostEntryId).length, 1,
         'reported once when it retires');
     } finally {

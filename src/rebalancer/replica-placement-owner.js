@@ -31,6 +31,7 @@ import {
 import {
   createBlockedPlacementAttempts, deleteUnresolvedPlacementAttempt,
   observePlacementAttemptAnswer, persistUnresolvedPlacementAttempt, reconcilePlacementAttempts,
+  reconcileReleaseAttempts, redrivenReleaseAttempt,
 } from './replica-placement-owner-attempts.js';
 import {
   PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
@@ -449,14 +450,15 @@ class ReplicaPlacementOwner {
     }
   }
 
-  submitHoldRelease(operationId) {
-    const attempt = this.resolveAttempt(
-      ENTRY_KIND_RELEASE,
-      operationId,
-      operationId,
-      () => Object.freeze({operationId}),
-    );
-    return this.submitPlacementAttempt(attempt, this.releasePlacementHold);
+  async submitHoldRelease(operationId) {
+    const attempt = this.resolveAttempt(ENTRY_KIND_RELEASE, operationId, operationId,
+      () => Object.freeze({operationId}));
+    const answer = await this.submitPlacementAttempt(attempt, this.releasePlacementHold);
+    // A release blocked on its entry key is re-driven under a fresh entry (N1).
+    const fresh = redrivenReleaseAttempt(this.ledgerPartitionService?.db, this,
+      attempt, answer, () => this.nextEntryId(ENTRY_KIND_RELEASE, operationId));
+    return fresh === null ? answer :
+      this.submitPlacementAttempt(fresh, this.releasePlacementHold);
   }
 
   async submitCandidateAdmission(candidate, buildStatement) {
@@ -722,6 +724,8 @@ class ReplicaPlacementOwner {
     if (triggers.has(PLACEMENT_TRIGGER.LEADERSHIP_START)) {
       initialCensus = await this.reconcileUnresolvedAttemptsOnLeadershipStart(initialCensus);
     }
+    reconcileReleaseAttempts(this.ledgerPartitionService.db, this.uncertainEntryIds,
+      this.blockedAttempts);
     const census = await this.submitReleaseIfCopyIdle(initialCensus);
     const nowMs = this.now();
     const nodeInput = readPlacementNodeInputs(this.nodeAuthority, nowMs);
@@ -731,7 +735,7 @@ class ReplicaPlacementOwner {
         state: nodeInput.state,
         reason: nodeInput.reason,
         clearingTrigger: PLACEMENT_CLEARING_TRIGGER[nodeInput.reason],
-        admitted: Object.freeze([]), blockedAttempts: this.blockedAttempts.list(),
+        admitted: Object.freeze([]), ...this.blockedAttempts.snapshot(),
       });
       return;
     }
@@ -759,7 +763,7 @@ class ReplicaPlacementOwner {
     });
     this.lastPassSnapshot = Object.freeze({
       state: SERVE_ELIGIBILITY_STATE.READY, admitted: Object.freeze(admitted),
-      blockedAttempts: this.blockedAttempts.list(),
+      ...this.blockedAttempts.snapshot(),
     });
   }
 }

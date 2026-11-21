@@ -1,4 +1,4 @@
-// Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts, createBlockedPlacementAttempts.
+// Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts, reconcileReleaseAttempts, redrivenReleaseAttempt, createBlockedPlacementAttempts.
 // Required collaborators: PartitionService SQLite db (_placement_owner_unresolved_attempts, _partition_statement_outcomes).
 // Durable authority / commit point: _placement_owner_unresolved_attempts and _partition_statement_outcomes in SQLite.
 // Permitted post-commit work: hydration and cleanup of in-memory uncertainEntryIds on ReplicaPlacementOwner.
@@ -8,19 +8,43 @@ import {readSettledOwnerCommandIn} from '../partition/partition-committed-statem
 import {PARTITION_SETTLED_COMMAND_STATE as SETTLED} from
   '../partition/partition-committed-statement-outcome-constants.js';
 import {placementBodyDigestOf} from '../partition/partition-placement-admission-command.js';
+import {readEngagedLedgerHoldIn} from '../partition/partition-placement-admission-decision.js';
 import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
   '../partition/partition-placement-admission-constants.js';
 
-// The named state of a kept attempt whose entry key already holds another
-// record: its command can never settle there, so it is blocked work, visible
-// in the owner's diagnostic and warned once. Release: the intent changes (a
-// fresh attempt and entry id replaces it) or an operator acts; nothing
-// retires it automatically.
+// The named states of an attempt whose entry key already holds another
+// record (outcome rows are permanent, so its command can never settle there),
+// visible in the owner's diagnostic:
+// - BLOCKED_ON_KEY_COLLISION: kept, warned once. An ADMIT is released when its
+//   intent changes (a fresh attempt and entry id replaces it); it blocks only
+//   its own partition's current intent.
+// - REDRIVEN_UNDER_FRESH_ENTRY: a RELEASE is never left blocked (its intent,
+//   the held operation, never changes, and an engaged ledger hold stops every
+//   pass): the owner re-drives it at once under a fresh entry id minted like
+//   every attempt's (placement-owner:<node>:release:<operationId>:<uuid>).
+//   Release is idempotent by operation identity at apply (HOLD_NOT_HELD once
+//   the hold is lifted), so the fresh entry cannot double-apply. The blocked
+//   record stays listed as history, naming the fresh entry.
 const PLACEMENT_ATTEMPT_STATE = Object.freeze({
   BLOCKED_ON_KEY_COLLISION: 'blocked_on_key_collision',
+  REDRIVEN_UNDER_FRESH_ENTRY: 'redriven_under_fresh_entry',
 });
+// A retirement that is not a settlement of the attempt's own command:
+// - SUPERSEDED_BY_LEDGER: an uncertain RELEASE whose hold the committed
+//   ledger no longer holds engaged (read with its receipt in one transaction
+//   on the leader's store). The release obligation is reached, whoever reached
+//   it; its own command is never counted as applied. Listed once.
+const PLACEMENT_ATTEMPT_RETIREMENT = Object.freeze({
+  SUPERSEDED_BY_LEDGER: 'superseded_by_ledger',
+});
+// The bounded history of re-driven and retired attempts (oldest dropped).
+const PLACEMENT_ATTEMPT_HISTORY_LIMIT = 32;
 const BLOCKED_ATTEMPT_WARNING =
   'Placement attempt blocked: its entry key holds another settled record';
+const REDRIVEN_ATTEMPT_INFO =
+  'Placement release re-driven under a fresh entry: its entry key holds another record';
+const SUPERSEDED_ATTEMPT_INFO =
+  'Placement release attempt retired: its hold is no longer engaged in the committed ledger';
 
 const ENTRY_KIND_ADMIT = 'admit';
 const ENTRY_KIND_RELEASE = 'release';
@@ -93,6 +117,8 @@ function hydrateUnresolvedPlacementAttempts(db, uncertainEntryIds) {
 }
 
 const UNSETTLED_ATTEMPT = Object.freeze({state: SETTLED.UNSETTLED});
+const RELEASE_ATTEMPT_PREFIX = `${ENTRY_KIND_RELEASE}${ATTEMPT_KEY_SEPARATOR}`;
+const isReleaseAttemptKey = (attemptKey) => attemptKey.startsWith(RELEASE_ATTEMPT_PREFIX);
 
 // Exact settlement of an attempt: the outcome owner's identity-checked read,
 // for the attempt's own command (its kind's type and its body, as the
@@ -109,17 +135,26 @@ function attemptSettlementOf(db, attemptKey, attempt) {
     readSettledOwnerCommandIn(db, {entryId: attempt.entryId, commandDigest});
 }
 
+function boundedAppend(history, state) {
+  history.push(state);
+  if (history.length > PLACEMENT_ATTEMPT_HISTORY_LIMIT) history.shift();
+}
+
 /**
  * The owner's registry of blocked attempts: one typed, frozen state per
  * attempt key whose current attempt meets another record under its entry key,
  * warned once per (attempt key, entry id), dropped when the attempt settles
- * or is replaced.
- * @param {Object} logger - The owner's logger (warn).
- * @return {Object} Frozen {observe(attemptKey, attempt, settlement),
- *   forget(attemptKey), list()}.
+ * or is replaced; and the bounded history of re-driven and retired attempts.
+ * @param {Object} logger - The owner's logger (warn, info).
+ * @return {Object} Frozen {observe, redrive, supersede, forget, list(),
+ *   superseded(), snapshot()}.
  */
 function createBlockedPlacementAttempts(logger) {
   const blocked = new Map();
+  const redriven = [];
+  const superseded = [];
+  const list = () => Object.freeze([...blocked.values(), ...redriven]);
+  const supersededList = () => Object.freeze([...superseded]);
   return Object.freeze({
     observe(attemptKey, attempt, settlement) {
       if (settlement.state !== SETTLED.OTHER_RECORD) {
@@ -133,12 +168,28 @@ function createBlockedPlacementAttempts(logger) {
       logger.warn(BLOCKED_ATTEMPT_WARNING, {attemptKey, entryId: attempt.entryId,
         recordClass: settlement.recordClass});
     },
+    redrive(attempt, collision, redrivenEntryId) {
+      const {attemptKey, entryId} = attempt;
+      blocked.delete(attemptKey);
+      boundedAppend(redriven, Object.freeze({
+        state: PLACEMENT_ATTEMPT_STATE.REDRIVEN_UNDER_FRESH_ENTRY, attemptKey, entryId,
+        recordClass: collision.recordClass, redrivenEntryId}));
+      logger.info(REDRIVEN_ATTEMPT_INFO, {attemptKey, entryId, redrivenEntryId});
+    },
+    supersede(attempt, operationId) {
+      const {attemptKey, entryId} = attempt;
+      blocked.delete(attemptKey);
+      boundedAppend(superseded, Object.freeze({
+        state: PLACEMENT_ATTEMPT_RETIREMENT.SUPERSEDED_BY_LEDGER, attemptKey, entryId,
+        operationId}));
+      logger.info(SUPERSEDED_ATTEMPT_INFO, {attemptKey, entryId, operationId});
+    },
     forget(attemptKey) {
       blocked.delete(attemptKey);
     },
-    list() {
-      return Object.freeze([...blocked.values()]);
-    },
+    list,
+    superseded: supersededList,
+    snapshot: () => ({blockedAttempts: list(), supersededAttempts: supersededList()}),
   });
 }
 
@@ -170,32 +221,102 @@ function observePlacementAttemptAnswer(db, blockedAttempts, attempt, answer) {
 }
 
 /**
+ * The re-drive of a RELEASE blocked on its entry key: when the answer is the
+ * BYTES collision and the entry key holds another record, a fresh attempt
+ * under a fresh entry id, persisted before it is submitted, with the blocked
+ * record moved to the history.
+ * @param {Object} db - The ledger partition's connection.
+ * @param {Object} owned - {uncertainEntryIds, blockedAttempts}.
+ * @param {Object} attempt - The submitted RELEASE attempt.
+ * @param {Object} answer - Its answer.
+ * @param {Function} mintEntryId - The owner's entry-id mint.
+ * @return {Object|null} The fresh attempt, or null when not blocked.
+ */
+function redrivenReleaseAttempt(db, owned, attempt, answer, mintEntryId) {
+  if (answer?.failureCode !== PLACEMENT_ADMISSION_ERROR.BYTES) return null;
+  const collision = attemptSettlementOf(db, attempt.attemptKey, attempt);
+  if (collision.state !== SETTLED.OTHER_RECORD) return null;
+  const fresh = Object.freeze({...attempt, entryId: mintEntryId()});
+  owned.uncertainEntryIds.set(fresh.attemptKey, fresh);
+  persistUnresolvedPlacementAttempt(db, fresh);
+  owned.blockedAttempts.redrive(attempt, collision, fresh.entryId);
+  return fresh;
+}
+
+function releaseOperationIdOf(attemptKey, attempt) {
+  return isReleaseAttemptKey(attemptKey) && typeof attempt.body?.operationId === 'string' ?
+    attempt.body.operationId : null;
+}
+
+// One read transaction on the leader's store: the attempt's exact receipt
+// and, for a RELEASE that it does not settle, whether its hold is engaged.
+function attemptDecisionIn(db, attemptKey, attempt) {
+  return db.transaction(() => {
+    const settlement = attemptSettlementOf(db, attemptKey, attempt);
+    const operationId = releaseOperationIdOf(attemptKey, attempt);
+    const superseded = settlement.state !== SETTLED.SAME_COMMAND && operationId !== null &&
+      !readEngagedLedgerHoldIn(db, operationId);
+    return {settlement, superseded, operationId};
+  })();
+}
+
+function reconcileAttempts(db, uncertainEntryIds, blockedAttempts, attemptKeys) {
+  for (const attemptKey of attemptKeys) {
+    const attempt = uncertainEntryIds.get(attemptKey);
+    const decision = attemptDecisionIn(db, attemptKey, attempt);
+    const settled = decision.settlement.state === SETTLED.SAME_COMMAND;
+    if (settled || decision.superseded) {
+      uncertainEntryIds.delete(attemptKey);
+      deleteUnresolvedPlacementAttempt(db, attemptKey);
+    }
+    if (decision.superseded) {
+      blockedAttempts.supersede(attempt, decision.operationId);
+    } else if (settled) {
+      blockedAttempts.forget(attemptKey);
+    } else {
+      blockedAttempts.observe(attemptKey, attempt, decision.settlement);
+    }
+  }
+}
+
+/**
  * Reconcile the durable unresolved attempts on leadership start: an attempt
- * is discharged only by its exact outcome record; one whose entry key holds
+ * is discharged by its exact outcome record; an uncertain RELEASE whose hold
+ * is no longer engaged retires SUPERSEDED_BY_LEDGER; one whose entry key holds
  * another record is kept and made visible as blocked work.
  * @param {Object} db - The ledger partition's connection.
  * @param {Map} uncertainEntryIds - The owner's in-memory attempts.
  * @param {Object} blockedAttempts - createBlockedPlacementAttempts().
  */
 function reconcilePlacementAttempts(db, uncertainEntryIds, blockedAttempts) {
+  if (!canUseAttemptStore(db)) return;
   hydrateUnresolvedPlacementAttempts(db, uncertainEntryIds);
-  for (const [attemptKey, attempt] of [...uncertainEntryIds.entries()]) {
-    const settlement = attemptSettlementOf(db, attemptKey, attempt);
-    if (settlement.state === SETTLED.SAME_COMMAND) {
-      uncertainEntryIds.delete(attemptKey);
-      deleteUnresolvedPlacementAttempt(db, attemptKey);
-      blockedAttempts.forget(attemptKey);
-    } else {
-      blockedAttempts.observe(attemptKey, attempt, settlement);
-    }
-  }
+  reconcileAttempts(db, uncertainEntryIds, blockedAttempts, [...uncertainEntryIds.keys()]);
+}
+
+/**
+ * The same reconciliation for the uncertain RELEASE attempts only, on every
+ * pass: a release is re-driven only while its hold is engaged, so one whose
+ * hold was lifted (by its own late commit or by another leader) is resolved
+ * here instead of being kept unseen.
+ * @param {Object} db - The ledger partition's connection.
+ * @param {Map} uncertainEntryIds - The owner's in-memory attempts.
+ * @param {Object} blockedAttempts - createBlockedPlacementAttempts().
+ */
+function reconcileReleaseAttempts(db, uncertainEntryIds, blockedAttempts) {
+  if (!canUseAttemptStore(db)) return;
+  reconcileAttempts(db, uncertainEntryIds, blockedAttempts,
+    [...uncertainEntryIds.keys()].filter(isReleaseAttemptKey));
 }
 
 export {
+  PLACEMENT_ATTEMPT_RETIREMENT,
   PLACEMENT_ATTEMPT_STATE,
   createBlockedPlacementAttempts,
   deleteUnresolvedPlacementAttempt,
   observePlacementAttemptAnswer,
   persistUnresolvedPlacementAttempt,
   reconcilePlacementAttempts,
+  reconcileReleaseAttempts,
+  redrivenReleaseAttempt,
 };

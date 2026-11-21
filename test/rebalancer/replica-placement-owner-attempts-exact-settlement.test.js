@@ -6,11 +6,26 @@
 // placement command, or of another command type under the same entry key is a
 // near miss and settles nothing: the attempt stays durable and unresolved.
 //
+// A RELEASE attempt is also read against the committed ledger's hold, in the
+// same read transaction: one whose hold is no longer engaged retires as
+// SUPERSEDED_BY_LEDGER (the obligation is reached), never as a settlement of
+// its own command.
+//
 // REAL: the outcome owner's table and recorder, the placement command's
-// canonical identity, the attempt store. No services (no census rows).
+// canonical identity, the attempt store, the canonical replica_operations
+// table and the decision owner's hold read. Ledger rows are planted.
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import {test} from 'node:test';
+import {REPLICA_OPERATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
+import {UNIFIED_SERVICE_TYPE} from '../../src/constants/unified-service-lifecycle.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {OPERATION_METADATA_KEY, OperationType, WORKFLOW_STEP_TO_STATUS} from
+  '../../src/rebalancer/replica-operation-progress.js';
+import {PLACEMENT_DISPATCH_HOLD} from
+  '../../src/rebalancer/replica-placement-owner-constants.js';
 import {createCommittedStatementOutcomeTable, recordCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {committedCommandDigest} from
@@ -21,8 +36,9 @@ import {placementBodyDigestOf} from
   '../../src/partition/partition-placement-admission-command.js';
 import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
   '../../src/partition/partition-placement-admission-constants.js';
-import {PLACEMENT_ATTEMPT_STATE, createBlockedPlacementAttempts,
-  persistUnresolvedPlacementAttempt, reconcilePlacementAttempts} from
+import {PLACEMENT_ATTEMPT_RETIREMENT, PLACEMENT_ATTEMPT_STATE,
+  createBlockedPlacementAttempts, persistUnresolvedPlacementAttempt,
+  reconcilePlacementAttempts} from
   '../../src/rebalancer/replica-placement-owner-attempts.js';
 import {PARTITION_COMMITTED_RECORD_CLASS as RECORD_CLASS} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
@@ -30,11 +46,34 @@ import {NODE, placementStatement} from '../partition/placement-admission-fixture
 
 const ATTEMPTS_SQL = 'SELECT attempt_key FROM _placement_owner_unresolved_attempts ' +
   'ORDER BY attempt_key';
-const SILENT_LOGGER = Object.freeze({warn() {}});
+const SILENT_LOGGER = Object.freeze({warn() {}, info() {}});
+const LEDGER = 'replica_operations-p1';
+const PLANT_ROW_SQL = 'INSERT INTO replica_operations (operation_id, type, partition_id, ' +
+  'entity_type, entity_id, source_node_id, target_node_id, status, workflow_step, ' +
+  'created_at, updated_at, steps_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 const blockedOf = (blocked) => Object.fromEntries(blocked.list().map((state) =>
   [state.attemptKey, `${state.state}:${state.recordClass}`]));
 const blockedAs = (recordClass) =>
   `${PLACEMENT_ATTEMPT_STATE.BLOCKED_ON_KEY_COLLISION}:${recordClass}`;
+
+// The ledger store an attempt is reconciled in: the outcome table and the
+// canonical replica_operations table.
+function ledgerStore() {
+  const db = new Database(':memory:');
+  createCommittedStatementOutcomeTable(db);
+  db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+  return db;
+}
+
+// A pending ledger move; `held` engages its dispatch hold.
+function plantLedgerMove(db, operationId, {held}) {
+  const first = held ? {[OPERATION_METADATA_KEY.DISPATCH_HOLD]:
+    PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE} : {};
+  db.prepare(PLANT_ROW_SQL).run(operationId, OperationType.ADD, LEDGER,
+    UNIFIED_SERVICE_TYPE.PARTITION, LEDGER, 'n1', 'n3',
+    WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.PENDING], WORKFLOW_STEP.PENDING, 1, 1,
+    JSON.stringify([first]));
+}
 
 function attemptOf(attemptKey, entryId, body) {
   return {attemptKey, intentKey: attemptKey, entryId, body, bodyText: JSON.stringify(body)};
@@ -51,9 +90,10 @@ function ownerRecordAt(db, entryId, index, commandDigest) {
 }
 
 test('an unresolved attempt is discharged only by the record of its exact command', () => {
-  const db = new Database(':memory:');
+  const db = ledgerStore();
   try {
-    createCommittedStatementOutcomeTable(db);
+    // The near-miss release's hold is still engaged: it is kept and blocked.
+    plantLedgerMove(db, 'pl-tables-p1-3-0', {held: true});
     const admitBody = placementStatement({partitionId: 'tables-p1', target: NODE.B});
     const otherBody = placementStatement({partitionId: 'tables-p1', target: NODE.C});
     const releaseBody = Object.freeze({operationId: 'pl-tables-p1-3-0'});
@@ -101,10 +141,10 @@ test('an unresolved attempt is discharged only by the record of its exact comman
 // therefore never a settlement of an attempt; only the attempt's exact
 // outcome record is.
 test('the ledger census never discharges an attempt: a row under its entry id from ' +
-  'another command, or a released hold, is not its exact record', () => {
-  const db = new Database(':memory:');
+  'another command is not its exact record', () => {
+  const db = ledgerStore();
   try {
-    createCommittedStatementOutcomeTable(db);
+    plantLedgerMove(db, 'pl-tables-p1-3-0', {held: true});
     const admitBody = placementStatement({partitionId: 'tables-p1', target: NODE.B});
     const otherBody = placementStatement({partitionId: 'tables-p1', target: NODE.C});
     const releaseBody = Object.freeze({operationId: 'pl-tables-p1-3-0'});
@@ -116,8 +156,9 @@ test('the ledger census never discharges an attempt: a row under its entry id fr
     // its ledger row names that entry id; the release attempt never settled.
     ownerRecordAt(db, 'e-census-admit', 1,
       placementBodyDigestOf(PLACEMENT_ADMIT_TYPE, otherBody));
-    // The ledger census (a row naming 'e-census-admit', the release's hold no
-    // longer engaged) is no input to settlement at all: only the exact record.
+    // The ledger census (a row naming 'e-census-admit') is no input to
+    // settlement at all: only the exact record. The release's hold is engaged,
+    // so the unsettled release is kept.
     const uncertain = new Map();
     const blocked = createBlockedPlacementAttempts(SILENT_LOGGER);
     reconcilePlacementAttempts(db, uncertain, blocked);
@@ -128,6 +169,38 @@ test('the ledger census never discharges an attempt: a row under its entry id fr
     assert.deepEqual(blockedOf(blocked),
       {'admit:tables-p1': blockedAs(RECORD_CLASS.OWNER_COMMAND)},
       'the colliding admit is blocked work; the unsettled release is not');
+  } finally {
+    db.close();
+  }
+});
+
+// F4 residue: the release obligation is reached when the committed ledger no
+// longer holds the hold engaged (lifted by another leader's release, or the
+// move no longer incomplete). That is a retirement of the obligation, named
+// SUPERSEDED_BY_LEDGER, and never a settlement of the attempt's own command.
+test('an uncertain release whose hold is no longer engaged retires as superseded by ' +
+  'ledger state; one whose hold is engaged is kept', () => {
+  const db = ledgerStore();
+  try {
+    plantLedgerMove(db, 'pl-lifted-1-0', {held: false});
+    plantLedgerMove(db, 'pl-held-2-0', {held: true});
+    const lifted = Object.freeze({operationId: 'pl-lifted-1-0'});
+    const held = Object.freeze({operationId: 'pl-held-2-0'});
+    persistUnresolvedPlacementAttempt(db, attemptOf('release:pl-lifted-1-0', 'e-lifted', lifted));
+    persistUnresolvedPlacementAttempt(db, attemptOf('release:pl-held-2-0', 'e-held', held));
+    const uncertain = new Map();
+    const blocked = createBlockedPlacementAttempts(SILENT_LOGGER);
+    reconcilePlacementAttempts(db, uncertain, blocked);
+    assert.deepEqual([...uncertain.keys()], ['release:pl-held-2-0']);
+    assert.deepEqual(db.prepare(ATTEMPTS_SQL).all().map(({attempt_key: key}) => key),
+      ['release:pl-held-2-0']);
+    assert.deepEqual(blocked.superseded(), [{
+      state: PLACEMENT_ATTEMPT_RETIREMENT.SUPERSEDED_BY_LEDGER,
+      attemptKey: 'release:pl-lifted-1-0', entryId: 'e-lifted', operationId: 'pl-lifted-1-0',
+    }], 'retired as its own named outcome');
+    assert.deepEqual(blocked.list(), [], 'neither is blocked work');
+    reconcilePlacementAttempts(db, uncertain, blocked);
+    assert.equal(blocked.superseded().length, 1, 'listed once');
   } finally {
     db.close();
   }
