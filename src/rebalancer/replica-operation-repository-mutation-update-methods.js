@@ -628,7 +628,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           });
         }
         try {
-          const reinserted = await this.persistNewOperationUnlocked(operation);
+          const reinserted = await this.repairRetainedOperation(operation);
           if (reinserted) {
             this.syncIncompleteOperationObservation(operation);
             return buildOperationUpdateOutcome({

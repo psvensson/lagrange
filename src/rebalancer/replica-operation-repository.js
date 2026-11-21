@@ -1,3 +1,5 @@
+import {assignRetainedPlacementRepairMethods} from
+  './replica-operation-repository-retained-placement-repair.js';
 /**
  * ReplicaOperationRepository — SQL/cache reads and writes, row <-> operation
  * translation for replica_operations.
@@ -498,6 +500,10 @@ class ReplicaOperationRepository {
     this.nodeId = options.nodeId;
     // Bound by the node composition owner, never read from an operation command.
     this.membershipOwnerBootIncarnation = options.membershipOwnerBootIncarnation ?? null;
+    this.repairRetainedPlacement = options.repairRetainedPlacement;
+    this.prepareRetainedPlacementRepair = options.prepareRetainedPlacementRepair;
+    this.retainedPlacementRepairs = new Map();
+    this.retainedPlacementRepairWakes = new Map();
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
     this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
@@ -542,6 +548,7 @@ class ReplicaOperationRepository {
    * timer indefinitely and keeps the event loop alive after teardown.
    */
   markShuttingDown() {
+    this.clearRetainedPlacementRepairCustody();
     this._shuttingDown = true;
   }
   /**
@@ -748,6 +755,8 @@ assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {
   buildDivergenceEvent,
   readAuthoritativeControlPlaneRows,
 });
+
+assignRetainedPlacementRepairMethods(ReplicaOperationRepository);
 
 export {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
