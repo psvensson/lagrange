@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
-import {spawnSync} from 'node:child_process';
+import {execFile, spawnSync} from 'node:child_process';
+import {promisify} from 'node:util';
 import {
   KEY_AFFECTED_WITNESS_FILES,
   auditClassificationDispositions,
@@ -16,6 +17,10 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const EVIDENCE_CLI = 'scripts/quest-evidence/repository-legacy-fallback-closure.js';
+const CHECKER_CLI = 'scripts/checks/check-repository-legacy-fallback-closure.js';
+const HISTORICAL = path.join(ROOT,
+  'solve/quests/repository-legacy-fallback-closure/evidence/receipt.json');
+const runCli = promisify(execFile);
 
 test('missing execution cannot establish affected-owner results', () => {
   assert.equal(KEY_AFFECTED_WITNESS_FILES.every((file) =>
@@ -67,19 +72,49 @@ test('valid classification labels and no searched runtime markers leave semantic
     assert.equal(audit.semanticClosure, 'unverified');
   });
 
-test('normal Q11 evidence CLI refuses current closure and preserves the historical receipt', () => {
-  const historical = path.join(ROOT,
-    'solve/quests/repository-legacy-fallback-closure/evidence/receipt.json');
-  const before = fs.readFileSync(historical);
-  const result = spawnSync(process.execPath, [EVIDENCE_CLI], {cwd: ROOT, encoding: 'utf8'});
-  assert.equal(result.status, 1, result.stderr);
-  const audit = JSON.parse(result.stdout);
-  assert.equal(audit.scope, 'current-closure-diagnostic');
-  assert.equal(audit.sourceCommit, describeCheckout(ROOT).head);
-  assert.equal(audit.ownerExecution.reportApplicable, false);
-  assert.ok(['unresolved', 'unverified'].includes(audit.semanticClosure));
-  if (audit.semanticClosure === 'unresolved') {
-    assert.ok(audit.runtimeMarkers.matches.length > 0);
+test('both Q11 entrypoints replace a stale scratch pass and print the incomplete result',
+  async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'q11-scratch-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    const before = fs.readFileSync(HISTORICAL);
+    const source = describeCheckout(ROOT).head;
+    await Promise.all([EVIDENCE_CLI, CHECKER_CLI].map(async (script, index) => {
+      const output = path.join(directory, `receipt-${index}.json`);
+      fs.writeFileSync(output, '{"status":"pass"}\n');
+      const options = index === 0 ? ['--output', output] : [`--output=${output}`];
+      await assert.rejects(runCli(process.execPath, [script, ...options], {cwd: ROOT}),
+        (result) => {
+          assert.equal(result.code, 1, result.stderr);
+          const audit = JSON.parse(result.stdout);
+          assert.equal(audit.scope, 'current-closure-diagnostic');
+          assert.equal(audit.sourceCommit, source);
+          assert.equal(audit.ownerExecution.reportApplicable, false);
+          assert.ok(['unresolved', 'unverified'].includes(audit.semanticClosure));
+          assert.equal(fs.readFileSync(output, 'utf8'), result.stdout);
+          return true;
+        });
+    }));
+    assert.deepEqual(fs.readFileSync(HISTORICAL), before);
+  });
+
+test('Q11 refuses historical output aliases and keeps verification read-only', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'q11-protected-'));
+  t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+  const before = fs.readFileSync(HISTORICAL);
+  const fileAlias = path.join(directory, 'file-link.json');
+  const directoryAlias = path.join(directory, 'evidence-link');
+  fs.symlinkSync(HISTORICAL, fileAlias);
+  fs.symlinkSync(path.dirname(HISTORICAL), directoryAlias, 'dir');
+  for (const output of [HISTORICAL, fileAlias, path.join(directoryAlias, 'receipt.json')]) {
+    const run = spawnSync(process.execPath, [EVIDENCE_CLI, '--output', output],
+      {cwd: ROOT, encoding: 'utf8'});
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /Cannot write diagnostics to the sealed historical receipt/u);
   }
-  assert.deepEqual(fs.readFileSync(historical), before);
+  const verification = spawnSync(process.execPath, [EVIDENCE_CLI, '--check-verification'],
+    {cwd: ROOT, encoding: 'utf8'});
+  const historicalVerification = JSON.parse(verification.stdout);
+  assert.equal(typeof historicalVerification.approved, 'boolean');
+  assert.equal(verification.status, historicalVerification.approved ? 0 : 1);
+  assert.deepEqual(fs.readFileSync(HISTORICAL), before);
 });

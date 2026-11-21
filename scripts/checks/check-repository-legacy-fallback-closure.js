@@ -25,6 +25,8 @@ const REPO_ROOT = path.resolve(CURRENT_DIR, '../..');
 const UTF8 = 'utf8';
 const CENSUS_PATH = 'data/fallback-census/census.json';
 const CLASSIFICATION_PATH = 'scripts/checks/code-navigability-fallback-classification.json';
+const HISTORICAL_RECEIPT =
+  'solve/quests/repository-legacy-fallback-closure/evidence/receipt.json';
 const EXPECTED_CENSUS_SCHEMA = 'fallback-census/1';
 const EXPECTED_TOTAL_CENSUS_SITES = 2674;
 const EXPECTED_ACTIVE_SRC_SITES = 2637;
@@ -51,8 +53,13 @@ const EXECUTION_REPORT_LIMIT =
 const CLOSURE_LIMITS =
   'Census and source markers do not prove semantic classification or caller closure.';
 const REPORT_OPTION = 'execution-report';
+const OUTPUT_OPTION = 'output';
 const STRING_OPTION = 'string';
 const DIAGNOSTIC_SCOPE = 'current-closure-diagnostic';
+const SCRATCH_PATH_REQUIRED = '--output requires a scratch path';
+const SEALED_OUTPUT_REFUSED = 'Cannot write diagnostics to the sealed historical receipt';
+const TEMPORARY_OUTPUT_PREFIX = '.q11-diagnostic-';
+const TEMPORARY_OUTPUT_FILE = 'output';
 
 const FALLBACK_ROWS = objectFreeze([
   'two_source_fallback_reads',
@@ -397,11 +404,52 @@ function auditCurrentClosure(root = REPO_ROOT, report = null) {
   };
 }
 
+function scratchOutputPath(value) {
+  if (value.length === ZERO_COUNT) throw new Error(SCRATCH_PATH_REQUIRED);
+  const requested = path.resolve(value);
+  const historical = path.join(REPO_ROOT, HISTORICAL_RECEIPT);
+  const historicalStat = fs.statSync(historical, {throwIfNoEntry: false});
+  const requestedStat = fs.statSync(requested, {throwIfNoEntry: false});
+  const sameInode = historicalStat && requestedStat &&
+    historicalStat.dev === requestedStat.dev && historicalStat.ino === requestedStat.ino;
+  if (requested === historical || sameInode) throw new Error(SEALED_OUTPUT_REFUSED);
+  if (requestedStat) return fs.realpathSync(requested);
+  const directory = path.dirname(requested);
+  fs.mkdirSync(directory, {recursive: true});
+  const resolved = path.join(fs.realpathSync(directory), path.basename(requested));
+  if (resolved === historical) throw new Error(SEALED_OUTPUT_REFUSED);
+  return resolved;
+}
+
+function writeScratchOutput(output, contents) {
+  const temporary = fs.mkdtempSync(path.join(path.dirname(output), TEMPORARY_OUTPUT_PREFIX));
+  try {
+    const file = path.join(temporary, TEMPORARY_OUTPUT_FILE);
+    fs.writeFileSync(file, contents, UTF8);
+    fs.renameSync(file, scratchOutputPath(output));
+  } finally {
+    fs.rmSync(temporary, {recursive: true, force: true});
+  }
+}
+
 function runCurrentClosureCli() {
-  const {values} = parseArgs({options: {[REPORT_OPTION]: {type: STRING_OPTION}}});
+  const {values} = parseArgs({options: {
+    [REPORT_OPTION]: {type: STRING_OPTION},
+    [OUTPUT_OPTION]: {type: STRING_OPTION},
+  }});
   const reportPath = values[REPORT_OPTION];
-  const audit = auditCurrentClosure(REPO_ROOT, reportPath ? readExecutionReport(reportPath) : null);
-  process.stdout.write(`${JSON.stringify(audit, null, 2)}\n`);
+  const output = values[OUTPUT_OPTION] === undefined ? null :
+    scratchOutputPath(values[OUTPUT_OPTION]);
+  let audit;
+  try {
+    audit = auditCurrentClosure(REPO_ROOT, reportPath ? readExecutionReport(reportPath) : null);
+  } catch (error) {
+    audit = {scope: DIAGNOSTIC_SCOPE, semanticClosure: SEMANTIC_CLOSURE.UNVERIFIED,
+      error: error.message};
+  }
+  const contents = `${JSON.stringify(audit, null, 2)}\n`;
+  if (output !== null) writeScratchOutput(output, contents);
+  process.stdout.write(contents);
   // Every result here is deliberately partial. The current owning Quest
   // must admit semantic caller evidence before issuing an acceptance receipt.
   process.exitCode = EXIT_CODE_CLOSURE_INCOMPLETE;

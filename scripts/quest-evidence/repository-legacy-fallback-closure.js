@@ -7,7 +7,6 @@ const QUEST_ID = 'repository-legacy-fallback-closure';
 if (process.argv.includes(CHECK_VERIFICATION_FLAG)) {
   exitWithQuestVerification(QUEST_ID);
 } else {
-  // The sealed receipt remains historical. This command reports current evidence
-  // on stdout, so an incomplete run cannot overwrite the original receipt.
+  // The checker owns current diagnostics on stdout and at an explicit scratch path.
   runCurrentClosureCli();
 }
