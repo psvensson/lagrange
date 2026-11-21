@@ -1,6 +1,9 @@
 // Real file-backed ledger and committed apply/CDC/outcome path. Consensus
 // transport is controlled; callers can compose this with a real user group.
 import assert from 'node:assert/strict';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {isTerminalStep, WORKFLOW_STEP_TO_STATUS, ReplicaStatus} from
+  '../../src/rebalancer/replica-operation-progress.js';
 import fs from 'node:fs';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -101,4 +104,21 @@ function attachCurrentCopyOwner(world) {
 }
 
 
-export {withRepairLedger, attachCurrentCopyOwner};
+async function stepRetainedLedgerRow(world, operationId, step) {
+  const raw = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+    .get(operationId);
+  assert.ok(raw, 'the actual committed blocker exists before transition');
+  const operation = world.coordinator.repository.rowToOperation(raw);
+  const now = Math.max(Date.now(), operation.updatedAt + 1);
+  const terminal = isTerminalStep(operation.type, step);
+  const next = {...operation, workflowStep: step, status: step === WORKFLOW_STEP.FAILED ?
+    ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[step],
+  updatedAt: now, completedAt: terminal ? now : null,
+  stepsHistory: [...operation.stepsHistory, {step, timestamp: now}]};
+  const answer = await world.coordinator.repository.persistOperationUpdate(next,
+    {expectedWorkflowStep: operation.workflowStep, expectedStepsHistory: operation.stepsHistory});
+  assert.equal(answer.persisted, true, 'normal guarded mutation commits the complete transition tuple');
+  return world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(operationId);
+}
+
+export {withRepairLedger, attachCurrentCopyOwner, stepRetainedLedgerRow};
