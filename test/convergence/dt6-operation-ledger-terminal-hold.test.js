@@ -329,8 +329,17 @@ t.test(
       const staleOperation = await coordinator.queryOperationById(
         selfMove.operationId,
       );
+      const expectedPreimage = {
+        operation_id: selfMove.operationId,
+        workflow_step: staleOperation.workflowStep,
+        updated_at: staleOperation.updatedAt,
+        steps_history: JSON.stringify(staleOperation.stepsHistory),
+        completed_at: null,
+      };
       await owner.reconcileTimeoutOperation(staleOperation, timeSource.now());
 
+      t.match(attempts[0]?.whereClause, expectedPreimage,
+        'the original guarded write carries the unmodified elapsed preimage');
       t.same(attempts.map(({changes}) => changes), [0],
         'the reaper reaches the actual guarded write and SQLite refuses it');
       const rowAfterRefusal = trackedOperations.get(selfMove.operationId);
@@ -380,7 +389,9 @@ t.test(
 
       t.same(attempts.map(({changes}) => changes), [0, 1],
         'the repair commits one change through the same mutation ingress');
-      t.same(attempts[0].whereClause, attempts[1].whereClause,
+      t.match(attempts[1]?.whereClause, expectedPreimage,
+        'the repaired write still guards completion and the original elapsed state');
+      t.same(attempts[0]?.whereClause, attempts[1]?.whereClause,
         'repair submits the original exact terminal preimage');
       const rowAfterRepair = trackedOperations.get(selfMove.operationId);
       t.equal(

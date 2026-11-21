@@ -28,7 +28,7 @@ documentClass: generated
 - [cdc-integration-service-authoritative-read-flow.js](cdc-integration-service-authoritative-read-flow.js) - No leading comment; first export: buildOwnerRpcSqlFallbackQueryOptions. (importers: few)
 - [cdc-integration-service-cache-divergence.js](cdc-integration-service-cache-divergence.js) - Compare one cached field against an expected post-write value. (importers: few)
 - [cdc-integration-service-cache-visibility-authority.js](cdc-integration-service-cache-visibility-authority.js) - No leading comment; first export: CACHE_REPAIR_READ_AUTHORITY. (importers: few)
-- [cdc-integration-service-cache-visibility-wait.js](cdc-integration-service-cache-visibility-wait.js) - Post-write cache visibility methods for the CDC integration service. (importers: few)
+- [cdc-integration-service-cache-visibility-wait.js](cdc-integration-service-cache-visibility-wait.js) - Post-write cache visibility methods for the CDC integration service. (importers: many)
 - [cdc-integration-service-cdc-event-delegates.js](cdc-integration-service-cdc-event-delegates.js) - Subsystem-reference setters and CDC event-dispatch methods for the CDC integration service. (importers: one)
 - [cdc-integration-service-coalesced-mutation.js](cdc-integration-service-coalesced-mutation.js) - Emit CDC error event only when listeners are registered. (importers: one)
 - [cdc-integration-service-fallback-diagnostics.js](cdc-integration-service-fallback-diagnostics.js) - Remove authoritative fallback samples that are older than the active window. (importers: one)
