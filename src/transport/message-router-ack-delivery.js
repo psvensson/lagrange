@@ -1,4 +1,4 @@
-import {recordServicesQueryTrace, traceOutboundServicesQuery} from
+import {QUERY_TRACE_STAGE as STAGE, recordServicesQueryTrace, traceOutboundServicesQuery} from
   '../diagnostics/services-query-delivery-trace.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
@@ -85,7 +85,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
     }
     const ws = connection?.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      observe?.('service_socket_not_open');
+      observe?.(STAGE.SERVICE_SOCKET_NOT_OPEN);
       rejectBeforeSend(router, connection, targetNodeId, reject);
       return;
     }
@@ -118,7 +118,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       if (router.pendingMessages.get(messageId) === pending) {
         router.pendingMessages.delete(messageId);
       }
-      observe?.('ack_wait_retired', {
+      observe?.(STAGE.ACK_WAIT_CLOSED, {
         accepted: settle === resolve,
         observedAtMs: clock.now(),
         sentAtMs: pending.sentAt,
@@ -164,7 +164,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       bytes = encoded.stamp();
       assertDeliveryOpen(options);
     } catch (error) {
-      observe?.('service_pre_handoff_refused');
+      observe?.(STAGE.SERVICE_PRE_HANDOFF_REFUSED);
       finish(reject, error);
       return;
     }
@@ -173,11 +173,13 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       writeStarted = true;
       ws.send(bytes, {binary: false}, (error) => {
         if (finishWrite(error) && error) pending.reject(error);
-        observe?.('service_write_callback', {failed: Boolean(error), observedAtMs: clock.now()});
+        observe?.(STAGE.SERVICE_WRITE_CALLBACK, {
+          failed: Boolean(error), observedAtMs: clock.now(),
+        });
       });
-      observe?.('service_socket_handoff', {handoffAtMs});
+      observe?.(STAGE.SERVICE_SOCKET_HANDOFF, {handoffAtMs});
     } catch (_sendError) {
-      observe?.('service_write_threw', {handoffAtMs});
+      observe?.(STAGE.SERVICE_WRITE_THREW, {handoffAtMs});
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close
       // owner may induce the actual callback; until then cleanup stays owed.

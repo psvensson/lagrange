@@ -33,7 +33,9 @@ const SQL = 'SELECT field_trace_secret FROM services';
 function capture(owner, records) {
   owner.logger = {
     ...owner.logger,
-    logConsoleOnly: (_level, _message, record) => records.push(record),
+    logConsoleOnly: (_level, _message, record) => {
+      if (record.event === 'services_query_delivery_trace') records.push(record);
+    },
   };
 }
 
@@ -55,6 +57,7 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   target.router.register(ADDRESS, () => ({success: true, rows: []}));
   await fixture.connect(sender, target);
   const systemCache = createMockSystemCache([PARTITION]);
+  systemCache.services[0].service_id = `${PARTITION}-r1`;
   systemCache.services[0].address = ADDRESS;
   const executor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
@@ -70,6 +73,11 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
     !enabled || records.some((entry) => entry.stage === 'response_write_callback'),
   'receiver write callback');
   const positive = records.splice(0);
+  const write = await sender.router.deliver(ADDRESS, {
+    type: QUERY_MESSAGE_TYPE.QUERY, sql: 'UPDATE services SET field_trace_secret = 1',
+  });
+  t.equal(write.transport.acknowledged, true, 'the ordinary write still reached the sink');
+  t.same(records, [], 'a write to the same partition does not consume trace budget');
 
   // Keep dispatch and response real. Delay the seed ACK at the socket handoff
   // until the sender's original grant has retired.

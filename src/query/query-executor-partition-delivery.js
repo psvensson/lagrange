@@ -98,15 +98,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     this.throwIfCancelled(cancellationToken);
     // Every failure a delivery ends with: an unresolved write's is its typed
     // unknown outcome (createUnknownOutcomeRedelivery).
-    const buildFailureResult = (errorMessage, details = {}) => {
-      traceQuery?.observe('query_failed');
-      return unknownOutcome.finish(buildPartitionExecutionFailureResult({
+    const buildFailureResult = (errorMessage, details = {}) =>
+      traceQuery.fail(unknownOutcome.finish(buildPartitionExecutionFailureResult({
         partitionId,
         failedTable,
         errorMessage,
         details,
-      }), this.logger);
-    };
+      }), this.logger));
     let candidateDeliveryAttempted = false;
     const buildPreSubmissionRouteFailureResult = (
       errorMessage,
@@ -391,12 +389,11 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           if (attemptRouterDeliveryOptions === null) {
             return buildDeadlineSpentFailureResult();
           }
-          traceQuery?.bind(request);
           deliverySubmitted = true;
           unknownOutcome.recordDelivery();
           const delivery = await this.messageRouter.deliver(
             address,
-            request,
+            traceQuery.bind(request),
             attemptRouterDeliveryOptions,
           );
           unknownOutcome.observeTransport(deliveryTransportOf(delivery));
@@ -413,14 +410,12 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               address,
               forRead,
             );
-            const result = buildSuccessResult(deliveryAnswerOf(delivery), {
+            return traceQuery.finish(buildSuccessResult(deliveryAnswerOf(delivery), {
               partitionId,
               address,
               request,
               executionOptions,
-            });
-            traceQuery?.observe(result?.success === false ? 'query_failed' : 'query_succeeded');
-            return result;
+            }));
           }
 
           // Handle leader redirect response - immediately retry with provided address
@@ -443,19 +438,17 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             }
             deliverySubmitted = true;
             unknownOutcome.recordDelivery();
-            const redirectRequest = buildRequest({
-              partitionId,
-              address: response.leaderAddress,
-              redirectedFromAddress: address,
-              leaderAddress: response.leaderAddress,
-              sql,
-              params,
-              executionOptions,
-            });
-            traceQuery?.bind(redirectRequest);
             const redirectDelivery = await this.messageRouter.deliver(
               response.leaderAddress,
-              redirectRequest,
+              traceQuery.bind(buildRequest({
+                partitionId,
+                address: response.leaderAddress,
+                redirectedFromAddress: address,
+                leaderAddress: response.leaderAddress,
+                sql,
+                params,
+                executionOptions,
+              })),
               redirectRouterDeliveryOptions,
             );
             unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
@@ -469,14 +462,12 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 response.leaderAddress,
                 forRead,
               );
-              const result = buildSuccessResult(deliveryAnswerOf(redirectDelivery), {
+              return traceQuery.finish(buildSuccessResult(deliveryAnswerOf(redirectDelivery), {
                 partitionId,
                 address: response.leaderAddress,
                 redirectedFromAddress: address,
                 executionOptions,
-              });
-              traceQuery?.observe(result?.success === false ? 'query_failed' : 'query_succeeded');
-              return result;
+              }));
             }
 
             // Redirect target also failed - continue to next candidate

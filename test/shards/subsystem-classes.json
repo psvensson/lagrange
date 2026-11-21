@@ -22,13 +22,13 @@
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
-    "transport-messaging": 115,
+    "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-5299f43b",
+  "censusSize": 2716,
+  "digest": "fnv1a32-950bc1e1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-28b21870",
+  "observationDigest": "fnv1a32-4759f3c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2645,6 +2645,7 @@
     "test/transport/rpc-timeout-behavior.property.test.js": "transport-messaging",
     "test/transport/service-delivery-lifetime.test.js": "transport-messaging",
     "test/transport/service-response-correlation.property.test.js": "transport-messaging",
+    "test/transport/services-query-delivery-trace.test.js": "transport-messaging",
     "test/transport/transport-outcome-forwarding-hop.test.js": "transport-messaging",
     "test/transport/transport-semantic-outcome.test.js": "transport-messaging",
     "test/transport/uniform-message-routing.property.test.js": "transport-messaging",
@@ -24620,6 +24621,12 @@
     "test/transport/rpc-client.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js"
+      ]
+    },
+    "test/transport/services-query-delivery-trace.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/transport/transport-semantic-outcome.test.js": {

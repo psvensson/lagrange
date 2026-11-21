@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2356,
+    "unit": 2357,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-9da050f4",
+  "censusSize": 2716,
+  "digest": "fnv1a32-9a6a54a0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2626,6 +2626,7 @@
     "test/transport/rpc-timeout-behavior.property.test.js": "unit",
     "test/transport/service-delivery-lifetime.test.js": "unit",
     "test/transport/service-response-correlation.property.test.js": "unit",
+    "test/transport/services-query-delivery-trace.test.js": "unit",
     "test/transport/transport-outcome-forwarding-hop.test.js": "unit",
     "test/transport/transport-semantic-outcome.test.js": "unit",
     "test/transport/uniform-message-routing.property.test.js": "unit",

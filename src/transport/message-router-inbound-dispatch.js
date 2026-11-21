@@ -1,7 +1,8 @@
 import {
+  QUERY_TRACE_STAGE as STAGE,
   getOutboundServicesQueryTrace,
   isServicesQueryTraceOpen,
-  isTracedServicesAddress,
+  isTracedServicesReadFrame,
   recordServicesQueryTrace,
 } from '../diagnostics/services-query-delivery-trace.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
@@ -47,11 +48,7 @@ function doesConnectionBelongToSocket(connection, connectionId, ws) {
 function inboundQueryTrace(router, message, nodeKey, connectionId) {
   const {messageId, payload, targetAddress, sourceNodeId, type} = message;
   if (type === RouterMessageType.SERVICE_MESSAGE) {
-    if (!isTracedServicesAddress(targetAddress) ||
-        !(router.isQueryDataPlaneMessage(payload) ||
-          (payload?.messageId === messageId && router.isQueryDataPlaneMessage(payload.payload)))) {
-      return null;
-    }
+    if (!isTracedServicesReadFrame(router, targetAddress, payload, messageId)) return null;
     return (stage, fields) => recordServicesQueryTrace(router, stage, {
       messageId, targetAddress, sourceNodeId, connectionId,
       activeConnectionId: router.nodeConnections.get(nodeKey)?.connectionId,
@@ -102,7 +99,7 @@ class MessageRouterInboundDispatch {
       const message = JSON.parse(data.toString());
       const trace = isServicesQueryTraceOpen() ?
         inboundQueryTrace(this, message, connectionId, socketConnectionId) : null;
-      trace?.('frame_parsed', {observedAtMs: this.timeSource.now()});
+      trace?.(STAGE.FRAME_PARSED, {observedAtMs: this.timeSource.now()});
       this.recordNodeInboundActivity(connectionId);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
@@ -114,7 +111,7 @@ class MessageRouterInboundDispatch {
         return;
       }
       if (!this.ensureInboundConnectionAuthenticated(connectionId, ws)) {
-        trace?.('frame_auth_refused');
+        trace?.(STAGE.FRAME_AUTH_REFUSED);
         return;
       }
       this.routeAuthenticatedInboundFrame(connectionId, ws, message, trace);
@@ -156,7 +153,7 @@ class MessageRouterInboundDispatch {
       return;
     }
     if (message.type === RouterMessageType.ACK) {
-      trace?.('ack_received', {pending: this.pendingMessages.has(message.messageId),
+      trace?.(STAGE.ACK_RECEIVED, {pending: this.pendingMessages.has(message.messageId),
         acknowledged: message.acknowledged === true, observedAtMs: this.timeSource.now()});
       this.handleAcknowledgment(message);
       return;
@@ -525,7 +522,7 @@ class MessageRouterInboundDispatch {
     }, traceAck);
     const handler = this.handlers.get(targetAddress);
     if (!handler) {
-      trace?.('partition_handler_missing');
+      trace?.(STAGE.PARTITION_HANDLER_MISSING);
       this.emit(TRANSPORT_EVENT.MESSAGE, {
         messageId,
         targetAddress,
@@ -554,7 +551,7 @@ class MessageRouterInboundDispatch {
     Promise.resolve()
       // The local-only second argument is not part of the wire envelope.
       .then(() => {
-        trace?.('partition_dispatch', {hasDeliveryAuthority: delivery !== null});
+        trace?.(STAGE.PARTITION_DISPATCH, {hasDeliveryAuthority: delivery !== null});
         return handler(envelope, delivery);
       })
       .then((result) => {
@@ -600,7 +597,7 @@ class MessageRouterInboundDispatch {
       noHandler,
     });
     this.recordServiceResponseDisposition(disposition);
-    trace?.('response_received', {disposition: disposition.kind, absorbed: disposition.absorbed,
+    trace?.(STAGE.RESPONSE_RECEIVED, {disposition: disposition.kind, absorbed: disposition.absorbed,
       observedAtMs: this.timeSource.now()});
     if (disposition.kind === SERVICE_RESPONSE_DISPOSITION_KIND.SETTLED) {
       return;

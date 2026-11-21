@@ -1,4 +1,4 @@
-import {traceOuterServicesQuery} from
+import {QUERY_TRACE_STAGE as STAGE, traceOuterServicesQuery} from
   '../diagnostics/services-query-delivery-trace.js';
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
@@ -206,7 +206,7 @@ export async function deliver(
       normalizedOutcome.answer,
       {messageId, correlationId},
     );
-    traceQuery?.('outer_outcome', {targetNodeId,
+    traceQuery?.(STAGE.OUTER_OUTCOME, {targetNodeId,
       state: deliveryTransportOf(delivered).deliveryState,
       answered: normalizedOutcome.answer != null});
     recordDeliveryMetric(router, {
@@ -216,7 +216,7 @@ export async function deliver(
     });
     return delivered;
   }, (error, lifetime) => {
-    traceQuery?.('outer_retired', {targetNodeId, timeout: lifetime.ownsTimeout(error)});
+    traceQuery?.(STAGE.OUTER_CLOSED, {targetNodeId, timeout: lifetime.ownsTimeout(error)});
     if (lifetime.ownsShutdown(error)) {
       return buildDeliveryEnvelope({
         messageId, correlationId, acknowledged: false, error: error.message,
@@ -587,15 +587,15 @@ export function sendRaw(router, ws, message, trace) {
     const handoffAtMs = router.timeSource.now();
     try {
       ws.send(JSON.stringify(message), (error) => {
-        trace('write_callback', {failed: Boolean(error)});
+        trace(STAGE.WRITE_CALLBACK, {failed: Boolean(error)});
       });
     } catch (error) {
-      trace('write_threw', {handoffAtMs});
+      trace(STAGE.WRITE_THREW, {handoffAtMs});
       throw error;
     }
-    trace('socket_handoff', {handoffAtMs});
+    trace(STAGE.SOCKET_HANDOFF, {handoffAtMs});
   } else {
-    trace?.('socket_not_open');
+    trace?.(STAGE.SOCKET_NOT_OPEN);
   }
 }
 
