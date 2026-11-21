@@ -181,11 +181,16 @@ function detectCommittedStatementOutcomeFormat(db) {
  * @return {Error} An Error whose `code` is FORMAT_UNSUPPORTED.
  */
 function committedStatementOutcomeFormatError(decision, partitionId = null) {
-  const error = new Error(`${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} of ` +
-    `partition ${partitionId} has columns [${decision.columns.join(COLUMN_LIST_SEPARATOR)}], ` +
-    `not [${PARTITION_COMMITTED_STATEMENT_COLUMNS.join(COLUMN_LIST_SEPARATOR)}]: a store of ` +
-    `another ${FORMAT_UNSUPPORTED_REMEDY}`);
-  error.code = PARTITION_COMMITTED_STATEMENT_ERROR_CODE.FORMAT_UNSUPPORTED;
+  // The message leads with the typed code, so a consumer that keeps only the
+  // message (a diagnostic detail) still names the refusal.
+  const code = PARTITION_COMMITTED_STATEMENT_ERROR_CODE.FORMAT_UNSUPPORTED;
+  const error = new Error(`${code}: ${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} of ` +
+    `partition ${partitionId} is not the owner's definition (it holds columns ` +
+    `[${decision.columns.join(COLUMN_LIST_SEPARATOR)}]; the owner's are ` +
+    `[${PARTITION_COMMITTED_STATEMENT_COLUMNS.join(COLUMN_LIST_SEPARATOR)}] with the ` +
+    `identity CHECK): a store of another ${FORMAT_UNSUPPORTED_REMEDY}`);
+  error.code = code;
+  error.partitionId = partitionId;
   error.columns = decision.columns;
   return error;
 }
