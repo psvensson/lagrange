@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2364,
+    "unit": 2365,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-a26f6ff1",
+  "censusSize": 2724,
+  "digest": "fnv1a32-b0d8e7aa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2381,6 +2381,7 @@
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "unit",
     "test/scripts/fallback-branch-census-launch-coordinators.test.js": "unit",
     "test/scripts/fallback-branch-census.test.js": "unit",
+    "test/scripts/fallback-necessity-trap.test.js": "unit",
     "test/scripts/formation-health.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
     "test/scripts/generate-source-owner-index.test.js": "unit",

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2697,
+    "ordinary": 2698,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-bf527212",
+  "censusSize": 2724,
+  "digest": "fnv1a32-5711b855",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2380,6 +2380,7 @@
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "exclusive",
     "test/scripts/fallback-branch-census-launch-coordinators.test.js": "ordinary",
     "test/scripts/fallback-branch-census.test.js": "ordinary",
+    "test/scripts/fallback-necessity-trap.test.js": "ordinary",
     "test/scripts/formation-health.test.js": "ordinary",
     "test/scripts/gen-solve-commands-index.test.js": "ordinary",
     "test/scripts/generate-source-owner-index.test.js": "ordinary",

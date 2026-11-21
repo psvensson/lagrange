@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 246,
     "storage-raft": 159,
-    "test-infrastructure": 167,
+    "test-infrastructure": 168,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-3a7bd656",
+  "censusSize": 2724,
+  "digest": "fnv1a32-a6473cdf",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4febea32",
+  "observationDigest": "fnv1a32-fc118e75",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2400,6 +2400,7 @@
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "test-infrastructure",
     "test/scripts/fallback-branch-census-launch-coordinators.test.js": "test-infrastructure",
     "test/scripts/fallback-branch-census.test.js": "test-infrastructure",
+    "test/scripts/fallback-necessity-trap.test.js": "test-infrastructure",
     "test/scripts/formation-health.test.js": "test-infrastructure",
     "test/scripts/gen-solve-commands-index.test.js": "test-infrastructure",
     "test/scripts/generate-source-owner-index.test.js": "test-infrastructure",
@@ -22370,6 +22371,17 @@
         "NODE_OPTIONS",
         "NODE_V8_COVERAGE",
         "PATH"
+      ]
+    },
+    "test/scripts/fallback-necessity-trap.test.js": {
+      "files": [
+        "data/fallback-census/census.json",
+        "package.json",
+        "scripts/checks/fallback-necessity-trap-preload.js",
+        "src/raft/raft-rs-turn-answer.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/scripts/formation-health.test.js": {
