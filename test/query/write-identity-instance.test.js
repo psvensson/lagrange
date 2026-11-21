@@ -46,6 +46,7 @@ import {
   createOperation,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  CASE_SENSITIVE_USER_TABLE,
   COUNTER_TABLE,
   JOINER_ID,
   JOIN_WRITE_OPTIONS,
@@ -205,6 +206,50 @@ test('a quoted named SQL write retains its entry until its own participant answe
         assert.equal(conflict.affectedRows, 0);
         assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
           [{node_address: params[0]}], 'conflict DO NOTHING preserves the committed target');
+      });
+  });
+
+test('exact-case user SQL cannot spend the named system write path',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    await withSurface([TABLES.LOGS, CASE_SENSITIVE_USER_TABLE],
+      async ({engine, gateway, deliveries, of}) => {
+        const system = of(TABLES.LOGS);
+        const user = of(CASE_SENSITIVE_USER_TABLE);
+        const userSql = 'UPDATE "Logs" SET n = ? WHERE id = ?';
+        const options = {writeIdentity: 'catalog-identity-control', tableName: TABLES.LOGS};
+        const originalUserValue = 1;
+        const entryId = 'case-collision';
+        const seed = await engine.executeQuery('INSERT INTO "Logs" (id, n) VALUES (?, ?)',
+          [entryId, originalUserValue]);
+        assert.equal(seed.success, true, 'the exact-case user table exists and accepts writes');
+        const mark = deliveries.length;
+
+        const refusal = await gateway.executeQuery(userSql, [2, entryId], options);
+        assert.equal(refusal.success, false, 'the system name cannot authorize a user effect');
+        assert.equal(deliveries.length, mark, 'no participant saw the named user statement');
+        assert.deepEqual(selectRows(user.dbPath, 'SELECT n FROM "Logs"'), [{n: originalUserValue}]);
+
+        const systemInsert = await gateway.executeQuery(
+          'INSERT INTO "global.logs" (log_id, timestamp, level, node_id, message, created_at) ' +
+          'VALUES (?, ?, ?, ?, ?, ?)', [entryId, 1, 'info', NODE_ID, 'new system log', 1], options);
+        assert.equal(systemInsert.success, true, 'the same name can bind its real system owner');
+        assert.equal(systemInsert.partitions[0], system.partitionId);
+        assert.deepEqual(selectRows(system.dbPath, 'SELECT message FROM logs'),
+          [{message: 'new system log'}]);
+
+        const structuredMark = deliveries.length;
+        await assert.rejects(gateway.updateSystemTableRow(CASE_SENSITIVE_USER_TABLE,
+          {log_id: entryId}, {message: 'wrong subject'}, {...options, ...JOIN_WRITE_OPTIONS}),
+        /requires a valid system table name/);
+        assert.equal(deliveries.length, structuredMark, 'structured ingress cannot fold case');
+        assert.deepEqual(selectRows(system.dbPath, 'SELECT message FROM logs'),
+          [{message: 'new system log'}]);
+
+        const userUpdate = await engine.executeQuery(userSql, [2, entryId],
+          {idempotencyKey: 'user-logs-exact-key'});
+        assert.equal(userUpdate.success, true, 'the direct user SQL owner accepts its own key');
+        assert.equal(userUpdate.partitions[0], user.partitionId);
+        assert.deepEqual(selectRows(user.dbPath, 'SELECT n FROM "Logs"'), [{n: 2}]);
       });
   });
 
@@ -544,7 +589,7 @@ for (const [label, pinClock] of [['new timestamps', false],
           table === TABLES.STORAGE_RESERVATIONS && /^\s*INSERT\b/iu.test(sql));
         assert.ok(nextBirth, `the release permits its next attempt (${JSON.stringify(again)})`);
         assert.notEqual(nextBirth.entryId, firstBirth.entryId, 'the released birth ends its key');
-        assert.equal(nextBirth.answer.affectedRows, 0,
+        assert.equal(nextBirth.answer.changes, 0,
           `the native insert saw the terminal row (${JSON.stringify(nextBirth.answer)})`);
         const [row] = selectRows(surface.dbPath, 'SELECT status FROM ' +
           TABLES.STORAGE_RESERVATIONS);
@@ -636,14 +681,14 @@ for (const [label, sql, params] of [
 }
 
 // ---------------------------------------------------------------------------
-// B2: a non-idempotent UPDATE behind the generic retry helper, across a
+// B2: a non-idempotent user UPDATE with the caller's explicit key, across a
 // forced runtime replacement, applies exactly once and is answered with its
 // original count; a cas-from UPDATE keeps one entry across the retry loop.
 
-test('a counter UPDATE behind the generic retry helper across a runtime ' +
+test('a user counter UPDATE under its explicit write key across a runtime ' +
   'replacement applies exactly once, answered with its original count',
 {timeout: TEST_TIMEOUT_MS}, async () => {
-  await withSurface([COUNTER_TABLE], async ({engine, gateway, deliveries,
+  await withSurface([COUNTER_TABLE], async ({engine, deliveries,
     of}) => {
     const surface = of(COUNTER_TABLE);
     await engine.executeQuery(`INSERT INTO ${COUNTER_TABLE} (id, n) ` +
@@ -651,9 +696,9 @@ test('a counter UPDATE behind the generic retry helper across a runtime ' +
     deliveries.length = 0;
     const {result, trap} = await spendOneBudget({engine, surface,
       attempt: () => runRetryableControlPlaneWrite((identity) =>
-        gateway.executeQuery(COUNTER_INCREMENT, [1, 'c', 0],
+        engine.executeQuery(COUNTER_INCREMENT, [1, 'c', 0],
           {...identity}),
-      {timeoutMs: SETTLE_BUDGET_MS, baseDelayMs: 20})});
+      {idempotencyKey: 'user-counter-exact-key', timeoutMs: SETTLE_BUDGET_MS, baseDelayMs: 20})});
     assert.ok(trap.count >= 1, 'setup: the core trapped the UPDATE');
     assert.equal(result?.success, true,
       `the helper ends applied (${JSON.stringify(result?.error ?? null)})`);

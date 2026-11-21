@@ -57,6 +57,7 @@ const TRAP_MESSAGE = 'unreachable';
 const JOINER_ID = 'uo-joiner';
 const USER_TABLE = 'uo_rows';
 const COUNTER_TABLE = 'uo_counters';
+const CASE_SENSITIVE_USER_TABLE = 'Logs';
 const SURFACE_INSERT = `INSERT INTO ${USER_TABLE} (node_id, value) ` +
   'VALUES (?, ?)';
 const ACTIVE_PARTITION_VERSION = 1;
@@ -122,7 +123,7 @@ function partitionSchemaOf(table) {
       {name: 'value', type: 'TEXT'},
     ]};
   }
-  if (table === COUNTER_TABLE) {
+  if (table === COUNTER_TABLE || table === CASE_SENSITIVE_USER_TABLE) {
     return {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'n', type: 'INTEGER'},
@@ -625,6 +626,7 @@ async function driveNativeR2Election(services) {
 }
 
 export {
+  CASE_SENSITIVE_USER_TABLE,
   COUNTER_TABLE,
   EXECUTOR_RETRY_DELAY_MS,
   JOINER_ID,

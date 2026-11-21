@@ -25,8 +25,8 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
 
 const BOUND = 4096;
 const SCOPE = 'identity-bound-witness';
-const ROUTE = {id: SCOPE, partitionId: null};
 const PARTITION_ID = 'named-proof-p1';
+const ROUTE = {id: SCOPE, partitionId: PARTITION_ID};
 function replyFor(idempotencyKey) {
   const participant = {success: true, partitionId: PARTITION_ID, affectedRows: 1,
     durableCommitWitness: {partitionId: PARTITION_ID, term: 4, logIndex: 29,
