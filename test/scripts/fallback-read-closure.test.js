@@ -86,7 +86,7 @@ const FIXTURE_ROWS = [
   'export const rows = [',
   '  {service_type: \'partition\', raft_role: \'leader\'},',
   '  {service_type: SERVICE_TYPE.MESSAGE_GROUP, raft_role: RAFT_ROLE.LEADER},',
-  '  {service_type: \'wasm\', raft_role: \'leader\'},',
+  '  {service_type: \'wasm_service\', raft_role: \'leader\'},',
   '  {raft_role: \'follower\'},',
   '];',
   'export function make(index, raftRole = \'leader\') {',
@@ -348,9 +348,12 @@ test('a kept arm stands only on a red throw-mode trap run and a classified witne
     assert.match(check(root).stderr.join('\n'), /names no red throw-mode trap run/u,
       JSON.stringify(bad));
   }
-  writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5));
+  writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5,
+    {run: {...runOf(1), failedTests: ['test/alpha/absent.test.js']}}));
   writeJson(root, KEPT, {version: 1, entries: [{...entry, witnessTest: 'test/alpha/absent.test.js'}]});
-  assert.match(check(root).stderr.join('\n'), /witness is not a classified \.test\.js file/u);
+  assert.match(check(root).stderr.join('\n'), /witness is not a classified \.test\.js file/u,
+    'a failed witness must still be a classified test file');
+  writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5));
   writeJson(root, KEPT, {version: 1, entries: [entry]});
   const kept = check(root, '--json');
   assert.equal(kept.exitCode, 0, kept.stderr.join('\n'));
