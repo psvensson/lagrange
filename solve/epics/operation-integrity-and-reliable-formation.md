@@ -310,6 +310,17 @@ needs the actual apply and readback paths.
 [Existing acknowledgement test](../../test/control-plane/membership-publication-coordinator-tail-final-test-cases.js) ·
 [Three-host original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-bd3bfd82-nov21.tar.gz).
 
+On `0e7cd4406` two independent publication coordinators reproduced a
+durable ordering defect through CDC and a file-backed PartitionService.
+Whichever writer arrived late erased the other node's confirmed ACK. A
+late ACK also changed a superseded publication back to `ACK_PENDING`.
+All three checks failed on the reopened SQLite state. The write owner
+must now condition an acknowledgement on the exact stored revision, merge
+after contention, and refuse an unconfirmed write. Same-entry replay and
+new-revision admission require distinct controls. The physical runs did
+not record the apply order of these writes.
+[Original managed run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-ack-native-original-0e7c-nov21.tar.gz).
+
 Across the three node logs in each complete recording, the query executor
 reported the following unresolved write deliveries. Each line with the exact
 message `Partition write outcome still unknown when its delivery budget was spent`
