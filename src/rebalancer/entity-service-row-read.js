@@ -164,16 +164,13 @@ function ownerFactEntityServiceRows(fact, identity) {
  * The SERVICES rows of one entity as the node's projection holds them: a
  * hint (readHint), never an owner fact. A row the projection has not
  * received is not yet known; nothing may be concluded from its absence.
- * @param {Object} systemTableCache - The node's system-table projection.
- * @param {Object} identity - {entityType, entityId}.
+ * @param {Function} readProjectedRows - () -> the entity's projected rows
+ *   (the repository's one projection read of an entity's SERVICES rows).
  * @return {Promise<Object>} {state: hint_observed, rows} | {state: hint_unavailable}.
  */
-function readEntityServiceRowsHint(systemTableCache, identity) {
-  return readHint(
-    (tableName, {cachePredicate}) => ({success: true,
-      rows: systemTableCache.filter(tableName, cachePredicate)}),
-    {tableName: SYSTEM_TABLE_NAME.SERVICES,
-      cachePredicate: (row) => entityServiceRowBelongsToIdentity(row, identity)});
+function readEntityServiceRowsHint(readProjectedRows) {
+  return readHint(() => ({success: true, rows: readProjectedRows()}),
+    {tableName: SYSTEM_TABLE_NAME.SERVICES});
 }
 
 export {

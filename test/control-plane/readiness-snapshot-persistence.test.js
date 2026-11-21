@@ -11,6 +11,8 @@ import Database from 'better-sqlite3';
 import {
   REPLICA_OPERATIONS_SCHEMA,
   STORAGE_RESERVATIONS_SCHEMA,
+  SYSTEM_TABLE_NAME,
+  getSchemaByTableName,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   generateCreateIndexSQL,
@@ -188,9 +190,11 @@ function createCanonicalOperationStore(t) {
   const database = new Database(':memory:');
   const sqlCalls = [];
   t.teardown(() => database.close());
+  // SERVICES is answered by the same store as its leader (owner-fact reads).
   for (const schema of [
     REPLICA_OPERATIONS_SCHEMA,
     STORAGE_RESERVATIONS_SCHEMA,
+    getSchemaByTableName(SYSTEM_TABLE_NAME.SERVICES),
   ]) {
     database.exec(generateCreateTableSQL(schema));
     for (const indexSql of generateCreateIndexSQL(schema)) {

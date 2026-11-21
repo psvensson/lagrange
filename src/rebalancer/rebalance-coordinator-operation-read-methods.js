@@ -498,7 +498,8 @@ class RebalanceCoordinatorOperationReadMethods {
    * @return {Promise<Object>} The readHint answer.
    */
   readEntityServiceHint({entityType, entityId}) {
-    return readEntityServiceRowsHint(this.systemTableCache, {entityType, entityId});
+    return readEntityServiceRowsHint(() => this.repository.getEntityServiceRows(
+      {partitionId: entityId, entityType, entityId}));
   }
 
   /**

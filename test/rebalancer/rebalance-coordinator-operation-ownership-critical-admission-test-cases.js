@@ -755,6 +755,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
               status: 'removing',
             },
           ], null));
+      // The services-p1 owner answers no replica rows for config-p1 (not over
+      // target); the over-target hold now decides only on the owner's rows.
+      coordinator.readEntityServiceOwnerRows = async () => [];
 
       try {
         await coordinator.ensureCriticalPartitionCreateLaneAvailable({
