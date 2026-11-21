@@ -120,19 +120,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async retryRetainedRepairDecision(attempt, mode) {
-      if (mode === MODE.JOIN) {
-        const satisfied = await this.submitRetainedPlacementRepairAttempt(
-          attempt.operation, attempt);
-        if (satisfied || !this.retainedRepairAttemptIsCurrent(attempt)) return satisfied;
-        if (attempt.lastAnswer?.committed !== true) return false;
-        const current = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.CENSUS);
-        attempt.lastDecision = current;
-        if (current.state === DECISION.UNAVAILABLE) {
-          this.scheduleRetainedRepairReadRetry(attempt, OBSERVATION.CONTENTION);
-          return false;
-        }
-        return this.settleRetainedRepairDecision(attempt, current);
-      }
+      if (mode === MODE.JOIN) return this.joinRetainedRepairDecision(attempt);
       const scope = this.retainedRepairReadScope(mode);
       const decision = await this.readRetainedRepairDecision(attempt, scope);
       attempt.lastDecision = decision;
@@ -144,8 +132,40 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (decision.state !== DECISION.ABSENT || mode === MODE.CONFIRM || mode === MODE.REFRESH) {
         return this.settleRetainedRepairDecision(attempt, decision);
       }
+      return this.resolveObservedRetainedRepair(attempt, decision.term);
+    },
+
+    async joinRetainedRepairDecision(attempt) {
+      const satisfied = await this.submitRetainedPlacementRepairAttempt(attempt.operation, attempt);
+      if (satisfied || !this.retainedRepairAttemptIsCurrent(attempt)) return satisfied;
+      if (attempt.lastAnswer?.committed !== true) return false;
+      const current = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.CENSUS);
+      attempt.lastDecision = current;
+      if (current.state === DECISION.UNAVAILABLE) {
+        this.scheduleRetainedRepairReadRetry(attempt, OBSERVATION.CONTENTION);
+        return false;
+      }
+      return this.settleRetainedRepairDecision(attempt, current);
+    },
+
+    async resolveObservedRetainedRepair(attempt, term) {
+      const resolvingPinned = attempt.entryId !== null;
+      const satisfied = await this.submitRetainedRepairAtTerm(attempt, term);
+      if (satisfied || !this.retainedRepairAttemptIsCurrent(attempt)) return satisfied;
+      if (!resolvingPinned || attempt.entryId !== null) return false;
+      // The owned observation survives resolution of the original unknown turn.
+      // Its old refusal never authorizes a successor: read current contention once.
+      const current = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.CENSUS);
+      attempt.lastDecision = current;
+      if (current.state !== DECISION.ABSENT) {
+        return this.settleRetainedRepairDecision(attempt, current);
+      }
+      return this.submitRetainedRepairAtTerm(attempt, current.term);
+    },
+
+    async submitRetainedRepairAtTerm(attempt, term) {
       attempt.nativeAnswerPromise = null;
-      attempt.nativeIngressTerm = decision.term;
+      attempt.nativeIngressTerm = term;
       try {
         return await this.submitRetainedPlacementRepairAttempt(attempt.operation, attempt);
       } finally {
