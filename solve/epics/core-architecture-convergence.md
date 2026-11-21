@@ -10,12 +10,14 @@ doneWhen:
     file: solve/oracle/core-architecture-convergence.json
 quests:
   - core-convergence-rs-raft-readiness-baseline
+  - independent-portability-q1-partition-observation
 authorizes:
   - architecture
   - docs
   - package.json
   - scripts/checks
   - scripts/quest-evidence
+  - solve/changes/global-owner-debt-inventory/inventory.json
   - solve/oracle
   - src/admin
   - src/bootstrap
@@ -73,6 +75,30 @@ authorizes:
 # Core architecture convergence
 
 ## Status and activation
+
+### Independent implementation portability (2026-11-17)
+
+The approved [implementation-independent portability plan](core-architecture-convergence/independent-portability-plan-2026-11-17.md)
+is a **planning-only contract and conformance continuation** within this epic,
+not a new runtime subsystem, Epic, roadmap lane or release requirement. Its
+[first Q0 inventory](core-architecture-convergence/independent-portability-q0-inventory-2026-11-17.md)
+is read-only and explicitly incomplete. It inventories source-of-truth and
+documentation drift without changing any existing sealed Quest or treating
+target semantics as current capability. A later behavior-changing package
+still requires the predecessor cutover/READY gates, one owner, a measuring
+red Quest, and the normal independent proof and landing rules.
+
+The first separate Q1 specification-only package is the
+[partition logical observation Quest](../quests/independent-portability-q1-partition-observation/quest.json).
+Its existing [partition owner document](../../architecture/process-partitioning.md#portable-logical-committed-statement-observation-q1a)
+describes exact retained integers, the `entry:`/`txop:` identity families,
+settled/unsettled/unavailable/unknown distinctions, nullable results, and a
+bounded descriptor-epoch comparator. The independent Python reference and
+vectors live under `test/partition`. This is **not** a production codec, an
+ingress acceptance, native raft-rs `u64` compatibility, crash recovery or
+a changed release gate. HLC ordering and Call Cell finite-JSON canonicalization
+remain separate Q1 owner decisions. The Quest log owns its actual validation
+and landing state; Q0 remains gated independently in draft PR #222.
 
 ### 2026-10-08 cutover interaction clarification
 
