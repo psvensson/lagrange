@@ -29,8 +29,8 @@ import {
   buildPlacementAdmissionStatement, resolveSourceCapacityForClass,
 } from './replica-placement-owner-admission-statement.js';
 import {
-  deleteUnresolvedPlacementAttempt, persistUnresolvedPlacementAttempt,
-  reconcilePlacementAttempts,
+  createBlockedPlacementAttempts, deleteUnresolvedPlacementAttempt,
+  observePlacementAttemptAnswer, persistUnresolvedPlacementAttempt, reconcilePlacementAttempts,
 } from './replica-placement-owner-attempts.js';
 import {
   PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
@@ -252,6 +252,7 @@ class ReplicaPlacementOwner {
     this.unsubscribers = [];
     this.resyncHandle = null;
     this.uncertainEntryIds = new Map();
+    this.blockedAttempts = createBlockedPlacementAttempts(this.logger);
     this.ownEntryIds = new Set();
     this.seenRowSignatures = new Map();
     this.placementResyncAdmissions = 0;
@@ -296,6 +297,11 @@ class ReplicaPlacementOwner {
 
   shutdown() {
     this.setLeader(false);
+  }
+
+  // Blocked work: attempts kept because their entry key holds another record.
+  blockedPlacementAttempts() {
+    return this.blockedAttempts.list();
   }
 
   attachLedgerListeners() {
@@ -434,6 +440,8 @@ class ReplicaPlacementOwner {
         this.uncertainEntryIds.delete(attemptKey);
         deleteUnresolvedPlacementAttempt(this.ledgerPartitionService?.db, attemptKey);
       }
+      observePlacementAttemptAnswer(this.ledgerPartitionService?.db, this.blockedAttempts,
+        attempt, answer);
       this.recordSeenOperationSignatures();
       return answer;
     } finally {
@@ -491,7 +499,7 @@ class ReplicaPlacementOwner {
     reconcilePlacementAttempts(
       this.ledgerPartitionService.db,
       this.uncertainEntryIds,
-      refreshed,
+      this.blockedAttempts,
     );
     return refreshed.length > 0 || census.length > 0 ? refreshed : census;
   }
@@ -723,7 +731,7 @@ class ReplicaPlacementOwner {
         state: nodeInput.state,
         reason: nodeInput.reason,
         clearingTrigger: PLACEMENT_CLEARING_TRIGGER[nodeInput.reason],
-        admitted: Object.freeze([]),
+        admitted: Object.freeze([]), blockedAttempts: this.blockedAttempts.list(),
       });
       return;
     }
@@ -751,6 +759,7 @@ class ReplicaPlacementOwner {
     });
     this.lastPassSnapshot = Object.freeze({
       state: SERVE_ELIGIBILITY_STATE.READY, admitted: Object.freeze(admitted),
+      blockedAttempts: this.blockedAttempts.list(),
     });
   }
 }

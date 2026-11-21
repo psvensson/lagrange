@@ -31,7 +31,8 @@ import {requestPlacementAdmission} from
 import {StorageCapacityAccountingService} from
   '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {
-  PLACEMENT_CLEARING_TRIGGER, PLACEMENT_REFUSAL, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
+  PLACEMENT_CLEARING_TRIGGER, PLACEMENT_DEFINITE_ANSWER_CODES, PLACEMENT_REFUSAL,
+  PLACEMENT_TRIGGER, PLACEMENT_WAITING_CLEARING_TRIGGER, PLACEMENT_WAITING_REASON,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
@@ -103,9 +104,21 @@ test('F11: every code on the admission path maps to a definite answer (null) or 
     .flatMap((vocabulary) => Object.values(vocabulary)));
   assert.deepEqual(Object.keys(PLACEMENT_CLEARING_TRIGGER)
     .filter((code) => !codes.has(code)), []);
+  // The DEFINITE set is exactly the owner's declaration: a code reaches null
+  // only through PLACEMENT_DEFINITE_ANSWER_CODES, never through a waiting row,
+  // and no code is declared both ways or twice.
+  const definite = new Set(PLACEMENT_DEFINITE_ANSWER_CODES);
+  assert.equal(definite.size, PLACEMENT_DEFINITE_ANSWER_CODES.length, 'declared once');
+  assert.deepEqual(Object.keys(PLACEMENT_CLEARING_TRIGGER)
+    .filter((code) => PLACEMENT_CLEARING_TRIGGER[code] === null).sort(),
+  [...definite].sort(), 'the null rows are exactly the declared DEFINITE codes');
+  assert.deepEqual(Object.keys(PLACEMENT_WAITING_CLEARING_TRIGGER)
+    .filter((code) => definite.has(code)), [], 'no code is both DEFINITE and waiting');
+  const declaredTriggers = new Set(Object.values(PLACEMENT_TRIGGER));
+  assert.deepEqual(Object.entries(PLACEMENT_WAITING_CLEARING_TRIGGER)
+    .filter(([, trigger]) => !declaredTriggers.has(trigger)), [],
+  'every waiting code names a declared trigger (never null)');
   const triggers = Object.values(PLACEMENT_CLEARING_TRIGGER);
-  assert.ok(triggers.every((trigger) => trigger === null ||
-    Object.values(PLACEMENT_TRIGGER).includes(trigger)));
   assert.equal(triggers.includes(PLACEMENT_TRIGGER.RESYNC), false);
   assert.equal(Object.keys(PLACEMENT_CLEARING_TRIGGER).some((reason) =>
     /retry/iu.test(reason)), false);

@@ -167,27 +167,41 @@ const PLACEMENT_TRIGGER = Object.freeze({
 });
 const TRIGGER = PLACEMENT_TRIGGER;
 
-// The one refusal-to-trigger table (design section 2.7). A reason mapped to
-// null is a definite answer that needs no clearing (the provisioning owner
-// adopts ALREADY_FOUNDED's ids; SYSTEM_PARTITION_SEED_FOUNDED is permanent by
-// partition kind; a claimed runtime-service identity is spent for ever; a
-// release of a row that holds nothing has nothing to wait for; a command from
-// another origin, for another table, with invalid or colliding bytes (its
-// entryId already settled for another command), an unscoped REMOVE intent, or
-// a settled record whose result is unreadable never becomes admissible by
-// waiting). A code reachable on the admission path without a row here is a
-// defect.
-const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
-  [PLACEMENT_ADMISSION_ERROR.ORIGIN]: null,
-  [PLACEMENT_ADMISSION_ERROR.BYTES]: null,
-  [PLACEMENT_ADMISSION_ERROR.TARGET]: null,
-  [PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED]: null,
-  [PLACEMENT_ADMISSION_ERROR.RESULT]: null,
+// The owner's one classification of every code on the admission path (design
+// section 2.7): each code is either DEFINITE - a definite answer, nothing to
+// wait for: retrying the same command or intent never changes it - or waits
+// for the named trigger whose event clears it. A code reachable on the
+// admission path that is in neither declaration is a defect; moving a code
+// into or out of DEFINITE is a change of this declaration.
+//
+// DEFINITE: the provisioning owner adopts ALREADY_FOUNDED's ids;
+// SYSTEM_PARTITION_SEED_FOUNDED is permanent by partition kind; a claimed
+// runtime-service identity is spent for ever; a release of a row that holds
+// nothing has nothing to wait for; a retained repair whose identity, row or
+// admission changed is replaced, not retried; a command from another origin,
+// for another table, with invalid or colliding bytes (its entryId already
+// settled for another command), an unscoped REMOVE intent, or a settled
+// record whose result is unreadable never becomes admissible by waiting.
+const PLACEMENT_DEFINITE_ANSWER_CODES = Object.freeze([
+  PLACEMENT_ADMISSION_ERROR.ORIGIN,
+  PLACEMENT_ADMISSION_ERROR.BYTES,
+  PLACEMENT_ADMISSION_ERROR.TARGET,
+  PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED,
+  PLACEMENT_ADMISSION_ERROR.RESULT,
+  PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED,
+  PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED,
+  PLACEMENT_REFUSAL.RETAINED_ADMISSION_REQUIRED,
+  PLACEMENT_REFUSAL.HOLD_NOT_HELD,
+  PLACEMENT_REFUSAL.TARGET_CLAIM_TAKEN,
+  PLACEMENT_REFUSAL.ALREADY_FOUNDED,
+  PLACEMENT_REFUSAL.SYSTEM_PARTITION_SEED_FOUNDED,
+  PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED,
+]);
+
+// WAITING: the trigger that clears each waiting code.
+const PLACEMENT_WAITING_CLEARING_TRIGGER = Object.freeze({
   [PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE]: TRIGGER.LEADERSHIP_START,
   [PLACEMENT_ADMISSION_ERROR.REPAIR_PENDING]: TRIGGER.LEDGER_COMMIT,
-  [PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED]: null,
-  [PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED]: null,
-  [PLACEMENT_REFUSAL.RETAINED_ADMISSION_REQUIRED]: null,
   [PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE]: TRIGGER.NODES_OR_FORMATION,
   [PLACEMENT_REFUSAL.PARTITION_BUSY]: TRIGGER.LEDGER_COMMIT,
   [PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY]: TRIGGER.LEDGER_COMMIT,
@@ -195,11 +209,6 @@ const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
   [PLACEMENT_REFUSAL.LEDGER_TRANSITION_UNRESOLVED]: TRIGGER.LEDGER_COMMIT,
   [PLACEMENT_REFUSAL.CDC_CAPACITY]: TRIGGER.LEDGER_COMMIT,
   [PLACEMENT_REFUSAL.COPY_PHASE_NOT_IDLE]: TRIGGER.LEDGER_COMMIT,
-  [PLACEMENT_REFUSAL.HOLD_NOT_HELD]: null,
-  [PLACEMENT_REFUSAL.TARGET_CLAIM_TAKEN]: null,
-  [PLACEMENT_REFUSAL.ALREADY_FOUNDED]: null,
-  [PLACEMENT_REFUSAL.SYSTEM_PARTITION_SEED_FOUNDED]: null,
-  [PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED]: null,
   [WRITE_REFUSAL.BACKPRESSURE]: TRIGGER.LEDGER_COMMIT,
   [WRITE_REFUSAL.CDC_CAPACITY]: TRIGGER.LEDGER_COMMIT,
   [WRITE_REFUSAL.CDC_DEMAND_EXCEEDS_CAPACITY]: TRIGGER.LEDGER_COMMIT,
@@ -235,6 +244,14 @@ const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
   [PLACEMENT_WAITING_REASON.LEDGER_AWAITING_COPY_IDLE]: TRIGGER.LEDGER_COMMIT,
 });
 
+// The one refusal-to-trigger table every consumer reads, built from the two
+// declarations above: a DEFINITE code maps to null, a waiting code to its
+// trigger.
+const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
+  ...Object.fromEntries(PLACEMENT_DEFINITE_ANSWER_CODES.map((code) => [code, null])),
+  ...PLACEMENT_WAITING_CLEARING_TRIGGER,
+});
+
 // operation_id = pl-<partitionId>-<applyIndex>-<n> (design section 2.5 step 8).
 const PLACEMENT_OPERATION_ID_PREFIX = 'pl-';
 const PLACEMENT_OPERATION_ID_SEPARATOR = '-';
@@ -243,6 +260,7 @@ export {
   PLACEMENT_CLASS,
   PLACEMENT_CLASS_ORDER,
   PLACEMENT_CLEARING_TRIGGER,
+  PLACEMENT_DEFINITE_ANSWER_CODES,
   PLACEMENT_COPY_CAPACITY,
   PLACEMENT_DEFICIT_KIND,
   PLACEMENT_DEFICIT_SEVERITY,
@@ -259,5 +277,6 @@ export {
   PLACEMENT_SYSTEM_FIRST_PARTITION_IDS,
   PLACEMENT_TRANSITION_KIND,
   PLACEMENT_TRIGGER,
+  PLACEMENT_WAITING_CLEARING_TRIGGER,
   PLACEMENT_WAITING_REASON,
 };

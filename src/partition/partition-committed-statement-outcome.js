@@ -58,6 +58,7 @@ import {
   PARTITION_COMMITTED_STATEMENT_COLUMNS,
   PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
   PARTITION_COMMITTED_STATEMENT_FORMAT,
+  PARTITION_COMMITTED_RECORD_CLASS,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
@@ -71,8 +72,8 @@ import {admitCommittedCommand, committedCommandRefusalResult} from
   './partition-committed-command-admission.js';
 import {buildDurableCommitWitness} from './partition-write-kernel.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
-  isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
-  './partition-retained-store-observation.js';
+  retainedStoreTableExistsIn, isStoredInteger, isStoredNullableText,
+  isStoredNullableInteger} from './partition-retained-store-observation.js';
 import {
   PARTITION_STATEMENT_REFUSAL_CODE,
   refusalLayerFieldOf,
@@ -135,26 +136,41 @@ function readCommittedStatementCensusIn(db) {
   }));
 }
 
+const RETAINED_STORE_FORMAT_REFUSALS = Object.freeze(new Set(
+  Object.values(RETAINED_STORE_ERROR)));
+
+function outcomeTableFormatIn(db) {
+  const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
+  if (!retainedStoreTableExistsIn(db, sql.TABLE)) {
+    return PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT;
+  }
+  try {
+    readRetainedStoreRowsIn(db, {table: sql.TABLE, select: sql.FORMAT_PROBE,
+      create: sql.CREATE_TABLE});
+    return PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT;
+  } catch (error) {
+    if (RETAINED_STORE_FORMAT_REFUSALS.has(error?.code)) {
+      return PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED;
+    }
+    throw error;
+  }
+}
+
 /**
- * The table-format decision at store open, read-only (no DDL): ABSENT when
- * the store holds no outcome table, CURRENT when its columns are exactly the
- * owner's, UNSUPPORTED for any other column set (a store of another format).
+ * The one table-format decision, read-only (no DDL): ABSENT when the store
+ * holds no outcome table, CURRENT when the table is the owner's definition
+ * (CREATE_TABLE, by the cold census's own rule), UNSUPPORTED for any other
+ * definition (a store of another format).
  * @param {Object} db - The partition's opened database.
  * @return {{outcome: string, columns: Array<string>}} Frozen decision; the
- *   outcome is a PARTITION_COMMITTED_STATEMENT_FORMAT value.
+ *   outcome is a PARTITION_COMMITTED_STATEMENT_FORMAT value, the columns what
+ *   the table holds (for the refusal).
  */
 function detectCommittedStatementOutcomeFormat(db) {
+  const outcome = db.transaction(() => outcomeTableFormatIn(db))();
   const columns = Object.freeze(db
     .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
     .all().map((column) => column.name));
-  const owned = PARTITION_COMMITTED_STATEMENT_COLUMNS;
-  let outcome = PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED;
-  if (columns.length === 0) {
-    outcome = PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT;
-  } else if (columns.length === owned.length &&
-      owned.every((column) => columns.includes(column))) {
-    outcome = PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT;
-  }
   return Object.freeze({outcome, columns});
 }
 
@@ -177,13 +193,15 @@ function committedStatementOutcomeFormatError(decision, partitionId = null) {
 /**
  * Create the outcome table on a store that has none (DDL; run once at
  * partition initialization, after the legacy-state detector). A store whose
- * table has another format is refused, typed, before any DDL.
+ * table has another format is refused, typed, before any DDL: the one format
+ * decision of store open.
  * @param {Object} db - The partition's connection.
+ * @param {string|null} [partitionId] - The partition opened, for the refusal.
  */
-function createCommittedStatementOutcomeTable(db) {
+function createCommittedStatementOutcomeTable(db, partitionId = null) {
   const format = detectCommittedStatementOutcomeFormat(db);
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
-    throw committedStatementOutcomeFormatError(format);
+    throw committedStatementOutcomeFormatError(format, partitionId);
   }
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
     db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
@@ -233,9 +251,19 @@ function readCommittedStatementOutcome(service, entryKey) {
 const UNSETTLED_COMMAND = Object.freeze({
   state: PARTITION_SETTLED_COMMAND_STATE.UNSETTLED,
 });
-const OTHER_RECORD = Object.freeze({
-  state: PARTITION_SETTLED_COMMAND_STATE.OTHER_RECORD,
-});
+/**
+ * The class of a settled record (PARTITION_COMMITTED_RECORD_CLASS).
+ * @param {Object} recorded - A SETTLED record.
+ * @return {string} Its record class.
+ */
+function committedRecordClassOf(recorded) {
+  if (typeof recorded.commandDigest === 'string') {
+    return PARTITION_COMMITTED_RECORD_CLASS.OWNER_COMMAND;
+  }
+  return recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED ?
+    PARTITION_COMMITTED_RECORD_CLASS.STATEMENT_FAILURE :
+    PARTITION_COMMITTED_RECORD_CLASS.STATEMENT;
+}
 
 /**
  * Exact settlement of one owner command, from the store: a durable outcome
@@ -255,7 +283,8 @@ function readSettledOwnerCommandIn(db, {entryId, commandDigest}) {
   }
   return recorded.commandDigest === commandDigest ?
     Object.freeze({state: PARTITION_SETTLED_COMMAND_STATE.SAME_COMMAND, recorded}) :
-    OTHER_RECORD;
+    Object.freeze({state: PARTITION_SETTLED_COMMAND_STATE.OTHER_RECORD,
+      recordClass: committedRecordClassOf(recorded)});
 }
 
 const PENDING_OWNER_COMMAND_DIGESTS = 'pendingOwnerCommandDigests';

@@ -232,7 +232,7 @@ documentClass: generated
 - [replica-operation-update-outcome.js](replica-operation-update-outcome.js) - No leading comment; first export: INVALID_OPERATION_PERSISTENCE_OUTCOME. (importers: hub)
 - [replica-placement-cure-policy.js](replica-placement-cure-policy.js) - Single owner of the replica-placement CURE-TYPING relation (quest cure-typing-single-owner-table; epic... (importers: many)
 - [replica-placement-owner-admission-statement.js](replica-placement-owner-admission-statement.js) - The canonical admission statement of a raw input: exact fields, typed values, the moves its kind admits. (importers: many)
-- [replica-placement-owner-attempts.js](replica-placement-owner-attempts.js) - Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts. (importers: few)
+- [replica-placement-owner-attempts.js](replica-placement-owner-attempts.js) - Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts,... (importers: few)
 - [replica-placement-owner-constants.js](replica-placement-owner-constants.js) - No leading comment; first export: PLACEMENT_CLASS. (importers: hub)
 - [replica-placement-owner-deficits.js](replica-placement-owner-deficits.js) - The placement deficit model of the one replica placement owner (quest replica-placement-admission-owner, design... (importers: few)
 - [replica-placement-owner-order.js](replica-placement-owner-order.js) - The one admission order of the replica placement owner (quest replica-placement-admission-owner, design section... (importers: many)

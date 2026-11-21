@@ -21,12 +21,20 @@ import {placementBodyDigestOf} from
   '../../src/partition/partition-placement-admission-command.js';
 import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
   '../../src/partition/partition-placement-admission-constants.js';
-import {persistUnresolvedPlacementAttempt, reconcilePlacementAttempts} from
+import {PLACEMENT_ATTEMPT_STATE, createBlockedPlacementAttempts,
+  persistUnresolvedPlacementAttempt, reconcilePlacementAttempts} from
   '../../src/rebalancer/replica-placement-owner-attempts.js';
+import {PARTITION_COMMITTED_RECORD_CLASS as RECORD_CLASS} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {NODE, placementStatement} from '../partition/placement-admission-fixture.js';
 
 const ATTEMPTS_SQL = 'SELECT attempt_key FROM _placement_owner_unresolved_attempts ' +
   'ORDER BY attempt_key';
+const SILENT_LOGGER = Object.freeze({warn() {}});
+const blockedOf = (blocked) => Object.fromEntries(blocked.list().map((state) =>
+  [state.attemptKey, `${state.state}:${state.recordClass}`]));
+const blockedAs = (recordClass) =>
+  `${PLACEMENT_ATTEMPT_STATE.BLOCKED_ON_KEY_COLLISION}:${recordClass}`;
 
 function attemptOf(attemptKey, entryId, body) {
   return {attemptKey, intentKey: attemptKey, entryId, body, bodyText: JSON.stringify(body)};
@@ -69,13 +77,19 @@ test('an unresolved attempt is discharged only by the record of its exact comman
       placementBodyDigestOf(PLACEMENT_RELEASE_HOLD_TYPE, releaseBody));
 
     const uncertain = new Map();
-    reconcilePlacementAttempts(db, uncertain, []);
+    const blocked = createBlockedPlacementAttempts(SILENT_LOGGER);
+    reconcilePlacementAttempts(db, uncertain, blocked);
     const remaining = ['admit:indices-p1', 'admit:services-p1', 'admit:tables-p1',
       'release:pl-tables-p1-3-0'];
     assert.deepEqual([...uncertain.keys()].sort(), remaining,
       'near-miss records settle nothing; the exact records discharge their attempts');
     assert.deepEqual(db.prepare(ATTEMPTS_SQL).all().map(({attempt_key: key}) => key),
       remaining);
+    assert.deepEqual(blockedOf(blocked), {
+      'admit:tables-p1': blockedAs(RECORD_CLASS.STATEMENT),
+      'admit:indices-p1': blockedAs(RECORD_CLASS.OWNER_COMMAND),
+      'release:pl-tables-p1-3-0': blockedAs(RECORD_CLASS.OWNER_COMMAND),
+    }, 'every kept near miss is visible blocked work; the unsettled one is not');
   } finally {
     db.close();
   }
@@ -102,18 +116,18 @@ test('the ledger census never discharges an attempt: a row under its entry id fr
     // its ledger row names that entry id; the release attempt never settled.
     ownerRecordAt(db, 'e-census-admit', 1,
       placementBodyDigestOf(PLACEMENT_ADMIT_TYPE, otherBody));
-    const census = [
-      {operationId: 'pl-tables-p1-1-0', admission: {entryId: 'e-census-admit'},
-        dispatchHold: null},
-      {operationId: 'pl-tables-p1-3-0', admission: {entryId: 'e-other-admission'},
-        dispatchHold: null},
-    ];
+    // The ledger census (a row naming 'e-census-admit', the release's hold no
+    // longer engaged) is no input to settlement at all: only the exact record.
     const uncertain = new Map();
-    reconcilePlacementAttempts(db, uncertain, census);
+    const blocked = createBlockedPlacementAttempts(SILENT_LOGGER);
+    reconcilePlacementAttempts(db, uncertain, blocked);
     assert.deepEqual([...uncertain.keys()].sort(),
       ['admit:tables-p1', 'release:pl-tables-p1-3-0'],
       'a census row is never the exact record of an attempt');
     assert.equal(db.prepare(ATTEMPTS_SQL).all().length, 2);
+    assert.deepEqual(blockedOf(blocked),
+      {'admit:tables-p1': blockedAs(RECORD_CLASS.OWNER_COMMAND)},
+      'the colliding admit is blocked work; the unsettled release is not');
   } finally {
     db.close();
   }

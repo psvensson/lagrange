@@ -59,14 +59,19 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
     'changes, last_insert_rowid, owner_result_text, command_digest) ' +
     'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   TABLE_COLUMNS: 'PRAGMA table_info(_partition_statement_outcomes)',
+  // The store-open format probe: proves the table is readable without
+  // reading a row; the decision is the table's definition (CREATE_TABLE).
+  FORMAT_PROBE: 'SELECT 1 FROM _partition_statement_outcomes WHERE 0',
 });
 
-// The one table format: exactly these columns. A store whose table has any
-// other column set was written by a build of another format (every released
-// build, v0.2.6 to v0.4.0, created it without command_digest; development
-// builds before the identity column likewise) and is refused, typed and
-// read-only, when it opens - never migrated, never given a column. Such a
-// data directory is re-founded (docs/operations-readiness.md).
+// The one table format is the owner's definition, CREATE_TABLE (its columns,
+// these, and its identity CHECK), decided by the same rule the cold census
+// applies (partition-retained-store-observation.js). A store whose table has
+// any other definition was written by a build of another format (every
+// released build, v0.2.6 to v0.4.0, created it without command_digest;
+// development builds before the identity column likewise) and is refused,
+// typed and read-only, when it opens - never migrated, never given a column.
+// Such a data directory is re-founded (docs/operations-readiness.md).
 const PARTITION_COMMITTED_STATEMENT_COLUMNS = Object.freeze([
   'entry_key', 'outcome', 'log_index', 'term', 'failure_code', 'failure_message',
   'changes', 'last_insert_rowid', 'owner_result_text', 'command_digest',
@@ -97,6 +102,15 @@ const PARTITION_SETTLED_COMMAND_STATE = Object.freeze({
   UNSETTLED: 'unsettled',
   SAME_COMMAND: 'same_command',
   OTHER_RECORD: 'other_record',
+});
+
+// The class of a settled record (named for an OTHER_RECORD collision): an
+// owner command's record (it carries a command digest), an applied SQL
+// statement's record, or a deterministic statement failure's record.
+const PARTITION_COMMITTED_RECORD_CLASS = Object.freeze({
+  OWNER_COMMAND: 'owner_command',
+  STATEMENT: 'statement',
+  STATEMENT_FAILURE: 'statement_failure',
 });
 
 // The decision of the owner-command request prelude (ownerCommandPrelude):
@@ -225,6 +239,7 @@ export {
   PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
   PARTITION_COMMITTED_STATEMENT_FORMAT,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+  PARTITION_COMMITTED_RECORD_CLASS,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
   PARTITION_OWNER_COMMAND_PRELUDE,
   PARTITION_SETTLED_COMMAND_STATE,
