@@ -565,4 +565,4 @@ function assignControlPlaneSystemTableGatewayReadStrategies(targetClass) {
   );
 }
 
-export {assignControlPlaneSystemTableGatewayReadStrategies};
+export {assignControlPlaneSystemTableGatewayReadStrategies, isCompleteAuthoritativeReadResult};

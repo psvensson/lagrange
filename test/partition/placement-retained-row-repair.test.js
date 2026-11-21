@@ -944,3 +944,49 @@ for (const lane of ['source', 'target']) {
       assert.ok(repository.retainedPlacementRepairs.get(retained.operationId).occupancy);
     }));
 }
+
+const invalidCensusAnswers = [
+  ['partial', (answer) => ({...answer, partial: true})],
+  ['failed', (answer) => ({...answer, success: false, rowSetComplete: false})],
+  ['stale', (answer) => ({...answer,
+    readAuthorityWitness: {...answer.readAuthorityWitness, appliedIndex: 0}})],
+  ['wrong-partition', (answer) => ({...answer,
+    readAuthorityWitness: {...answer.readAuthorityWitness, partitionId: 'foreign-ledger-p1'}})],
+];
+for (const [name, corrupt] of invalidCensusAnswers) {
+  test(`${name} capacity census cannot spend or retire remote repair debt`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world, OperationType.ADD);
+      const holders = await occupyCopyLane(world, 'target');
+      const remote = remoteCaller(world);
+      const sender = remote.coordinator.repository;
+      try {
+        assert.equal(await sender.repairRetainedOperation(retained), false);
+        const held = sender.retainedPlacementRepairs.get(retained.operationId);
+        assert.ok(held.occupancy);
+        const read = sender.executeReplicaOperationsRead;
+        let reads = 0;
+        sender.executeReplicaOperationsRead = async (...args) => {
+          reads += 1;
+          return corrupt(await read.apply(sender, args));
+        };
+        stepLedgerRow(world.leader, holders[0], WORKFLOW_STEP.FAILED);
+        const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(holders[0]);
+        await observeBurst(sender, cleared);
+        assert.equal(reads, 1, 'one bounded authoritative read for the whole release burst');
+        assert.equal(sender.retainedPlacementRepairs.get(retained.operationId), held,
+          'partial, stale or foreign authority cannot retire or replace the exact retained record');
+        sender.executeReplicaOperationsRead = read;
+        await settleRepair(world);
+        const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId);
+        assert.ok(row, 'the actual native owner can independently win; corrupted read is not its authority');
+        await observeBurst(sender, row);
+        assert.equal(sender.retainedPlacementRepairs.size, 0,
+          'a genuine correctly scoped successor observation can still confirm the actual winner');
+      } finally {
+        await remote.coordinator.shutdown();
+      }
+    }));
+}

@@ -24,7 +24,8 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
       const sqlEngine = {async executeQuery(sql, params = []) {
         const statement = leader.db.prepare(sql);
         assert.equal(statement.reader, true, 'only native committed apply mutates');
-        return {success: true, rows: statement.all(...params), rowSetComplete: true};
+        return {success: true, rows: statement.all(...params), rowSetComplete: true,
+          readAuthorityWitness: leader.buildRemoteReadAuthorityWitness(false)};
       }};
       const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
       gateway.submitMutation = async (mutation) => {
