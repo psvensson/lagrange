@@ -28,7 +28,6 @@ const PLACEMENT_PASS_CHECKPOINT = Object.freeze({
   PASS_START: 'PASS_START',
   TERM_START_BARRIER: 'TERM_START_BARRIER',
   NODE_AUTHORITY: 'NODE_AUTHORITY',
-  AFTER_CDC_DRIVE: 'A1_AFTER_CDC_DRIVE',
   BEFORE_HOLD_RELEASE: 'BEFORE_HOLD_RELEASE',
   AFTER_HOLD_RELEASE: 'A2_AFTER_HOLD_RELEASE',
   CANDIDATE: 'CANDIDATE',
@@ -52,7 +51,7 @@ function createPlacementObservation() {
   return {passSequence: 0, totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
     leadershipStartDrivesJoined: 0, constructions: 0, evaluated: 0, candidates: 0,
     capacityChecks: 0, proposals: 0, fenced: 0, admitted: 0, released: 0, refused: {},
-    outcomeUnknown: 0}};
+    outcomeUnknown: 0, failedPasses: 0, leadershipStartDriveFailures: 0}};
 }
 
 function newPassRecord(observation, custody, sequence, triggers) {
@@ -95,6 +94,17 @@ function markPassWaiting(pass, checkpoint) {
 
 function recordLeadershipStartDriveJoined(pass) {
   pass.observation.totals.leadershipStartDrivesJoined += 1;
+}
+
+// A pass ended by an exception: its triggers are retained by the custody.
+function recordPassFailure(pass, error) {
+  pass.stoppedAt = CHECKPOINT.ABORTED;
+  pass.failure = String(error?.message ?? error);
+  pass.observation.totals.failedPasses += 1;
+}
+
+function recordLeadershipStartDriveFailure(observation) {
+  observation.totals.leadershipStartDriveFailures += 1;
 }
 
 // The node authority's answer that stopped the pass (stoppedAt NODE_AUTHORITY).
@@ -203,7 +213,9 @@ function frozenTotals(totals) {
 function placementPassSnapshot(pass, clearingTriggers) {
   const nodeWait = pass.stoppedAt !== CHECKPOINT.NODE_AUTHORITY ? {} : {
     reason: pass.nodeAnswer.reason, clearingTrigger: clearingTriggers[pass.nodeAnswer.reason]};
-  return Object.freeze({state: pass.state, ...nodeWait,
+  const aborted = pass.stoppedAt !== CHECKPOINT.ABORTED ? {} : {failure: pass.failure,
+    retainedTriggers: pass.triggers};
+  return Object.freeze({state: pass.state, ...nodeWait, ...aborted,
     admitted: Object.freeze([...pass.operationIds]), passSequence: pass.sequence,
     triggers: pass.triggers, tenureTerm: pass.tenureTerm, stoppedAt: pass.stoppedAt,
     stale: pass.stale, evaluated: pass.evaluated, candidates: pass.candidates,
@@ -224,8 +236,10 @@ export {
   placementPassSnapshot,
   recordCapacityCheck,
   recordFenced,
+  recordLeadershipStartDriveFailure,
   recordLeadershipStartDriveJoined,
   recordNodeAuthorityWait,
+  recordPassFailure,
   recordPassEvaluations,
   recordProposal,
   recordSubmissionAnswer,

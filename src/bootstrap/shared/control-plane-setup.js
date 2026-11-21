@@ -423,6 +423,11 @@ class ControlPlaneSetup {
           storageAccountingService,
           now: () => ledgerPartitionService.timeSource.now(),
           logger: ledgerPartitionService.logger,
+          // The owner's one timer, the resync (sealed quest
+          // replica-placement-admission-owner, no-timer-no-bound-no-retry),
+          // on the ledger's time source; armed per custody, cleared with it.
+          setIntervalFn: (fn, ms) => ledgerPartitionService.timeSource.setInterval(fn, ms),
+          clearIntervalFn: (handle) => ledgerPartitionService.timeSource.clearInterval(handle),
         }),
     );
 

@@ -30,10 +30,13 @@ const PLACEMENT_TENURE_FENCE = Object.freeze({
 /**
  * The owner's custody of one leadership tenure of its ledger replica.
  * @param {Object} tenure - The ledger's live leadershipTenure token.
- * @return {Object} {tenure, termStart, reconciled, running}.
+ * @return {Object} {tenure, termStart, reconciled, running, retainedTriggers}:
+ *   retainedTriggers are those of a pass that threw, carried into the custody's
+ *   next pass (started by the next wake: any trigger or the resync).
  */
 function createTenureCustody(tenure) {
-  return {tenure, termStart: PLACEMENT_TERM_START.PENDING, reconciled: false, running: null};
+  return {tenure, termStart: PLACEMENT_TERM_START.PENDING, reconciled: false, running: null,
+    retainedTriggers: new Set()};
 }
 
 /**
