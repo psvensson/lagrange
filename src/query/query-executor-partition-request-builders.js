@@ -19,6 +19,10 @@ import {
   materializeAndPresentRowObjects,
   presentRawSqlRows,
 } from './sql-value-presentation.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
+import {LEADER_READ_REQUEST_FIELD, leaderReadRequestOf} from
+  '../control-plane/control-plane-owner-fact-read-contract.js';
 
 const {
   MIGRATION_PARTITION_OPERATION,
@@ -110,6 +114,17 @@ function stampTransactionIdentityFields(request, executionOptions,
   }
 }
 
+// A leader-REQUIRED read is decided by its receiver: the request names the
+// leader-qualified read (and, for readOwnerFact, its read point floor), and a
+// replica that may not serve it refuses typed, with no rows.
+function leaderReadFieldOf(executionOptions, forRead) {
+  return forRead === true && executionOptions?.readAuthority?.leaderMode ===
+    CONTROL_PLANE_READ_LEADER_MODE.REQUIRED ?
+    {[LEADER_READ_REQUEST_FIELD]: leaderReadRequestOf(
+      executionOptions.ownerFactFloor)} :
+    {};
+}
+
 function createDefaultPartitionRequestBuilder({
   executionOptions,
   forRead = false,
@@ -117,6 +132,7 @@ function createDefaultPartitionRequestBuilder({
   partitionId = null,
   sql,
 }) {
+  const leaderReadField = leaderReadFieldOf(executionOptions, forRead);
   const shouldEncodeTypedParams =
     forRead === true &&
     !executionOptions?.transactionIdentity &&
@@ -132,6 +148,7 @@ function createDefaultPartitionRequestBuilder({
       sql,
       params: jsonSafeParams,
       ...(preEncodedTypedParams ? {typedParams: preEncodedTypedParams} : {}),
+      ...leaderReadField,
     };
     stampOptionalStringField(
       request, QUERY_MESSAGE_FIELD_SESSION_ID, executionOptions.sessionId);

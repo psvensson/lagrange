@@ -1,5 +1,7 @@
 import {assignRetainedPlacementRepairMethods, createRetainedPlacementRepairPorts} from
   './replica-operation-repository-retained-placement-repair.js';
+import {assignReplicaOperationOwnerFactReadMethods} from
+  './replica-operation-repository-owner-fact-read-methods.js';
 /**
  * ReplicaOperationRepository — SQL/cache reads and writes, row <-> operation
  * translation for replica_operations.
@@ -735,6 +737,7 @@ assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {
 });
 
 assignRetainedPlacementRepairMethods(ReplicaOperationRepository);
+assignReplicaOperationOwnerFactReadMethods(ReplicaOperationRepository);
 
 export {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,

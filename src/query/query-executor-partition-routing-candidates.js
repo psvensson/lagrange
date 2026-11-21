@@ -10,6 +10,11 @@ const {
   TABLES,
 } = QUERY_EXECUTOR_SHARED;
 
+function ownNodeFirst(services, nodeId) {
+  return [...services.filter((service) => service.node_id === nodeId),
+    ...services.filter((service) => service.node_id !== nodeId)];
+}
+
 const queryExecutorPartitionRoutingCandidateMethods = {
   /**
    * Resolve the routed service row that produced the current delivery target.
@@ -170,23 +175,22 @@ const queryExecutorPartitionRoutingCandidateMethods = {
         QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
       ]?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
     if (requireCanonicalLeader) {
-      if (!canonicalLeaderNodeId) {
-        this.logCanonicalLeaderRoutingGap(partitionId, {
-          reason: LEADER_GAP_REASON_OWNER_MISSING,
-          services: orderedServices,
-          routingSnapshot,
-        });
+      // Redirect-first (S0 ruling Q1): the published leader's replicas when
+      // it is published and usable; a replica that does not lead refuses typed
+      // and names the leader it knows. Only with no usable published leader
+      // is every routable replica asked, this node's first.
+      canonicalLeaderServices.forEach(addService);
+      if (candidates.length > 0) {
         return {candidates, routingSnapshot};
       }
-      canonicalLeaderServices.forEach(addService);
-      if (candidates.length === 0) {
-        this.logCanonicalLeaderRoutingGap(partitionId, {
-          reason: LEADER_GAP_REASON_SERVICE_MISSING,
-          canonicalLeaderNodeId,
-          services: orderedServices,
-          routingSnapshot,
-        });
-      }
+      this.logCanonicalLeaderRoutingGap(partitionId, {
+        reason: canonicalLeaderNodeId ? LEADER_GAP_REASON_SERVICE_MISSING :
+          LEADER_GAP_REASON_OWNER_MISSING,
+        canonicalLeaderNodeId,
+        services: orderedServices,
+        routingSnapshot,
+      });
+      ownNodeFirst(orderedServices, this.nodeId).forEach(addService);
       return {candidates, routingSnapshot};
     }
     if (!forRead) {

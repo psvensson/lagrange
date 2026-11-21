@@ -214,6 +214,7 @@ documentClass: generated
 - [replica-operation-repository-mutation-transition-methods.js](replica-operation-repository-mutation-transition-methods.js) - No leading comment; first export: assignReplicaOperationRepositoryMutationTransitionMethods. (importers: one)
 - [replica-operation-repository-mutation-update-methods.js](replica-operation-repository-mutation-update-methods.js) - Resolve existing durable truth before a workflow prepares a new effect. (importers: one)
 - [replica-operation-repository-observation-methods.js](replica-operation-repository-observation-methods.js) - Normalize one observed services row into workflow replica lifecycle. (importers: many)
+- [replica-operation-repository-owner-fact-read-methods.js](replica-operation-repository-owner-fact-read-methods.js) - The repository's owner-fact read of the replica operation ledger: the canonical readOwnerFact... (importers: one)
 - [replica-operation-repository-read-methods.js](replica-operation-repository-read-methods.js) - The authoritative read retry window is spent with the read still failing retryably: one wait_bound_spent ERROR; the... (importers: one)
 - [replica-operation-repository-retained-placement-repair.js](replica-operation-repository-retained-placement-repair.js) - No leading comment; first export: assignRetainedPlacementRepairMethods. (importers: one)
 - [replica-operation-repository-row-methods.js](replica-operation-repository-row-methods.js) - Translate a raw SQL/cache row into a normalized operation object. (importers: few)

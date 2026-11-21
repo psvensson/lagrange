@@ -11,6 +11,7 @@ import {
   buildOwnerRpcSqlFallbackQueryOptions,
   executeAuthoritativeOwnerRpcRead,
   executeAuthoritativeSqlFallbackRead,
+  executeInProcessLeaderRead,
   getLocalQueryTransportReadiness,
   maybeReseedBootstrapOverlay,
   normalizeAuthoritativeReadLocalQueryTransport,
@@ -632,6 +633,13 @@ async function executeAuthoritativeSystemTableRead(
   ) {
     return buildLocalReadResult();
   }
+
+  // A leader-REQUIRED read on the node hosting the leader asks it in process
+  // (the same receiver entry), before needing a transport or a query engine.
+  const inProcessLeaderRead = requireOwnerRpcRead ?
+    await executeInProcessLeaderRead(service, tableName, statement, params,
+      canonicalOptions, baseDiagnostics) : null;
+  if (inProcessLeaderRead !== null) return inProcessLeaderRead;
 
   const localQueryTransportReadiness = getLocalQueryTransportReadiness(service);
 

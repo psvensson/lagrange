@@ -30,6 +30,7 @@ import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
+import {bindHostedReplicaOwner} from '../cdc/cdc-hosted-replica-owner.js';
 import {createParticipantReleaseRecovery} from './replica-handler-release-recovery.js';
 import {createParticipantReleaseAuthorizationOwner} from
   './participant-release-authorization-owner.js';
@@ -184,6 +185,9 @@ class ReplicaHandler extends EventEmitter {
     // voter-readiness); the registry also relays each tracked service's
     // consensus observations to the REPLACE owner (design S5.2).
     this.localServices = new TrackedServiceRegistry();
+    // This registry is the one owner of the replicas the node hosts: the CDC
+    // service's leader-qualified reads find a hosted leader through it.
+    bindHostedReplicaOwner(this.cdcIntegrationService, this);
     this.consensusEvents = Object.freeze({
       subscribe: (listener) =>
         this.localServices.subscribeConsensusObservations?.(listener) ||
@@ -233,6 +237,20 @@ class ReplicaHandler extends EventEmitter {
   }
 }
 
+Object.assign(ReplicaHandler.prototype, {
+  /**
+   * The live replicas of one partition this node hosts, read from this
+   * handler's registry: bootstrap and join attach theirs to it, CREATE
+   * registers its own, so it holds every replica the node runs.
+   * @param {string} partitionId - The partition.
+   * @return {Array<Object>} Its hosted, initialized, running services.
+   */
+  hostedPartitionReplicas(partitionId) {
+    return [...this.localServices.values()].filter((service) =>
+      service?.partitionId === partitionId && service.initialized === true &&
+      service.isShutdown !== true);
+  },
+});
 assignReplicaHandlerLifecycleMethods(ReplicaHandler);
 assignReplicaHandlerProgressMethods(ReplicaHandler);
 assignReplicaHandlerCreateStatusMethods(ReplicaHandler);

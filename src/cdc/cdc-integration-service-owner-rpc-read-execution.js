@@ -2,8 +2,15 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
 import {resolveAuthoritativeReadModeContract} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {isValidLeaderReadAuthorityWitness} from
-  '../control-plane/control-plane-authoritative-read-witness.js';
+import {
+  OWNER_FACT_UNAVAILABLE_REASON,
+  leaderReadRequestOf,
+  leaderReadWitnessRefusal,
+} from '../control-plane/control-plane-owner-fact-read-contract.js';
+import {resolvePartitionExecutionBuilders} from
+  '../query/query-executor-partition-request-builders.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {hostedPartitionReplicasOf} from './cdc-hosted-replica-owner.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
@@ -94,24 +101,33 @@ function isRequiredLeaderReadSuccess(queryResult, readAuthority) {
     readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
 }
 
+// The verification of what was received: the receiver's own leader-read
+// predicate, applied again to the witness that came back (a coalesced answer
+// or a receiver that never saw the request's leaderRead field is still
+// refused). A refused answer keeps none of the served rows.
 function enforceRequiredLeaderReadAuthority(
   queryResult,
   partitionId,
   readAuthority,
+  ownerFactFloor,
 ) {
   if (!isRequiredLeaderReadSuccess(queryResult, readAuthority)) {
     return queryResult;
   }
-  const witness = queryResult?.readAuthorityWitness;
-  if (isValidLeaderReadAuthorityWitness(witness, partitionId)) {
+  const refusal = leaderReadWitnessRefusal(queryResult?.readAuthorityWitness,
+    {partitionId, read: leaderReadRequestOf(ownerFactFloor)});
+  if (refusal === null) {
     return queryResult;
   }
+  const {rowSet: _rowSet, rawRows: _rawRows, columns: _columns,
+    ...withoutRows} = queryResult;
   return {
-    ...queryResult,
+    ...withoutRows,
     success: false,
     rows: [],
     error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
     authorityFailureReason: AUTHORITATIVE_LEADER_WITNESS_FAILURE,
+    failureCode: refusal,
   };
 }
 
@@ -486,6 +502,7 @@ async function executeAuthoritativeOwnerRpcRead(
           retryResult?.success ? retryResult : retryResult || queryResult,
           partitionId,
           readAuthority,
+          options?.queryOptions?.ownerFactFloor,
         ),
       });
     }
@@ -498,13 +515,82 @@ async function executeAuthoritativeOwnerRpcRead(
       queryResult,
       partitionId,
       readAuthority,
+      options?.queryOptions?.ownerFactFloor,
     ),
+  });
+}
+
+function isHostedCoreLeader(replica) {
+  return replica.readOwnRaftStatus()?.role === RAFT_ROLE.LEADER;
+}
+
+function inProcessReadResult(answer, builders, nodeId) {
+  return answer?.success === true ?
+    {...builders.buildSuccessResult(answer), participantNodeId: nodeId} :
+    {...answer, rows: [], participantNodeId: nodeId};
+}
+
+/**
+ * The owner RPC arm's in-process transport. On a node that hosts a replica of
+ * the partition whose consensus core leads, a leader-REQUIRED read asks that
+ * replica's receiver entry (handleRemoteQuery, the entry the query transport
+ * reaches) with the request the routed arm sends: no routing projection, no
+ * query engine, no transport. The receiver decides as it does for a routed
+ * request, and the answer is verified here exactly as a routed one is. A
+ * replica that stopped leading refuses typed and the read goes to the owner
+ * over the transport (null); any other answer is the leader's own.
+ * @param {Object} service - The CDC service.
+ * @param {string} tableName - A single-partition system table.
+ * @param {string} statement - The SQL.
+ * @param {Array} params - Its parameters.
+ * @param {Object} options - {readAuthority, queryOptions}.
+ * @param {Object} baseDiagnostics - The read's diagnostics.
+ * @return {Promise<Object|null>} The read result, or null to route.
+ */
+async function executeInProcessLeaderRead(
+  service,
+  tableName,
+  statement,
+  params,
+  options,
+  baseDiagnostics,
+) {
+  const readAuthority = options?.readAuthority;
+  const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
+  if (readAuthority?.leaderMode !== CONTROL_PLANE_READ_LEADER_MODE.REQUIRED ||
+      partitionId === null) {
+    return null;
+  }
+  const replica = hostedPartitionReplicasOf(service, partitionId)
+    .find(isHostedCoreLeader);
+  if (replica === undefined) return null;
+  const executionOptions = {
+    ...(options.queryOptions && typeof options.queryOptions === 'object' ?
+      options.queryOptions : {}),
+    readAuthority,
+  };
+  const builders = resolvePartitionExecutionBuilders({
+    executionOptions, forRead: true, params, partitionId, sql: statement});
+  const answer = await issueAuthoritativeReadStage(service,
+    CDC_TERMINAL_STAGE.OWNER_RPC_READ,
+    () => replica.handleRemoteQuery(builders.buildRequest({partitionId,
+      address: replica.unifiedAddress, sql: statement, params, executionOptions})));
+  if (answer?.failureCode === OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER) {
+    return null;
+  }
+  return buildOwnerRpcReadResult({
+    baseDiagnostics,
+    localQueryTransportReadiness: null,
+    queryResult: enforceRequiredLeaderReadAuthority(
+      inProcessReadResult(answer, builders, service.nodeId),
+      partitionId, readAuthority, executionOptions.ownerFactFloor),
   });
 }
 
 export {
   buildOwnerRpcSqlFallbackQueryOptions,
   executeAuthoritativeOwnerRpcRead,
+  executeInProcessLeaderRead,
   executeAuthoritativeSqlFallbackRead,
   getLocalQueryTransportReadiness,
   maybeReseedBootstrapOverlay,
