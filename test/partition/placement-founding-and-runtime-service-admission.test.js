@@ -232,7 +232,7 @@ it('placement preserves the exact pending entry past a real former-leader refusa
       assert.equal(requests.length, 1);
       assert.equal(successor.proposed.filter(({entryId}) => entryId === refused.entryId).length, 1);
       assert.equal(ledgerRows(successor.leader).length, 1);
-      assert.equal(coordinator.uncertainPlacementAttempts.size, 0);
+      assert.equal(coordinator.uncertainPlacementAdmissionAttempts.size, 0);
     } finally {
       await stop();
       await shutdownAll(successor.leader);
@@ -266,7 +266,7 @@ it('placement retains and replays one committed entry after actual router respon
         [[intent.entryId, statement], [intent.entryId, statement]]);
       assert.equal(proposed.filter(({entryId}) => entryId === intent.entryId).length, 1);
       assert.equal(ledgerRows(leader).length, 1);
-      assert.equal(coordinator.uncertainPlacementAttempts.size, 0);
+      assert.equal(coordinator.uncertainPlacementAdmissionAttempts.size, 0);
     } finally {
       held.resolve();
     }
