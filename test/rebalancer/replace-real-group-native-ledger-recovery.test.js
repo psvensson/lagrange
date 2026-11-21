@@ -14,6 +14,8 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
 import {PLACEMENT_REFUSAL, PLACEMENT_TRIGGER} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
 import {classifyPlacementClass} from '../../src/rebalancer/replica-placement-owner-order.js';
+import {RETAINED_REPAIR_BLOCKER as BLOCKER, RETAINED_REPAIR_CUSTODY as CUSTODY} from
+  '../../src/rebalancer/replica-operation-retained-repair-record.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {placementStatement} from '../partition/placement-admission-fixture.js';
 import {stepRetainedLedgerRow} from '../partition/placement-retained-row-repair-fixture.js';
@@ -172,7 +174,8 @@ function assertDebtIdentity(debt, retained, leader) {
   assert.equal(debt.operation.operationId, retained.operationId);
   assert.equal(debt.operation.replicaId, retained.replicaId);
   assert.equal(debt.operation.createdAt, retained.createdAt);
-  assert.deepEqual(debt.expectedOwner, {nodeId: leader.nodeId, replicaId: leader.replicaId});
+  assert.deepEqual({nodeId: debt.binding.nodeId, replicaId: debt.binding.replicaId},
+    {nodeId: leader.nodeId, replicaId: leader.replicaId});
 }
 
 function assertBoundDebt(context, row, {delegationAllowed}) {
@@ -184,16 +187,18 @@ function assertBoundDebt(context, row, {delegationAllowed}) {
     const debt = repository.retainedPlacementRepairs.get(retained.operationId);
     assert.ok(debt, 'each repository retains a bound obligation');
     assertDebtIdentity(debt, retained, ledger.leader);
-    assert.deepEqual(debt.blockers, [blocker]);
+    assert.deepEqual(debt.blocker, {kind: BLOCKER.OPERATIONS, operations: [blocker]});
     assert.equal(debt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT);
-    if (debt.delegated) {
+    // Named-state record: DELEGATED custody is held only when the receiver's
+    // attestation matched this record's operation, entry and body.
+    if (debt.custody.state === CUSTODY.DELEGATED) {
       assert.ok(delegationAllowed && repository === holder.repository);
       const receiver = ledger.coordinator.repository.retainedPlacementRepairs
         .get(retained.operationId);
-      assert.equal(debt.delegated.entryId, receiver.entryId);
-      assert.equal(debt.delegated.bodyText, JSON.stringify(receiver.body));
-      assert.equal(debt.delegated.operationId, retained.operationId);
-      assert.equal(debt.delegated.createdAt, retained.createdAt);
+      assert.equal(debt.custody.entryId, receiver.entry.entryId);
+      assert.equal(JSON.stringify(debt.entry.body), JSON.stringify(receiver.entry.body));
+      assert.equal(receiver.operation.operationId, retained.operationId);
+      assert.equal(receiver.operation.createdAt, retained.createdAt);
     }
   }
 }
@@ -270,11 +275,13 @@ async function confirmRestoredDebt(context, restored) {
     const debt = repository.retainedPlacementRepairs.get(retained.operationId);
     if (debt) {
       assertDebtIdentity(debt, retained, ledger.leader);
-      assert.ok(debt.delegated, 'remaining custody has a named native receiver');
-      assert.deepEqual({nodeId: debt.delegated.nodeId, replicaId: debt.delegated.replicaId},
-        debt.expectedOwner);
-      assert.equal(debt.delegated.operationId, retained.operationId);
-      assert.equal(debt.delegated.createdAt, retained.createdAt);
+      assert.equal(debt.custody.state, CUSTODY.DELEGATED,
+        'remaining custody has a named native receiver');
+      assert.deepEqual(
+        {nodeId: debt.custody.binding.nodeId, replicaId: debt.custody.binding.replicaId},
+        {nodeId: debt.binding.nodeId, replicaId: debt.binding.replicaId});
+      assert.equal(debt.custody.entryId, debt.entry.entryId);
+      assert.equal(debt.operation.createdAt, retained.createdAt);
     }
     repository.observeRetainedPlacementRepairCommit('replica_operations', restored);
   }

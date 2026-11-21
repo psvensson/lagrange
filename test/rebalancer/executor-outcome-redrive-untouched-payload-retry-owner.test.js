@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {completeServicesFixtureRead, buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {createObservationOnlyMutationPort} from './test-helpers.js';
@@ -161,6 +162,7 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
   // This boundary fixture models an existing nonterminal row and confirmed
   // projection. Repository authority is exercised by the SQLite witnesses.
   const replicaObserver = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: TEST_TERMINAL_OPERATION.targetNodeId,
     systemTableCache: {get: () => null, getAll: () => []},
     controlPlaneSystemTableGateway: {

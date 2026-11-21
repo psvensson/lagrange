@@ -6,6 +6,7 @@ import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE} from
   '../../src/rebalancer/replica-operation-repository-constants.js';
 import {OperationType, createOperation} from '../../src/rebalancer/replica-status.js';
 import {NODE_ID, selectRows, withSurface} from './unknown-outcome-surface-fixture.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 
 const LEDGER_TABLE = TABLES.REPLICA_OPERATIONS;
 const TIMEOUT_MS = 60000;
@@ -13,6 +14,7 @@ const logger = {debug() {}, info() {}, warn() {}, error() {}};
 
 function newRepository(engine, gateway, cdcIntegrationService, options = {}) {
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: NODE_ID,
     systemTableCache: engine.systemCache,
     controlPlaneSystemTableGateway: gateway,

@@ -10,6 +10,7 @@ import {
   ControlPlaneSetup,
 } from '../../src/bootstrap/shared/control-plane-setup.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
+import {retainedRepairOwnerWithoutRecords} from '../test-helpers/retained-repair-ports.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -1245,6 +1246,7 @@ export async function runScopedRemovalPlacementAttachmentWitness({
         isVoterReadyFloorCountableReplica: () => true,
         isOperationReplicaRow: (row, op) => row[COLUMN.REPLICA_ID] === op.replicaId,
         getCriticalMinReplicaCount: () => 3,
+        repository: retainedRepairOwnerWithoutRecords(),
       };
       const attachment2 = ControlPlaneSetup.attachReplicaPlacementOwner({
         nodeId: 'n1',

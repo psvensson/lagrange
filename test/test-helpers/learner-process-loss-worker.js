@@ -3,6 +3,7 @@
  * The node/metadata gateway is local fixture physics, not distributed SQL/RPC.
  */
 import {createFixtureSystemMutationPort} from '../rebalancer/test-helpers.js';
+import {unavailableRetainedRepairPorts} from './retained-repair-ports.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -115,7 +116,9 @@ function openOperations(file, clock, nodeId) {
     executeQuery: async (sql, params) => execute(sql, params),
     readAuthoritativeRows: async (_table, sql, params) => execute(sql, params)};
   gateway.readRows = gateway.readAuthoritativeRows;
-  const repository = new ReplicaOperationRepository({nodeId, membershipOwnerBootIncarnation: 1,
+  const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
+    nodeId, membershipOwnerBootIncarnation: 1,
     timeSource: clock, controlPlaneSystemTableGateway: gateway, logger: noLog,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
     cdcIntegrationService: {},

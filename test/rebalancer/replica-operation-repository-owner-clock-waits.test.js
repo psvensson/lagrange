@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -62,6 +63,7 @@ function createRepository({timeSource, readAuthoritativeRows, executeQuery,
   logger = SILENT_LOGGER}) {
   const execute = executeQuery || (async () => ({success: true, changes: 1}));
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: TEST_NODE_ID,
     timeSource,
     systemTableCache: {

@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {
   ControlPlaneSystemTableGateway, CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -347,6 +348,7 @@ async function readThroughHeldLedger(answer, firstRead, secondRead) {
     },
   });
   const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: 'node-1',
     controlPlaneSystemTableGateway: gateway,
   });

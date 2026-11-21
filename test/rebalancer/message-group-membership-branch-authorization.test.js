@@ -4,6 +4,7 @@
  * No test here claims a physical CREATE or distributed SQL/Raft execution.
  */
 import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -182,6 +183,7 @@ async function setup(t, {initial = false} = {}) {
     },
   };
   const repo = (nodeId = OWNER, boot = 1) => new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId, timeSource: clock,
     membershipOwnerBootIncarnation: boot, controlPlaneSystemTableGateway: gateway,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},

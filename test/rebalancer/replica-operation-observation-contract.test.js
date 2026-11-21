@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -28,6 +29,7 @@ const EMPTY_AUTHORITATIVE_READS = {
 function createRepository(overrides = {}) {
   const {controlPlaneSystemTableGateway = EMPTY_AUTHORITATIVE_READS, ...rest} = overrides;
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: 'node-1',
     systemTableCache: {},
     cdcIntegrationService: {},

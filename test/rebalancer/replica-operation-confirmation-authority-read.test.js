@@ -1,4 +1,5 @@
 import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {createTestCoordinator} from './test-helpers.js';
 import {ERRORS, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -69,6 +70,7 @@ function createRepository(readAuthoritativeRows,
     executeQuery,
   };
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: TEST_NODE_ID,
     systemTableCache: {
       get: () => null,
@@ -401,6 +403,7 @@ test(
     );
 
     const repository = new ReplicaOperationRepository({
+      ...unavailableRetainedRepairPorts(),
       nodeId: TEST_NODE_ID,
       systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
       cdcIntegrationService: {},

@@ -20,6 +20,7 @@
 // the partition's defaults); the durable log is read on an independent
 // connection through the store owner's own statement and proposal codec.
 
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -276,6 +277,7 @@ test('F-ak: the routers that hold a write answer route it again by its code',
     try {
       const cdc = new CDCIntegrationService({nodeId: 'typed-release-node'});
       const repository = new ReplicaOperationRepository({
+        ...unavailableRetainedRepairPorts(),
         nodeId: 'typed-release-node',
         systemTableCache: {get: () => null, getAll: () => [],
           filter: () => []},

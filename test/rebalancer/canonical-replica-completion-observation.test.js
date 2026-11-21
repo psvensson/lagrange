@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -28,6 +29,7 @@ const EMPTY_AUTHORITATIVE_READS = {
 function createRepository(overrides = {}) {
   const {controlPlaneSystemTableGateway = EMPTY_AUTHORITATIVE_READS, ...rest} = overrides;
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: 'node-1',
     systemTableCache: {
       get() {

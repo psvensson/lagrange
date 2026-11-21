@@ -11,6 +11,7 @@ import {PartitionServiceRowOwner} from '../../src/partition/partition-service-ro
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {applyCommitted} from '../test-helpers/participant-transaction-fixture.js';
 import {createObservationOnlyMutationPort} from '../rebalancer/test-helpers.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {NODE, commitLedgerStatement} from './placement-admission-fixture.js';
 
 // The seam the partition service row owner writes through, admitted into the
@@ -92,6 +93,7 @@ function createAuthoritativeLedgerRepository(leader) {
   // write is the explicit committed-statement CAS below; the structured
   // writer port therefore observes only.
   const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: NODE.A,
     timeSource: leader.timeSource,
     logger: leader.logger,

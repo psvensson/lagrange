@@ -8,6 +8,7 @@
  * claim or recover the lane.
  */
 
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -122,6 +123,7 @@ function createSqlGateway(database, options = {}) {
 
 function createRepository(database, options = {}) {
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: options.nodeId || 'foundation-owner',
     systemTableCache: {
       get: () => null,

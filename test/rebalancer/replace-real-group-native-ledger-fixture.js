@@ -11,8 +11,6 @@ import {placementStatement} from '../partition/placement-admission-fixture.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
-import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
-import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {classifyPlacementClass} from '../../src/rebalancer/replica-placement-owner-order.js';
 import {createOperationAt, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -26,14 +24,12 @@ const HISTORICAL_ID = 'native-s11-historical-holder';
 const LEDGER = 'replica_operations';
 const EFFECT_WHILE_LIVE = 'remove_with_live_committed_competitor';
 
-function activeLedgerServiceRow(leader) {
-  return PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
-    replicaId: leader.replicaId, nodeId: leader.nodeId, service: leader,
-    status: SERVICE_STATUS.ACTIVE});
-}
-
-function ledgerLeaderRow(leader) {
-  return {partition_id: leader.partitionId, leader_node_id: leader.nodeId};
+// The canonical ledger route as production publishes it: PARTITIONS names the
+// leader node and the leader's own registration row (raft_role follower, like
+// every partition SERVICES row) is its endpoint.
+function ledgerRouteRows(ledger) {
+  return {partitions: [{partition_id: ledger.leader.partitionId,
+    leader_node_id: ledger.leader.nodeId}], services: [{...ledger.endpoint}]};
 }
 
 function routeLedgerMessages(world, ledger, observation) {
@@ -54,8 +50,10 @@ function routeLedgerMessages(world, ledger, observation) {
     return original.deliver(address, payload, options);
   };
   coordinator.syncOwnerDependencies({messageRouter: routed});
-  coordinator.systemTableCache.upsert('services', activeLedgerServiceRow(ledger.leader));
-  coordinator.systemTableCache.upsert('partitions', ledgerLeaderRow(ledger.leader));
+  const route = ledgerRouteRows(ledger);
+  for (const table of ['partitions', 'services']) {
+    for (const row of route[table]) coordinator.systemTableCache.upsert(table, row);
+  }
 }
 
 function ledgerGatewayForWorld(world, ledger, original, incumbentId, observation) {
@@ -97,8 +95,7 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
   const repairAnswers = [];
   const holder = createTestCoordinator({nodeId: sourceNode,
     controlPlaneSystemTableGateway: ledger.gateway,
-    cacheData: {services: [activeLedgerServiceRow(ledger.leader)],
-      partitions: [ledgerLeaderRow(ledger.leader)]},
+    cacheData: ledgerRouteRows(ledger),
     replaceWitness: false, committedMembershipFixture: false,
     messageRouter: {async deliver(_address, payload) {
       const answer = await send(ledger.leader, payload);

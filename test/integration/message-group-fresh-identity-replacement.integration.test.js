@@ -1,4 +1,5 @@
 import {createFixtureSystemMutationPort} from '../rebalancer/test-helpers.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -365,6 +366,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
     const noLog = {debug() {}, info() {}, warn() {}, error() {}};
     const repositoryFor = (nodeId) =>
       new ReplicaOperationRepository({
+        ...unavailableRetainedRepairPorts(),
         nodeId,
         membershipOwnerBootIncarnation: 1,
         timeSource: {now: () => nowMs},

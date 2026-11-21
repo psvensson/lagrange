@@ -8,7 +8,7 @@ import {readPartitionAppliedIndex} from './partition-committed-log.js';
 import {createHash} from 'node:crypto';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
-import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
+import {OperationType} from '../rebalancer/replica-operation-progress.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL, PLACEMENT_TRANSITION_KIND} from
   '../rebalancer/replica-placement-owner-constants.js';
 import {admitCommittedCommand, PARTITION_COMMITTED_COMMAND_ORIGIN,
@@ -34,8 +34,6 @@ import {buildPlacementCommand, isPinnedPlacementCommand} from
   './partition-placement-admission-command.js';
 import {LEDGER_PARTITION_ID, decideHoldRelease, decidePlacementAdmission} from
   './partition-placement-admission-decision.js';
-import {placementOperationIdOf, placementReplicaIdOf} from
-  './partition-placement-admission-identity.js';
 import {decideRetainedPlacementRepair} from './partition-placement-retained-repair.js';
 import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADMIT_TYPE,
   PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_RESULT_FIELD} from
@@ -65,122 +63,13 @@ function commandFingerprintOf(command) {
     .slice(0, FINGERPRINT_HEX_LENGTH), HEX_RADIX);
 }
 
-const SELECT_ADMITTED_OPERATION_SQL =
-  'SELECT type, target_node_id, source_node_id, partition_id, entity_type, ' +
-  'entity_id, replica_id, source_replica_id, copy_source_node_id, ' +
-  'membership_publication_epoch, steps_history ' +
-  'FROM replica_operations WHERE operation_id = ?';
-
-function nullableField(value) {
-  return value ?? null;
-}
-
-function matchesAdmittedRowIdentity(row, statement, move, opId) {
-  const expectedReplicaId = move.replicaId ?? placementReplicaIdOf(opId);
-  return row.type === move.type &&
-    row.target_node_id === move.targetNodeId &&
-    row.source_node_id === statement.sourceNodeId &&
-    row.partition_id === statement.partitionId &&
-    row.entity_type === statement.entityType &&
-    row.entity_id === statement.entityId &&
-    row.replica_id === expectedReplicaId;
-}
-
-function matchesAdmittedRowOptionalColumns(row, statement, move) {
-  return nullableField(row.source_replica_id) === nullableField(move.sourceReplicaId) &&
-    nullableField(row.copy_source_node_id) === nullableField(move.copySourceNodeId) &&
-    nullableField(row.membership_publication_epoch) ===
-      nullableField(statement.membershipPublicationEpoch);
-}
-
-function readFirstStepEntry(row) {
-  if (typeof row?.steps_history !== 'string' || row.steps_history.length === 0) {
-    return null;
-  }
-  const history = JSON.parse(row.steps_history);
-  return Array.isArray(history) && history.length > 0 ? nullableField(history[0]) : null;
-}
-
-function matchesFirstStepIncarnations(firstStep, move) {
-  return nullableField(firstStep?.[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION]) ===
-      nullableField(move.targetNodeBootIncarnation) &&
-    nullableField(firstStep?.[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION]) ===
-      nullableField(move.targetNodeStorageIncarnation);
-}
-
-function matchesAdmissionMetaFields(meta, command, statement) {
-  return meta.entryId === command.entryId &&
-    meta.transitionKind === statement.transitionKind &&
-    meta.placementClass === statement.placementClass &&
-    meta.repair === statement.repair &&
-    nullableField(meta.formationLatchEpoch) === nullableField(statement.formationLatchEpoch) &&
-    nullableField(meta.foundingIntentId) === nullableField(statement.foundingIntentId);
-}
-
-function matchesRetirementScope(recorded, requested) {
-  if (requested === undefined || recorded === undefined) return recorded === requested;
-  if (recorded === null || requested === null) return false;
-  return Object.keys(recorded).length === Object.keys(requested).length &&
-    Object.entries(requested).every(([key, value]) => recorded[key] === value);
-}
-
-function matchesAdmittedStepMetadata(row, command, statement, move) {
-  const firstStep = readFirstStepEntry(row);
-  const meta = nullableField(firstStep?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION]);
-  return meta !== null &&
-    matchesFirstStepIncarnations(firstStep, move) &&
-    matchesAdmissionMetaFields(meta, command, statement) &&
-    matchesRetirementScope(meta.voterRetirement, move.voterRetirement) &&
-    matchesRetirementScope(meta.learnerRetirement, move.learnerRetirement);
-}
-
-function matchesAdmittedRow(row, command, statement, move, opId) {
-  return Boolean(row) &&
-    matchesAdmittedRowIdentity(row, statement, move, opId) &&
-    matchesAdmittedRowOptionalColumns(row, statement, move) &&
-    matchesAdmittedStepMetadata(row, command, statement, move);
-}
-
-function matchesPreFingerprintAdmittedResult(service, recorded, result, command) {
-  if (command.type !== PLACEMENT_ADMIT_TYPE || !Array.isArray(result.operationIds) ||
-      !Array.isArray(command.body?.moves) || result.operationIds.length === 0 ||
-      result.operationIds.length !== command.body.moves.length) {
-    return false;
-  }
-  const selectOp = service.db.prepare(SELECT_ADMITTED_OPERATION_SQL);
-  for (let idx = 0; idx < result.operationIds.length; idx += 1) {
-    const opId = result.operationIds[idx];
-    const expectedOpId = placementOperationIdOf(
-      command.body.partitionId, recorded.logIndex, idx);
-    if (opId !== expectedOpId) return false;
-    const row = selectOp.get(opId);
-    if (!matchesAdmittedRow(row, command, command.body, command.body.moves[idx], opId)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function isPreFingerprintCommandReplay(service, recorded, command) {
-  const result = retainedResult(recorded);
-  if (result.outcome === PLACEMENT_OUTCOME.ADMITTED) {
-    return matchesPreFingerprintAdmittedResult(service, recorded, result, command);
-  }
-  if (result.outcome === PLACEMENT_OUTCOME.RELEASED) {
-    return command.type === PLACEMENT_RELEASE_HOLD_TYPE &&
-      Array.isArray(result.operationIds) &&
-      result.operationIds.length === 1 &&
-      command.body?.operationId === result.operationIds[0];
-  }
-  return false;
-}
-
-function isSameCommandReplay(service, recorded, command) {
-  if (Number.isSafeInteger(recorded.lastInsertRowid)) {
-    return recorded.lastInsertRowid === commandFingerprintOf(command);
-  }
-  if (recorded.lastInsertRowid !== null) return false;
-  return isPreFingerprintCommandReplay(service, recorded, command);
+// Old outcome rows have no immutable original command identity. Their format is
+// admitted explicitly as unresolved debt; mutable operation rows cannot supply
+// missing bytes. Never rewrite these rows or repeat effects to guess identity.
+function recordedReplayRefusal(recorded, command) {
+  if (recorded.lastInsertRowid === null) return ERROR.OUTCOME_IDENTITY_UNAVAILABLE;
+  return Number.isSafeInteger(recorded.lastInsertRowid) &&
+    recorded.lastInsertRowid === commandFingerprintOf(command) ? null : ERROR.BYTES;
 }
 
 function refusal(service, failureCode) {
@@ -214,6 +103,15 @@ function recordedAnswer(service, recorded, command) {
     ...(command.type === PLACEMENT_REPAIR_TYPE ? {entryId: command.entryId} : {})});
 }
 
+function recordedRequestAnswer(service, recorded, command) {
+  const replayRefusal = recordedReplayRefusal(recorded, command);
+  if (replayRefusal !== null) return refusal(service, replayRefusal);
+  const answer = recordedAnswer(service, recorded, command);
+  return command.type === PLACEMENT_ADMIT_TYPE &&
+    command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
+    {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} : answer;
+}
+
 // The leader-local proposal of a built command: leadership, the cutover
 // pause, the committed-command admission, a settled answer replayed, a
 // pending one joined; the CDC owed admission counts its rows before it is
@@ -229,12 +127,7 @@ function proposePlacementCommand(service, command) {
   const entryKey = service.getCommittedEntryKey(command);
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
-    if (!isSameCommandReplay(service, recorded, command)) return refusal(service, ERROR.BYTES);
-    const answer = recordedAnswer(service, recorded, command);
-    return command.type === PLACEMENT_ADMIT_TYPE &&
-      command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
-      {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} :
-      answer;
+    return recordedRequestAnswer(service, recorded, command);
   }
   // A settled exact entry is a read of an existing outcome, not a new write.
   // Cutover pause still refuses every uncommitted proposal or pending turn.
@@ -388,8 +281,10 @@ function applyPlacementCommand(service, committed) {
   const entryKey = service.getCommittedEntryKey(command);
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
-    if (!isSameCommandReplay(service, recorded, command)) throw new Error(ERROR.BYTES);
-    const answer = recordedAnswer(service, recorded, command);
+    const replayRefusal = recordedReplayRefusal(recorded, command);
+    if (replayRefusal === ERROR.BYTES) throw new Error(ERROR.BYTES);
+    const answer = replayRefusal === null ? recordedAnswer(service, recorded, command) :
+      refusal(service, replayRefusal);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }

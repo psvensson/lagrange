@@ -1,4 +1,5 @@
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 /**
@@ -174,6 +175,7 @@ function createTestRepository(overrides = {}) {
   };
 
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: overrides.nodeId || TEST_NODE_ID,
     systemTableCache: mockCache,
     cdcIntegrationService: mockCdc,

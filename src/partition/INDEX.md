@@ -100,7 +100,7 @@ documentClass: generated
 - [partition-placement-admission-constants.js](partition-placement-admission-constants.js) - The placement owner's committed command types at the partition boundary (quest replica-placement-admission-owner,... (importers: hub)
 - [partition-placement-admission-decision.js](partition-placement-admission-decision.js) - Every committed row at a step where it can be incomplete, in id order. (importers: hub)
 - [partition-placement-admission-identity.js](partition-placement-admission-identity.js) - The identity of every operation the placement admission applier admits (quest replica-placement-admission-owner,... (importers: many)
-- [partition-placement-admission.js](partition-placement-admission.js) - Request one admission on this replica_operations partition: the placement owner's local call, and the... (importers: many)
+- [partition-placement-admission.js](partition-placement-admission.js) - Request one admission on this replica_operations partition: the placement owner's local call, and the... (importers: hub)
 - [partition-placement-founder-proof.js](partition-placement-founder-proof.js) - No leading comment; first export: provePlacementFounders. (importers: few)
 - [partition-placement-repair-preparation-result.js](partition-placement-repair-preparation-result.js) - No leading comment; first export: unavailableRepairPreparation. (importers: few)
 - [partition-placement-repair-preparation.js](partition-placement-repair-preparation.js) - No leading comment; first export: requestPlacementRepairPreparation. (importers: few)

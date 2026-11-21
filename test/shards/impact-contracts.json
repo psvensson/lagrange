@@ -2276,6 +2276,26 @@
         "test/bootstrap/release-version-fence.test.js",
         "test/bootstrap/support-envelope-owner.test.js"
       ]
+    },
+    "retained-placement-repair-leadership-publication": {
+      "description": "Partition leadership is published by the replica leadership publishers as the PARTITIONS leader_node_id (SERVICES rows collapse leader to follower) and reaches each coordinator cache through CDC delivery and cache admission. The retained placement repair owner treats every ledger PARTITIONS/SERVICES change (and a bound node's boot incarnation change) as a hint: its serialized decision re-resolves the canonical binding from the cache, voids custody across the publication and presents the exact pinned entry; it never routes from the notified row.",
+      "owners": [
+        "src/raft/replica-leadership-state.js",
+        "src/partition/partition-service-metadata-delivery-methods.js",
+        "src/partition/partition-service-metadata-mutation-helpers.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/message-group/cdc-handler.js",
+        "src/cache/system-table-cache.js",
+        "src/cache/system-table-cache-observation-methods.js",
+        "src/rebalancer/replica-operation-retained-repair-wake.js",
+        "src/rebalancer/replica-operation-repository-retained-placement-repair.js",
+        "src/rebalancer/replica-placement-owner-retained-repair-routing.js",
+        "src/rebalancer/replica-placement-owner-transport.js"
+      ],
+      "tests": [
+        "test/partition/placement-retained-real-publication.test.js",
+        "test/partition/placement-retained-publication.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4805,6 +4825,36 @@
       "witnessTests": [
         "test/bootstrap/release-version-fence.test.js",
         "test/bootstrap/support-envelope-owner.test.js"
+      ]
+    },
+    "leadership-publication-and-retained-placement-repair": {
+      "description": "A shared producer changed meaning (SERVICES stopped carrying raft_role=leader) while the retained repair consumer and its fixtures kept the old meaning. The witness drives the real publishers through a durable write and CDC delivery into both caches and asserts the consumer rebinds A-B-A and completes the exact entry once.",
+      "endpoints": [
+        {
+          "id": "partition-leadership-publication",
+          "owners": [
+            "src/raft/replica-leadership-state.js",
+            "src/partition/partition-service-metadata-delivery-methods.js",
+            "src/partition/partition-service-metadata-mutation-helpers.js",
+            "src/partition/partition-service-row-owner.js",
+            "src/message-group/cdc-handler.js",
+            "src/cache/system-table-cache.js",
+            "src/cache/system-table-cache-observation-methods.js"
+          ]
+        },
+        {
+          "id": "retained-placement-repair-consumer",
+          "owners": [
+            "src/rebalancer/replica-operation-retained-repair-wake.js",
+            "src/rebalancer/replica-operation-repository-retained-placement-repair.js",
+            "src/rebalancer/replica-placement-owner-retained-repair-routing.js",
+            "src/rebalancer/replica-placement-owner-transport.js"
+          ]
+        }
+      ],
+      "contract": "retained-placement-repair-leadership-publication",
+      "witnessTests": [
+        "test/partition/placement-retained-real-publication.test.js"
       ]
     }
   }

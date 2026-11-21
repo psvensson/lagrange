@@ -1,6 +1,7 @@
 /** Shared canonical operation/native fixture; transport and metadata are supplied
  * test physics, not distributed SQL or physical networking. */
 import {createFixtureSystemMutationPort} from '../rebalancer/test-helpers.js';
+import {unavailableRetainedRepairPorts} from './retained-repair-ports.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -100,7 +101,9 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
       group_id: GROUP, node_id: nodeId, replica_id: replicaId, status});
     return serviceRows[serviceRows.length - 1];
   };
-  const repositoryFor = (nodeId) => new ReplicaOperationRepository({nodeId,
+  const repositoryFor = (nodeId) => new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
+    nodeId,
     membershipOwnerBootIncarnation: 1, timeSource: clock,
     controlPlaneSystemTableGateway: gateway, logger: noLog, systemTableCache,
     cdcIntegrationService: {},
