@@ -512,7 +512,7 @@ test('different remote E2 never receives custody while owner retains unknown E1;
     }
   }));
 
-test('remote E2 joins active E1 then takes actual custody after its definite BUSY settlement', () =>
+test('remote E2 joins active E1 and retains renewed BUSY without spending its entry', () =>
   withRepairLedger(async (world) => {
     const retained = await retainMissing(world);
     const competitor = await compete(world);
@@ -552,7 +552,9 @@ test('remote E2 joins active E1 then takes actual custody after its definite BUS
       release();
       assert.equal(await firstResult, false);
       assert.equal(await secondResult, false);
-      assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+      assert.equal(reply.retainedRepairObservation.state, 'contended');
+      assert.equal(reply.retainedRepairObservation.result.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+      assert.equal(reply.committed, undefined, 'E1 is never relabeled as a committed E2');
       assert.equal(reply.repairCustody, undefined,
         'settled E2 has no receiver custody; sender retains its typed blocker wake');
       assert.equal(sender.retainedPlacementRepairs.get(retained.operationId).delegated, undefined);
@@ -607,6 +609,7 @@ async function holdRemotePendingReply(world, retained) {
   };
   const result = sender.repairRetainedOperation(retained);
   await arrived;
+  reads = 0;
   return {remote, sender, result, release, reads: () => reads};
 }
 
@@ -806,6 +809,7 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
       };
       const result = sender.repairRetainedOperation(retained);
       await arrived;
+      reads = 0;
       try {
         const incumbent = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(competitor.operationIds[0]);
@@ -1082,4 +1086,106 @@ for (const producer of ['mutation', 'ACTIVE-reservation']) {
         }
       }));
   }
+}
+
+async function queuedRepairWinner(world) {
+  const retained = await retainMissing(world);
+  const remote = remoteCaller(world);
+  const sender = remote.coordinator.repository;
+  const receiver = world.coordinator.repository;
+  let queued;
+  let releaseSend;
+  let committed;
+  let releaseWinner;
+  let reply;
+  const sourceReady = new Promise((resolve) => {
+    queued = resolve;
+  });
+  const sendGate = new Promise((resolve) => {
+    releaseSend = resolve;
+  });
+  const winnerReady = new Promise((resolve) => {
+    committed = resolve;
+  });
+  const winnerGate = new Promise((resolve) => {
+    releaseWinner = resolve;
+  });
+  const sendNative = sender.repairRetainedPlacement;
+  sender.repairRetainedPlacement = async (payload) => {
+    queued(payload);
+    await sendGate;
+    reply = await sendNative(payload);
+    return reply;
+  };
+  const sourceResult = sender.repairRetainedOperation(retained);
+  const e2 = await sourceReady;
+  const ownerNative = receiver.repairRetainedPlacement;
+  receiver.repairRetainedPlacement = async (payload) => {
+    const answer = await ownerNative(payload);
+    committed(payload);
+    await winnerGate;
+    return answer;
+  };
+  const winnerResult = receiver.repairRetainedOperation(retained);
+  const e1 = await winnerReady;
+  return {retained, remote, sender, receiver, e1, e2, sourceResult, winnerResult,
+    releaseSend, releaseWinner, reply: () => reply};
+}
+
+for (const authority of ['exact', 'changed', 'unavailable']) {
+  test(`queued real E2 joins E1 winner and confirms ${authority} authority without relabeling`, () =>
+    withRepairLedger(async (world) => {
+      const race = await queuedRepairWinner(world);
+      const originalRead = race.receiver.executeReplicaOperationsRead;
+      try {
+        assert.notEqual(race.e1.entryId, race.e2.entryId);
+        assert.equal(world.commands.length, 1);
+        if (authority === 'changed') {
+          await world.gateway.submitMutation({tableName: 'replica_operations', operation: 'update',
+            whereClause: {operation_id: race.retained.operationId},
+            data: {created_at: race.retained.createdAt + 1,
+              updated_at: race.retained.updatedAt + 1}});
+        }
+        if (authority === 'unavailable') {
+          race.receiver.executeReplicaOperationsRead = (...args) => {
+            const held = race.receiver.retainedPlacementRepairs.get(race.retained.operationId);
+            return held?.entryId === race.e2.entryId ?
+              Promise.resolve({success: false, rowSetComplete: false}) :
+              originalRead.apply(race.receiver, args);
+          };
+        }
+        race.releaseSend();
+        await settleTicks();
+        assert.equal(world.commands.length, 1,
+          'E2 joins E1; it does not propose around the active completer');
+        race.releaseWinner();
+        assert.equal(await race.winnerResult, authority !== 'changed');
+        assert.equal(await race.sourceResult, authority === 'exact');
+        const reply = race.reply();
+        assert.equal(reply.committed, undefined, 'E1 is not a durable outcome under E2 identity');
+        assert.equal(reply.retainedRepairObservation.state, authority);
+        assert.equal(reply.retainedRepairObservation.entryId, race.e2.entryId);
+        assert.equal(world.commands.length, 1, 'joining a winner does not create an exact-existing proposal');
+        if (authority === 'unavailable') {
+          const held = race.sender.retainedPlacementRepairs.get(race.retained.operationId);
+          assert.equal(held.entryId, race.e2.entryId);
+          assert.deepEqual(held.body, race.e2.body);
+          race.receiver.executeReplicaOperationsRead = originalRead;
+          const actual = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+            .get(race.retained.operationId);
+          await observeBurst(race.sender, actual);
+          assert.equal(race.sender.retainedPlacementRepairs.size, 0);
+        } else {
+          assert.equal(race.sender.retainedPlacementRepairs.size, 0);
+        }
+        const actual = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(race.retained.operationId);
+        assert.equal(actual.created_at, race.retained.createdAt + (authority === 'changed' ? 1 : 0));
+      } finally {
+        race.receiver.executeReplicaOperationsRead = originalRead;
+        race.releaseSend();
+        race.releaseWinner();
+        await race.remote.coordinator.shutdown();
+      }
+    }));
 }
