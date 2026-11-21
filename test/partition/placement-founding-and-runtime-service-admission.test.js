@@ -20,8 +20,10 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {
+  CDC_OPERATION,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  TABLES,
   UNIFIED_SERVICE_TYPE,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -76,10 +78,87 @@ import {
 import {attachAutoCommitLoop, createCoordinatorWithLedger} from
   './placement-create-with-ledger-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {createRouterEnvelopeFixture} from '../transport/router-envelope-witness-fixture.js';
 
 const SERVICE_ID = 'transaction_coordinator';
 const USER_PARTITION_ID = 'orders-p1';
 const SCHEMA_JOB_ID = 'schema-job-found-1';
+const REMOTE_TIMEOUT_MS = 1_000;
+
+async function withRemotePlacementWire(scenario) {
+  const network = createRouterEnvelopeFixture(import.meta.url, NODE.A);
+  await network.setup();
+  try {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const sender = await network.start(NODE.A);
+        const target = await network.start(leader.nodeId);
+        const cache = new SystemTableCache();
+        const coordinator = createCoordinatorWithLedger(leader, {
+          registerLocalLeader: false, messageRouter: sender.router,
+        });
+        coordinator.systemTableCache = cache;
+        const serviceRow = PartitionServiceRowOwner.buildServiceRow({
+          partitionId: leader.partitionId, replicaId: leader.replicaId,
+          nodeId: leader.nodeId, service: leader, status: SERVICE_STATUS.ACTIVE,
+        });
+        const requests = [];
+        target.router.register(serviceRow.address, (envelope) => {
+          requests.push(envelope);
+          return leader.handleTransportMessage(envelope);
+        });
+        await network.connect(sender, target);
+        const owner = new PartitionServiceRowOwner({systemTableWriter: {
+          updateSystemTableRow(tableName, key, fields) {
+            cache.applySystemTableChange(tableName, CDC_OPERATION.UPSERT, {...key, ...fields});
+          },
+        }});
+        const publish = () => owner.publishCanonicalLeaderNodeId(serviceRow, leader);
+        const submit = (entryId) => coordinator.submitPlacementPayload({entryId,
+          body: placementStatement({partitionId: 'q11-routing-p1', target: NODE.B})},
+        REMOTE_TIMEOUT_MS);
+        await scenario({cache, serviceRow, requests, publish, submit, leader,
+          proposed, coordinator});
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  } finally {
+    await network.teardown();
+  }
+}
+
+it('placement holds an active endpoint until canonical leader publication', async () => {
+  await withRemotePlacementWire(async ({cache, serviceRow, requests, publish, submit, leader}) => {
+    assert.equal(serviceRow.raft_role, RAFT_ROLE.FOLLOWER,
+      'production registration collapses the service role');
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, serviceRow);
+    await assert.rejects(submit('q11-pending-remote'), {code: 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE'});
+    assert.equal(requests.length, 0, 'no unconfirmed route receives a message');
+    assert.deepEqual(ledgerRows(leader), []);
+    await publish();
+    assert.equal((await submit('q11-pending-remote')).placementResult.outcome, 'ADMITTED');
+    assert.equal(requests.length, 1);
+    assert.equal(ledgerRows(leader).length, 1);
+  });
+});
+
+it('placement never uses sendToAddress as a response-bearing delivery port', async () =>
+  withRemotePlacementWire(async ({cache, serviceRow, publish, submit, coordinator, leader}) => {
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, serviceRow);
+    await publish();
+    let legacyCalls = 0;
+    coordinator.messageRouter = {async sendToAddress() {
+      legacyCalls += 1;
+      return {success: true, committed: true};
+    }};
+    await assert.rejects(submit('q11-legacy-delivery'), {code: 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE'});
+    assert.equal(legacyCalls, 0);
+    assert.deepEqual(ledgerRows(leader), []);
+  }));
 
 describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEMENT_ADMIT', () => {
   it('routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN', async () => {
