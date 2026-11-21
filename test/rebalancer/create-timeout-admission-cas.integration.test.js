@@ -84,8 +84,18 @@ async function withExpiredStep(measure, {
     } : null;
     const cache = createMockCache({services: source ? [source] : []});
     const otherTables = createCoordinatorSqlStore(cache);
+    let readOwnerState = () => ({});
     const sql = {async executeQuery(statement, params = []) {
       if (/\breplica_operations\b/u.test(statement)) {
+        if (leader.db === null) {
+          const evidence = new Error('late fixture ledger read');
+          const context = {
+            ...readOwnerState(),
+            sqlKind: statement.trim().split(/\s+/u)[0],
+          };
+          throw new Error(`${JSON.stringify(context)}
+${evidence.stack}`);
+        }
         const prepared = leader.db.prepare(statement);
         assert.equal(prepared.reader, true, 'the operation ledger writes through committed apply');
         return {success: true, rowSetComplete: true, rows: prepared.all(...params)};
@@ -128,6 +138,21 @@ async function withExpiredStep(measure, {
       controlPlaneSystemTableGateway: gateway,
     });
     const owner = coordinator.workflowOwner;
+    readOwnerState = () => ({
+      coordinatorShuttingDown: coordinator.isShuttingDown,
+      ownerLanes: owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey.size,
+      ownerHandoffTimers: owner.createdOperationHandoffRetryTimerByOperationId.size,
+    });
+    const handleHandoffFailure =
+      owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure.bind(owner);
+    owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure =
+      (operation, error, ...args) => {
+        const reportedError = error.message.includes('late fixture ledger read') ?
+          new Error(`${error.message}
+Handoff catch site
+${new Error().stack}`) : error;
+        return handleHandoffFailure(operation, reportedError, ...args);
+      };
     const target = new ReplicaCreateAdmissionOwner({
       nodeId: NODE.B, ownerIncarnation: OWNER_BOOT, gateway,
     });
