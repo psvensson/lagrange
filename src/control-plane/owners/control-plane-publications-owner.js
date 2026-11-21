@@ -1,7 +1,10 @@
 import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
   '../../bootstrap/system-table-schemas-constants.js';
 import {isControlPlaneWriterShutDown} from '../control-plane-error-classification.js';
-import {TABLES} from '../../constants/index.js';
+import {buildSystemTableMutationSqlParts} from
+  '../../cdc/cdc-system-table-mutation-sql-helpers.js';
+import {CDC_OPERATION, TABLES} from '../../constants/index.js';
+import {serializeControlPlanePublicationRow} from '../system-row-normalizers.js';
 import {publicationRowsHaveSameRevision} from '../control-plane-publication-merge.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane-system-table-gateway.js';
@@ -66,6 +69,15 @@ function publicationWritePredicate(row) {
   return Object.fromEntries(PUBLICATION_COLUMNS.map((column) => [column, row[column]]));
 }
 
+function publicationWriteEffectConfirmation(row) {
+  const serialized = serializeControlPlanePublicationRow(row);
+  const columns = Object.fromEntries(PUBLICATION_COLUMNS.map((column) =>
+    [column, serialized[column] ?? null]));
+  const {values} = buildSystemTableMutationSqlParts(CDC_OPERATION.UPDATE, columns);
+  return (observed) => observed !== null && PUBLICATION_COLUMNS.every((column, index) =>
+    Object.hasOwn(observed, column) && observed[column] === values[index]);
+}
+
 class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = CONTROL_PLANE_PUBLICATIONS_OWNER_NAME;
   static TABLE_NAME = TABLES.CONTROL_PLANE_PUBLICATIONS;
@@ -122,19 +134,13 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
     return this.listCachedRows(options);
   }
 
-  async insertPublication(row, options = {}) {
-    assertPublicationMutationRow(row, null);
-    return this.insertRow(
-      row,
-      this.buildPublicationMutationOptions(options),
-    );
-  }
-
   async upsertPublication(row, options = {}) {
     const {expectedPublicationRow, ...writeOptions} = options;
     assertPublicationMutationRow(row, expectedPublicationRow);
     assertPublicationWriteRevision(row, expectedPublicationRow);
-    const mutationOptions = this.buildPublicationMutationOptions(writeOptions);
+    const mutationOptions = this.buildPublicationMutationOptions({
+      ...writeOptions, confirmWriteEffect: publicationWriteEffectConfirmation(row),
+    });
     if (expectedPublicationRow === null) {
       return this.insertRow(row, mutationOptions);
     }
@@ -142,15 +148,6 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
     return this.executeMutation(UPDATE, {whereClause, data: row}, mutationOptions,
       (attemptOptions) => this.requireGateway().updateSystemTableRow(
         this.getTableName(), whereClause, row, attemptOptions));
-  }
-
-  async updatePublication(publicationId, data, options = {}) {
-    assertPublicationMutationRow({...data, publication_id: publicationId}, null);
-    return this.updateByPrimaryKey(
-      publicationId,
-      data,
-      this.buildPublicationMutationOptions(options),
-    );
   }
 }
 

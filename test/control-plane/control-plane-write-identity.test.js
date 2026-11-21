@@ -7,6 +7,7 @@ import {test} from 'node:test';
 
 import {
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
+  captureControlPlaneWriteConfirmation,
   controlPlaneWriteIdentity,
   releaseControlPlaneWriteIdentities,
   runControlPlaneWrite,
@@ -65,4 +66,35 @@ test('at the bound a new named write is refused typed before delivery; no ' +
       return {success: true};
     });
   assert.notEqual(afterRelease, keys[0], 'a released name is a new instance');
+});
+
+test('a durable confirmation can release only the exact observed instance and effect', async () => {
+  const name = controlPlaneWriteIdentity(SCOPE, 'confirmed-instance');
+  const first = {publication: 'first-content'};
+  const second = {publication: 'second-content'};
+  const keys = [];
+  const unknown = async (key) => {
+    keys.push(key);
+    return UNKNOWN_ANSWER;
+  };
+  const write = (effect) => runControlPlaneWrite({
+    writeIdentity: name, confirmWriteEffect: (observed) => observed === effect,
+  }, effect, unknown);
+  try {
+    await write(first);
+    const delayed = captureControlPlaneWriteConfirmation(name);
+    await runControlPlaneWrite({writeIdentity: name}, first, async () => ({success: true}));
+    await write(second);
+
+    const current = captureControlPlaneWriteConfirmation(name);
+    assert.equal(delayed(first), false, 'an earlier read cannot clear the successor');
+    assert.equal(current(first), false, 'the same name does not prove the effect');
+    await write(second);
+    assert.equal(keys[2], keys[1], 'either unconfirmed read preserves the retained instance');
+    assert.equal(current(second), true);
+    await write(second);
+    assert.notEqual(keys[3], keys[1], 'exact authoritative readback retires the retained instance');
+  } finally {
+    releaseControlPlaneWriteIdentities(SCOPE);
+  }
 });

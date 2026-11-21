@@ -51,8 +51,10 @@ import {
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {controlPlaneWriteIdentity, releaseControlPlaneWriteIdentity} from
-  './control-plane-write-identity.js';
+import {
+  captureControlPlaneWriteConfirmation,
+  controlPlaneWriteIdentity,
+} from './control-plane-write-identity.js';
 
 const PUBLICATION_WRITE_UNCONFIRMED = 'PUBLICATION_WRITE_UNCONFIRMED';
 const PUBLICATION_WRITE_IDENTITY_SUBJECT = 'membership-publication';
@@ -197,6 +199,13 @@ function publicationWriteUnconfirmed(publicationId, cause) {
   });
 }
 
+async function readPublicationForWrite(owner, publicationId, readOptions, writeIdentity) {
+  const confirm = captureControlPlaneWriteConfirmation(writeIdentity);
+  const row = await owner.getPublication(publicationId, readOptions);
+  confirm(row);
+  return row;
+}
+
 function canUsePublicationCommit(result, publicationId) {
   return result?.success === true && result.committed === true &&
     result.partitionResult?.affectedRows === 1 &&
@@ -248,7 +257,7 @@ class MembershipPublicationCoordinatorPersist extends
     const readOptions = buildPublicationReadOptions(publicationOptions);
     const maxAttempts = normalizePositiveInteger(
       options.publicationWriteMaxAttempts, PUBLICATION_WRITE_MAX_ATTEMPTS);
-    let current = await owner.getPublication(publicationId, readOptions);
+    let current = await readPublicationForWrite(owner, publicationId, readOptions, writeIdentity);
     let observedIntent = observePublicationIntent(intent, current);
     let decision = decidePublicationIntent(observedIntent, current);
     let failure;
@@ -261,7 +270,6 @@ class MembershipPublicationCoordinatorPersist extends
         });
         if (options.skipPublicationWriteReadback === true &&
             canUsePublicationCommit(result, publicationId)) {
-          releaseControlPlaneWriteIdentity(writeIdentity);
           await this._maybeLatchFormationAfterPublicationWrite(candidate);
           return candidate;
         }
@@ -270,7 +278,7 @@ class MembershipPublicationCoordinatorPersist extends
         failure = error;
       }
       try {
-        current = await owner.getPublication(publicationId, readOptions);
+        current = await readPublicationForWrite(owner, publicationId, readOptions, writeIdentity);
       } catch (error) {
         if (isControlPlaneWriterShutDown(error)) throw error;
         reportPublicationWriteUnconfirmed(this, {
@@ -282,7 +290,6 @@ class MembershipPublicationCoordinatorPersist extends
       decision = decidePublicationIntent(observedIntent, current);
     }
     if (decision.state === PUBLICATION_INTENT_DECISION.CONFIRMED) {
-      releaseControlPlaneWriteIdentity(writeIdentity);
       const confirmed = serializeMembershipPublicationRow(decision.row);
       await this._maybeLatchFormationAfterPublicationWrite(confirmed);
       return confirmed;

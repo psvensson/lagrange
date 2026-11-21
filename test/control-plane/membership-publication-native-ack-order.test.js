@@ -587,7 +587,10 @@ test('refresh closes a durable open row that already contains the entire ACK set
       'the confirmed closure and metadata need no repeated proposal');
   }));
 
-test('a read-only birth replay cannot release an earlier unresolved refresh entry',
+for (const settleBeforeRead of [false, true]) {
+  test(settleBeforeRead ?
+    'read-only replay retires the earlier refresh once its exact effect is durable' :
+    'a read-only birth replay cannot release an earlier unresolved refresh entry',
   () => withPublicationLedger(async (ledger, writer) => {
     const {leader} = ledger;
     const row = publicationRow(3, NODES, WRITER_TIME - 10);
@@ -643,28 +646,41 @@ test('a read-only birth replay cannot release an earlier unresolved refresh entr
       const unknownEntryId = heldCommand.entryId;
       assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), original);
       const beforeReplay = arrivals.length;
+      if (settleBeforeRead) {
+        assert.equal(applyCommitted(leader, heldCommand), null);
+        ledger.applied.push(heldCommand);
+        heldCommand = null;
+      }
+      const expectedRow = leader.db.prepare(SELECT_ROW).get(publicationId);
 
       const candidate = normalizeControlPlanePublicationRow(original);
       writer.coordinator.deriveClusterMembershipCandidate =
-        async () => ({...candidate, changed: true});
+          async () => ({...candidate, changed: true});
       const replay = await writer.coordinator.reconcileClusterMembership(options);
       assert.equal(replay.publicationRow.publicationId, publicationId);
       assert.equal(arrivals.length, beforeReplay, 'replaying birth proposes no write');
-      assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), original);
+      assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), expectedRow);
 
       resolving = true;
-      installLifecycleRefresh(writer, original, [NODES[1]]);
-      const later = track(writer.coordinator.reconcileClusterMembership(options));
-      await Promise.allSettled([later.promise]);
-      assert.equal(arrivals[beforeReplay], unknownEntryId,
-        'resolve the independently retained refresh before delivering new same-name content');
-      await assert.rejects(later.promise, {code: 'PUBLICATION_WRITE_UNCONFIRMED'});
-      assert.deepEqual(readDurablePublication(leader, publicationId)
-        .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[0]]);
+      const nextRefresh = installLifecycleRefresh(writer, expectedRow, [NODES[1]]);
+      if (settleBeforeRead) {
+        await nextRefresh();
+        assert.equal(arrivals.length, beforeReplay + 1,
+          'the exactly observed effect does not need to be reissued');
+        assert.notEqual(arrivals[beforeReplay], unknownEntryId,
+          'fresh content is delivered only with a fresh identity');
+      } else {
+        const later = track(nextRefresh({publicationWriteMaxAttempts: 1}));
+        await Promise.allSettled([later.promise]);
+        assert.equal(arrivals[beforeReplay], unknownEntryId,
+          'resolve the earlier refresh before delivering different same-name content');
+        await assert.rejects(later.promise, {code: 'PUBLICATION_WRITE_UNCONFIRMED'});
+        assert.deepEqual(readDurablePublication(leader, publicationId)
+          .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[0]]);
+        const current = leader.db.prepare(SELECT_ROW).get(publicationId);
+        await installLifecycleRefresh(writer, current, [NODES[1]])();
+      }
       assert.equal(ledger.applied.filter(({entryId}) => entryId === unknownEntryId).length, 1);
-
-      const current = leader.db.prepare(SELECT_ROW).get(publicationId);
-      await installLifecycleRefresh(writer, current, [NODES[1]])();
       assert.deepEqual(readDurablePublication(leader, publicationId)
         .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[1]]);
     } finally {
@@ -673,3 +689,4 @@ test('a read-only birth replay cannot release an earlier unresolved refresh entr
       await Promise.allSettled(pending ? [pending.promise] : []);
     }
   }));
+}
