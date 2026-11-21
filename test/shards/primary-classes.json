@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2364,
+    "unit": 2365,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-a26f6ff1",
+  "censusSize": 2724,
+  "digest": "fnv1a32-5a6aefd1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1626,6 +1626,7 @@
     "test/query/locking-read-canonical-ast.test.js": "unit",
     "test/query/locking-read-execution-lifecycle.test.js": "unit",
     "test/query/lookup-primitive.test.js": "unit",
+    "test/query/named-write-verdict-table-probe.test.js": "unit",
     "test/query/nested-call-classifier.test.js": "unit",
     "test/query/nested-call-rejection-messages.test.js": "unit",
     "test/query/nested-call-rejection.test.js": "unit",
