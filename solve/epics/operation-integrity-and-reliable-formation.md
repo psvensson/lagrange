@@ -125,9 +125,9 @@ product features.
 | Decision | Current evidence | Next owner action |
 | --- | --- | --- |
 | Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
-| Which operation may a caller replay? | At `5b36d3ba6` four managed files passed the native, identity, reservation and deduplication checks. Review found that a malformed optional identity could reach an earlier replay exit. | The creation owner is validating the request once before lane selection and all reuse. Compare the same cold and replay requests with the actual native and SQL provisioning callers. |
-| When may placement retire an existing learner? | At `46f3ac3f5` four managed files passed the restart and receipt controls. On `1a6d97c57` late promotion preserved the replica but labeled the removal FAILED. An unscoped, undispatched removal also remained open. The control for an uncertain dispatched removal retained its obligation. | Verify the durable SUPERSEDED disposition across status, replay, recensus and cleanup. A genuine successful REMOVE still requires its own effect. |
-| Does the whole cluster meet the service goal? | The unchanged 53-file selection passed 52 on `268d439b2`. The outstanding REPLACE test found an additional completion caller. On `9e7184a3b`, five placement files passed. Full-range static job #5504 found seven dependency violations, four lint errors and one oversized source file. | The integration owner pins the repaired composition and checks the complete selection and full-range static. Run the three physical formations within 420 seconds, then the comparative smoke. |
+| Which operation may a caller replay? | The native CREATE owner now refuses a durably FAILED creation and replays a matching ACTIVE creation. The composed terminal-replay file at `e7e978450` checks that the exact failed attempt releases its lane for its successor. | Preserve the distinction between a confirmed terminal row and an unreadable or mismatched result through reconstruction. |
+| When may placement retire an existing learner? | The 24 native retirement assertions passed on `e89e3dccf` and on `e7e978450`. The cases cover a newer boot or replica birth, late promotion, a neutral durable SUPERSEDED result and continued custody of an uncertain dispatched REMOVE. | Check neutral retirement and release through the normal dispatch and recensus path when composing further changes. |
+| Does the whole cluster meet the service goal? | All 53 files from the frozen selection passed on `052a8d877` across the three lab hosts (3,291 assertions without retry). On `e7e978450`, full-range fast static passed in 55.818 seconds on tv-dator (managed request #5507). Four affected native and SQLite files passed on adam-laptop (40 assertions). | The integration owner runs the repaired composition on the three distinct hosts and keeps the original deadline and SQL predicates. Three consecutive successes precede comparative smoke. |
 
 Three-host run `e5deee2a` on clean `9e7184a3b` exhausted the 420-second
 formation bound and the 120-second public routability bound. The harness
@@ -136,11 +136,15 @@ observable ledger snapshot already had four failed ADDs. In the complete
 target logs, two materialized CREATEs expired in the first bounded
 learner-admission request. Two other CREATEs re-entered after transient
 authority refusal and reached the runtime constructor without a membership
-stamp. The admission owner tests retained work after the original caller
-expires and cleanup after genuine failure. The workflow owner traces the
-stamp obtained for dispatch into the durable operation that a recovering
-target reads. Continue with those controls on the managed fleet before
-repeating the physical trial.
+stamp. Both failure orders were reproduced on the managed lab. On
+`e7e978450` the materialized learner remains owned after the caller expires
+and a reconstructed ADD reads the original bootstrap stamp from its
+operation. Independent review identified two additional orders for the
+CREATE owners to prove: recovery of an already-admitted row lacking its
+original stamp and a voter-gated REPLACE whose usable service address
+arrives after the last consensus wake. The three-host measurement determines
+how the two demonstrated ADD repairs affect formation. A focused pass alone
+cannot establish fleet progress.
 
 The prior three-host runs shared a failure to reach global quiet. Within
 the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with
