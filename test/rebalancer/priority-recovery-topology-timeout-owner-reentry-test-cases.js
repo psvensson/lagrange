@@ -599,26 +599,12 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
     };
 
     const sqlQueryEngine = {
-      async executeQuery(sql, params = []) {
+      async executeQuery(sql) {
         const normalizedSql = String(sql);
         if (normalizedSql.includes('FROM replica_operations')) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: 1,
-          };
-        }
-        if (normalizedSql.startsWith('UPDATE replica_operations SET')) {
-          updateCount += 1;
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
             affectedRows: 1,
           };
         }
@@ -640,6 +626,12 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
     const coordinator = createCoordinator({
       nodeId: TEST_SOURCE_NODE_ID,
       sqlQueryEngine,
+      // Each structured UPDATE of the fixture row asks for it once.
+      operationRowOf: (operationId) => {
+        if (operationId !== TEST_OPERATION_ID) return null;
+        updateCount += 1;
+        return operationRow;
+      },
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get(tableName, key) {
@@ -1053,26 +1045,12 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
     };
 
     const sqlQueryEngine = {
-      async executeQuery(sql, params = []) {
+      async executeQuery(sql) {
         const normalizedSql = String(sql);
         if (normalizedSql.includes('FROM replica_operations')) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: 1,
-          };
-        }
-        if (normalizedSql.startsWith('UPDATE replica_operations SET')) {
-          updateCount += 1;
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
             affectedRows: 1,
           };
         }
@@ -1095,6 +1073,12 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       nodeId: TEST_TARGET_NODE_ID,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,
+      // Each structured UPDATE of the fixture row asks for it once.
+      operationRowOf: (operationId) => {
+        if (operationId !== TEST_OPERATION_ID) return null;
+        updateCount += 1;
+        return operationRow;
+      },
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get(tableName, key) {

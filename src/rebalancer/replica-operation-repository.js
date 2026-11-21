@@ -467,8 +467,8 @@ class ReplicaOperationRepository {
    * @param {string} options.nodeId
    * @param {object} options.systemTableCache
    * @param {object} options.cdcIntegrationService
-   * @param {object} options.controlPlaneSystemTableGateway
-   * @param {boolean} [options.requireMutationPort] - Validate the writer binding.
+   * @param {object} options.controlPlaneSystemTableGateway - Required; its
+   *   structured submitMutation port is the repository's one writer.
    * @param {object} options.logger
    * @param {object} [options.emitter] - EventEmitter for divergence events
    */
@@ -481,7 +481,6 @@ class ReplicaOperationRepository {
     this.retainedPlacementRepairWakes = new Map();
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
-    this.requireMutationPort = options.requireMutationPort === true;
     this.setControlPlaneSystemTableGateway(options.controlPlaneSystemTableGateway);
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.logger = options.logger;
@@ -534,8 +533,7 @@ class ReplicaOperationRepository {
     return this._shuttingDown === true;
   }
   setControlPlaneSystemTableGateway(gateway) {
-    this.submitOperationMutation = bindReplicaOperationMutationPort(
-      gateway, this.requireMutationPort);
+    this.submitOperationMutation = bindReplicaOperationMutationPort(gateway);
     this.controlPlaneSystemTableGateway = gateway;
   }
 

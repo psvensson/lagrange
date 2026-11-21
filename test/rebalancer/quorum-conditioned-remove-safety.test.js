@@ -22,7 +22,9 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {createMockPolicyService, createTestCoordinator} from './test-helpers.js';
+import {
+  createMockPolicyService, createObservationOnlyMutationPort, createTestCoordinator,
+} from './test-helpers.js';
 import {registerQuorumConditionedRemoveSafetyDeferredDispatchTests} from './quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js';
 import {registerQuorumConditionedRemoveSafetyTailTests} from './quorum-conditioned-remove-safety-tail-test-cases.js';
 
@@ -1206,6 +1208,7 @@ test('priority publication safety services row rejects partial, incomplete, and 
     const coordinator = createTestCoordinator({
       nodeId: 'node-1',
       controlPlaneSystemTableGateway: {
+        submitMutation: createObservationOnlyMutationPort('quorum invalid authoritative read'),
         async readAuthoritativeRows() {
           return invalidRead.response;
         },

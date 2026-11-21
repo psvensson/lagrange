@@ -332,7 +332,15 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
+  // Leader-authority census #3/#4 (2026-11-21): partition SERVICES rows never
+  // publish leader, so the leader-removal gate reads no replica row role; the
+  // source's leadership is the canonical leader publication (leader_node_id).
   'src/rebalancer/priority-publication-safety-topology.js': Object.freeze({
+    forbiddenFragments: Object.freeze([
+      'getPriorityPublicationSourceRoleState',
+      'getPriorityPublicationReplacementRoleState',
+      'normalizeReplicaRowRaftRole',
+    ]),
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'resolvePriorityPublicationSourceRoleState',
@@ -342,6 +350,7 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
         ]),
         forbiddenFragments: Object.freeze([
           'completedLeaderHandoffEvidence',
+          'raft_role',
         ]),
       }),
     ]),
@@ -352,6 +361,12 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
   'src/rebalancer/priority-publication-leader-safety.js': Object.freeze({
     requiredFragments: Object.freeze([
       'LEADERSHIP_PENDING',
+    ]),
+    forbiddenFragments: Object.freeze([
+      'raft_role',
+      'getPriorityPublicationSourceRoleState',
+      'getPriorityPublicationReplacementRoleState',
+      'hasCoLocatedLeaderSiblingEvidence',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({

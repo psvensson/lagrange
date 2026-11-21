@@ -29,7 +29,7 @@
  * Design: §2, §7, Phase 2
  */
 
-import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {createFixtureSystemMutationPort, createOperationRowUpdatePort} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
@@ -141,42 +141,32 @@ function createTestCoordinator(options = {}) {
   const emitter = new ExecutorOutcomeEmitter({logger: console});
   const workflowCoordinator = new DurableWorkflowCoordinator();
   const persisted = [];
+  // The fixture's durable ledger row, apart from the caller's operation.
+  const durable = operation ? operationToRow(operation) : null;
   const executeQuery = async (sql, params, queryOptions = null) => {
-    if (sql.includes('WHERE operation_id') && operation) {
-      const opId = params?.[0];
-      if (opId === operation.operationId) {
-        return {
-          success: true,
-          rows: [operationToRow(operation)],
-        };
-      }
-    }
     if (sql.includes('UPDATE')) {
-      // Owner-lease heartbeat touch (findings 5+14): a lease-only UPDATE
-      // carries [leaseExpiresAt, operationId] — distinct from the canonical
-      // transition shape — and mutates only the lease column.
-      if (sql.includes('lease_expires_at = ?')) {
-        if (operation) {
-          operation.ownerLeaseExpiresAt = params?.[0] ?? null;
-        }
-        persisted.push({sql, params, queryOptions});
-        return persistResults;
-      }
-      if (operation) {
-        operation.status = params?.[0] ?? operation.status;
-        operation.workflowStep = params?.[1] ?? operation.workflowStep;
-        operation.updatedAt = params?.[2] ?? operation.updatedAt;
-        operation.completedAt = params?.[3] ?? operation.completedAt;
-        operation.errorMessage = params?.[4] ?? operation.errorMessage;
-        operation.stepsHistory = Array.isArray(operation.stepsHistory) ?
-          JSON.parse(params?.[5] || JSON.stringify(operation.stepsHistory)) :
-          [];
-        operation.replicaId = params?.[6] ?? operation.replicaId;
+      // Owner-lease heartbeat touch (findings 5+14): the repository's
+      // lease-only UPDATE carries [leaseExpiresAt, operationId] and mutates
+      // only the lease column.
+      if (durable && sql.includes('lease_expires_at = ?') && params?.[1] === durable.operation_id) {
+        durable.lease_expires_at = params[0] ?? null;
       }
       persisted.push({sql, params, queryOptions});
       return persistResults;
     }
+    if (sql.includes('WHERE operation_id') && durable && params?.[0] === durable.operation_id) {
+      return {success: true, rows: [{...durable}]};
+    }
     return {success: true, rows: []};
+  };
+  // A transition is the structured UPDATE, applied to the row by its named
+  // columns; it is recorded with the query options the repository sent.
+  const applyStructured = createOperationRowUpdatePort(
+    (operationId) => (operationId === durable?.operation_id ? durable : null),
+    createFixtureSystemMutationPort(executeQuery));
+  const submitMutation = async (mutation, queryOptions) => {
+    if (mutation?.operation === 'update') persisted.push({mutation, queryOptions});
+    return applyStructured(mutation, queryOptions);
   };
 
   const coordinator = new RebalanceCoordinator({
@@ -200,7 +190,7 @@ function createTestCoordinator(options = {}) {
       executeQuery,
     },
     controlPlaneSystemTableGateway: {
-      submitMutation: createFixtureSystemMutationPort(executeQuery),
+      submitMutation,
       async readRows(_tableName, sql, params) {
         return executeQuery(sql, params);
       },
@@ -474,9 +464,9 @@ async (t) => {
     1,
     'priority dispatch claim should perform exactly one durable compare-and-set update',
   );
-  t.match(
-    persisted[0]?.sql || '',
-    /WHERE operation_id = \? AND workflow_step = \?/,
+  t.equal(
+    persisted[0]?.mutation?.whereClause?.workflow_step,
+    WORKFLOW_STEP.PENDING,
     'priority dispatch claim should guard the update on the durable PENDING row',
   );
 });

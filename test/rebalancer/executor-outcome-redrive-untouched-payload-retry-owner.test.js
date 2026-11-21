@@ -1,5 +1,6 @@
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {completeServicesFixtureRead, buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {createObservationOnlyMutationPort} from './test-helpers.js';
 /**
  * CL-029 (quest formation-ledger-self-move-blocks-cluster-ops): the re-drive
  * loop's retained-and-untouched exit must arm the timed retry.
@@ -163,6 +164,7 @@ function buildTerminalPersistenceHost({transitionOutcome}) {
     nodeId: TEST_TERMINAL_OPERATION.targetNodeId,
     systemTableCache: {get: () => null, getAll: () => []},
     controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('untouched payload replica observer'),
       readAuthoritativeRows: async () => completeServicesFixtureRead([]),
     },
   });

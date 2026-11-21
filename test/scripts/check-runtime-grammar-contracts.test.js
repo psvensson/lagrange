@@ -86,6 +86,8 @@ const BUILD_PRIORITY_CLOSURE_WITNESS_COMPARISON_FRAGMENT =
 const COMPLETED_LEADER_HANDOFF_EVIDENCE_FRAGMENT =
   'completedLeaderHandoffEvidence';
 const LEADERSHIP_PENDING_FRAGMENT = 'LEADERSHIP_PENDING';
+const RAFT_ROLE_FRAGMENT = 'raft_role';
+const SOURCE_ROW_ROLE_READER_FRAGMENT = 'getPriorityPublicationSourceRoleState';
 const STATE_MACHINE_PRESSURE_PREFLIGHT_GRAMMAR_FRAGMENT =
   'STATE_MACHINE_PRESSURE_POINT_GRAMMAR';
 const STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_FRAGMENT =
@@ -482,6 +484,53 @@ test('detects priority source removal code that collapses handoff evidence into 
       ),
     );
   });
+
+test('detects a priority leader-removal gate that reads a replica row role ' +
+  '(leader-authority census #3/#4: the gate reads the fresh witness and ' +
+  'partitions.leader_node_id only)', async (t) => {
+  const leaderSafetyViolations =
+    collectRuntimeGrammarContractViolationsFromSource([
+      'class PriorityPublicationLeaderSafety {',
+      '  buildPriorityPublicationLeaderRemoveSafetySnapshot(operation, row) {',
+      '    const replacementLeaderOwnershipObserved = row.raft_role === \'leader\';',
+      '    const moved = partitionLeaderNodeId !== sourceNodeId;',
+      '    return {state: STATE.LEADERSHIP_PENDING, moved,',
+      '      replacementLeaderOwnershipObserved};',
+      '  }',
+      '}',
+    ].join('\n'), PRIORITY_PUBLICATION_LEADER_SAFETY_FILE_PATH);
+  t.ok(leaderSafetyViolations.some((violation) =>
+    violation.target === RAFT_ROLE_FRAGMENT),
+  'a row role read in the leader-safety gate is a violation');
+  const topologyViolations = collectRuntimeGrammarContractViolationsFromSource([
+    'class PriorityPublicationSafetyTopology {',
+    '  getPriorityPublicationSourceRoleState(replicaRow) {',
+    '    return replicaRow.raft_role;',
+    '  }',
+    '  resolvePriorityPublicationSourceRoleState(operation, partitionRow) {',
+    '    if (partitionLeaderNodeId === sourceNodeId) {',
+    '      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER;',
+    '    }',
+    '    return operation.sourceRow.raft_role;',
+    '  }',
+    '}',
+  ].join('\n'), PRIORITY_PUBLICATION_SAFETY_TOPOLOGY_FILE_PATH);
+  t.ok(topologyViolations.some((violation) =>
+    violation.target === SOURCE_ROW_ROLE_READER_FRAGMENT),
+  'the deleted source row-role reader is a violation');
+  t.ok(topologyViolations.some((violation) =>
+    violation.functionName ===
+      RESOLVE_PRIORITY_PUBLICATION_SOURCE_ROLE_STATE_FUNCTION &&
+    violation.target === RAFT_ROLE_FRAGMENT),
+  'a row role read in the source leadership resolution is a violation');
+  for (const filePath of [PRIORITY_PUBLICATION_LEADER_SAFETY_FILE_PATH,
+    PRIORITY_PUBLICATION_SAFETY_TOPOLOGY_FILE_PATH]) {
+    const source = await readFile(new URL(`../../${filePath}`, import.meta.url),
+      'utf8');
+    t.same(collectRuntimeGrammarContractViolationsFromSource(source, filePath),
+      [], `${filePath} reads no replica row role for leadership`);
+  }
+});
 
 test('ignores non-hotspot files', async (t) => {
   const violations = collectRuntimeGrammarContractViolationsFromSource(

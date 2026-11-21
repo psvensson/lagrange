@@ -4,10 +4,66 @@ import {buildOperationUpdateOutcome} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
-import {TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION, SERVICE_STATUS} from '../../src/constants/index.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {applyCommitted} from '../test-helpers/participant-transaction-fixture.js';
+import {createObservationOnlyMutationPort} from '../rebalancer/test-helpers.js';
 import {NODE, commitLedgerStatement} from './placement-admission-fixture.js';
+
+// The seam the partition service row owner writes through, admitted into the
+// real SystemTableCache as the CDC change each committed write delivers.
+function cacheAdmissionWriter(cache) {
+  return {
+    async insertSystemTableRow(tableName, row) {
+      cache.applySystemTableChange(tableName, CDC_OPERATION.UPSERT, row);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async updateSystemTableRow(tableName, key, fields) {
+      cache.applySystemTableChange(tableName, CDC_OPERATION.UPSERT, {...key, ...fields});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+}
+
+/**
+ * Publish the ledger leader through the real publisher: the partition service
+ * row owner registers the leader's ACTIVE replica (its SERVICES row, which
+ * publishes an ordinary partition leader as raft_role follower) and then
+ * publishes the leader identity on the ledger's PARTITIONS row
+ * (leader_node_id). Nothing here writes a row by hand.
+ * @param {Object} cache - The coordinator's SystemTableCache.
+ * @param {Object} leader - The ledger leader service.
+ * @return {Promise<void>}
+ */
+async function publishLedgerLeader(cache, leader) {
+  const owner = new PartitionServiceRowOwner({systemTableWriter: cacheAdmissionWriter(cache)});
+  await owner.registerReplica({partitionId: leader.partitionId, replicaId: leader.replicaId,
+    nodeId: leader.nodeId, service: leader, status: SERVICE_STATUS.ACTIVE});
+}
+
+/**
+ * The canonical delivery port toward the ledger leader's endpoint. A delivery
+ * must name exactly the address the row owner binds to that replica; the
+ * ledger's answer travels in the transport owner's acknowledged envelope.
+ * @param {Object} leader - The ledger leader service.
+ * @param {Function} answer - (address, message, options) => the ledger answer.
+ * @return {{deliver: Function}} The router's delivery seam.
+ */
+function ledgerLeaderTransport(leader, answer) {
+  const {address} = PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
+    replicaId: leader.replicaId, nodeId: leader.nodeId});
+  return {
+    async deliver(target, message, options) {
+      if (target !== address) {
+        throw new Error(`ledger delivery addressed ${target}; the published endpoint is ${address}`);
+      }
+      return buildDeliveryEnvelope({acknowledged: true}, await answer(target, message, options));
+    },
+  };
+}
 
 function attachAutoCommitLoop(leader, proposed) {
   let seen = proposed.length;
@@ -32,11 +88,16 @@ function attachAutoCommitLoop(leader, proposed) {
 
 function createAuthoritativeLedgerRepository(leader) {
   let casCounter = 0;
-  // Retain the repository owner's exact projection comparison.
+  // Retain the repository owner's exact projection comparison. Its only
+  // write is the explicit committed-statement CAS below; the structured
+  // writer port therefore observes only.
   const repository = new ReplicaOperationRepository({
     nodeId: NODE.A,
     timeSource: leader.timeSource,
     logger: leader.logger,
+    controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('placement ledger repository'),
+    },
   });
   return Object.assign(repository, {
     async executeReplicaOperationsRead(sql, params) {
@@ -102,16 +163,15 @@ function createAuthoritativeLedgerRepository(leader) {
   });
 }
 
+/**
+ * A coordinator facade over the real ledger leader, with the real
+ * SystemTableCache as its cache.
+ * @param {Object} leader - The ledger leader service.
+ * @param {Object} [options] - {registerLocalLeader, messageRouter}.
+ * @return {Object} The coordinator.
+ */
 function createCoordinatorWithLedger(leader, options = {}) {
-  const servicesRows = options.servicesRows || [];
-  const partitionsRows = options.partitionsRows || [];
-  const systemTableCache = {
-    getAll(tableName) {
-      if (tableName === TABLES.SERVICES) return servicesRows;
-      if (tableName === TABLES.PARTITIONS) return partitionsRows;
-      return [];
-    },
-  };
+  const systemTableCache = new SystemTableCache();
   const coordinator = Object.create(RebalanceCoordinator.prototype);
   coordinator.nodeId = NODE.A;
   coordinator.initialized = true;
@@ -170,4 +230,21 @@ function createCoordinatorWithLedger(leader, options = {}) {
   return coordinator;
 }
 
-export {attachAutoCommitLoop, createCoordinatorWithLedger};
+/**
+ * A coordinator that is not the ledger leader: it reaches the leader only
+ * through what the real publisher put in its cache and the given router.
+ * @param {Object} leader - The ledger leader service.
+ * @param {Object} messageRouter - The router's delivery seam.
+ * @return {Promise<Object>} The coordinator.
+ */
+async function createRemoteLedgerCoordinator(leader, messageRouter) {
+  const coordinator = createCoordinatorWithLedger(leader,
+    {registerLocalLeader: false, messageRouter});
+  await publishLedgerLeader(coordinator.systemTableCache, leader);
+  return coordinator;
+}
+
+export {
+  attachAutoCommitLoop, createCoordinatorWithLedger, createRemoteLedgerCoordinator,
+  ledgerLeaderTransport,
+};

@@ -12,6 +12,7 @@ import {
   createCoordinator,
   createTimeoutSweepCoordinator,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
+import {withExecutorMutationPort} from './test-helpers.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const INCOMPLETE_OPERATION_OWNER_QUERY_SQL_FRAGMENT =
@@ -285,7 +286,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
         },
-        controlPlaneSystemTableGateway: {
+        controlPlaneSystemTableGateway: withExecutorMutationPort({
           async readRows(tableName, sql, params, options) {
             gatewayCalls.push({
               tableName,
@@ -306,7 +307,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
               affectedRows: 0,
             };
           },
-        },
+        }),
         messageRouter: {
           async deliver() {
             return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
@@ -386,7 +387,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         cdcIntegrationService: {
           refreshAuthoritativeCacheRow: async () => true,
         },
-        controlPlaneSystemTableGateway: {
+        controlPlaneSystemTableGateway: withExecutorMutationPort({
           async readRows() {
             return {
               success: true,
@@ -402,7 +403,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
               affectedRows: 0,
             };
           },
-        },
+        }),
         messageRouter: {
           async deliver() {
             return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});

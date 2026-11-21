@@ -1,4 +1,5 @@
 import {createCoordinatorSqlStore, createMockCache} from './test-helpers.js';
+import {applyOperationRowUpdate} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase,
@@ -44,7 +45,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     TEST_EMPTY_LIST,
     TEST_EMPTY_VALUE,
     TEST_ENTITY_TYPE_PARTITION,
-    TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX,
     TEST_HANDOFF_TIMEOUT_MS,
     TEST_LOCAL_OWNER_PARTITION_ID,
     TEST_LOCAL_OWNER_REPLICA_ID,
@@ -102,7 +102,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase(TEST_SQL_PRIORITY_TIMEOUT_REDISPATCH_TEST_NAME, async (t) => {
     const deliveries = [];
     const updateOptions = [];
-    const updateParams = [];
+    const updateMutations = [];
     let updateCount = 0;
     const nowMs = Date.now();
     const operationRow = buildPendingOperationRow({
@@ -113,28 +113,12 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     });
 
     const sqlQueryEngine = {
-      async executeQuery(sql, params = [], options = {}) {
+      async executeQuery(sql) {
         const normalizedSql = String(sql);
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: 1,
-          };
-        }
-        if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += 1;
-          updateOptions.push({...options});
-          updateParams.push([...params]);
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
             affectedRows: 1,
           };
         }
@@ -154,6 +138,13 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     };
 
     const coordinator = createCoordinator({
+      // Each structured ledger UPDATE, applied to the row by column.
+      operationUpdate: async (mutation, options) => {
+        updateCount += 1;
+        updateOptions.push({...options});
+        updateMutations.push(mutation);
+        return applyOperationRowUpdate(operationRow, mutation);
+      },
       nodeId: TEST_TARGET_NODE_ID,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,
@@ -300,7 +291,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
       );
       t.equal(
-        updateParams[0]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+        updateMutations[0]?.whereClause?.workflow_step,
         TEST_STEP_PENDING,
         TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
       );
@@ -591,7 +582,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
 
   registerCase(TEST_SQL_PRIORITY_DEFERRED_CLAIM_DISPATCH_TEST_NAME, async (t) => {
     const deliveries = [];
-    const updateParams = [];
+    const updateMutations = [];
     let updateCount = 0;
     const nowMs = Date.now();
     const operationRow = buildPendingOperationRow({
@@ -602,44 +593,12 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     });
 
     const sqlQueryEngine = {
-      async executeQuery(sql, params = []) {
+      async executeQuery(sql) {
         const normalizedSql = String(sql);
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
             rows: [{...operationRow}],
-            affectedRows: 1,
-          };
-        }
-        if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += 1;
-          updateParams.push([...params]);
-          if (updateCount === 1) {
-            return {
-              success: false,
-              error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
-              errorCode: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
-              participantFailures: [
-                {
-                  deferRetry: true,
-                  retryAfterMs: TEST_RETRY_AFTER_MS,
-                },
-              ],
-              firstFailedParticipant: {
-                deferRetry: true,
-                retryAfterMs: TEST_RETRY_AFTER_MS,
-              },
-            };
-          }
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[NUM.THREE];
-          operationRow.error_message = params[NUM.FOUR];
-          operationRow.steps_history = params[NUM.FIVE];
-          operationRow.replica_id = params[NUM.SIX];
-          return {
-            success: true,
             affectedRows: 1,
           };
         }
@@ -659,6 +618,29 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     };
 
     const coordinator = createCoordinator({
+      // Each structured ledger UPDATE, applied to the row by column.
+      operationUpdate: async (mutation) => {
+        updateCount += 1;
+        updateMutations.push(mutation);
+        if (updateCount === 1) {
+          return {
+            success: false,
+            error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+            errorCode: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+            participantFailures: [
+              {
+                deferRetry: true,
+                retryAfterMs: TEST_RETRY_AFTER_MS,
+              },
+            ],
+            firstFailedParticipant: {
+              deferRetry: true,
+              retryAfterMs: TEST_RETRY_AFTER_MS,
+            },
+          };
+        }
+        return applyOperationRowUpdate(operationRow, mutation);
+      },
       nodeId: TEST_TARGET_NODE_ID,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,
@@ -735,7 +717,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_STEP,
     );
     t.equal(
-      updateParams[1]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+      updateMutations[1]?.whereClause?.workflow_step,
       TEST_STEP_PENDING,
       TEST_ASSERT_SQL_PRIORITY_DEFERRED_CLAIM_CAS,
     );
@@ -758,40 +740,8 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     });
 
     const sqlQueryEngine = {
-      async executeQuery(sql, params = [], options = {}) {
+      async executeQuery(sql, params = []) {
         const normalizedSql = String(sql);
-        if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += 1;
-          updateOptions.push({...options});
-          if (updateCount === 1 || updateCount === NUM.THREE) {
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[NUM.THREE];
-            operationRow.error_message = params[NUM.FOUR];
-            operationRow.steps_history = params[NUM.FIVE];
-            operationRow.replica_id = params[NUM.SIX];
-            return {
-              success: true,
-              affectedRows: 1,
-            };
-          }
-          return {
-            success: false,
-            error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
-            errorCode: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
-            participantFailures: [
-              {
-                deferRetry: true,
-                retryAfterMs: TEST_RETRY_AFTER_MS,
-              },
-            ],
-            firstFailedParticipant: {
-              deferRetry: true,
-              retryAfterMs: TEST_RETRY_AFTER_MS,
-            },
-          };
-        }
         if (
           normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
         normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
@@ -831,6 +781,29 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     };
 
     const coordinator = createCoordinator({
+      // Each structured ledger UPDATE, applied to the row by column.
+      operationUpdate: async (mutation, options) => {
+        updateCount += 1;
+        updateOptions.push({...options});
+        if (updateCount === 1 || updateCount === NUM.THREE) {
+          return applyOperationRowUpdate(operationRow, mutation);
+        }
+        return {
+          success: false,
+          error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+          errorCode: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
+          participantFailures: [
+            {
+              deferRetry: true,
+              retryAfterMs: TEST_RETRY_AFTER_MS,
+            },
+          ],
+          firstFailedParticipant: {
+            deferRetry: true,
+            retryAfterMs: TEST_RETRY_AFTER_MS,
+          },
+        };
+      },
       nodeId: TEST_TARGET_NODE_ID,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,
@@ -999,20 +972,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     const sqlQueryEngine = {
       async executeQuery(sql, params = []) {
         const normalizedSql = String(sql);
-        if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += 1;
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[NUM.THREE];
-          operationRow.error_message = params[NUM.FOUR];
-          operationRow.steps_history = params[NUM.FIVE];
-          operationRow.replica_id = params[NUM.SIX];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
         if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
           return {
             success: true,
@@ -1041,6 +1000,11 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     };
 
     const coordinator = createCoordinator({
+      // Each structured ledger UPDATE, applied to the row by column.
+      operationUpdate: async (mutation) => {
+        updateCount += 1;
+        return applyOperationRowUpdate(operationRow, mutation);
+      },
       nodeId: TEST_TARGET_NODE_ID,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,
@@ -1157,20 +1121,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       const sqlQueryEngine = {
         async executeQuery(sql, params = []) {
           const normalizedSql = String(sql);
-          if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-            updateCount += 1;
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[NUM.THREE];
-            operationRow.error_message = params[NUM.FOUR];
-            operationRow.steps_history = params[NUM.FIVE];
-            operationRow.replica_id = params[NUM.SIX];
-            return {
-              success: true,
-              affectedRows: 1,
-            };
-          }
           if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
             return {
               success: true,
@@ -1199,6 +1149,11 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       };
 
       const coordinator = createCoordinator({
+        // Each structured ledger UPDATE, applied to the row by column.
+        operationUpdate: async (mutation) => {
+          updateCount += 1;
+          return applyOperationRowUpdate(operationRow, mutation);
+        },
         nodeId: TEST_TARGET_NODE_ID,
         replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
         sqlQueryEngine,

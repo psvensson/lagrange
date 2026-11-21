@@ -16,6 +16,7 @@ import {test} from '../../src/test-helpers/tap.js';
 
 import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
+import {createObservationOnlyMutationPort} from './test-helpers.js';
 
 const TEST_NODE_ID = 'node-a';
 const RETRY_BACKOFF_MS = 5000;
@@ -42,6 +43,7 @@ function createRepository(timeSource, reads) {
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('repository time authority'),
       readAuthoritativeRows: async () => {
         reads.push('authoritative');
         return {success: true, rows: []};

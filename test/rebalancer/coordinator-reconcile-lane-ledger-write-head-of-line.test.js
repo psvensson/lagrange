@@ -25,6 +25,7 @@ import {
   createMockControlPlaneSystemTableGateway,
   createMockMessageRouter,
   createMockPolicyService,
+  createOperationRowUpdatePort,
 } from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
@@ -34,8 +35,6 @@ const TEST_SIBLING_OPERATION_ID = 'coordinator-hol-sibling-reconcile';
 const TEST_SLOW_REPLICA_ID = 'replica_operations-p1-r4';
 const TEST_SIBLING_REPLICA_ID = 'control_plane_publications-p1-r4';
 const TEST_OBSERVATION_TURN_BUDGET = 20;
-const TEST_SQL_INSERT_PREFIX = 'INSERT';
-const TEST_SQL_UPDATE_PREFIX = 'UPDATE';
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 
 function createDeferred() {
@@ -69,31 +68,6 @@ function buildOperation({operationId, partitionId, replicaId, step}) {
   return operation;
 }
 
-function updateTrackedOperationRow(rowsByOperationId, params) {
-  const [
-    status,
-    workflowStep,
-    updatedAt,
-    completedAt,
-    errorMessage,
-    stepsHistory,
-    replicaId,
-    operationId,
-  ] = params;
-  const existing = rowsByOperationId.get(operationId) || {};
-  rowsByOperationId.set(operationId, {
-    ...existing,
-    operation_id: operationId,
-    status,
-    workflow_step: workflowStep,
-    updated_at: updatedAt,
-    completed_at: completedAt,
-    error_message: errorMessage,
-    steps_history: stepsHistory,
-    replica_id: replicaId,
-  });
-}
-
 function createCoordinatorHarness() {
   const slowWriteStarted = createDeferred();
   const releaseSlowWrite = createDeferred();
@@ -114,33 +88,9 @@ function createCoordinatorHarness() {
     step: WORKFLOW_STEP.SYNCING,
   });
 
-  let coordinator = null;
   const sqlQueryEngine = {
     async executeQuery(sql, params = []) {
       const normalizedSql = String(sql).trim();
-      if (
-        normalizedSql.startsWith(TEST_SQL_INSERT_PREFIX) &&
-        normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE) &&
-        params[0] === TEST_SLOW_OPERATION_ID
-      ) {
-        slowWriteStarted.resolve();
-        await releaseSlowWrite.promise;
-        rowsByOperationId.set(
-          slowOperation.operationId,
-          coordinator.repository.buildReplicaOperationRow(slowOperation),
-        );
-        return {success: true, affectedRows: 1, changes: 1};
-      }
-      if (
-        normalizedSql.startsWith(TEST_SQL_UPDATE_PREFIX) &&
-        normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE)
-      ) {
-        updateTrackedOperationRow(rowsByOperationId, params);
-        if (params[7] === TEST_SIBLING_OPERATION_ID) {
-          siblingWriteStarted.resolve();
-        }
-        return {success: true, affectedRows: 1, changes: 1};
-      }
       if (normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE)) {
         const operationId = params[0];
         if (operationId && rowsByOperationId.has(operationId)) {
@@ -154,7 +104,28 @@ function createCoordinatorHarness() {
       return {success: true, rows: []};
     },
   };
-  coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
+  // The ledger writes arrive at the structured port: the slow operation's
+  // INSERT is held, and each UPDATE applies to the tracked row by column.
+  const controlPlaneSystemTableGateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+  const applyUpdate = createOperationRowUpdatePort(
+    (operationId) => rowsByOperationId.get(operationId),
+    controlPlaneSystemTableGateway.submitMutation);
+  controlPlaneSystemTableGateway.submitMutation = async (mutation, options) => {
+    if (mutation?.tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+      return applyUpdate(mutation, options);
+    }
+    if (mutation.operation === 'insert' && mutation.row?.operation_id === TEST_SLOW_OPERATION_ID) {
+      slowWriteStarted.resolve();
+      await releaseSlowWrite.promise;
+      rowsByOperationId.set(TEST_SLOW_OPERATION_ID, {...mutation.row});
+      return {success: true, affectedRows: 1, changes: 1};
+    }
+    if (mutation.whereClause?.operation_id === TEST_SIBLING_OPERATION_ID) {
+      siblingWriteStarted.resolve();
+    }
+    return applyUpdate(mutation, options);
+  };
+  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: TEST_NODE_ID,
     systemTableCache: createMockCache(),
     cdcIntegrationService: {
@@ -165,8 +136,7 @@ function createCoordinatorHarness() {
     messageRouter: createMockMessageRouter(),
     tablePolicyService: createMockPolicyService(),
     sqlQueryEngine,
-    controlPlaneSystemTableGateway:
-      createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+    controlPlaneSystemTableGateway,
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
     },

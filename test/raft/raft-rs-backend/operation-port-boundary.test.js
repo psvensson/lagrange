@@ -22,7 +22,8 @@ const SRC_RAFT = path.join(SRC, 'raft');
 const BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'raft',
   'raft-rs-backend', 'capability-baseline.json'), 'utf8'));
 const PORT_OPERATIONS = Object.freeze([
-  'campaign', 'close', 'configureTick', 'probePeerProgress', 'propose',
+  'campaign', 'close', 'configureTick', 'observeCurrentAuthority',
+  'probePeerProgress', 'propose',
   'proposeConfChange', 'proposeMembershipTransition',
   'readCommittedMembership', 'readStatus',
   'startScheduling', 'step',

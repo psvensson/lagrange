@@ -352,7 +352,6 @@ class RebalanceCoordinatorLifecycle {
       options.repository ||
       new ReplicaOperationRepository({
         nodeId: this.nodeId,
-        requireMutationPort: true,
         prepareRetainedPlacementRepair: (operation) =>
           prepareRetainedPlacementRepairBody(this, operation),
         repairRetainedPlacement: (payload) => this.submitRetainedPlacementRepair(payload),

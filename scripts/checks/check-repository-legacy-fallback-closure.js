@@ -1,12 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {parseArgs} from 'node:util';
 import {detectNavigabilityPatterns} from './code-navigability-detectors.js';
 import {siteIdentity} from './code-navigability-source.js';
 import {measureNavigabilityBudgetWithFailures} from './code-navigability-budget.js';
+import {
+  describeCheckout, executionReportProblems, readExecutionReport,
+} from '../test-execution-report.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
@@ -19,6 +25,8 @@ const REPO_ROOT = path.resolve(CURRENT_DIR, '../..');
 const UTF8 = 'utf8';
 const CENSUS_PATH = 'data/fallback-census/census.json';
 const CLASSIFICATION_PATH = 'scripts/checks/code-navigability-fallback-classification.json';
+const HISTORICAL_RECEIPT =
+  'solve/quests/repository-legacy-fallback-closure/evidence/receipt.json';
 const EXPECTED_CENSUS_SCHEMA = 'fallback-census/1';
 const EXPECTED_TOTAL_CENSUS_SITES = 2674;
 const EXPECTED_ACTIVE_SRC_SITES = 2637;
@@ -30,8 +38,28 @@ const JS_EXTENSION = '.js';
 const REASON_CENSUS_MISSING = 'Census file missing or schema mismatch';
 const REASON_CLASSIFICATION_INVALID = 'Classification file missing or invalid';
 const REASON_CLASSIFICATION_MISSING = 'Classification file missing';
-const CHECK_FAILURE_MESSAGE = 'check-repository-legacy-fallback-closure failed\n';
-const EXIT_CODE_FAILURE = 1;
+const EXIT_CODE_CLOSURE_INCOMPLETE = 1;
+const SEMANTIC_CLOSURE = objectFreeze({
+  UNRESOLVED: 'unresolved', UNVERIFIED: 'unverified',
+});
+const OWNER_EXECUTION_PROBLEM = objectFreeze({
+  SELECTION: 'affected-owner-selection-mismatch',
+  CHECKOUT: 'affected-owner-checkout-not-clean',
+});
+const EXACT_SELECTION_REQUIRED =
+  'The exact named owner files must each execute once without reused proofs';
+const EXECUTION_REPORT_LIMIT =
+  'Execution reports are unsigned. Applicability requires trusted original producer custody.';
+const CLOSURE_LIMITS =
+  'Census and source markers do not prove semantic classification or caller closure.';
+const REPORT_OPTION = 'execution-report';
+const OUTPUT_OPTION = 'output';
+const STRING_OPTION = 'string';
+const DIAGNOSTIC_SCOPE = 'current-closure-diagnostic';
+const SCRATCH_PATH_REQUIRED = '--output requires a scratch path';
+const SEALED_OUTPUT_REFUSED = 'Cannot write diagnostics to the sealed historical receipt';
+const TEMPORARY_OUTPUT_PREFIX = '.q11-diagnostic-';
+const TEMPORARY_OUTPUT_FILE = 'output';
 
 const FALLBACK_ROWS = objectFreeze([
   'two_source_fallback_reads',
@@ -78,6 +106,16 @@ const KEY_AFFECTED_WITNESS_FILES = objectFreeze([
 
 const RETIRED_ROLLING_UPGRADE_TERM = 'options.nowMs || Date.now()';
 const ROLLING_UPGRADE_PATH = 'src/bootstrap/owners/rolling-upgrade-owner.js';
+const SEMANTIC_COUNTEREXAMPLES = objectFreeze([
+  ['src/partition/partition-placement-admission.js',
+    'return isPreFingerprintCommandReplay(service, recorded, command);'],
+  ['src/rebalancer/replica-operation-repository-mutation-gateway-methods.js',
+    'typeof gateway?.insertSystemTableRow === \'function\''],
+  ['src/rebalancer/replica-placement-owner-transport.js',
+    'await messageRouter.sendToAddress(address, message, options)'],
+  ['src/rebalancer/rebalance-coordinator-operation-creation-support.js',
+    'const selected = nodeLeader || rows[0];'],
+]);
 
 const LIMITS_STATEMENT =
   'Coverage classes indicate observed execution in census runs, not proof of code death';
@@ -95,7 +133,7 @@ function auditCandidateInventory(root = REPO_ROOT) {
   const censusData = readJsonFile(root, CENSUS_PATH);
   if (!censusData || censusData.schema !== EXPECTED_CENSUS_SCHEMA) {
     return {
-      isInventoryComplete: false,
+      matchesCensusCounts: false,
       reason: REASON_CENSUS_MISSING,
       totalCensusSites: ZERO_COUNT,
       activeDetectedSites: ZERO_COUNT,
@@ -122,16 +160,15 @@ function auditCandidateInventory(root = REPO_ROOT) {
   const retired = arrayFilter(censusSites, (site) =>
     !detectedIdentities.has(siteIdentity(site)));
 
-  const isInventoryComplete = censusSites.length === EXPECTED_TOTAL_CENSUS_SITES &&
+  const matchesCensusCounts = censusSites.length === EXPECTED_TOTAL_CENSUS_SITES &&
     detectedFallbackSites.length === EXPECTED_ACTIVE_SRC_SITES &&
     retired.length === EXPECTED_RETIRED_SITES;
 
   return {
-    isInventoryComplete,
+    matchesCensusCounts,
     totalCensusSites: censusSites.length,
     activeDetectedSites: detectedFallbackSites.length,
     retiredSites: retired.length,
-    retired,
     byClass,
     byRow,
   };
@@ -179,7 +216,7 @@ function auditClassificationClosure(root = REPO_ROOT) {
   const classificationData = readJsonFile(root, CLASSIFICATION_PATH);
   if (!classificationData || !Array.isArray(classificationData.entries)) {
     return {
-      isClassificationComplete: false,
+      censusIdentitiesClassified: false,
       reason: REASON_CLASSIFICATION_INVALID,
       totalClassified: ZERO_COUNT,
       unclassifiedCount: EXPECTED_TOTAL_CENSUS_SITES,
@@ -196,12 +233,12 @@ function auditClassificationClosure(root = REPO_ROOT) {
   const unclassifiedCount = countUnclassifiedSites(censusSites, classifiedMap);
   const budgetUnclassifiedRowValue = readBudgetUnclassifiedValue(root);
 
-  const isClassificationComplete = unclassifiedCount === ZERO_COUNT &&
+  const censusIdentitiesClassified = unclassifiedCount === ZERO_COUNT &&
     classifiedMap.size >= EXPECTED_TOTAL_CENSUS_SITES &&
     budgetUnclassifiedRowValue === ZERO_COUNT;
 
   return {
-    isClassificationComplete,
+    censusIdentitiesClassified,
     totalClassified: classifiedMap.size,
     unclassifiedCount,
     budgetUnclassifiedRowValue,
@@ -210,11 +247,11 @@ function auditClassificationClosure(root = REPO_ROOT) {
   };
 }
 
-function auditZeroUnresolvedViolations(root = REPO_ROOT) {
+function auditClassificationDispositions(root = REPO_ROOT) {
   const classificationData = readJsonFile(root, CLASSIFICATION_PATH);
   if (!classificationData || !Array.isArray(classificationData.entries)) {
     return {
-      zeroUnresolvedViolations: false,
+      dispositionsWellFormed: false,
       reason: REASON_CLASSIFICATION_MISSING,
       unauthorizedDispositions: [],
       omittedExplanations: [],
@@ -233,11 +270,11 @@ function auditZeroUnresolvedViolations(root = REPO_ROOT) {
     }
   }
 
-  const zeroUnresolvedViolations = unauthorizedDispositions.length === ZERO_COUNT &&
+  const dispositionsWellFormed = unauthorizedDispositions.length === ZERO_COUNT &&
     omittedExplanations.length === ZERO_COUNT;
 
   return {
-    zeroUnresolvedViolations,
+    dispositionsWellFormed,
     unauthorizedCount: unauthorizedDispositions.length,
     omittedExplanationCount: omittedExplanations.length,
     unauthorizedDispositions,
@@ -245,7 +282,7 @@ function auditZeroUnresolvedViolations(root = REPO_ROOT) {
   };
 }
 
-function auditCanonicalCallerAndExportClosure(root = REPO_ROOT) {
+function auditRetiredRuntimeMarkers(root = REPO_ROOT) {
   const violations = [];
 
   for (const relativeDir of SCANNED_RUNTIME_DIRECTORIES) {
@@ -264,29 +301,50 @@ function auditCanonicalCallerAndExportClosure(root = REPO_ROOT) {
     }
   }
 
-  const rollingUpgradeOwnerPath = path.resolve(root, ROLLING_UPGRADE_PATH);
-  if (fs.existsSync(rollingUpgradeOwnerPath)) {
-    const content = fs.readFileSync(rollingUpgradeOwnerPath, UTF8);
-    if (stringIncludes(content, RETIRED_ROLLING_UPGRADE_TERM)) {
-      violations.push({filePath: rollingUpgradeOwnerPath, term: RETIRED_ROLLING_UPGRADE_TERM});
+  for (const [file, term] of [
+    [ROLLING_UPGRADE_PATH, RETIRED_ROLLING_UPGRADE_TERM], ...SEMANTIC_COUNTEREXAMPLES,
+  ]) {
+    const filePath = path.resolve(root, file);
+    if (fs.existsSync(filePath) && stringIncludes(fs.readFileSync(filePath, UTF8), term)) {
+      violations.push({filePath, term});
     }
   }
 
   return {
-    isClosureComplete: violations.length === ZERO_COUNT,
-    violationsCount: violations.length,
-    violations,
+    searchedDirectories: SCANNED_RUNTIME_DIRECTORIES,
+    matches: violations,
   };
 }
 
-function verifyAffectedOwnerProofs(root = REPO_ROOT) {
-  const existingWitnesses = arrayFilter(KEY_AFFECTED_WITNESS_FILES, (file) =>
-    fs.existsSync(path.resolve(root, file)));
+function isExactSelection(paths) {
+  return Array.isArray(paths) && paths.length === KEY_AFFECTED_WITNESS_FILES.length &&
+    arrayEvery(KEY_AFFECTED_WITNESS_FILES, (file) => arrayIncludes(paths, file));
+}
 
+function verifyAffectedOwnerProofs(root = REPO_ROOT, report = null) {
+  const checkout = describeCheckout(root);
+  const {problems, summary} = executionReportProblems(report, {
+    sha: checkout.head, tree: checkout.tree, requiredFiles: KEY_AFFECTED_WITNESS_FILES,
+  });
+  if (summary) {
+    const planned = arrayFlatMap(report.runs, (run) => run?.planned ?? []);
+    const executed = arrayFlatMap(report.runs, (run) =>
+      Array.isArray(run?.results) ? arrayMap(run.results, (result) => result?.file) : []);
+    if (!isExactSelection(report.planned) || !isExactSelection(planned) ||
+        !isExactSelection(executed) || report.reusedProofs.length > ZERO_COUNT) {
+      problems.push({code: OWNER_EXECUTION_PROBLEM.SELECTION, detail: EXACT_SELECTION_REQUIRED});
+    }
+    if (!checkout.clean) {
+      problems.push({code: OWNER_EXECUTION_PROBLEM.CHECKOUT, detail: root});
+    }
+  }
   return {
-    allWitnessesPresent: existingWitnesses.length === KEY_AFFECTED_WITNESS_FILES.length,
-    witnessCount: existingWitnesses.length,
-    keyWitnessFiles: KEY_AFFECTED_WITNESS_FILES,
+    reportApplicable: problems.length === ZERO_COUNT,
+    sourceCommit: checkout.head,
+    selectedFiles: KEY_AFFECTED_WITNESS_FILES,
+    problems,
+    summary,
+    limits: EXECUTION_REPORT_LIMIT,
   };
 }
 
@@ -328,29 +386,77 @@ function auditReintroductionGuardAndCoverageLimits(root = REPO_ROOT) {
   };
 }
 
-function main() {
-  const inventory = auditCandidateInventory();
-  const classification = auditClassificationClosure();
-  const violations = auditZeroUnresolvedViolations();
-  const callerClosure = auditCanonicalCallerAndExportClosure();
-  const proofs = verifyAffectedOwnerProofs();
-  const guard = auditReintroductionGuardAndCoverageLimits();
+function auditCurrentClosure(root = REPO_ROOT, report = null) {
+  const runtimeMarkers = auditRetiredRuntimeMarkers(root);
+  const ownerExecution = verifyAffectedOwnerProofs(root, report);
+  return {
+    scope: DIAGNOSTIC_SCOPE,
+    sourceCommit: ownerExecution.sourceCommit,
+    inventory: auditCandidateInventory(root),
+    classification: auditClassificationClosure(root),
+    dispositionFormat: auditClassificationDispositions(root),
+    runtimeMarkers,
+    ownerExecution,
+    reintroductionGuard: auditReintroductionGuardAndCoverageLimits(root),
+    semanticClosure: runtimeMarkers.matches.length > ZERO_COUNT ?
+      SEMANTIC_CLOSURE.UNRESOLVED : SEMANTIC_CLOSURE.UNVERIFIED,
+    limits: CLOSURE_LIMITS,
+  };
+}
 
-  const allPass = inventory.isInventoryComplete &&
-    classification.isClassificationComplete &&
-    violations.zeroUnresolvedViolations &&
-    callerClosure.isClosureComplete &&
-    proofs.allWitnessesPresent &&
-    guard.guardPasses;
+function scratchOutputPath(value) {
+  if (value.length === ZERO_COUNT) throw new Error(SCRATCH_PATH_REQUIRED);
+  const requested = path.resolve(value);
+  const historical = path.join(REPO_ROOT, HISTORICAL_RECEIPT);
+  const historicalStat = fs.statSync(historical, {throwIfNoEntry: false});
+  const requestedStat = fs.statSync(requested, {throwIfNoEntry: false});
+  const sameInode = historicalStat && requestedStat &&
+    historicalStat.dev === requestedStat.dev && historicalStat.ino === requestedStat.ino;
+  if (requested === historical || sameInode) throw new Error(SEALED_OUTPUT_REFUSED);
+  if (requestedStat) return fs.realpathSync(requested);
+  const directory = path.dirname(requested);
+  fs.mkdirSync(directory, {recursive: true});
+  const resolved = path.join(fs.realpathSync(directory), path.basename(requested));
+  if (resolved === historical) throw new Error(SEALED_OUTPUT_REFUSED);
+  return resolved;
+}
 
-  if (!allPass) {
-    process.stderr.write(CHECK_FAILURE_MESSAGE);
-    process.exit(EXIT_CODE_FAILURE);
+function writeScratchOutput(output, contents) {
+  const temporary = fs.mkdtempSync(path.join(path.dirname(output), TEMPORARY_OUTPUT_PREFIX));
+  try {
+    const file = path.join(temporary, TEMPORARY_OUTPUT_FILE);
+    fs.writeFileSync(file, contents, UTF8);
+    fs.renameSync(file, scratchOutputPath(output));
+  } finally {
+    fs.rmSync(temporary, {recursive: true, force: true});
   }
 }
 
+function runCurrentClosureCli() {
+  const {values} = parseArgs({options: {
+    [REPORT_OPTION]: {type: STRING_OPTION},
+    [OUTPUT_OPTION]: {type: STRING_OPTION},
+  }});
+  const reportPath = values[REPORT_OPTION];
+  const output = values[OUTPUT_OPTION] === undefined ? null :
+    scratchOutputPath(values[OUTPUT_OPTION]);
+  let audit;
+  try {
+    audit = auditCurrentClosure(REPO_ROOT, reportPath ? readExecutionReport(reportPath) : null);
+  } catch (error) {
+    audit = {scope: DIAGNOSTIC_SCOPE, semanticClosure: SEMANTIC_CLOSURE.UNVERIFIED,
+      error: error.message};
+  }
+  const contents = `${JSON.stringify(audit, null, 2)}\n`;
+  if (output !== null) writeScratchOutput(output, contents);
+  process.stdout.write(contents);
+  // Every result here is deliberately partial. The current owning Quest
+  // must admit semantic caller evidence before issuing an acceptance receipt.
+  process.exitCode = EXIT_CODE_CLOSURE_INCOMPLETE;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  main();
+  runCurrentClosureCli();
 }
 
 export {
@@ -360,8 +466,10 @@ export {
   KEY_AFFECTED_WITNESS_FILES,
   auditCandidateInventory,
   auditClassificationClosure,
-  auditZeroUnresolvedViolations,
-  auditCanonicalCallerAndExportClosure,
+  auditClassificationDispositions,
+  auditRetiredRuntimeMarkers,
   verifyAffectedOwnerProofs,
   auditReintroductionGuardAndCoverageLimits,
+  auditCurrentClosure,
+  runCurrentClosureCli,
 };

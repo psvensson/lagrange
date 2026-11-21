@@ -7,14 +7,26 @@ import {ReplicaStatus, OperationType} from '../../src/rebalancer/replica-status.
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../../src/constants/unified-service-lifecycle.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createObservationOnlyMutationPort, createTestCoordinator} from './test-helpers.js';
 
 const TEST_REPLICA_ID = 'replica-1';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_NODE_ID = 'node-2';
 const SIBLING_REPLICA_ID = 'replica-sibling-99';
 
+const EMPTY_AUTHORITATIVE_READS = {
+  async readAuthoritativeRows() {
+    return {
+      success: true,
+      rowSetComplete: true,
+      rows: [],
+    };
+  },
+};
+
+// The observer reads; its writer port is the observation-only fixture port.
 function createRepository(overrides = {}) {
+  const {controlPlaneSystemTableGateway = EMPTY_AUTHORITATIVE_READS, ...rest} = overrides;
   return new ReplicaOperationRepository({
     nodeId: 'node-1',
     systemTableCache: {
@@ -39,16 +51,11 @@ function createRepository(overrides = {}) {
       error() {},
       debug() {},
     },
+    ...rest,
     controlPlaneSystemTableGateway: {
-      async readAuthoritativeRows() {
-        return {
-          success: true,
-          rowSetComplete: true,
-          rows: [],
-        };
-      },
+      submitMutation: createObservationOnlyMutationPort('canonical replica completion observation'),
+      ...controlPlaneSystemTableGateway,
     },
-    ...overrides,
   });
 }
 

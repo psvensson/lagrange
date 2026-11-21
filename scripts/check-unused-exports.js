@@ -79,7 +79,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-17 (candidate-integration): tightened 1321 -> 1319 on the checker
 // hint after de-exporting internal-only rebalancer, query, bootstrap,
 // partition, and comparative-harness helpers.
-const BASELINE_UNUSED_EXPORT_COUNT = 1319;
+// 2026-11-21 (leader-role dead arms): tightened 1319 -> 1316 on the checker
+// hint.
+const BASELINE_UNUSED_EXPORT_COUNT = 1316;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

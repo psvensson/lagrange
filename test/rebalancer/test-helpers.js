@@ -410,6 +410,71 @@ function createFixtureSystemMutationPort(execute) {
   };
 }
 
+// Bind a fixture gateway's structured port to that gateway's own statement
+// executor (late-bound, so a case that swaps executeQuery swaps the store).
+function withExecutorMutationPort(gateway) {
+  gateway.submitMutation = createFixtureSystemMutationPort(
+    (sql, params, options) => gateway.executeQuery(sql, params, options));
+  return gateway;
+}
+
+function whereColumnHolds(row, column, value) {
+  return value === null ? row[column] === null || row[column] === undefined :
+    row[column] === value;
+}
+
+function affectedRowsAnswer(affectedRows) {
+  return {success: true, changes: affectedRows, affectedRows, partitionResult: {affectedRows}};
+}
+
+// Apply one structured replica_operations UPDATE to a fixture's in-memory
+// row as SQL applies it: every where column must hold (a null where-value
+// is IS NULL), then the data columns are written. Answers the row count.
+function applyOperationRowUpdate(row, mutation) {
+  const holds = Boolean(row) && Object.entries(mutation.whereClause ?? {}).every(
+    ([column, value]) => whereColumnHolds(row, column, value));
+  if (holds) Object.assign(row, mutation.data);
+  return affectedRowsAnswer(holds ? 1 : 0);
+}
+
+// Hand each structured replica_operations UPDATE to `handle(mutation,
+// options)`; every other mutation goes to `next` unchanged.
+function routeOperationRowUpdates(handle, next) {
+  return async (mutation, options) => (
+    mutation?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+      mutation.operation === 'update' ?
+      handle(mutation, options) : next(mutation, options));
+}
+
+// The structured replica_operations writer over a fixture's own in-memory
+// rows: `rowOf(operationId)` returns the fixture's row object.
+function createOperationRowUpdatePort(rowOf, next) {
+  return routeOperationRowUpdates((mutation) => applyOperationRowUpdate(
+    rowOf(mutation.whereClause?.operation_id), mutation), next);
+}
+
+// The structured replica_operations INSERT into a fixture's own in-memory
+// rows: `insertRow(row)` stores the canonical row (named columns) and returns
+// false when its key is already present; every other mutation goes to `next`.
+function createOperationRowInsertPort(insertRow, next) {
+  return async (mutation, options) => {
+    if (mutation?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+        mutation.operation !== 'insert') {
+      return next(mutation, options);
+    }
+    return affectedRowsAnswer(insertRow({...mutation.row}) === false ? 0 : 1);
+  };
+}
+
+// The structured mutation port of a fixture that has no durable store and
+// only observes: a submitted mutation is a fixture defect, named loudly.
+function createObservationOnlyMutationPort(fixtureName) {
+  return async (mutation) => {
+    throw new Error(`Unexpected ${mutation?.operation} of ${mutation?.tableName} ` +
+      `in the observation-only fixture ${fixtureName}`);
+  };
+}
+
 function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
   const gateway = {
     async executeQuery(sql, params = [], _queryOptions = {}) {
@@ -1403,7 +1468,9 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 }
 
 export {
-  createFixtureSystemMutationPort,
+  createFixtureSystemMutationPort, createObservationOnlyMutationPort, withExecutorMutationPort,
+  applyOperationRowUpdate, createOperationRowInsertPort, createOperationRowUpdatePort,
+  routeOperationRowUpdates,
   buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
   createAllowAllStorageAdmissionService, createCoordinatorSqlStore, createMockCache,
   createMockCdcService,

@@ -17,6 +17,7 @@ import {PriorityRecoverySupersededTarget} from
   '../../../src/rebalancer/priority-recovery-superseded-target.js';
 import {ReplicaOperationRepository} from
   '../../../src/rebalancer/replica-operation-repository.js';
+import {createObservationOnlyMutationPort} from '../../rebalancer/test-helpers.js';
 import {formAdmittedGroup} from '../../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../../partition/partition-release-fixture.js';
 import {createLoopbackTransport} from '../../partition/partition-service-test-support.js';
@@ -49,7 +50,9 @@ function replaceConsumerContext(source, target) {
     targetReplicaId: target.replicaId, replicaId: target.replicaId};
   const repository = new ReplicaOperationRepository({nodeId: target.nodeId,
     systemTableCache: target.systemTableCache, logger: target.logger,
-    timeSource: target.timeSource});
+    timeSource: target.timeSource, controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('replace completion consumer'),
+    }});
   const owner = Object.assign(Object.create(PriorityRecoverySupersededTarget.prototype),
     {messageRouter: source.transport, repository});
   return {owner, operation};

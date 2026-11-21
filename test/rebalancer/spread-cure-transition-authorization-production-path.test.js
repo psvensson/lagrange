@@ -51,8 +51,7 @@ const CURE_TARGET_NODE_ID = 'node-c';
 const PUBLISHED_EPOCH = 4;
 const DECLARED_REPLICATION_FACTOR = 3;
 const REBALANCE_BUDGET = 5;
-const STEPS_HISTORY_PARAM_INDEX = 13;
-const INSERT_STATEMENT_FRAGMENT = 'INSERT INTO replica_operations';
+const REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const SERVICES_QUERY_FRAGMENT = 'FROM services';
 const NODE_IDS = Object.freeze(
   ['node-a', 'node-b', 'node-c', 'node-d', 'node-e']);
@@ -89,7 +88,7 @@ function serviceRow(partitionId, [replicaSuffix, nodeId, raftRole]) {
 /**
  * Drive one real rebalance cycle and record everything the carrier could
  * ride on: the planned moves, the coordinator requests, and the persisted
- * replica_operations INSERT payloads.
+ * replica_operations INSERT rows submitted to the structured port.
  * @param {Object} options scenario declaration
  * @return {Promise<Object>} {moves, requests, inserts}
  */
@@ -165,13 +164,13 @@ async function driveOneRebalance(options) {
     requests.push(request);
     return createOperation(request);
   };
-  const engine = coordinator.sqlQueryEngine;
-  const executeQuery = engine.executeQuery.bind(engine);
-  engine.executeQuery = async (sql, params) => {
-    if (String(sql).includes(INSERT_STATEMENT_FRAGMENT)) {
-      inserts.push(params);
+  const gateway = coordinator.controlPlaneSystemTableGateway;
+  const submitMutation = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (mutation, options) => {
+    if (mutation?.tableName === REPLICA_OPERATIONS_TABLE && mutation.operation === 'insert') {
+      inserts.push({...mutation.row});
     }
-    return executeQuery(sql, params);
+    return submitMutation(mutation, options);
   };
   try {
     await rebalancer.rebalance(TriggerType.PERIODIC);
@@ -221,8 +220,8 @@ async function createIsolatedPlanner() {
   return {planner: rebalancer.movePlanner, currentReplicas, rebalancer};
 }
 
-function stepsHistoryOf(insertParams) {
-  return JSON.parse(insertParams[STEPS_HISTORY_PARAM_INDEX]);
+function stepsHistoryOf(insertedRow) {
+  return JSON.parse(insertedRow.steps_history);
 }
 
 // Nothing in this cycle carries the key - checked with Object.hasOwn, so an
@@ -287,11 +286,11 @@ test('one authorization travels the real planner, coordinator and row',
     assert.ok(stamped, 'the persisted row carries the record');
     assert.deepEqual({...stamped}, {
       ...minted,
-      destinationReplicaId: cure.inserts[0][3],
-      operationId: cure.inserts[0][0],
+      destinationReplicaId: cure.inserts[0].replica_id,
+      operationId: cure.inserts[0].operation_id,
     }, 'completed with the row\'s own replica id and operation id, no more');
     const binding = decodeSpreadCureTransitionAuthorizationFromOperationRow(
-      {steps_history: cure.inserts[0][STEPS_HISTORY_PARAM_INDEX]});
+      {steps_history: cure.inserts[0].steps_history});
     assert.equal(binding.state, 'present',
       'and the binding owner decodes the persisted bytes as one record');
 

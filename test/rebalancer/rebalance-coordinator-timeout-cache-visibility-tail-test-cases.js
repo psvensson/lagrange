@@ -1,4 +1,6 @@
-import {createCoordinatorSqlStore, createTestCoordinator} from './test-helpers.js';
+import {
+  createCoordinatorSqlStore, createTestCoordinator, withExecutorMutationPort,
+} from './test-helpers.js';
 import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
@@ -151,7 +153,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         t.ok(insert.success, `committed reservation fixture ${id}`);
       }
       const coordinator = createTestCoordinator({
-        controlPlaneSystemTableGateway: {
+        controlPlaneSystemTableGateway: withExecutorMutationPort({
           async readAuthoritativeRows(tableName, sql, params, options) {
             gatewayCalls.push({tableName, sql, options});
             return store.execute(sql, params);
@@ -159,7 +161,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async executeQuery(sql, params) {
             return store.execute(sql, params);
           },
-        },
+        }),
         enableTimeouts: false,
       });
       const readStatuses = () => store.execute(
@@ -408,7 +410,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           },
         },
         cdcIntegrationService: {refreshAuthoritativeCacheRow: async () => true},
-        controlPlaneSystemTableGateway: {
+        controlPlaneSystemTableGateway: withExecutorMutationPort({
           async readAuthoritativeRows(tableName, sql, params) {
             if (tableName === 'replica_operations') {
               authoritativeReadCalls += 1;
@@ -424,7 +426,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
             }
             return store.execute(sql, params);
           },
-        },
+        }),
         messageRouter: {
           async deliver() {
             return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});

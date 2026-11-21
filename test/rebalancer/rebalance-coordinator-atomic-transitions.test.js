@@ -13,6 +13,18 @@ function createMinimalCoordinator(t, overrides = {}) {
   return coordinator;
 }
 
+// The coordinator's one ledger writer is its structured mutation port; a
+// workflow-step write is an UPDATE of replica_operations naming workflow_step.
+function interceptStepWrites(coordinator, intercept) {
+  const gateway = coordinator.controlPlaneSystemTableGateway;
+  const submit = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (mutation, options) => {
+    const stepWrite = mutation?.tableName === 'replica_operations' &&
+      mutation.operation === 'update' && Object.hasOwn(mutation.data ?? {}, 'workflow_step');
+    return (stepWrite && await intercept(mutation, options)) || submit(mutation, options);
+  };
+}
+
 async function seedOperation(t, coordinator, overrides = {}) {
   const operation = {
     operationId: 'op-atomic-test', type: 'ADD', partitionId: 'partition-1',
@@ -33,19 +45,17 @@ test('transition persistence is independent autocommit with expected-step CAS', 
     }},
   });
   const operation = await seedOperation(t, coordinator);
-  const execute = coordinator.sqlQueryEngine.executeQuery.bind(coordinator.sqlQueryEngine);
   const writes = [];
-  coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
-    if (sql.includes('UPDATE replica_operations') && sql.includes('workflow_step')) {
-      writes.push({sql, params, options});
-    }
-    return execute(sql, params, options);
-  };
+  interceptStepWrites(coordinator, (mutation, options) => {
+    writes.push({mutation, options});
+    return null;
+  });
   await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
   t.equal(operation.workflowStep, WORKFLOW_STEP.SENDING);
   t.equal(writes.length, 1);
-  t.match(writes[0].sql, /workflow_step = \?/);
-  t.equal(writes[0].params.at(-1), WORKFLOW_STEP.PENDING);
+  t.equal(writes[0].mutation.data.workflow_step, WORKFLOW_STEP.SENDING);
+  t.equal(writes[0].mutation.whereClause.workflow_step, WORKFLOW_STEP.PENDING,
+    'the write is the expected-step CAS');
   t.equal(Object.hasOwn(writes[0].options || {}, 'sessionId'), false);
 });
 
@@ -150,15 +160,9 @@ test('guarded transitions retry the same operation after rejected persistence', 
       operationId: `op-same-object-${testCase.name}`,
       workflowStep: testCase.initialStep, status: testCase.initialStatus,
     });
-    const execute = coordinator.sqlQueryEngine.executeQuery.bind(coordinator.sqlQueryEngine);
     let writes = 0;
-    coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
-      if (sql.includes('UPDATE replica_operations') && sql.includes('workflow_step') &&
-          ++writes === 1) {
-        return {success: false, error: 'persist failed'};
-      }
-      return execute(sql, params, options);
-    };
+    interceptStepWrites(coordinator, () => (++writes === 1 ?
+      {success: false, error: 'persist failed'} : null));
     await t.rejects(testCase.invoke(coordinator, operation));
     t.equal(coordinator.operationWorkflowCoordinator.isTransitionIdempotent(
       operation.operationId, testCase.targetStep), false);

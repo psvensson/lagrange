@@ -1,6 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {createCoordinatorSqlStore} from './test-helpers.js';
+import {createCoordinatorSqlStore, withExecutorMutationPort} from './test-helpers.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
@@ -139,7 +139,7 @@ test('checkTimeouts retries a stale STOPPING operation after strict owner reads 
       },
     };
 
-    const controlPlaneSystemTableGateway = {
+    const controlPlaneSystemTableGateway = withExecutorMutationPort({
       async readRows(tableName, sql, params = [], options = {}) {
         return cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
@@ -162,7 +162,7 @@ test('checkTimeouts retries a stale STOPPING operation after strict owner reads 
         }
         return store.execute(sql, params);
       },
-    };
+    });
 
     const coordinator = createTimeoutSweepCoordinator({
       nodeId: 'node-1',

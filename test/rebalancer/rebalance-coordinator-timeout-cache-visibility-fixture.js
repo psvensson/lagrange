@@ -5,7 +5,9 @@ import {applyCDCIntegrationServiceCacheVisibilityWait} from
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
-import {createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {
+  createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway, withExecutorMutationPort,
+} from './test-helpers.js';
 import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
@@ -60,7 +62,7 @@ export function createCoordinator(overrides = {}) {
     authoritativeVisibilityRetryDelayMs: 0,
     ...overrides,
     sqlQueryEngine,
-    controlPlaneSystemTableGateway: {
+    controlPlaneSystemTableGateway: withExecutorMutationPort({
       readAuthoritativeRows: async (_tableName, sql, params = [], options = {}) => {
         return sqlQueryEngine.executeQuery(sql, params, options);
       },
@@ -70,7 +72,7 @@ export function createCoordinator(overrides = {}) {
       executeQuery: async (sql, params = [], options = {}) => {
         return sqlQueryEngine.executeQuery(sql, params, options);
       },
-    },
+    }),
   })));
 }
 

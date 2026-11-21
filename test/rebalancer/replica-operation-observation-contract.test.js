@@ -2,6 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {createObservationOnlyMutationPort} from './test-helpers.js';
 
 const TEST_PARTITION_SERVICE_TYPE = 'partition';
 const TEST_REPLICA_ID = 'replica-1';
@@ -13,22 +14,29 @@ const TEST_AUTHORITATIVE_SOURCE = 'authoritative';
 const TEST_PARTITION_NODE_FALLBACK_REPLICA_ID = 'replica-2';
 const TEST_PARTITION_NODE_FALLBACK_ADDRESS = 'node-2/partition/replica-2';
 
+const EMPTY_AUTHORITATIVE_READS = {
+  async readAuthoritativeRows() {
+    return {
+      success: true,
+      rowSetComplete: true,
+      rows: [],
+    };
+  },
+};
+
+// The observer reads; its writer port is the observation-only fixture port.
 function createRepository(overrides = {}) {
+  const {controlPlaneSystemTableGateway = EMPTY_AUTHORITATIVE_READS, ...rest} = overrides;
   return new ReplicaOperationRepository({
     nodeId: 'node-1',
     systemTableCache: {},
     cdcIntegrationService: {},
     logger: console,
+    ...rest,
     controlPlaneSystemTableGateway: {
-      async readAuthoritativeRows() {
-        return {
-          success: true,
-          rowSetComplete: true,
-          rows: [],
-        };
-      },
+      submitMutation: createObservationOnlyMutationPort('replica operation observation contract'),
+      ...controlPlaneSystemTableGateway,
     },
-    ...overrides,
   });
 }
 

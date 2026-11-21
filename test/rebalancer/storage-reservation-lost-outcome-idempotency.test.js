@@ -5,7 +5,7 @@
  * hold instead of colliding with it or allocating another hold.
  */
 
-import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {createFixtureSystemMutationPort, createOperationRowInsertPort} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {ERRORS, NUM, TIME_MS, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -205,11 +205,6 @@ function createLostOutcomeSqlEngine(options = {}) {
       return reservationInsertAttempts;
     },
     async executeQuery(sql, params, queryOptions = {}) {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const row = buildOperationRow(params);
-        operations.set(row.operation_id, row);
-        return {success: true, changes: 1};
-      }
       if (sql.includes('INSERT') && sql.includes('storage_reservations')) {
         return insertReservation(sql, params, queryOptions);
       }
@@ -324,7 +319,11 @@ function createCoordinator(sqlEngine) {
   });
   accounting.initialize({systemTableCache: cache});
   const gateway = {
-    submitMutation: createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)),
+    // The operation row lands in the engine's rows by its named columns.
+    submitMutation: createOperationRowInsertPort(
+      (row) => !sqlEngine.operations.has(row.operation_id) &&
+        Boolean(sqlEngine.operations.set(row.operation_id, row)),
+      createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args))),
     readAuthoritativeRows: async (_table, sql, params = [], options = {}) =>
       sqlEngine.executeQuery(sql, params, options),
     readRows: async (_table, sql, params = [], options = {}) =>
