@@ -1,3 +1,4 @@
+import {captureReplaceRemovalEffectTurn} from './operation-workflow-replace-owner-state.js';
 import {
   isPlacementBootstrapAwaitingAuthority, isPlacementBootstrapBeforeDeadline,
 } from './operation-workflow-placement-bootstrap-phase.js';
@@ -394,6 +395,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   async reconcileOperationLifecycle(operation, options = {}) {
     if (!operation) return OPERATION_RECONCILE_OUTCOME.REFUSED;
     if (operation.status === ReplicaStatus.HELD) return OPERATION_RECONCILE_OUTCOME.HELD;
+    const removalEffectTurn = isReplaceRemovalIntentDurable(operation) ?
+      captureReplaceRemovalEffectTurn(this, operation) : null;
     const priorityRecoveryDrainSnapshot =
       await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
     if (
@@ -431,7 +434,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       if (isReplaceRemovalIntentDurable(operation)) {
         // D2: recovery of a post-intent REPLACE resumes its owner; it never
         // re-enables a timer- or restart-driven FAILED.
-        const stoppingResult = await this.runReplaceStoppingOwner(operation);
+        const stoppingResult = await this.runReplaceStoppingOwner(operation, removalEffectTurn);
         return classifyReconcileExecutionOutcome(
           this,
           operation,
@@ -464,7 +467,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return classifyReconcileExecutionOutcome(this, operation, previousStep, removeDispatchResult);
     }
     case OPERATION_LIFECYCLE_ACTION.RECONCILE_STOPPING: {
-      const stoppingProgressed = await this.reconcileStoppingOperationProgress(operation);
+      const stoppingProgressed = await this.reconcileStoppingOperationProgress(
+        operation, removalEffectTurn);
       if (this.repository.isOperationTerminal(operation)) {
         return terminalOperationReconcileOutcome(operation);
       }

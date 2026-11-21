@@ -28,9 +28,16 @@
  * generates over both orders.
  */
 
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  buildDeliveryEnvelope, deliveryAnswerOf, deliveryTransportOf,
+  isDeliveredTransportDeliveryOutcome,
+} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
+import {removalAuthorityDeferred} from '../../src/node/replica-removal-debt-errors.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -40,6 +47,7 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {
+  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
@@ -585,27 +593,213 @@ async (t) => {
   }
 });
 
+async function enterStopping(world) {
+  return world.coordinator.reconcileOperationLifecycle(await readPersisted(world));
+}
+
+function holdStoppingContender(world) {
+  const owner = world.coordinator.workflowOwner;
+  const scope = new AsyncLocalStorage();
+  const contender = Symbol();
+  const release = Promise.withResolvers();
+  let entered = false;
+  const observe = owner.observeStoppingReplicaProgress.bind(owner);
+  owner.observeStoppingReplicaProgress = async (...args) => {
+    if (scope.getStore() === contender && args[0] === world.sourceReplicaId) {
+      entered = true;
+      await release.promise;
+    }
+    return observe(...args);
+  };
+  return {
+    start() {
+      return scope.run(contender, () => enterStopping(world));
+    },
+    entered: () => entered,
+    release: release.resolve,
+  };
+}
+
+function traceSourceRemovalReplies(world, intercept) {
+  const owner = world.coordinator.workflowOwner;
+  const deliver = owner.deliverReplicaOperationRequest.bind(owner);
+  const replies = [];
+  owner.deliverReplicaOperationRequest = async (operation, target, request, ...rest) => {
+    const answer = await deliver(operation, target, request, ...rest);
+    if (request.type !== ReplicaOperationMessageType.REMOVE_REPLICA) return answer;
+    const transport = deliveryTransportOf(answer);
+    const observation = {
+      target, operationId: request.operationId, replicaId: request.replicaId,
+      messageId: transport.messageId, correlationId: transport.correlationId,
+      acknowledged: isDeliveredTransportDeliveryOutcome(transport),
+      reply: deliveryAnswerOf(answer),
+    };
+    replies.push(observation);
+    return intercept(answer, observation, replies.length);
+  };
+  return replies;
+}
+
 test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
   'the re-send of the removal effect as it defers the first send', async (t) => {
   const world = await openReplaceWorld();
+  const reply = Promise.withResolvers();
+  const entries = [];
+  const contender = holdStoppingContender(world);
   try {
-    // The source node acknowledges but its row lags: the intent is durable
-    // and the effect must be re-sent later (T5').
     world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
     await driveToIntent(world);
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
     world.clockOffsetMs += 61_000;
     await commitConcurrentRemove(t, world);
-    await world.coordinator.reconcileOperationLifecycle(
-      await readPersisted(world));
-    await settleTurns();
+    await entry(world);
     t.equal(world.removeEffects.length, 1,
       'no re-send while a concurrent partition operation is active');
+
+    const replies = traceSourceRemovalReplies(world, async (answer, observation, count) => {
+      if (count === 1) await reply.promise;
+      return answer;
+    });
     await failConcurrentRemove(t, world);
-    await entry(world);
+    entries.push(enterStopping(world));
+    t.ok(await waitUntil(() => replies.length > 0, 200),
+      'the first renewed turn receives the source ACK');
+    entries.push(contender.start());
+    t.ok(await waitUntil(contender.entered, 200),
+      'the second named lifecycle turn entered STOPPING while the first ACK was held');
+    contender.release();
+    await entries[1];
+    t.equal(world.removeEffects.length, 2,
+      'the second turn does not issue a REMOVE while the acknowledged send owns the claim');
+    reply.resolve();
+    await Promise.all(entries);
+    t.equal(replies.length, 1, 'one exact acknowledged resend crosses the source route');
+    t.match(replies[0], {
+      target: new RegExp(`^${world.sourceNodeId}/service/`),
+      operationId: world.operation.operationId, replicaId: world.sourceReplicaId,
+      messageId: /^replace-fixture-send-/,
+      correlationId: world.operation.operationId, acknowledged: true,
+      reply: {status: ReplicaOperationResponseStatus.INITIATED,
+        operationId: world.operation.operationId, replicaId: world.sourceReplicaId,
+        nodeId: world.sourceNodeId},
+    }, 'transport and source receipts name the original request');
     t.equal(world.removeEffects.length, 2,
       'the pending removal is re-sent once after the holder settles');
+  } finally {
+    contender.release();
+    reply.resolve();
+    await Promise.allSettled(entries);
+    await disposeWorld(world);
+  }
+});
+
+for (const mode of ['empty reply', 'retryable source error', 'lost ACK']) {
+  test(`T5-prime redrives after ${mode} on its registered owner timer`, async (t) => {
+    const world = await openReplaceWorld({sourceHandler: true});
+    const reply = Promise.withResolvers();
+    const entries = [];
+    const contender = holdStoppingContender(world);
+    try {
+      world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
+      await driveToIntent(world);
+      world.eventsSuppressed = true;
+      const operationId = world.operation.operationId;
+      const replicaId = world.sourceReplicaId;
+      const handler = world.sourceHandler.handler;
+      const owner = world.coordinator.workflowOwner;
+      const isError = mode === 'retryable source error';
+      const isLost = mode === 'lost ACK';
+      const rejection = isError ? handler.answerFailedCreateCleanupDeferred({
+        operationId, replicaId, partitionId: world.partitionId,
+        deferral: removalAuthorityDeferred(replicaId),
+      }) : null;
+      if (isError) world.removeEffectAnswer = rejection;
+      const replies = traceSourceRemovalReplies(world, async (answer, observation, count) => {
+        if (count !== 1) return answer;
+        await reply.promise;
+        if (isError) return answer;
+        return buildDeliveryEnvelope(isLost ? {deferRetry: true} : {acknowledged: true},
+          null, {messageId: observation.messageId, correlationId: observation.correlationId});
+      });
+      world.clockOffsetMs += 61_000;
+      entries.push(enterStopping(world));
+      t.ok(await waitUntil(() => replies.length > 0, 200), 'first renewed route reaches source');
+      t.match(replies[0], {
+        operationId, replicaId, acknowledged: true, correlationId: operationId,
+        reply: rejection ?? {status: ReplicaOperationResponseStatus.INITIATED},
+      }, 'source reply and transport are observed before the owner response is released');
+      entries.push(contender.start());
+      t.ok(await waitUntil(contender.entered, 200),
+        'the named contender is inside STOPPING before the reply settles');
+      reply.resolve();
+      await entries[0];
+      contender.release();
+      await entries[1];
+      t.equal(replies.length, 1,
+        'the older admitted contender cannot turn the unresolved reply into a new send');
+      t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+        'the reply does not settle the durable removal intent');
+      const dispatchTimer = owner.dispatchRetryTimerByOperationId.get(operationId);
+      t.equal(Boolean(dispatchTimer), isError || isLost, 'typed retryability owns the dispatch timer');
+      const timer = dispatchTimer ?? owner.safetyDeferredRetryTimerByOperationId.get(operationId);
+      t.ok(timer && !timer.cleared, 'the exact operation owns a live retry callback');
+      world.removeEffectAnswer = null;
+      await timer?.fn();
+      await settleTurns();
+      t.equal(world.removeEffects.length, 3,
+        'that owner timer alone sends again without another backstop interval');
+      t.match(replies[1], {
+        acknowledged: true, operationId, replicaId, correlationId: operationId,
+        reply: {status: ReplicaOperationResponseStatus.INITIATED, operationId, replicaId,
+          nodeId: world.sourceNodeId},
+      }, 'the real source handler accepts that operation and replica');
+      t.not(replies[1]?.messageId, replies[0]?.messageId,
+        'the retry is a separate transport attempt for the same operation');
+      t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+        'source acceptance alone does not prove committed membership removal');
+    } finally {
+      contender.release();
+      reply.resolve();
+      await Promise.allSettled(entries);
+      await disposeWorld(world);
+    }
+  });
+}
+
+test('T5-prime binds source receipts and accepts the real replica-only NOT_FOUND', async (t) => {
+  const world = await openReplaceWorld({sourceHandler: true});
+  try {
+    world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
+    await driveToIntent(world);
+    world.eventsSuppressed = true;
+    const operationId = world.operation.operationId;
+    const replicaId = world.sourceReplicaId;
+    const handler = world.sourceHandler.handler;
+    const owner = world.coordinator.workflowOwner;
+    world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED,
+      operationId: 'another-operation'};
+    const replies = traceSourceRemovalReplies(world, (answer) => answer);
+    world.clockOffsetMs += 61_000;
+    await enterStopping(world);
+    t.equal(replies.length, 1, 'the foreign receipt does not trigger inline re-entry');
+    t.match(replies[0]?.reply, {operationId: 'another-operation', replicaId},
+      'the acknowledged application reply belongs to another operation');
+    const retry = owner.safetyDeferredRetryTimerByOperationId.get(operationId);
+    t.ok(retry && !retry.cleared, 'the unbound reply leaves the STOPPING waiter armed');
+
+    const getLocalReplica = handler.getLocalReplica.bind(handler);
+    handler.getLocalReplica = (id) => id === replicaId ? null : getLocalReplica(id);
+    world.removeEffectAnswer = null;
+    await retry?.fn();
+    await settleTurns();
+    t.equal(replies.length, 2, 'the existing retry reaches the original source again');
+    t.same(replies[1]?.reply, {status: ReplicaOperationResponseStatus.NOT_FOUND,
+      replicaId, nodeId: world.sourceNodeId}, 'native NOT_FOUND names the replica and source');
+    await enterStopping(world);
+    t.equal(replies.length, 2, 'the bound NOT_FOUND waits for membership without another send');
+    t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+      'the missing local replica does not settle the membership obligation');
   } finally {
     await disposeWorld(world);
   }

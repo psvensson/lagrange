@@ -482,6 +482,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           deliveries.push({target, payload, options});
           return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
+            operationId: payload.operationId,
+            replicaId: payload.replicaId,
+            nodeId: SOURCE_NODE_ID,
           });
         },
       };
@@ -759,6 +762,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           deliveries.push({target, payload, options});
           return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
+            operationId: payload.operationId,
+            replicaId: payload.replicaId,
+            nodeId: SOURCE_NODE_ID,
           });
         },
         getConnectionState: () => 'connected',

@@ -41,7 +41,7 @@ import {
   reconcileUnscopedPlacementRemoval, settleSupersededRemoval,
 } from
   './operation-workflow-placement-learner-retirement.js';
-import {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect} from
+import {deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect, prepareReplaceRemovalEffectTurn} from
   './operation-workflow-remove-effect-admission.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
@@ -407,8 +407,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (isReplaceStoppingOwnerEntry(operation, options)) {
       return this.runReplaceStoppingOwner(operation);
     }
-    const replaceRemoveDispatchPhase =
-      this.repository.isReplaceRemoveDispatchPhase(operation);
+    const replaceRemoveDispatchPhase = this.repository.isReplaceRemoveDispatchPhase(operation);
+    const removalEffectTurn = prepareReplaceRemovalEffectTurn(
+      this, operation, replaceRemoveDispatchPhase, options);
     const removeRedriveDispatchPhase =
       operation.type === OperationType.REMOVE &&
       REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(operation.workflowStep);
@@ -416,8 +417,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       this.isCreateRearmDispatchPhase(operation) ||
       (operation.type === OperationType.GROWTH_PROMOTE &&
         !DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep));
-    const replaceSourceReplicaId =
-      this.repository.getReplaceSourceReplicaId(operation);
+    const replaceSourceReplicaId = this.repository.getReplaceSourceReplicaId(operation);
     const dispatchOperationId = operation.operationId;
     operation = await resolveDispatchTargetBinding(
       this, operation, replaceRemoveDispatchPhase, replaceSourceReplicaId,
@@ -736,25 +736,18 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE, operation.operationId,
       );
     }
-    logSendOperationAttempt(this, operation, {
-      operationId: operation.operationId,
-      target,
-      type: messageType,
-      entityType,
-      entityId,
-      replaceRemovePhase: replaceRemoveDispatchPhase,
-    });
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;
     const strandedRemovePreimage = captureStrandedRemovePreimage(operation);
     try {
-      const delivery = await this.deliverReplicaOperationRequest(
-        operation,
-        target,
-        request,
-        dispatchNodeId,
-      );
+      const {delivery, wait} = await deliverAdmittedOperationEffect(
+        this, operation, target, request, dispatchNodeId, removalEffectTurn,
+        readinessEntryLevel, () => logSendOperationAttempt(this, operation, {
+          operationId: operation.operationId, target, type: messageType, entityType,
+          entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
+        }));
+      if (wait) return wait;
       transport = deliveryTransportOf(delivery);
       response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
@@ -841,8 +834,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
     }
     while (true) {
-      noteReplaceSourceRemovalEffect(
-        this, operation, response, replaceRemoveDispatchPhase);
       const retainedCreateDelivery = this.retainDeliveredCreateProgress(
         operation,
         response,

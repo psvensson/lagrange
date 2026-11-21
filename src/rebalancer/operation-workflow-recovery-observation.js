@@ -619,9 +619,9 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
   }
 
-  async reconcileStoppingOperationProgress(operation) {
+  async reconcileStoppingOperationProgress(operation, removalEffectTurn) {
     if (isReplaceRemovalIntentDurable(operation)) {
-      await this.runReplaceStoppingOwner(operation);
+      await this.runReplaceStoppingOwner(operation, removalEffectTurn);
       return this.repository.isOperationTerminal(operation) ?
         terminalOperationReconcileOutcome(operation) : OPERATION_RECONCILE_OUTCOME.WAITING;
     }

@@ -159,7 +159,8 @@ async function createHarness(t, {
           'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
         )).rows[0] : null,
       });
-      return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+      return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated',
+        operationId, replicaId: payload?.replicaId, nodeId: options.targetNodeId});
     },
   };
   coordinator = createTestCoordinator({

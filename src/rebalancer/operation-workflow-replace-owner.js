@@ -62,7 +62,7 @@ function isReplaceTerminalPersistSettled(transitionOutcome) {
   return isTerminalTransitionOutcomeSettled(transitionOutcome);
 }
 import {
-  deliverToReplaceWitness, deliveryUnavailableReason, replaceAnswerStatus,
+  deliverToReplaceWitness, deliveryUnavailableReason,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
@@ -75,7 +75,9 @@ import {
 } from './operation-workflow-replace-handoff-attempt.js';
 import {
   REPLACE_INTENT_FIELD,
+  captureReplaceRemovalEffectTurn,
   isDeferredVisibilitySnapshot,
+  isRemovalEffectResendDue,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,
   nowMsOf,
   readOwnerState,
@@ -402,29 +404,6 @@ async function redriveReplaceSourceRetirement(owner, operation, observation) {
   return true;
 }
 
-/**
- * Record that the REMOVE_REPLICA effect was delivered and what the source
- * answered. T5' re-sends only when no effect is recorded (a restart lost it)
- * or the recorded one has had its backstop window without the source's row
- * retiring.
- * @param {Object} owner
- * @param {Object} operation
- * @param {Object|null} response
- */
-function recordReplaceSourceRemovalEffect(owner, operation, response) {
-  readOwnerState(owner).removalEffectByOperationId.set(operation.operationId, {
-    sentAtMs: nowMsOf(owner),
-    status: replaceAnswerStatus(response),
-  });
-}
-
-function isRemovalEffectResendDue(owner, operation) {
-  const effect = readOwnerState(owner).removalEffectByOperationId
-    .get(operation.operationId);
-  return !effect ||
-    nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS;
-}
-
 async function observeReplaceSourceRow(owner, operation) {
   const {sourceReplicaId} = replaceReplicaIdsOf(owner, operation);
   return owner.observeStoppingReplicaProgress(
@@ -561,6 +540,7 @@ async function recordAdoptedReplaceIntent(owner, operation) {
  */
 async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   if (owner.repository.isOperationTerminal(operation)) return false;
+  const turn = context.removalEffectTurn ?? captureReplaceRemovalEffectTurn(owner, operation);
   if (replaceIntentEntryOf(operation) === null &&
       !await recordAdoptedReplaceIntent(owner, operation)) {
     return waitForReplaceOwner(owner, operation,
@@ -587,15 +567,15 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     isSourceUnreachableAtIntent(operation);
   const rowContext = {...waitContext, sourceRow, retirementAdmissible};
   if (!retirementAdmissible) {
-    if (!isRemovalEffectResendDue(owner, operation)) {
-      // The effect was delivered and the source's row has not retired yet:
-      // wait for its lifecycle (or the membership) to move.
+    if (!isRemovalEffectResendDue(owner, operation, turn)) {
+      // Another turn owns the send, or its acknowledgment is still recent.
+      // Wait for source lifecycle or membership progress.
       return waitForReplaceOwner(owner, operation,
         REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
     }
     // T5': when the backstop is due and lifecycle has not retired, re-send
     // the removal effect through the same remove-safety evaluation.
-    const result = await owner.executeReplaceSourceRemovalEffect(operation);
+    const result = await owner.executeReplaceSourceRemovalEffect(operation, turn);
     const waitReason = result?.deferReason ||
       REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING;
     // Reinstall the dispatch-cleared wait against the entry level.
@@ -788,6 +768,5 @@ export {
   readReplaceOwnerPhase,
   recordReplaceBudgetDiagnostic,
   recordReplaceOwnerWait,
-  recordReplaceSourceRemovalEffect,
   reconcileReplaceStoppingOwner,
 };

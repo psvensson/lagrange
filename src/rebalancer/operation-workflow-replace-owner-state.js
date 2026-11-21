@@ -82,6 +82,55 @@ function replaceIntentEntryOf(operation) {
   return null;
 }
 
+// A turn remembers the result visible before its authority reads. An older
+// turn cannot send after a concurrent attempt settles, even without a receipt.
+function replaceRemovalEffectIdentity(operation) {
+  return JSON.stringify([
+    operation.createdAt, operation.partitionId,
+    operation.sourceNodeId, operation.sourceReplicaId,
+    operation.targetNodeId, operation.replicaId,
+  ]);
+}
+
+function captureReplaceRemovalEffectTurn(owner, operation) {
+  const current = readOwnerState(owner).removalEffectByOperationId.get(operation.operationId);
+  const identity = replaceRemovalEffectIdentity(operation);
+  return {identity, observed: current?.identity === identity && current.inFlight ?
+    current.previous : current};
+}
+
+function removalEffectIsDue(owner, effect, identity) {
+  return effect?.identity !== identity || (!effect.inFlight &&
+    (effect.sentAtMs === null ||
+      nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS));
+}
+
+function isRemovalEffectResendDue(owner, operation, turn) {
+  const current = readOwnerState(owner).removalEffectByOperationId.get(operation.operationId);
+  return current === turn.observed && removalEffectIsDue(owner, current, turn.identity);
+}
+
+function claimReplaceRemovalEffect(owner, operation, turn) {
+  if (turn.identity !== replaceRemovalEffectIdentity(operation) ||
+      !isRemovalEffectResendDue(owner, operation, turn)) return null;
+  const previous = turn.observed;
+  const claim = {
+    identity: turn.identity, inFlight: true, previous,
+    sentAtMs: previous?.identity === turn.identity ? previous.sentAtMs : null,
+  };
+  readOwnerState(owner).removalEffectByOperationId.set(operation.operationId, claim);
+  return claim;
+}
+
+function finishReplaceRemovalEffect(owner, operationId, claim, receipt) {
+  const effects = readOwnerState(owner).removalEffectByOperationId;
+  if (effects.get(operationId) !== claim) return;
+  effects.set(operationId, {
+    identity: claim.identity, inFlight: false,
+    sentAtMs: receipt ? nowMsOf(owner) : claim.sentAtMs,
+  });
+}
+
 /**
  * Record the owner's current wait as its one bounded diagnostic (D2/S9):
  * step and owner phase, source and target, how long this wait has lasted,
@@ -252,6 +301,10 @@ function isDeferredVisibilitySnapshot(operation) {
 
 export {
   admitReplaceOwnerHandBack,
+  captureReplaceRemovalEffectTurn,
+  claimReplaceRemovalEffect,
+  finishReplaceRemovalEffect,
+  isRemovalEffectResendDue,
   isDeferredVisibilitySnapshot,
   REPLACE_INTENT_FIELD,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,

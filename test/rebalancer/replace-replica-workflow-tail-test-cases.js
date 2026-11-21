@@ -395,7 +395,12 @@ export async function registerReplaceReplicaWorkflowTailTests({
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: ReplicaOperationResponseStatus.INITIATED,
+            operationId: payload.operationId,
+            replicaId: payload.replicaId,
+            nodeId: 'seed-node',
+          });
         },
       };
 
@@ -434,6 +439,11 @@ export async function registerReplaceReplicaWorkflowTailTests({
         t.equal(beforeReplay.workflowStep, WORKFLOW_STEP.STOPPING,
           'the first owner committed removal intent before replay');
         t.equal(deliveries.length, 1, 'the first owner sent one source removal');
+        t.match(deliveries[0], {
+          target: 'seed-node/service/replica-handler',
+          payload: {type: ReplicaOperationMessageType.REMOVE_REPLICA,
+            operationId: operation.operationId, replicaId: 'users-p1-r1'},
+        }, 'the first owner sends the exact retiring source operation');
 
         const progressed = await coordinator.reconcileOperationLifecycle(operation);
 

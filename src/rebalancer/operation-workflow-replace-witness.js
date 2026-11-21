@@ -236,7 +236,6 @@ function deliveryUnavailableReason(delivery) {
 export {
   deliverToReplaceWitness,
   deliveryUnavailableReason,
-  replaceAnswerStatus,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 };
