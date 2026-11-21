@@ -12,6 +12,8 @@ import {
 import {
   OperationType, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
+import {applyGrowthPromoteRequestFields} from
+  '../../src/rebalancer/operation-workflow-growth-promote.js';
 import {assertOperationUpdateSubject} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -197,3 +199,40 @@ test('stale exact growth adopts actual terminal while foreign or swapped pairs r
     assert.deepEqual(ledgerRows(leader), [terminal]);
   });
 });
+
+test('native growth decode refuses missing original, malformed, or later-conflicting cohorts',
+  async () => withNativeGrowth(async ({coordinator, service}, row, leader) => {
+    const [first] = JSON.parse(row.steps_history);
+    const withoutCohort = {...first};
+    delete withoutCohort.promoteReplicaIds;
+    const badHistories = [
+      [withoutCohort],
+      [withoutCohort, {promoteReplicaIds: [FIRST_LEARNER, SECOND_LEARNER]}],
+      [{...first, promoteReplicaIds: [FIRST_LEARNER, 42]}],
+      [{...first, promoteReplicaIds: [FIRST_LEARNER, FIRST_LEARNER]}],
+      [{...first, promoteReplicaIds: [SECOND_LEARNER, FIRST_LEARNER]}],
+      [first, {promoteReplicaIds: [FIRST_LEARNER, 'foreign-learner']}],
+    ];
+    for (const [index, history] of badHistories.entries()) {
+      assert.equal(commitLedgerStatement(leader, `growth-dispatch:malformed:${index}`,
+        'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
+        [JSON.stringify(history), row.operation_id]), null);
+      const [actual] = ledgerRows(leader);
+      assert.throws(() => coordinator.repository.rowToOperation(actual),
+        {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'});
+      assert.throws(() => service.buildOperationFromRow(actual),
+        {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'});
+    }
+  }));
+
+test('growth executor wire cannot substitute an explicit foreign cohort for original history',
+  async () => withNativeGrowth(async ({coordinator}, row) => {
+    const exact = coordinator.repository.rowToOperation(row);
+    const request = {};
+    applyGrowthPromoteRequestFields(request, exact);
+    assert.deepEqual(request[ReplicaOperationField.PROMOTE_REPLICA_IDS],
+      [FIRST_LEARNER, SECOND_LEARNER]);
+    assert.throws(() => applyGrowthPromoteRequestFields({}, {
+      ...exact, promoteReplicaIds: [FIRST_LEARNER, 'foreign-learner'],
+    }), {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'});
+  }));
