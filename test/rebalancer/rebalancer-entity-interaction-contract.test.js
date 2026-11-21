@@ -19,8 +19,6 @@ import {
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {PriorityPublicationSafetyRows} from
   '../../src/rebalancer/priority-publication-safety-rows.js';
-import {PriorityRecoverySupersededTarget} from
-  '../../src/rebalancer/priority-recovery-superseded-target.js';
 import {
   canonicalizeRebalancerMove,
 } from '../../src/rebalancer/rebalancer-entity-identity.js';
@@ -190,35 +188,45 @@ test('non-partition remove safety serializes and evaluates its actual entity',
 
 test('move preflight preserves canonical entity identity at the safety owner',
   async (t) => {
-    const owner = Object.create(PriorityRecoverySupersededTarget.prototype);
+    // The real workflow owner (the coordinator's move-safety owner). Its
+    // preflight hands the prospective operation to the remove-safety
+    // evaluator, whose first owner question is the removal phase; a
+    // pass-through observer there records the operation the safety owner got.
+    const coordinator = createTestCoordinator({enableTimeouts: false});
+    const owner = coordinator.workflowOwner;
     let observedOperation = null;
-    owner.getRemoveSafetyError = async (operation) => {
-      observedOperation = operation;
-      return null;
+    const isRemoveInitialDispatchPhase = owner.isRemoveInitialDispatchPhase.bind(owner);
+    owner.isRemoveInitialDispatchPhase = (operation) => {
+      observedOperation ??= operation;
+      return isRemoveInitialDispatchPhase(operation);
     };
     const entityId = 'runtime-preflight';
-    await owner.getMoveSafetyError({
-      type: OperationType.REMOVE,
-      partitionId: entityId,
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      entityId,
-      replicaId: `${entityId}-r1`,
-      nodeId: 'node-a',
-    });
-    t.match(observedOperation, {
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      entityId,
-      partitionId: entityId,
-    }, 'preflight cannot reconstruct a runtime move as a partition operation');
-    await t.rejects(
-      owner.getMoveSafetyError({
+    try {
+      await owner.getMoveSafetyError({
         type: OperationType.REMOVE,
-        partitionId: 'untyped-move',
-        replicaId: 'untyped-move-r1',
-      }),
-      /Unsupported rebalancer entity type/,
-      'the safety boundary rejects an untyped move instead of guessing',
-    );
+        partitionId: entityId,
+        entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        entityId,
+        replicaId: `${entityId}-r1`,
+        nodeId: 'node-a',
+      });
+      t.match(observedOperation, {
+        entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        entityId,
+        partitionId: entityId,
+      }, 'preflight cannot reconstruct a runtime move as a partition operation');
+      await t.rejects(
+        owner.getMoveSafetyError({
+          type: OperationType.REMOVE,
+          partitionId: 'untyped-move',
+          replicaId: 'untyped-move-r1',
+        }),
+        /Unsupported rebalancer entity type/,
+        'the safety boundary rejects an untyped move instead of guessing',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
   });
 
 test('planner handoff emits one complete move identity', (t) => {

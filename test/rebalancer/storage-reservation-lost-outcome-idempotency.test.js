@@ -39,6 +39,7 @@ import {
   createMockMessageRouter,
   createMockPolicyService,
   createMockTransactionCoordinator,
+  createTestCoordinator,
 } from './test-helpers.js';
 
 const UNIQUE_RESERVATION_ERROR =
@@ -367,11 +368,99 @@ function createCoordinator(sqlEngine) {
   return coordinator;
 }
 
+const ALLOW_ALL_STORAGE_ADMISSION = Object.freeze({
+  checkAdd: async () => ({
+    allowed: true, decisionType: 'admitted', blockingReasons: [],
+    eligibleNodeIds: [], ineligibleNodes: [],
+  }),
+  checkReplace: async () => ({
+    allowed: true, decisionType: 'admitted', blockingReasons: [],
+    eligibleNodeIds: [], ineligibleNodes: [],
+  }),
+});
+
+// The partition's typed answer for a write whose durable outcome is unknown.
+const LOST_RESERVATION_INSERT_ANSWER = Object.freeze({
+  success: false,
+  error: ERRORS.WRITE_OUTCOME_UNKNOWN,
+  failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+  priorMutationDeliveryMayHaveBeenAttempted: true,
+});
+
+/**
+ * A coordinator that creates its operation through the production-schema
+ * SQLite store (createTestCoordinator): its entity census is the complete
+ * owner read creation requires. The first reservation INSERT lands in the
+ * store and its answer is lost; the store is the read-back the owner
+ * reconciles from. The ledger records each reservation mutation's and each
+ * reservation/operation read's query options (the shared deadline).
+ * @return {{coordinator: Object, ledger: Object}}
+ */
+function createLostAnswerCoordinator() {
+  const cache = createMockCache();
+  const accounting = new StorageCapacityAccountingService({systemTableCache: cache});
+  accounting.initialize({systemTableCache: cache});
+  const ledger = {
+    store: null,
+    reservationInsertAttempts: 0,
+    reservationMutationOptions: [],
+    reservationReadOptions: [],
+    operationReadOptions: [],
+  };
+  const observeRead = (sql, options) => {
+    if (sql.includes('SELECT * FROM storage_reservations WHERE operation_id = ?')) {
+      ledger.reservationReadOptions.push(options);
+    } else if (sql.includes('SELECT * FROM replica_operations') &&
+        sql.includes('operation_id = ?')) {
+      ledger.operationReadOptions.push(options);
+    }
+  };
+  const coordinator = createTestCoordinator({
+    nodeId: 'reservation-owner-node',
+    systemTableCache: cache,
+    storageAccountingService: accounting,
+    storageAdmissionService: ALLOW_ALL_STORAGE_ADMISSION,
+    controlPlaneSystemTableGatewayFactory: (store) => {
+      ledger.store = store;
+      return {
+        ...store,
+        async readAuthoritativeRows(tableName, sql, params, options) {
+          observeRead(sql, options);
+          return store.readAuthoritativeRows(tableName, sql, params, options);
+        },
+        async readRows(tableName, sql, params, options) {
+          observeRead(sql, options);
+          return store.readRows(tableName, sql, params, options);
+        },
+        async executeQuery(sql, params, options) {
+          if (!(sql.includes('INSERT') && sql.includes('storage_reservations'))) {
+            observeRead(sql, options);
+            return store.executeQuery(sql, params, options);
+          }
+          ledger.reservationInsertAttempts++;
+          ledger.reservationMutationOptions.push(options);
+          const result = await store.executeQuery(sql, params, options);
+          return ledger.reservationInsertAttempts === 1 && result.success ?
+            LOST_RESERVATION_INSERT_ANSWER :
+            result;
+        },
+      };
+    },
+  });
+  coordinator.repository.waitForOperationPersistRetry = async () => {};
+  return {coordinator, ledger};
+}
+
+async function readStoredReservations(ledger) {
+  const result = await ledger.store.executeQuery('SELECT * FROM storage_reservations', []);
+  if (result.success !== true) throw new Error(`reservation read failed: ${result.error}`);
+  return result.rows;
+}
+
 test('lost reservation INSERT answer adopts one exact durable capacity hold',
   async (t) => {
     initializeConfig();
-    const sqlEngine = createLostOutcomeSqlEngine();
-    const coordinator = createCoordinator(sqlEngine);
+    const {coordinator, ledger: sqlEngine} = createLostAnswerCoordinator();
     // Reservation adoption is under test, not dispatch: the created
     // operation rests at its durable PENDING step (the create arm is inert).
     coordinator.armCoordinatorCreatedOperationProgress = async () => false;
@@ -391,9 +480,10 @@ test('lost reservation INSERT answer adopts one exact durable capacity hold',
 
       t.equal(operation.workflowStep, WORKFLOW_STEP.PENDING,
         'the exact live operation remains dispatchable');
-      t.equal(sqlEngine.reservations.size, 1,
+      const reservations = await readStoredReservations(sqlEngine);
+      t.equal(reservations.length, 1,
         'one durable capacity hold exists after the lost answer');
-      const reservation = Array.from(sqlEngine.reservations.values())[0];
+      const reservation = reservations[0];
       t.equal(reservation.operation_id, operation.operationId,
         'the hold belongs to the exact live operation generation');
       t.equal(reservation.reservation_id, `res-${operation.operationId}`,

@@ -9,29 +9,26 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
-import {createFixtureSystemMutationPort, createOperationRowInsertPort} from './test-helpers.js';
+import {createMockCache, createTestCoordinator} from './test-helpers.js';
+import {buildCreatedOperationFixture} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {withFixtureCommittedMembership} from
-  './committed-membership-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   REBALANCER_ENTITY_TYPE,
   REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  createMockControlPlaneReadinessService,
-  createMockTransactionCoordinator,
-} from './test-helpers.js';
-import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 const MoveType = REBALANCER_MOVE_TYPE;
+const COORDINATOR_NODE_ID = 'test-node';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -75,134 +72,57 @@ function createMockMoveStateProvider(options = {}) {
 }
 
 /**
- * Create a mock SQL query engine for RebalanceCoordinator tests.
+ * The coordinator's replica_operations ledger: createTestCoordinator's
+ * production-schema SQLite store, whose entity census is a complete owner
+ * read (a hand reader answering `rows: []` would claim "no operations" once
+ * operations exist). `existingOperations` are committed producer rows; the
+ * store mirrors every committed operation row into `cache`, which
+ * getOperations() reads. `insertDelay` (ms) delays every ledger read and
+ * write, the latency the concurrency cases rely on.
  */
-function createMockSqlQueryEngine(options = {}) {
-  const {
-    existingOperations = [],
-    insertDelay = 0,
-  } = options;
-
-  const operations = new Map(
-    existingOperations.map((operation) => [
-      operation.operation_id,
-      {
-        entity_type: EntityType.PARTITION,
-        entity_id: operation.partition_id,
-        ...operation,
-      },
-    ]),
-  );
-
-  const simulateDelay = async () => {
-    if (insertDelay > 0) {
-      await new Promise((resolve) => setTimeout(resolve, insertDelay));
-    }
+function createOperationLedger({existingOperations = [], insertDelay = 0} = {}) {
+  const cache = createMockCache({replicaOperations: existingOperations});
+  return {
+    cache,
+    insertDelay,
+    getOperations: () => cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
   };
-  const engine = {
-    executeQuery: async (sql, params) => {
-      // Simulate network/processing delay
-      if (insertDelay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, insertDelay));
-      }
-
-      if (sql.includes('SELECT') && sql.includes('partition_id = ?') &&
-          sql.includes('target_node_id = ?')) {
-        // Query for existing in-flight operation
-        const [partitionId, targetNodeId] = params;
-        const existing = Array.from(operations.values()).find(
-          (op) => op.partition_id === partitionId &&
-            op.target_node_id === targetNodeId &&
-            !['active', 'removed', 'failed'].includes(op.status),
-        );
-        return {
-          success: true,
-          rows: existing ? [existing] : [],
-        };
-      }
-
-      if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
-        const [operationId] = params;
-        const existing = operations.get(operationId);
-        return {
-          success: true,
-          rows: existing ? [existing] : [],
-        };
-      }
-
-      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
-        return {success: true, changes: 1};
-      }
-
-      return {success: true, rows: []};
-    },
-    getOperations: () => Array.from(operations.values()),
-  };
-  // The structured operation INSERT takes the same simulated delay and lands
-  // in the rows by its named columns; other writes plan onto executeQuery.
-  const applyMutation = createOperationRowInsertPort(
-    (row) => {
-      operations.set(row.operation_id, row);
-    },
-    createFixtureSystemMutationPort((...args) => engine.executeQuery(...args)));
-  engine.submitMutation = async (mutation, options) => {
-    if (mutation?.operation === 'insert') await simulateDelay();
-    return applyMutation(mutation, options);
-  };
-  return engine;
 }
 
-/**
- * Create mock dependencies for RebalanceCoordinator.
- */
-function createMockCoordinatorDeps(sqlEngine) {
+function withLedgerLatency(gateway, delayMs) {
+  if (delayMs <= 0) return gateway;
+  const delayed = (method) => async (...args) => {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return method(...args);
+  };
   return {
-    nodeId: 'test-node',
-    systemTableCache: {
-      get: () => null,
-      filter: () => [],
-      getAll: () => [],
-    },
-    cdcIntegrationService: {
-      insertSystemTableRow: async () => ({success: true}),
-    },
-    messageRouter: withFixtureCommittedMembership({
-      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
-    }, null),
-    controlPlaneSystemTableGateway: {
-      submitMutation: (mutation, options) => sqlEngine.submitMutation(mutation, options),
-      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      executeQuery: async (sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
+    ...gateway,
+    readAuthoritativeRows: delayed(gateway.readAuthoritativeRows),
+    readRows: delayed(gateway.readRows),
+    executeQuery: delayed(gateway.executeQuery),
+    submitMutation: delayed(gateway.submitMutation),
+  };
+}
+
+function createCoordinatorUnderTest(ledger, overrides = {}) {
+  const coordinator = createTestCoordinator({
+    nodeId: COORDINATOR_NODE_ID,
+    systemTableCache: ledger.cache,
+    messageRouter: {
+      deliver: async () => buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'}),
     },
     tablePolicyService: {
       getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
     },
-    sqlQueryEngine: sqlEngine,
-    transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService({
-      defaultRepairEligible: true,
-    }),
+    readinessFixture: {defaultRepairEligible: true},
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
     },
-    storageAccountingService: {
-      estimateReplicaBytes: () => 1,
-    },
-    enableTimeouts: false,
-  };
-}
-
-function createCoordinatorUnderTest(sqlEngine, overrides = {}) {
-  const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-    ...createMockCoordinatorDeps(sqlEngine),
+    controlPlaneSystemTableGatewayFactory: (gateway) =>
+      withLedgerLatency(gateway, ledger.insertDelay),
     ...overrides,
-  }));
-  coordinator.initialize();
+  });
   // The planner's dedupe is under test, not dispatch: a created operation
   // rests at its durable PENDING step (the owner's create arm is inert).
   coordinator.armCoordinatorCreatedOperationProgress = async () => false;
@@ -396,8 +316,8 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
   await t.test('in-memory guard prevents duplicate concurrent creates', async (t) => {
     // Property: When multiple createOperation calls happen concurrently
     // for the same partition/node, only one operation should be created
-    const sqlEngine = createMockSqlQueryEngine({insertDelay: 10});
-    const coordinator = createCoordinatorUnderTest(sqlEngine);
+    const ledger = createOperationLedger({insertDelay: 10});
+    const coordinator = createCoordinatorUnderTest(ledger);
 
     // Simulate concurrent createOperation calls
     const move = {
@@ -418,7 +338,7 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
     const operationIds = new Set(results.map((r) => r.operationId));
 
     // Should only have one unique operation created
-    const allOperations = sqlEngine.getOperations();
+    const allOperations = ledger.getOperations();
     const partitionOps = allOperations.filter(
       (op) => op.partition_id === 'partition-1' && op.target_node_id === 'node-2',
     );
@@ -432,19 +352,21 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
   await t.test('database deduplication prevents duplicate operations', async (t) => {
     // Property: If an operation already exists in the database,
     // createOperation should return the existing operation
-    const existingOp = {
-      operation_id: 'existing-op-1',
-      type: 'ADD',
-      partition_id: 'partition-1',
-      target_node_id: 'node-2',
-      status: 'pending',
-      workflow_step: 'pending',
-    };
+    // The committed PENDING ADD an earlier cycle of this coordinator created:
+    // the one record builder's record as its canonical durable row.
+    const existingOp = buildCanonicalReplicaOperationRow(buildCreatedOperationFixture({
+      operationId: 'existing-op-1',
+      type: OperationType.ADD,
+      partitionId: 'partition-1',
+      sourceNodeId: COORDINATOR_NODE_ID,
+      targetNodeId: 'node-2',
+      createdAt: Date.now(),
+    }), null);
 
-    const sqlEngine = createMockSqlQueryEngine({
+    const ledger = createOperationLedger({
       existingOperations: [existingOp],
     });
-    const coordinator = createCoordinatorUnderTest(sqlEngine);
+    const coordinator = createCoordinatorUnderTest(ledger);
 
     const move = {
       type: 'ADD',
@@ -471,8 +393,8 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
     //
     // The issue from the logs is that the SAME partition was creating
     // duplicate operations, which should be prevented by the deduplication.
-    const sqlEngine = createMockSqlQueryEngine();
-    const coordinator = createCoordinatorUnderTest(sqlEngine);
+    const ledger = createOperationLedger();
+    const coordinator = createCoordinatorUnderTest(ledger);
 
     // Two different partitions creating operations to the same node
     const move1 = {
@@ -498,7 +420,7 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
     t.not(result1.operationId, result2.operationId,
       'Different partitions should have different operations');
 
-    const allOperations = sqlEngine.getOperations();
+    const allOperations = ledger.getOperations();
     t.equal(allOperations.length, 2, 'Should have two operations');
   });
 
@@ -510,8 +432,8 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
         fc.asyncProperty(
           fc.integer({min: 2, max: 5}),
           async (concurrentAttempts) => {
-            const sqlEngine = createMockSqlQueryEngine({insertDelay: 5});
-            const coordinator = createCoordinatorUnderTest(sqlEngine);
+            const ledger = createOperationLedger({insertDelay: 5});
+            const coordinator = createCoordinatorUnderTest(ledger);
 
             const move = {
               type: 'ADD',
@@ -532,7 +454,7 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
             const operationIds = new Set(results.map((r) => r.operationId));
 
             // Only one operation should exist for this partition/node
-            const allOperations = sqlEngine.getOperations();
+            const allOperations = ledger.getOperations();
             const partitionOps = allOperations.filter(
               (op) => op.partition_id === 'partition-1' &&
                 op.target_node_id === 'node-2',
@@ -555,8 +477,8 @@ test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
     // This test simulates the scenario from the logs where multiple
     // rebalance cycles happen in rapid succession, potentially before
     // the in-flight operations are visible in the system cache.
-    const sqlEngine = createMockSqlQueryEngine();
-    const coordinator = createCoordinatorUnderTest(sqlEngine);
+    const ledger = createOperationLedger();
+    const coordinator = createCoordinatorUnderTest(ledger);
 
     // Simulate multiple rapid rebalance cycles for the same partition
     const partitionId = 'indices-p1';
@@ -592,7 +514,7 @@ test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
       'Third cycle should return same operation');
 
     // Only one operation should exist
-    const allOperations = sqlEngine.getOperations();
+    const allOperations = ledger.getOperations();
     const partitionOps = allOperations.filter(
       (op) => op.partition_id === partitionId && op.target_node_id === targetNodeId,
     );
@@ -817,8 +739,8 @@ test('System Cache Consistency - In-Flight Operation Visibility', async (t) => {
     // The RebalanceCoordinator has an in-memory guard (operationsInCreation Set)
     // that provides immediate visibility of operations being created.
     // This is the correct approach for preventing duplicates.
-    const sqlEngine = createMockSqlQueryEngine();
-    const coordinator = createCoordinatorUnderTest(sqlEngine);
+    const ledger = createOperationLedger();
+    const coordinator = createCoordinatorUnderTest(ledger);
 
     // Start creating an operation (but don't await yet)
     const createPromise = coordinator.createOperation({
@@ -859,11 +781,11 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
     // to the same target node, which is by design. The problem from
     // the logs is that the SAME partition is creating duplicates.
 
-    const sqlEngine1 = createMockSqlQueryEngine();
-    const coordinator1 = createCoordinatorUnderTest(sqlEngine1);
+    const ledger1 = createOperationLedger();
+    const coordinator1 = createCoordinatorUnderTest(ledger1);
 
-    const sqlEngine2 = createMockSqlQueryEngine();
-    const coordinator2 = createCoordinatorUnderTest(sqlEngine2);
+    const ledger2 = createOperationLedger();
+    const coordinator2 = createCoordinatorUnderTest(ledger2);
 
     // Each coordinator has its own in-memory guard
     t.not(coordinator1.operationsInCreation, coordinator2.operationsInCreation,
@@ -886,9 +808,9 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
     // combination, not across different partitions.
 
     // Shared SQL engine simulates shared database
-    const sharedSqlEngine = createMockSqlQueryEngine();
+    const sharedLedger = createOperationLedger();
     const coordinator1 = createCoordinatorUnderTest(
-      sharedSqlEngine,
+      sharedLedger,
       {nodeId: 'node-1'},
     );
 
@@ -909,7 +831,7 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
     coordinator1.shutdown();
 
     // Both operations should exist (different partitions)
-    const allOps = sharedSqlEngine.getOperations();
+    const allOps = sharedLedger.getOperations();
     t.equal(allOps.length, 2, 'Different partitions can target same node');
 
     const partition1Ops = allOps.filter((op) => op.partition_id === 'partition-1');

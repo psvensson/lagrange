@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-01fd718b",
+  "observationDigest": "fnv1a32-c3b63e56",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18805,7 +18805,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/executor-bypasses-workflow-owner.test.js": {
@@ -19519,7 +19519,6 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/priority-publication-safety-rows.js",
-        "src/rebalancer/priority-recovery-superseded-target.js",
         "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
