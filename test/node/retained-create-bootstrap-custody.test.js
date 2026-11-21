@@ -171,9 +171,23 @@ test('only a durable original bootstrap and its publication wake the exact stopp
 
       const completed = waitForCreateCompletion(fixture.handler);
       completed.catch(() => {});
+      const laterOnly = JSON.parse(parked.steps_history);
+      laterOnly.at(-1)[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
+        history[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP];
+      assert.equal(commitLedgerStatement(leader, 'retained-bootstrap:publish-later',
+        'UPDATE replica_operations SET steps_history = ?, updated_at = ? WHERE operation_id = ?',
+        [JSON.stringify(laterOnly), parked.updated_at + 1, parked.operation_id]), null);
+      publish(fixture.authority.read(row.operation_id));
+      await waitForPhysicalStart(fixture);
+      assert.equal(fixture.physicalStarts(), 0,
+        'a durable later-step stamp cannot open the retained original CREATE');
+      assert.equal(fixture.authority.lifecycleStore.durableRow(
+        TABLES.SERVICES, row.replica_id), null);
+      assert.equal(fixture.authority.read(row.operation_id).create_admission_state,
+        CREATE_ADMISSION_STATE.ADMITTED);
       assert.equal(commitLedgerStatement(leader, 'retained-bootstrap:publish-original',
         'UPDATE replica_operations SET steps_history = ?, updated_at = ? WHERE operation_id = ?',
-        [projected.steps_history, parked.updated_at + 1, parked.operation_id]), null);
+        [projected.steps_history, parked.updated_at + 2, parked.operation_id]), null);
       publish(fixture.authority.read(row.operation_id));
       await waitForPhysicalStart(fixture);
       assert.equal(fixture.physicalStarts(), 1, 'the durable original publication wakes recovery');

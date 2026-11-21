@@ -130,6 +130,28 @@ describe('ReplicaHandlerSetup', () => {
       );
     });
 
+    it('refuses a cache with no matching unsubscribe before acquiring the handler', () => {
+      let subscriptions = 0;
+      assert.throws(() => {
+        const acquired = ReplicaHandlerSetup.create({
+          nodeId: TEST_NODE_ID,
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: {
+            ...mockSystemTableCache,
+            onCacheChange() {
+              subscriptions += 1;
+            },
+          },
+          createPartitionService: mockCreatePartitionService,
+          ownerIncarnation: TEST_BOOT_INCARNATION,
+          deferInitialization: true,
+        });
+        createdStateMachines.push(acquired.replicaStateMachine);
+      }, {serviceName: 'ReplicaHandlerSetup', dependencyName: 'systemTableCache'});
+      assert.equal(subscriptions, 0);
+    });
+
     it('should throw DependencyError when createPartitionService is missing', () => {
       assert.throws(
         () => ReplicaHandlerSetup.create({
