@@ -26,6 +26,8 @@ import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantGroupAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {createRouterEnvelopeFixture, settleUntil} from
   '../transport/router-envelope-witness-fixture.js';
@@ -40,6 +42,10 @@ const ALTERNATE_REPLICA = `${PARTITION}-r2`;
 const GROUP = 'read-grant-message-group';
 const HELD_KEY = 'held';
 const PEER_KEY = 'peer';
+const PIN_SESSION = 'read-grant-pinned-session';
+const INDEPENDENT_SESSION = 'read-grant-independent-session';
+const PIN_ROW_KEY = 'pin-seed';
+const PIN_INSERT = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
 const SQL = `SELECT id, value FROM ${TABLE} WHERE id = ?`;
 const LATE_MS = 1;
 const READ_ATTEMPTS = 3;
@@ -142,21 +148,24 @@ async function openPartitions(t, fixture, target, cache, resources, options) {
     publishPartition(cache, leader);
     const publishAlternate = () => publishPartition(cache, follower);
     if (!options.hideAlternate) publishAlternate();
-    const handoff = async () => {
-      assert.equal((await turnChainValue(leader.requestLeadershipTransfer({
-        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: follower.replicaId,
+    const transfer = async (from, to) => {
+      assert.equal((await turnChainValue(from.requestLeadershipTransfer({
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId,
       }))).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
       assert.equal(await group.waitFor(() =>
-        leader.raft.readStatus().role === RAFT_ROLE.FOLLOWER &&
-        follower.raft.readStatus().role === RAFT_ROLE.LEADER &&
-        follower.role === RAFT_ROLE.LEADER), true, 'actual Raft leadership transferred');
+        from.raft.readStatus().role === RAFT_ROLE.FOLLOWER &&
+        to.raft.readStatus().role === RAFT_ROLE.LEADER &&
+        to.role === RAFT_ROLE.LEADER), true, 'actual Raft leadership transferred');
       cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPDATE, {
-        partition_id: PARTITION, table_id: TABLE, leader_node_id: follower.nodeId,
+        partition_id: PARTITION, table_id: TABLE, leader_node_id: to.nodeId,
       });
     };
     return {
       primaryAddress: leader.unifiedAddress, alternate,
-      alternateAddress: follower.unifiedAddress, handoff, publishAlternate,
+      alternateAddress: follower.unifiedAddress, publishAlternate,
+      handoff: () => transfer(leader, follower),
+      handoffToPrimary: () => transfer(follower, leader),
+      releaseAdmission: () => resumeFixtureParticipantGroupAdmission(group.services, group.waitFor),
     };
   }
   const partition = new PartitionService(withFoundingStamp(withTestDbPath({
@@ -201,7 +210,8 @@ async function openFixture(t, options = {}) {
   resources.group = group;
   await group.initialize();
   sender.router.setQueryMessageGroupServiceResolver(() => ({service: group}));
-  const {primaryAddress, alternate, alternateAddress, handoff, publishAlternate} =
+  const {primaryAddress, alternate, alternateAddress, handoff, handoffToPrimary,
+    publishAlternate, releaseAdmission} =
     await openPartitions(t, fixture, target, cache, resources, options);
   cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     partition_id: PARTITION, table_id: TABLE, leader_node_id: TARGET,
@@ -247,6 +257,16 @@ async function openFixture(t, options = {}) {
   return {
     clock, group, probeMs, read, executor, handoff, publishAlternate, source: sender.router,
     primaryAddress, alternateAddress,
+    async establishSessionPin() {
+      await handoff();
+      await releaseAdmission();
+      const pin = await executor.executeOnPartition(PARTITION, PIN_INSERT,
+        [PIN_ROW_KEY, 'session affinity through a committed write'], false, true, false,
+        {sessionId: PIN_SESSION, timeoutMs: GRANT_PROBES * probeMs});
+      assert.equal(pin.success, true, JSON.stringify(pin));
+      assert.equal(executor.getSessionPartitionAddress(PIN_SESSION, PARTITION), alternateAddress);
+      await handoffToPrimary();
+    },
     routingInspections: () => routingInspections,
     limitRoutingInspections() {
       inspectionLimit = routingInspections + MAX_INSPECTIONS_PER_OBSERVATION;
@@ -535,5 +555,33 @@ test('excluding every candidate sends nothing and leaves no pending waiters', as
   t.equal(result.success, false);
   t.equal(f.sent().length, 0);
   t.equal(f.alternateSends().length, 0);
+  assertRetired(f, t);
+});
+
+test('session affinity orders eligible routes and cannot introduce an excluded route', async (t) => {
+  const f = await openFixture(t, {withAlternate: true});
+  f.executor.readRetryAttempts = 1;
+  await f.establishSessionPin();
+  const deadline = f.clock.now() + GRANT_PROBES * f.probeMs;
+  const pinned = await f.read(PEER_KEY, deadline, {sessionId: PIN_SESSION});
+  t.equal(pinned.readAuthorityWitness?.servingNodeId, ALTERNATE,
+    'the ordinary read honors the eligible pin created by the committed write');
+  const independent = await f.read(PEER_KEY, deadline, {sessionId: INDEPENDENT_SESSION});
+  t.equal(independent.readAuthorityWitness?.servingNodeId, TARGET,
+    'an independent session prefers the canonical leader');
+  const alternateCount = f.alternateSends().length;
+  const allowed = await f.read(PEER_KEY, deadline, {
+    sessionId: PIN_SESSION, excludeDeliveryAddresses: [f.alternateAddress],
+  });
+  t.equal(allowed.readAuthorityWitness?.servingNodeId, TARGET,
+    'the eligible leader answers after the session-pinned route is excluded');
+  t.equal(f.alternateSends().length, alternateCount, 'the excluded pin never reached the wire');
+  const primaryCount = f.sent().length;
+  const noRoute = await f.read(PEER_KEY, deadline, {
+    sessionId: PIN_SESSION, excludeDeliveryAddresses: [f.primaryAddress, f.alternateAddress],
+  });
+  t.equal(noRoute.success, false, 'all-excluded remains a typed failure even with a live session pin');
+  t.equal(f.sent().length, primaryCount, 'all-excluded adds no primary wire submission');
+  t.equal(f.alternateSends().length, alternateCount, 'all-excluded adds no pinned wire submission');
   assertRetired(f, t);
 });
