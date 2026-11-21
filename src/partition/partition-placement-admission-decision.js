@@ -144,6 +144,17 @@ function readPlacementCopyOccupancy(statement, census) {
     targetNodeId: move.targetNodeId, targetOccupancy, targetLimit: statement.kTgt});
 }
 
+// A CDC row for a live or just-finished copy can clear a retained capacity
+// refusal. Scope belongs to the same canonical founder/copy classifier as apply.
+function copyCapacityObservationAffects(statement, row) {
+  const peer = censusRowOf(row);
+  const move = statement.moves[0];
+  return COPY_TYPES.has(peer.type) && !peer.founder &&
+    peer.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
+    (peer.copySourceNodeId === null || peer.copySourceNodeId === move.copySourceNodeId ||
+      peer.targetNodeId === move.targetNodeId);
+}
+
 function capacityRefusal(statement, census) {
   const move = statement.moves[0];
   if (statement.transitionKind !== KIND.PLACEMENT || !COPY_TYPES.has(move.type)) return null;
@@ -354,4 +365,5 @@ export {
   readPlacementCensus,
   readPlacementCopyOccupancy,
   operationHoldsPlacementCopyCapacity,
+  copyCapacityObservationAffects,
 };

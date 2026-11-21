@@ -220,6 +220,7 @@ documentClass: generated
 - [replica-operation-repository-visibility-methods.js](replica-operation-repository-visibility-methods.js) - Bound retryable SQL backoff for replica_operations owner reads. (importers: one)
 - [replica-operation-repository.js](replica-operation-repository.js) - ReplicaOperationRepository - SQL/cache reads and writes, row <-> operation translation for replica_operations. (importers: hub)
 - [replica-operation-retained-repair-answer.js](replica-operation-retained-repair-answer.js) - Canonical native repair answers; validation never substitutes for a grant. (importers: one)
+- [replica-operation-retained-repair-observation.js](replica-operation-retained-repair-observation.js) - Observations are hints for the retained-record owner, never row authority. (importers: one)
 - [replica-operation-step-policy.js](replica-operation-step-policy.js) - Single owner of replica-operation STEP-COVERAGE policy (quest step-coverage-single-owner-table; epic... (importers: hub)
 - [replica-operation-topology-drain.js](replica-operation-topology-drain.js) - Resolve the latest retained drain watermark for coordinator-owned topology-shaping work. (importers: few)
 - [replica-operation-update-disposition.js](replica-operation-update-disposition.js) - Mandatory replica-operation UPDATE result vocabulary. (importers: hub)

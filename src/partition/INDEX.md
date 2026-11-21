@@ -98,7 +98,7 @@ documentClass: generated
 - [partition-participant-transaction-topology-fence.js](partition-participant-transaction-topology-fence.js) - TX1 v10 8.1: BEGIN/new PREPARE consult the split/merge owners' handles and transition metadata. (importers: few)
 - [partition-placement-admission-command.js](partition-placement-admission-command.js) - The pinned committed form of the placement owner's commands (quest replica-placement-admission-owner, design section... (importers: many)
 - [partition-placement-admission-constants.js](partition-placement-admission-constants.js) - The placement owner's committed command types at the partition boundary (quest replica-placement-admission-owner,... (importers: hub)
-- [partition-placement-admission-decision.js](partition-placement-admission-decision.js) - Every committed row at a step where it can be incomplete, in id order. (importers: many)
+- [partition-placement-admission-decision.js](partition-placement-admission-decision.js) - Every committed row at a step where it can be incomplete, in id order. (importers: hub)
 - [partition-placement-admission-identity.js](partition-placement-admission-identity.js) - The identity of every operation the placement admission applier admits (quest replica-placement-admission-owner,... (importers: many)
 - [partition-placement-admission.js](partition-placement-admission.js) - Request one admission on this replica_operations partition: the placement owner's local call, and the... (importers: many)
 - [partition-placement-founder-proof.js](partition-placement-founder-proof.js) - No leading comment; first export: provePlacementFounders. (importers: few)
