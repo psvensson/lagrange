@@ -8,6 +8,8 @@ import {
   closeAcknowledgedMetadataRefreshRow,
   serializeMembershipPublicationRow,
 } from './membership-publication-planning-evidence.js';
+import {areMembershipLifecycleSummariesEqual} from
+  './membership-publication-lifecycle-summary.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
 import {normalizeNodeIdList} from './membership-publication-row-helpers.js';
 import {assertPublicationWriteRevision} from './owners/control-plane-publications-owner.js';
@@ -43,8 +45,11 @@ function publicationRefreshIntent(row, {
   nowMs, priorityPartitionSummary, membershipLifecycleSummary,
   acknowledgedNodeIds, requirePublished,
 }) {
+  const baseline = normalizeControlPlanePublicationRow(row);
   return {kind: INTENT_KIND.REFRESH, revision: publicationRevision(row),
     nowMs, priorityPartitionSummary, membershipLifecycleSummary,
+    baselinePrioritySummary: baseline.priorityPartitionSummary,
+    baselineLifecycleSummary: baseline.membershipLifecycleSummary,
     acknowledgedNodeIds, requirePublished};
 }
 
@@ -80,6 +85,37 @@ function projectPublicationIntent(intent, current) {
   }
 }
 
+function lifecycleRefreshConflicts(intent, current, actualSummary, desiredSummary) {
+  if (intent.membershipLifecycleSummary === undefined ||
+      areMembershipLifecycleSummariesEqual(actualSummary, desiredSummary)) {
+    return false;
+  }
+  // ACK closure also owns part of the lifecycle summary. Apply that same
+  // projection to the retained baseline before testing for another refresh.
+  const projectedBaseline = closeAcknowledgedMetadataRefreshRow({
+    publicationRow: {
+      ...current,
+      membership_lifecycle_summary: intent.baselineLifecycleSummary,
+      membershipLifecycleSummary: intent.baselineLifecycleSummary,
+    },
+    nowMs: current.updated_at,
+  });
+  return !areMembershipLifecycleSummariesEqual(actualSummary,
+    normalizeControlPlanePublicationRow(projectedBaseline).membershipLifecycleSummary);
+}
+
+function publicationRefreshConflicts(intent, current, proposed) {
+  if (intent.kind !== INTENT_KIND.REFRESH) return false;
+  const actual = normalizeControlPlanePublicationRow(current);
+  const desired = normalizeControlPlanePublicationRow(proposed);
+  const actualPriority = JSON.stringify(actual.priorityPartitionSummary);
+  const priorityChanged = intent.priorityPartitionSummary !== undefined &&
+    actualPriority !== JSON.stringify(desired.priorityPartitionSummary) &&
+    actualPriority !== JSON.stringify(intent.baselinePrioritySummary);
+  return priorityChanged || lifecycleRefreshConflicts(intent, current,
+    actual.membershipLifecycleSummary, desired.membershipLifecycleSummary);
+}
+
 function decidePublicationIntent(intent, current) {
   if (current === null) {
     return intent.kind === INTENT_KIND.BIRTH ?
@@ -87,19 +123,17 @@ function decidePublicationIntent(intent, current) {
       {state: PUBLICATION_INTENT_DECISION.UNCONFIRMED, row: null};
   }
   assertPublicationWriteRevision(intent.revision, current);
-  let proposed = current;
-  if (intent.kind !== INTENT_KIND.BIRTH &&
-      !isPublicationOwnerFailureStatus(readUpperStateField(current.status))) {
-    proposed = serializeMembershipPublicationRow(projectPublicationIntent(intent, current));
-  }
-  const confirmed = publicationRowSatisfiesDesiredState(current, proposed);
-  const requestedClosureMissing = intent.requirePublished &&
-    !isPublicationOwnerFailureStatus(readUpperStateField(current.status)) &&
-    proposed.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
-  return requestedClosureMissing ?
-    {state: PUBLICATION_INTENT_DECISION.UNCONFIRMED, row: current} :
-    confirmed ?
-      {state: PUBLICATION_INTENT_DECISION.CONFIRMED, row: current} :
+  const settled = intent.kind === INTENT_KIND.BIRTH ||
+    isPublicationOwnerFailureStatus(readUpperStateField(current.status));
+  const proposed = settled ? current :
+    serializeMembershipPublicationRow(projectPublicationIntent(intent, current));
+  const unconfirmed = !settled && (
+    (intent.requirePublished && proposed.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) ||
+    publicationRefreshConflicts(intent, current, proposed)
+  );
+  const confirmed = settled || publicationRowSatisfiesDesiredState(current, proposed);
+  return unconfirmed ? {state: PUBLICATION_INTENT_DECISION.UNCONFIRMED, row: current} :
+    confirmed ? {state: PUBLICATION_INTENT_DECISION.CONFIRMED, row: current} :
       {state: PUBLICATION_INTENT_DECISION.WRITE, row: proposed};
 }
 

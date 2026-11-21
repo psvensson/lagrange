@@ -284,7 +284,9 @@ class MembershipPublicationCoordinatorPersist extends
       await this._maybeLatchFormationAfterPublicationWrite(confirmed);
       return confirmed;
     }
-    reportPublicationWriteUnconfirmed(this, {maxAttempts, publicationId, row: decision.row});
+    if (decision.state === PUBLICATION_INTENT_DECISION.WRITE) {
+      reportPublicationWriteUnconfirmed(this, {maxAttempts, publicationId, row: decision.row});
+    }
     throw publicationWriteUnconfirmed(publicationId, failure);
   }
 
