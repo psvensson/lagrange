@@ -31,6 +31,7 @@ import {readPartitionAppliedIndex} from '../../src/partition/partition-committed
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  PARTITION,
   READ_SQL,
   READ_TIMEOUT_MS,
   TABLE,
@@ -344,6 +345,26 @@ test('readOwnerFact: the deadline and the routing class are required and travel 
     {name: 'OwnerFactRequestRefusal', field: 'deadline'}, 'a call without a deadline is refused');
   t.equal(seen.length, calls, 'and issues no read');
 });
+
+test('readOwnerFact: an answer decided for another floor is not this read\'s answer',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const group = await openLedgerGroupSurface(t, import.meta.url);
+    const [leader] = group.services;
+    await group.settleLeader(leader);
+    group.seedRow(leader, OPERATION);
+    // The leader's own decided answer for floor index 0, handed back as the
+    // answer to a read with floor index 1 (a shared or rebuilt answer).
+    const decided = await leader.handleRemoteQuery(
+      ownerFactRequestTo(leader, [OPERATION], {partitionId: PARTITION, index: 0, term: 0}));
+    const answerOf = async () => ({success: true, rows: [], rowSetComplete: true,
+      readAuthorityWitness: decided.readAuthorityWitness});
+    const other = await readOwnerFact(answerOf,
+      ownerFactDraft([OPERATION], {floor: {partitionId: PARTITION, index: 1, term: 0}}));
+    t.equal(other.state, STATE.UNAVAILABLE, 'never READY on another request\'s decision');
+    t.equal(other.reason, REASON.ANSWER_FOR_ANOTHER_REQUEST);
+    const own = await readOwnerFact(answerOf, ownerFactDraft([OPERATION]));
+    t.equal(own.state, STATE.READY, 'the decision of exactly this request is its answer');
+  });
 
 test('readOwnerFact: the caller verifies what it received; a successful empty answer ' +
   'carrying a follower\'s witness is not absence', {timeout: TEST_TIMEOUT_MS}, async (t) => {

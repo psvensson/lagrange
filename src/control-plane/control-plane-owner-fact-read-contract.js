@@ -23,9 +23,9 @@ const OWNER_FACT_UNAVAILABLE_REASON = Object.freeze({
   NOT_LEADER: 'owner_fact_not_leader',
   // A leader whose applied position is behind the commit index it observed.
   APPLY_BEHIND_COMMIT: 'owner_fact_apply_behind_commit',
-  // A leader that has not applied every entry its log held when it was
-  // elected: entries an earlier leader committed may still be missing from
-  // its state (raft-rs commits them only through an entry of its own term).
+  // A leader that has not applied an entry of its own term (the raft owner's
+  // currentTermApplied): entries an earlier leader committed may still be
+  // missing from its state (raft-rs commits them only through such an entry).
   ELECTION_LOG_NOT_APPLIED: 'owner_fact_election_log_not_applied',
   BELOW_INDEX_FLOOR: 'owner_fact_below_index_floor',
   BELOW_TERM_FLOOR: 'owner_fact_below_term_floor',
@@ -149,7 +149,7 @@ function ownerFactPointRefusal(witness, read) {
   if (!isIndexPosition(witness) || witness.commitIndex > witness.appliedIndex) {
     return OWNER_FACT_UNAVAILABLE_REASON.APPLY_BEHIND_COMMIT;
   }
-  if (witness.electionLogApplied !== true) {
+  if (witness.currentTermApplied !== true) {
     return OWNER_FACT_UNAVAILABLE_REASON.ELECTION_LOG_NOT_APPLIED;
   }
   if (witness.appliedIndex < read.floor.index) {
@@ -168,8 +168,8 @@ function ownerFactPointRefusal(witness, read) {
  * asks that the witness echoes exactly this read (kind and floor; the
  * receiver echoes the read it decided), that its floor is a position of the
  * partition read, and for an applied read point not behind the commit
- * index the leader observed, covering every entry the leader's log held when
- * it was elected, and meeting the floor (and, when pinned, the expected
+ * index the leader observed, from a leader that has applied an entry of its
+ * own term (so every entry an earlier leader committed), and meeting the floor (and, when pinned, the expected
  * serving replica).
  * @param {Object} witness - The serving replica's readAuthorityWitness.
  * @param {Object} expectation - {partitionId, read}; read is a parsed

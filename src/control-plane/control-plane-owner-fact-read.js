@@ -245,8 +245,8 @@ function ownerFactAnswerOf(answer, request) {
  * caller's existing continuation owns the next attempt).
  *
  * READY is a leader-local read point: the serving replica decided, on its
- * raft core's observation, that it leads, has applied every entry its log
- * held when it was elected (so every entry an earlier leader committed) and
+ * raft core's current observation, that it leads, has applied an entry of
+ * its own term (so every entry an earlier leader committed) and
  * that the floor is a position of its group it has reached; the rows and the
  * applied position the witness names were read in one read transaction of
  * its connection, which no foreign transaction held; after the read it still

@@ -31,6 +31,7 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {readStateField} from '../utils/state-field-read.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {
   LEADER_READ_KIND,
   LEADER_READ_REQUEST_FIELD,
@@ -203,21 +204,14 @@ function storePositionOf(value) {
   return typeof value === 'string' ? safeIndexOf(Number(value)) : null;
 }
 
-// The serving replica described from one status its raft-rs runtime reports
-// (readOwnRaftStatus: CORE_OK, this group, this replica). While a core turn
-// is pending that status is the last announced observation, not the core's
-// current state (raft-rs-runtime-owner.js readStatusObserved): an open limit
-// of this receiver until the raft owner offers an uncached observation. Role, term, the
-// applied and commit index and whether it has applied every entry its log
-// held when it was elected all come from that observation, never from the
-// event-derived service role. raft-rs sets its pending configuration index to
-// the last log index on becoming leader and only raises it while leading
-// (raft-rs-status-observation.js currentTermApplied, raft-0.7.0 raft.rs
-// 1227-1232), so a leader with no configuration change pending past its
-// applied index has applied that whole log, which holds every entry an
-// earlier leader committed. This is the raft owner's own fallback test of an
-// applied own-term read point (raft-rs-conf-change-admission.js
-// hasAppliedOwnTermEntry); its applied-term test is not in the status.
+// The serving replica described from one raft observation: for a
+// leader-qualified read the raft owner's current authority observation
+// (observeOwnAuthority), for any other read the status its runtime reports
+// (readOwnRaftStatus). Role, term, the commit and applied index and whether
+// it has applied an entry of its own term (raft-rs commits an earlier
+// leader's entries only through one, so such a leader has applied every
+// entry an earlier leader committed) come from that observation, never from
+// the event-derived service role.
 function readAuthorityWitnessOf(service, status, read = undefined) {
   return {
     state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
@@ -227,7 +221,7 @@ function readAuthorityWitnessOf(service, status, read = undefined) {
     term: safeIndexOf(status?.term),
     appliedIndex: safeIndexOf(status?.appliedIndex),
     commitIndex: safeIndexOf(status?.commitIndex),
-    electionLogApplied: status?.confChangePending === false,
+    currentTermApplied: status?.currentTermApplied === true,
     // A replica whose core gave no usable observation claims no role.
     role: readStateField(status?.role),
     // The leader-qualified read this receiver decided, echoed to its caller.
@@ -247,6 +241,18 @@ function logRemoteQueryHandling(service, sql) {
     partitionId: service.partitionId,
     replicaId: service.replicaId,
   });
+}
+
+// The replica's raft core as it is now (the raft owner's current authority
+// observation: never a turn, never cached, never driving), when it is a usable
+// observation of this replica in this group; else null. A leader that has not
+// applied an entry of its own term while a turn pends reports NOT_SETTLED,
+// which is not LEADER.
+function observeOwnAuthority(service) {
+  const observation = service.raft.observeCurrentAuthority();
+  return observation?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    observation.groupId === service.partitionId &&
+    observation.replicaIdentity === service.replicaId ? observation : null;
 }
 
 // A replica that does not lead names the live leader its own core knows, at
@@ -279,9 +285,9 @@ function leaderReadRefusal(service, reason, witness) {
 }
 
 // After the read: the replica still leads in the same term with the same
-// runtime (readOwnRaftStatus also re-checks group and replica identity).
+// runtime (observeOwnAuthority also re-checks group and replica identity).
 function leaderReadRefusalAfter(service, before) {
-  const after = service.readOwnRaftStatus();
+  const after = observeOwnAuthority(service);
   return after?.role !== RaftRole.LEADER || after.term !== before.term ||
     after.lifecycleIncarnation !== before.lifecycleIncarnation ||
     after.runtimeGeneration !== before.runtimeGeneration ?
@@ -307,8 +313,8 @@ function witnessAtReadPosition(witness, read, result) {
 
 /**
  * Answer a leader-qualified read (the request's leaderRead field) as its
- * receiver: decided here, by the leader-read predicate, on the status the
- * raft-rs runtime reports, with nothing awaited between that status and the
+ * receiver: decided here, by the leader-read predicate, on its raft core's
+ * current observation, with nothing awaited between that observation and the
  * statement. An owner fact's rows and the applied position its witness names
  * are read in one read transaction (the statement owner's applied-position
  * read), on a connection no foreign transaction holds. The witness echoes the
@@ -325,7 +331,7 @@ async function answerLeaderQualifiedRead(service, payload, sql) {
       failureCode: LEADER_READ_REQUEST_MALFORMED,
       partitionId: service.partitionId};
   }
-  const before = service.readOwnRaftStatus();
+  const before = observeOwnAuthority(service);
   const witness = readAuthorityWitnessOf(service, before, read);
   const refusal = leaderReadWitnessRefusal(witness,
     {partitionId: service.partitionId, read}) ?? foreignTransactionRefusal(service, read);

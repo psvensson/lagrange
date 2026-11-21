@@ -167,12 +167,13 @@ only absence. Neither read authorises an effect: an effect is granted by a
 conditional committed write that revalidates its own predicate.
 
 The safe read point of an owner fact is decided by the replica that answers,
-at its receiver (`PartitionService.handleRemoteQuery`), on the status its
-raft-rs runtime reports: it leads; it has applied every entry its log held
-when it was elected (raft-rs sets its pending configuration index to that last
-index on becoming leader; by Raft's leader completeness that log holds every
-entry an earlier leader committed, and the leader commits them only through
-an entry of its own term); its applied position is not behind the commit
+at its receiver (`PartitionService.handleRemoteQuery`), on its raft core's
+current authority observation (`observeCurrentAuthority`: read, never driven,
+never cached): it leads (a leader that has not applied an entry of its term
+while a turn pends is reported not settled, which is not leading); it has
+applied an entry of its own term (`currentTermApplied`; by Raft's leader
+completeness its log holds every entry an earlier leader committed, and it
+commits them only through such an entry); its applied position is not behind the commit
 index it observed; and the caller's floor, a position `{partitionId, index,
 term}` typed by the raft group it was taken in, names this partition and is
 met. A read on a connection inside a transaction the receiver did not open is
@@ -184,12 +185,8 @@ typed and ships no rows. The witness echoes the read it decided (kind and
 floor); `readOwnerFact` accepts only an answer that echoes its own request,
 and the gateway never shares one owner fact's read with a read of another
 kind, floor or deadline.
-Known limit (verification F1, open until the raft owner's current authority
-observation is adopted): while a core turn is pending (a peer send, a
-persistence-admission wait) the runtime's status is the last announced
-observation, not the core's current state
-(`src/raft/raft-rs-runtime-owner.js:1559-1578`), so the leadership decision
-can rest on a stale status. The node that hosts the replica reaches the same
+Each decision is the core's state at that instant, not the status of its last
+completed turn. The node that hosts the replica reaches the same
 receiver in process; every other node reaches it over the query transport,
 redirect-first, inside the original request's deadline, under the routing
 class the caller states.

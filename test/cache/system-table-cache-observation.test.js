@@ -65,7 +65,7 @@ test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from
         commitIndex: 28,
         appliedIndex: 27,
         lastIndex: 28,
-        confChangePending: false,
+        currentTermApplied: true,
       }),
     },
   };
@@ -84,7 +84,7 @@ test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from
     term: 3,
     appliedIndex: 27,
     commitIndex: 28,
-    electionLogApplied: true,
+    currentTermApplied: true,
     role: RAFT_ROLE.LEADER,
     observedAtMs: 4_200,
   });
