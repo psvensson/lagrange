@@ -131,7 +131,8 @@ function createRemoveCoordinator({
       async deliver(target, payload) {
         deliveries.push({target, payload});
         if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
-          await beforeRemoveReply?.(payload);
+          const answer = await beforeRemoveReply?.(payload);
+          if (answer !== undefined) return answer;
         }
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: payload.type === ReplicaOperationMessageType.REMOVE_REPLICA ?
@@ -453,23 +454,40 @@ for (const entityType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP,
 
 
 for (const boundary of ['before response', 'before SQLite CAS']) {
-  for (const field of ['created_at', 'steps_history']) {
+  const fields = boundary === 'before response' ? ['created_at', 'steps_history'] :
+    ['created_at', 'steps_history', 'updated_at', 'target_node_id', 'status', 'delete'];
+  for (const field of fields) {
     test(`the stranded REMOVE reply cannot replace moved ${field} ${boundary}`, async (t) => {
       const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
         workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
-      const changed = field === 'created_at' ? operationRow.created_at + 1 :
-        JSON.stringify([...JSON.parse(operationRow.steps_history),
-          {step: WORKFLOW_STEP.ACTIVE, timestamp: operationRow.updated_at, reason: 'new owner turn'}]);
+      const changed = {
+        created_at: operationRow.created_at + 1,
+        updated_at: operationRow.updated_at + 1,
+        target_node_id: 'new-target-same-key',
+        status: ReplicaStatus.REMOVING,
+        steps_history: JSON.stringify([...JSON.parse(operationRow.steps_history),
+          {step: WORKFLOW_STEP.ACTIVE, timestamp: operationRow.updated_at, reason: 'new owner turn'}]),
+      };
       const {coordinator, deliveries} = createRemoveCoordinator({
         operationRow, removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND,
         ...(boundary === 'before response' ? {beforeRemoveReply: movePreimage} : {}),
       });
       const {repository, controlPlaneSystemTableGateway: gateway} = coordinator;
       let moved;
+      let mutationRan = false;
+      let releases = 0;
+      const owner = coordinator.workflowOwner;
+      const release = owner.releaseDurableTerminalOperation.bind(owner);
+      owner.releaseDurableTerminalOperation = (...args) => {
+        releases += 1;
+        return release(...args);
+      };
       async function movePreimage() {
-        const result = await gateway.submitMutation({tableName: 'replica_operations',
-          operation: 'update', whereClause: {operation_id: ACTIVE_OPERATION_ID},
-          data: {[field]: changed}});
+        mutationRan = true;
+        const mutation = field === 'delete' ? {operation: 'delete'} :
+          {operation: 'update', data: {[field]: changed[field]}};
+        const result = await gateway.submitMutation({...mutation, tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID}});
         t.match(result, {success: true, partitionResult: {affectedRows: 1}},
           'the independent writer moves the exact live preimage');
         moved = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
@@ -477,7 +495,7 @@ for (const boundary of ['before response', 'before SQLite CAS']) {
       if (boundary === 'before SQLite CAS') {
         const execute = gateway.executeQuery.bind(gateway);
         gateway.executeQuery = async (sql, params, options) => {
-          if (!moved && sql.includes('UPDATE replica_operations') &&
+          if (!mutationRan && sql.includes('UPDATE replica_operations') &&
               sql.includes('AND steps_history = ?') && params[1] === WORKFLOW_STEP.STOPPING) {
             await movePreimage();
           }
@@ -487,12 +505,64 @@ for (const boundary of ['before response', 'before SQLite CAS']) {
       try {
         await coordinator.reconcileOrphanedOperations();
         t.equal(removeDeliveries(deliveries).length, 1, 'the old preimage admitted one send');
-        t.equal(moved?.workflowStep, WORKFLOW_STEP.ACTIVE, 'the original row changed after send');
+        t.equal(mutationRan, true, 'the prior row moved after the original send');
         t.same(await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID), moved,
-          'the late response cannot write over the changed row or report progress');
+          'the late response cannot write over the moved row or reinsert an absent row');
+        t.equal(releases, 0, 'no changed or absent row grants terminal release');
       } finally {
         await coordinator.shutdown();
       }
     });
   }
+}
+
+
+for (const [answer, generation] of [
+  ['rejected', 'replaced'], ['undelivered', 'replaced'], ['thrown', 'replaced'],
+  ['rejected', 'same'], ['undelivered', 'same'], ['thrown', 'same'],
+]) {
+  test(`a ${answer} stranded REMOVE can adopt only a ${generation} terminal subject`, async (t) => {
+    const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+    let terminal;
+    const {coordinator, deliveries} = createRemoveCoordinator({
+      operationRow,
+      beforeRemoveReply: async () => {
+        const time = Date.now();
+        const mutation = await coordinator.controlPlaneSystemTableGateway.submitMutation({
+          operation: 'update', tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID, completed_at: null},
+          data: {created_at: operationRow.created_at + Number(generation === 'replaced'),
+            status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
+            updated_at: time, completed_at: time, error_message: 'independent terminal writer',
+            steps_history: JSON.stringify([...JSON.parse(operationRow.steps_history),
+              {step: WORKFLOW_STEP.FAILED, timestamp: time}])},
+        });
+        t.match(mutation, {success: true, partitionResult: {affectedRows: 1}});
+        terminal = await coordinator.repository
+          .queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+        if (answer === 'thrown') throw new Error('transport did not return a reply');
+        return answer === 'rejected' ? buildDeliveryEnvelope({acknowledged: true}, {
+          status: ReplicaOperationResponseStatus.ERROR, error: 'source rejected removal',
+        }) : buildDeliveryEnvelope({acknowledged: false}, null);
+      },
+    });
+    const released = [];
+    const owner = coordinator.workflowOwner;
+    const release = owner.releaseDurableTerminalOperation.bind(owner);
+    owner.releaseDurableTerminalOperation = (operation, outcome) => {
+      released.push(outcome.operation);
+      return release(operation, outcome);
+    };
+    try {
+      await coordinator.reconcileOrphanedOperations();
+      t.equal(removeDeliveries(deliveries).length, 1, 'the prior committed row permits one send');
+      t.same(await coordinator.repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID),
+        terminal, 'the independent terminal result remains exactly as committed');
+      t.same(released, generation === 'same' ? [terminal] : [],
+        'release authority requires the actual bound generation');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 }
