@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "1f6a5dfe4ff0ab33623c8405d5d8f8de69dfba2dd63c46d8562c383bd6a3dc3a"
+        "sha256": "43091471eb29b39542c1e91e7e2fa83d11a7266d91ae0558ec108d7dfaaeef66"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3778487,
-        "sha256": "48abff40686d21f52e3d467575cea21d5075998d64adcd9b5ec0a53633cc7063"
+        "bytes": 3779898,
+        "sha256": "0068388d395e8b1caca319de0471adfb7691e2fbb1af021fe9007674d2148338"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1b2c468ffa4ceebf9a7319fabf4abd0139386b90f16af52defe257cfef37b57f"
+        "sha256": "7fae5f680bfc7bc236b6bfad2e2960c5f91f8bff949bb94196c34dea6ee378f8"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "98edbae3b43947d5aba389dc4a5af31f7c9cf18215802548ec11b633755893be"
+    "inputDigest": "5c23c8206f9d771a9bac6daecf27992cf2081d4534c90a27aa85c20517bc1729"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "1f6a5dfe4ff0ab33623c8405d5d8f8de69dfba2dd63c46d8562c383bd6a3dc3a"
+        "sha256": "43091471eb29b39542c1e91e7e2fa83d11a7266d91ae0558ec108d7dfaaeef66"
       },
-      "declaredCount": 1740,
-      "observedCount": 1740,
-      "assignedCount": 1740
+      "declaredCount": 1741,
+      "observedCount": 1741,
+      "assignedCount": 1741
     },
     "cognitive": {
       "identity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1b2c468ffa4ceebf9a7319fabf4abd0139386b90f16af52defe257cfef37b57f"
+          "sha256": "7fae5f680bfc7bc236b6bfad2e2960c5f91f8bff949bb94196c34dea6ee378f8"
         },
         "cloneGroups": 606,
         "duplicatedLines": 21632,
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3778487,
-        "sha256": "48abff40686d21f52e3d467575cea21d5075998d64adcd9b5ec0a53633cc7063"
+        "bytes": 3779898,
+        "sha256": "0068388d395e8b1caca319de0471adfb7691e2fbb1af021fe9007674d2148338"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "10adb12cb370ed749c72e804b73ded79c451a909120149c11a7a61a1560a93fa",
-      "moduleCount": 6383,
-      "edgeCount": 38043,
+      "sourceDigest": "1ed30de5ae64d6e394d84e262ebebb411fac827912434f9bcadb203e03f5877e",
+      "moduleCount": 6387,
+      "edgeCount": 38055,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2414,
-    "assignedSignalCount": 2414,
-    "uniqueAssignmentCount": 2414,
-    "digest": "dccaa9bd7a40d0f475b9f23a610925723f278bc851f32204468524ca0743c313"
+    "sourceSignalCount": 2415,
+    "assignedSignalCount": 2415,
+    "uniqueAssignmentCount": 2415,
+    "digest": "116110db14661b47be3355047ddd1059bce32bab1d03ad7428e847faae7ad0c1"
   },
   "signalCounts": {
     "cognitive": 149,
-    "complexity": 1740,
+    "complexity": 1741,
     "duplication": 449,
     "fileSize": 36,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1255,
+    "filesWithDebt": 1256,
     "rankedBoundaryCount": 109,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 89,
@@ -1077,6 +1077,34 @@
       ]
     },
     {
+      "key": "area:test/cdc",
+      "owner": null,
+      "boundary": "test/cdc",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/cdc"
+      ],
+      "fileCount": 12,
+      "signalCount": 12,
+      "complexity": 5,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 474,
+      "cloneTouches": 14,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 86,
+      "score": 67.4,
+      "topPaths": [
+        "test/cdc/websocket-address-derivation.property.test.js",
+        "test/cdc/cdc-pipeline-metrics.property.test.js",
+        "test/cdc/cdc-integration-service.test.js",
+        "test/cdc/retry-delay-backoff.property.test.js",
+        "test/cdc/bootstrap-mode-routing.property.test.js"
+      ]
+    },
+    {
       "key": "semantic:priority_recovery_owner/priority_recovery_snapshot_projection",
       "owner": "priority_recovery_owner",
       "boundary": "priority_recovery_snapshot_projection",
@@ -1158,34 +1186,6 @@
         "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/message-group/message-group-native-w7-composition.js",
         "test/message-group/message-group-service-raft-replication-and-cdc.test.js"
-      ]
-    },
-    {
-      "key": "area:test/cdc",
-      "owner": null,
-      "boundary": "test/cdc",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/cdc"
-      ],
-      "fileCount": 11,
-      "signalCount": 11,
-      "complexity": 4,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 474,
-      "cloneTouches": 14,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 83,
-      "score": 63.4,
-      "topPaths": [
-        "test/cdc/websocket-address-derivation.property.test.js",
-        "test/cdc/cdc-pipeline-metrics.property.test.js",
-        "test/cdc/cdc-integration-service.test.js",
-        "test/cdc/retry-delay-backoff.property.test.js",
-        "test/cdc/bootstrap-mode-routing.property.test.js"
       ]
     },
     {
