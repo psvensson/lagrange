@@ -260,22 +260,26 @@ test('CA1 / M9: the envelopes after a refused one are stepped in the same ' +
     // A commits and applies C's removal on B's acknowledgement alone.
     deliverPending(cluster, A, [bAcknowledgement]);
     processFirst(cluster, A);
-    // A forwarded proposal of B's, delivered after a response of C's that A
-    // (which removed C) refuses.
-    await turnChainValue(cluster.node(B).propose({afterRefused: true}));
-    const [forwarded] = takeInbox(cluster, A);
-    assert.equal(forwarded?.message.msgType, MESSAGE_TYPE.MsgPropose,
-      'setup: B\'s forwarded proposal');
+    // B's acknowledgement of an entry of A's, delivered after a response of
+    // C's that A (which removed C) refuses. With C removed, A and B are the
+    // voters: only that acknowledgement commits the entry. (Restaged after
+    // item C: the valid envelope was B's forwarded proposal; a follower now
+    // refuses a proposal and forwards nothing.)
+    const entry = {afterRefused: true};
+    await turnChainValue(cluster.node(A).propose(entry));
+    processAt(cluster, B);
+    const acknowledgement = takeInbox(cluster, A).filter((envelope) =>
+      envelope.message.msgType === MESSAGE_TYPE.MsgAppendResponse &&
+      envelope.message.reject !== true).at(-1);
+    assert.ok(acknowledgement, 'setup: B\'s acknowledgement of A\'s entry');
     takeInbox(cluster, B);
-    deliverPending(cluster, A, [refused, forwarded]);
+    const appliedBefore = cluster.replica(A).appliedCommands.length;
+    deliverPending(cluster, A, [refused, acknowledgement]);
     const answered = cluster.node(A).readStatus();
     assert.equal(answered.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `the turn answers its own read (${JSON.stringify(answered)})`);
-    const appends = cluster.replica(B).inbox.filter((envelope) =>
-      envelope.message.msgType === MESSAGE_TYPE.MsgAppend &&
-      (envelope.message.entries || []).length > 0);
-    assert.ok(appends.length > 0,
-      'in that same turn A appended B\'s proposal and sent it to B');
+    assert.deepEqual(cluster.replica(A).appliedCommands.slice(appliedBefore), [entry],
+      'in that same turn A committed and applied its entry on B\'s acknowledgement');
   } finally {
     cluster.dispose();
   }

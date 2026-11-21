@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 246,
-    "storage-raft": 163,
+    "storage-raft": 166,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2727,
-  "digest": "fnv1a32-5c4e3b26",
+  "censusSize": 2730,
+  "digest": "fnv1a32-2189740a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ff3346aa",
+  "observationDigest": "fnv1a32-185f694d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1819,6 +1819,7 @@
     "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/formation-placement-lease-authority.test.js": "storage-raft",
     "test/raft/raft-rs-backend/formation-placement-native-retirement.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": "storage-raft",
     "test/raft/raft-rs-backend/founding-growth-lifecycle-witnesses.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
@@ -1857,6 +1858,7 @@
     "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "storage-raft",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
@@ -1891,6 +1893,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
+    "test/raft/raft-rs-current-authority-deposition.test.js": "storage-raft",
     "test/raft/raft-rs-current-authority-observation.test.js": "storage-raft",
     "test/raft/raft-rs-current-term-applied.test.js": "storage-raft",
     "test/raft/raft-rs-lifecycle-turn-admission.test.js": "storage-raft",
@@ -17294,6 +17297,18 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": {
       "files": [
         "src/raft/raft-committed-membership-constants.js",
@@ -17791,6 +17806,18 @@
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ]
@@ -18309,6 +18336,16 @@
         "src/raft",
         "test/distributed/config",
         "test/distributed/harness"
+      ]
+    },
+    "test/raft/raft-rs-current-authority-deposition.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-current-authority-observation.test.js": {
