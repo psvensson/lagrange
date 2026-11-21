@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2356,
+    "unit": 2357,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-9da050f4",
+  "censusSize": 2716,
+  "digest": "fnv1a32-9101be66",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1655,6 +1655,7 @@
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": "unit",
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "unit",
     "test/query/query-executor-recovery-owned-routing.test.js": "unit",
+    "test/query/query-executor-recovery-read-lifetime.test.js": "unit",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "unit",
     "test/query/query-executor-serve-eligibility-routing.test.js": "unit",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "unit",

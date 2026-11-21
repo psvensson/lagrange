@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 290,
-    "query-sql": 206,
+    "query-sql": 207,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-5299f43b",
+  "censusSize": 2716,
+  "digest": "fnv1a32-a091ee72",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-28b21870",
+  "observationDigest": "fnv1a32-dc53c29d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1674,6 +1674,7 @@
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": "query-sql",
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "query-sql",
     "test/query/query-executor-recovery-owned-routing.test.js": "query-sql",
+    "test/query/query-executor-recovery-read-lifetime.test.js": "query-sql",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "query-sql",
     "test/query/query-executor-serve-eligibility-routing.test.js": "query-sql",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "query-sql",
@@ -15443,6 +15444,15 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js"
+      ]
+    },
+    "test/query/query-executor-recovery-read-lifetime.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/transport/router-envelope-witness-fixture.js"
       ]
     },
     "test/query/query-executor-routable-services-and-read-delivery.test.js": {
