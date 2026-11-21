@@ -19,17 +19,18 @@ const REPAIR_AUTHORITY = Object.freeze({UNAVAILABLE: 'unavailable', READY: 'read
 // READ_FAILED, UNQUALIFIED_LEADERSHIP (the serving replica is not leader) and
 // UNQUALIFIED_POSITION are transient: the continuation owns a bounded retry.
 // SHAPE and INVALID_ROW are typed refusals that arm no timer; their wake is a
-// change of the offending row or of the binding. UNQUALIFIED_BINDING (an
-// absence or contention served by another replica than the decision bound)
-// waits for the route publication.
+// change of the offending row or of the binding. UNQUALIFIED_BINDING (served
+// by another replica than the decision bound, or an absence read with no
+// binding) waits for the route publication.
 const REPAIR_AUTHORITY_REFUSAL = Object.freeze({READ_FAILED: 'owner_read_failed',
   UNQUALIFIED_LEADERSHIP: 'unqualified_leadership', UNQUALIFIED_POSITION: 'unqualified_position',
   UNQUALIFIED_BINDING: 'unqualified_binding', UNQUALIFIED_SHAPE: 'unqualified_shape',
   INVALID_ROW: 'invalid_operation_row'});
-// Which replica served a qualified read, against the decision's binding. A
-// present row is a committed fact whoever served it; only absence and
-// contention, which may lead to a proposal or a blocker, need the binding.
-const REPAIR_READ_SERVICE = Object.freeze({BOUND: 'bound', UNBOUND: 'unbound'});
+// Which replica served a qualified read, against the decision's binding:
+// the bound replica, another replica than a resolvable binding (either it or
+// the cache is stale: the decision cannot tell which), or no binding at all.
+const REPAIR_READ_SERVICE = Object.freeze({BOUND: 'bound', OTHER_REPLICA: 'other_replica',
+  NO_BINDING: 'no_binding'});
 const TRANSIENT_AUTHORITY_REFUSALS = new Set([REPAIR_AUTHORITY_REFUSAL.READ_FAILED,
   REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_LEADERSHIP, REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_POSITION]);
 const OBSERVED_WITNESS = 'observed';
@@ -63,11 +64,11 @@ function readPlan(attempt, scope) {
 // A read is judged against the binding its decision resolved when it began.
 function readService(witness, binding) {
   if (binding.state !== BINDING.LOCAL && binding.state !== BINDING.REMOTE) {
-    return REPAIR_READ_SERVICE.UNBOUND;
+    return REPAIR_READ_SERVICE.NO_BINDING;
   }
   return witness.servingNodeId === binding.nodeId &&
     witness.servingReplicaId === binding.replicaId ?
-    REPAIR_READ_SERVICE.BOUND : REPAIR_READ_SERVICE.UNBOUND;
+    REPAIR_READ_SERVICE.BOUND : REPAIR_READ_SERVICE.OTHER_REPLICA;
 }
 
 function witnessPosition(witness, attempt) {

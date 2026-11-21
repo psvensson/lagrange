@@ -15,6 +15,7 @@
  */
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {buildCanonicalReplicaOperationRow} from
   '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
@@ -200,8 +201,7 @@ function createTestCoordinator(options = {}) {
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createTransactionCoordinator(),
-    // An empty cache: no row by key, no rows of a table (the ledger route reads both).
-    systemTableCache: {get: () => null, getAll: () => []},
+    systemTableCache: new SystemTableCache(),
     cdcIntegrationService: {
       async refreshAuthoritativeCacheRow() {
         return true;

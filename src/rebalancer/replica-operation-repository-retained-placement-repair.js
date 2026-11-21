@@ -186,8 +186,8 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     // Without a binding nothing can be presented, but a qualified read still
-    // proves a present row: EXACT or CHANGED settles it. Absence, contention or
-    // a failed read leave the obligation to the next route publication.
+    // settles a present row (EXACT or CHANGED). Absence, contention or a
+    // failed read leave the obligation to the next route publication.
     async confirmUnboundRetainedRepair(attempt, kinds, binding) {
       const decision = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.SUBJECT,
         binding);
@@ -444,9 +444,10 @@ function assignRetainedPlacementRepairMethods(Repository) {
       return false;
     },
 
-    // A present row is a committed fact any qualified ledger leader proves at
-    // or above the floors, whoever served it. Absence and contention may lead
-    // to a proposal or a blocker: only the decision's binding may serve them.
+    // The bound replica's read decides. With no binding at all, a qualified
+    // read still settles a present row (EXACT or CHANGED), never an absence:
+    // absence and contention may lead to a proposal or a blocker. A replica
+    // other than a resolvable binding settles nothing (it or the cache is stale).
     async readRetainedRepairDecision(attempt, scope, binding) {
       const authority = await readRetainedRepairAuthority(this, attempt, scope, binding);
       if (authority.state !== REPAIR_AUTHORITY.READY) {
@@ -454,7 +455,9 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       const row = authority.rows.find((candidate) =>
         candidate.operation_id === attempt.operation.operationId);
-      if (!row && authority.service !== REPAIR_READ_SERVICE.BOUND) {
+      const unboundPresence = row !== undefined &&
+        authority.service === REPAIR_READ_SERVICE.NO_BINDING;
+      if (authority.service !== REPAIR_READ_SERVICE.BOUND && !unboundPresence) {
         return {state: DECISION.UNAVAILABLE, reason: REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING};
       }
       attempt.minimumLedgerIndex =
