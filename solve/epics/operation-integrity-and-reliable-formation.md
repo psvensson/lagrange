@@ -369,6 +369,17 @@ answers, and a causal overload claim still needs the paired observation.
 [Amazon Builders’ Library](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) ·
 [Google SRE, Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/).
 
+Physical diagnostic `eca9c75a` recorded 29 polls and 74 failed control
+reads. The serving lanes first opened at 7.499 seconds. Formation missed
+its 420-second bound. Two pending CREATE answers and a final timeout
+consumed the public query budget before COUNT. The final log scan took
+280.376 seconds after the public phase. The harness reported an incomplete
+seed log tail and a refused management tunnel during teardown. The other
+two containers were removed normally. The integration owner recovered the
+stopped seed's full log independently, removed its exact container and
+verified absence. The original incomplete stream and the later recovery
+are both retained. [Physical report, logs and TCP observations](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-eca9c75a-trace-nov21.tar.gz).
+
 In `eca9c75a`, query 12 on adam-laptop sent wire request
 `1c5bd0d9-6c81-4edf-9d09-8e086abb7511` at 05:37:11.711 UTC. The seed
 parsed it, dispatched it and completed its response write in one local
