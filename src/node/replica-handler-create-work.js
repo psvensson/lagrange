@@ -7,6 +7,8 @@ import {
   LEARNER_ADMISSION_WAIT_OUTCOME,
 } from './replica-handler-voter-readiness-methods.js';
 import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
+import {hasSystemCacheChangeReader} from '../cache/system-cache-client.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recovery.js';
 import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
 import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
@@ -14,11 +16,13 @@ import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
 import {REPLICA_HANDLER_DEFAULT, REPLICA_HANDLER_PROGRESS, REPLICA_HANDLER_TYPEOF} from
   './replica-handler-constants.js';
 
+const CREATE_VOTER_CACHE_REQUIRED = 'CREATE voter readiness requires a subscribable SERVICES cache';
 const FRESH_CREATE_RELEASE_ROUTE_UNAVAILABLE = 'Fresh CREATE participant release route unavailable';
 
 function requireFreshCreateReleaseRoute(handler) {
   const router = handler.messageRouter;
-  if (typeof router?.deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
+  const deliver = router?.deliver;
+  if (typeof deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
       !isExactReplicaHandlerRegistered(router,
         handler.nodeId + PARTICIPANT_RELEASE_ROUTE_SUFFIX, handler.registeredRouterHandler)) {
     throw Object.assign(new Error(FRESH_CREATE_RELEASE_ROUTE_UNAVAILABLE),
@@ -52,6 +56,7 @@ function replicaCreateWork(handler, request) {
   const {operationId, replicaId, partitionId, createPhysicalWorkerClaim: claim} = request;
   return {
     operationId, replicaId, partitionId, claim,
+    createAdmissionEvidence: request.createAdmissionEvidence,
     tracker: handler.inProgressOperations.get(operationId),
     service: handler.getTrackedService(replicaId),
     openedService: null,
@@ -124,22 +129,38 @@ function stopCreateReadinessWake(work) {
 
 function hasDecidedCreateWorkReadiness(handler, work) {
   return hasDecidedCreateReadiness(handler, work.service, work.replicaId,
-    work.voterReadinessRequired);
+    work.voterReadinessRequired, work.createAdmissionEvidence);
+}
+
+function requireVoterReadinessInputs(handler, request) {
+  if (request.createAdmissionEvidence &&
+      !hasSystemCacheChangeReader(handler.systemTableCache) &&
+      handler.shouldGateActivationOnVoterReadiness(request.partitionId,
+        request.operationId, false, request.explicitOperationType)) {
+    throw new Error(CREATE_VOTER_CACHE_REQUIRED);
+  }
 }
 
 function retainCreateReadinessWake(handler, work) {
-  const {operationId, replicaId, service} = work;
+  const {operationId, replicaId, service, voterReadinessRequired} = work;
+  const cache = handler.systemTableCache;
+  if (voterReadinessRequired && !hasSystemCacheChangeReader(cache)) return;
   const wake = () => {
-    if (work.retained && ownsReplicaCreateWork(handler, work) &&
+    if (!handler.shuttingDown && !service.isShutdown &&
+        work.retained && ownsReplicaCreateWork(handler, work) &&
         hasDecidedCreateWorkReadiness(handler, work)) {
       armCreateAdmissionRecoveryRearm(handler);
     }
   };
-  // Only real consensus evidence or a settled request can wake a parked
-  // readiness observer. The service's existing learner cadence owns delivery.
+  // These are changes to inputs of the same readiness decision. Re-read
+  // current custody and readiness; a notification grants no authority.
   const stopConsensus = handler.consensusEvents.subscribe((event) => {
     if (event.replicaId === replicaId) wake();
   });
+  const servicesChanged = (tableName, _operation, row) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES && row?.service_id === replicaId) wake();
+  };
+  if (voterReadinessRequired) cache.onCacheChange(servicesChanged);
   const admissionSettled = (event) => {
     if (event.operationId === operationId) wake();
   };
@@ -156,6 +177,7 @@ function retainCreateReadinessWake(handler, work) {
   work.stopReadinessWake = () => {
     stopConsensus();
     stopService();
+    if (voterReadinessRequired) cache.offCacheChange(servicesChanged);
     service.off?.(PARTITION_SERVICE_EVENT.REPLICA_ADMISSION_SETTLED, admissionSettled);
     service.off?.(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, serviceWithdrawn);
   };
@@ -188,6 +210,7 @@ async function waitForMaterializedCreateReadiness(
     await handler.waitForVoterReadyActivation(replicaId, partitionId, {
       deadlineAtMs,
       expectedService: service,
+      createAdmissionEvidence: work.createAdmissionEvidence,
       isCreateCurrent: () => ownsReplicaCreateWork(handler, work) && !handler.shuttingDown,
     });
   } else if (joining) {
@@ -234,6 +257,7 @@ export {
   ownsReplicaCreateWork,
   releaseReplicaCreateWork,
   replicaCreateWork,
+  requireVoterReadinessInputs,
   requireFreshCreateReleaseRoute,
   requireReplicaCreateWork,
   retainCreateReadinessWake,

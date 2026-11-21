@@ -14,14 +14,18 @@ import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_EVENT, PARTITION_SERVICE_MESSAGE_TYPE} from
+  '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {committedStampOfAnswer} from
   '../../src/raft/raft-committed-membership-stamp.js';
+import {COMMITTED_REPLICA_ROLE} from '../../src/raft/raft-rs-committed-membership-read.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {OPERATION_METADATA_KEY, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
+import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {ReplicaOperationField, ReplicaOperationResponseStatus} from
+  '../../src/rebalancer/replica-operation-constants.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from
   '../../src/rebalancer/replica-create-admission-token.js';
 import {operationRow, routedCreateRequest, sqlOperationsAuthority, targetLifecycle} from
@@ -47,8 +51,11 @@ const TABLE_NAME = 'admission_lifetime';
 const OBSERVATION_BOUND_MS = 10_000;
 const TEST_TIMEOUT_MS = 30_000;
 const CREATE_BUDGET_MS = 100;
+const CRITICAL_PARTITION = 'sql_transactions-p1';
 
-async function withAdmissionGroup(t, routerClock) {
+async function withAdmissionGroup(t, routerClock, partitionId = PARTITION) {
+  const leaderId = `${partitionId}-r1`;
+  const learnerId = `${partitionId}-r2`;
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({node: {id: NODE}});
@@ -74,9 +81,9 @@ async function withAdmissionGroup(t, routerClock) {
   await router.initialize({startServer: false});
   const create = (replicaId, options = {}) => {
     const service = new PartitionService(withFoundingStamp({
-      partitionId: PARTITION, tableId: TABLE_NAME, tableName: TABLE_NAME,
+      partitionId, tableId: TABLE_NAME, tableName: TABLE_NAME,
       schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
-      replicaId, replicaIds: [LEADER], nodeId: NODE, transport: router,
+      replicaId, replicaIds: [leaderId], nodeId: NODE, transport: router,
       deferElection: true, dbPath: join(directory, `${replicaId}.sqlite`),
       systemTableCache: new SystemTableCache(),
       learnerCatchUpCheckIntervalMs: TEST_TIMEOUT_MS,
@@ -85,15 +92,15 @@ async function withAdmissionGroup(t, routerClock) {
     services.push(service);
     return service;
   };
-  const leader = create(LEADER);
+  const leader = create(leaderId);
   await leader.initialize();
   await leader.raft.campaign();
   assert.equal(leader.raft.readStatus().role, RAFT_ROLE.LEADER);
   const stamp = committedStampOfAnswer(await leader.raft.readCommittedMembership({
     purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
   assert.ok(stamp, 'the leader serves its actual committed membership stamp');
-  const createLearner = (options = {}) => create(LEARNER, {
-    replicaIds: [LEADER, LEARNER], bootstrapMembership: stamp, isJoiningExistingGroup: true,
+  const createLearner = (options = {}) => create(learnerId, {
+    replicaIds: [leaderId, learnerId], bootstrapMembership: stamp, isJoiningExistingGroup: true,
     ...options,
   });
   const learner = createLearner();
@@ -250,13 +257,17 @@ test('the first real admission delivery cannot renew the original CREATE budget'
     OBSERVATION_BOUND_MS), true, 'the answering leader still owns any native effect');
   });
 
-function createMaterializedJoinAuthority(stamp, ownerIncarnation) {
-  const {operation_id: operationId} = committedAddOperation(PARTITION, [LEARNER, NODE]);
+function createMaterializedJoinAuthority(stamp, ownerIncarnation, partitionId = PARTITION) {
+  const leaderId = `${partitionId}-r1`;
+  const replicaId = `${partitionId}-r2`;
+  const {operation_id: operationId} = committedAddOperation(partitionId, [replicaId, NODE]);
   const admissionToken = buildReplicaCreateAdmissionToken({
-    operationId, replicaId: LEARNER, targetNodeId: NODE, workflowUpdatedAt: 11,
+    operationId, replicaId, targetNodeId: NODE, workflowUpdatedAt: 11,
   });
   const row = operationRow({
-    ...committedAddOperation(PARTITION, [LEARNER, NODE]), source_node_id: NODE,
+    ...committedAddOperation(partitionId, [replicaId, NODE]),
+    type: partitionId === CRITICAL_PARTITION ? OperationType.REPLACE : OperationType.ADD,
+    source_node_id: NODE,
     create_admission_token: admissionToken,
     create_admission_attempt_token: buildReplicaCreateAttemptToken(admissionToken, 1),
     create_admission_owner_incarnation: TEST_BOOT_INCARNATION,
@@ -272,20 +283,91 @@ function createMaterializedJoinAuthority(stamp, ownerIncarnation) {
     }),
   });
   cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    partition_id: PARTITION, table_id: TABLE_NAME, leader_node_id: NODE,
+    partition_id: partitionId, table_id: TABLE_NAME, leader_node_id: NODE,
   });
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    service_id: LEADER, service_type: SERVICE_TYPE.PARTITION, replica_id: LEADER,
-    partition_id: PARTITION, node_id: NODE, status: ReplicaStatus.ACTIVE,
-    raft_role: RAFT_ROLE.LEADER, address: `${NODE}/partition/${LEADER}`,
+    service_id: leaderId, service_type: SERVICE_TYPE.PARTITION, replica_id: leaderId,
+    partition_id: partitionId, node_id: NODE, status: ReplicaStatus.ACTIVE,
+    raft_role: RAFT_ROLE.LEADER, address: `${NODE}/partition/${leaderId}`,
   });
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT',
     targetLifecycle(row, {status: ReplicaStatus.SYNCING}));
   return {row, cache, authority: sqlOperationsAuthority(cache, [row], ownerIncarnation)};
 }
 
-function readAdmittedLifecycle(authority) {
-  return authority.lifecycleStore.durableRow(TABLES.SERVICES, LEARNER);
+function readAdmittedLifecycle(authority, replicaId = LEARNER) {
+  return authority.lifecycleStore.durableRow(TABLES.SERVICES, replicaId);
+}
+
+function copyAdmissionProjection(source) {
+  const cache = new SystemTableCache();
+  for (const [table, rows] of Object.entries(source.getAllData())) {
+    for (const row of rows) cache.applySystemTableChange(table, 'INSERT', row);
+  }
+  return cache;
+}
+
+async function observeCriticalServicePublication(rig, shutdown) {
+  const {replicaId, cache, authority, handler, learner, outcomes} = rig;
+  const projected = cache.get(TABLES.SERVICES, replicaId);
+  assert.equal(projected.address, null);
+  const nextAt = projected.updated_at + 1;
+  const current = readAdmittedLifecycle(authority, replicaId);
+  assert.equal(current.status, ReplicaStatus.SYNCING);
+  const notifications = [];
+  const consensus = [];
+  const collectConsensus = (event) => consensus.push(event);
+  learner.on(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, collectConsensus);
+  const collect = (table, _action, row) => {
+    if (table === TABLES.SERVICES) notifications.push(row);
+  };
+  cache.onCacheChange(collect);
+  const publish = async (row) => {
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', row);
+    await turn();
+    assert.ok(notifications.some((observed) =>
+      observed.service_id === row.service_id &&
+      observed.updated_at === row.updated_at), 'real cache owner published the accepted change');
+  };
+  try {
+    const wrongKey = `${replicaId}-other`;
+    await publish({...current, service_id: wrongKey, replica_id: wrongKey});
+    await publish({...current, create_attempt_token: 'old-attempt', updated_at: nextAt});
+    assert.equal(cache.get(TABLES.SERVICES, replicaId).create_attempt_token, 'old-attempt');
+    assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'unrelated and superseded SERVICES rows cannot wake this REPLACE');
+    const addressless = {...current, address: null,
+      updated_at: nextAt + 1};
+    await publish(addressless);
+    assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null);
+    assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'the same generation without a route is still waiting');
+    const foreignAddress = `${learner.unifiedAddress}-retired`;
+    await publish({...current, address: foreignAddress, updated_at: nextAt + 2});
+    assert.equal(cache.get(TABLES.SERVICES, replicaId).address, foreignAddress);
+    assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'a nonempty address from another route cannot wake the parked voter');
+    assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
+    const matching = {...current, address: learner.unifiedAddress,
+      updated_at: nextAt + 3};
+    if (shutdown) {
+      cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', matching);
+      await handler.shutdown();
+      await publish({...matching, updated_at: matching.updated_at + 1});
+      assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
+      assert.equal(readAdmittedLifecycle(authority, replicaId).status, ReplicaStatus.SYNCING);
+      assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null);
+      assert.equal(learner.isShutdown, true);
+      return;
+    }
+    await publish(matching);
+    assert.deepEqual(consensus, [], 'the group emits no new consensus evidence during publication');
+    assert.ok(handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+      'processing the exact CDC publication schedules the stationary voter recovery');
+  } finally {
+    cache.offCacheChange(collect);
+    learner.off(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, collectConsensus);
+  }
 }
 
 for (const treatment of [
@@ -294,15 +376,23 @@ for (const treatment of [
   {name: 'learner readiness waits after a deferred delivery', readiness: true},
   {name: 'native work is fenced during shutdown', shutdown: true},
   {name: 'budget expires before the first delivery', beforeDelivery: true},
+  {name: 'critical REPLACE observes the exact SERVICES route last', cacheLast: true},
+  {name: 'queued SERVICES publication after shutdown', cacheLast: true, lateCache: true},
+  {name: 'wrong SERVICES attempt before expiry', cacheLast: true, earlyCache: 'wrong'},
+  {name: 'exact SERVICES attempt before expiry', cacheLast: true, earlyCache: 'exact'},
 ]) {
   test(`materialized native CREATE retains its learner at expiry: ${treatment.name}`,
     {timeout: TEST_TIMEOUT_MS}, async (t) => {
       const createClock = new VirtualTimeSource({startMs: 1000});
+      const partitionId = treatment.cacheLast ? CRITICAL_PARTITION : PARTITION;
+      const replicaId = `${partitionId}-r2`;
       const {leader, learner: previous, directory, router, createLearner, stamp} =
-        await withAdmissionGroup(t, new VirtualTimeSource());
+        await withAdmissionGroup(t, new VirtualTimeSource(), partitionId);
       await previous.shutdown();
       const ownerIncarnation = treatment.rejoin ? TEST_BOOT_INCARNATION + 1 : TEST_BOOT_INCARNATION;
-      const {row, cache, authority} = createMaterializedJoinAuthority(stamp, ownerIncarnation);
+      const {row, cache: source, authority} =
+        createMaterializedJoinAuthority(stamp, ownerIncarnation, partitionId);
+      const cache = treatment.cacheLast ? copyAdmissionProjection(source) : source;
       const replicaStateMachine = new ReplicaStateMachine({nodeId: NODE, ownerIncarnation,
         cdcIntegrationService: {}, controlPlaneSystemTableGateway: authority.gateway,
         systemTableCache: cache, timeSource: createClock});
@@ -316,8 +406,20 @@ for (const treatment of [
         createPartitionService: async (options) => {
           opened += 1;
           assert.equal(options.identityExisted, true);
+          if (treatment.cacheLast) {
+            const projected = cache.get(TABLES.SERVICES, replicaId);
+            assert.equal(projected.status, ReplicaStatus.SYNCING);
+            cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+              ...projected, address: null, updated_at: projected.updated_at + 1,
+            });
+          }
           learner = createLearner({...options, dbPath: previous.dbPath,
-            systemTableCache: cache, replicaStateMachine});
+            systemTableCache: cache, replicaStateMachine,
+            // Use the placement-enabled membership relay to project only
+            // the actual committed native voter into the service role.
+            ...(treatment.cacheLast ? {rebalanceCoordinator: {placementAdmissionEnabled: true}} :
+              {}),
+          });
           completePartitionConstructionFixture(learner, options);
           await learner.initialize();
           assert.equal(router.getRegisteredHandler(learner.unifiedAddress),
@@ -330,6 +432,22 @@ for (const treatment of [
       handler.registerWithRouter(router);
       handler.syncTimeoutMs = CREATE_BUDGET_MS;
       const held = Promise.withResolvers();
+      const reply = Promise.withResolvers();
+      const voterChecks = [];
+      if (treatment.cacheLast) {
+        const deliver = router.deliver.bind(router);
+        router.deliver = async (address, payload, options) => {
+          const result = await deliver(address, payload, options);
+          if (payload?.type === PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA) await reply.promise;
+          return result;
+        };
+        const check = handler.isReplicaVoterReady.bind(handler);
+        handler.isReplicaVoterReady = (...args) => {
+          const ready = check(...args);
+          voterChecks.push(ready);
+          return ready;
+        };
+      }
       let leaderReads = 0;
       const gateway = leader.controlPlaneSystemTableGateway;
       const read = gateway.readAuthoritativeRows.bind(gateway);
@@ -352,8 +470,13 @@ for (const treatment of [
           handler.initialize();
           await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
         } else {
-          await handler.handleCreateReplica({...routedCreateRequest(row),
+          const response = await handler.handleCreateReplica({...routedCreateRequest(row),
+            [ReplicaOperationField.OPERATION_TYPE]: row.type,
             [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: stamp});
+          if (treatment.cacheLast) {
+            assert.notEqual(response.status, ReplicaOperationResponseStatus.ERROR,
+              JSON.stringify(response));
+          }
         }
         if (treatment.beforeDelivery) {
           assert.equal(await waitForCondition(() =>
@@ -371,24 +494,67 @@ for (const treatment of [
           assert.equal(learner.replicaAdmissionRequest.state, 'pending');
           assert.ok(learner.learnerPromotionTimer, 'the existing learner cadence owns the retry');
         }
+        if (treatment.cacheLast) {
+          held.resolve();
+          const voterEstablished = await waitForCondition(() =>
+            learner.getRole() === RAFT_ROLE.FOLLOWER &&
+            learner.raft.readStatus().memberRole === COMMITTED_REPLICA_ROLE.VOTER,
+          OBSERVATION_BOUND_MS);
+          assert.equal(voterEstablished, true, JSON.stringify({
+            actor: 'real target before SERVICES arrives', role: learner.getRole(),
+            memberRole: learner.raft.readStatus().memberRole,
+            leader: learner.raft.readStatus().leaderAddress,
+            outcome: learner.replicaAdmissionRequest?.lastOutcome,
+          }));
+          assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null,
+            'the actual CDC projection is still missing its usable address');
+          if (!treatment.earlyCache) {
+            reply.resolve();
+            assert.equal(await waitForCondition(() => voterChecks.length > 0,
+              OBSERVATION_BOUND_MS), true,
+            'the original voter gate runs after real membership and before a usable address');
+            assert.deepEqual(voterChecks, [false]);
+          }
+        }
         assert.equal(opened, 1);
-        assert.equal(handler.getTrackedService(LEARNER), learner);
+        assert.equal(handler.getTrackedService(replicaId), learner);
         const tracker = handler.inProgressOperations.get(row.operation_id);
         const owner = handler.getReplicaCreateAdmissionOwner();
         const claim = owner.activePhysicalWorkerOperationIds.get(row.operation_id);
         assert.ok(tracker && claim);
         worker = Promise.all([...handler.operationTasks]);
+        if (treatment.earlyCache) {
+          const current = readAdmittedLifecycle(authority, replicaId);
+          const exact = treatment.earlyCache === 'exact';
+          const projected = cache.get(TABLES.SERVICES, replicaId);
+          const expectedAttempt = exact ? current.create_attempt_token : 'another-attempt';
+          cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+            ...current, create_attempt_token: expectedAttempt, updated_at: projected.updated_at + 1,
+          });
+          assert.equal(cache.get(TABLES.SERVICES, replicaId).create_attempt_token, expectedAttempt);
+          reply.resolve();
+          assert.equal(await waitForCondition(() => voterChecks.length > 0,
+            OBSERVATION_BOUND_MS), true, 'the original live voter gate consumes the published row');
+          assert.deepEqual(voterChecks, [exact], 'only the original CREATE attempt can be ready');
+          if (exact) {
+            await worker;
+            assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+            assert.equal(readAdmittedLifecycle(authority, replicaId).status, ReplicaStatus.ACTIVE);
+            assert.equal(handler.getTrackedService(replicaId), learner);
+            return;
+          }
+        }
         if (!treatment.beforeDelivery) createClock.advance(CREATE_BUDGET_MS);
         assert.equal(await waitForCondition(() =>
           handler.operationTasks.size === 0, OBSERVATION_BOUND_MS), true,
         'the original CREATE task settles before the held request returns');
-        assert.equal(readAdmittedLifecycle(authority).status, ReplicaStatus.SYNCING,
+        assert.equal(readAdmittedLifecycle(authority, replicaId).status, ReplicaStatus.SYNCING,
           'an expired observation cannot terminally fail the materialized SERVICES identity');
-        assert.equal(readAdmittedLifecycle(authority).cleanup_token, null);
+        assert.equal(readAdmittedLifecycle(authority, replicaId).cleanup_token, null);
         assert.equal(authority.read(row.operation_id).create_admission_state,
           CREATE_ADMISSION_STATE.MATERIALIZED);
         assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
-        assert.equal(handler.getTrackedService(LEARNER), learner);
+        assert.equal(handler.getTrackedService(replicaId), learner);
         assert.equal(handler.inProgressOperations.get(row.operation_id), tracker);
         assert.equal(owner.ownsPhysicalWorker(claim), true);
         assert.equal(learner.db.open, true);
@@ -398,12 +564,21 @@ for (const treatment of [
           assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
           assert.equal(owner.ownsPhysicalWorker(claim), false);
           assert.equal(learner.isShutdown, true);
-          assert.equal(readAdmittedLifecycle(authority).status, ReplicaStatus.SYNCING);
+          assert.equal(readAdmittedLifecycle(authority, replicaId).status, ReplicaStatus.SYNCING);
           return;
         }
         if (treatment.readiness) {
           assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
             'the spent readiness wait parks without a rearm loop');
+        }
+        if (treatment.earlyCache) {
+          assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null);
+          return;
+        }
+        if (treatment.cacheLast) {
+          await observeCriticalServicePublication(
+            {replicaId, cache, authority, handler, learner, outcomes}, treatment.lateCache);
+          if (treatment.lateCache) return;
         }
         const previousRecovery = handler.replicaCreateAdmissionRecoveryTask;
         if (treatment.beforeDelivery) {
@@ -411,33 +586,39 @@ for (const treatment of [
             'undelivered admission is owed to the existing rearm owner');
         }
         held.resolve();
-        const cadence = treatment.readiness ? runLearnerCadenceTurn(learner) : null;
-        assert.equal(await waitForCondition(() => leader.raft.readStatus().peers.some(
-          ({replicaIdentity}) => replicaIdentity === LEARNER),
-        OBSERVATION_BOUND_MS), true, 'the delayed real answer changes native membership');
-        await cadence;
-        assert.equal(await waitForCondition(() =>
-          Boolean(learner.raft.readStatus().leaderAddress), OBSERVATION_BOUND_MS), true,
-        'the exact retained runtime observes its native group leader');
-        assert.equal(await waitForCondition(() =>
-          handler.replicaCreateAdmissionRecoveryRearmOwner.current() ||
-        handler.replicaCreateAdmissionRecoveryTask !== previousRecovery,
-        OBSERVATION_BOUND_MS), true,
-        'the real delivery or committed consensus observation wakes recovery');
+        if (!treatment.cacheLast) {
+          const cadence = treatment.readiness ? runLearnerCadenceTurn(learner) : null;
+          assert.equal(await waitForCondition(() => leader.raft.readStatus().peers.some(
+            ({replicaIdentity}) => replicaIdentity === replicaId),
+          OBSERVATION_BOUND_MS), true, 'the delayed real answer changes native membership');
+          await cadence;
+          assert.equal(await waitForCondition(() =>
+            Boolean(learner.raft.readStatus().leaderAddress), OBSERVATION_BOUND_MS), true,
+          'the retained learner observes its native group leader');
+          assert.equal(await waitForCondition(() =>
+            handler.replicaCreateAdmissionRecoveryRearmOwner.current() ||
+            handler.replicaCreateAdmissionRecoveryTask !== previousRecovery,
+          OBSERVATION_BOUND_MS), true,
+          'the real delivery or committed consensus observation wakes recovery');
+        }
         assert.equal(await waitForCondition(() => {
-          if (readAdmittedLifecycle(authority).status === ReplicaStatus.ACTIVE) return true;
+          const lifecycle = readAdmittedLifecycle(authority, replicaId);
+          if (lifecycle.status === ReplicaStatus.ACTIVE) return true;
           createClock.advance(10);
           return false;
-        }, OBSERVATION_BOUND_MS), true, 'the existing recovery owner finishes the live learner');
+        }, OBSERVATION_BOUND_MS), true,
+        'the existing recovery owner finishes the live learner');
         await handler.replicaCreateAdmissionRecoveryTask;
         assert.equal(leaderReads, treatment.readiness ? 2 : 1,
           'the existing recovery owner neither duplicates nor restarts the admission request');
         assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
         assert.equal(opened, 1);
-        assert.equal(handler.getTrackedService(LEARNER), learner);
+        assert.equal(handler.getTrackedService(replicaId), learner);
         assert.equal(owner.ownsPhysicalWorker(claim), false);
       } finally {
         held.resolve();
+        reply.resolve();
+        createClock.advance(CREATE_BUDGET_MS);
         await worker;
         await handler.shutdown();
         authority.close();

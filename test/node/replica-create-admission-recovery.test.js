@@ -23,7 +23,7 @@ const CREATE_AUTHORITY_BUDGET_MS = 100;
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 
 async function withHeldActivationRead(t, run, {refuseRead = false,
-  loseReleaseReply = false, supersedeBeforeRead = false, unregisterReleaseRoute = false} = {}) {
+  loseReleaseReply = false, supersedeBeforeRead = false, unavailableReleaseRoute = null} = {}) {
   const row = operationRow();
   const clock = new VirtualTimeSource({startMs: 1000});
   const outcomes = [];
@@ -38,7 +38,7 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
   const held = Promise.withResolvers();
   const releaseRequests = [];
   const releaseRouter = handler.messageRouter;
-  if (unregisterReleaseRoute) handler.unregisterFromRouter(releaseRouter);
+  const releaseDelivery = releaseRouter.deliver;
   if (loseReleaseReply) {
     const deliver = releaseRouter.deliver.bind(releaseRouter);
     releaseRouter.deliver = async (address, payload) => {
@@ -60,7 +60,12 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
   handler.persistReplicaStatusWithRetry = async (replicaId, status, options) => {
     const result = await persist(replicaId, status, options);
     if (status === ReplicaStatus.SYNCING) {
-      if (unregisterReleaseRoute) entered.resolve();
+      if (unavailableReleaseRoute === 'registration') {
+        handler.unregisterFromRouter(releaseRouter);
+      } else if (unavailableReleaseRoute === 'delivery') {
+        releaseRouter.deliver = undefined;
+      }
+      if (unavailableReleaseRoute) entered.resolve();
       else armed = true;
     }
     return result;
@@ -97,7 +102,7 @@ async function withHeldActivationRead(t, run, {refuseRead = false,
     ]);
     assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
     await run({...fixture, row, clock, outcomes, worker, release: held.resolve,
-      changeOperation, releaseRequests, releaseRouter,
+      changeOperation, releaseRequests, releaseRouter, releaseDelivery,
       currentStatus: () => fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, row.replica_id)?.status,
     });
   } finally {
@@ -390,22 +395,28 @@ it('lost fresh CREATE release reply retains and resumes the exact materialized w
     assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
   }, {loseReleaseReply: true}));
 
-it('fresh CREATE cannot activate while the exact participant release route is missing',
-  async (t) => withHeldActivationRead(t, async (f) => {
-    await f.worker;
-    const original = f.handler.getTrackedService(f.row.replica_id);
-    assert.ok(original);
-    assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
-    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
-    assert.equal(f.physicalShutdowns(), 0);
-    f.handler.registerWithRouter(f.releaseRouter);
-    f.handler.startReplicaCreateAdmissionRecovery();
-    await f.handler.replicaCreateAdmissionRecoveryTask;
-    assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
-    assert.equal(f.physicalStarts(), 1);
-    assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
-    assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
-  }, {unregisterReleaseRoute: true}));
+for (const unavailableReleaseRoute of ['registration', 'delivery']) {
+  it(`fresh CREATE retains the target without participant release ${unavailableReleaseRoute}`,
+    async (t) => withHeldActivationRead(t, async (f) => {
+      await f.worker;
+      const original = f.handler.getTrackedService(f.row.replica_id);
+      assert.ok(original);
+      assert.equal(f.currentStatus(), ReplicaStatus.SYNCING);
+      assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING]);
+      assert.equal(f.physicalShutdowns(), 0);
+      if (unavailableReleaseRoute === 'registration') {
+        f.handler.registerWithRouter(f.releaseRouter);
+      } else {
+        f.releaseRouter.deliver = f.releaseDelivery;
+      }
+      f.handler.startReplicaCreateAdmissionRecovery();
+      await f.handler.replicaCreateAdmissionRecoveryTask;
+      assert.equal(f.handler.getTrackedService(f.row.replica_id), original);
+      assert.equal(f.physicalStarts(), 1);
+      assert.equal(f.currentStatus(), ReplicaStatus.ACTIVE);
+      assert.deepEqual(f.outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+    }, {unavailableReleaseRoute}));
+}
 
 for (const beforeRead of [true, false]) {
   it(`supersession ${beforeRead ? 'before' : 'during'} final CREATE authority retires the old work`,

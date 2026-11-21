@@ -3,6 +3,7 @@
 // are explicit component seams; this is not physical formation acceptance.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {classifySystemPartition} from '../../src/bootstrap/system-partition-classification.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -143,7 +144,8 @@ async function timeoutFixture(t, holdAt = 'materialization',
     assert.match(authority.heldReadStack(), /resumeCreatingReplicaCreateStatus/u,
       'fault binds to the CREATING probe after the FAILED probe already completed');
   }
-  assert.equal(handler.shouldUsePriorityReplicaCreateStatusFallback(row.partition_id), priority);
+  assert.equal(classifySystemPartition({partitionId: row.partition_id}).priorityControlPlane,
+    priority);
   const durable = () => authority.lifecycleStore.durableRow(
     SYSTEM_TABLE_NAME.SERVICES, row.replica_id);
   assert.equal(durable().status, ReplicaStatus.PENDING);

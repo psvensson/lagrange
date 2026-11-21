@@ -666,9 +666,11 @@ test('shared incarnation rule governs both durable role persistence and local pr
     raft_role: 'follower',
     updated_at: 3000,
   });
-  handler.seedLocalPriorityServiceRow(REPLICA_ID, PARTITION_ID, ReplicaStatus.FAILED, {
-    markLocalOnly: false,
-  });
+  const unrelatedRow = handler.systemTableCache.get('services', REPLICA_ID);
+  handler.projectConfirmedCreateFailure(REPLICA_ID, 'nodes-p1');
+  t.same(handler.systemTableCache.get('services', REPLICA_ID), unrelatedRow,
+    'non-priority confirmed failure does not write a priority recovery row');
+  handler.projectConfirmedCreateFailure(REPLICA_ID, PARTITION_ID);
   const failedRow = handler.systemTableCache.get('services', REPLICA_ID);
   t.equal(failedRow?.status, ReplicaStatus.FAILED, 'row transitioned to failed');
   t.equal(failedRow?.raft_role, null, 'terminal FAILED seed clears cached raft_role');

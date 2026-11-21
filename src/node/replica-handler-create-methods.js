@@ -32,6 +32,7 @@ import {
   ownsReplicaCreateWork,
   releaseReplicaCreateWork,
   replicaCreateWork,
+  requireVoterReadinessInputs,
   requireFreshCreateReleaseRoute,
   requireReplicaCreateWork,
   retainCreateReadinessWake,
@@ -212,6 +213,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             const start = async () => {
               if (this.shuttingDown || !ownsReplicaCreateWork(this, work)) return;
               const evidence = request?.createAdmissionEvidence;
+              requireVoterReadinessInputs(this, request);
               if (evidence && !await this.getReplicaCreateAdmissionOwner()
                 .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
                 throw lostBootPhysicalWorkerError(
@@ -266,7 +268,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       const retained = this.inProgressOperations.get(evidence.operationId)?.retainedActivation;
       if (!retained) return false;
       const {work, activate, failCreate, release} = retained;
-      if (!matchesRetainedCreateActivation(retained.evidence, evidence) ||
+      if (!matchesRetainedCreateActivation(work.createAdmissionEvidence, evidence) ||
           !ownsReplicaCreateWork(this, work) || work.openedService?.isShutdown === true) {
         try {
           await retireReplicaCreateWork(this, work);
@@ -410,10 +412,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         this.setLocalReplica(replicaId, {
           replicaId, partitionId, status: ReplicaStatus.FAILED,
         });
-        // CL-016: a locally seeded CREATING row must not linger after failure.
-        if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-          this.seedLocalPriorityServiceRow(replicaId, partitionId, ReplicaStatus.FAILED);
-        }
+        this.projectConfirmedCreateFailure(replicaId, partitionId);
         this.failReplicaCreationProgress(work.progress, error);
         releaseReplicaCreateWork(this, work);
         this.emitExecutorOutcome(
@@ -470,6 +469,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           work.retiring = false;
           createAdmissionEvidence =
             initialStatusOptions.createAdmissionEvidence;
+          work.createAdmissionEvidence = createAdmissionEvidence;
           createAttemptToken = initialStatusOptions.createAttemptToken;
           createPhase = replicaCreatePhaseAfterResume(
             createPhase, initialStatusOptions.resumedLifecycleStatus);
@@ -700,7 +700,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             if (!canRetainCreateActivation(this, work, error)) throw error;
             work.retained = true;
             work.tracker.retainedActivation = {
-              work, evidence: createAdmissionEvidence, activate, failCreate,
+              work, activate, failCreate,
               deadlineAtMs: activationDeadlineAtMs,
               release: () => releaseReplicaCreateWork(this, work),
             };

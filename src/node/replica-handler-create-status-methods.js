@@ -73,6 +73,10 @@ function registerAuthoritativeCreateSnapshot(
   });
 }
 
+function isPriorityReplicaCreatePartition(partitionId) {
+  return classifySystemPartition({partitionId}).priorityControlPlane;
+}
+
 function observeTrackedReplicaState(handler, replicaId) {
   if (typeof handler.replicaStateMachine?.getState !==
     REPLICA_HANDLER_TYPEOF.FUNCTION) {
@@ -283,7 +287,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         }
         this.throwIfShuttingDown();
         if (options.isCreateCurrent?.() === false) return false;
-        if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
+        if (isPriorityReplicaCreatePartition(partitionId)) {
           return await this.persistPriorityReplicaCreateCreatingStatus(options);
         }
         await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.CREATING, {
@@ -453,13 +457,11 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       return true;
     }
 
-    /**
-     * @param {string} partitionId
-     * @return {boolean}
-     * @private
-     */
-    shouldUsePriorityReplicaCreateStatusFallback(partitionId) {
-      return classifySystemPartition({partitionId}).priorityControlPlane;
+    projectConfirmedCreateFailure(replicaId, partitionId) {
+      // CL-016: replace any locally seeded CREATING row after durable FAILED.
+      if (isPriorityReplicaCreatePartition(partitionId)) {
+        this.seedLocalPriorityServiceRow(replicaId, partitionId, ReplicaStatus.FAILED);
+      }
     }
 
     /**
