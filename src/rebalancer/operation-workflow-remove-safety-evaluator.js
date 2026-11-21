@@ -450,7 +450,7 @@ async function evaluateRemoveSafety(context, operation) {
   // retirement while unrelated partition rows appear idle.
   let allOps;
   try {
-    allOps = await context.repository.getRequiredOperationsByEntity(entityType, entityId);
+    allOps = await context.repository.getRequiredRemoveArbitrationCompetitors(operation);
   } catch (cause) {
     const detail = cause?.cause ?? cause;
     return context.buildDeferredRemoveSafetyEvaluation(
@@ -469,7 +469,6 @@ async function evaluateRemoveSafety(context, operation) {
   let concurrentActiveOp = null;
   for (const op of allOps) {
     if (
-      op.operationId === operation.operationId ||
       context.repository.isOperationTerminal(op) ||
       context.isConcurrentOperationStalePastStepTimeout(
         op,

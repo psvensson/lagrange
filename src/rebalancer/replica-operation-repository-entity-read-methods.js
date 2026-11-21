@@ -2,6 +2,8 @@ import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './repli
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
+import {isSameStrandedRemovePreimage} from './operation-workflow-stranded-remove-repair.js';
+import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {isScopedPlacementLearnerRetirement} from
   './operation-workflow-placement-learner-retirement.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
@@ -15,6 +17,25 @@ function malformedEntityOperationRead() {
   return Object.assign(new TypeError(
     REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_MALFORMED,
   ), {reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED});
+}
+
+function incompleteEntityOperationRead(cause) {
+  return Object.assign(new Error(
+    REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+    {cause},
+  ), {
+    reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+  });
+}
+
+function assertRemoveArbitrationSubject(requested, durable) {
+  assertOperationUpdateSubject(requested, durable);
+  if (!Number.isFinite(durable.createdAt) || durable.createdAt !== requested.createdAt ||
+      durable.replicaId !== requested.replicaId ||
+      durable.workflowStep !== requested.workflowStep || durable.completedAt !== null) {
+    throw malformedEntityOperationRead();
+  }
+  if (!isSameStrandedRemovePreimage(requested, durable)) assertOperationUpdateRecord(durable);
 }
 
 function assertEntityOperationRows(rows, entityType, entityId) {
@@ -202,21 +223,34 @@ function assignReplicaOperationRepositoryEntityReadMethods(
 
     // Effect arbitration requires a complete leader census, independent of
     // the separate projection policy below for planning and recovery.
-    async getRequiredOperationsByEntity(entityType, entityId) {
+    async readRequiredEntityOperationRows(entityType, entityId) {
       const result = await this.readEntityOperationOwnerResult(
         entityType, entityId, CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
       );
       if (!result.success || result.rowSetComplete !== true) {
-        throw Object.assign(new Error(
-          REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
-          {cause: result.error},
-        ), {
-          reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
-        });
+        throw incompleteEntityOperationRead(result.error);
       }
       const ids = new Set(result.rows.map((row) => row.operation_id));
       if (ids.size !== result.rows.length) throw malformedEntityOperationRead();
-      return result.rows.map((row) => assertOperationUpdateRecord(this.rowToOperation(row)));
+      return result.rows;
+    }
+
+    async getRequiredOperationsByEntity(entityType, entityId) {
+      const rows = await this.readRequiredEntityOperationRows(entityType, entityId);
+      return rows.map((row) => assertOperationUpdateRecord(this.rowToOperation(row)));
+    }
+
+    // Prove the subject and evaluate all its competitors from the same
+    // complete leader snapshot. The historical stranded REMOVE is a repair
+    // preimage, never a valid operation result or a competing holder.
+    async getRequiredRemoveArbitrationCompetitors(operation) {
+      const {entityType, entityId} = assertCanonicalRebalancerEntityIdentity(operation);
+      const rows = await this.readRequiredEntityOperationRows(entityType, entityId);
+      const own = rows.find((row) => row.operation_id === operation.operationId);
+      if (!own) throw incompleteEntityOperationRead();
+      assertRemoveArbitrationSubject(operation, this.rowToOperation(own));
+      return rows.filter((row) => row !== own)
+        .map((row) => assertOperationUpdateRecord(this.rowToOperation(row)));
     }
 
     /**

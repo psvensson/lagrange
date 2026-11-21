@@ -3,6 +3,7 @@ import {buildOperationUpdateOutcome} from
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {UNIFIED_SERVICE_TYPE} from '../../src/constants/unified-service-lifecycle.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED as SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {
@@ -100,6 +101,7 @@ const STABLE_SERVICE_ROWS = [
 
 function createRemoveCoordinator({
   operationRow,
+  otherOperationRows = [],
   serviceRows = [buildActiveServiceRow(), ...STABLE_SERVICE_ROWS],
   removeResponseStatus = ReplicaOperationResponseStatus.INITIATED,
 }) {
@@ -122,7 +124,7 @@ function createRemoveCoordinator({
     cacheData: {
       nodes: nodeIds.map((nodeId) => ({node_id: nodeId, status: 'active'})),
       services: serviceRows,
-      replicaOperations: [operationRow],
+      replicaOperations: [operationRow, ...otherOperationRows],
     },
     messageRouter: {
       async deliver(target, payload) {
@@ -353,3 +355,94 @@ test('stranded REMOVE correction preserves a competing durable terminal failure'
     await coordinator.shutdown();
   }
 });
+
+
+for (const [label, step, status, reason] of [
+  ['a valid competitor', WORKFLOW_STEP.PENDING, ReplicaStatus.PENDING,
+    /concurrent partition operation competing-remove/u],
+  ['a malformed different row', WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE,
+    /invalid operation type or step/u],
+]) {
+  test(`stranded REMOVE still defers behind ${label}`, async (t) => {
+    const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+    const other = buildOperationRow({operationId: 'competing-remove',
+      replicaId: `${PARTITION_ID}-r2`, workflowStep: step, status});
+    const {coordinator, deliveries} = createRemoveCoordinator({
+      operationRow, otherOperationRows: [other],
+    });
+    try {
+      const operation = coordinator.repository.rowToOperation(operationRow);
+      const result = await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+      t.match(result.error, reason);
+      await coordinator.reconcileOrphanedOperations();
+      t.same(removeDeliveries(deliveries), [], 'no source effect bypasses the competitor');
+      const durable = await coordinator.repository
+        .queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+      t.equal(durable.workflowStep, WORKFLOW_STEP.ACTIVE);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+}
+
+for (const mode of ['missing', 'mismatched generation', 'duplicate', 'unavailable']) {
+  test(`remove arbitration defers when its exact committed subject is ${mode}`, async (t) => {
+    const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+    const {coordinator, deliveries} = createRemoveCoordinator({operationRow});
+    const {repository, controlPlaneSystemTableGateway: gateway} = coordinator;
+    try {
+      const operation = repository.rowToOperation(operationRow);
+      const read = gateway.readAuthoritativeRows.bind(gateway);
+      gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+        const result = await read(table, sql, params, options);
+        if (table !== 'replica_operations' || !sql.includes('entity_type = ? AND entity_id = ?')) {
+          return result;
+        }
+        if (mode === 'unavailable') return {success: false, error: 'leader read withheld'};
+        if (mode === 'duplicate') return {...result, rows: [...result.rows, ...result.rows]};
+        return result;
+      };
+      if (mode === 'missing' || mode === 'mismatched generation') {
+        const mutation = mode === 'missing' ? {operation: 'delete'} :
+          {operation: 'update', data: {created_at: operationRow.created_at + 1}};
+        const written = await gateway.submitMutation({...mutation, tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID}});
+        t.match(written, {success: true, partitionResult: {affectedRows: 1}});
+      }
+      const result = await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+      t.match(result.error, /operation ledger is unavailable for removal arbitration/u);
+      t.same(removeDeliveries(deliveries), []);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+}
+
+for (const entityType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP,
+  UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]) {
+  test(`complete removal arbitration binds an ordinary ${entityType} row and only its peers`,
+    async (t) => {
+      const operationRow = {...buildOperationRow({operationId: PENDING_OPERATION_ID}),
+        entity_type: entityType};
+      const contender = {...operationRow, operation_id: 'typed-contender',
+        replica_id: `${PARTITION_ID}-r2`};
+      const foreign = {...operationRow, operation_id: 'other-entity-type',
+        entity_type: entityType === SERVICE_TYPE.PARTITION ?
+          SERVICE_TYPE.MESSAGE_GROUP : SERVICE_TYPE.PARTITION,
+        workflow_step: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE};
+      const {coordinator} = createRemoveCoordinator({
+        operationRow, otherOperationRows: [foreign, contender],
+      });
+      try {
+        const {repository} = coordinator;
+        const operation = repository.rowToOperation(operationRow);
+        const competitors = await repository.getRequiredRemoveArbitrationCompetitors(operation);
+        t.same(competitors.map(({operationId}) => operationId), [contender.operation_id],
+          'same text entity ID in another type could not contribute a malformed row');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+}

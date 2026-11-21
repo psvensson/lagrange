@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
 import {ReplicaOperationResponseStatus} from './replica-operation-constants.js';
@@ -9,6 +10,7 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
   './replica-operation-update-disposition.js';
 import {OPERATION_RECONCILE_OUTCOME as OUTCOME} from './operation-workflow-reconcile-outcome.js';
 
+const CORRECTION_REASON = 'safety-gated stranded REMOVE correction';
 const ACCEPTED_REMOVE_RESPONSES = new Set([
   ReplicaOperationResponseStatus.INITIATED, ReplicaOperationResponseStatus.IN_PROGRESS,
   ReplicaOperationResponseStatus.ALREADY_EXISTS, ReplicaOperationResponseStatus.COMPLETED,
@@ -19,6 +21,14 @@ function isStrandedRemove(operation) {
   return operation?.type === OperationType.REMOVE &&
     operation.workflowStep === WORKFLOW_STEP.ACTIVE && operation.status === ReplicaStatus.ACTIVE &&
     operation.completedAt === null;
+}
+
+// This preimage is only meaningful to the historical correction. The
+// normal persistence outcome validator continues to reject REMOVE/ACTIVE.
+function isSameStrandedRemovePreimage(requested, durable) {
+  return isStrandedRemove(requested) && isStrandedRemove(durable) &&
+    Number.isFinite(durable.updatedAt) && requested.updatedAt === durable.updatedAt &&
+    isDeepStrictEqual(requested.stepsHistory, durable.stepsHistory);
 }
 
 async function adoptTerminal(owner, operation, durable) {
@@ -52,7 +62,7 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response) {
     status: ReplicaStatus.REMOVING, updatedAt: now,
     stepsHistory: [...durable.stepsHistory, {
       step: WORKFLOW_STEP.STOPPING, previousStep: WORKFLOW_STEP.ACTIVE, timestamp: now,
-      ownerKey: operation.operationId, reason: 'safety-gated stranded REMOVE correction',
+      ownerKey: operation.operationId, reason: CORRECTION_REASON,
     }]};
   const persisted = await owner.repository.persistOperationUpdate(projected, {
     ...owner.buildOperationTransitionPersistOptions(),
@@ -76,4 +86,4 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response) {
   return OUTCOME.WAITING;
 }
 
-export {repairStrandedRemoveAfterResponse};
+export {isSameStrandedRemovePreimage, repairStrandedRemoveAfterResponse};
