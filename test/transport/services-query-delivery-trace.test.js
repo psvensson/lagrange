@@ -39,6 +39,7 @@ const WRITE_SQL = 'UPDATE services SET field_trace_secret = 1';
 const BACKGROUND_ADDRESS = `${TARGET}/partition/partitions-p1-r1`;
 const BACKGROUND_SQL = 'SELECT field_trace_background FROM partitions';
 const OTHER_CALLER = 'services-query-trace-other-caller';
+const WRONG_ACK_ID = 'wrong-message-id';
 const ADMIN_QUERY_ID = 'q-1795320000000-formation';
 const SHARED_SNAPSHOT_SQL = 'SELECT * FROM services WHERE service_type = \'partition\'';
 
@@ -142,7 +143,7 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   let heldAck;
   target.router.sendRaw = (ws, frame, trace, replyFamily) => {
     if (frame.type === ROUTER_MESSAGE_TYPE.ACK) {
-      heldAck = {ws, frame, trace};
+      heldAck = {ws, frame, trace, pending: sender.router.pendingMessages.get(frame.messageId)};
       return;
     }
     raw(ws, frame, trace, replyFamily);
@@ -155,23 +156,41 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
     'the expired delivery deferred');
   t.equal(timeout.reasonCode, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
     'the sender reported its spent delivery bound');
-  t.ok(heldAck, 'the real seed parsed the query and tried to ACK');
+  t.ok(heldAck?.pending, 'the held ACK belongs to a live wire waiter');
+  const {ws, frame, trace} = heldAck;
+  const {messageId} = frame;
+  // The public delivery and the MessageGroup's wire delivery have distinct
+  // grants. Observe retirement of the precise wire waiter before releasing ACKs.
+  await settleUntil(t, () => !sender.router.pendingMessages.has(messageId),
+    'retirement of the held ACK waiter');
 
   const replacement = {
     ...connection, connectionId: 'trace-replacement', ws: otherConnection.ws,
   };
+  const expectedAckIds = new Set([WRONG_ACK_ID, messageId]);
+  const observedAcks = new Map();
+  const observeAck = (data) => {
+    const received = JSON.parse(data.toString());
+    if (received.type === ROUTER_MESSAGE_TYPE.ACK && expectedAckIds.has(received.messageId)) {
+      // The router's synchronous message listener was installed at connect.
+      observedAcks.set(received.messageId, sender.router.pendingMessages.has(messageId));
+    }
+  };
+  connection.ws.on('message', observeAck);
   sender.router.nodeConnections.set(TARGET, replacement);
   try {
-    const {ws, frame, trace} = heldAck;
-    raw(ws, {...frame, messageId: 'wrong-message-id'});
+    raw(ws, {...frame, messageId: WRONG_ACK_ID});
     raw(ws, frame, trace);
-    await settleUntil(t, () => !enabled || records.some((entry) =>
-      entry.stage === 'ack_received' && entry.messageId === frame.messageId), 'late ACK');
+    await settleUntil(t, () => observedAcks.size === expectedAckIds.size,
+      'wrong and late ACK received on original WebSocket');
+    t.equal(observedAcks.get(WRONG_ACK_ID), false, 'the wrong ACK left the wire waiter retired');
+    t.equal(observedAcks.get(messageId), false, 'the late ACK left the wire waiter retired');
+    t.equal(sender.router.pendingMessages.has(WRONG_ACK_ID), false, 'the wrong ACK owns no waiter');
   } finally {
+    connection.ws.off('message', observeAck);
     sender.router.nodeConnections.set(TARGET, connection);
     target.router.sendRaw = raw;
   }
-  t.equal(sender.router.pendingMessages.size, 0, 'the late ACK did not recreate a waiter');
   if (!enabled) {
     t.same([...positive, ...records], [], 'disabled diagnostics emit no records');
     return;
