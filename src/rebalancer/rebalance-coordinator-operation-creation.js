@@ -95,7 +95,6 @@ const {
   ReplicaOperationField,
   SERVICE_TYPE,
   STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-  buildReplicatedServiceBootstrapTopology,
   createOperationRecord,
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -312,22 +311,16 @@ class RebalanceCoordinatorOperationCreation {
     return null;
   }
 
+  // A partition join's bootstrap topology, from the committed membership
+  // stamp. No other entity has one: a message group's membership never
+  // changes through an operation (owner decision 2026-10-04; its planner
+  // parks before planning, and no other creator makes a message-group ADD or
+  // REPLACE).
   async buildOperationBootstrapTopology(context) {
-    const {
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-      targetNodeId,
-      targetReplicaId,
-    } = context;
-
-    if (
-      (entityType !== SERVICE_TYPE.MESSAGE_GROUP &&
-        entityType !== SERVICE_TYPE.PARTITION) ||
-      (normalizedMoveType !== OperationType.ADD &&
-        normalizedMoveType !== OperationType.REPLACE)
-    ) {
+    const {normalizedMoveType, entityType, partitionId, targetNodeId, targetReplicaId} =
+      context;
+    if (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE) {
       return null;
     }
     if (entityType === SERVICE_TYPE.PARTITION) {
@@ -340,37 +333,7 @@ class RebalanceCoordinatorOperationCreation {
           readAddressBook: () => this.readBootstrapServiceRows(context),
         });
     }
-
-    // Membership from rows: decided on the owner fact, never the projection.
-    const serviceRows = await this.readEntityServiceOwnerRows({entityType, entityId});
-    if (serviceRows.length === 0) {
-      throw new Error(
-        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
-      );
-    }
-
-    const topology = buildReplicatedServiceBootstrapTopology({
-      serviceType: entityType,
-      serviceRows,
-      targetReplicaId,
-      targetNodeId,
-    });
-    const replicaIds = topology?.replicaIds || [];
-    const peerAddresses = topology?.peerAddresses || [];
-
-    if (
-      replicaIds.length <= 1 ||
-      peerAddresses.length < replicaIds.length
-    ) {
-      throw new Error(
-        `Canonical topology for ${entityType} ${entityId} is incomplete`,
-      );
-    }
-
-    return {
-      replicaIds,
-      peerAddresses,
-    };
+    return null;
   }
 
   // A partition join's address book: the node's projection, a hint (the

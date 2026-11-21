@@ -116,7 +116,6 @@ import {
 } from './replica-operation-repository.js';
 import {OperationWorkflowOwner} from './operation-workflow-owner.js';
 import {ProvisioningAdmissionPolicy} from './provisioning-admission-policy.js';
-import {buildReplicatedServiceBootstrapTopology} from '../service/replicated-service-topology.js';
 
 /**
  * SQL queries for replica_operations table access.
@@ -295,7 +294,6 @@ export const REBALANCE_COORDINATOR_SHARED = {
   buildPriorityRecoveryOperationAssessment,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
-  buildReplicatedServiceBootstrapTopology,
   buildTimeoutClassification,
   classifySystemPartition,
   createChildTimeoutBudget,

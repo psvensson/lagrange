@@ -467,8 +467,8 @@ class RebalanceCoordinatorOperationReadMethods {
    * The SERVICES rows of one entity as an owner fact of the services-p1
    * leader: the coordinator's one adapter for the inventory consumers that
    * decide from those rows (topology guard, replica-id allocator, over-target
-   * hold, retired REPLACE-source check, message-group bootstrap). READY or
-   * UNAVAILABLE; rows only through ownerFactEntityServiceRows.
+   * hold, retired REPLACE-source check). READY or UNAVAILABLE; rows only
+   * through ownerFactEntityServiceRows.
    * @param {Object} identity - {entityType, entityId}.
    * @return {Promise<Object>} The readOwnerFact answer.
    */

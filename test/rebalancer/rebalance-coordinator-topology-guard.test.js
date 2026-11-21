@@ -242,6 +242,8 @@ test('RebalanceCoordinator blocks same-node duplicate topology creation', async 
     nodeId: TEST_EXISTING_NODE_ID,
     enforceConcurrentOperationBudget: true,
   }));
+  t.comment(`OBSERVATION same-node-add rejection: ${error?.message} ` +
+    `(reasonCode ${error?.reasonCode ?? null}, skip ${error?.rebalanceSkipReason ?? null})`);
 
   t.equal(
     error?.admissionResult?.decisionType,

@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 296,
+    "placement-rebalance": 297,
     "query-sql": 209,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2735,
-  "digest": "fnv1a32-bf006d9c",
+  "censusSize": 2736,
+  "digest": "fnv1a32-a29c675d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cb4e20ed",
+  "observationDigest": "fnv1a32-8e4a9bdb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2128,6 +2128,7 @@
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-removal-owner.test.js": "placement-rebalance",
+    "test/rebalancer/replace-target-binding-owner-fact-retry.test.js": "placement-rebalance",
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": "placement-rebalance",
     "test/rebalancer/replace-witness-boundary.test.js": "placement-rebalance",
     "test/rebalancer/replica-inventory.test.js": "placement-rebalance",
@@ -19009,7 +19010,9 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/rebalance-coordinator-shared.js",
+        "src/rebalancer/storage-admission-constants.js"
       ]
     },
     "test/rebalancer/failed-create-cleanup-recovery-owner-lifetime.test.js": {
@@ -20090,6 +20093,17 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/replace-target-binding-owner-fact-retry.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js"
       ]
     },
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": {

@@ -2278,7 +2278,7 @@
       ]
     },
     "services-inventory-owner-fact": {
-      "description": "The coordinator's SERVICES inventory consumers (topology guard, replica-id allocator, critical create-lane over-target hold, retired REPLACE-source check, message-group bootstrap membership) decide only on the services-p1 leader's owner fact (readOwnerFact): READY rows through ownerFactRows; an UNAVAILABLE owner fact is no decision, a typed deferral that the caller's existing continuation (the planner's scheduled turn, the workflow's deferred dispatch retry) retries, never rows and never a permanent refusal. The partition bootstrap address book is a hint (readHint), nothing concluded from its absence.",
+      "description": "The coordinator's SERVICES inventory consumers (topology guard, replica-id allocator, critical create-lane over-target hold, retired REPLACE-source check) decide only on the services-p1 leader's owner fact (readOwnerFact): READY rows through ownerFactRows; an UNAVAILABLE owner fact is never rows. For the guard, the allocator and the retired-source check it is no decision, a typed deferral that the caller's existing continuation (the planner's scheduled turn, the workflow owner's per-operation retry) retries, never a permanent refusal; the over-target hold fails open on it, as the sealed invariant failed-authoritative-read-admission-verdict states (deadlock witness G1). The partition bootstrap address book is a hint (readHint), nothing concluded from its absence.",
       "owners": [
         "src/control-plane/control-plane-owner-fact-read.js",
         "src/control-plane/control-plane-owner-fact-read-contract.js",
@@ -2294,7 +2294,9 @@
         "test/rebalancer/topology-guard-inventory-authority.test.js",
         "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
         "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
-        "test/rebalancer/services-inventory-owner-fact-siblings.test.js"
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+        "test/rebalancer/replace-target-binding-owner-fact-retry.test.js",
+        "test/rebalancer/failed-authoritative-read-admission-verdict.test.js"
       ]
     }
   },
@@ -4855,7 +4857,9 @@
         "test/rebalancer/topology-guard-inventory-authority.test.js",
         "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
         "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
-        "test/rebalancer/services-inventory-owner-fact-siblings.test.js"
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+        "test/rebalancer/replace-target-binding-owner-fact-retry.test.js",
+        "test/rebalancer/failed-authoritative-read-admission-verdict.test.js"
       ]
     }
   }

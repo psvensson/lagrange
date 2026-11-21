@@ -5,8 +5,9 @@
 // owner fact. READY decides exactly as the complete leader read decides
 // (the reference world, where the planner node leads services-p1 and the
 // complete read is local); UNAVAILABLE decides nothing: no replica id, no
-// released hold, no source judged retirable, a typed refusal naming why, for
-// the caller's own retry. The retired-source check never releases its lease
+// source judged retirable, a typed refusal naming why, for the caller's own
+// retry. The over-target hold, by its sealed verdict, fails OPEN on an
+// UNAVAILABLE fact, counting no rows at all. The retired-source check never releases its lease
 // on the node's projection alone. The partition bootstrap address book is
 // the node's projection (a hint): a row it has not received is an address
 // not yet known, and no read of the owner is made for it.
@@ -262,24 +263,47 @@ test('getRetiredReplaceSourceMoveSafetyError: a terminal status in the node\'s p
   t.equal(ready.value, reference.value, 'READY decides as the reference');
 });
 
-test('holdCriticalPartitionCreateLaneIfOverTarget: the over-target hold is decided on ' +
-  'the owner fact and never released by an unavailable one', {timeout: CASE_TIMEOUT_MS},
-async (t) => {
+// The over-target hold fails OPEN on a read gap by the sealed invariant
+// failed-authoritative-read-admission-verdict (deadlock witness G1). What it
+// must never do is count rows that are not the owner's: the planner's
+// follower lacks the leader-only fourth replica (its count, three, would
+// release the hold), and the planner's projection holds it (its count, four,
+// would engage the hold on a read gap).
+test('holdCriticalPartitionCreateLaneIfOverTarget: a READY owner fact over target holds ' +
+  'as the reference does; an UNAVAILABLE one is no rows and the hold fails open; the ' +
+  'planner\'s follower rows never reach it', {timeout: CASE_TIMEOUT_MS}, async (t) => {
   const decide = (host) => host.coordinator.holdCriticalPartitionCreateLaneIfOverTarget({
     ...SERVICES_IDENTITY, normalizedMoveType: OperationType.ADD,
     move: {type: OperationType.ADD, nodeId: NODE.PEER_B,
       moveReason: MOVE_REASON.INCREASE_REPLICA_COUNT}});
-  const seed = (world) => world.seedLeaderOnlyRow(leaderOnlyPartitionRow(world));
-  const {reference, ready, unavailable} = await decideInBothWorlds(t, decide, seed);
-  printObservation(t, 'over-target-hold', {referenceError: errorShape(reference.error),
-    readyError: errorShape(ready.error), unavailableError: errorShape(unavailable.error)});
-  t.ok(reference.error !== null,
+  const reference = await openWorld(t, NODE.PLANNER, PORTS);
+  reference.seedLeaderOnlyRow(leaderOnlyPartitionRow(reference));
+  const referenceDecision = await settle(() =>
+    decide(openPlannerHost(t, reference, {readyNodes: true})));
+  const world = await openWorld(t, NODE.PEER_A, PORTS);
+  world.seedLeaderOnlyRow(leaderOnlyPartitionRow(world));
+  t.equal(world.replicaOn(NODE.PLANNER).getRole(), RAFT_ROLE.FOLLOWER,
+    'setup: in the subject world the planner node hosts a follower');
+  const hostOptions = {readyNodes: true, publishedRows: [leaderOnlyPartitionRow(world)]};
+  const plannerBefore = world.readCountsOf(NODE.PLANNER);
+  const ready = await settle(() => decide(openPlannerHost(t, world, hostOptions)));
+  const plannerAfterReady = world.readCountsOf(NODE.PLANNER);
+  const unavailable = await settle(() => decide(openPlannerHost(t, world,
+    {...hostOptions, unreachableNodeIds: [world.leaderNodeId]})));
+  const plannerAfterUnavailable = world.readCountsOf(NODE.PLANNER);
+  printObservation(t, 'over-target-hold', {referenceError: errorShape(referenceDecision.error),
+    readyError: errorShape(ready.error), unavailableError: errorShape(unavailable.error),
+    plannerBefore, plannerAfterReady, plannerAfterUnavailable});
+  t.ok(referenceDecision.error !== null,
     'reference: four alive replicas over a target of three hold the lane');
-  t.notOk(isTypedUnavailable(ready),
-    'READY is a decision, not an unavailability');
-  t.equal(ready.error?.message, reference.error?.message,
-    'READY holds the lane exactly as the reference does');
-  t.ok(isTypedUnavailable(unavailable),
-    `UNAVAILABLE releases no hold: a typed refusal ${
-      JSON.stringify(errorShape(unavailable.error))}`);
+  t.notOk(isTypedUnavailable(ready), 'READY is a decision, not an unavailability');
+  t.equal(ready.error?.message, referenceDecision.error?.message,
+    'READY holds the lane exactly as the reference does (the follower\'s three would not)');
+  t.same(plannerAfterReady, plannerBefore,
+    'READY: the planner\'s follower replica was not asked, locally or through its receiver');
+  t.equal(unavailable.error, null,
+    'UNAVAILABLE: the hold fails open (the sealed verdict), although the planner\'s ' +
+      'projection shows four replicas: an unavailable owner fact is no rows and no count');
+  t.equal(plannerAfterUnavailable.local, plannerBefore.local,
+    'UNAVAILABLE: no row of the planner\'s follower replica was read');
 });
