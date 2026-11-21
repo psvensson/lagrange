@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 291,
+    "placement-rebalance": 292,
     "query-sql": 209,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2730,
-  "digest": "fnv1a32-1da91f19",
+  "censusSize": 2731,
+  "digest": "fnv1a32-7007cf6e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b44ef373",
+  "observationDigest": "fnv1a32-5f9d5733",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2196,6 +2196,7 @@
     "test/rebalancer/terminal-status-constants.test.js": "placement-rebalance",
     "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js": "placement-rebalance",
     "test/rebalancer/timeout-triggers-failure.property.test.js": "placement-rebalance",
+    "test/rebalancer/topology-guard-inventory-authority.test.js": "placement-rebalance",
     "test/rebalancer/topology-owner-contracts.test.js": "placement-rebalance",
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": "placement-rebalance",
@@ -20639,6 +20640,36 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
+      ]
+    },
+    "test/rebalancer/topology-guard-inventory-authority.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cdc/cdc-integration-service-shared-constants.js",
+        "src/control-plane/control-plane-authoritative-read-witness.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/entity-service-row-read.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/rebalance-coordinator-shared.js",
+        "src/rebalancer/replica-inventory-constants.js",
+        "src/rebalancer/storage-admission-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": {
