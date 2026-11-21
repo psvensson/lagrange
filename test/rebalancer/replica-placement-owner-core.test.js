@@ -197,22 +197,24 @@ test('HOST_SPREAD on declared hosts: two nodes of one host are one host; the sou
 });
 
 test('per-target eligibility: a lapsed READY lease or an undeclared host only drops the ' +
-  'node as a target; its replicas become FAILED_OR_DEAD repairs', () => {
+  'node as a target and conserves its incumbent membership', () => {
   const nodes = [nodeRow('n1', 'h1'), nodeRow('n2', 'h2', {leaseExpiresAt: NOW_MS - 1}),
     nodeRow('n3', null), nodeRow('n4', 'h4'), nodeRow('n5', 'h5')];
   const eligibility = buildPlacementNodeEligibility({nodeRows: nodes, nowMs: NOW_MS});
   assert.deepEqual(eligibility.eligibleNodeIds, ['n1', 'n4', 'n5']);
-  const repair = deficit('config-p1', [['n1', true], ['n2'], ['n4']], nodes);
-  assert.equal(repair.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD);
-  assert.equal(repair.candidate.repair, true);
-  assert.deepEqual(repair.candidate.move, {type: OperationType.REPLACE, targetNodeId: 'n5',
-    replicaId: null, sourceReplicaId: 'config-p1-r2', copySourceNodeId: 'n1'});
+  const retained = deficit('config-p1', [['n1', true], ['n2'], ['n4']], nodes);
+  assert.equal(retained.state, PLACEMENT_DEFICIT_STATE.NONE);
+  const unknownHost = deficit('config-p1', [['n1', true], ['n3'], ['n4']], nodes);
+  assert.equal(unknownHost.state, PLACEMENT_DEFICIT_STATE.WAITING);
+  assert.equal(unknownHost.waiting.reason,
+    PLACEMENT_WAITING_REASON.INCUMBENT_RETIREMENT_UNAVAILABLE);
   // Another partition proceeds to the ready targets in the same pass.
   const other = deficit('tables-p1', [['n1', true], ['n1'], ['n4']], nodes);
   assert.equal(other.candidate.move.targetNodeId, 'n5');
-  // With enough live voters the dead replica is removed instead.
-  const surplusDead = deficit('indices-p1', [['n1', true], ['n4'], ['n5'], ['n2']], nodes);
-  assert.deepEqual(surplusDead.candidate.move, {type: OperationType.REMOVE, targetNodeId: 'n2',
+  // An explicit replica failure still authorizes repair of that replica.
+  const failed = deficit('indices-p1', [['n1', true], ['n4'], ['n5'], ['n2', false, true]], nodes);
+  assert.equal(failed.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.FAILED_OR_DEAD);
+  assert.deepEqual(failed.candidate.move, {type: OperationType.REMOVE, targetNodeId: 'n2',
     replicaId: 'indices-p1-r4', sourceReplicaId: null, copySourceNodeId: null});
 });
 
@@ -1216,13 +1218,13 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     promoteReplicaIds: ['config-p1-r2', 'config-p1-r3'],
   });
 
-  // Dead learner (n2 lease expired): DEAD_LEARNER REMOVE on n2:
+  // Lease expiry preserves the existing learner and its host reservation.
   const expiredN2 = [
     nodeRow('n1', 'h1'),
     nodeRow('n2', 'h2', {leaseExpiresAt: NOW_MS - 1}),
     nodeRow('n3', 'h3'),
   ];
-  const deadLearnerResult = evaluatePartitionDeficit({
+  const retainedLearnerResult = evaluatePartitionDeficit({
     partitionId: 'config-p1',
     replicationFactor: 3,
     replicaRows: [
@@ -1231,16 +1233,7 @@ test('WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner
     ],
     eligibility: buildPlacementNodeEligibility({nodeRows: expiredN2, nowMs: NOW_MS}),
   });
-  assert.equal(deadLearnerResult.state, PLACEMENT_DEFICIT_STATE.CANDIDATE);
-  assert.equal(deadLearnerResult.candidate.deficitKind, PLACEMENT_DEFICIT_KIND.DEAD_LEARNER);
-  assert.equal(deadLearnerResult.candidate.repair, true);
-  assert.deepEqual(deadLearnerResult.candidate.move, {
-    type: OperationType.REMOVE,
-    targetNodeId: 'n2',
-    replicaId: 'config-p1-r2',
-    sourceReplicaId: null,
-    copySourceNodeId: null,
-  });
+  assert.equal(retainedLearnerResult.state, PLACEMENT_DEFICIT_STATE.NONE);
 
   // Failed pre-voter create row (status: 'failed', raft_role: null) and
   // partition_cleanup tombstone are excluded from buildPartitionReplicaRows:

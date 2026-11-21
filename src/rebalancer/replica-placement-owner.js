@@ -220,8 +220,10 @@ function shouldStopPlacementPass(isLeader, candidate, state) {
 }
 
 function moveIntentKeyOf(partitionId, move) {
-  return `${partitionId}:${move.type}:${move.targetNodeId}:` +
+  const identity = `${partitionId}:${move.type}:${move.targetNodeId}:` +
     `${move.sourceReplicaId ?? ''}:${move.replicaId ?? ''}:${move.copySourceNodeId ?? ''}`;
+  return move.targetNodeBootIncarnation == null ? identity :
+    `${identity}:${move.targetNodeBootIncarnation}`;
 }
 
 function promotedVoterReplicaIdsOf(census) {
@@ -236,6 +238,27 @@ function promotedVoterReplicaIdsOf(census) {
     }
   }
   return promoted;
+}
+
+function isPlacementMoveCurrent(move, eligibility) {
+  const node = eligibility.nodeIdentities.get(move.targetNodeId);
+  const expectedBoot = move.targetNodeBootIncarnation;
+  if (expectedBoot != null && node?.boot !== expectedBoot) return false;
+  if (move.type === OperationType.REMOVE && expectedBoot != null) return node.retired === true;
+  return !COPY_MOVE_TYPES.has(move.type) || eligibility.hostOfNode.has(move.targetNodeId);
+}
+
+function incumbentIdentitiesOf(census) {
+  const byPartition = new Map();
+  for (const row of census) {
+    if (!COPY_MOVE_TYPES.has(row.type) || row.entityType !== UNIFIED_SERVICE_TYPE.PARTITION ||
+      row.step !== WORKFLOW_STEP.ACTIVE || row.targetNodeBootIncarnation === null) continue;
+    const incumbents = byPartition.get(row.entityId) ?? new Map();
+    incumbents.set(row.replicaId, {nodeId: row.targetNodeId,
+      boot: row.targetNodeBootIncarnation, operationId: row.operationId});
+    byPartition.set(row.entityId, incumbents);
+  }
+  return byPartition;
 }
 
 class ReplicaPlacementOwner {
@@ -549,7 +572,7 @@ class ReplicaPlacementOwner {
 
   evaluateAllPartitions(
     nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets,
-    promotedVoterReplicaIds = null,
+    promotedVoterReplicaIds = null, incumbentIdentities = null,
   ) {
     const servicesByPartition = new Map();
     for (const row of this.systemTableCache.getAll(TABLES.SERVICES)) {
@@ -572,6 +595,7 @@ class ReplicaPlacementOwner {
         partitionRow[COLUMN.LEADER_NODE_ID],
         isBusy,
         promotedVoterReplicaIds,
+        incumbentIdentities?.get(partitionId),
       );
       inputsByPartition.set(partitionId, {replicationFactor, replicaRows});
       const evaluation = evaluatePartitionDeficit({
@@ -624,11 +648,11 @@ class ReplicaPlacementOwner {
 
   preparePassOrderedCandidates(
     nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
-    promotedVoterReplicaIds = null,
+    promotedVoterReplicaIds = null, incumbentIdentities = null,
   ) {
     const {evaluations, inputsByPartition} = this.evaluateAllPartitions(
       nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
-      promotedVoterReplicaIds,
+      promotedVoterReplicaIds, incumbentIdentities,
     );
     const repairWaitingSourceNodeIds = repairSourceNodeIdsOf(
       evaluations.filter((e) => !e.isBusy).map((e) => e.evaluation),
@@ -667,13 +691,17 @@ class ReplicaPlacementOwner {
       candidate, repairWaitingSourceNodeIds, occupancy))) {
       return null;
     }
+    const current = readPlacementNodeInputs(this.nodeAuthority, this.now());
+    if (current.state !== SERVE_ELIGIBILITY_STATE.READY ||
+        !isPlacementMoveCurrent(candidate.move, current.eligibility) ||
+        formationWaitingReasonOf(candidate.placementClass, current.formation) !== null) return null;
     const answer = await this.submitCandidateAdmission(candidate, () =>
       buildPlacementAdmissionStatement(candidate, {
         sourceNodeId: this.resolveStatementSourceNodeId(candidate, inputsByPartition),
         repairWaitingSourceNodeIds,
-        formationLatchEpoch: nodeInput.formation.latchEpoch,
+        formationLatchEpoch: current.formation.latchEpoch,
         membershipPublicationEpoch: null,
-        positions: {nodesEpoch: nodeInput.epoch?.publicationEpoch ?? null},
+        positions: {nodesEpoch: current.epoch?.publicationEpoch ?? null},
       }));
     const result = answer?.[PLACEMENT_RESULT_FIELD];
     if (result?.outcome !== PLACEMENT_OUTCOME.ADMITTED) return null;
@@ -739,7 +767,7 @@ class ReplicaPlacementOwner {
     const {ordered, inputsByPartition, repairWaitingSourceNodeIds} =
       this.preparePassOrderedCandidates(
         nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
-        promotedVoterReplicaIds);
+        promotedVoterReplicaIds, incumbentIdentitiesOf(census));
     const admitted = await this.admitOrderedCandidates({
       ordered, inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets,

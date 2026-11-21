@@ -570,13 +570,16 @@ class HeartbeatServicePublicationMethods {
   /**
    * Apply the canonical guarded disconnect for a node whose ready lease expired.
    * @param {Object} node - Observed node snapshot.
-   * @param {number} now - Current timestamp.
    * @return {Promise<Object>} CDC mutation result.
-   */ async disconnectNodeDueToLeaseExpiry(node, now) {
+   */ async disconnectNodeDueToLeaseExpiry(node) {
+    // A new boot or lifecycle state can reuse the lease and heartbeat watermarks.
     const whereClause = {
       node_id: node.node_id,
+      boot_incarnation: node.boot_incarnation,
+      status: node.status,
+      connection_state: node.connection_state,
       ready_lease_expires_at: node.ready_lease_expires_at,
-      last_heartbeat: node.last_heartbeat || now,
+      last_heartbeat: node.last_heartbeat,
     };
     try {
       return await this.getControlPlaneSystemTableGateway().updateSystemTableRow(

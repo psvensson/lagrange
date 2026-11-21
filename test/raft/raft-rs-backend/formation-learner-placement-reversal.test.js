@@ -265,7 +265,20 @@ async function runCase(mode) {
           return;
         }
         assert.ok(dip.leaseExpiresAt < dip.now);
-        assert.equal(dip.nodeStatus, mode === CASE.LOSS ? NODE_STATE.FAILED : NODE_STATE.ACTIVE);
+        if (mode === CASE.DIP) {
+          assert.equal(dip.nodeStatus, NODE_STATE.ACTIVE);
+          assert.equal(dip.ledger.length, 1);
+          renew();
+          await refresh();
+          const renewed = sample('renewal-preserved-original-learner');
+          assert.equal(renewed.bootIncarnation, BOOT);
+          assert.ok(renewed.leaseExpiresAt > renewed.now);
+          assert.equal(renewed.ledger.length, 1);
+          assert.equal(renewed.committedLearner, true);
+          assert.equal(owner.placementResyncAdmissions, 0);
+          return;
+        }
+        assert.equal(dip.nodeStatus, NODE_STATE.FAILED);
         assert.equal(dip.ledger.length, 2);
         const removal = ledgerRows(ledger).find((row) => row.type === OperationType.REMOVE);
         assert.equal(removal.replica_id, initial.replica_id);
@@ -275,15 +288,6 @@ async function runCase(mode) {
           record.replicaId === initial.replica_id));
         assert.ok(dip.wakes.includes(PLACEMENT_TRIGGER.NODES_OR_FORMATION));
 
-        // The same incarnation renews while the REMOVE owns the ledger lane.
-        if (mode === CASE.DIP) {
-          renew();
-          await refresh();
-          const renewed = sample('renewal-released-while-remove-pending');
-          assert.equal(renewed.bootIncarnation, BOOT);
-          assert.ok(renewed.leaseExpiresAt > renewed.now);
-          assert.equal(renewed.ledger.length, 2);
-        }
         const learnerPeer = peerIdOf(cluster, SEED_REPLICA, initial.replica_id);
         turnChainValue(cluster.node(SEED_REPLICA).proposeConfChange({
           type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
@@ -301,27 +305,7 @@ async function runCase(mode) {
         assert.equal(terminal.dispatchHolds, 0);
         const replacements = terminal.ledger.filter((row) =>
           row.type === OperationType.ADD && row.operationId !== initial.operation_id);
-        assert.equal(replacements.length, mode === CASE.DIP ? 1 : 0);
-        if (mode === CASE.DIP) {
-          assert.equal(replacements[0].target, TARGET);
-          assert.equal(terminal.targetCopies, 1);
-          assert.ok(terminal.wakes.slice(dip.wakes.length)
-            .includes(PLACEMENT_TRIGGER.LEDGER_COMMIT));
-          const replacement = ledgerRows(ledger).find((row) =>
-            row.operation_id === replacements[0].operationId);
-          assert.notEqual(replacement.replica_id, initial.replica_id);
-          context.learnerId = replacement.replica_id;
-          addLearner(cluster, replacement);
-          cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT,
-            serviceRow(replacement.replica_id, TARGET, RAFT_ROLE.LEARNER));
-          finishLedger(ledger, replacement, WORKFLOW_STEP.ACTIVE,
-            SERVICE_STATUS.ACTIVE, clock.now());
-          await owner.awaitCurrentWorkIdle();
-          const recovered = sample('replacement-complete');
-          assert.equal(recovered.committedLearner, true);
-          assert.equal(recovered.targetCopies, 0);
-          assert.equal(recovered.ledger.length, 3);
-        }
+        assert.equal(replacements.length, 0);
         assert.equal(owner.placementResyncAdmissions, 0);
       } finally {
         actions.stop();

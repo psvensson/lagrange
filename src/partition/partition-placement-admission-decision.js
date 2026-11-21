@@ -12,7 +12,8 @@ import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {OPERATION_METADATA_KEY, OperationType} from
   '../rebalancer/replica-operation-progress.js';
-import {createOperationAt, getOperationMetadataObject, getOperationMetadataValue} from
+import {createOperationAt, getOperationMetadataObject, getOperationMetadataValue,
+  readOperationTargetNodeBootIncarnation} from
   '../rebalancer/replica-status.js';
 import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse-memo.js';
 import {isGenesisFoundingCreateOperation, ReplicaOperationField} from
@@ -69,7 +70,8 @@ function censusRowOf(row) {
     [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
       getOperationMetadataObject(history, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP)});
   return Object.freeze({operationId: row.operation_id, type: row.type,
-    entityType: row.entity_type, entityId: row.entity_id,
+    entityType: row.entity_type, entityId: row.entity_id, replicaId: row.replica_id,
+    targetNodeBootIncarnation: readOperationTargetNodeBootIncarnation(row, history),
     targetNodeId: row.target_node_id, copySourceNodeId: row.copy_source_node_id,
     step: row.workflow_step, founder,
     incomplete: isIncompleteOperationRowStep(row.type, row.workflow_step),
