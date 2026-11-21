@@ -217,7 +217,11 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             transactionIdentity: executionOptions?.transactionIdentity || null,
           },
         );
-      for (let attempt = 1; attempt <= currentMaxAttempts; attempt++) {
+      let shouldRecheckRoutes = false;
+      for (let attempt = 1;
+        attempt <= currentMaxAttempts || shouldRecheckRoutes || readDelivery?.hasPending();
+        attempt++) {
+        shouldRecheckRoutes = false;
         lastAttempt = attempt;
         this.throwIfCancelled(cancellationToken);
         readDelivery?.throwIfAborted();
@@ -333,13 +337,12 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             participantAddress,
           });
         };
-        let shouldRecheckRoutes = false;
-        for (
-          let candidateIndex = 0;
-          candidateIndex < candidateQueue.length ||
-            (attempt === currentMaxAttempts && readDelivery?.hasEligible(candidateQueue));
-          candidateIndex += 1
-        ) {
+        let submittedRecoveryRead = false;
+        let inspectedRecoveryRead = false;
+        const markRecoverySubmission = () => {
+          submittedRecoveryRead = true;
+        };
+        for (let candidateIndex = 0; candidateIndex < candidateQueue.length; candidateIndex++) {
           let serviceInfo = candidateQueue[candidateIndex];
           let address = serviceInfo?.address;
           // Follow a routed write's retry decision: true when the candidate
@@ -366,10 +369,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             widenWriteCandidate(candidateAddress);
             return false;
           };
-          const drain = !serviceInfo;
-          if (!drain && candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) continue;
-          if (!drain) candidateState.markAttemptedAddress(address);
+          if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) continue;
+          const mayRetry = attempt <= currentMaxAttempts;
+          if (readDelivery && !readDelivery.canSelect(serviceInfo, mayRetry)) continue;
+          const moreUnstarted = readDelivery?.hasUnstarted(
+            candidateQueue.slice(candidateIndex + 1), mayRetry);
+          if (moreUnstarted && readDelivery.wasProbed(serviceInfo)) continue;
+          candidateState.markAttemptedAddress(address);
           const observeSubmission = () => {
+            markRecoverySubmission();
             candidateDeliveryAttempted = true;
             notifyHedgeDeliveryObserver(executionOptions, partitionId, serviceInfo,
               address, serviceCandidates.length);
@@ -379,7 +387,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           let deliverySubmitted = false;
           try {
             this.throwIfCancelled(cancellationToken);
-            let request = drain ? null : buildRequest({
+            let request = buildRequest({
               partitionId, address, sql, params, executionOptions,
             });
             const routerOptions = buildRouterDeliveryOptions(
@@ -389,15 +397,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             let delivery;
             let readTicket;
             if (readDelivery) {
-              const anotherCandidate = candidateIndex + 1 < candidateQueue.length;
-              const probeMs = anotherCandidate || attempt < currentMaxAttempts ?
-                recoveryReadProbeMs(routerOptions, serviceInfo) : null;
-              const ticket = drain ? null :
-                {address, request, serviceInfo, submit: observeSubmission};
+              inspectedRecoveryRead = true;
+              const ticket = {address, request, serviceInfo, submit: observeSubmission};
               const completion = await readDelivery.select(ticket, routerOptions, candidateQueue,
-                probeMs);
+                recoveryReadProbeMs(routerOptions, serviceInfo));
               if (completion === ROUTING_PROBE_ELAPSED) {
                 shouldRecheckRoutes = true;
+                if (!moreUnstarted) break;
                 continue;
               }
               readTicket = completion.ticket;
@@ -463,7 +469,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               });
               const redirectAddress = response.leaderAddress;
               const redirectCompletion = readDelivery ? await readDelivery.redirect(
-                redirectAddress, redirectRequest, redirectRouterDeliveryOptions) : null;
+                redirectAddress, redirectRequest, redirectRouterDeliveryOptions,
+                markRecoverySubmission) : null;
               if (redirectCompletion && !readDelivery.redirectedRouteIsCurrent(
                 readTicket, redirectCompletion.ticket, resolveAttemptCandidates().candidates)) {
                 shouldRecheckRoutes = true;
@@ -774,8 +781,11 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             throw error;
           }
         }
-        if (attempt < currentMaxAttempts && !shouldRecheckRoutes &&
-            !(await waitForLeaderRetryBudget())) {
+        // Awaiting an already issued delivery spends its existing routing
+        // pass. Only a new delivery starts another submission pass.
+        if (inspectedRecoveryRead && !submittedRecoveryRead) attempt -= 1;
+        if (shouldRecheckRoutes || readDelivery?.hasPending()) continue;
+        if (attempt < currentMaxAttempts && !(await waitForLeaderRetryBudget())) {
           return buildDeadlineSpentFailureResult();
         }
       }
