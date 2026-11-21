@@ -387,10 +387,13 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           /Conflicting in-flight operation/u, 'normal admission refuses a new overlapping ADD');
 
         // The safety owner still protects a historical holder already in the ledger.
-        const concurrentOp = buildOperation({operationId: 'historical-overlap',
-          type: conflictingMove.type, partitionId: testPartitionId,
-          entityType: 'partition', entityId: testPartitionId, replicaId: `${testPartitionId}-r9`,
-          sourceNodeId: 'node-b', targetNodeId: 'node-b'});
+        const concurrentOp = {
+          ...buildOperation({operationId: 'historical-overlap', type: conflictingMove.type,
+            partitionId: testPartitionId, replicaId: `${testPartitionId}-r9`,
+            sourceNodeId: 'node-b', targetNodeId: 'node-b'}),
+          entityType: 'partition',
+          entityId: testPartitionId,
+        };
         t.equal(await coordinator.repository.persistNewOperation(concurrentOp), true,
           'the historical companion is committed in the fixture ledger');
         await commitRemoveSafetyStep(coordinator, concurrentOp, WORKFLOW_STEP.CREATING,
