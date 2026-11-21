@@ -68,6 +68,8 @@ function createDispatchWorld(leader) {
   const service = new ReplicaDispatchService(withNodeReadinessService('ReplicaDispatchService', {
     nodeId: NODE.A,
     rebalanceCoordinator: coordinator,
+    systemTableCache: coordinator.systemTableCache,
+    controlPlaneSystemTableGateway: gateway,
   }));
   // The proof controls readiness and queue delivery only. Dispatch row
   // reconstruction, workflow, SQL transition and adoption are production.
