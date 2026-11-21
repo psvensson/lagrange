@@ -1,4 +1,4 @@
-import {assignRetainedPlacementRepairMethods} from
+import {assignRetainedPlacementRepairMethods, createRetainedPlacementRepairPorts} from
   './replica-operation-repository-retained-placement-repair.js';
 /**
  * ReplicaOperationRepository — SQL/cache reads and writes, row <-> operation
@@ -499,8 +499,7 @@ class ReplicaOperationRepository {
     this.nodeId = options.nodeId;
     // Bound by the node composition owner, never read from an operation command.
     this.membershipOwnerBootIncarnation = options.membershipOwnerBootIncarnation ?? null;
-    this.repairRetainedPlacement = options.repairRetainedPlacement;
-    this.prepareRetainedPlacementRepair = options.prepareRetainedPlacementRepair;
+    Object.assign(this, createRetainedPlacementRepairPorts(options));
     this.retainedPlacementRepairs = new Map();
     this.retainedPlacementRepairWakes = new Map();
     this.systemTableCache = options.systemTableCache;

@@ -7,7 +7,7 @@ import {promotedVoterReplicaIdsByPartition} from
 // Recovery / wake entry: setLeader(true) and PLACEMENT_TRIGGER notifications rebuild pass state from readPlacementCensus and committed node/table authorities.
 // Representative production tests: test/rebalancer/replica-placement-owner-core.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
-import {COLUMN, TABLES, WORKFLOW_STEP} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';

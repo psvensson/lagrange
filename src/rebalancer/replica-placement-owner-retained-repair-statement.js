@@ -1,3 +1,6 @@
+import {RETAINED_COPY_POLICY_STATE as POLICY} from
+  '../partition/partition-placement-admission-constants.js';
+import {PLACEMENT_REFUSAL} from './replica-placement-owner-constants.js';
 import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
 // The ordinary placement owner classifies a currently eligible same-ID copy
 // repair. This observes its real node/formation/deficit inputs; it never labels
@@ -25,31 +28,46 @@ function promotedVoterReplicaIdsByPartition(census) {
   return byPartition;
 }
 
-function buildCurrentRetainedCopyStatement(owner, operation) {
-  if (!owner || typeof owner.preparePassOrderedCandidates !== 'function') return null;
+function unavailableCopyPolicy() {
+  return {state: POLICY.UNAVAILABLE, reason: PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE};
+}
+
+function currentTargetIdentity(owner, targetNodeId) {
+  return resolveTargetNodeIncarnationSnapshot(owner.systemTableCache, targetNodeId);
+}
+
+function retainedTargetMatches(owner, nodeInput, operation) {
+  const identity = currentTargetIdentity(owner, operation.targetNodeId);
+  return [typeof operation.replicaId === 'string', operation.replicaId?.length > 0,
+    Number.isSafeInteger(operation.targetNodeBootIncarnation),
+    Number.isSafeInteger(operation.targetNodeStorageIncarnation),
+    nodeInput.eligibility.nodeBoots.get(operation.targetNodeId) ===
+      operation.targetNodeBootIncarnation,
+    identity.bootIncarnation === operation.targetNodeBootIncarnation,
+    identity.storageIncarnation === operation.targetNodeStorageIncarnation].every(Boolean);
+}
+
+function buildCurrentRetainedCopyPolicy(owner, operation) {
+  if (!owner) return unavailableCopyPolicy();
   const nodeInput = readPlacementNodeInputs(owner.nodeAuthority, owner.now());
-  if (nodeInput.state !== SERVE_ELIGIBILITY_STATE.READY) return null;
+  if (nodeInput.state !== SERVE_ELIGIBILITY_STATE.READY) return unavailableCopyPolicy();
   const census = readPlacementCensus(owner.ledgerPartitionService.db);
   const busy = new Set(census.filter((row) => row.incomplete &&
     row.entityType === UNIFIED_SERVICE_TYPE.PARTITION).map((row) => row.entityId));
   // Capacity is arbitrated by native apply, against its own committed cut.
   // Keeping the target out of the saturation filter cannot grant a slot.
-  const {ordered, repairWaitingSourceNodeIds, inputsByPartition} = owner.preparePassOrderedCandidates(
-    nodeInput, busy, new Set(), owner.readStorageExcludedTargets(nodeInput, owner.now()),
-    promotedVoterReplicaIdsByPartition(census));
+  const {ordered, repairWaitingSourceNodeIds, inputsByPartition} =
+    owner.preparePassOrderedCandidates(
+      nodeInput, busy, new Set(), owner.readStorageExcludedTargets(nodeInput, owner.now()),
+      promotedVoterReplicaIdsByPartition(census));
   const candidate = ordered.find((entry) => entry.partitionId === operation.partitionId &&
     entry.move.type === operation.type && entry.move.targetNodeId === operation.targetNodeId &&
     entry.move.copySourceNodeId === operation.copySourceNodeId &&
     (entry.move.sourceReplicaId ?? null) === (operation.sourceReplicaId ?? null));
-  const identity = resolveTargetNodeIncarnationSnapshot(owner.systemTableCache, operation.targetNodeId);
-  if (!candidate || typeof operation.replicaId !== 'string' || operation.replicaId.length === 0 ||
-      !Number.isSafeInteger(operation.targetNodeBootIncarnation) ||
-      !Number.isSafeInteger(operation.targetNodeStorageIncarnation) ||
-      nodeInput.eligibility.nodeBoots.get(operation.targetNodeId) !==
-        operation.targetNodeBootIncarnation || identity.bootIncarnation !==
-        operation.targetNodeBootIncarnation || identity.storageIncarnation !==
-        operation.targetNodeStorageIncarnation) return null;
-  return buildPlacementAdmissionStatement({...candidate,
+  if (!candidate || !retainedTargetMatches(owner, nodeInput, operation)) {
+    return unavailableCopyPolicy();
+  }
+  const statement = buildPlacementAdmissionStatement({...candidate,
     move: {...candidate.move,
       targetNodeBootIncarnation: operation.targetNodeBootIncarnation,
       targetNodeStorageIncarnation: operation.targetNodeStorageIncarnation ?? null}}, {
@@ -59,6 +77,7 @@ function buildCurrentRetainedCopyStatement(owner, operation) {
     membershipPublicationEpoch: operation.membershipPublicationEpoch ?? null,
     positions: {nodesEpoch: nodeInput.epoch?.publicationEpoch ?? null},
   });
+  return {state: POLICY.READY, statement};
 }
 
-export {buildCurrentRetainedCopyStatement, promotedVoterReplicaIdsByPartition};
+export {buildCurrentRetainedCopyPolicy, promotedVoterReplicaIdsByPartition};

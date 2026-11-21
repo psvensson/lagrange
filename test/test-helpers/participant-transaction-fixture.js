@@ -387,6 +387,10 @@ function committedQueryOf(entryId, sql) {
 // A fixture replica: the fixture table unless `extra.tableName` names
 // another (a production system table, with `extra.schema`), of the fixture
 // partition unless `partitionId` names another.
+function fixtureReplicaNodeId(extra) {
+  return extra.nodeId ?? 'test-node';
+}
+
 function createReplica(replicaId, extra = {}, partitionId = PARTITION_ID) {
   const replicaIds = extra.replicaIds ?? [...REPLICAS];
   return createControllablePartitionService({
@@ -395,7 +399,7 @@ function createReplica(replicaId, extra = {}, partitionId = PARTITION_ID) {
     tableName: extra.tableName ?? TABLE,
     replicaId,
     replicaIds,
-    nodeId: 'test-node',
+    nodeId: fixtureReplicaNodeId(extra),
     peerAddresses: replicaIds.map((id) => `test-node/partition/${id}`),
     // A readable empty topology owner for these isolated participant groups.
     // Unavailable/active topology is supplied explicitly by its witnesses.
@@ -448,7 +452,7 @@ async function startReplica(replicaId, extra, partitionId = PARTITION_ID) {
 // The leader of the fixture partition, or of the partition `partitionId`
 // names (several leaders of one table on one node, each its own partition).
 async function startLeader(extra, partitionId = PARTITION_ID) {
-  const leader = await startReplica(REPLICAS[0], extra, partitionId);
+  const leader = await startReplica(extra?.replicaId ?? REPLICAS[0], extra, partitionId);
   try {
     leader.role = 'leader';
     leader.isLeader = true;

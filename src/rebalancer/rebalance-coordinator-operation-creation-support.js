@@ -259,8 +259,10 @@ const operationCreationSupportMethods = {
     if (!cache?.getAll) return null;
     const rows = (cache.getAll(TABLES.SERVICES) || []).filter(isLedgerServiceRow);
     const roleLeader = rows.find((row) => row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER);
-    if (roleLeader) return {nodeId: roleLeader[COLUMN.NODE_ID],
-      replicaId: roleLeader[COLUMN.REPLICA_ID], address: formatLedgerReplicaAddress(roleLeader)};
+    if (roleLeader) {
+      return {nodeId: roleLeader[COLUMN.NODE_ID],
+        replicaId: roleLeader[COLUMN.REPLICA_ID], address: formatLedgerReplicaAddress(roleLeader)};
+    }
     const partitions = cache.getAll(TABLES.PARTITIONS) || [];
     const ledgerPartition = partitions.find(
       (row) => row?.[COLUMN.PARTITION_ID] === LEDGER_PARTITION_ID,

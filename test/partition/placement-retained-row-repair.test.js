@@ -181,12 +181,16 @@ test('a clearing holder commit during the old BUSY reply owns a successor attemp
     const submit = repository.repairRetainedPlacement;
     let release;
     let committed;
-    const gotBusy = new Promise((resolve) => { committed = resolve; });
+    const gotBusy = new Promise((resolve) => {
+      committed = resolve;
+    });
     repository.repairRetainedPlacement = async (payload) => {
       const answer = await submit(payload);
       if (answer.placementResult?.reason === PLACEMENT_REFUSAL.PARTITION_BUSY) {
         committed();
-        await new Promise((resolve) => { release = resolve; });
+        await new Promise((resolve) => {
+          release = resolve;
+        });
       }
       return answer;
     };
@@ -197,7 +201,8 @@ test('a clearing holder commit during the old BUSY reply owns a successor attemp
     release();
     await pending;
     await settleRepair(world);
-    assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId));
+    assert.ok(ledgerRows(world.leader)
+      .find((row) => row.operation_id === retained.operationId));
     assert.equal(repository.retainedPlacementRepairs.size, 0,
       'no unrelated later traffic is needed to consume the already observed clearing');
   }));
@@ -231,7 +236,7 @@ test('current actual deficit policy preserves same-ID copies and native capacity
     const result = await world.coordinator.repository.persistOperationUpdate(retained,
       {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
     assert.equal(result.disposition, DISPOSITION.REFUSED);
-    assert.equal(world.commands.at(-1).body.admissionStatement.repair, false,
+    assert.equal(world.commands.at(-1).body.copyPolicy.statement.repair, false,
       'the actual one-voter LEARNER_DEFICIT remains ordinary policy, with no quota promotion');
     assert.equal(world.commands.at(-1).body.operation.operationId, retained.operationId);
     const outcome = readCommittedStatementOutcome(world.leader,
@@ -267,6 +272,7 @@ test('foreign and malformed native answers retain one exact unknown attempt', as
       const held = repository.retainedPlacementRepairs.get(retained.operationId);
       assert.equal(held.entryId, original.entryId);
       assert.deepEqual(held.body, original.body);
+      repository.repairRetainedPlacement = submit;
       assert.equal(await repository.repairRetainedOperation(retained), true);
       assert.equal(repository.retainedPlacementRepairs.size, 0);
       assert.equal(world.commands.length, 1);
@@ -281,11 +287,15 @@ test('shutdown retires volatile custody and late committed replies cannot rearm 
     const submit = repository.repairRetainedPlacement;
     let release;
     let arrived;
-    const committed = new Promise((resolve) => { arrived = resolve; });
+    const committed = new Promise((resolve) => {
+      arrived = resolve;
+    });
     repository.repairRetainedPlacement = async (payload) => {
       const answer = await submit(payload);
       arrived();
-      await new Promise((resolve) => { release = resolve; });
+      await new Promise((resolve) => {
+        release = resolve;
+      });
       return answer;
     };
     const pending = repository.repairRetainedOperation(retained);
@@ -328,11 +338,13 @@ for (const first of ['normal', 'ledger']) {
           {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
         assert.equal(restored.disposition, DISPOSITION.REFUSED);
         assert.equal(ledgerRows(world.leader).length, 1);
-        const debt = world.coordinator.repository.retainedPlacementRepairs.get(retained.operationId);
+        const debt = world.coordinator.repository.retainedPlacementRepairs
+          .get(retained.operationId);
         assert.equal(debt.blockers[0].operationId, normal.operationIds[0]);
         stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
         await settleRepair(world);
-        assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId));
+        assert.ok(ledgerRows(world.leader)
+          .find((row) => row.operation_id === retained.operationId));
       } else {
         const restored = await world.coordinator.repository.persistOperationUpdate(retained,
           {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
@@ -367,11 +379,11 @@ test('remote-only current copy preparation succeeds and changed target boot stay
       assert.deepEqual(remote.messages.map(({payload}) => payload.type),
         ['PLACEMENT_REPAIR_PREPARE', 'PLACEMENT_REPAIR']);
       const wire = remote.messages[1].payload;
-      assert.equal(wire.body.admissionStatement.moves[0].replicaId, null,
+      assert.equal(wire.body.copyPolicy.statement.moves[0].replicaId, null,
         'ordinary canonical resource policy mints no identity');
       assert.equal(wire.body.operation.replicaId, retained.replicaId,
         'the retained envelope alone owns the existing identity');
-      assert.equal(wire.body.admissionStatement.moves[0].targetNodeBootIncarnation, 1);
+      assert.equal(wire.body.copyPolicy.statement.moves[0].targetNodeBootIncarnation, 1);
       await world.gateway.submitMutation({tableName: 'replica_operations', operation: 'delete',
         whereClause: {operation_id: retained.operationId}});
       const before = world.commands.length;
@@ -428,10 +440,11 @@ test('a retained ordinary copy consumes source capacity and resumes on its actua
     const command = world.commands.at(-1);
     const outcome = readCommittedStatementOutcome(world.leader, `entry:${command.entryId}`);
     assert.equal(JSON.parse(outcome.ownerResultText).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
-    assert.equal(command.body.admissionStatement.repair, false);
+    assert.equal(command.body.copyPolicy.statement.repair, false);
     stepLedgerRow(world.leader, holders[2], WORKFLOW_STEP.FAILED);
     await settleRepair(world);
-    assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId));
+    assert.ok(ledgerRows(world.leader)
+      .find((row) => row.operation_id === retained.operationId));
   }));
 
 test('retained-copy-first occupies the ordinary target lane until its own committed release', () =>
