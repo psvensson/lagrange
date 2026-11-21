@@ -20,9 +20,17 @@ function createPartitionCandidateEligibility(executor, partitionId, executionOpt
     const row = executor.findRoutingSnapshotService(snapshot, serviceInfo, address);
     return !executor.isTemporarilyUnroutableAddress(partitionId, address, row);
   }
-  function resolve(resolution, inspectEligible) {
+  function prioritize(resolution, requireCanonicalLeader) {
+    if (requireCanonicalLeader) return resolution;
+    const candidates = executor.prioritizeSessionPartitionAddress(
+      resolution.candidates, resolution.routingSnapshot, executionOptions.sessionId, partitionId);
+    return {...resolution, candidates};
+  }
+  function resolve(resolution, inspectEligible, requireCanonicalLeader) {
     if (!inspectEligible) return resolution;
-    const {candidates, routingSnapshot} = resolution;
+    // A pin can nominate a route from the snapshot as well as reorder one.
+    // Evaluate eligibility after that last nomination, before any use of the set.
+    const {candidates, routingSnapshot} = prioritize(resolution, requireCanonicalLeader);
     const seen = new Set();
     const eligible = candidates.filter((candidate) => {
       const {address} = candidate;
@@ -30,9 +38,17 @@ function createPartitionCandidateEligibility(executor, partitionId, executionOpt
       seen.add(address);
       return true;
     });
-    return {...resolution, candidates: eligible, ownerHadCandidates: candidates.length > 0};
+    return {
+      ...resolution, candidates: eligible, ownerHadCandidates: resolution.candidates.length > 0,
+    };
   }
-  return {allowsAddress, accepts, resolve};
+  function redirectCandidate(address, {routingSnapshot}) {
+    const row = routingSnapshot.routableServices.find((entry) => entry.address === address);
+    if (!row) return null;
+    const candidate = {address, nodeId: row.node_id, replicaId: row.service_id || row.replica_id};
+    return accepts(candidate, address, routingSnapshot) ? candidate : null;
+  }
+  return {accepts, prioritize, resolve, redirectCandidate};
 }
 
 function createPartitionCandidateDeliveryState({
