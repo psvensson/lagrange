@@ -299,7 +299,11 @@ function resolveTransportDeliveryOptions(
   const baseOptions = targetSnapshot.criticalTransport === true ?
     {deliveryPriority: MESSAGE_GROUP_SERVICE_LITERAL.CRITICAL} :
     {};
-  if (Number.isFinite(overrides?.timeoutMs) && overrides.timeoutMs > 0) {
+  if (overrides?.deliveryLifetime !== undefined) {
+    // These stay in local options. The transport owns validation and expiry.
+    baseOptions.deliveryLifetime = overrides.deliveryLifetime;
+    baseOptions.signal = overrides.signal;
+  } else if (Number.isFinite(overrides?.timeoutMs) && overrides.timeoutMs > 0) {
     baseOptions.timeoutMs = Math.floor(overrides.timeoutMs);
   }
   if (

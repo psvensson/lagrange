@@ -100,6 +100,40 @@ admission ownership, joiner bounds, late mutation or retained recovery. The
 completion seal prohibits an unexplained increase; first establish the owner
 contract, clock treatment and discriminating trace.
 
+## Public query and local MessageGroup grant
+
+The transport owner declares one caller budget in
+[runtime contracts](../../../architecture/runtime-contracts.md#timeout-and-invariant-rules).
+At integration `8a3e8ff32`, `QueryExecutor` calculates the remaining execution
+budget for the next candidate. `MessageRouter.deliver` creates that attempt's
+local lifetime. `buildQueryTransportSendOptions` forwards its original
+duration to the local MessageGroup, which calls the same router again with a
+new wire ID and starts another full duration. By then the outer deadline has
+already been running. Expiry of the outer caller can precede actual retirement
+of the inner ACK waiter.
+
+This narrow item 03 successor carries the exact router-owned lifetime and its
+abort signal through local options, from `buildQueryTransportSendOptions`
+through `resolveTransportDeliveryOptions` into the existing `deliver` call.
+The router validates the lifetime belongs to itself. The MessageGroup still
+owns its envelope identity and one direct-only attempt. The router still
+owns the exact inner waiter, the local handler boundary, and the remote
+write callback and outbound slot. Expiry prohibits further submission and
+retires pending waits. Already submitted bytes retain callback custody and
+an uncertain write retains its existing operation identity. The existing
+wire envelope and its receiver retain their existing clock and delivery
+contracts. A separate incoming request or application forwarder has its own
+invocation and does not receive this process-local lifetime as payload.
+
+The witness-only pin `43f3f5865dec91c184d658cfc78f8f9ed9ea0624` retains the
+old production path. It exercises real routers, a MessageGroup and a TCP
+WebSocket, with virtual time controlling dispatch before and after the caller
+deadline. It observes the same wire ID at the target and in the caller's ACK
+map, and holds the raw write callback across expiry. This source finding
+does not explain the seconds-long late receipt in the retained physical run:
+the three q12 outer and wire retirements were within two milliseconds of
+one another. Managed baseline, repair and independent review are pending.
+
 ## Recovered originals and remaining physical attribution
 
 The integration owner recovered task-3804 and task-3823 originals and verified
