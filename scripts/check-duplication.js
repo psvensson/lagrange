@@ -299,8 +299,9 @@ const RATCHET_TARGETS = [
     // consolidating sleepWithAbortSignal across the TiDB reference harness.
     // 2026-11-18 (fix-removal-cleanup): tightened 21898 -> 21888 on the checker hint.
     // 2026-11-19: tightened 612/21888 -> 610/21830 on the checker hint.
-    baselineCloneGroupCount: 610,
-    baselineDuplicatedLineCount: 21830,
+    // 2026-11-21: measured after the SQLite fixture migration.
+    baselineCloneGroupCount: 609,
+    baselineDuplicatedLineCount: 21780,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
