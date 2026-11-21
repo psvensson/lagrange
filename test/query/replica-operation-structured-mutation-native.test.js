@@ -21,15 +21,13 @@ function newRepository(engine, gateway, cdcIntegrationService, options = {}) {
 }
 
 function operation(operationId) {
-  return createOperation({
+  return Object.assign(createOperation({
     operationId,
     type: OperationType.ADD,
     partitionId: 'user-p1',
-    entityType: 'partition',
-    entityId: 'user-p1',
     sourceNodeId: NODE_ID,
     targetNodeId: 'other-node',
-  });
+  }), {entityType: 'partition', entityId: 'user-p1'});
 }
 
 const readRows = (of) => selectRows(of(LEDGER_TABLE).dbPath,
