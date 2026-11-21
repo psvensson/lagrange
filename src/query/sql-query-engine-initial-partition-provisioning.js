@@ -71,10 +71,8 @@ const LOCAL_STR_WAIT_REPLICA_METADATA = 'wait_replica_metadata';
 const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
 
 const {
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
-  OperationType,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   ReplicaOperationField,
@@ -281,36 +279,19 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         continue;
       }
 
-      let admissionDecision = null;
-      const childIntent = buildSchemaProvisioningChildIntent(
-        context?.schemaJobId,
-        targetNodeId,
-      );
-      try {
-        admissionDecision =
-          await this.rebalanceCoordinator.checkProvisioningAdmission({
-            type: OperationType.ADD,
-            partitionId,
-            entityType: SERVICE_TYPE.PARTITION,
-            entityId: partitionId,
-            nodeId: targetNodeId,
-            controlPlaneMutationWorkClass:
-              CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-            operationIntentId: childIntent.operationIntentId,
-            replicaIntentId: childIntent.replicaIntentId,
-          });
-      } catch (error) {
-        if (!this.isProvisioningAdmissionDeniedError(error)) {
-          throw error;
-        }
-        admissionDecision = {
-          allowed: false,
-          admissionResult: error.admissionResult || null,
-          error,
-        };
+      if (admittedTargetNodeIds.length >= requiredNewReplicaCount) {
+        break;
       }
-
-      if (admissionDecision?.allowed === true) {
+      const admissionDecision = await this.readProvisioningTargetAdmission({
+        partitionId,
+        targetNodeId,
+        childIntent: buildSchemaProvisioningChildIntent(
+          context?.schemaJobId,
+          targetNodeId,
+        ),
+        timeoutBudget,
+      });
+      if (admissionDecision.allowed) {
         admittedTargetNodeIds.push(targetNodeId);
         if (admissionDecision.operationCreationAdmission) {
           operationCreationAdmissionByTargetNodeId.set(
@@ -321,23 +302,10 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         continue;
       }
 
-      const rejectionError =
-        admissionDecision?.error && typeof admissionDecision.error === 'object' ?
-          admissionDecision.error :
-          (() => {
-            const fallbackError = new Error(
-              `Provisioning admission denied on ${targetNodeId}`,
-            );
-            fallbackError.admissionResult =
-                admissionDecision?.admissionResult || null;
-            return fallbackError;
-          })();
-      const rejection = this.createProvisioningTargetRejection(
-        targetNodeId,
-        rejectionError,
+      rejectedTargetNodePlans.push(admissionDecision.rejection);
+      this.logProvisioningTargetRejection(
+        partitionId, targetNodeId, admissionDecision.rejection,
       );
-      rejectedTargetNodePlans.push(rejection);
-      this.logProvisioningTargetRejection(partitionId, targetNodeId, rejection);
     }
 
     const maximumPrecheckedProvisionableReplicaCount =
