@@ -1,5 +1,5 @@
 // The two raft facts the per-turn and per-message paths read from memory,
-// held by the connection's cache (src/storage/sqlite-connection-cache.js):
+// held by the connection's cache (src/storage/sqlite-connection-state.js):
 //
 //   the snapshot index (raft-rs-snapshot-witness.js) - read every raft turn by
 //     the runtime's compaction check. Read from storage once per connection;

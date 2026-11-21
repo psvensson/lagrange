@@ -21,7 +21,7 @@
 // determinism.js) asks the stricter forms: R1 refuses every alias token, and
 // R2 requires every primary-key column named and an INTEGER PRIMARY KEY's
 // every value an explicit integer in [-2^62, 2^62).
-import {sqliteConnectionCache} from '../storage/sqlite-connection-cache.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {asciiLower} from './partition-statement-admission-lexer.js';
 import {
   dmlVerbIndex,
@@ -39,7 +39,7 @@ import {
 } from './partition-statement-admission-constants.js';
 
 // --- the table shape: read through the owner's own code-built statements
-// (prepared once per connection, sqlite-connection-cache.js), fresh for every
+// (prepared once per connection, sqlite-connection-state.js), fresh for every
 // admitted statement ---
 
 const ABSENT_SHAPE = Object.freeze({exists: false, withoutRowid: false,
@@ -84,7 +84,7 @@ function readTableShape(db, tableName) {
   if (typeof tableName !== 'string' || tableName.length === 0) {
     return ABSENT_SHAPE;
   }
-  const statements = sqliteConnectionCache(db);
+  const statements = sqliteConnectionState(db);
   const listed = statements.statement(SHAPE_SQL.TABLE_LIST).get(tableName);
   if (listed === undefined) {
     return ABSENT_SHAPE;
@@ -118,7 +118,7 @@ function readTableShape(db, tableName) {
  * @return {{temporary: boolean, tableName: (string|null)}} Its table.
  */
 function readIndexTable(db, indexName) {
-  const statements = sqliteConnectionCache(db);
+  const statements = sqliteConnectionState(db);
   const temporary = statements.statement(SHAPE_SQL.TEMP_INDEX_TABLE).get(indexName);
   if (temporary !== undefined) {
     return {temporary: true, tableName: temporary.tableName};

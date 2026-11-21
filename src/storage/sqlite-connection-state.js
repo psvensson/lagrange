@@ -22,7 +22,7 @@
 // read derives it from the connection, which sees its own uncommitted rows
 // exactly as SQL does, and nothing uncommitted outlives the transaction.
 
-const CONNECTION_CACHE = Symbol('sqliteConnectionCache');
+const CONNECTION_CACHE = Symbol('sqliteConnectionState');
 
 /**
  * The statements and committed facts of one SQLite connection.
@@ -143,7 +143,7 @@ class SqliteConnectionCache {
  * @param {Object} db - A better-sqlite3 connection.
  * @return {SqliteConnectionCache} Its cache.
  */
-function sqliteConnectionCache(db) {
+function sqliteConnectionState(db) {
   if (!Object.hasOwn(db, CONNECTION_CACHE)) {
     Object.defineProperty(db, CONNECTION_CACHE,
       {value: new SqliteConnectionCache(db)});
@@ -151,4 +151,4 @@ function sqliteConnectionCache(db) {
   return db[CONNECTION_CACHE];
 }
 
-export {sqliteConnectionCache};
+export {sqliteConnectionState};
