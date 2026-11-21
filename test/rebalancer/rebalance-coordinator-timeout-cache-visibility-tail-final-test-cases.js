@@ -1,6 +1,27 @@
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {SQL} from '../../src/rebalancer/replica-operation-repository.js';
 import {createCoordinatorSqlStore} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+
+function assertReplaceReconcileLedgerReadScope(t, calls, row, readMode, requireWinnerRead) {
+  const strictReads = calls.filter(({tableName, options}) =>
+    tableName === 'replica_operations' &&
+    options.authoritativeReadMode === readMode);
+  const winnerReads = strictReads.filter(({sql}) => sql === SQL.SELECT_OPERATION_BY_ID);
+  const censusReads = strictReads.filter(({sql}) => sql === SQL.SELECT_OPERATIONS_BY_ENTITY);
+  if (requireWinnerRead) t.ok(winnerReads.length > 0, 'the owner checks the exact winner');
+  t.ok(winnerReads.every(({params}) => params.length === 1 && params[0] === row.operation_id),
+    'any strict winner lookup names the exact REPLACE');
+  t.ok(censusReads.length > 0, 'source retirement asks for complete entity authority');
+  t.ok(censusReads.every(({params, options}) => params.length === 2 &&
+    params[0] === row.entity_type && params[1] === row.entity_id &&
+    options.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED),
+  'the required leader census names exactly the entity whose source might be removed');
+  t.equal(strictReads.length, winnerReads.length + censusReads.length,
+    'the strict reads contain only the exact winner check and the exact entity census');
+}
 
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests({
   test,
@@ -172,14 +193,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       ),
       'observed progress should stay on the non-strict local owner read path',
     );
-    const strictOperationReads = authoritativeReadCalls.filter((call) =>
-      call.tableName === 'replica_operations' &&
-      call.options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
-    t.ok(strictOperationReads.length > 0,
-      'the owner attempts the optional strict check for a more advanced REPLACE winner');
-    t.ok(strictOperationReads.every((call) => call.sql.includes('operation_id = ?') &&
-      call.params[0] === operationRow.operation_id),
-    'the strict winner check remains scoped to this operation');
+    assertReplaceReconcileLedgerReadScope(t, authoritativeReadCalls, operationRow,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED, true);
   });
 
   test('observed progress prefers local authoritative target status over ' +
@@ -1001,6 +1016,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           success: true,
           source: 'local_partition_replica',
           rows: [],
+          rowSetComplete: false,
         };
       },
     };
@@ -1077,19 +1093,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
       enableTimeouts: false,
     });
-    coordinator.repository.queryAuthoritativeOperationById = async (
-      _operationId,
-      options = {},
-    ) => {
-      authoritativeReadCalls.push({
-        tableName: 'replica_operations',
-        sql: 'SELECT * FROM replica_operations WHERE operation_id = ?',
-        params: [operationRow.operation_id],
-        options: {...options},
-      });
-      return null;
-    };
-
     coordinator.initialize();
     try {
       coordinator.handleObservedReplicaStateChange(
@@ -1122,14 +1125,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       'observed progress should still attempt the bounded non-strict ' +
       'owner observation before giving up',
     );
-    t.ok(
-      authoritativeReadCalls.every((call) =>
-        call.tableName !== 'replica_operations' ||
-      call.options.authoritativeReadMode !== 'owner_rpc_required',
-      ),
-      'observed progress should not widen ACTIVE replace reconciliation into ' +
-      'strict owner-rpc while remove safety is still blocked',
-    );
+    assertReplaceReconcileLedgerReadScope(t, authoritativeReadCalls, operationRow,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED, false);
   });
 
   test('priority REMOVE drain fails (never completes) a stale undispatched ' +
