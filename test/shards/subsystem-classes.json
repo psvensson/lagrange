@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 291,
-    "query-sql": 210,
+    "query-sql": 211,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2724,
-  "digest": "fnv1a32-2d3b83f5",
+  "censusSize": 2725,
+  "digest": "fnv1a32-1b54987d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f9dc937b",
+  "observationDigest": "fnv1a32-0f7e86d6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1678,6 +1678,7 @@
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": "query-sql",
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "query-sql",
     "test/query/query-executor-no-handler-quarantine-clock.test.js": "query-sql",
+    "test/query/query-executor-no-handler-quarantine-penalty.test.js": "query-sql",
     "test/query/query-executor-recovery-owned-routing.test.js": "query-sql",
     "test/query/query-executor-recovery-read-lifetime.test.js": "query-sql",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "query-sql",
@@ -15640,6 +15641,16 @@
       ]
     },
     "test/query/query-executor-no-handler-quarantine-clock.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js"
+      ]
+    },
+    "test/query/query-executor-no-handler-quarantine-penalty.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-readiness-constants.js",
