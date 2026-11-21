@@ -1,6 +1,4 @@
-import {
-  buildTerminalOperationFixtureOutcome, installCommittedOperationMutationFixture,
-} from './operation-outcome-fixture.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
@@ -237,109 +235,41 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
     async (t) => {
       const now = Date.now();
       const reconciledOperationIds = [];
-      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-        nodeId: 'node-local',
-        transactionCoordinator: createTransactionCoordinator(),
-        systemTableCache: {
-          get() {
-            return null;
-          },
-        },
-        cdcIntegrationService: {
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-          },
-        },
-        sqlQueryEngine: {
-          async executeQuery() {
-            return {success: true, rows: [], affectedRows: 0};
-          },
-        },
-        ...createStorageOwners(),
-        enableTimeouts: false,
+      const replacePartitionId = 'sql_transactions-p1';
+      const localNodeId = 'node-local';
+      const remoteNodeId = 'node-remote';
+      const replicaOperations = [
+        {id: 'op-remote-owner', partitionId: 'partition-1',
+          replicaId: 'partition-1-r1', source: remoteNodeId},
+        {id: 'op-replace-target-owner', partitionId: replacePartitionId,
+          replicaId: replacePartitionId + '-r4', source: remoteNodeId,
+          type: OperationType.REPLACE, step: WORKFLOW_STEP.SYNCING,
+          status: ReplicaStatus.SYNCING},
+        {id: 'op-local-owner', partitionId: 'partition-1',
+          replicaId: 'partition-1-r2', source: localNodeId},
+        {id: NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID,
+          partitionId: NON_PRIORITY_SYSTEM_PARTITION_ID,
+          replicaId: NON_PRIORITY_SYSTEM_REPLICA_ID, source: remoteNodeId,
+          type: OperationType.REPLACE},
+      ].map(({id, partitionId, replicaId, source, type = OperationType.ADD,
+        step = WORKFLOW_STEP.CREATING, status = ReplicaStatus.CREATING}) => ({
+        operation_id: id,
+        type,
+        partition_id: partitionId,
+        entity_type: 'partition',
+        entity_id: partitionId,
+        replica_id: replicaId,
+        source_node_id: source,
+        target_node_id: localNodeId,
+        status,
+        workflow_step: step,
+        created_at: now - 1_000,
+        updated_at: now - 50,
+        completed_at: null,
+        steps_history: JSON.stringify([{step, timestamp: now - 50}]),
       }));
-      coordinator.initialize();
-
-      coordinator.workflowOwner.repository.queryIncompleteOperations =
-      async () => {
-        return [
-          {
-            operationId: 'op-remote-owner',
-            type: 'ADD',
-            partitionId: 'partition-1',
-            entityType: 'partition',
-            entityId: 'partition-1',
-            replicaId: 'partition-1-r1',
-            sourceNodeId: 'node-remote',
-            targetNodeId: 'node-local',
-            status: 'creating',
-            workflowStep: WORKFLOW_STEP.CREATING,
-            createdAt: now - 1000,
-            updatedAt: now - 50,
-            completedAt: null,
-            errorMessage: null,
-            stepsHistory: [],
-          },
-          {
-            operationId: 'op-replace-target-owner',
-            type: OperationType.REPLACE,
-            partitionId: 'sql_transactions-p1',
-            entityType: 'partition',
-            entityId: 'sql_transactions-p1',
-            replicaId: 'sql_transactions-p1-r4',
-            sourceNodeId: 'node-remote',
-            targetNodeId: 'node-local',
-            status: 'syncing',
-            workflowStep: WORKFLOW_STEP.SYNCING,
-            createdAt: now - 1000,
-            updatedAt: now - 50,
-            completedAt: null,
-            errorMessage: null,
-            stepsHistory: [],
-          },
-          {
-            operationId: 'op-local-owner',
-            type: 'ADD',
-            partitionId: 'partition-1',
-            entityType: 'partition',
-            entityId: 'partition-1',
-            replicaId: 'partition-1-r2',
-            sourceNodeId: 'node-local',
-            targetNodeId: 'node-local',
-            status: 'creating',
-            workflowStep: WORKFLOW_STEP.CREATING,
-            createdAt: now - 1000,
-            updatedAt: now - 50,
-            completedAt: null,
-            errorMessage: null,
-            stepsHistory: [],
-          },
-          {
-            operationId: NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID,
-            type: OperationType.REPLACE,
-            partitionId: NON_PRIORITY_SYSTEM_PARTITION_ID,
-            entityType: 'partition',
-            entityId: NON_PRIORITY_SYSTEM_PARTITION_ID,
-            replicaId: NON_PRIORITY_SYSTEM_REPLICA_ID,
-            sourceNodeId: 'node-remote',
-            targetNodeId: 'node-local',
-            status: 'creating',
-            workflowStep: WORKFLOW_STEP.CREATING,
-            createdAt: now - 1000,
-            updatedAt: now - 50,
-            completedAt: null,
-            errorMessage: null,
-            stepsHistory: [],
-          },
-        ];
-      };
+      const fixture = createCommittedLedgerFixture({cacheData: {replicaOperations}});
+      const {coordinator} = fixture;
       coordinator.workflowOwner.reconcileOperationLifecycle =
       async (operation) => {
         reconciledOperationIds.push(operation.operationId);
@@ -348,8 +278,6 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       coordinator.workflowOwner.reconcileReservations = async () => {
         return {expired: 0, orphansReleased: 0};
       };
-      coordinator.workflowOwner.failOperation = async (operation) =>
-        buildTerminalOperationFixtureOutcome(operation, {failed: true});
       const expectedReconciledOperationIds = Object.freeze([
         'op-replace-target-owner',
         'op-local-owner',
@@ -363,8 +291,10 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           [...expectedReconciledOperationIds].sort(),
           'timeout reconciliation must skip non-owner operations but keep target-owned system REPLACE reconciliation',
         );
+        t.same(replicaOperations.map(({operation_id}) => fixture.readback(operation_id).completed_at),
+          replicaOperations.map(() => null), 'fresh operations stay nonterminal');
       } finally {
-        await coordinator.shutdown();
+        await fixture.close();
       }
     });
 
@@ -803,79 +733,41 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       let nowMs = baseNowMs;
       Date.now = () => nowMs;
 
-      const operation = {
-        operationId: 'op-timeout-window-gap',
-        type: 'REPLACE',
-        partitionId: 'partition-1',
-        entityType: 'partition',
-        entityId: 'partition-1',
-        replicaId: 'partition-1-r1',
-        sourceNodeId: 'node-local',
-        targetNodeId: 'node-remote',
-        status: 'pending',
-        workflowStep: WORKFLOW_STEP.SENDING,
-        createdAt: baseNowMs - 40_000,
-        updatedAt: baseNowMs - 29_900,
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
-      };
-      let failedCount = 0;
-
-      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-        nodeId: 'node-local',
-        transactionCoordinator: createTransactionCoordinator(),
-        systemTableCache: {
-          get() {
-            return null;
-          },
-        },
-        cdcIntegrationService: {
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-          },
-        },
-        sqlQueryEngine: {
-          async executeQuery() {
-            return {success: true, rows: [], affectedRows: 0};
-          },
-        },
-        ...createStorageOwners(),
-        enableTimeouts: false,
-      }));
-      coordinator.initialize();
-
-      coordinator.workflowOwner.repository.queryIncompleteOperations =
-      async () => {
-        if (failedCount > 0) {
-          return [];
-        }
-        return [operation];
-      };
+      const operationId = 'op-timeout-window-gap';
+      const partitionId = 'partition-1';
+      const createdAt = baseNowMs - 40_000;
+      const enteredSendingAt = baseNowMs - 29_900;
+      const stepsHistory = JSON.stringify([
+        {step: WORKFLOW_STEP.PENDING, timestamp: createdAt},
+        {step: WORKFLOW_STEP.SENDING, timestamp: enteredSendingAt},
+      ]);
+      const replicaOperations = [{
+        operation_id: operationId,
+        type: OperationType.REPLACE,
+        partition_id: partitionId,
+        entity_type: 'partition',
+        entity_id: partitionId,
+        replica_id: 'partition-1-r1',
+        source_node_id: 'node-local',
+        target_node_id: 'node-remote',
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.SENDING,
+        created_at: createdAt,
+        updated_at: enteredSendingAt,
+        completed_at: null,
+        steps_history: stepsHistory,
+      }];
+      const fixture = createCommittedLedgerFixture({cacheData: {replicaOperations}});
+      const {coordinator} = fixture;
+      // The lifecycle check reports no replica progress. The sweep still
+      // decides timeout from the complete current operation and owns its CAS.
       coordinator.workflowOwner.reconcileOperationLifecycle =
-      async () => OPERATION_RECONCILE_OUTCOME.WAITING;
-      coordinator.workflowOwner.reconcileReservations = async () => ({
-        expired: 0,
-        orphansReleased: 0,
-      });
-      coordinator.workflowOwner.failOperation = async () => {
-        failedCount += 1;
-        operation.workflowStep = WORKFLOW_STEP.FAILED;
-        operation.status = 'failed';
-        operation.completedAt = nowMs;
-        operation.updatedAt = nowMs;
-        return buildTerminalOperationFixtureOutcome(operation, {failed: true, completedAt: nowMs});
-      };
-
+        async () => OPERATION_RECONCILE_OUTCOME.WAITING;
       try {
         const verifyWindowAtMs = baseNowMs + 4_100;
+        await coordinator.checkTimeouts();
+        t.equal(fixture.readback(operationId).workflow_step, WORKFLOW_STEP.SENDING,
+          'the first sweep preserves an operation whose step has time remaining');
         for (
           let sweepAtMs = baseNowMs + coordinator.timeoutCheckIntervalMs;
           sweepAtMs <= verifyWindowAtMs;
@@ -886,14 +778,17 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         }
 
         nowMs = verifyWindowAtMs;
-        t.equal(
-          failedCount > 0,
-          true,
-          'overdue operation should be failed before verification snapshot window',
-        );
+        const row = fixture.readback(operationId);
+        t.equal(row.workflow_step, WORKFLOW_STEP.FAILED,
+          'the SQLite operation is FAILED before the verification snapshot');
+        t.ok(row.completed_at > baseNowMs && row.completed_at <= verifyWindowAtMs,
+          'the durable completion falls within the sweep window');
+        t.same(JSON.parse(row.steps_history).map(({step}) => step), [
+          WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING, WORKFLOW_STEP.FAILED,
+        ], 'the timeout advances the exact row once');
       } finally {
         Date.now = originalDateNow;
-        await coordinator.shutdown();
+        await fixture.close();
       }
     });
 
