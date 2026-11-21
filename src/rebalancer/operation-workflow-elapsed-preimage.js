@@ -8,7 +8,7 @@ function captureElapsedWorkflowPreimage(operation) {
     type: operation.type,
     partition_id: operation.partitionId,
     source_node_id: operation.sourceNodeId,
-    source_replica_id: operation.sourceReplicaId,
+    source_replica_id: operation.sourceReplicaId ?? null,
     target_node_id: operation.targetNodeId,
     replica_id: operation.replicaId,
     status: operation.status,

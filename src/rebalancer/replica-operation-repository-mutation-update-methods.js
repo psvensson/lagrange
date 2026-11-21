@@ -1,6 +1,7 @@
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {isDeepStrictEqual} from 'node:util';
+import {elapsedWorkflowPreimageMatches} from './operation-workflow-elapsed-preimage.js';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
   invalidOperationPersistenceOutcome,
@@ -184,6 +185,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         expectedWorkflowStep,
         terminalTransition,
       );
+      const elapsedPreimage = options.elapsedWorkflowPreimage;
+      let elapsedCasFields;
       if (terminalTransition) {
         // Recovery credit requires a proved preimage. Unavailable authority
         // cannot establish that a later matching terminal was newly applied.
@@ -192,6 +195,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
             leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
             requireAbsenceConfirmation: true,
+            requireCompleteExactKey: Boolean(elapsedPreimage),
             expectedOperation: operation,
             timeoutBudget: options.timeoutBudget,
           });
@@ -221,6 +225,21 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             operation: terminalPreimage,
           });
         }
+        if (elapsedPreimage) {
+          const fields = preimage.persistedCasFields;
+          if (!elapsedWorkflowPreimageMatches(terminalPreimage, elapsedPreimage) ||
+              fields?.source_replica_id === undefined ||
+              typeof fields.steps_history !== 'string') {
+            return buildOperationUpdateOutcome({
+              persisted: false,
+              disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+              operation: null,
+            });
+          }
+          // The REPLACE decoder may take the source from history. The SQL CAS
+          // compares the actual stored source and history values from this read.
+          elapsedCasFields = {...elapsedPreimage, ...fields};
+        }
       }
       if (
         await this.shouldRejectExpectedWorkflowStepMutation(
@@ -247,7 +266,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
                 options.requireCreateAdmissionAbsent === true,
               requireExactCreateTarget: options.requireExactCreateTarget === true,
               expectedStepsHistory,
-              elapsedWorkflowPreimage: options.elapsedWorkflowPreimage,
+              elapsedWorkflowPreimage: elapsedCasFields,
             },
           ),
           data: this.buildReplicaOperationUpdateData(operation),

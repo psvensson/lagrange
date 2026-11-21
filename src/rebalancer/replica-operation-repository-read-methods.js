@@ -405,9 +405,17 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         }
         if (result.rows[0]?.operation_id !== operationId) return defer();
         try {
-          const operation = this.rowToOperation(result.rows[0]);
+          const row = result.rows[0];
+          const operation = this.rowToOperation(row);
           assertOperationUpdateRecord(operation);
-          return Object.freeze({operation, deferredOutcome: null});
+          return Object.freeze({
+            operation,
+            deferredOutcome: null,
+            persistedCasFields: Object.freeze({
+              source_replica_id: row.source_replica_id,
+              steps_history: row.steps_history,
+            }),
+          });
         } catch {
           return defer();
         }

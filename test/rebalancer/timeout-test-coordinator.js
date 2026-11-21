@@ -9,6 +9,7 @@
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {
   buildMockPolicyAuthorityWitness,
   createMockCache,
@@ -47,23 +48,30 @@ function createTrackedLedgerStore(rows) {
     const result = store.submitMutation(mutation);
     if (!result.success) throw new Error(`Invalid injected ledger row: ${result.error}`);
   };
+  const flushFixtures = () => {
+    for (const id of [...published.keys()]) {
+      if (!rows.has(id)) {
+        commitFixtureChange({operation: 'delete', tableName: OPERATIONS_TABLE,
+          whereClause: {operation_id: id}});
+      }
+    }
+    for (const [id, row] of rows) {
+      if (published.get(id) === JSON.stringify(row)) continue;
+      commitFixtureChange(published.has(id) ?
+        {operation: 'update', tableName: OPERATIONS_TABLE,
+          whereClause: {operation_id: id}, data: row} :
+        {operation: 'insert', tableName: OPERATIONS_TABLE, row});
+    }
+  };
   return {
     suspend: store.suspend,
     execute(sql, params) {
-      for (const id of [...published.keys()]) {
-        if (!rows.has(id)) {
-          commitFixtureChange({operation: 'delete', tableName: OPERATIONS_TABLE,
-            whereClause: {operation_id: id}});
-        }
-      }
-      for (const [id, row] of rows) {
-        if (published.get(id) === JSON.stringify(row)) continue;
-        commitFixtureChange(published.has(id) ?
-          {operation: 'update', tableName: OPERATIONS_TABLE,
-            whereClause: {operation_id: id}, data: row} :
-          {operation: 'insert', tableName: OPERATIONS_TABLE, row});
-      }
+      flushFixtures();
       return store.execute(sql, params);
+    },
+    submitMutation(mutation) {
+      flushFixtures();
+      return store.submitMutation(mutation);
     },
   };
 }
@@ -85,12 +93,6 @@ function createTimeoutTestCoordinator(options = {}) {
     SHARED_LEDGER_STORES.set(trackedOperations, createTrackedLedgerStore(trackedOperations));
   }
   const ledgerStore = SHARED_LEDGER_STORES.get(trackedOperations);
-
-  // Mock CDC service (not used for persistence in the current architecture).
-  const cdcService = {
-    insertSystemTableRow: async () => ({success: true}),
-    updateSystemTableRow: async () => ({success: true}),
-  };
 
   // SQL engine that tracks operations via INSERT/UPDATE queries.
   const sqlEngine = {
@@ -141,11 +143,17 @@ function createTimeoutTestCoordinator(options = {}) {
     },
   };
 
+  const gateway = {
+    ...createMockControlPlaneSystemTableGateway(sqlEngine),
+    submitMutation: ledgerStore.submitMutation,
+  };
+  installCommittedOperationMutationFixture(gateway);
+
   const coordinator = new RebalanceCoordinator({
     nodeId: options.nodeId || 'test-node-1',
     systemTableCache: createMockCache(),
-    cdcIntegrationService: cdcService,
-    controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
+    cdcIntegrationService: gateway.cdcIntegrationService,
+    controlPlaneSystemTableGateway: gateway,
     tablePolicyService: createMockPolicyService(),
     // The committed-membership read of a join is the fixture world's (O1),
     // however a witness later re-points deliver.
@@ -172,8 +180,11 @@ function createTimeoutTestCoordinator(options = {}) {
   coordinator.initialize();
   const shutdown = coordinator.shutdown.bind(coordinator);
   coordinator.shutdown = async () => {
-    await shutdown();
-    ledgerStore.suspend();
+    try {
+      await shutdown();
+    } finally {
+      ledgerStore.suspend();
+    }
   };
   // Every create is armed by the coordinator's workflow owner (the durable
   // dispatch hold, not a request flag, gates dispatch). A fixture that drives
