@@ -28,7 +28,7 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_WRITE_ROUTE,
-  controlPlaneWriteIdentity,
+  controlPlaneWriteRoute,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
 
@@ -383,7 +383,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       sql,
       operationKind: descriptor.sqlOperation || null,
     });
-    const route = controlPlaneWriteIdentity(CONTROL_PLANE_WRITE_ROUTE.SQL,
+    const route = controlPlaneWriteRoute(CONTROL_PLANE_WRITE_ROUTE.SQL,
       this.nodeId, descriptor.tableName);
     const command = {sql, params, sessionId: queryOptions.sessionId};
     const execute = (statement, idempotencyKey) => this.assertSqlQueryEngine().executeQuery(
