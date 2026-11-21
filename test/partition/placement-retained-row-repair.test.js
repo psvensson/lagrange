@@ -600,9 +600,9 @@ async function holdRemotePendingReply(world, retained) {
     await held;
     return reply;
   };
-  const observe = sender.queryReplicaOperationPersistenceAuthorityObservation;
+  const observe = sender.executeReplicaOperationsRead;
   let reads = 0;
-  sender.queryReplicaOperationPersistenceAuthorityObservation = async (...args) => {
+  sender.executeReplicaOperationsRead = async (...args) => {
     reads += 1;
     return observe.apply(sender, args);
   };
@@ -759,6 +759,233 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
         assert.equal(world.commands.length, commands, 'retirement cannot retain a repeated clearing event');
       } finally {
         release();
+        await remote.coordinator.shutdown();
+      }
+    }));
+}
+
+async function observeBurst(sender, row) {
+  for (let count = 0; count < 5; count += 1) {
+    sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+  }
+  await settleTicks();
+  await sender.retainedPlacementRepairDrain;
+  await settleTicks();
+}
+
+for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
+  test(`still-live incumbent duplicates never mint a fresh BUSY turn: ${order}`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world);
+      const competitor = await compete(world);
+      const remote = remoteCaller(world);
+      const sender = remote.coordinator.repository;
+      const submit = sender.repairRetainedPlacement;
+      let release;
+      let received;
+      let first = true;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const arrived = new Promise((resolve) => {
+        received = resolve;
+      });
+      sender.repairRetainedPlacement = async (payload) => {
+        const answer = await submit(payload);
+        if (first) {
+          first = false;
+          received();
+          await gate;
+        }
+        return answer;
+      };
+      let reads = 0;
+      const read = sender.executeReplicaOperationsRead;
+      sender.executeReplicaOperationsRead = (...args) => {
+        reads += 1;
+        return read.apply(sender, args);
+      };
+      const result = sender.repairRetainedOperation(retained);
+      await arrived;
+      try {
+        const incumbent = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(competitor.operationIds[0]);
+        const before = world.commands.length;
+        if (order === 'answer-before-CDC') {
+          release();
+          assert.equal(await result, false);
+        }
+        for (let count = 0; count < 5; count += 1) {
+          sender.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
+        }
+        release();
+        assert.equal(await result, false);
+        await settleTicks();
+        await sender.retainedPlacementRepairDrain;
+        assert.equal(world.commands.length, before, 'a live incumbent is not clearing evidence');
+        assert.ok(reads <= 1, 'one coalesced burst uses at most one bounded authoritative read');
+        const firstReads = reads;
+        await observeBurst(sender, incumbent);
+        assert.equal(world.commands.length, before);
+        assert.equal(reads, firstReads, 'exact repeated live-incumbent hints do not create more reads');
+        stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+        const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(competitor.operationIds[0]);
+        await observeBurst(sender, cleared);
+        await settleRepair(world);
+        assert.equal(world.commands.length, before + 1, 'genuine clearing makes exactly one native successor');
+        assert.ok(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId));
+      } finally {
+        release();
+        await remote.coordinator.shutdown();
+      }
+    }));
+}
+
+async function occupyCopyLane(world, lane) {
+  const targets = lane === 'source' ? [NODE.B, NODE.C, NODE.D] : [NODE.B, NODE.B];
+  const holders = [];
+  for (const [index, target] of targets.entries()) {
+    const answer = await placementAdmission.requestPlacementAdmission(world.leader, {
+      entryId: `${lane}-remote-holder-${index}`,
+      body: placementStatement({partitionId: `${lane}-remote-holder-${index}-p1`, target}),
+    });
+    assert.equal(answer.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+    holders.push(answer.placementResult.operationIds[0]);
+  }
+  return holders;
+}
+
+for (const lane of ['source', 'target']) {
+  for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
+    test(`remote ordinary ${lane} capacity release crosses entities: ${order}`, () =>
+      withRepairLedger(async (world) => {
+        const retained = await retainMissing(world, OperationType.ADD);
+        const holders = await occupyCopyLane(world, lane);
+        const remote = remoteCaller(world);
+        const sender = remote.coordinator.repository;
+        const submit = sender.repairRetainedPlacement;
+        let release;
+        let received;
+        let first = true;
+        const gate = new Promise((resolve) => {
+          release = resolve;
+        });
+        const arrived = new Promise((resolve) => {
+          received = resolve;
+        });
+        sender.repairRetainedPlacement = async (payload) => {
+          const answer = await submit(payload);
+          if (first) {
+            first = false;
+            assert.equal(answer.placementResult.reason, lane === 'source' ?
+              PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY : PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
+            received();
+            await gate;
+          }
+          return answer;
+        };
+        const result = sender.repairRetainedOperation(retained);
+        await arrived;
+        try {
+          if (order === 'answer-before-CDC') {
+            release();
+            assert.equal(await result, false);
+          }
+          const before = world.commands.length;
+          const releasedId = holders.at(-1);
+          stepLedgerRow(world.leader, releasedId, WORKFLOW_STEP.FAILED);
+          const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+            .get(releasedId);
+          sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+          sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+          release();
+          assert.equal(await result, false);
+          await settleRepair(world);
+          await sender.retainedPlacementRepairDrain;
+          await settleTicks();
+          assert.ok(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+            .get(retained.operationId));
+          assert.equal(sender.retainedPlacementRepairs.size, 0,
+            'remote copy release is owed after capacity replies as well as before them');
+          assert.equal(world.commands.length, before + 1);
+        } finally {
+          release();
+          await remote.coordinator.shutdown();
+        }
+      }));
+  }
+}
+
+for (const lane of ['source', 'target']) {
+  test(`impossible ${lane} capacity answer preserves original entry until genuine same-pin outcome`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world, OperationType.ADD);
+      await occupyCopyLane(world, lane);
+      const repository = world.coordinator.repository;
+      const native = repository.repairRetainedPlacement;
+      let original;
+      repository.repairRetainedPlacement = async (payload) => {
+        original = payload;
+        const answer = await native(payload);
+        const occupancy = {...answer.placementResult.occupancy};
+        occupancy[lane === 'source' ? 'sourceOccupancy' : 'targetOccupancy'] = 0;
+        return {...answer, placementResult: {...answer.placementResult, occupancy}};
+      };
+      assert.equal(await repository.repairRetainedOperation(retained), false);
+      const held = repository.retainedPlacementRepairs.get(retained.operationId);
+      assert.equal(held.entryId, original.entryId);
+      assert.deepEqual(held.body, original.body);
+      const commands = world.commands.length;
+      repository.repairRetainedPlacement = native;
+      assert.equal(await repository.repairRetainedOperation(retained), false);
+      assert.equal(world.commands.length, commands, 'genuine refusal replays original committed attempt');
+      assert.ok(repository.retainedPlacementRepairs.get(retained.operationId).occupancy);
+    }));
+}
+
+const invalidCensusAnswers = [
+  ['partial', (answer) => ({...answer, partial: true})],
+  ['failed', (answer) => ({...answer, success: false, rowSetComplete: false})],
+  ['stale', (answer) => ({...answer,
+    readAuthorityWitness: {...answer.readAuthorityWitness, appliedIndex: 0}})],
+  ['wrong-partition', (answer) => ({...answer,
+    readAuthorityWitness: {...answer.readAuthorityWitness, partitionId: 'foreign-ledger-p1'}})],
+];
+for (const [name, corrupt] of invalidCensusAnswers) {
+  test(`${name} capacity census cannot spend or retire remote repair debt`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world, OperationType.ADD);
+      const holders = await occupyCopyLane(world, 'target');
+      const remote = remoteCaller(world);
+      const sender = remote.coordinator.repository;
+      try {
+        assert.equal(await sender.repairRetainedOperation(retained), false);
+        const held = sender.retainedPlacementRepairs.get(retained.operationId);
+        assert.ok(held.occupancy);
+        const read = sender.executeReplicaOperationsRead;
+        let reads = 0;
+        sender.executeReplicaOperationsRead = async (...args) => {
+          reads += 1;
+          return corrupt(await read.apply(sender, args));
+        };
+        stepLedgerRow(world.leader, holders[0], WORKFLOW_STEP.FAILED);
+        const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(holders[0]);
+        await observeBurst(sender, cleared);
+        assert.equal(reads, 1, 'one bounded authoritative read for the whole release burst');
+        assert.equal(sender.retainedPlacementRepairs.get(retained.operationId), held,
+          'partial, stale or foreign authority cannot retire or replace the exact retained record');
+        sender.executeReplicaOperationsRead = read;
+        await settleRepair(world);
+        const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId);
+        assert.ok(row, 'the actual native owner can independently win; corrupted read is not its authority');
+        await observeBurst(sender, row);
+        assert.equal(sender.retainedPlacementRepairs.size, 0,
+          'a genuine correctly scoped successor observation can still confirm the actual winner');
+      } finally {
         await remote.coordinator.shutdown();
       }
     }));

@@ -1,3 +1,8 @@
+import {REPAIR_AUTHORITY, readRetainedRepairAuthority} from
+  './replica-operation-retained-repair-authority.js';
+import {retainedPlacementContentionDecision, retainedPlacementEntityDecision} from
+  '../partition/partition-placement-retained-repair.js';
+import {ENTITY_ADMISSION_STATE} from '../partition/partition-placement-admission-decision.js';
 import {REPAIR_OBSERVATION as OBSERVATION, peerObservationMayClear, ownRowObservation,
   recordRepairObservation, takeRepairObservations, observationAllowsRetry} from
   './replica-operation-retained-repair-observation.js';
@@ -96,6 +101,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (!attempt) {
         attempt = {operation: copyOperationOutcomeData(operation), entryId: payload.entryId,
           body: payload.body, blockers: null, pending: null, observations: OBSERVATION.NONE,
+          minimumLedgerIndex: 0, minimumLedgerTerm: 0, expectedOwner: null,
           clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};
         this.retainedPlacementRepairs.set(operation.operationId, attempt);
       }
@@ -178,6 +184,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (!attempt) {
         attempt = {operation: copyOperationOutcomeData(operation), entryId: null,
           blockers: null, pending: null, observations: OBSERVATION.NONE,
+          minimumLedgerIndex: 0, minimumLedgerTerm: 0, expectedOwner: null,
           clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};
         this.retainedPlacementRepairs.set(operation.operationId, attempt);
       }
@@ -224,6 +231,10 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
       const committed = isCommittedRepairAnswer(answer, attempt);
       if (answer?.committed === true && !committed) return false;
+      if (committed) {
+        attempt.minimumLedgerIndex = Math.max(attempt.minimumLedgerIndex, answer.logIndex);
+        attempt.minimumLedgerTerm = Math.max(attempt.minimumLedgerTerm, answer.term);
+      }
       this.recordRetainedRepairCustody(attempt, answer);
       if (!committed) {
         return this.retainUncommittedRepairAnswer(attempt, answer, releaseSequence);
@@ -329,12 +340,34 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async revalidateRetainedRepairObservation(attempt, observations) {
-      const observed = await this.confirmRetainedOperationRow(attempt.operation);
-      if (!this.retainedRepairAttemptIsCurrent(attempt)) return;
-      if (observed.state === ROW_STATE.EXACT || observed.state === ROW_STATE.CHANGED) {
+      const authority = await readRetainedRepairAuthority(this, attempt);
+      if (!this.retainedRepairAttemptIsCurrent(attempt) ||
+          authority.state !== REPAIR_AUTHORITY.READY) return;
+      const row = authority.rows.find((candidate) =>
+        candidate.operation_id === attempt.operation.operationId);
+      if (row) {
         this.retainedPlacementRepairs.delete(attempt.operation.operationId);
-      } else if (observed.state === ROW_STATE.ABSENT && observationAllowsRetry(observations)) {
-        await this.repairRetainedOperation(attempt.operation);
+        return;
+      }
+      if (!observationAllowsRetry(observations)) return;
+      const decision = authority.completeCensus ?
+        retainedPlacementContentionDecision(attempt.operation, attempt.body.copyPolicy, authority.census) :
+        retainedPlacementEntityDecision(attempt.operation, authority.census);
+      if (decision.state === ENTITY_ADMISSION_STATE.REFUSED) {
+        this.retainCurrentRepairContention(attempt, authority.rows, decision.result);
+        return;
+      }
+      await this.repairRetainedOperation(attempt.operation);
+    },
+
+    retainCurrentRepairContention(attempt, rows, result) {
+      if (result.occupancy) attempt.occupancy = result.occupancy;
+      if (result.operationIds) {
+        attempt.blockers = result.operationIds.map((operationId) => {
+          const row = rows.find((candidate) => candidate.operation_id === operationId);
+          return {operationId, createdAt: row.created_at, workflowStep: row.workflow_step,
+            completedAt: row.completed_at};
+        });
       }
     },
 
@@ -361,7 +394,8 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       const blockerCleared = attempt.blockers?.some((blocker) =>
         blocker.operationId === row?.operation_id && !sameBlocker(row, blocker)) === true;
-      const possiblyClearedWhilePending = attempt.pending && peerObservationMayClear(attempt, row);
+      const possiblyClearedWhilePending = (attempt.pending || attempt.occupancy) &&
+        peerObservationMayClear(attempt, row);
       return blockerCleared || possiblyClearedWhilePending ?
         OBSERVATION.CLEARING : OBSERVATION.NONE;
     },

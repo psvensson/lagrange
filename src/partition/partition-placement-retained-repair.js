@@ -17,7 +17,7 @@ import {OPERATION_METADATA_KEY} from '../rebalancer/replica-operation-progress.j
 import {getOperationMetadataValue} from '../rebalancer/replica-status.js';
 import {PLACEMENT_TRANSITION_KIND, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../rebalancer/replica-placement-owner-constants.js';
-import {admissionRefusal, entityAdmissionDecision, ENTITY_ADMISSION_STATE, operationHoldsPlacementCopyCapacity,
+import {placementContentionRefusal, entityAdmissionDecision, ENTITY_ADMISSION_STATE, operationHoldsPlacementCopyCapacity,
   readPlacementCensus} from './partition-placement-admission-decision.js';
 
 const READY_POLICY_FIELDS = Object.freeze(['state', 'statement']);
@@ -136,7 +136,7 @@ function unavailableCopyDecision() {
     ...refuse(PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE)};
 }
 
-function copyRepairDecision(db, operation, copyPolicy, census) {
+function copyRepairDecision(operation, copyPolicy, census) {
   if (copyPolicy.state !== POLICY.READY) {
     return unavailableCopyDecision();
   }
@@ -146,23 +146,34 @@ function copyRepairDecision(db, operation, copyPolicy, census) {
   if (statement.dispatchHold !== null && retainedHold !== statement.dispatchHold) {
     return unavailableCopyDecision();
   }
-  const capacity = admissionRefusal(db, statement, census);
-  return capacity === null ? REPAIR_CLEAR : blockingRepairDecision(db, census, capacity);
+  const capacity = placementContentionRefusal(statement, census);
+  return capacity === null ? REPAIR_CLEAR :
+    {state: ENTITY_ADMISSION_STATE.REFUSED, result: capacity};
 }
 
-function liveRepairDecision(db, operation, copyPolicy) {
-  if (operation.completedAt !== null) return REPAIR_CLEAR;
-  const census = readPlacementCensus(db);
-  const entity = entityAdmissionDecision({transitionKind: PLACEMENT_TRANSITION_KIND.PLACEMENT,
+function retainedPlacementEntityDecision(operation, census) {
+  return entityAdmissionDecision({transitionKind: PLACEMENT_TRANSITION_KIND.PLACEMENT,
     entityType: operation.entityType, entityId: operation.entityId,
     dispatchHold: getOperationMetadataValue(operation.stepsHistory,
       OPERATION_METADATA_KEY.DISPATCH_HOLD),
     moves: [{type: operation.type}]}, census);
+}
+
+function retainedPlacementContentionDecision(operation, copyPolicy, census) {
+  if (operation.completedAt !== null) return REPAIR_CLEAR;
+  const entity = retainedPlacementEntityDecision(operation, census);
   if (entity.state === ENTITY_ADMISSION_STATE.REFUSED) {
-    return blockingRepairDecision(db, census, entity.result);
+    return entity;
   }
   return operationHoldsPlacementCopyCapacity(operation) ?
-    copyRepairDecision(db, operation, copyPolicy, census) : REPAIR_CLEAR;
+    copyRepairDecision(operation, copyPolicy, census) : REPAIR_CLEAR;
+}
+
+function liveRepairDecision(db, operation, copyPolicy) {
+  const census = readPlacementCensus(db);
+  const decision = retainedPlacementContentionDecision(operation, copyPolicy, census);
+  return decision.state === ENTITY_ADMISSION_STATE.REFUSED ?
+    blockingRepairDecision(db, census, decision.result) : decision;
 }
 
 function insertRetainedRow(db, row) {
@@ -189,4 +200,5 @@ function decideRetainedPlacementRepair(db, {operation, copyPolicy}) {
     operationIds: Object.freeze([operation.operationId])}), rows: [row]};
 }
 
-export {canonicalRetainedPlacementRepair, decideRetainedPlacementRepair};
+export {canonicalRetainedPlacementRepair, decideRetainedPlacementRepair,
+  retainedPlacementContentionDecision, retainedPlacementEntityDecision};

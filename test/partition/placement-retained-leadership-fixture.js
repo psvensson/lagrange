@@ -2,6 +2,8 @@
 // port mirrors committed commands and produces real role/lifecycle events;
 // this measures owner routing/custody, not rs-raft election/quorum behavior.
 import assert from 'node:assert/strict';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {withRepairLedger} from './placement-retained-row-repair-fixture.js';
 import {applyCommitted, resumeFixtureParticipantAdmission, send, settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
@@ -13,6 +15,13 @@ async function withRetainedLeadershipPair(measure) {
     const nodes = [a, b];
     const messages = [];
     let leader = a;
+    const ownerReads = new Map(nodes.map((node) => [node,
+      node.gateway.readAuthoritativeRows.bind(node.gateway)]));
+    for (const node of nodes) {
+      node.gateway.readAuthoritativeRows = (table, sql, params, options) =>
+        ownerReads.get(options?.authoritativeReadMode === READ_MODE.OWNER_RPC_REQUIRED ?
+          leader : node)(table, sql, params, options);
+    }
     const replicate = (source, target) => ({command}) => {
       if (source === leader) assert.equal(applyCommitted(target.leader, command), null);
     };

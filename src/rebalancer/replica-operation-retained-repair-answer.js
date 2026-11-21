@@ -82,7 +82,7 @@ function readBlockers(result) {
   if (!isDeepStrictEqual(result.operationIds, blockers.map((row) => row.operationId))) {
     return UNKNOWN;
   }
-  return {state: REPAIR_ANSWER_STATE.KNOWN, blockers};
+  return {state: REPAIR_ANSWER_STATE.KNOWN, blockers, occupancy: null};
 }
 
 function validOccupancyCounts(occupancy) {
@@ -99,8 +99,11 @@ function readOccupancy(result, attempt) {
     targetNodeId: statement.moves[0].targetNodeId,
     sourceLimit: statement.kSrcForClass, targetLimit: statement.kTgt};
   if (!Object.keys(expected).every((key) => occupancy[key] === expected[key])) return UNKNOWN;
-  return validOccupancyCounts(occupancy) ?
-    {state: REPAIR_ANSWER_STATE.KNOWN, occupancy} : UNKNOWN;
+  const atSourceLimit = occupancy.sourceOccupancy >= occupancy.sourceLimit;
+  const reasonMatchesCounts = result.reason === PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY ?
+    atSourceLimit : !atSourceLimit && occupancy.targetOccupancy >= occupancy.targetLimit;
+  return validOccupancyCounts(occupancy) && reasonMatchesCounts ?
+    {state: REPAIR_ANSWER_STATE.KNOWN, occupancy, blockers: null} : UNKNOWN;
 }
 
 function readRetainedRepairRefusal(result, attempt) {
@@ -111,7 +114,7 @@ function readRetainedRepairRefusal(result, attempt) {
       !isDeepStrictEqual(result.blockingOperations, []))) return UNKNOWN;
   if (result.reason === PLACEMENT_REFUSAL.CDC_CAPACITY &&
       !hasResultFields(result, RESULT_FIELDS.CDC)) return UNKNOWN;
-  let evidence = {state: REPAIR_ANSWER_STATE.KNOWN};
+  let evidence = {state: REPAIR_ANSWER_STATE.KNOWN, blockers: null, occupancy: null};
   if (BLOCKING_REASONS.has(result.reason)) evidence = readBlockers(result);
   else if (CAPACITY_REASONS.has(result.reason)) evidence = readOccupancy(result, attempt);
   if (evidence.state === REPAIR_ANSWER_STATE.UNKNOWN) return evidence;

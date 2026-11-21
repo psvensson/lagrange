@@ -83,6 +83,13 @@ function censusRowOf(row) {
  * @param {Object} db - The partition's connection (inside the apply).
  * @return {Array<Object>} Frozen census rows.
  */
+function retainedRepairCensusRead(operationId) {
+  return {sql: `SELECT * FROM ${TABLE} WHERE operation_id = ? OR workflow_step IN ` +
+    `(${INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS.map(() => SQL_PARAMETER)
+      .join(SQL_LIST_SEPARATOR)}) ORDER BY operation_id`,
+  params: [operationId, ...INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS]};
+}
+
 function readPlacementCensus(db) {
   return db.prepare(CENSUS_SQL).all(...INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS)
     .map(censusRowOf);
@@ -221,10 +228,14 @@ function entityAdmissionDecision(statement, census) {
   return ENTITY_CLEAR;
 }
 
-function admissionRefusal(db, statement, census) {
+function placementContentionRefusal(statement, census) {
   const entity = entityAdmissionDecision(statement, census);
   return entity.state === ENTITY_ADMISSION_STATE.REFUSED ? entity.result :
-    capacityRefusal(statement, census) ?? claimRefusal(db, statement);
+    capacityRefusal(statement, census);
+}
+
+function admissionRefusal(db, statement, census) {
+  return placementContentionRefusal(statement, census) ?? claimRefusal(db, statement);
 }
 
 function admissionMetadataOf(command, statement, move) {
@@ -366,4 +377,7 @@ export {
   readPlacementCopyOccupancy,
   operationHoldsPlacementCopyCapacity,
   copyCapacityObservationAffects,
+  censusRowOf,
+  retainedRepairCensusRead,
+  placementContentionRefusal,
 };
