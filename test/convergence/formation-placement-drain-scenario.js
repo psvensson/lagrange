@@ -343,6 +343,11 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
       return promise;
     },
     markCommittedWriteProposal: () => true,
+    // The kernel's ownership check: the registration is the waiter this stub
+    // registered (one object per registration); the stub keeps no proposal
+    // state, and its tenure never changes, so the tenure fence never releases.
+    pendingCommittedWriteOf: (entryId) => commitWaiters.get(entryId) ?? null,
+    committedWriteProposalOf: () => null,
     recordWritePhaseDuration: () => {},
     applyWriteSideEffectPlan: async () => {},
     syncCDCGeneratorDependencies: () => ({

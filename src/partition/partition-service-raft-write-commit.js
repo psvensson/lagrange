@@ -79,31 +79,46 @@ function portDeferralOf(proposed) {
     proposed.reason : null;
 }
 
-// The tenure fence: a write is handed to consensus only under the leadership
-// tenure it was submitted under (its hand-off's, the replica's
-// leadershipTenure compared by identity). One whose tenure ended - a role
-// edge, or a term renewed without one, which is a leadership lost and
-// regained between two announcements - is in the state a leadership loss
-// releases, and is released here the same way: unproposed, LEADERSHIP_LOST.
-// True when its tenure ended (it was released, or no longer pending).
+// Whether a hand-off still owns the pending write registered for it (its
+// registration, compared by identity). The registry is keyed by entryId, so a
+// write released and registered again under the same entryId (a join under a
+// later tenure, a retry after a role edge) is another registration, which an
+// execution of the first never marks, proposes, releases or rejects.
+function ownsPendingWrite(service, handoff) {
+  return handoff.registration !== null &&
+    service.pendingCommittedWriteOf(handoff.entry.entryId) === handoff.registration;
+}
+
+// The tenure fence, the one release step of every hand-over of a write - its
+// proposal, a readmit, and a caller's join of its answer: a write is handed to
+// consensus only under the leadership tenure it was submitted under (its
+// hand-off's, the replica's leadershipTenure compared by identity). One whose
+// tenure ended - a role edge, or a term renewed without one, which is a
+// leadership lost and regained between two announcements - is in the state a
+// leadership loss releases, and is released the same way: unproposed,
+// LEADERSHIP_LOST. Only the hand-off's own registration is released, and only
+// while it is not yet handed to consensus: a write handed over is inherited
+// work, answered by its commit. True when it was released here.
 function releasedOnEndedTenure(service, handoff) {
-  if (handoff.tenure === service.leadershipTenure) {
+  const {entryId} = handoff.entry;
+  if (handoff.tenure === service.leadershipTenure || !ownsPendingWrite(service, handoff) ||
+      service.committedWriteProposalOf(entryId) !== PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED) {
     return false;
   }
-  service.releasePendingCommittedWrite(handoff.entry.entryId, (pending) =>
+  return service.releasePendingCommittedWrite(entryId, (pending) =>
     buildReleasedPendingWriteAnswer(pending, service.partitionId,
       {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
-  return true;
 }
 
 // One proposal of a write to consensus: the first, every one after a port
 // deferral and the readmit of a parked write all come here. The tenure fence
-// runs in the same synchronous step as the proposal; a write already released
-// (or answered) is never handed over. A typed deferral of the port leaves the
-// write queued, as the retryable result the canonical retry owner re-runs.
+// runs in the same synchronous step as the proposal; a write whose
+// registration this hand-off no longer owns (released, answered, or
+// registered again) is never handed over. A typed deferral of the port leaves
+// the write queued, as the retryable result the canonical retry owner re-runs.
 async function proposeUnlessDeferred(service, handoff) {
   const {entry} = handoff;
-  if (releasedOnEndedTenure(service, handoff) ||
+  if (!ownsPendingWrite(service, handoff) || releasedOnEndedTenure(service, handoff) ||
       !service.markCommittedWriteProposal(entry.entryId,
         PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED)) {
     return PROPOSAL_NOT_MADE;
@@ -113,8 +128,10 @@ async function proposeUnlessDeferred(service, handoff) {
   if (admission === null) {
     return proposed;
   }
-  service.markCommittedWriteProposal(entry.entryId,
-    PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED);
+  if (ownsPendingWrite(service, handoff)) {
+    service.markCommittedWriteProposal(entry.entryId,
+      PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED);
+  }
   return {success: false, deferRetry: true, admission};
 }
 
@@ -154,7 +171,9 @@ function portWriteDeferral(service, entryId, admission, handoff) {
     deferRetry: true,
   };
   handoff.answer = answer;
-  service.rejectCommittedWrite(entryId, deferral);
+  if (ownsPendingWrite(service, handoff)) {
+    service.rejectCommittedWrite(entryId, deferral);
+  }
   return answer;
 }
 
@@ -185,6 +204,22 @@ function forgetWriteHandoff(service, entryId, handoff) {
   if (PARKED_WRITES.get(service)?.get(entryId) === handoff) {
     PARKED_WRITES.get(service).delete(entryId);
   }
+}
+
+/**
+ * The join of a pending write's answer is a hand-over of that write: before
+ * a caller joins the write pending under entryId, the tenure fence releases
+ * it when it was registered under a tenure that has ended and is not yet
+ * handed to consensus, so the caller registers its own write under the
+ * current tenure and never inherits that release. A write handed to
+ * consensus is inherited work, joined as before.
+ * @param {Object} service - The partition.
+ * @param {string} entryId - The entryId a caller would join.
+ * @return {boolean} Whether the pending write was released.
+ */
+function releaseJoinedWriteOfEndedTenure(service, entryId) {
+  const handoff = WRITE_HANDOFFS.get(service)?.get(entryId);
+  return handoff !== undefined && releasedOnEndedTenure(service, handoff);
 }
 
 // The cause of an unknown outcome stays with the write kernel's answer (no
@@ -275,7 +310,9 @@ async function handOffToConsensus(service, handoff) {
     }
   } catch (error) {
     handoff.proposal = Object.freeze({state: WRITE_PROPOSAL.REFUSED, error});
-    service.rejectCommittedWrite(entry.entryId, error);
+    if (ownsPendingWrite(service, handoff)) {
+      service.rejectCommittedWrite(entry.entryId, error);
+    }
     service.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
       partitionId: service.partitionId,
       error: error.message,
@@ -336,9 +373,10 @@ function reparkReservedWrite(service, entryId) {
 
 async function executePartitionRaftWriteCommit(service, options) {
   // The tenure the write is submitted under, taken in the step that
-  // registers it: every hand-over of it is fenced on it.
+  // registers it: every hand-over of it is fenced on it. Its registration
+  // (the pending write it owns) is recorded once the registry took it.
   const handoff = {entry: options.entry, proposal: PROPOSAL_ACCEPTED,
-    answer: null, tenure: service.leadershipTenure};
+    answer: null, tenure: service.leadershipTenure, registration: null};
   perService(WRITE_HANDOFFS, service).set(options.entry.entryId, handoff);
   try {
     return await executeHandedOffWriteCommit(service, options, handoff);
@@ -363,6 +401,7 @@ async function executeHandedOffWriteCommit(service, options, handoff) {
     commitPromise = service.waitForCommittedWrite(entry.entryId, {
       admissionClass: cdcDrainAdmissionClass(service, entry),
     });
+    handoff.registration = service.pendingCommittedWriteOf(entry.entryId);
   } catch (error) {
     service.recordWritePhaseDuration(
       phaseTimings,
@@ -518,6 +557,7 @@ function startPartitionRaftWriteCommit(service, options) {
 export {
   partitionWriteLeadershipRefusalOf,
   readmitReservedWrites,
+  releaseJoinedWriteOfEndedTenure,
   reparkReservedWrite,
   startAdmittedPartitionWrite,
   startPartitionRaftWriteCommit,

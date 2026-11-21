@@ -215,6 +215,17 @@ class ProposalQueue {
   }
 
   /**
+   * Where a pending write stands with consensus.
+   *
+   * @param {string} entryId - Unique identifier of the proposal.
+   * @return {string|null} Its PROPOSAL_QUEUE_PROPOSAL_STATE while its response
+   *   is pending; null once it was released or answered.
+   */
+  proposalStateOf(entryId) {
+    return this.isResponsePending(entryId) ? this.proposals.get(entryId).state : null;
+  }
+
+  /**
    * Resolve a pending response. Frees capacity once optional raw work closes.
    *
    * @param {string} entryId - Unique identifier of the proposal.

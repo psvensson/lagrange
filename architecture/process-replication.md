@@ -177,6 +177,19 @@ Three details that matter when reading the code or a trace:
 
   The former single-replica `DIRECT` bypass is absent. A one-voter leader
   proposes through raft-rs, not through a parallel local-apply path.
+- **A write is handed to consensus only under the leadership tenure it was
+  submitted under.** The [write kernel](../src/partition/partition-service-raft-write-commit.js)
+  records the replica's leadership tenure (a token minted at every leadership
+  edge and every term observed while leading) and the write's own registration
+  when it registers the write, and compares both by identity in the same
+  synchronous step as every hand-over: the first proposal, each re-proposal
+  after a port deferral, the readmit of a parked write, and a caller's join of
+  the pending answer; its leadership read also refuses when the tenure changes
+  inside that read. On a mismatch the write, not yet handed to consensus, is
+  released as on a leadership loss (`NOT_LEADER`, nothing proposed) and its
+  owner decides again under the current tenure; a write already handed to
+  consensus is inherited work and completes, or is answered as an unknown
+  outcome, under its existing entryId.
 
 - **CDC is emitted from the apply callback, not the propose path,** and only when
   the local replica is the leader. The leader stamps `updated_at_hlc` onto the
