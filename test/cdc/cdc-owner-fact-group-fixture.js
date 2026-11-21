@@ -136,11 +136,14 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     routers.get(callerNodeId).setQueryMessageGroupServiceResolver(() => ({
       async sendMessage(address, message, options) {
         const targetNodeId = nodeOfAddress(address);
+        // As on the wire, only the remaining duration and the caller's abort
+        // cross to the target router; that router's delivery lifetime is its own.
+        const {deliveryLifetime, signal} = options.transportDeliveryOptions;
         const delivery = unreachable.has(targetNodeId) ?
           buildDeliveryEnvelope({acknowledged: false, noHandler: true}) :
           await routers.get(targetNodeId).deliverLocal(address, TRANSIT_MESSAGE_ID,
-            message, null, options.transportDeliveryOptions).then(({result, answer}) =>
-            buildDeliveryEnvelope(result, answer));
+            message, null, {timeoutMs: deliveryLifetime.remainingMs(), signal})
+            .then(({result, answer}) => buildDeliveryEnvelope(result, answer));
         transit.push({callerNodeId, targetNodeId, address, reached: !unreachable.has(targetNodeId),
           answer: deliveryAnswerOf(delivery) ?? null});
         return {delivery};

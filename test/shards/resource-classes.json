@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2698,
+    "ordinary": 2700,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2724,
-  "digest": "fnv1a32-b8895faf",
+  "censusSize": 2726,
+  "digest": "fnv1a32-b61407ae",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -364,6 +364,7 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": "ordinary",
     "test/cdc/cdc-integration-service.test.js": "ordinary",
     "test/cdc/cdc-observability.test.js": "ordinary",
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js": "ordinary",
     "test/cdc/cdc-owner-fact-stale-published-leader.test.js": "ordinary",
     "test/cdc/cdc-owner-required-authoritative-routing.test.js": "ordinary",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "ordinary",
@@ -544,6 +545,7 @@
     "test/control-plane/control-plane-mutation-outcome-classifier.test.js": "ordinary",
     "test/control-plane/control-plane-mutation-readiness-durable-priority-spread.repro.test.js": "ordinary",
     "test/control-plane/control-plane-mutation-readiness.test.js": "ordinary",
+    "test/control-plane/control-plane-owner-fact-read.test.js": "ordinary",
     "test/control-plane/control-plane-publication-merge.test.js": "ordinary",
     "test/control-plane/control-plane-publications-leadership.test.js": "ordinary",
     "test/control-plane/control-plane-read-authority-token.test.js": "ordinary",

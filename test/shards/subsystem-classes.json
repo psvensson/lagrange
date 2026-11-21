@@ -5,9 +5,9 @@
     "admin-diagnostics": 122,
     "architecture-governance": 21,
     "bootstrap-membership": 350,
-    "cdc-metadata": 73,
+    "cdc-metadata": 74,
     "cli-tooling": 99,
-    "control-plane": 235,
+    "control-plane": 236,
     "convergence-topology": 87,
     "distributed-harness": 223,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2724,
-  "digest": "fnv1a32-121fb7ed",
+  "censusSize": 2726,
+  "digest": "fnv1a32-be600bf4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a1a9e384",
+  "observationDigest": "fnv1a32-4afaf6c2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -384,6 +384,7 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service.test.js": "cdc-metadata",
     "test/cdc/cdc-observability.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js": "cdc-metadata",
     "test/cdc/cdc-owner-fact-stale-published-leader.test.js": "cdc-metadata",
     "test/cdc/cdc-owner-required-authoritative-routing.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "cdc-metadata",
@@ -564,6 +565,7 @@
     "test/control-plane/control-plane-mutation-outcome-classifier.test.js": "control-plane",
     "test/control-plane/control-plane-mutation-readiness-durable-priority-spread.repro.test.js": "control-plane",
     "test/control-plane/control-plane-mutation-readiness.test.js": "control-plane",
+    "test/control-plane/control-plane-owner-fact-read.test.js": "control-plane",
     "test/control-plane/control-plane-publication-merge.test.js": "control-plane",
     "test/control-plane/control-plane-publications-leadership.test.js": "control-plane",
     "test/control-plane/control-plane-read-authority-token.test.js": "control-plane",
@@ -4323,6 +4325,30 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/cdc/cdc-owner-fact-group-fixture.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/cdc/cdc-owner-fact-stale-published-leader.test.js": {
