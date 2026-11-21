@@ -162,6 +162,7 @@ test('a re-drive refused before it was proposed does not end an instance ' +
     surface.partition.handleRemoteQuery = async () => ({success: false,
       partitionId: surface.partitionId, failureCode: NOT_LEADER,
       error: 'No leader available for write operation'});
+    const refusalMark = deliveries.length;
     let refused;
     try {
       refused = await withMutedConsoleError(() =>
@@ -169,9 +170,15 @@ test('a re-drive refused before it was proposed does not end an instance ' +
     } finally {
       surface.partition.handleRemoteQuery = handle;
     }
-    assert.equal(refused.success, false, 'setup: the re-drive is refused');
-    assert.ok(!JSON.stringify(refused).includes(OUTCOME_UNKNOWN),
-      'setup: a refusal before proposal, nothing unknown in it');
+    const refusals = deliveries.slice(refusalMark);
+    assert.ok(refusals.length > 0, 'setup: the re-drive reached the participant');
+    assert.ok(refusals.every(({answer}) => answer.failureCode === NOT_LEADER &&
+      answer.committed !== true), 'the re-drive attempts were refused before proposal');
+    assert.equal(refused.success, false, 'the owner did not receive an applied answer');
+    assert.equal(refused.failureCode, OUTCOME_UNKNOWN,
+      'a new refusal leaves the original possibility of effect unresolved');
+    assert.equal(refused.pendingInstance?.entryId, deliveries[0].entryId,
+      'the retained obligation is the original entry');
     engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
     const again = await reservationBirth(gateway, 111, now);
     assert.equal(again.success, true, 'answered applied ' +
@@ -414,7 +421,7 @@ for (const [label, pinClock] of [['new timestamps', false],
     'row', {timeout: TEST_TIMEOUT_MS}, async () => {
     await withSurface([TABLES.REPLICA_OPERATIONS,
       TABLES.STORAGE_RESERVATIONS], async ({engine, gateway, messageRouter,
-      cdcIntegrationService, of}) => {
+      cdcIntegrationService, deliveries, of}) => {
       const surface = of(TABLES.STORAGE_RESERVATIONS);
       const coordinator = reservationCoordinator({engine, gateway,
         messageRouter, cdcIntegrationService});
@@ -436,9 +443,24 @@ for (const [label, pinClock] of [['new timestamps', false],
         assert.ok(await appliedRow(surface, 'res-op-rel'),
           'setup: it commits');
         engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
+        const releaseMark = deliveries.length;
         const released = await coordinator.transitionActiveReservationById(
           'res-op-rel', 'released', Date.now());
-        assert.equal(released.changed, true, 'setup: released');
+        const releaseReceipts = deliveries.slice(releaseMark).filter(({table}) =>
+          table === TABLES.STORAGE_RESERVATIONS).map(({entryId, answer}) => ({
+          entryId,
+          failureCode: answer?.failureCode,
+          witness: answer?.durableCommitWitness,
+          settledReplay: answer?.settledReplay,
+        }));
+        const [terminal] = selectRows(surface.dbPath, 'SELECT status FROM ' +
+          TABLES.STORAGE_RESERVATIONS);
+        assert.equal(terminal?.status, 'released', 'setup: the release committed');
+        assert.ok(releaseReceipts.some(({entryId, witness}) =>
+          witness?.entryId === entryId && witness.partitionId === surface.partitionId),
+        `setup: native owner issued the bound release receipt (${JSON.stringify(releaseReceipts)})`);
+        assert.equal(released.changed, true,
+          `setup: owner acknowledges the release (${JSON.stringify(released)})`);
         authorityReads.length = 0;
         stamp();
         const again = await coordinator.createReservationForOperation(

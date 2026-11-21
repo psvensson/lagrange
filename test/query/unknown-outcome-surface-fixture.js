@@ -319,7 +319,8 @@ async function withSurface(tables, body, {cdc = false} = {}) {
     }
     const gateway = createControlPlaneRuntimeBundle({nodeId: NODE_ID,
       sqlQueryEngine: engine, messageRouter,
-      ...(cdcIntegrationService ? {cdcIntegrationService} : {}),
+      ...(cdc ? {cdcIntegrationService} :
+        {startupSqlMutationPhase: CONTROL_PLANE_PHASE_SCOPE.JOIN}),
     }).controlPlaneSystemTableGateway;
     const of = (table) => [...surfaces.values()].find((surface) =>
       surface.table === table);
