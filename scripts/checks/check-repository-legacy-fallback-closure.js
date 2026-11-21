@@ -47,6 +47,8 @@ const OWNER_EXECUTION_PROBLEM = objectFreeze({
 });
 const EXACT_SELECTION_REQUIRED =
   'The exact named owner files must each execute once without reused proofs';
+const EXECUTION_REPORT_LIMIT =
+  'Execution reports are unsigned. Applicability requires trusted original producer custody.';
 const CLOSURE_LIMITS =
   'Census and source markers do not prove semantic classification or caller closure.';
 const REPORT_OPTION = 'execution-report';
@@ -330,11 +332,12 @@ function verifyAffectedOwnerProofs(root = REPO_ROOT, report = null) {
     }
   }
   return {
-    passed: problems.length === ZERO_COUNT,
+    reportApplicable: problems.length === ZERO_COUNT,
     sourceCommit: checkout.head,
     selectedFiles: KEY_AFFECTED_WITNESS_FILES,
     problems,
     summary,
+    limits: EXECUTION_REPORT_LIMIT,
   };
 }
 

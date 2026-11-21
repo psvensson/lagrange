@@ -21,7 +21,7 @@ test('missing execution cannot establish affected-owner results', () => {
   assert.equal(KEY_AFFECTED_WITNESS_FILES.every((file) =>
     fs.existsSync(path.join(ROOT, file))), true);
   const proof = verifyAffectedOwnerProofs(ROOT);
-  assert.equal(proof.passed, false);
+  assert.equal(proof.reportApplicable, false);
   assert.deepEqual(proof.problems.map(({code}) => code), [EXECUTION_PROBLEM.REPORT_ABSENT]);
 });
 
@@ -47,7 +47,7 @@ test('affected owner proof rejects missing, failed, empty and foreign execution'
     [incompleteReport({source: '0'.repeat(40)}), EXECUTION_PROBLEM.CANDIDATE_SHA_MISMATCH],
   ]) {
     const proof = verifyAffectedOwnerProofs(ROOT, report);
-    assert.equal(proof.passed, false);
+    assert.equal(proof.reportApplicable, false);
     assert.ok(proof.problems.some(({code}) => code === required), required);
   }
 });
@@ -75,7 +75,7 @@ test('normal Q11 evidence CLI refuses current closure and preserves the historic
   assert.equal(result.status, 1, result.stderr);
   const audit = JSON.parse(result.stdout);
   assert.equal(audit.sourceCommit, describeCheckout(ROOT).head);
-  assert.equal(audit.ownerExecution.passed, false);
+  assert.equal(audit.ownerExecution.reportApplicable, false);
   assert.ok(['unresolved', 'unverified'].includes(audit.semanticClosure));
   if (audit.semanticClosure === 'unresolved') {
     assert.ok(audit.runtimeMarkers.matches.length > 0);
