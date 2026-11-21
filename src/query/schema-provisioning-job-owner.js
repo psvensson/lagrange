@@ -1,3 +1,4 @@
+import {RETAINED_PLACEMENT_ATTEMPT} from '../partition/partition-placement-admission-constants.js';
 import {randomUUID} from 'node:crypto';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
@@ -139,6 +140,9 @@ function buildInitialRow(intent, workflow) {
 }
 
 export function isTransientProvisioningError(error) {
+  if (error?.admissionAnswer?.[RETAINED_PLACEMENT_ATTEMPT] === true) {
+    return true;
+  }
   const code = String(error?.code || error?.errorCode || '').toUpperCase();
   const message = String(error?.message || '').toLowerCase();
   return TRANSIENT_PROVISIONING_CODES.has(code) ||

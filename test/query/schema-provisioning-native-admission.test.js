@@ -1,11 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {OWNER_CONTRACT_STATE} from '../../src/control-plane/owner-contract-outcome.js';
-import {buildSchemaProvisioningChildIntent} from '../../src/query/schema-provisioning-child-intent.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
 import {buildRejectedProposedWriteAnswer} from '../../src/partition/partition-write-kernel.js';
-import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {LEDGER_PARTITION_ID, ledgerRows, onLedgerLeader} from
   '../partition/placement-admission-fixture.js';
 import {attachAutoCommitLoop, createCoordinatorWithLedger} from
@@ -128,20 +126,30 @@ for (const replay of [false, true]) {
         const {clock, state, readiness, engine} = createServeRefreshFixture(t, createGateway());
         state.nodes[1].ready_lease_expires_at = 1100;
         await readiness.readServeEligibility();
-        const coordinator = createCoordinatorWithLedger(leader);
+        const messages = [];
+        const coordinator = remoteCoordinator(leader, async (_address, message) => {
+          const answer = await requestPlacementAdmission(leader, message);
+          if (message.body?.transitionKind === 'PLACEMENT') {
+            messages.push({entryId: message.entryId, body: message.body});
+            if (replay && messages.length === 1) {
+              return buildRejectedProposedWriteAnswer(new Error('lost native child reply'), {
+                partitionId: LEDGER_PARTITION_ID, entryId: message.entryId,
+              });
+            }
+          }
+          return answer;
+        });
         const dispatched = recordNativeDispatch(engine, coordinator, ['serve-a']);
         const partitionId = 'schema-expand-p1';
         const schemaJobId = 'schema-job-expand';
         let existing;
         if (replay) {
-          existing = await coordinator.createOperation({
-            type: OperationType.ADD, partitionId, entityType: SERVICE_TYPE.PARTITION,
-            entityId: partitionId, nodeId: 'serve-b',
-            deferDispatchUntilBootstrapTopology: true,
-            ...buildSchemaProvisioningChildIntent(schemaJobId, 'serve-b'),
-          });
-          coordinator.queryExistingInFlightOperation = () =>
-            coordinator.repository.queryAuthoritativeOperationById(existing.operationId);
+          await t.rejects(engine.provisionInitialTablePartition({
+            partitionId, schemaJobId, replicaCount: 2,
+          }));
+          [existing] = ledgerRows(leader);
+          t.ok(existing, 'the ambiguous reply hides a genuinely committed ADD');
+          t.same(dispatched, []);
         }
         const result = await engine.provisionInitialTablePartition({
           partitionId, schemaJobId, replicaCount: 2,
@@ -152,8 +160,9 @@ for (const replay of [false, true]) {
         const rows = ledgerRows(leader);
         if (replay) {
           t.equal(result, null, 'the exact durable child remains available to its own custody');
-          t.same(rows.map(({operation_id: operationId}) => operationId), [existing.operationId]);
-          t.same(dispatched.map(({operationId}) => operationId), [existing.operationId]);
+          t.same(rows.map(({operation_id: operationId}) => operationId), [existing?.operation_id]);
+          t.same(dispatched.map(({operationId}) => operationId), [existing?.operation_id]);
+          t.same(messages, [messages[0], messages[0]], 'an exact retained ADD bypasses the fresh guard');
         } else {
           t.equal(result?.code, 'TABLE_PARTITION_PROVISIONING_RETRYABLE');
           t.same(rows, [], 'no CREATE is submitted for a newly stale target');

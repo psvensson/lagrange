@@ -1,4 +1,8 @@
 import {
+  bindPlacementAttemptAnswer, canReplaceSettledPlacementAttempt,
+  isPlacementAttemptIdentitySettled,
+} from './placement-admission-attempt.js';
+import {
   buildPartitionPlacementMove,
   resolvePartitionPlacementIntentKey,
   resolveRuntimeServiceIntentKey,
@@ -15,13 +19,13 @@ import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-de
 import {
   PLACEMENT_ADMISSION_ERROR,
   PLACEMENT_RESULT_FIELD,
+  RETAINED_PLACEMENT_ATTEMPT,
 } from '../partition/partition-placement-admission-constants.js';
 import {
   requestPlacementAdmission,
   routePlacementAdmission,
 } from '../partition/partition-placement-admission.js';
 import {
-  isWriteOutcomeUnknown,
   resolveEntryId,
 } from '../partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -30,7 +34,6 @@ import {
   PLACEMENT_FORMATION_GATED_CLASSES,
   PLACEMENT_OUTCOME,
   PLACEMENT_WAITING_REASON,
-  PLACEMENT_REFUSAL,
 } from './replica-placement-owner-constants.js';
 import {
   buildPlacementAdmissionStatement,
@@ -55,18 +58,6 @@ const HOLD_RELEASE_NOT_FOUND_REASON = 'operation_not_found';
 const HOLD_RELEASE_COHORT_MISMATCH_REASON = 'topology_cohort_mismatch';
 const TRANSPORT_TIMEOUT_CODE = 'TRANSPORT_TIMEOUT';
 const TRANSPORT_TIMEOUT_MESSAGE = 'Transport delivery failed';
-const DEFINITE_PLACEMENT_OUTCOMES = Object.freeze(new Set([
-  PLACEMENT_OUTCOME.ADMITTED,
-  PLACEMENT_OUTCOME.REFUSED,
-  PLACEMENT_OUTCOME.RELEASED,
-]));
-const STATIC_PRE_PROPOSAL_FAILURE_CODES = Object.freeze(new Set([
-  PLACEMENT_ADMISSION_ERROR.BYTES,
-  PLACEMENT_ADMISSION_ERROR.TARGET,
-  PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED,
-  PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED,
-]));
-
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER =
   'Failed to prime coordinator-created operation progress';
@@ -217,20 +208,6 @@ function wrapPlacementTransport(messageRouter) {
   };
 }
 
-function isPlacementAttemptIdentitySettled(answer) {
-  if (!answer || isWriteOutcomeUnknown(answer)) return false;
-  if (STATIC_PRE_PROPOSAL_FAILURE_CODES.has(answer.failureCode)) return true;
-  if (answer.committed !== true) return false;
-  const result = answer[PLACEMENT_RESULT_FIELD];
-  return DEFINITE_PLACEMENT_OUTCOMES.has(result?.outcome);
-}
-
-function isRetainedAttemptRefusedOrMismatched(answer) {
-  if (answer?.failureCode === PLACEMENT_ADMISSION_ERROR.BYTES) return true;
-  const result = answer?.[PLACEMENT_RESULT_FIELD];
-  return result?.outcome === PLACEMENT_OUTCOME.REFUSED;
-}
-
 async function readPartitionVoterRemovalScope(coordinator, partitionId, move) {
   const readiness = coordinator.controlPlaneReadinessService;
   if (!readiness || !move.replicaId) return null;
@@ -269,7 +246,7 @@ function throwRuntimeServicePlacementError(entityId, answer, result) {
 
 function isSingleOperationPlacementAccepted(answer) {
   const result = answer?.[PLACEMENT_RESULT_FIELD];
-  return answer?.committed === true &&
+  return isPlacementAttemptIdentitySettled(answer) &&
     result?.outcome === PLACEMENT_OUTCOME.ADMITTED &&
     Array.isArray(result.operationIds) &&
     result.operationIds.length === 1 &&
@@ -381,21 +358,22 @@ const operationCreationSupportMethods = {
     if (!intentKey || !attempts.has(intentKey)) return null;
     const retained = attempts.get(intentKey);
     if (!retained?.statement) return null;
-    const answer = retained.admittedAnswer || await this.submitPlacementPayload(
+    const rawAnswer = retained.admittedAnswer || await this.submitPlacementPayload(
       {entryId: retained.entryId, body: retained.statement},
       timeoutMs,
     );
-    if (!isPlacementAttemptIdentitySettled(answer)) {
-      return {settled: false, answer: {...answer, entryId: retained.entryId}};
+    const answer = bindPlacementAttemptAnswer(rawAnswer, retained.entryId, true);
+    if (answer[RETAINED_PLACEMENT_ATTEMPT]) {
+      return {settled: false, answer};
     }
-    if (isRetainedAttemptRefusedOrMismatched(answer)) {
+    if (canReplaceSettledPlacementAttempt(answer, retained.statement)) {
       if (attempts.get(intentKey) === retained) attempts.delete(intentKey);
       return {settled: true, retryWithFreshEntry: true};
     }
     return {
       settled: true,
       retryWithFreshEntry: false,
-      answer: {...answer, entryId: retained.entryId},
+      answer,
     };
   },
 
@@ -425,6 +403,7 @@ const operationCreationSupportMethods = {
     timeoutMs = DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS,
     confirmOperation = null,
     requestedMove = null,
+    assertFreshCreationAllowed,
   }) {
     const retainedResolution = await this.resolveRetainedPlacementAttempt(
       intentKey,
@@ -434,6 +413,7 @@ const operationCreationSupportMethods = {
       return this.finishPlacementAdmissionAttempt(intentKey,
         retainedResolution.answer, confirmOperation);
     }
+    assertFreshCreationAllowed?.();
     const explicitId = retainedResolution?.retryWithFreshEntry && !requestedMove ? null : entryId;
     const resolved = this.resolvePlacementAdmissionEntryId(
       intentKey,
@@ -445,8 +425,8 @@ const operationCreationSupportMethods = {
       {entryId: resolved.entryId, body: resolved.statement},
       timeoutMs,
     );
-    return this.finishPlacementAdmissionAttempt(resolved.key,
-      {...answer, entryId: resolved.entryId}, confirmOperation);
+    const bound = bindPlacementAttemptAnswer(answer, resolved.entryId, Boolean(resolved.key));
+    return this.finishPlacementAdmissionAttempt(resolved.key, bound, confirmOperation);
   },
 
   async materializePlacementOperationById(operationId, move, requested, admitted, entryId) {
@@ -550,6 +530,7 @@ const operationCreationSupportMethods = {
       intentKey,
       statement,
       requestedMove,
+      assertFreshCreationAllowed: context.assertFreshCreationAllowed,
       confirmOperation: (operationId, admitted, entryId) =>
         this.materializePlacementOperationById(
           operationId, requestedMove, statement, admitted, entryId,

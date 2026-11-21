@@ -1,3 +1,4 @@
+import {isServeEligibilityAnswerEligible} from '../control-plane/serve-eligibility-owner.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-execution.js';
 import {
@@ -16,7 +17,7 @@ import {shouldRetainDurableSchemaPlanningOperations} from
   './durable-schema-planning-retention.js';
 import {buildSchemaProvisioningChildIntent} from
   './schema-provisioning-child-intent.js';
-import {PLACEMENT_RESULT_FIELD} from
+import {PLACEMENT_RESULT_FIELD, RETAINED_PLACEMENT_ATTEMPT} from
   '../partition/partition-placement-admission-constants.js';
 import {
   buildFoundingAdmissionStatement,
@@ -34,8 +35,9 @@ const DEFAULT_FOUND_SOURCE_NODE_ID = 'node-1';
 const FOUND_ENTRY_PREFIX = 'found';
 const PLACEMENT_FOUND_REFUSED_CODE = 'PLACEMENT_FOUND_REFUSED';
 
-function isFoundingPlacementAccepted(result, foundingIntentId) {
-  if (!result || !Array.isArray(result.operationIds) ||
+function isFoundingPlacementAccepted(answer, result, foundingIntentId) {
+  if (answer?.committed !== true || answer[RETAINED_PLACEMENT_ATTEMPT] ||
+      !result || !Array.isArray(result.operationIds) ||
       result.operationIds.length === 0) {
     return false;
   }
@@ -73,6 +75,7 @@ const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
 const {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
+  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   ReplicaOperationField,
@@ -409,17 +412,24 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
         try {
           await context?.assertProvisioningOwnership?.();
-          if (needsAdmission && discoverTargets &&
-              !this.resolveProvisionTargetNodeDiagnostics(requestedReplicaCount)
-                .selectedNodeIds.includes(targetNodeId)) {
-            continue;
-          }
+          const assertFreshCreationAllowed = () => {
+            throwIfCancellationRequested(cancellationToken);
+            this.assertProvisioningAttemptBudget(timeoutBudget);
+            if (discoverTargets && !isServeEligibilityAnswerEligible(
+              this.controlPlaneReadinessService?.answerServeEligibility(targetNodeId),
+            )) {
+              const error = new Error(`Provisioning target no longer serves: ${targetNodeId}`);
+              error.code = QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE;
+              throw error;
+            }
+          };
           const operation =
             await this.createProvisioningOperationWithAdmissionReentry({
               partitionId,
               targetNodeId,
               childIntent,
               supportsAdmissionPrecheck,
+              assertFreshCreationAllowed,
               timeoutBudget,
               cancellationToken,
               operationCreationAdmission:
@@ -690,7 +700,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       statement,
     });
     const result = answer?.[PLACEMENT_RESULT_FIELD];
-    if (!isFoundingPlacementAccepted(result, foundingIntentId)) {
+    if (!isFoundingPlacementAccepted(answer, result, foundingIntentId)) {
       throwFoundingPlacementError(partitionId, answer, result);
     }
     const operations = await coordinator.materializePlacementAdmittedOperations({

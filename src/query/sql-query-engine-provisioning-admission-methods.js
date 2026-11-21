@@ -494,13 +494,11 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    * @private
    */
   async createProvisioningOperationWithAdmissionReentry(options) {
-    const createWithAdmission = (admission) => {
-      throwIfCancellationRequested(options.cancellationToken);
-      this.assertProvisioningAttemptBudget(options.timeoutBudget);
-      return this.rebalanceCoordinator.createOperation(
+    const createWithAdmission = (admission) =>
+      this.rebalanceCoordinator.createOperation(
         this.buildProvisioningCreateOperationMove(options, admission),
+        {assertFreshCreationAllowed: options.assertFreshCreationAllowed},
       );
-    };
     let admission = options.operationCreationAdmission || null;
     try {
       return await createWithAdmission(admission);
