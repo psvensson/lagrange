@@ -197,4 +197,34 @@ function createPartitionCandidateDeliveryState({
   };
 }
 
-export {createPartitionCandidateDeliveryState};
+/**
+ * Report one delivery attempt to a straggler-hedging observer when the
+ * caller supplied one, so a speculative retry can be forced onto a
+ * different replica than the primary attempt targeted.
+ * @param {Object} executionOptions - Execution options.
+ * @param {string} partitionId - Partition ID.
+ * @param {Object} serviceInfo - Candidate service info.
+ * @param {string} address - Delivery address.
+ * @param {number} candidateCount - Distinct routable candidates seen.
+ * @private
+ */
+function notifyHedgeDeliveryObserver(
+  executionOptions,
+  partitionId,
+  serviceInfo,
+  address,
+  candidateCount,
+) {
+  const observer = executionOptions?.hedgeDeliveryObserver;
+  if (typeof observer !== QUERY_EXECUTOR_LITERAL.STRING_FUNCTION) {
+    return;
+  }
+  observer({
+    partitionId,
+    address,
+    nodeId: serviceInfo?.nodeId,
+    candidateCount,
+  });
+}
+
+export {createPartitionCandidateDeliveryState, notifyHedgeDeliveryObserver};

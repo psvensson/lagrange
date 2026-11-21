@@ -1,3 +1,4 @@
+import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
@@ -316,6 +317,12 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
       const failureDescription = this.isQueryDeliveryPayload(payload) ?
         'Query message delivery failed' :
         'Message delivery failed';
+      // The local router grant can retire before raw ingress settles.
+      // Its signal retires only this direct-only envelope, not the handler.
+      const signal = options.transportDeliveryOptions?.signal;
+      const retire = () => this.pendingMessages.delete(messageId);
+      if (signal?.aborted) retire();
+      signal?.addEventListener(TRANSPORT_EVENT.ABORT, retire, {once: true});
       try {
         const deliveryResult = await this.attemptDirectDelivery(
           messageEnvelope,
@@ -331,7 +338,6 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           throw buildDirectDeliveryError(deliveryResult, failureDescription);
         }
         messageEnvelope.status = MessageStatus.DELIVERED;
-        this.pendingMessages.delete(messageId);
         return {
           messageId,
           status: MessageStatus.DELIVERED,
@@ -353,8 +359,10 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           },
         );
         messageEnvelope.status = MessageStatus.FAILED;
-        this.pendingMessages.delete(messageId);
         throw error;
+      } finally {
+        signal?.removeEventListener(TRANSPORT_EVENT.ABORT, retire);
+        retire();
       }
     }
     /**

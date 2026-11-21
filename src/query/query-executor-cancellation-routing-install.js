@@ -1,3 +1,4 @@
+import {executorShutdownError} from './query-executor-recovery-read-delivery.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QueryExecutorWriteRetryRouting} from './query-executor-write-retry-routing.js';
 import {
@@ -13,9 +14,6 @@ import {
 const {
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
-
-const QUERY_EXECUTOR_SHUTDOWN_ABORT_MESSAGE =
-  'Query execution aborted: SQL query engine is shutting down';
 
 class QueryExecutorCancellationRouting extends QueryExecutorWriteRetryRouting {
   async delay(delayMs) {
@@ -38,6 +36,7 @@ class QueryExecutorCancellationRouting extends QueryExecutorWriteRetryRouting {
    */
   markShuttingDown() {
     this._shuttingDown = true;
+    this.partitionReadShutdownController.abort(executorShutdownError());
   }
 
   /**
@@ -55,9 +54,7 @@ class QueryExecutorCancellationRouting extends QueryExecutorWriteRetryRouting {
    */
   throwIfCancelled(cancellationToken) {
     if (this._shuttingDown === true) {
-      const error = new Error(QUERY_EXECUTOR_SHUTDOWN_ABORT_MESSAGE);
-      error.code = 'QUERY_EXECUTOR_SHUTTING_DOWN';
-      throw error;
+      throw executorShutdownError();
     }
     if (
       !cancellationToken ||
