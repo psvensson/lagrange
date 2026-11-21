@@ -11,6 +11,10 @@ import {
 } from '../../src/bootstrap/shared/control-plane-setup.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {COLUMN} from '../../src/constants/columns.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import {
   CDC_OPERATION,
   SERVICE_STATUS,
@@ -64,12 +68,16 @@ import {
   buildDeliveryEnvelope,
 } from '../../src/transport/transport-semantic-outcome.js';
 import {
+  commitLedgerStatement,
   ledgerRows,
   onLedgerLeader,
 } from '../partition/placement-admission-fixture.js';
 import {
   applyCommitted, clearFixtureSingletons, resetFixtureSingletons,
 } from '../test-helpers/participant-transaction-fixture.js';
+
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
+import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 
 function createLeaderDatabaseReadBoundary(sqlQueryEngine) {
   return {
@@ -824,6 +832,23 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
       executeQuery: async (sql, params = []) =>
         sqlQueryEngine.execute(sql, params),
     };
+    const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+    const planner = new ControlPlaneSystemTableGateway();
+    const committedTimeouts = [];
+    let writeSequence = 0;
+    gateway.submitMutation = async (mutation) => {
+      const {sql, params} = planner.buildSqlMutationPlan(mutation);
+      const entryId = `growth-promote:write:${++writeSequence}`;
+      assert.equal(commitLedgerStatement(leaderService, entryId, sql, params), null);
+      const {changes} = readCommittedStatementOutcome(leaderService, `entry:${entryId}`);
+      assert.ok(Number.isInteger(changes));
+      if (mutation.data?.workflow_step === WORKFLOW_STEP.FAILED) {
+        committedTimeouts.push({operationId: mutation.whereClause.operation_id, changes});
+      }
+      syncCacheFromDb();
+      return {success: true, partitionResult: {affectedRows: changes}};
+    };
+    installCommittedOperationMutationFixture(gateway);
     const coordinator = new RebalanceCoordinator({
       nodeId: 'n2',
       systemTableCache: cache,
@@ -833,7 +858,11 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
         getNodeReadinessSync: () => ({ready: true}),
         getPriorityRecoveryPlanningSnapshotSync: () => null,
       }),
-      cdcIntegrationService: createLeaderDatabaseReadBoundary(sqlQueryEngine),
+      controlPlaneSystemTableGateway: gateway,
+      cdcIntegrationService: {
+        ...createLeaderDatabaseReadBoundary(sqlQueryEngine),
+        ...gateway.cdcIntegrationService,
+      },
       tablePolicyService: {getReplicationFactor: () => 5},
       sqlQueryEngine,
       transactionCoordinator: {
@@ -846,128 +875,133 @@ export async function runGrowthPromoteLeaderRedirectAndTimeoutWitness({
     });
     coordinator.initialize();
 
-    // 1. 3->5 growth operation admitted under old leader 'n1', then 'n2' elected leader while
-    // 'n1' remains alive as a follower returning `not_leader` (pointing to r2 on 'n2'):
-    const opId1 = 'pl-promote-3to5-redirect';
-    const initialHistory = JSON.stringify([
-      {
-        step: WORKFLOW_STEP.PENDING,
-        timestamp: NOW_MS,
-        promoteReplicaIds: [l4, l5],
-      },
-    ]);
-    leaderService.db.prepare(
-      `INSERT INTO replica_operations (
-        operation_id, type, partition_id, entity_type, entity_id,
-        replica_id, source_node_id, target_node_id,
-        source_replica_id, status, workflow_step, created_at, updated_at, steps_history
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      opId1,
-      OperationType.GROWTH_PROMOTE,
-      LEDGER_PARTITION_ID,
-      'partition',
-      LEDGER_PARTITION_ID,
-      l4,
-      'n2',
-      'n1',
-      l5,
-      ReplicaStatus.PENDING,
-      WORKFLOW_STEP.PENDING,
-      NOW_MS,
-      NOW_MS,
-      initialHistory,
-    );
-    syncCacheFromDb();
+    try {
+      // 1. 3->5 growth operation admitted under old leader 'n1', then 'n2' elected leader while
+      // 'n1' remains alive as a follower returning `not_leader` (pointing to r2 on 'n2'):
+      const opId1 = 'pl-promote-3to5-redirect';
+      const initialHistory = JSON.stringify([
+        {
+          step: WORKFLOW_STEP.PENDING,
+          timestamp: NOW_MS,
+          promoteReplicaIds: [l4, l5],
+        },
+      ]);
+      leaderService.db.prepare(
+        `INSERT INTO replica_operations (
+          operation_id, type, partition_id, entity_type, entity_id,
+          replica_id, source_node_id, target_node_id,
+          source_replica_id, status, workflow_step, created_at, updated_at, steps_history
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        opId1,
+        OperationType.GROWTH_PROMOTE,
+        LEDGER_PARTITION_ID,
+        'partition',
+        LEDGER_PARTITION_ID,
+        l4,
+        'n2',
+        'n1',
+        l5,
+        ReplicaStatus.PENDING,
+        WORKFLOW_STEP.PENDING,
+        NOW_MS,
+        NOW_MS,
+        initialHistory,
+      );
+      syncCacheFromDb();
 
-    const op1 = coordinator.repository.rowToOperation(
-      cache.get(TABLES.REPLICA_OPERATIONS, opId1),
-    );
-    // First dispatch goes to old leader 'n1', receives `not_leader` with leaderId=r2,
-    // records the new administration route to 'n2', and defers to SYNCING:
-    const firstAttempt = await coordinator.workflowOwner.executeOperationFromReconcilePath(op1);
-    assert.equal(firstAttempt.status, 'in_progress');
-    assert.equal(dispatchedTargets[0], 'n1/service/replica-handler');
-    assert.equal(op1.administrationRouteNodeId, 'n2', 'the live attempt retains the redirected route');
-    assert.equal(leaderService.db.prepare(
-      'SELECT target_node_id FROM replica_operations WHERE operation_id = ?',
-    ).get(opId1).target_node_id, 'n1', 'a routing hint does not change the durable growth target');
-    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId1), true);
-    assert.equal(op1.operationId, opId1);
-    assert.deepEqual(op1[ReplicaOperationField.PROMOTE_REPLICA_IDS], [l4, l5]);
+      const op1 = coordinator.repository.rowToOperation(
+        cache.get(TABLES.REPLICA_OPERATIONS, opId1),
+      );
+      // First dispatch goes to old leader 'n1', receives `not_leader` with leaderId=r2,
+      // records the new administration route to 'n2', and defers to SYNCING:
+      const firstAttempt = await coordinator.workflowOwner.executeOperationFromReconcilePath(op1);
+      assert.equal(firstAttempt.status, 'in_progress');
+      assert.equal(dispatchedTargets[0], 'n1/service/replica-handler');
+      assert.equal(op1.administrationRouteNodeId, 'n2', 'the live attempt retains the redirected route');
+      assert.equal(leaderService.db.prepare(
+        'SELECT target_node_id FROM replica_operations WHERE operation_id = ?',
+      ).get(opId1).target_node_id, 'n1', 'a routing hint does not change the durable growth target');
+      assert.equal(hasIncompletePlacementOperation(leaderService.db, opId1), true);
+      assert.equal(op1.operationId, opId1);
+      assert.deepEqual(op1[ReplicaOperationField.PROMOTE_REPLICA_IDS], [l4, l5]);
 
-    // Second reconcile dispatches to new leader 'n2' and completes:
-    const secondAttempt = await coordinator.workflowOwner.reconcileOperationLifecycle(
-      op1,
-      {cause: 'observed_progress'},
-    );
-    assert.equal(secondAttempt, 'completed');
-    assert.equal(dispatchedTargets[1], 'n2/service/replica-handler');
-    assert.equal(op1.workflowStep, WORKFLOW_STEP.ACTIVE);
-    assert.equal(op1.status, ReplicaStatus.ACTIVE);
-    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId1), false,
-      'successful redirected promotion clears growth occupancy');
+      // Second reconcile dispatches to new leader 'n2' and completes:
+      const secondAttempt = await coordinator.workflowOwner.reconcileOperationLifecycle(
+        op1,
+        {cause: 'observed_progress'},
+      );
+      assert.equal(secondAttempt, 'completed');
+      assert.equal(dispatchedTargets[1], 'n2/service/replica-handler');
+      assert.equal(op1.workflowStep, WORKFLOW_STEP.ACTIVE);
+      assert.equal(op1.status, ReplicaStatus.ACTIVE);
+      assert.equal(hasIncompletePlacementOperation(leaderService.db, opId1), false,
+        'successful redirected promotion clears growth occupancy');
 
-    // 2. Persistent refusal case: once in SYNCING, repeated retryable refusals do NOT count
-    // as workflow progress, so reconcileTimeoutOperation enforces the step timeout budget
-    // and fails the operation cleanly (releasing its placement hold):
-    forcePersistentNotLeader = true;
-    const opId2 = 'pl-promote-3to5-timeout';
-    const staleStartMs = NOW_MS - 120_000;
-    const staleHistory = JSON.stringify([
-      {
-        step: WORKFLOW_STEP.SYNCING,
-        timestamp: staleStartMs,
-        promoteReplicaIds: [l4, l5],
-      },
-    ]);
-    leaderService.db.prepare(
-      `INSERT INTO replica_operations (
-        operation_id, type, partition_id, entity_type, entity_id,
-        replica_id, source_node_id, target_node_id,
-        source_replica_id, status, workflow_step, created_at, updated_at, steps_history
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      opId2,
-      OperationType.GROWTH_PROMOTE,
-      LEDGER_PARTITION_ID,
-      'partition',
-      LEDGER_PARTITION_ID,
-      l4,
-      'n2',
-      'n1',
-      l5,
-      ReplicaStatus.SYNCING,
-      WORKFLOW_STEP.SYNCING,
-      staleStartMs,
-      staleStartMs,
-      staleHistory,
-    );
-    syncCacheFromDb();
+      // 2. Persistent refusal case: once in SYNCING, repeated retryable refusals do NOT count
+      // as workflow progress, so reconcileTimeoutOperation enforces the step timeout budget
+      // and fails the operation cleanly (releasing its placement hold):
+      forcePersistentNotLeader = true;
+      const opId2 = 'pl-promote-3to5-timeout';
+      const staleStartMs = NOW_MS - 120_000;
+      const staleHistory = JSON.stringify([
+        {
+          step: WORKFLOW_STEP.SYNCING,
+          timestamp: staleStartMs,
+          promoteReplicaIds: [l4, l5],
+        },
+      ]);
+      leaderService.db.prepare(
+        `INSERT INTO replica_operations (
+          operation_id, type, partition_id, entity_type, entity_id,
+          replica_id, source_node_id, target_node_id,
+          source_replica_id, status, workflow_step, created_at, updated_at, steps_history
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        opId2,
+        OperationType.GROWTH_PROMOTE,
+        LEDGER_PARTITION_ID,
+        'partition',
+        LEDGER_PARTITION_ID,
+        l4,
+        'n2',
+        'n1',
+        l5,
+        ReplicaStatus.SYNCING,
+        WORKFLOW_STEP.SYNCING,
+        staleStartMs,
+        staleStartMs,
+        staleHistory,
+      );
+      syncCacheFromDb();
 
-    const op2 = coordinator.repository.rowToOperation(
-      cache.get(TABLES.REPLICA_OPERATIONS, opId2),
-    );
-    const inPlaceProgress = await coordinator.workflowOwner.reconcileOperationLifecycle(
-      op2,
-      {cause: 'timeout', now: NOW_MS},
-    );
-    assert.equal(
-      inPlaceProgress,
-      'waiting',
-      'in-place SYNCING retry deferral must report waiting (not progress) to timeout reconciliation',
-    );
-    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId2), true,
-      'a refusal keeps the timed operation in the placement census while the step is live');
-    await coordinator.workflowOwner.reconcileTimeoutOperation(op2, NOW_MS);
-    syncCacheFromDb();
-    const timedOutRow = cache.get(TABLES.REPLICA_OPERATIONS, opId2);
-    assert.equal(timedOutRow.workflow_step, WORKFLOW_STEP.FAILED);
-    assert.equal(timedOutRow.status, ReplicaStatus.FAILED);
-    assert.equal(hasIncompletePlacementOperation(leaderService.db, opId2), false,
-      'durable timeout releases the same operation’s growth occupancy');
-
-    await coordinator.shutdown();
+      const op2 = coordinator.repository.rowToOperation(
+        cache.get(TABLES.REPLICA_OPERATIONS, opId2),
+      );
+      const inPlaceProgress = await coordinator.workflowOwner.reconcileOperationLifecycle(
+        op2,
+        {cause: 'timeout', now: NOW_MS},
+      );
+      assert.equal(
+        inPlaceProgress,
+        'waiting',
+        'in-place SYNCING retry deferral must report waiting (not progress) to timeout reconciliation',
+      );
+      assert.equal(hasIncompletePlacementOperation(leaderService.db, opId2), true,
+        'a refusal keeps the timed operation in the placement census while the step is live');
+      await coordinator.workflowOwner.reconcileTimeoutOperation(op2, NOW_MS);
+      syncCacheFromDb();
+      const timedOutRow = cache.get(TABLES.REPLICA_OPERATIONS, opId2);
+      assert.equal(timedOutRow.workflow_step, WORKFLOW_STEP.FAILED);
+      assert.equal(timedOutRow.status, ReplicaStatus.FAILED);
+      assert.match(timedOutRow.error_message, /Timeout in SYNCING step/u);
+      assert.deepEqual(committedTimeouts, [{operationId: opId2, changes: 1}],
+        'the guarded SYNCING timeout commits exactly once in the native ledger');
+      assert.equal(hasIncompletePlacementOperation(leaderService.db, opId2), false,
+        'durable timeout releases the same operation’s growth occupancy');
+    } finally {
+      await coordinator.shutdown();
+    }
   }, {systemTableCache: cache});
 }
 

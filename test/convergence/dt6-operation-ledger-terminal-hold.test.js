@@ -301,22 +301,23 @@ t.test(
       );
       setOperationUpdatedAt(selfMove.operationId, START_MS);
 
-      // Refuse the guarded terminal UPDATE (zero rows changed, row left
-      // untouched) while every read keeps serving the live non-terminal
-      // row — the resolveZeroChangeOperationUpdate REFUSED shape.
+      // Force zero actual SQLite changes at the guarded mutation ingress,
+      // while all reads continue to return the live operation.
       const gateway = coordinator.repository.controlPlaneSystemTableGateway;
-      const originalExecuteQuery = gateway.executeQuery.bind(gateway);
+      const submit = gateway.submitMutation.bind(gateway);
+      const attempts = [];
       let refuseTerminalWrites = true;
-      gateway.executeQuery = async (sql, params, queryOptions) => {
-        if (
-          refuseTerminalWrites &&
-          typeof sql === 'string' &&
-          sql.includes('UPDATE replica_operations') &&
-          sql.includes('completed_at IS NULL')
-        ) {
-          return {success: true, changes: 0};
+      gateway.submitMutation = async (mutation, options) => {
+        if (mutation.whereClause?.operation_id !== selfMove.operationId ||
+            mutation.data?.workflow_step !== WORKFLOW_STEP.FAILED) {
+          return submit(mutation, options);
         }
-        return originalExecuteQuery(sql, params, queryOptions);
+        const whereClause = mutation.whereClause;
+        const result = await submit(refuseTerminalWrites ? {
+          ...mutation, whereClause: {...whereClause, completed_at: START_MS},
+        } : mutation, options);
+        attempts.push({whereClause, changes: result.partitionResult?.affectedRows});
+        return result;
       };
 
       // The reaper decides to terminate past the step timeout — and the
@@ -330,6 +331,8 @@ t.test(
       );
       await owner.reconcileTimeoutOperation(staleOperation, timeSource.now());
 
+      t.same(attempts.map(({changes}) => changes), [0],
+        'the reaper reaches the actual guarded write and SQLite refuses it');
       const rowAfterRefusal = trackedOperations.get(selfMove.operationId);
       t.not(
         rowAfterRefusal.workflow_step,
@@ -375,6 +378,10 @@ t.test(
       );
       await repairTimerHandle.callback();
 
+      t.same(attempts.map(({changes}) => changes), [0, 1],
+        'the repair commits one change through the same mutation ingress');
+      t.same(attempts[0].whereClause, attempts[1].whereClause,
+        'repair submits the original exact terminal preimage');
       const rowAfterRepair = trackedOperations.get(selfMove.operationId);
       t.equal(
         rowAfterRepair.workflow_step,
