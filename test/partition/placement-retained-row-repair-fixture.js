@@ -19,7 +19,7 @@ const DEFAULT_PARTITION_ID = 'retained-repair-p1';
 const planner = new ControlPlaneSystemTableGateway();
 
 async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
-  nodeId = NODE.A, replicaId, serviceNodeId, partitionRows} = {}) {
+  nodeId = NODE.A, replicaId, serviceNodeId, partitionRows, releaseAdmission} = {}) {
   const temporary = temporaryDbPath();
   try {
     await onLedgerLeader(async (leader, proposed) => {
@@ -33,7 +33,7 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
       const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
       gateway.submitMutation = async (mutation) => {
         const {sql, params} = planner.buildSqlMutationPlan(mutation);
-        const entryId = `retained:sql:${++mutationId}`;
+        const entryId = `retained:${leader.replicaId}:sql:${++mutationId}`;
         assert.equal(commitLedgerStatement(leader, entryId, sql, params), null);
         const result = readCommittedStatementOutcome(leader, `entry:${entryId}`);
         return {success: true, partitionResult: {affectedRows: result.changes}};
@@ -57,7 +57,7 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
         leader.setRebalancerLeadershipSink(null);
         await coordinator.shutdown();
       }
-    }, {dbPath: temporary.dbPath, replicaId, nodeId: serviceNodeId});
+    }, {dbPath: temporary.dbPath, replicaId, nodeId: serviceNodeId, releaseAdmission});
   } finally {
     fs.rmSync(temporary.directory, {recursive: true, force: true});
   }
