@@ -295,7 +295,21 @@ for (const stopReason of ['deadline', 'cancel']) {
     }));
 }
 
-for (const caseName of ['same', 'unproved', 'mixed', 'incomplete']) {
+function movePlacementProofToLaterStep(leader, rows, t) {
+  for (const row of rows) {
+    const steps = JSON.parse(row.steps_history);
+    const key = OPERATION_METADATA_KEY.PLACEMENT_ADMISSION;
+    steps.push({step: WORKFLOW_STEP.CREATING, [key]: steps[0][key]});
+    delete steps[0][key];
+    t.equal(commitLedgerStatement(leader, `move-proof-${row.operation_id}`,
+      'UPDATE replica_operations SET steps_history = ? WHERE operation_id = ?',
+      [JSON.stringify(steps), row.operation_id]), null);
+  }
+}
+
+for (const caseName of [
+  'same', 'unproved', 'mixed', 'incomplete', 'late-origin', 'late-materialization',
+]) {
   test(`ALREADY_FOUNDED requires a complete exact founder cohort (${caseName})`, (t) =>
     onLedgerLeader(async (leader, proposed) => {
       const stop = attachAutoCommitLoop(leader, proposed);
@@ -323,6 +337,16 @@ for (const caseName of ['same', 'unproved', 'mixed', 'incomplete']) {
         }
         if (caseName === 'incomplete') {
           t.equal(stepLedgerRow(leader, rows[2].operation_id, WORKFLOW_STEP.FAILED), null);
+        }
+        if (caseName === 'late-origin') {
+          movePlacementProofToLaterStep(leader, rows, t);
+        } else if (caseName === 'late-materialization') {
+          const coordinator = engine.rebalanceCoordinator;
+          const read = coordinator.materializePlacementAdmittedOperations.bind(coordinator);
+          coordinator.materializePlacementAdmittedOperations = (options) => {
+            movePlacementProofToLaterStep(leader, rows, t);
+            return read(options);
+          };
         }
         if (caseName === 'same') {
           engine.rebalanceCoordinator = createCoordinatorWithLedger(leader);

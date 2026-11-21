@@ -1,7 +1,6 @@
 import {provePlacementFounders} from '../partition/partition-placement-founder-proof.js';
-import {getOperationMetadataObject, readOriginalCreateBootstrapMembership} from
+import {readOriginalCreateBootstrapMembership, readOriginalCreatePlacementAdmission} from
   '../rebalancer/replica-status.js';
-import {OPERATION_METADATA_KEY} from '../rebalancer/replica-operation-progress.js';
 import {isServeEligibilityAnswerEligible} from '../control-plane/serve-eligibility-owner.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-execution.js';
@@ -754,8 +753,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     const cohort = provePlacementFounders(operations.map((operation) => ({
       ...operation,
       bootstrapMembership: readOriginalCreateBootstrapMembership(operation.stepsHistory),
-      admission: getOperationMetadataObject(operation.stepsHistory,
-        OPERATION_METADATA_KEY.PLACEMENT_ADMISSION),
+      admission: readOriginalCreatePlacementAdmission(operation.stepsHistory),
     })), {partitionId, foundingIntentId});
     if (!cohort || cohort.entryId !== originEntryId ||
         operations.some(({operationId}, ordinal) => operationId !== result.operationIds[ordinal])) {
