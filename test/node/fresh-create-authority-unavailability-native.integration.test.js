@@ -1,17 +1,10 @@
 import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
-// Production-bound witness, quest fresh-create-failure-after-committed-admission
-// (receipt superseded under R09 on 2026-11-02: an INDUCED authority-read
-// unavailability replaces the live lottery). A real ReplicaHandler runs the real
-// CREATE path of a fresh sql_transactions-p1 founder: durable create admission,
-// a real PartitionService on the real raft-rs operation port, the voter-ready
-// activation, and releaseFreshCreate through the real release client, the real
-// loopback route and the real participant cutover owner. The one injected fault
-// is at the owner boundary: the control-plane gateway's authoritative read of
-// the MATERIALIZED replica_operations row answers unavailable (the
-// readiness-routing refusal of run b26d2c090), N times then the row, or forever.
-// Nothing else is faked: no release answer, membership, origin or token.
+// Item 03 proves committed-admission release through the real loopback route
+// and native partition. Faults affect only the answering leader's authoritative
+// operation read. The historical Quest's sealed proof remains in its record.
 
 import assert from 'node:assert/strict';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,8 +13,19 @@ import {test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {
+  PARTICIPANT_CUTOVER_OUTCOME as RELEASE_OUTCOME,
+  PARTICIPANT_RELEASE_ACTION,
+  PARTICIPANT_RELEASE_MISSING_FACT,
+  PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_TRIGGER,
+} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {readPartitionWriteOrigin} from
+  '../../src/partition/partition-participant-transaction-store.js';
+import {deliveryAnswerOf} from '../../src/transport/transport-semantic-outcome.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
@@ -43,14 +47,19 @@ import {admitCreateTerminalFailure, decideFailedCreateTargetCleanup} from
   '../../src/rebalancer/operation-workflow-replace-terminal-admission.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
-import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
+import {createLoopbackTransport, waitForCondition} from
+  '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
-import {genesisStampFor, withBootstrapStamp} from './replica-handler-bootstrap-stamps.js';
+import {committedStampFor, genesisStampFor, withBootstrapStamp} from
+  './replica-handler-bootstrap-stamps.js';
 
 const NODE_ID = 'fresh-authority-native-node';
 const PARTITION_ID = 'sql_transactions-p1';
 const SYNC_TIMEOUT_MS = 4000;
 const TEST_TIMEOUT_MS = 60000;
+const OBSERVATION_GRACE_MS = 2000;
+const OBSERVATION_TIMEOUT_MS = SYNC_TIMEOUT_MS + OBSERVATION_GRACE_MS;
+const NOT_GENESIS_REASON = 'create_operation_not_genesis_founding';
 const ROUTING_REFUSAL = Object.freeze({success: false, outcome: 'owner_not_ready',
   error: 'all_services_filtered_by_readiness'});
 
@@ -108,15 +117,13 @@ function operationRowsFor(operationRow, sql, params) {
   return row.replica_id === params[0] && row.target_node_id === params[1] ? [row] : [];
 }
 
-// The control-plane gateway as the create path consumes it, with the one
-// fault: once the replica's runtime has opened (armed by the partition
-// factory), the authority read of the operation row answers unavailable.
-function faultingGateway(cache, operationRow, refusals) {
+// Scope the gateway fault to the release route. Worker/recovery validation
+// shares the operation lookup SQL and must continue to read the real row.
+function faultingGateway(cache, operationRow, releaseRead, fault) {
   const lifecycle = createLifecycleControlPlaneGatewayForCache(cache);
   const matches = (row, where) => Object.entries(where).every(
     ([field, value]) => row?.[field] === value);
-  const fault = {armed: false, remaining: refusals, refused: 0};
-  return {fault, lifecycle, gateway: {
+  return {lifecycle, gateway: {
     async readAuthoritativeRows(tableName, sql, params) {
       if (tableName === SYSTEM_TABLE_NAME.NODES) {
         return {success: true, rows: [{node_id: NODE_ID, boot_incarnation: 101}]};
@@ -124,10 +131,20 @@ function faultingGateway(cache, operationRow, refusals) {
       if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
         return lifecycle.readAuthoritativeRows(tableName, sql, params);
       }
-      if (sql.includes('WHERE operation_id = ?') && fault.armed && fault.remaining > 0) {
-        fault.remaining -= 1;
-        fault.refused += 1;
-        return ROUTING_REFUSAL;
+      const release = releaseRead.getStore();
+      if (release && sql.includes('WHERE operation_id = ?') &&
+          params[0] === release.request.createAdmissionIdentity.operationId) {
+        release.row = {...operationRow};
+        if (fault.hold) {
+          const held = fault.hold;
+          fault.hold = null;
+          fault.held = release;
+          await held.promise;
+        } else if (fault.remaining > 0) {
+          fault.remaining -= 1;
+          fault.refused += 1;
+          return ROUTING_REFUSAL;
+        }
       }
       return {success: true, rows: operationRowsFor(operationRow, sql, params)};
     },
@@ -143,15 +160,46 @@ function faultingGateway(cache, operationRow, refusals) {
   }};
 }
 
-async function runCreate(t, {label, refusals}) {
+function observeReleaseRoute(releaseRead, transport, serviceOf) {
+  const deliveries = [];
+  const deliver = transport.deliver.bind(transport);
+  transport.deliver = async (address, request, options) => {
+    if (request?.action !== PARTICIPANT_RELEASE_ACTION.RELEASE ||
+        request.trigger !== PARTICIPANT_RELEASE_TRIGGER.FRESH_CREATE) {
+      return deliver(address, request, options);
+    }
+    const release = {request, sentAtMs: Date.now(),
+      origin: readPartitionWriteOrigin(serviceOf().db)};
+    deliveries.push(release);
+    return releaseRead.run(release, async () => {
+      const delivery = await deliver(address, request, options);
+      release.answer = deliveryAnswerOf(delivery)?.[PARTICIPANT_RELEASE_RESULT_FIELD];
+      release.answeredAtMs = Date.now();
+      return delivery;
+    });
+  };
+  return deliveries;
+}
+
+async function runCreate(t, {label, refusals = 0, holdRead = false, notGenesis = false}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), `fresh-authority-${label}-`));
   const operationId = `op-fresh-authority-${label}`;
   const replicaId = `${PARTITION_ID}-r-${label}`;
   const cache = seedCache(operationId, replicaId);
   const operationRow = structuredClone(cache.get(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId));
-  const {gateway, fault, lifecycle} = faultingGateway(cache, operationRow, refusals);
+  if (notGenesis) {
+    operationRow.steps_history = JSON.stringify([{
+      [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]: committedStampFor([replicaId]),
+    }]);
+  }
+  const held = holdRead ? Promise.withResolvers() : null;
+  const fault = {hold: held, held: null, remaining: refusals, refused: 0};
+  const releaseRead = new AsyncLocalStorage();
+  const {gateway, lifecycle} = faultingGateway(cache, operationRow, releaseRead, fault);
   const transport = createLoopbackTransport();
+  const opened = [];
+  const releases = observeReleaseRoute(releaseRead, transport, () => opened[0]);
   const handler = new ReplicaHandler({
     nodeId: NODE_ID, ownerIncarnation: 101,
     cdcIntegrationService: {}, controlPlaneSystemTableGateway: gateway,
@@ -165,18 +213,27 @@ async function runCreate(t, {label, refusals}) {
       // The lone founder of this fixture group leads (as a founded group's
       // first election would); the subject is the release, not the election.
       await service.raft.campaign();
-      fault.armed = true;
+      opened.push(service);
       return service;
     },
   });
   handler.registerWithRouter(transport);
+  const created = [];
+  const failed = [];
+  const onCreated = (event) => created.push(event);
+  const onFailed = (event) => failed.push(event);
+  handler.on('replicaCreated', onCreated);
+  handler.on('replicaCreationFailed', onFailed);
   t.after(async () => {
-    await handler.shutdown().catch(() => {});
-    fs.rmSync(directory, {recursive: true, force: true});
-  });
-  const settled = new Promise((resolve) => {
-    handler.once('replicaCreated', () => resolve({created: true}));
-    handler.once('replicaCreationFailed', (event) => resolve({created: false, event}));
+    held?.resolve();
+    handler.off('replicaCreated', onCreated);
+    handler.off('replicaCreationFailed', onFailed);
+    try {
+      await handler.shutdown();
+    } finally {
+      releaseRead.disable();
+      fs.rmSync(directory, {recursive: true, force: true});
+    }
   });
   handler.initialize();
   await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
@@ -200,11 +257,43 @@ async function runCreate(t, {label, refusals}) {
   }, genesisStampFor([replicaId], {[replicaId]: NODE_ID})));
   assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
     `setup: the create was admitted (${JSON.stringify(response)})`);
-  // The release client's waits are unref'd timers; hold the loop open.
-  const keepAlive = setInterval(() => {}, 250);
-  const outcome = await settled.finally(() => clearInterval(keepAlive));
-  return {outcome, elapsedMs: Date.now() - startedAt, fault, handler, operationId,
-    replicaId, operationRow, store: lifecycle.store};
+  const tasks = [...handler.operationTasks];
+  assert.equal(tasks.length, 1, 'CREATE registered its detached work');
+  const deadlineAtMs = handler.inProgressOperations.get(operationId).startedAt + SYNC_TIMEOUT_MS;
+  const original = {deadlineAtMs, settledAtMs: null};
+  void Promise.all(tasks).then(() => {
+    original.settledAtMs = Date.now();
+  }, (error) => {
+    original.error = error;
+  });
+  return {created, failed, startedAt, fault, handler, operationId, replicaId, operationRow,
+    admissionToken, opened, releases, original, restoreAuthority: () => held?.resolve(),
+    store: lifecycle.store};
+}
+
+async function observe(predicate, description, timeoutMs = OBSERVATION_TIMEOUT_MS) {
+  assert.ok(await waitForCondition(predicate, timeoutMs), description);
+}
+
+function assertRetainedIdentity(run, row) {
+  const service = run.opened[0];
+  assert.equal(run.opened.length, 1, 'one physical service was constructed');
+  assert.equal(run.handler.localServices.get(run.replicaId), service);
+  assert.equal(service.isShutdown, false, 'the admitted runtime stays open');
+  assert.equal(service.createAdmissionOperationId, run.operationId);
+  assert.equal(service.createAdmissionToken, run.admissionToken);
+  assert.equal(run.operationRow.create_admission_token, run.admissionToken);
+  assert.equal(row.create_attempt_token, buildReplicaCreateAttemptToken(run.admissionToken, 1));
+  assert.equal(service.createAttemptToken, row.create_attempt_token);
+  assert.equal(run.operationRow.create_admission_attempt_token, row.create_attempt_token);
+  assert.equal(row.created_at, run.operationRow.create_admission_replica_created_at);
+  assert.equal(row.cleanup_token, null);
+  assert.equal(run.failed.length, 0, 'unavailable authority does not publish failure');
+  assert.ok(run.store.mutations.every((mutation) =>
+    mutation.tableName !== TABLES.SERVICES ||
+    (mutation.operation !== 'delete' &&
+      (mutation.row ?? mutation.data)?.status !== ReplicaStatus.FAILED)),
+  'unavailable authority neither fails nor removes the service');
 }
 
 test('an authority read unavailable N times delays the fresh create, which ' +
@@ -212,26 +301,91 @@ test('an authority read unavailable N times delays the fresh create, which ' +
 {timeout: TEST_TIMEOUT_MS}, async (t) => {
   environment(t);
   const run = await runCreate(t, {label: 'recovering', refusals: 3});
+  await observe(() => run.created.length || run.failed.length, 'finite CREATE settled');
   assert.equal(run.fault.refused, 3, 'the authority refused the release read 3 times');
-  assert.equal(run.outcome.created, true,
-    `the create completed (${run.outcome.event?.error ?? ''})`);
-  assert.ok(run.elapsedMs < SYNC_TIMEOUT_MS + 1000,
-    `within the existing create deadline (${run.elapsedMs} ms)`);
+  const refusals = run.releases.filter(({answer}) =>
+    answer?.outcome === RELEASE_OUTCOME.UNAVAILABLE &&
+    answer.missingFact === PARTICIPANT_RELEASE_MISSING_FACT.CREATE_ADMISSION_AUTHORITY);
+  assert.equal(refusals.length, 3, 'the real route returned typed authority deferral');
+  assert.equal(run.failed.length, 0, run.failed[0]?.error);
+  assert.equal(run.created[0]?.operationId, run.operationId);
+  const released = run.releases.find(({answer}) => answer?.outcome === RELEASE_OUTCOME.CUT_OVER);
+  assert.ok(released, 'the real release route completed cutover');
+  assert.equal(released.request.deadlineAtMs, run.original.deadlineAtMs);
+  assert.ok(released.answeredAtMs <= run.original.deadlineAtMs);
+  const elapsedMs = Date.now() - run.startedAt;
+  assert.ok(elapsedMs < SYNC_TIMEOUT_MS + 1000,
+    `within the existing create deadline (${elapsedMs} ms)`);
   const row = run.store.durableRow(TABLES.SERVICES, run.replicaId);
   assert.equal(row?.status, ReplicaStatus.ACTIVE, 'the replica is ACTIVE');
 });
 
-test('an authority read unavailable forever fails the fresh create at the ' +
-  'existing deadline with a cleanup claim, and the claimed REMOVE completes',
+test('a held release read expires the original CREATE wait and recovery activates ' +
+  'the exact retained service after authority returns',
 {timeout: TEST_TIMEOUT_MS}, async (t) => {
   environment(t);
-  const run = await runCreate(t, {label: 'permanent', refusals: Infinity});
-  assert.ok(run.fault.refused >= 2, 'the release re-read the refused authority');
-  assert.equal(run.outcome.created, false, 'the create failed');
-  assert.ok(run.elapsedMs >= SYNC_TIMEOUT_MS - 500 && run.elapsedMs < SYNC_TIMEOUT_MS + 2000,
-    `it failed at the existing create deadline (${run.elapsedMs} ms)`);
-  assert.match(String(run.outcome.event?.error),
-    /create_admission_authority/u, 'the failure names the typed missing fact');
+  const run = await runCreate(t, {label: 'held', holdRead: true});
+  await observe(() => run.fault.held, 'the registered release reached its authority read');
+  const {request, row: heldOperation, origin} = run.fault.held;
+  assert.equal(request.deadlineAtMs, run.original.deadlineAtMs);
+  assert.equal(origin, null, 'the founder has no write origin when release starts');
+  assert.equal(heldOperation.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
+  await observe(() => run.original.settledAtMs !== null || run.original.error,
+    'original detached CREATE returned with its read still held');
+  assert.ifError(run.original.error);
+  assert.ok(run.original.settledAtMs >= request.deadlineAtMs &&
+    run.original.settledAtMs < request.deadlineAtMs + OBSERVATION_GRACE_MS,
+  `original work settled at ${run.original.settledAtMs} for deadline ${request.deadlineAtMs}`);
+  assert.equal(run.fault.held.answer, undefined, 'original release has no reply yet');
+  assert.equal(run.created.length, 0);
+  const syncing = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.equal(syncing?.status, ReplicaStatus.SYNCING);
+  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
+  assertRetainedIdentity(run, syncing);
+
+  run.restoreAuthority();
+  await observe(() => run.created.length || run.failed.length, 'normal admission recovery settled');
+  assert.equal(run.created.length, 1);
+  assert.equal(run.created[0].operationId, run.operationId);
+  assert.equal(run.created[0].replicaId, run.replicaId);
+  const released = run.releases.find(({answer}) => answer?.outcome === RELEASE_OUTCOME.CUT_OVER);
+  assert.ok(released, 'the real release owner completed cutover');
+  assert.ok(released.sentAtMs >= request.deadlineAtMs &&
+    released.request.deadlineAtMs > request.deadlineAtMs, 'a separate recovery turn released');
+  assert.deepEqual(released.request.createAdmissionIdentity, request.createAdmissionIdentity);
+  assert.equal(run.fault.held.answer?.outcome, RELEASE_OUTCOME.UNAVAILABLE);
+  assert.equal(run.fault.held.answer.missingFact,
+    PARTICIPANT_RELEASE_MISSING_FACT.RELEASE_DEADLINE);
+  assert.notEqual(readPartitionWriteOrigin(run.opened[0].db), null,
+    'the native origin was committed');
+  const active = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.equal(active?.status, ReplicaStatus.ACTIVE);
+  assert.equal(active.created_at, syncing.created_at);
+  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
+  assertRetainedIdentity(run, active);
+});
+
+test('readable no-origin founding contradiction fails CREATE with a cleanup ' +
+  'claim and the real guarded REMOVE completes',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const run = await runCreate(t, {label: 'not-genesis', notGenesis: true});
+  await observe(() => run.created.length || run.failed.length, 'contradictory CREATE settled');
+  assert.equal(run.created.length, 0);
+  assert.equal(run.failed.length, 1);
+  assert.equal(run.failed[0].operationId, run.operationId);
+  const refused = run.releases.find(({answer}) =>
+    answer?.outcome === RELEASE_OUTCOME.OPERATOR_REQUIRED);
+  assert.ok(refused, 'the real release owner required operator authority');
+  assert.equal(refused.answer.reason, NOT_GENESIS_REASON);
+  assert.equal(refused.answer.missingFact,
+    PARTICIPANT_RELEASE_MISSING_FACT.FRESH_STORAGE_OR_OPERATOR_AUTHORITY);
+  assert.equal(refused.origin, null);
+  assert.equal(refused.row.type, OperationType.ADD);
+  assert.equal(refused.row.completed_at, null);
+  assert.equal(refused.row.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
+  assert.equal(refused.row.create_admission_token, run.admissionToken);
+  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.FAILED);
   const row = run.store.durableRow(TABLES.SERVICES, run.replicaId);
   assert.equal(row?.status, ReplicaStatus.FAILED, 'the replica is FAILED');
   assert.equal(row?.cleanup_token, buildFailedCreateCleanupToken(run.operationId),
@@ -246,7 +400,8 @@ test('an authority read unavailable forever fails the fresh create at the ' +
   const operation = {operationId: run.operationId, type: OperationType.ADD,
     entityType: 'partition', partitionId: PARTITION_ID, replicaId: run.replicaId,
     targetNodeId: NODE_ID, workflowStep: 'SYNCING',
-    createAdmissionAttemptToken: row.create_attempt_token};
+    createAdmissionAttemptToken: row.create_attempt_token,
+    createAdmissionReplicaCreatedAt: run.operationRow.create_admission_replica_created_at};
   const admission = await admitCreateTerminalFailure(owner, operation);
   assert.equal(admission.admitted, true, 'the operation owner admits the FAILED');
   const decision = await decideFailedCreateTargetCleanup(owner, {...operation,
@@ -256,7 +411,8 @@ test('an authority read unavailable forever fails the fresh create at the ' +
     'the cleanup decision is ELIGIBLE with the recorded lifecycle precondition');
   const request = {operationId: `cleanup-${run.operationId}`,
     partitionId: PARTITION_ID, replicaId: run.replicaId,
-    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: row};
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      decision.lifecyclePrecondition};
   const accepted = await run.handler.handleRemoveReplica(request);
   assert.equal(accepted.status, ReplicaOperationResponseStatus.INITIATED,
     `the claimed REMOVE is accepted (${JSON.stringify(accepted)})`);

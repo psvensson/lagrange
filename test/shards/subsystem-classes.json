@@ -28,7 +28,7 @@
   "censusSize": 2708,
   "digest": "fnv1a32-b46ecbf6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-16eada00",
+  "observationDigest": "fnv1a32-13ddf670",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11502,6 +11502,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11511,6 +11512,8 @@
         "src/rebalancer/operation-workflow-replace-terminal-admission.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/partition/partition-service-test-support.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
