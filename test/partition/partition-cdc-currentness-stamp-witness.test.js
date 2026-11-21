@@ -47,12 +47,15 @@ import {LATENCY_GROUP_STATE, LATENCY_PROPAGATION_MODE, LATENCY_TOPOLOGY_CONFIG_K
 import {CDC_GROUP_PROPAGATION_STATE, CDC_MESSAGE_GROUP_REPLICA_SUFFIX} from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
+import {propagationPlanAtStamp} from '../../src/topology/cdc-group-propagation-durable-plan.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
+import {LatencyTopologySetup} from '../../src/bootstrap/shared/latency-topology-setup.js';
 import {createCdcObligationLane} from '../../src/partition/partition-cdc-obligation-lane.js';
 import {PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {FAST_FOREGROUND_RETRY, createDurableSourceMessageGroupService,
+import {FAST_FOREGROUND_RETRY, beginDurableCdcInvocation, createDurableCdcEvent,
+  createDurablePropagationRequest, createDurableSourceMessageGroupService,
   createMessageGroupServiceRow, deliveredEventsOf, setupConfig, teardownConfig} from
   '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll, startLeader} from
@@ -221,13 +224,14 @@ function buildSubscriber(f) {
   });
 }
 
-function seedTopologyRows(f, targets) {
+function seedTopologyRows(f, targets, serviceFields = {}) {
   writeRow(f, TABLES.NODES, {[COLUMN.NODE_ID]: SOURCE_NODE,
     [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP}, CDC_OPERATION.INSERT);
   writeRow(f, TABLES.NODES, {[COLUMN.NODE_ID]: PEER, [COLUMN.BOOT_INCARNATION]: 1},
     CDC_OPERATION.INSERT);
   for (const groupId of targets) {
-    writeRow(f, TABLES.SERVICES, targetServiceRow(groupId), CDC_OPERATION.INSERT);
+    writeRow(f, TABLES.SERVICES, targetServiceRow(groupId, PEER, serviceFields),
+      CDC_OPERATION.INSERT);
   }
 }
 
@@ -265,16 +269,23 @@ function startTree(f, t, stubTree) {
   const read = tree.getRoutingOrder.bind(tree);
   tree.getRoutingOrder = (...args) => {
     f.counts.planBuilds += 1;
+    // A case may move a plan input inside one observation, as a raft drive
+    // inside a foreign call would.
+    const during = f.duringPlanBuild;
+    f.duringPlanBuild = null;
+    during?.();
     return read(...args);
   };
   return tree;
 }
 
-function startTopology(f, t, {stubTree = false} = {}) {
+// `routerLate`: the service is wired without a router; the case wires it later.
+function startTopology(f, t, {stubTree = false, routerLate = false} = {}) {
   f.tree = startTree(f, t, stubTree);
   f.topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE, systemTableCache: f.cache,
-    messageRouter: f.router, latencyTreeService: f.tree, nowFn: f.clock.now,
-    ...FAST_FOREGROUND_RETRY, deliveryRetryMaxAttempts: ONE_ATTEMPT_PER_DRIVE});
+    messageRouter: routerLate ? null : f.router, latencyTreeService: f.tree,
+    nowFn: f.clock.now, ...FAST_FOREGROUND_RETRY,
+    deliveryRetryMaxAttempts: ONE_ATTEMPT_PER_DRIVE});
   f.topology.initialize();
   f.topology.start();
   t.after(() => f.topology.stop());
@@ -282,7 +293,8 @@ function startTopology(f, t, {stubTree = false} = {}) {
 
 // One owed row on a leading partition with one production subscriber; no
 // subscriber callback runs during setup (readiness is withheld until the end).
-async function currentnessFixture(t, {targets = [TARGET_GROUP], stubTree = false} = {}) {
+async function currentnessFixture(t, {targets = [TARGET_GROUP], stubTree = false,
+  routerLate = false} = {}) {
   const clock = heldDispatchClock(START_MS);
   const f = {clock, cache: new SystemTableCache({timeSource: clock}), updatedAt: START_MS,
     ready: false, closed: false, targetMode: RESPONSE.NATIVE, routingOrder: [],
@@ -290,7 +302,7 @@ async function currentnessFixture(t, {targets = [TARGET_GROUP], stubTree = false
     counts: {planBuilds: 0, checkSelections: 0, deliverySelections: 0}};
   seedTopologyRows(f, targets);
   await startRouterAndPeer(f, t);
-  startTopology(f, t, {stubTree});
+  startTopology(f, t, {stubTree, routerLate});
   f.source = createDurableSourceMessageGroupService(SOURCE_GROUP,
     {canAcceptCDCEvent: () => f.ready});
   f.selected = f.source;
@@ -830,6 +842,218 @@ test('a plan input changed between two drives (different turns) is seen by the n
     assert.equal(f.targetCalls.at(-1).address, moved, 'the next read re-observed the moved route');
     assert.equal(outcome.state, DRIVE.DRAINED, 'the moved route covered the range');
   });
+
+// --- witness 5: version sources are required at wiring; the stamp is known ---
+
+const COLLABORATOR_INVALID = 'cdc_group_propagation_collaborator_invalid';
+
+function refusesWiring(collaborator, capability) {
+  return (error) => error?.code === COLLABORATOR_INVALID &&
+    error.collaborator === collaborator && error.message.includes(capability);
+}
+
+test('CDCGroupPropagationService refuses wiring a system table cache without table versions',
+  () => {
+    const cache = new SystemTableCache();
+    const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: cache});
+    tree.initialize();
+    const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+      systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
+      latencyTreeService: tree});
+    assert.throws(() => service.initialize(),
+      refusesWiring('systemTableCache', 'getTableMutationVersion'));
+  });
+
+test('CDCGroupPropagationService refuses wiring a latency tree without a routing generation',
+  () => {
+    const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+      systemTableCache: new SystemTableCache(),
+      latencyTreeService: {getRoutingOrder: () => []}});
+    assert.throws(() => service.initialize(),
+      refusesWiring('latencyTreeService', 'getRoutingGeneration'));
+  });
+
+test('the production topology composition wires a known plan stamp: a second identical ' +
+  'delivery reuses the plan', async (t) => {
+  const clock = heldDispatchClock(START_MS);
+  const f = {clock, cache: new SystemTableCache({timeSource: clock}), updatedAt: START_MS,
+    closed: false, targetMode: RESPONSE.NATIVE, targetCalls: [], duringTarget: null,
+    duringError: null, counts: {planBuilds: 0}};
+  seedTopologyRows(f, [TARGET_GROUP]);
+  await startRouterAndPeer(f, t);
+  const owners = LatencyTopologySetup.create({nodeId: SOURCE_NODE, systemTableCache: f.cache,
+    cdcIntegrationService: {}, messageRouter: f.router, nowFn: clock.now});
+  t.after(() => LatencyTopologySetup.stop(owners));
+  owners.latencyTreeService.start();
+  owners.cdcGroupPropagationService.start();
+  const tree = owners.latencyTreeService;
+  const read = tree.getRoutingOrder.bind(tree);
+  tree.getRoutingOrder = (...args) => {
+    f.counts.planBuilds += 1;
+    return read(...args);
+  };
+  const source = createDurableSourceMessageGroupService(SOURCE_GROUP);
+  const deliver = async (index) => {
+    const invocation = beginDurableCdcInvocation(clock);
+    const result = await owners.cdcGroupPropagationService.propagateCDCEvent(
+      createDurablePropagationRequest(source, createDurableCdcEvent({
+        eventKey: `composition-event-${index}`, sourceLogIndex: index + 1}), invocation));
+    invocation.finish();
+    return result;
+  };
+  assert.equal((await deliver(0)).success, true, 'setup: the first delivery completed');
+  const afterFirst = f.counts.planBuilds;
+  assert.equal(afterFirst, 1, 'the first delivery observes the plan once');
+  assert.equal((await deliver(1)).success, true, 'setup: the second delivery completed');
+  if (f.duringError) throw f.duringError;
+  assert.equal(f.counts.planBuilds, afterFirst,
+    'the wired production owners expose every version: the identical delivery reuses the plan');
+  assert.equal(f.targetCalls.length, 2, 'setup: both deliveries reached the target');
+});
+
+test('a plan input moved during a plan observation is not held: the next read observes anew',
+  async (t) => {
+    const f = await currentnessFixture(t);
+    const before = f.counts.planBuilds;
+    f.duringPlanBuild = () => writeRow(f, TABLES.NODES, {[COLUMN.NODE_ID]: 'node-during-build',
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE}, CDC_OPERATION.INSERT);
+    const first = propagationPlanAtStamp(f.topology, f.source);
+    const second = propagationPlanAtStamp(f.topology, f.source);
+    assert.equal(f.counts.planBuilds - before, 2,
+      'a plan whose inputs moved during its observation is observed again');
+    assert.notEqual(second, first);
+    const third = propagationPlanAtStamp(f.topology, f.source);
+    assert.equal(third, second, 'an observation with no move is held');
+  });
+
+// --- witness 6: each stamp component is load-bearing ---
+// Each case changes exactly one input through its owner, between two
+// deliveries, so that the next wave's admission capture is the only reader:
+// with that component dropped from the stamp the old plan would be reused.
+
+function latencyEdge(sourceGroupId, targetGroupId) {
+  return {latency_edge_id: `${sourceGroupId}->${targetGroupId}`,
+    [COLUMN.SOURCE_GROUP_ID]: sourceGroupId, [COLUMN.TARGET_GROUP_ID]: targetGroupId,
+    [COLUMN.LATENCY_MS]: 1, [COLUMN.SAMPLE_COUNT]: 5, [COLUMN.LAST_MEASURED_AT]: START_MS};
+}
+
+function targetOrder(f, from = 0) {
+  return f.targetCalls.slice(from).map((call) => call.targetGroupId);
+}
+
+// Another owed row, committed while no delivery runs; the next drive ships it
+// through a new range and therefore a new topology progress.
+async function commitAnotherRow(f, id) {
+  f.ready = false;
+  const command = committedQueryOf(`currentness-stamp-row-${id}`,
+    `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`);
+  command.params = [id, `currentness-stamp-body-${id}`];
+  command.timestamp = new HLCTimestamp(1001, 0, 'currentness-stamp').toString();
+  assert.equal(applyCommitted(f.leader, command), null);
+  await settleTicks();
+  f.ready = true;
+}
+
+const ORDERED_GROUPS = Object.freeze(['stamp-lg-a', 'stamp-lg-b']);
+
+// Two target groups that are also latency groups, ordered by id while no
+// latency edge exists; the plan is held after the first, drained delivery.
+async function orderedGroupsFixture(t) {
+  const f = await currentnessFixture(t, {targets: ORDERED_GROUPS});
+  for (const groupId of ORDERED_GROUPS) {
+    writeRow(f, TABLES.LATENCY_GROUPS, latencyGroupRow(groupId, PEER), CDC_OPERATION.INSERT);
+  }
+  f.tree.recompute();
+  assert.equal((await f.drive()).state, DRIVE.DRAINED, 'setup: the first range drained');
+  assert.deepEqual(targetOrder(f), ORDERED_GROUPS, 'setup: without latency edges, by id');
+  await settleTicks();
+  propagationPlanAtStamp(f.topology, f.source);
+  return f;
+}
+
+test('stamp component: the tree routing generation (a recompute alone reorders the plan)',
+  async (t) => {
+    const f = await orderedGroupsFixture(t);
+    writeRow(f, TABLES.INTER_GROUP_LATENCIES, latencyEdge(SOURCE_GROUP, ORDERED_GROUPS[1]),
+      CDC_OPERATION.INSERT);
+    f.tree.recompute();
+    await commitAnotherRow(f, 'B');
+    const from = f.targetCalls.length;
+    assert.equal((await f.drive()).state, DRIVE.DRAINED);
+    if (f.duringError) throw f.duringError;
+    assert.deepEqual(targetOrder(f, from), [...ORDERED_GROUPS].reverse(),
+      'the new progress takes the recomputed routing order (no plan table changed)');
+  });
+
+test('stamp component: the tree identity (a tree re-wired at an equal generation)',
+  async (t) => {
+    const f = await orderedGroupsFixture(t);
+    const other = {cache: new SystemTableCache({timeSource: f.clock}), updatedAt: START_MS};
+    writeRow(other, TABLES.NODES, {[COLUMN.NODE_ID]: SOURCE_NODE,
+      [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP}, CDC_OPERATION.INSERT);
+    for (const groupId of ORDERED_GROUPS) {
+      writeRow(other, TABLES.LATENCY_GROUPS, latencyGroupRow(groupId, PEER),
+        CDC_OPERATION.INSERT);
+    }
+    writeRow(other, TABLES.INTER_GROUP_LATENCIES, latencyEdge(SOURCE_GROUP, ORDERED_GROUPS[1]),
+      CDC_OPERATION.INSERT);
+    const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: other.cache});
+    tree.initialize();
+    while (tree.getRoutingGeneration() < f.tree.getRoutingGeneration()) tree.recompute();
+    assert.equal(tree.getRoutingGeneration(), f.tree.getRoutingGeneration(),
+      'setup: the re-wired tree has the same generation');
+    f.topology.initialize({latencyTreeService: tree});
+    await commitAnotherRow(f, 'B');
+    const from = f.targetCalls.length;
+    assert.equal((await f.drive()).state, DRIVE.DRAINED);
+    if (f.duringError) throw f.duringError;
+    assert.deepEqual(targetOrder(f, from), [...ORDERED_GROUPS].reverse(),
+      'the new progress takes the re-wired tree\'s order');
+  });
+
+test('stamp component: the cache identity (a cache re-wired at equal table versions)',
+  async (t) => {
+    const f = await currentnessFixture(t);
+    assert.equal((await f.drive()).state, DRIVE.DRAINED, 'setup: the first range drained');
+    await settleTicks();
+    propagationPlanAtStamp(f.topology, f.source);
+    const rewired = `${PEER}/message-group/rewired-cache`;
+    const other = {cache: new SystemTableCache({timeSource: f.clock}), updatedAt: START_MS};
+    seedTopologyRows(other, [TARGET_GROUP], {[COLUMN.ADDRESS]: rewired});
+    for (const tableName of [TABLES.SERVICES, TABLES.NODES, TABLES.LATENCY_GROUPS,
+      TABLES.MESSAGE_GROUPS]) {
+      assert.equal(other.cache.getTableMutationVersion(tableName),
+        f.cache.getTableMutationVersion(tableName), `setup: equal ${tableName} versions`);
+    }
+    f.topology.initialize({systemTableCache: other.cache});
+    await commitAnotherRow(f, 'B');
+    assert.equal((await f.drive()).state, DRIVE.DRAINED);
+    if (f.duringError) throw f.duringError;
+    assert.equal(f.targetCalls.at(-1).address, rewired,
+      'the new progress takes the re-wired cache\'s route');
+  });
+
+test('stamp component: the router identity (a router wired late makes grouped targets ' +
+  'routable)', async (t) => {
+  ConfigurationManager.getInstance().setByPath(LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE,
+    LATENCY_PROPAGATION_MODE.GROUPED);
+  const f = await currentnessFixture(t, {routerLate: true});
+  writeRow(f, TABLES.LATENCY_GROUPS, latencyGroupRow(SOURCE_GROUP, SOURCE_NODE),
+    CDC_OPERATION.INSERT);
+  writeRow(f, TABLES.LATENCY_GROUPS, latencyGroupRow('stamp-lg-target', PEER),
+    CDC_OPERATION.INSERT);
+  f.tree.recompute();
+  assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER,
+    'setup: without a router the grouped target is not routable');
+  assert.equal(f.targetCalls.length, 0, 'setup: nothing was sent');
+  await settleTicks();
+  propagationPlanAtStamp(f.topology, f.source);
+  f.topology.initialize({messageRouter: f.router});
+  assert.equal((await f.drive()).state, DRIVE.DRAINED);
+  if (f.duringError) throw f.duringError;
+  assert.deepEqual(targetOrder(f), [TARGET_GROUP],
+    'the new progress takes the plan observed with the wired router');
+});
 
 // --- anchor: one production selection evaluation is one raft status read ---
 
