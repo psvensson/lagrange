@@ -1949,6 +1949,7 @@
       "description": "A CREATE_REPLICA/REPLACE target is admitted to its partition only from its committed replica operation (quest replica-admission-from-committed-operation): the node create path sends ADMIT_REPLICA {partitionId, replicaIdentity, operationId} right after its SYNCING commit and re-sends on the learner cadence (consuming a NOT_LEADER leader hint); the partition request owner answers NOT_LEADER first, then from a committed read of replica_operations (AUTHORITY_UNAVAILABLE / OPERATION_NOT_ADMITTING typed), then through the membership administration seam (admitPartitionRaftPeer, the only caller) with the node from the committed row; no services row or cache read admits, except the named refuse-only groupRetiringRefusal fence.",
       "owners": [
         "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-create-work.js",
         "src/partition/partition-replica-admission.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
@@ -1959,6 +1960,7 @@
       ],
       "tests": [
         "test/partition/replica-admission-from-committed-operation.test.js",
+        "test/partition/replica-admission-delivery-lifetime.test.js",
         "test/partition/replica-admission-committed-operation-production.integration.test.js",
         "test/partition/partition-admission-redrive-wakes.test.js",
         "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
