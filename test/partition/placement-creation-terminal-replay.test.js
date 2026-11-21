@@ -13,6 +13,7 @@ import {attachAutoCommitLoop, createCoordinatorWithLedger} from
 
 const TEST_PARTITION_ID = 'terminal-replay-orders-p1';
 const TEST_NATIVE_ENTRY_ID = 'terminal-replay-original-entry';
+const TEST_NEXT_ENTRY_ID = 'terminal-replay-next-entry';
 
 for (const terminalStep of [WORKFLOW_STEP.FAILED, WORKFLOW_STEP.ACTIVE]) {
   test(`native create replay reads committed ${terminalStep} after the original reply is lost`,
@@ -79,6 +80,30 @@ for (const terminalStep of [WORKFLOW_STEP.FAILED, WORKFLOW_STEP.ACTIVE]) {
         assert.equal(coordinator.stats.operationsCreated, 0);
         assert.deepEqual(announcements, []);
         assert.deepEqual(wakes, []);
+
+        if (terminalStep === WORKFLOW_STEP.FAILED) {
+          const next = await coordinator.createOperation({...move, entryId: TEST_NEXT_ENTRY_ID});
+          assert.notEqual(next.operationId, held.operation_id,
+            'the settled failed attempt cannot strand a distinct request in the same lane');
+          assert.equal(next.workflowStep, WORKFLOW_STEP.PENDING);
+          assert.equal(proposed.length, 2, 'only the distinct new entry proposes another admission');
+          const nextRows = ledgerRows(leader);
+          assert.equal(nextRows.length, 2);
+          const durableFailure = nextRows.find((row) => row.operation_id === held.operation_id);
+          assert.deepEqual(durableFailure, terminal);
+          assert.ok(nextRows.some((row) => row.operation_id === next.operationId));
+          assert.deepEqual(announcements, [next.operationId]);
+          await assert.rejects(() => coordinator.createOperation(move), {
+            code: 'REPLICA_CREATION_FAILED',
+            operationId: held.operation_id,
+          });
+          assert.deepEqual(ledgerRows(leader), nextRows);
+          assert.deepEqual(entries, [
+            TEST_NATIVE_ENTRY_ID, TEST_NATIVE_ENTRY_ID, TEST_NEXT_ENTRY_ID, TEST_NATIVE_ENTRY_ID,
+          ]);
+          assert.equal(proposed.length, 2, 'original replay never proposes a replacement');
+          assert.deepEqual(announcements, [next.operationId]);
+        }
       } finally {
         await stopAutoCommit();
       }
