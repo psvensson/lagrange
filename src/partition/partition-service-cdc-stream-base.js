@@ -409,6 +409,12 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   releasePendingCommittedWrites(answerOf) {
     this.proposalQueue.release(answerOf);
   }
+  // The release of one pending write whose leadership tenure ended before it
+  // was handed to consensus (the write kernel's tenure fence), answered as
+  // each write of the release above; false when it was no longer pending.
+  releasePendingCommittedWrite(entryId, answerOf) {
+    return this.proposalQueue.releaseEntry(entryId, answerOf);
+  }
   // Where a pending write stands with consensus (a
   // PROPOSAL_QUEUE_PROPOSAL_STATE); false once it was released or answered.
   markCommittedWriteProposal(entryId, proposal) {

@@ -11,9 +11,11 @@ import {
   PROPOSAL_QUEUE_RELEASED_CODE,
 } from './proposal-queue-constants.js';
 import {
+  PARTITION_WRITE_RELEASE_CAUSE,
   buildPartitionWriteLeadershipRefusal,
   buildPartitionWriteProposalRefusal,
   buildRejectedProposedWriteAnswer,
+  buildReleasedPendingWriteAnswer,
   isWriteOutcomeUnknown,
 } from './partition-write-kernel.js';
 import {PARTITION_LEADERSHIP_TRANSFER_MESSAGE} from
@@ -77,12 +79,33 @@ function portDeferralOf(proposed) {
     proposed.reason : null;
 }
 
-// One proposal of a write to consensus. A write already released (or
-// answered) is never handed over. A typed deferral of the port leaves the
+// The tenure fence: a write is handed to consensus only under the leadership
+// tenure it was submitted under (its hand-off's, the replica's
+// leadershipTenure compared by identity). One whose tenure ended - a role
+// edge, or a term renewed without one, which is a leadership lost and
+// regained between two announcements - is in the state a leadership loss
+// releases, and is released here the same way: unproposed, LEADERSHIP_LOST.
+// True when its tenure ended (it was released, or no longer pending).
+function releasedOnEndedTenure(service, handoff) {
+  if (handoff.tenure === service.leadershipTenure) {
+    return false;
+  }
+  service.releasePendingCommittedWrite(handoff.entry.entryId, (pending) =>
+    buildReleasedPendingWriteAnswer(pending, service.partitionId,
+      {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+  return true;
+}
+
+// One proposal of a write to consensus: the first, every one after a port
+// deferral and the readmit of a parked write all come here. The tenure fence
+// runs in the same synchronous step as the proposal; a write already released
+// (or answered) is never handed over. A typed deferral of the port leaves the
 // write queued, as the retryable result the canonical retry owner re-runs.
-async function proposeUnlessDeferred(service, entry) {
-  if (!service.markCommittedWriteProposal(entry.entryId,
-    PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED)) {
+async function proposeUnlessDeferred(service, handoff) {
+  const {entry} = handoff;
+  if (releasedOnEndedTenure(service, handoff) ||
+      !service.markCommittedWriteProposal(entry.entryId,
+        PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED)) {
     return PROPOSAL_NOT_MADE;
   }
   const proposed = await turnChainValue(service.raft.propose(entry));
@@ -102,9 +125,9 @@ function deferredByPort(result) {
 
 // One proposal, proposed again on the replica's own clock while the port
 // defers it, within the deferral budget.
-function proposeWithinDeferralBudget(service, entry) {
+function proposeWithinDeferralBudget(service, handoff) {
   return runRetryableControlPlaneWrite(
-    () => proposeUnlessDeferred(service, entry), {
+    () => proposeUnlessDeferred(service, handoff), {
       timeoutMs:
         PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS,
       baseDelayMs:
@@ -116,7 +139,7 @@ function proposeWithinDeferralBudget(service, entry) {
         (resolve) => service.timeSource.setTimeout(resolve, delayMs)),
       logger: service.logger,
       spentWait: WRITE_DEFERRAL_BUDGET_WAIT,
-      scope: {partitionId: service.partitionId, entryId: entry.entryId},
+      scope: {partitionId: service.partitionId, entryId: handoff.entry.entryId},
     });
 }
 
@@ -138,7 +161,7 @@ function portWriteDeferral(service, entryId, admission, handoff) {
 // --- reserved writers (TX1 design 7, decision X) ---
 
 // Per partition service, by entryId: every write this replica is executing
-// (its hand-off: {entry, proposal, answer}), and those parked unproposed
+// (its hand-off: {entry, proposal, answer, tenure}), and those parked unproposed
 // while a prepared participant transaction reserves the partition. A parked
 // write stays pending in the proposal queue under its own commit deadline,
 // so it is bounded by the queue's capacity and released like any pending
@@ -242,7 +265,7 @@ async function applyCommittedWriteSideEffects(service, entry,
 async function handOffToConsensus(service, handoff) {
   const {entry} = handoff;
   try {
-    const proposed = await proposeWithinDeferralBudget(service, entry);
+    const proposed = await proposeWithinDeferralBudget(service, handoff);
     if (proposed === PROPOSAL_NOT_MADE) {
       handoff.proposal = PROPOSAL_NOT_MADE;
     } else if (deferredByPort(proposed)) {
@@ -273,7 +296,8 @@ function parkReservedWrite(service, handoff) {
  * decision's post-commit effect, design 7): each is handed to consensus
  * through the same proposal path; a write already released (its deadline,
  * leadership loss) is never proposed (the proposal queue refuses to mark
- * it). Their answers stay with their waiting executions.
+ * it), and one parked under a tenure that has ended is released there (the
+ * tenure fence). Their answers stay with their waiting executions.
  * @param {Object} service - The partition.
  * @return {number} How many parked writes were re-admitted.
  */
@@ -311,8 +335,10 @@ function reparkReservedWrite(service, entryId) {
 }
 
 async function executePartitionRaftWriteCommit(service, options) {
+  // The tenure the write is submitted under, taken in the step that
+  // registers it: every hand-over of it is fenced on it.
   const handoff = {entry: options.entry, proposal: PROPOSAL_ACCEPTED,
-    answer: null};
+    answer: null, tenure: service.leadershipTenure};
   perService(WRITE_HANDOFFS, service).set(options.entry.entryId, handoff);
   try {
     return await executeHandedOffWriteCommit(service, options, handoff);
@@ -413,11 +439,16 @@ async function executeHandedOffWriteCommit(service, options, handoff) {
 /**
  * The write kernel's leadership refusal of a proposal on this replica, or
  * null when it may propose: only the consensus leader proposes, and a group
- * held by its host failure proposes nothing.
+ * held by its host failure proposes nothing. The status read may run a
+ * consensus turn (drain inbound, apply, announce): a leadership tenure that
+ * ended inside it ended under the caller, who decided under the tenure before
+ * it, so the caller is refused as not leading (the tenure fence, for the read
+ * that precedes a write's registration).
  * @param {Object} service - The partition.
  * @return {Object|null} The typed refusal (nothing proposed), or null.
  */
 function partitionWriteLeadershipRefusalOf(service) {
+  const tenure = service.leadershipTenure;
   const consensusStatus = service.raft.readStatus();
   const commitMode = resolvePartitionWriteCommitMode({
     replicaIds: service.replicaIds,
@@ -425,7 +456,8 @@ function partitionWriteLeadershipRefusalOf(service) {
     raftLeaderState: RaftRole.LEADER,
     hasKnownRemoteLeader: service.hasKnownRemoteLeaderWitness(),
   });
-  return commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED ?
+  return commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED ||
+    service.leadershipTenure !== tenure ?
     buildPartitionWriteLeadershipRefusal(consensusStatus, service.partitionId) :
     null;
 }

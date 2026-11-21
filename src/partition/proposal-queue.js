@@ -269,7 +269,8 @@ class ProposalQueue {
 
   /**
    * Release one pending proposal without an answer from consensus (its
-   * commit deadline passed). It is rejected with a
+   * commit deadline passed, or the leadership tenure it was submitted under
+   * ended before it was handed over). It is rejected with a
    * PROPOSAL_QUEUE_RELEASED_CODE error carrying the answer `answerOf` gives
    * it from what the queue knew of it; this is the queue's one release.
    *
