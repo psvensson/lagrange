@@ -36,7 +36,7 @@ import {
   buildPublicationReadOptions,
   serializeMembershipPublicationRow,
 } from './membership-publication-planning-evidence.js';
-import {PUBLICATION_INTENT_DECISION, decidePublicationIntent,
+import {PUBLICATION_INTENT_DECISION, decidePublicationIntent, observePublicationIntent,
   publicationAcknowledgementIntent, publicationBirthIntent} from
   './membership-publication-write-intent.js';
 import {MembershipPublicationCoordinatorPlanning} from './membership-publication-coordinator-planning.js';
@@ -249,7 +249,8 @@ class MembershipPublicationCoordinatorPersist extends
     const maxAttempts = normalizePositiveInteger(
       options.publicationWriteMaxAttempts, PUBLICATION_WRITE_MAX_ATTEMPTS);
     let current = await owner.getPublication(publicationId, readOptions);
-    let decision = decidePublicationIntent(intent, current);
+    let observedIntent = observePublicationIntent(intent, current);
+    let decision = decidePublicationIntent(observedIntent, current);
     let failure;
     for (let attempt = 0; attempt < maxAttempts &&
         decision.state === PUBLICATION_INTENT_DECISION.WRITE; attempt += 1) {
@@ -276,7 +277,8 @@ class MembershipPublicationCoordinatorPersist extends
         });
         throw publicationWriteUnconfirmed(publicationId, error);
       }
-      decision = decidePublicationIntent(intent, current);
+      observedIntent = observePublicationIntent(observedIntent, current);
+      decision = decidePublicationIntent(observedIntent, current);
     }
     if (decision.state === PUBLICATION_INTENT_DECISION.CONFIRMED) {
       releaseControlPlaneWriteIdentity(writeIdentity);

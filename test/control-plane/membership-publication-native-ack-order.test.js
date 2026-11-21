@@ -368,11 +368,39 @@ test('an adopted supersession does not open the reconciliation workflow',
     writer.coordinator.deriveClusterMembershipCandidate = async () => ({
       ...baseline, changed: true,
     });
-    const result = await racePublicationReconcile(ledger, writer, row, {
+    const getPublication = writer.owner.getPublication.bind(writer.owner);
+    let entered = false;
+    const release = Promise.withResolvers();
+    writer.owner.getPublication = async (...args) => {
+      entered = true;
+      await release.promise;
+      return getPublication(...args);
+    };
+    const reconcile = () => writer.coordinator.reconcileClusterMembership({
       latestPublicationRow: row, latestPublishedPublicationRow: row,
-    }, {
-      status: STATUS.SUPERSEDED, updated_at: WRITER_TIME + 10, closed_at: WRITER_TIME + 10,
     });
+    const pending = track(reconcile());
+    let result;
+    try {
+      await settleTicks();
+      assert.equal(entered, true, 'the selected birth reached its held exact authority read');
+      assert.equal(pending.settled, false, 'the held read has not answered the workflow');
+      const current = await getPublication(row.publication_id);
+      const mutation = await writer.owner.upsertPublication({
+        ...current, status: STATUS.SUPERSEDED,
+        updated_at: WRITER_TIME + 10, closed_at: WRITER_TIME + 10,
+      }, {expectedPublicationRow: current});
+      assert.equal(mutation.partitionResult.affectedRows, 1);
+      const commitsBeforeRead = ledger.applied.length;
+      release.resolve();
+      result = await pending.promise;
+      assert.equal(ledger.applied.length, commitsBeforeRead,
+        'adopting the durable terminal row submits no duplicate birth');
+    } finally {
+      release.resolve();
+      await Promise.allSettled([pending.promise]);
+      writer.owner.getPublication = getPublication;
+    }
     assert.equal(result.publicationRow.status, STATUS.SUPERSEDED);
     const workflow = writer.coordinator.workflowCoordinator
       .getWorkflowByOwnerKey(writer.coordinator.buildOwnerKey());

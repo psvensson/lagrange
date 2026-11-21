@@ -32,13 +32,14 @@ function publicationRevision(row) {
 }
 
 function publicationBirthIntent(row) {
-  return {kind: INTENT_KIND.BIRTH, revision: publicationRevision(row),
-    initialRow: serializeMembershipPublicationRow(row)};
+  const initialRow = serializeMembershipPublicationRow(row);
+  return {kind: INTENT_KIND.BIRTH, revision: publicationRevision(initialRow), initialRow};
 }
 
 function publicationAcknowledgementIntent(row, {nodeId, nowMs, timeoutMs, timeoutReasonCode}) {
   return {kind: INTENT_KIND.ACK, revision: publicationRevision(row),
-    nodeId, nowMs, timeoutMs, timeoutReasonCode};
+    nodeId, nowMs, timeoutMs, timeoutReasonCode,
+    observedAcknowledgedNodeIds: normalizeControlPlanePublicationRow(row).acknowledgedNodeIds};
 }
 
 function publicationRefreshIntent(row, {
@@ -66,12 +67,27 @@ function refreshedPublicationRow(intent, current, nowMs) {
   });
 }
 
+function observePublicationIntent(intent, current) {
+  if (intent.kind !== INTENT_KIND.ACK || current === null) return intent;
+  assertPublicationWriteRevision(intent.revision, current);
+  const {acknowledgedNodeIds, requiredAckNodeIds} = normalizeControlPlanePublicationRow(current);
+  const observedAcknowledgedNodeIds = normalizeNodeIdList([
+    ...intent.observedAcknowledgedNodeIds, ...acknowledgedNodeIds,
+  ]).filter((nodeId) => requiredAckNodeIds.includes(nodeId));
+  return {...intent, observedAcknowledgedNodeIds};
+}
+
 function projectPublicationIntent(intent, current) {
   const nowMs = Math.max(intent.nowMs, current.updated_at ?? 0);
   switch (intent.kind) {
   case INTENT_KIND.ACK: {
     const acknowledged = acknowledgeMembershipPublication({
-      publicationRow: current, nodeId: intent.nodeId, nowMs: intent.nowMs,
+      publicationRow: {
+        ...current,
+        acknowledged_node_ids: intent.observedAcknowledgedNodeIds,
+        acknowledgedNodeIds: intent.observedAcknowledgedNodeIds,
+      },
+      nodeId: intent.nodeId, nowMs: intent.nowMs,
       timeoutMs: intent.timeoutMs, timeoutReasonCode: intent.timeoutReasonCode,
     });
     return closeAcknowledgedMetadataRefreshRow({
@@ -138,6 +154,6 @@ function decidePublicationIntent(intent, current) {
 }
 
 export {
-  PUBLICATION_INTENT_DECISION, decidePublicationIntent,
+  PUBLICATION_INTENT_DECISION, decidePublicationIntent, observePublicationIntent,
   publicationAcknowledgementIntent, publicationBirthIntent, publicationRefreshIntent,
 };
