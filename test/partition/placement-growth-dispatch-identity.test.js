@@ -314,9 +314,9 @@ test('native census credits healthy completed growth and preserves another real 
         staged.push(body);
       },
     });
-    owner.isLeader = true;
     try {
-      await owner.runPass(new Set());
+      owner.setLeader(true);
+      await owner.awaitCurrentWorkIdle();
       assert.deepEqual(staged.map((statement) => statement.partitionId), [PARTITION_ID],
         'real deficit survives malformed and foreign-partition cohort evidence');
       assert.equal(staged[0].moves[0].type, OperationType.GROWTH_PROMOTE);

@@ -5,6 +5,11 @@
  * (createRaftOperationPort) over the request the replica itself states, and
  * a committed command is applied through the production proposal codec and
  * application-transaction owner on the replica's own database.
+ *
+ * currentTermApplied (the rs-raft status field: this replica leads and has
+ * applied an entry of its current term) is a stated simplification here: the
+ * term-start entry is treated as already applied whenever the double leads; a
+ * test that needs the barrier sets currentTermApplied explicitly.
  */
 
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -172,6 +177,24 @@ function resolvedPeerAddress(resolveAddress, identity, nodeId) {
   }
 }
 
+/**
+ * The leadership a hand-built (non-PartitionService) ledger stub exposes, in
+ * the real service's shape: its leadershipTenure token and a consensus port
+ * whose status says it leads with its term start applied (the simplification
+ * above). Subscriptions are accepted and never fire.
+ * @param {number} [term] - The tenure's term.
+ * @return {{leadershipTenure: Object, raft: Object}}
+ */
+export function leadingLedgerStubFields(term = 1) {
+  return {
+    leadershipTenure: Object.freeze({term}),
+    raft: Object.freeze({
+      readStatus: () => deepFreeze({role: RAFT_ROLE.LEADER, term, currentTermApplied: true}),
+      subscribe: () => () => {},
+    }),
+  };
+}
+
 export class ControllableConsensusPort {
   constructor(options = {}) {
     Object.assign(this, DEFAULT_PORT_STATE);
@@ -210,6 +233,8 @@ export class ControllableConsensusPort {
     this.gateOpen = options.gateOpen !== false;
     this.identityRecorded = options.identityRecorded !== false;
     this.confChangePending = false;
+    // The simplification above: null answers "applied whenever it leads".
+    this.currentTermApplied = null;
   }
 
   /**
@@ -409,6 +434,8 @@ export class ControllableConsensusPort {
           runtimeHealth: this.runtimeHealth,
           groupHealth: this.groupHealth,
           confChangePending: this.confChangePending,
+          currentTermApplied: this.currentTermApplied ??
+            this.role === RAFT_ROLE.LEADER,
         });
       },
       // The fake holds no committed configuration; a test that needs one

@@ -430,7 +430,8 @@ test('P4 bound over repeated transfers: N transfers with every leadership-start 
       await world.electLedger(transfer % 2 === 1 ? a : b);
       await world.idle({except: nodes});
       samples.push({transfer, ...outstandingWork(nodes),
-        heldDrives: gates.reduce((sum, gate) => sum + gate.calls, 0)});
+        heldDrives: gates.reduce((sum, gate) => sum + gate.calls, 0),
+        admitted: admittedOperations(world, a, DEFICIT).length});
       timerCensus.push({transfer, timers: world.timers.aliveCreators()});
     }
   } finally {
@@ -446,12 +447,35 @@ test('P4 bound over repeated transfers: N transfers with every leadership-start 
   // transfer k with k + 2.
   for (const [earlier, later] of [[samples[2], samples[4]], [samples[3], samples[5]]]) {
     for (const field of ['inFlightPasses', 'pendingTriggers', 'pendingWrites',
-      'unresolvedAttempts', 'heldDrives', 'timers']) {
+      'unresolvedAttempts', 'heldDrives']) {
       assert.ok(later[field] <= earlier[field],
         `property 3: ${field} does not grow with N (after ${earlier.transfer}: ` +
         `${earlier[field]}, after ${later.transfer}: ${later[field]}); samples ` +
         `${JSON.stringify(samples)}; ${report}`);
     }
   }
+  // Timers (re-staged 2026-11-21, lead ruling): attributed by creation site.
+  // A timer is the placement owner's when a frame of a
+  // src/rebalancer/replica-placement-owner* module is on its synchronous
+  // creation stack (fixture aliveCreators, 64 frames). Not seen: a timer a
+  // collaborator arms later, after an await, on the owner's behalf (its stack
+  // starts at the collaborator's continuation), and unref'd timers.
+  // (a) the placement owner's live timers are the same number after every
+  // transfer;
+  const ownerTimers = timerCensus.map(({transfer, timers}) => ({transfer,
+    count: timers.filter((timer) => timer.placementOwner).length}));
+  assert.ok(ownerTimers.every(({count}) => count === ownerTimers[0].count),
+    `property 3: the placement owner's timers do not grow with N; ${
+      JSON.stringify(ownerTimers)}; ${JSON.stringify(timerCensus)}; ${report}`);
+  // (b) the whole live timer set is constant from the transfer after the
+  // deficit was admitted (its operation's own workflow timers start there)
+  // through the last transfer, so nothing else grows with N either.
+  const firstAdmitted = samples.findIndex((sample) => sample.admitted > 0);
+  const window = timerCensus.slice(firstAdmitted < 0 ? 2 : firstAdmitted + 1);
+  assert.ok(window.length >= 2, `property 3: at least two transfers follow the admission; ${
+    JSON.stringify(samples)}; ${report}`);
+  assert.ok(window.every(({timers}) => timers.length === window[0].timers.length),
+    `property 3: the live timer set does not grow with N after the admission (from transfer ${
+      window[0].transfer}); ${JSON.stringify(timerCensus)}; ${report}`);
   assertOneAdmitted(world, nodes, report);
 }));

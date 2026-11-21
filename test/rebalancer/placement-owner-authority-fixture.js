@@ -80,6 +80,8 @@ const TEST_TABLE_SCHEMA = Object.freeze({columns: [
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const LEAKED_TIMERS = [];
+const TIMER_STACK_FRAMES = 64;
+const PLACEMENT_OWNER_FRAME = /\/src\/rebalancer\/replica-placement-owner[^/]*\.js/u;
 
 // Timers created while a world runs (global setTimeout/setInterval, looked up
 // at call time by the production owners), so that teardown can name every
@@ -89,7 +91,13 @@ function trackWorldTimers() {
   const created = [];
   const track = (kind) => function trackedTimer(...args) {
     const timer = originals[kind].apply(this, args);
-    created.push({timer, kind, stack: new Error().stack});
+    // The whole synchronous creation stack, so a timer armed by a callee on a
+    // module's behalf in the same turn is attributed to that module too.
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = TIMER_STACK_FRAMES;
+    const stack = new Error().stack;
+    Error.stackTraceLimit = limit;
+    created.push({timer, kind, stack});
     return timer;
   };
   globalThis.setTimeout = track('setTimeout');
@@ -100,10 +108,13 @@ function trackWorldTimers() {
       globalThis.setInterval = originals.setInterval;
     },
     // The src creators of the ref'd timers alive now (a diagnostic census).
+    // placementOwner: a frame of a src/rebalancer/replica-placement-owner*
+    // module is on the timer's synchronous creation stack.
     aliveCreators() {
       return created.filter(({timer}) => timer && timer._destroyed !== true &&
         typeof timer.hasRef === 'function' && timer.hasRef()).map(({kind, timer, stack}) => ({
         kind, ms: timer._idleTimeout ?? null,
+        placementOwner: PLACEMENT_OWNER_FRAME.test(stack),
         creator: stack.split('\n').filter((line) => line.includes('/src/')).slice(0, 2)
           .map((line) => line.trim().replace(/^at /u, '').replace(/\(.*\/src\//u, '(src/'))}));
     },

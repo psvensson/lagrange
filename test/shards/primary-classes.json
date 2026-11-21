@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2372,
+    "unit": 2373,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2731,
-  "digest": "fnv1a32-075c0f45",
+  "censusSize": 2732,
+  "digest": "fnv1a32-447550c6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2030,6 +2030,7 @@
     "test/rebalancer/placement-owner-authority-provisioner.test.js": "unit",
     "test/rebalancer/placement-owner-authority-tenure.test.js": "unit",
     "test/rebalancer/placement-owner-authority-wakes.test.js": "unit",
+    "test/rebalancer/placement-owner-authority-write-kernel.test.js": "unit",
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": "unit",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "unit",
     "test/rebalancer/planner-single-path-enforcement.test.js": "unit",

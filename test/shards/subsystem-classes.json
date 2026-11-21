@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 298,
+    "placement-rebalance": 299,
     "query-sql": 209,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2731,
-  "digest": "fnv1a32-c298ca07",
+  "censusSize": 2732,
+  "digest": "fnv1a32-0885f7cb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3688e380",
+  "observationDigest": "fnv1a32-e4f1e189",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2049,6 +2049,7 @@
     "test/rebalancer/placement-owner-authority-provisioner.test.js": "placement-rebalance",
     "test/rebalancer/placement-owner-authority-tenure.test.js": "placement-rebalance",
     "test/rebalancer/placement-owner-authority-wakes.test.js": "placement-rebalance",
+    "test/rebalancer/placement-owner-authority-write-kernel.test.js": "placement-rebalance",
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
@@ -6114,7 +6115,8 @@
         "src/storage/data-directory-manager.js",
         "src/storage/data-directory-process-owner.js",
         "test/convergence/formation-joint-admission-world.js",
-        "test/simulation/formation-sim-infrastructure-composition.js"
+        "test/simulation/formation-sim-infrastructure-composition.js",
+        "test/test-helpers/controllable-consensus-port.js"
       ],
       "directories": [
         "src"
@@ -18963,6 +18965,11 @@
         "src/node/participant-release-authorization-owner.js",
         "src/node/replica-handler-create-status-methods.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -19379,6 +19386,27 @@
       ]
     },
     "test/rebalancer/placement-owner-authority-wakes.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/rebalancer/placement-owner-authority-write-kernel.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
         "src/partition/partition-committed-statement-outcome.js",

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2705,
+    "ordinary": 2706,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2731,
-  "digest": "fnv1a32-262e47e2",
+  "censusSize": 2732,
+  "digest": "fnv1a32-0aa108f3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2029,6 +2029,7 @@
     "test/rebalancer/placement-owner-authority-provisioner.test.js": "ordinary",
     "test/rebalancer/placement-owner-authority-tenure.test.js": "ordinary",
     "test/rebalancer/placement-owner-authority-wakes.test.js": "ordinary",
+    "test/rebalancer/placement-owner-authority-write-kernel.test.js": "ordinary",
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": "ordinary",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "ordinary",
     "test/rebalancer/planner-single-path-enforcement.test.js": "ordinary",

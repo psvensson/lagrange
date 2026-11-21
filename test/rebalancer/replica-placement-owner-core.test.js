@@ -112,6 +112,7 @@ import {
   buildPlacementAdmissionStatement, canonicalPlacementStatement,
   resolveSourceCapacityForClass,
 } from '../../src/rebalancer/replica-placement-owner-admission-statement.js';
+import {leadingLedgerStubFields} from '../test-helpers/controllable-consensus-port.js';
 
 const NOW_MS = 1_000_000;
 const LEASE_MS = 60_000;
@@ -423,6 +424,7 @@ function createRealSqlLedgerHarness(cache, nodeId = 'n1') {
   const entryIdsSeen = [];
   const emitter = new EventEmitter();
   const service = Object.assign(emitter, {
+    ...leadingLedgerStubFields(),
     partitionId: LEDGER_PARTITION_ID,
     tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
     replicaId: `${LEDGER_PARTITION_ID}-r1`,

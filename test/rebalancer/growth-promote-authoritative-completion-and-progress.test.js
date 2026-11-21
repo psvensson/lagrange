@@ -59,6 +59,7 @@ import {
   createOperation, OperationType, ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {leadingLedgerStubFields} from '../test-helpers/controllable-consensus-port.js';
 
 const TEST_PARTITION_ID = 'user_orders-p1';
 const TEST_LEADER_NODE_1 = 'node-leader-1';
@@ -1430,6 +1431,7 @@ test(
 
     const admittedStatements = [];
     const ledgerService = Object.assign(new EventEmitter(), {
+      ...leadingLedgerStubFields(),
       partitionId: LEDGER_PARTITION_ID,
       db,
     });
