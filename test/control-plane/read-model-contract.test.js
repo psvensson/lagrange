@@ -548,6 +548,9 @@ async (t) => {
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      async submitMutation() {
+        throw new Error('Unexpected mutation in this observation fixture');
+      },
       async readAuthoritativeRows(_tableName, _sql, _params, options = {}) {
         capturedReadOptions.push(options);
         if (

@@ -40,6 +40,7 @@ import {RebalanceCoordinator} from
 import {repairOperationRowForGateRepairedReservation} from
   '../../src/rebalancer/operation-workflow-gate-operation-row-repair.js';
 import {
+  createFixtureSystemMutationPort,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
@@ -111,6 +112,7 @@ function createSqlGateway(database, options = {}) {
   };
   return {
     executeQuery: execute,
+    submitMutation: createFixtureSystemMutationPort(execute),
     readAuthoritativeRows: async (_table, sql, params = []) =>
       executeSql(database, sql, params),
     readRows: async (_table, sql, params = []) =>

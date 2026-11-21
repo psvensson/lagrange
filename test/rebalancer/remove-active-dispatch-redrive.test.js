@@ -166,6 +166,17 @@ function createRemoveCoordinator({
   return {coordinator, deliveries};
 }
 
+function beforeOperationMutation(gateway, matches, beforeSubmit) {
+  const submit = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (mutation, options) => {
+    if (mutation.tableName === 'replica_operations' &&
+        mutation.operation === 'update' && matches(mutation)) {
+      await beforeSubmit();
+    }
+    return submit(mutation, options);
+  };
+}
+
 function removeDeliveries(deliveries) {
   return deliveries.filter((entry) =>
     entry.payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA,
@@ -499,14 +510,9 @@ for (const boundary of ['before response', 'before SQLite CAS']) {
         moved = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
       }
       if (boundary === 'before SQLite CAS') {
-        const execute = gateway.executeQuery.bind(gateway);
-        gateway.executeQuery = async (sql, params, options) => {
-          if (!mutationRan && sql.includes('UPDATE replica_operations') &&
-              sql.includes('AND steps_history = ?') && params[1] === WORKFLOW_STEP.STOPPING) {
-            await movePreimage();
-          }
-          return execute(sql, params, options);
-        };
+        beforeOperationMutation(gateway, (mutation) =>
+          !mutationRan && typeof mutation.whereClause.steps_history === 'string' &&
+          mutation.data.workflow_step === WORKFLOW_STEP.STOPPING, movePreimage);
       }
       try {
         await coordinator.reconcileOrphanedOperations();
@@ -644,14 +650,9 @@ for (const [boundary, change] of [
           return transition(operationId, request, ...args);
         };
       } else {
-        const execute = gateway.executeQuery.bind(gateway);
-        gateway.executeQuery = async (sql, params, options) => {
-          if (!mutationRan && sql.includes('UPDATE replica_operations') &&
-              sql.includes('completed_at IS NULL') && params[1] === WORKFLOW_STEP.REMOVED) {
-            await changeStoppingSubject();
-          }
-          return execute(sql, params, options);
-        };
+        beforeOperationMutation(gateway, (mutation) =>
+          !mutationRan && mutation.whereClause.completed_at === null &&
+          mutation.data.workflow_step === WORKFLOW_STEP.REMOVED, changeStoppingSubject);
       }
       try {
         await coordinator.reconcileOrphanedOperations();

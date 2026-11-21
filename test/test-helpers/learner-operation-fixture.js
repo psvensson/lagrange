@@ -1,5 +1,6 @@
 /** Shared canonical operation/native fixture; transport and metadata are supplied
  * test physics, not distributed SQL or physical networking. */
+import {createFixtureSystemMutationPort} from '../rebalancer/test-helpers.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -66,6 +67,7 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   let beforeNodes = null;
   let beforeOperation = null;
   const gateway = {
+    submitMutation: createFixtureSystemMutationPort(execute),
     executeQuery: async (sql, params) => execute(sql, params),
     readAuthoritativeRows: async (table, sql, params, options) => {
       reads.push({table, sql, options});

@@ -402,6 +402,14 @@ function withAuthoritativeReadDefaults(tableName, rawResult) {
 
 const MUTATION_SQL_PLANNER = new ControlPlaneSystemTableGateway();
 
+// A fixture named port backed by its existing durable SQL statement executor.
+function createFixtureSystemMutationPort(execute) {
+  return (mutation, options) => {
+    const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan(mutation);
+    return execute(sql, params, options);
+  };
+}
+
 function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
   const gateway = {
     async executeQuery(sql, params = [], _queryOptions = {}) {
@@ -410,10 +418,8 @@ function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
       }
       return {success: true, rows: [], rowSetComplete: true};
     },
-    async submitMutation(mutation, options) {
-      const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan(mutation);
-      return gateway.executeQuery(sql, params, options);
-    },
+    submitMutation: createFixtureSystemMutationPort(
+      (...args) => gateway.executeQuery(...args)),
     async readAuthoritativeRows(tableName, sql, params = [], queryOptions = {}) {
       return withAuthoritativeReadDefaults(
         tableName,
@@ -1397,6 +1403,7 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 }
 
 export {
+  createFixtureSystemMutationPort,
   buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
   createAllowAllStorageAdmissionService, createCoordinatorSqlStore, createMockCache,
   createMockCdcService,

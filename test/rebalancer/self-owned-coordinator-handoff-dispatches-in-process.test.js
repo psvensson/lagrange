@@ -36,6 +36,9 @@ function buildCoordinatorWithDeliverySpy(nodeId) {
       },
     },
     controlPlaneSystemTableGateway: {
+      async submitMutation() {
+        throw new Error('Unexpected mutation in this observation fixture');
+      },
       async readRows() {
         return {success: true, rows: [], affectedRows: 0};
       },

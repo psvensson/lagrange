@@ -1,3 +1,4 @@
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
@@ -228,6 +229,9 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          throw new Error('The topology refusal must precede operation mutation');
+        },
         async readRows(tableName, sql, params = []) {
           return authoritativeRead(tableName, sql, params);
         },
@@ -419,6 +423,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       controlPlaneSystemTableGateway: {
+        submitMutation: createFixtureSystemMutationPort(reservationAwareExecuteQuery),
         async readRows(tableName, sql, params = []) {
           return authoritativeRead(tableName, sql, params);
         },
@@ -609,6 +614,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       controlPlaneSystemTableGateway: {
+        submitMutation: createFixtureSystemMutationPort(reservationAwareExecuteQuery),
         async readRows(tableName, sql, params = []) {
           return authoritativeRead(tableName, sql, params);
         },

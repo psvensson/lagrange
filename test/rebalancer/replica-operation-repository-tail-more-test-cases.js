@@ -46,12 +46,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
     };
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
-        cdcIntegrationService: {
-          async updateSystemTableRow() {
-            return {success: true};
-          },
-        },
-        updateSystemTableRow: async () => ({
+        submitMutation: async () => ({
           success: false,
           error: 'query_admission_deferred',
           errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
@@ -169,12 +164,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       };
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          cdcIntegrationService: {
-            async updateSystemTableRow() {
-              return {success: true};
-            },
-          },
-          updateSystemTableRow: async () => {
+          submitMutation: async () => {
             updateCalls += 1;
             if (updateCalls === 1) {
               return {
@@ -249,12 +239,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       };
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          cdcIntegrationService: {
-            async insertSystemTableRow() {
-              return {success: true};
-            },
-          },
-          insertSystemTableRow: async () => {
+          submitMutation: async () => {
             insertCalls += 1;
             if (insertCalls === 1) {
               return {
@@ -310,12 +295,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       let waitCalls = 0;
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          cdcIntegrationService: {
-            async insertSystemTableRow() {
-              return {success: true};
-            },
-          },
-          insertSystemTableRow: async () => {
+          submitMutation: async () => {
             insertCalls += 1;
             if (insertCalls === 1) {
               const error = new Error('control_plane_pressure_degraded');
@@ -964,12 +944,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
       };
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          cdcIntegrationService: {
-            async updateSystemTableRow() {
-              return {success: true};
-            },
-          },
-          updateSystemTableRow: async (_tableName, _whereClause, _data, options = {}) => {
+          submitMutation: async (_mutation, options = {}) => {
             updateCalls += 1;
             observedSessions.push(options.sessionId || null);
             observedTimeouts.push(options.timeoutMs || null);
