@@ -89,7 +89,8 @@ function idsOf(rows) {
 // REMOVE copies nothing.
 function isOccupyingCopy(row) {
   return row.incomplete && COPY_TYPES.has(row.type) && !row.founder &&
-    COPY_PHASE_WORKFLOW_STEPS.has(row.step);
+    COPY_PHASE_WORKFLOW_STEPS.has(row.step) &&
+    row.entityType === UNIFIED_SERVICE_TYPE.PARTITION;
 }
 
 // Step 4 (FOUND only): a static-catalog partition is founded by the seed;
@@ -119,7 +120,7 @@ function capacityRefusal(statement, census) {
     return null;
   }
   const copies = census.filter(isOccupyingCopy);
-  const sourceOccupancy = copies.filter((row) => row.copySourceNodeId === null ||
+  const sourceOccupancy = copies.filter((row) =>
     row.copySourceNodeId === move.copySourceNodeId).length;
   const targetOccupancy = copies.filter((row) =>
     row.targetNodeId === move.targetNodeId).length;
@@ -150,6 +151,9 @@ function claimRefusal(db, statement) {
 }
 
 function admissionRefusal(db, statement, census) {
+  if (statement.partitionId !== LEDGER_PARTITION_ID) {
+    return refused(REFUSAL.NOT_LEDGER_PARTITION);
+  }
   const entityRows = census.filter((row) => row.incomplete &&
     row.entityType === statement.entityType && row.entityId === statement.entityId);
   const ledgerRows = census.filter((row) => row.incomplete &&
@@ -264,7 +268,7 @@ function decideHoldRelease(db, {command, release}) {
     return {result: refused(REFUSAL.HOLD_NOT_HELD), rows: []};
   }
   const copying = census.filter((row) => row.operationId !== held.operationId &&
-    row.incomplete && COPY_TYPES.has(row.type) && COPY_PHASE_WORKFLOW_STEPS.has(row.step));
+    isOccupyingCopy(row));
   if (copying.length > 0) {
     return {result: refused(REFUSAL.COPY_PHASE_NOT_IDLE,
       {operationIds: idsOf(copying)}), rows: []};
