@@ -75,8 +75,6 @@ const {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
   OperationType,
-  QUERY_DEFAULTS,
-  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   ReplicaOperationField,
@@ -150,21 +148,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       this.createControlPlaneTimeoutBudget(
         this.tablePartitionProvisioningTimeoutMs,
       );
-    let provisionTargetDiagnostics =
-      explicitTargetNodeIds.length === 0 ?
-        this.resolveProvisionTargetNodeIdsWithDiagnostics(targetReplicaCount)
-          .diagnostics :
-        null;
-    let provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
-      explicitTargetNodeIds,
-      targetReplicaCount,
-      provisionTargetDiagnostics,
-    );
+    let provisionTargetNodeIds = explicitTargetNodeIds;
     let provisioningContractState = OWNER_CONTRACT_STATE.READY;
     let provisioningNextAction = OWNER_CONTRACT_NEXT_ACTION.PROCEED;
     let provisioningReasonCodes = [];
     let provisioningRetryAfterMs = 0;
-    let provisioningEpoch = provisionTargetDiagnostics?.epoch || null;
+    let provisioningEpoch = null;
     let admissionConvergence =
       context?.admissionConvergence &&
       typeof context.admissionConvergence === LOCAL_STR_OBJECT ?
@@ -184,77 +173,38 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       });
     }
 
-    if (
-      explicitTargetNodeIds.length === 0 &&
-      (provisionTargetNodeIds.length < targetReplicaCount ||
-        this.supportsProvisioningAdmissionPrecheck())
-    ) {
+    const discoverTargets = explicitTargetNodeIds.length === 0;
+    const assertFoundingOwnership =
+      discoverTargets && this.rebalanceCoordinator.placementAdmissionEnabled === true &&
+      routableNodeIds.length === 0 &&
+      context?.assertProvisioningOwnership ?
+        () => context.assertProvisioningOwnership() :
+        null;
+    if (discoverTargets) {
       const convergenceResult = await this.waitForProvisionTargetNodeIds({
         partitionId,
         schemaJobId: context?.schemaJobId,
         requiredReplicaCount: targetReplicaCount,
         minimumRoutableReplicaCount,
         hasExplicitMinimumRoutableReplicaCount,
-        minimumRoutableReplicaCountWasDefaulted:
-          context?.minimumRoutableReplicaCountWasDefaulted === true,
         timeoutBudget,
-        failOnTimeout: false,
         maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
-        explicitTargetNodeIds,
-        allowAdaptiveAdmissionConvergenceWait:
-          this.tablePartitionTargetNodeConvergenceTimeoutMs ===
-          QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS,
+        assertProvisioningOwnership: assertFoundingOwnership,
         cancellationToken,
       });
       admissionConvergence = convergenceResult.admissionProbe || null;
-      provisionTargetDiagnostics =
-        convergenceResult.diagnostics || provisionTargetDiagnostics;
-      provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
-        explicitTargetNodeIds,
-        targetReplicaCount,
-        provisionTargetDiagnostics,
-      );
-      provisioningEpoch = convergenceResult?.epoch || provisioningEpoch;
-      if (convergenceResult.contractState === OWNER_CONTRACT_STATE.DEFERRED) {
-        const error = new Error(
-          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
-        );
-        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.epoch = convergenceResult.epoch || null;
-        error.reasons = convergenceResult.reasons || [];
-        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
-        error.detail = {
-          epoch: error.epoch,
-          reasons: error.reasons,
-          retryAfterMs: error.retryAfterMs,
-        };
-        throw error;
+      provisionTargetNodeIds = convergenceResult.nodeIds;
+      provisioningEpoch = convergenceResult.epoch;
+      if (admissionConvergence || provisionTargetNodeIds.length < targetReplicaCount) {
+        targetReplicaCount = provisionTargetNodeIds.length;
+        if (!hasExplicitMinimumRoutableReplicaCount) {
+          minimumRoutableReplicaCount = Math.max(
+            convergenceResult.quorumReplicaCount,
+            Math.min(minimumRoutableReplicaCount, targetReplicaCount),
+          );
+        }
+        enforceEveryProvisioningOperation = true;
       }
-      targetReplicaCount = provisionTargetNodeIds.length;
-      if (!hasExplicitMinimumRoutableReplicaCount) {
-        minimumRoutableReplicaCount = Math.max(
-          this.calculateQuorumReplicaCount(requestedReplicaCount),
-          Math.min(minimumRoutableReplicaCount, targetReplicaCount),
-        );
-      }
-      if (targetReplicaCount < minimumRoutableReplicaCount) {
-        const error = new Error(
-          `Provisioning unavailable: quorum not reachable for partition ${partitionId}`,
-        );
-        error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-        error.epoch = provisioningEpoch;
-        error.reasons = convergenceResult.reasons || [];
-        error.retryAfterMs = convergenceResult.retryAfterMs || 0;
-        error.detail = {
-          epoch: error.epoch,
-          reasons: error.reasons,
-          retryAfterMs: error.retryAfterMs,
-        };
-        throw error;
-      }
-      enforceEveryProvisioningOperation = true;
       provisioningContractState = convergenceResult.contractState;
       provisioningNextAction = convergenceResult.nextAction;
       provisioningReasonCodes = Array.isArray(convergenceResult.reasonCodes) ?
@@ -286,9 +236,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       candidateTargetNodeIds.push(targetNodeId);
     }
 
-    const supportsAdmissionPrecheck =
-      typeof this.rebalanceCoordinator.checkProvisioningAdmission ===
-      'function';
+    const supportsAdmissionPrecheck = this.supportsProvisioningAdmissionPrecheck();
     const admittedTargetNodeIds = [];
     const operationCreationAdmissionByTargetNodeId = new Map();
     const precheckedTargetNodeIds = new Set();
@@ -304,8 +252,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }
       admittedTargetNodeIds.push(
         ...admissionConvergence.admittedTargetNodeIds.filter(
-          (targetNodeId) =>
-            typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > 0,
+          (targetNodeId) => seenCandidateTargetNodeIds.has(targetNodeId),
         ),
       );
       for (const plan of Array.isArray(
@@ -323,7 +270,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         }
       }
       rejectedTargetNodePlans.push(
-        ...admissionConvergence.rejectedTargetNodePlans,
+        ...admissionConvergence.rejectedTargetNodePlans.filter(
+          ({targetNodeId}) => seenCandidateTargetNodeIds.has(targetNodeId),
+        ),
       );
     }
     for (const targetNodeId of candidateTargetNodeIds) {
@@ -419,7 +368,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         routableNodeIdSet.size === 0 &&
         admittedTargetNodeIds.length > 0 &&
         requiredNewReplicaCount > 0) {
-      await context?.assertProvisioningOwnership?.();
+      if (!discoverTargets) {
+        await context?.assertProvisioningOwnership?.();
+      }
       const founded = await this.tryProvisionFoundingSetViaPlacementAdmission({
         partitionId,
         targetNodeIds: admittedTargetNodeIds.slice(0, requiredNewReplicaCount),

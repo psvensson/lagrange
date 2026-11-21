@@ -335,6 +335,7 @@ test('public CREATE reports a real missing quorum without inventing a reason',
     assertQuorumRefusal(t, answer, answer.outcome.detail);
     t.equal(attempts.length, 0, 'one target cannot reach founding');
     t.same(answer.outcome.reasons, [], 'the owner supplied no denial reason');
+    t.same(answer.outcome.reasonCodes, []);
     t.same(answer.outcome.detail.epoch, observed.epoch);
     t.same(answer.outcome.detail.nodeReasons, {});
     t.same(answer.outcome.detail.candidateTargetNodeIds, ['serve-a']);
@@ -369,6 +370,7 @@ test('public CREATE rechecks serve freshness after admission prechecks',
     if (answer.outcome.detail) {
       assertQuorumRefusal(t, answer, answer.outcome.detail);
       t.same(answer.outcome.detail.reasons, ['unavailable_stale']);
+      t.same(answer.outcome.reasonCodes, answer.outcome.detail.reasons);
       t.same(answer.outcome.detail.nodeReasons['serve-b'], ['unavailable_stale']);
       t.same(answer.outcome.detail.nodeReasons['serve-c'], ['unavailable_stale']);
       t.same(answer.outcome.detail.candidateTargetNodeIds, ['serve-a']);

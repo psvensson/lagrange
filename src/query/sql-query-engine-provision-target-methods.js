@@ -8,76 +8,68 @@ const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_UNAVAILABLE = 'unavailable';
 const LOCAL_STR_ELIGIBLE = 'eligible';
-const LOCAL_STR_READY_LEASE_EXPIRED = 'ready_lease_expired';
-const LOCAL_STR_PROVISIONING_UNAVAILABLE = 'provisioning_unavailable';
-const TARGET_NODE_WAIT_LOG_LEVEL = Object.freeze({
-  FAIL: 'error',
-  CONTINUE: 'warn',
-});
-
 const {
   AddressManager,
   ENTITY_TYPE,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
   QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG: _QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
-  TABLE_PARTITION_TARGET_NODE_WAIT: _TABLE_PARTITION_TARGET_NODE_WAIT,
-  TIMEOUT_BUDGET_CLASSIFICATION: _TIMEOUT_BUDGET_CLASSIFICATION,
   buildOwnerContractOutcome,
 } = SQL_QUERY_ENGINE_SHARED;
 
-/**
- * Log a provisioning-target wait failure that waitForCondition did not
- * already report as a spent bound (e.g. a budget refused up front).
- * @param {Object} engine - SQL query engine.
- * @param {Error} error - The wait failure.
- * @param {Object} payload - Log payload.
- * @param {boolean} failOnTimeout - Whether the failure propagates.
- * @private
- */
-function _logUnreportedTargetNodeWaitFailure(
-  engine,
-  error,
-  payload,
-  failOnTimeout,
-) {
-  if (error?.waitBoundSpentReported === true) {
-    return;
+function readTargetAnswerReasons(answer) {
+  if (answer.state === LOCAL_STR_UNAVAILABLE) {
+    return answer.reason ? [answer.reason] : [];
   }
-  const level = failOnTimeout ?
-    TARGET_NODE_WAIT_LOG_LEVEL.FAIL :
-    TARGET_NODE_WAIT_LOG_LEVEL.CONTINUE;
-  engine.logger[level](
-    QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
-    payload,
+  return answer.decision !== LOCAL_STR_ELIGIBLE ? answer.reasons : [];
+}
+
+function buildProvisionTargetRefusal({
+  partitionId, jobId, diagnostics, nodeIds, requiredReplicaCount,
+  quorumReplicaCount, retryAfterMs,
+}) {
+  const {cohort, epoch, selectedNodeIds} = diagnostics;
+  const reasonCodes = new Set();
+  if (cohort?.state === LOCAL_STR_UNAVAILABLE && cohort.reason) {
+    reasonCodes.add(cohort.reason);
+  }
+  const nodeReasons = Object.fromEntries(Object.entries(cohort?.answers || {})
+    .map(([nodeId, answer]) => [nodeId, readTargetAnswerReasons(answer)])
+    .filter(([, reasons]) => reasons?.length > 0));
+  for (const reasons of Object.values(nodeReasons)) {
+    for (const reason of reasons) reasonCodes.add(reason);
+  }
+  return {
+    partitionId,
+    jobId,
+    epoch,
+    reasons: [...reasonCodes],
+    nodeReasons,
+    candidateTargetNodeIds: nodeIds,
+    eligibleTargetNodeIds: selectedNodeIds,
+    requiredReplicaCount,
+    quorumReplicaCount,
+    targetObservationChanged: selectedNodeIds.length >= quorumReplicaCount &&
+      nodeIds.length < quorumReplicaCount,
+    retryAfterMs,
+  };
+}
+
+function throwProvisionTargetRefusal(detail) {
+  const {partitionId, candidateTargetNodeIds, quorumReplicaCount} = detail;
+  const error = new Error(
+    `Provisioning unavailable: quorum not reachable for partition ${partitionId} ` +
+    `(have ${candidateTargetNodeIds.length}, quorum ${quorumReplicaCount})`,
   );
-}
-
-function appendAnswerUnavailabilityReasons(reasons, ans) {
-  if (ans?.state === LOCAL_STR_UNAVAILABLE) {
-    reasons.push(ans.reason);
-  } else if (
-    ans?.decision !== LOCAL_STR_ELIGIBLE &&
-    Array.isArray(ans?.reasons)
-  ) {
-    reasons.push(...ans.reasons);
-  }
-}
-
-function collectCohortUnavailabilityReasons(cohort) {
-  const reasons =
-    cohort?.state === LOCAL_STR_UNAVAILABLE && cohort.reason ?
-      [cohort.reason] :
-      [];
-  for (const ans of Object.values(cohort?.answers || {})) {
-    appendAnswerUnavailabilityReasons(reasons, ans);
-  }
-  if (reasons.length === 0) {
-    reasons.push(LOCAL_STR_READY_LEASE_EXPIRED);
-  }
-  return [...new Set(reasons)];
+  error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
+  error.errorCode = error.code;
+  error.epoch = detail.epoch;
+  error.reasons = detail.reasons;
+  error.reasonCodes = detail.reasons;
+  error.retryAfterMs = detail.retryAfterMs;
+  error.detail = detail;
+  throw error;
 }
 
 class SQLQueryEngineProvisionTargetMethods {
@@ -107,7 +99,7 @@ class SQLQueryEngineProvisionTargetMethods {
   }
 
   /**
-   * Wait for the active-node cache to expose enough provisioning targets.
+   * Resolve a provisioning quorum from the serving-eligibility owner.
    * @param {Object} options
    * @param {string} options.partitionId
    * @param {number} options.requiredReplicaCount
@@ -115,6 +107,7 @@ class SQLQueryEngineProvisionTargetMethods {
    * @param {string[]} [options.explicitTargetNodeIds]
    * @param {number} [options.maxWaitMs]
    * @param {boolean} [options.failOnTimeout]
+   * @param {Function} [options.assertProvisioningOwnership]
    * @return {Promise<Object>}
    * @private
    */
@@ -132,9 +125,8 @@ class SQLQueryEngineProvisionTargetMethods {
     );
 
     const readiness = this.controlPlaneReadinessService;
-    let cohort = readiness && typeof readiness.answerServeCohort === LOCAL_STR_FUNCTION ?
-      readiness.answerServeCohort() :
-      null;
+    const hasExplicitTargets = explicitTargetNodeIds.length > 0;
+    let cohort = hasExplicitTargets ? null : this.observeProvisionTargetCohort();
 
     if (
       cohort?.state === LOCAL_STR_UNAVAILABLE &&
@@ -160,88 +152,82 @@ class SQLQueryEngineProvisionTargetMethods {
         );
       }
       throwIfCancellationRequested(cancellationToken);
-      cohort = readiness.answerServeCohort();
+      cohort = this.observeProvisionTargetCohort();
     }
 
-    const resolution =
-      this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
-    const lastDiagnostics = resolution.diagnostics;
-    const resolvedNodeIds = this.resolveProvisionTargetNodeIdsForContext(
-      explicitTargetNodeIds,
-      requiredReplicaCount,
-      lastDiagnostics,
-    );
-
-    let lastAdmissionProbe = null;
-    if (partitionId && this.supportsProvisioningAdmissionPrecheck()) {
-      lastAdmissionProbe = await this.probeProvisioningTargetAdmission({
-        partitionId,
-        targetNodeIds: resolvedNodeIds,
-        schemaJobId: options.schemaJobId,
-      });
-    }
-
+    let diagnostics =
+      this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount, cohort)
+        .diagnostics;
+    let nodeIds = hasExplicitTargets ? explicitTargetNodeIds : diagnostics.selectedNodeIds;
+    const majorityCount = this.calculateQuorumReplicaCount(requiredReplicaCount);
+    const requestedMinimum = options.minimumRoutableReplicaCount;
     const quorumReplicaCount =
-      this.calculateQuorumReplicaCount(requiredReplicaCount);
-    const explicitMinimumReplicaCount =
       options.hasExplicitMinimumRoutableReplicaCount === true &&
-      Number.isInteger(options.minimumRoutableReplicaCount) &&
-      options.minimumRoutableReplicaCount > 0 ?
-        Math.min(requiredReplicaCount, options.minimumRoutableReplicaCount) :
-        quorumReplicaCount;
-    const quorumCount = Math.max(quorumReplicaCount, explicitMinimumReplicaCount);
-    const epoch = cohort?.epoch || lastDiagnostics?.epoch || null;
-    const failOnTimeout = options.failOnTimeout !== false;
+      Number.isInteger(requestedMinimum) && requestedMinimum > 0 ?
+        Math.max(majorityCount, Math.min(requestedMinimum, requiredReplicaCount)) :
+        majorityCount;
 
-    if (resolvedNodeIds.length < quorumCount) {
-      const uniqueReasons = collectCohortUnavailabilityReasons(cohort);
-      const retryAfterMs = cohort?.retryAfterMs || this.tablePartitionProvisioningTimeoutMs;
-
-      const error = new Error(
-        `Provisioning unavailable: quorum not reachable for partition ${partitionId} (have ${resolvedNodeIds.length}, quorum ${quorumCount})`,
-      );
-      error.code = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-      error.errorCode = QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE;
-      error.epoch = epoch;
-      error.reasons = uniqueReasons;
-      error.retryAfterMs = retryAfterMs;
-      error.detail = {
-        epoch,
-        reasons: uniqueReasons,
-        retryAfterMs,
-      };
-
-      if (failOnTimeout) {
-        throw error;
+    let admissionProbe = null;
+    if (nodeIds.length >= quorumReplicaCount) {
+      if (partitionId && this.supportsProvisioningAdmissionPrecheck()) {
+        admissionProbe = await this.probeProvisioningTargetAdmission({
+          partitionId,
+          targetNodeIds: nodeIds,
+          schemaJobId: options.schemaJobId,
+        });
       }
+      if (options.assertProvisioningOwnership) {
+        await options.assertProvisioningOwnership();
+      }
+      throwIfCancellationRequested(cancellationToken);
+      if (!hasExplicitTargets && (admissionProbe || options.assertProvisioningOwnership)) {
+        // The owner fences expired or superseded evidence on every answer.
+        // Newly eligible targets belong to a subsequent admission attempt.
+        cohort = this.observeProvisionTargetCohort();
+        diagnostics =
+          this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount, cohort)
+            .diagnostics;
+        const eligibleNodeIds = new Set(diagnostics.selectedNodeIds);
+        nodeIds = nodeIds.filter((nodeId) => eligibleNodeIds.has(nodeId));
+      }
+    }
 
+    if (nodeIds.length < quorumReplicaCount) {
+      const detail = buildProvisionTargetRefusal({
+        partitionId,
+        jobId: options.schemaJobId ?? null,
+        diagnostics,
+        nodeIds,
+        requiredReplicaCount,
+        quorumReplicaCount,
+        retryAfterMs: cohort?.retryAfterMs ?? this.tablePartitionProvisioningTimeoutMs,
+      });
+      if (options.failOnTimeout !== false) {
+        throwProvisionTargetRefusal(detail);
+      }
       return this.buildProvisionTargetNodeConvergenceResult({
-        nodeIds: resolvedNodeIds,
-        diagnostics: lastDiagnostics,
-        admissionProbe: lastAdmissionProbe,
+        nodeIds,
+        diagnostics,
+        admissionProbe,
         timedOut: true,
         requiredReplicaCount,
+        quorumReplicaCount,
         waitedMs: 0,
-        epoch,
-        reasons: uniqueReasons,
-        retryAfterMs,
-        contractOutcome: buildOwnerContractOutcome({
-          contractState: OWNER_CONTRACT_STATE.DEFERRED,
-          nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-        }),
+        reasons: detail.reasons,
+        retryAfterMs: detail.retryAfterMs,
       });
     }
 
     return this.buildProvisionTargetNodeConvergenceResult({
-      nodeIds: resolvedNodeIds,
-      diagnostics: lastDiagnostics,
-      admissionProbe: lastAdmissionProbe,
+      nodeIds,
+      diagnostics,
+      admissionProbe,
       timedOut: false,
       requiredReplicaCount,
+      quorumReplicaCount,
       waitedMs: 0,
-      epoch,
       contractOutcome: buildOwnerContractOutcome({
-        contractState: resolvedNodeIds.length >= requiredReplicaCount ?
+        contractState: nodeIds.length >= requiredReplicaCount ?
           OWNER_CONTRACT_STATE.READY :
           OWNER_CONTRACT_STATE.UNDER_REPLICATED,
         nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
@@ -256,9 +242,6 @@ class SQLQueryEngineProvisionTargetMethods {
         options.diagnostics :
         null;
     const reasonCodes = options.reasons ? [...options.reasons] : [];
-    if (timedOut && reasonCodes.length === 0) {
-      reasonCodes.push(LOCAL_STR_PROVISIONING_UNAVAILABLE);
-    }
     const contractOutcome = options.contractOutcome || (timedOut ?
       buildOwnerContractOutcome({
         contractState: OWNER_CONTRACT_STATE.DEFERRED,
@@ -283,6 +266,7 @@ class SQLQueryEngineProvisionTargetMethods {
         options.requiredReplicaCount > 0 ?
           options.requiredReplicaCount :
           1,
+      quorumReplicaCount: options.quorumReplicaCount,
       waitedMs:
         Number.isFinite(options.waitedMs) &&
         options.waitedMs > 0 ?
@@ -296,7 +280,7 @@ class SQLQueryEngineProvisionTargetMethods {
             0,
       reasonCodes: Object.freeze(reasonCodes),
       reasons: reasonCodes,
-      epoch: options.epoch || diagnostics?.epoch || null,
+      epoch: diagnostics?.epoch || null,
     };
   }
 

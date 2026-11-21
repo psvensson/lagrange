@@ -148,7 +148,7 @@ export function isTransientProvisioningError(error) {
 }
 
 function buildProvisioningRefusal(workflow, error) {
-  const {epoch, reasons, retryAfterMs} = error;
+  const {epoch, reasons, retryAfterMs} = error.detail;
   return {
     success: false,
     error: error.message,
@@ -161,7 +161,8 @@ function buildProvisioningRefusal(workflow, error) {
     epoch,
     reasons,
     retryAfterMs,
-    detail: {epoch, reasons, retryAfterMs},
+    reasonCodes: reasons,
+    detail: error.detail,
   };
 }
 

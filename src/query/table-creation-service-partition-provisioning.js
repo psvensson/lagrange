@@ -80,6 +80,8 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
           partitionId,
           replicaCount,
           error: error.message,
+          ...(error.code === QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE ?
+            {detail: error.detail} : {}),
         });
       }
       if (!error.code) {
