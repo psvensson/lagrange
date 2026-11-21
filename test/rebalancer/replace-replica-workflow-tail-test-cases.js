@@ -1,3 +1,4 @@
+import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerReplaceReplicaWorkflowTailMoreTests} from './replace-replica-workflow-tail-more-test-cases.js';
 import {
@@ -49,7 +50,6 @@ export async function registerReplaceReplicaWorkflowTailTests({
       const addReplicaId = 'widgets-p1-r4';
       const addTargetNodeId = 'node-4';
       const deliveries = [];
-      const deferredTimers = [];
       let failActiveTransition = true;
       const messageRouter = {
         async deliver(target, payload, options) {
@@ -70,9 +70,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         enableTimeouts: false,
         messageRouter,
         setTimeoutFn(fn, delayMs) {
-          const handle = {fn, delayMs};
-          deferredTimers.push(handle);
-          return handle;
+          return {fn, delayMs};
         },
         clearTimeoutFn() {},
         cacheData: {
@@ -150,13 +148,10 @@ export async function registerReplaceReplicaWorkflowTailTests({
           WORKFLOW_STEP.SENDING,
           'the operation should stay dispatchable until observed progress resumes it',
         );
-        t.equal(
-          deferredTimers.length,
-          1,
-          'a bounded observed-progress retry should be armed',
-        );
-
-        await deferredTimers[0].fn();
+        const retry = coordinator.workflowOwner
+          .observedProgressRetryTimerByOperationId.get(operation.operationId);
+        t.ok(retry?.timeoutHandle, 'the operation owns a live observed-progress retry');
+        await retry.timeoutHandle.fn();
         for (let attempt = 0; attempt < 10 && deliveries.length < 2; attempt++) {
           await new Promise((resolve) => setImmediate(resolve));
         }
@@ -191,7 +186,6 @@ export async function registerReplaceReplicaWorkflowTailTests({
       const removeReplicaId = 'widgets-p1-r4';
       const removeTargetNodeId = 'node-4';
       const deliveries = [];
-      const deferredTimers = [];
       let failRemovedTransition = true;
       const messageRouter = {
         async deliver(target, payload, options) {
@@ -212,9 +206,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         enableTimeouts: false,
         messageRouter,
         setTimeoutFn(fn, delayMs) {
-          const handle = {fn, delayMs};
-          deferredTimers.push(handle);
-          return handle;
+          return {fn, delayMs};
         },
         clearTimeoutFn() {},
         cacheData: {
@@ -294,13 +286,10 @@ export async function registerReplaceReplicaWorkflowTailTests({
           WORKFLOW_STEP.STOPPING,
           'the satisfied remove should persist STOPPING before observed progress resumes terminal completion',
         );
-        t.equal(
-          deferredTimers.length,
-          1,
-          'a bounded observed-progress retry should be armed',
-        );
-
-        await deferredTimers[0].fn();
+        const retry = coordinator.workflowOwner
+          .observedProgressRetryTimerByOperationId.get(operation.operationId);
+        t.ok(retry?.timeoutHandle, 'the operation owns a live observed-progress retry');
+        await retry.timeoutHandle.fn();
         for (let attempt = 0; attempt < 10 && deliveries.length < 2; attempt++) {
           await new Promise((resolve) => setImmediate(resolve));
         }
@@ -343,16 +332,12 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
-        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
-        sqlQueryResults: {
-          'FROM services WHERE service_id = ?': {
-            success: true,
-            rows: [
-              buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
-              buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
-            ],
-            affectedRows: 1,
-          },
+        cacheData: {
+          nodes: buildActiveNodes(['seed-node', 'node-2']),
+          services: [
+            buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
+            buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
+          ],
         },
       });
 
@@ -375,22 +360,6 @@ export async function registerReplaceReplicaWorkflowTailTests({
         await coordinator.repository.persistOperationUpdate(operation,
           {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
 
-        // The universal remove-safety floor (audit finding 1, lenient
-        // REPLACE) evaluates the REPLACE source-removal against the
-        // replacement replica holding quorum. Seed the target replica as
-        // voter-ready so the lenient branch sees it; otherwise the floor
-        // fails closed on an empty replica-row read.
-        coordinator.systemTableCache.upsert('services', {
-          service_id: operation.replicaId,
-          replica_id: operation.replicaId,
-          partition_id: 'users-p1',
-          node_id: 'node-2',
-          service_type: 'partition',
-          status: 'active',
-          raft_role: 'leader',
-          address: `node-2/partition/${operation.replicaId}`,
-        });
-
         const progressed =
           await coordinator.operationWorkflowRunExclusive(
             coordinator.getOperationOwnerSingleFlightKey(
@@ -399,7 +368,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
             () => coordinator.reconcileOperationLifecycle(operation),
           );
 
-        t.equal(progressed, true,
+        t.equal(progressed, OPERATION_RECONCILE_OUTCOME.ADVANCED,
           'reconciliation should progress a syncing REPLACE with active target');
         t.equal(deliveries.length, 1,
           'reconciliation should dispatch source-removal even with owner key held');
@@ -420,7 +389,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
   );
 
   await t.test(
-    'REPLACE reconciliation skips duplicate source removal when ACTIVE transition is already committed',
+    'REPLACE reconciliation skips duplicate source removal after the first effect becomes pending',
     async (t) => {
       const deliveries = [];
       const messageRouter = {
@@ -434,16 +403,12 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
-        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
-        sqlQueryResults: {
-          'FROM services WHERE service_id = ?': {
-            success: true,
-            rows: [
-              buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
-              buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
-            ],
-            affectedRows: 1,
-          },
+        cacheData: {
+          nodes: buildActiveNodes(['seed-node', 'node-2']),
+          services: [
+            buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
+            buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
+          ],
         },
       });
 
@@ -461,19 +426,23 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
-        coordinator.operationWorkflowCoordinator
-          .markTransitionCommitted(
-            operation.operationId,
-            WORKFLOW_STEP.ACTIVE,
-          );
+        await coordinator.repository.persistOperationUpdate(operation,
+          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+        const firstOwner = {...operation};
+        await coordinator.reconcileOperationLifecycle(firstOwner);
+        const beforeReplay = await coordinator.queryOperationById(operation.operationId);
+        t.equal(beforeReplay.workflowStep, WORKFLOW_STEP.STOPPING,
+          'the first owner committed removal intent before replay');
+        t.equal(deliveries.length, 1, 'the first owner sent one source removal');
 
-        const progressed =
-          await coordinator.reconcileOperationLifecycle(operation);
+        const progressed = await coordinator.reconcileOperationLifecycle(operation);
 
-        t.equal(progressed, true,
-          'reconciliation should treat ACTIVE replay as observed progress');
-        t.equal(deliveries.length, 0,
-          'idempotent ACTIVE replays should not redispatch source removal');
+        t.equal(progressed, OPERATION_RECONCILE_OUTCOME.ADVANCED,
+          'the stale execution mirror adopts committed STOPPING progress');
+        t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+          'the stale execution mirror now reflects the owner of the pending effect');
+        t.equal(deliveries.length, 1,
+          'adopting durable removal intent should not duplicate the pending removal');
       } finally {
         await coordinator.shutdown();
       }
@@ -495,16 +464,12 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
-        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
-        sqlQueryResults: {
-          'FROM services WHERE service_id = ?': {
-            success: true,
-            rows: [
-              buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
-              buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
-            ],
-            affectedRows: 1,
-          },
+        cacheData: {
+          nodes: buildActiveNodes(['seed-node', 'node-2']),
+          services: [
+            buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
+            buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
+          ],
         },
       });
 
@@ -522,40 +487,17 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
-        coordinator.operationWorkflowCoordinator
-          .markTransitionCommitted(
-            operation.operationId,
-            WORKFLOW_STEP.ACTIVE,
-          );
-
-        // The universal remove-safety floor (audit finding 1, lenient
-        // REPLACE) evaluates the REPLACE source-removal against the
-        // replacement replica holding quorum. Seed the target replica as
-        // voter-ready so the lenient branch sees it; otherwise the floor
-        // fails closed on an empty replica-row read.
-        coordinator.systemTableCache.upsert('services', {
-          service_id: operation.replicaId,
-          replica_id: operation.replicaId,
-          partition_id: 'users-p1',
-          node_id: 'node-2',
-          service_type: 'partition',
-          status: 'active',
-          raft_role: 'leader',
-          address: `node-2/partition/${operation.replicaId}`,
-        });
-
-        const authoritativeActiveOperation = {
-          ...operation,
-          workflowStep: WORKFLOW_STEP.ACTIVE,
-          status: ReplicaStatus.ACTIVE,
-        };
-        coordinator.repository.queryAuthoritativeOperationById =
-          async () => authoritativeActiveOperation;
+        await coordinator.repository.persistOperationUpdate(operation,
+          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+        const authoritativeOperation = {...operation};
+        await coordinator.updateStep(authoritativeOperation, WORKFLOW_STEP.ACTIVE);
+        t.equal(operation.workflowStep, WORKFLOW_STEP.SYNCING,
+          'the replay begins with the stale SYNCING execution mirror');
 
         const progressed =
           await coordinator.reconcileOperationLifecycle(operation);
 
-        t.equal(progressed, true,
+        t.equal(progressed, OPERATION_RECONCILE_OUTCOME.ADVANCED,
           'reconciliation should treat stale syncing state as observed progress');
         t.equal(deliveries.length, 1,
           'authoritative ACTIVE replay should redispatch source removal');
@@ -564,8 +506,9 @@ export async function registerReplaceReplicaWorkflowTailTests({
           ReplicaOperationMessageType.REMOVE_REPLICA,
           'authoritative replay should issue source removal for REPLACE',
         );
+        const persisted = await coordinator.queryOperationById(operation.operationId);
         t.equal(
-          operation.workflowStep,
+          persisted.workflowStep,
           WORKFLOW_STEP.STOPPING,
           'authoritative ACTIVE replay should advance the durable row into STOPPING',
         );
@@ -576,11 +519,16 @@ export async function registerReplaceReplicaWorkflowTailTests({
   );
 
   await t.test(
-    'REPLACE reconciliation does not rewind a more advanced cached terminal state',
+    'REPLACE reconciliation does not rewind a committed terminal state from a stale SYNCING mirror',
     async (t) => {
       const deliveries = [];
+      const witness = createReplaceWitness({leaderReplicaId: 'users-p1-r2'});
       const messageRouter = {
         async deliver(target, payload, options) {
+          const witnessAnswer = witness.deliveryFor(payload);
+          if (witnessAnswer) {
+            return witnessAnswer;
+          }
           deliveries.push({target, payload, options});
           return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
@@ -589,17 +537,14 @@ export async function registerReplaceReplicaWorkflowTailTests({
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
+        replaceWitness: false,
         messageRouter,
-        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
-        sqlQueryResults: {
-          'FROM services WHERE service_id = ?': {
-            success: true,
-            rows: [
-              buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
-              buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
-            ],
-            affectedRows: 1,
-          },
+        cacheData: {
+          nodes: buildActiveNodes(['seed-node', 'node-2']),
+          services: [
+            buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
+            buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
+          ],
         },
       });
 
@@ -618,50 +563,26 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
 
-        coordinator.repository.getReplicaOperationRowFromCache =
-          () => ({
-            operation_id: operation.operationId,
-            type: OperationType.REPLACE,
-            partition_id: operation.partitionId,
-            entity_type: operation.entityType,
-            entity_id: operation.entityId,
-            source_node_id: operation.sourceNodeId,
-            target_node_id: operation.targetNodeId,
-            replica_id: operation.replicaId,
-            source_replica_id: 'users-p1-r1',
-            status: ReplicaStatus.REMOVED,
-            workflow_step: WORKFLOW_STEP.REMOVED,
-            created_at: operation.createdAt,
-            updated_at: operation.createdAt + 1000,
-            completed_at: operation.createdAt + 1000,
-            error_message: null,
-            steps_history: JSON.stringify([
-              ...(Array.isArray(operation.stepsHistory) ?
-                operation.stepsHistory : []),
-              {
-                step: WORKFLOW_STEP.REMOVED,
-                timestamp: operation.createdAt + 1000,
-                previousStep: WORKFLOW_STEP.STOPPING,
-                reason: 'operation_completed',
-                ownerKey: operation.operationId,
-              },
-            ]),
-          });
-        coordinator.repository.queryAuthoritativeOperationById =
-          async () => ({
-            ...operation,
-            sourceReplicaId: 'users-p1-r1',
-            workflowStep: WORKFLOW_STEP.ACTIVE,
-            status: ReplicaStatus.ACTIVE,
-          });
+        await coordinator.repository.persistOperationUpdate(operation,
+          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+        const retiringOperation = {...operation};
+        await coordinator.reconcileOperationLifecycle(retiringOperation);
+        t.equal(retiringOperation.workflowStep, WORKFLOW_STEP.STOPPING,
+          'the first owner records durable removal intent and sends the effect');
+        t.equal(deliveries.length, 1, 'the first owner sends one source removal');
+        witness.commitRemoval();
+        await coordinator.reconcileOperationLifecycle(retiringOperation);
+        const terminal = await coordinator.queryOperationById(operation.operationId);
+        t.equal(terminal.workflowStep, WORKFLOW_STEP.REMOVED,
+          'committed removal lets the first owner write the terminal row');
 
         const progressed =
           await coordinator.reconcileOperationLifecycle(operation);
 
-        t.equal(progressed, true,
+        t.equal(progressed, OPERATION_RECONCILE_OUTCOME.COMPLETED,
           'reconciliation should accept observed terminal progress');
-        t.equal(deliveries.length, 0,
-          'terminal cached progress should not redispatch source removal');
+        t.equal(deliveries.length, 1,
+          'adopting the committed terminal should not redispatch source removal');
         t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.REMOVED,
@@ -706,14 +627,10 @@ export async function registerReplaceReplicaWorkflowTailTests({
         enableTimeouts: false,
         replaceWitness: false,
         messageRouter,
-        sqlQueryResults: {
-          'FROM services WHERE service_id = ?': {
-            success: true,
-            rows: [
-              buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.FAILED),
-            ],
-            affectedRows: 1,
-          },
+        cacheData: {
+          services: [
+            buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.FAILED),
+          ],
         },
       });
 
@@ -731,7 +648,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.sourceReplicaId = 'users-p1-r1';
         operation.workflowStep = WORKFLOW_STEP.STOPPING;
-        operation.status = ReplicaStatus.ACTIVE;
+        operation.status = ReplicaStatus.REMOVING;
         // The durable row is STOPPING (another writer's, with no intent);
         // the owner records its intent from a fresh witness read first.
         operation.stepsHistory = [...operation.stepsHistory,
@@ -782,16 +699,12 @@ export async function registerReplaceReplicaWorkflowTailTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
-        cacheData: {nodes: buildActiveNodes(['seed-node', 'node-2'])},
-        sqlQueryResults: {
-          'FROM services WHERE service_id = ?': {
-            success: true,
-            rows: [
-              buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
-              buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
-            ],
-            affectedRows: 1,
-          },
+        cacheData: {
+          nodes: buildActiveNodes(['seed-node', 'node-2']),
+          services: [
+            buildUsersP1ServiceRow('users-p1-r2', 'node-2', ReplicaStatus.ACTIVE, 'leader'),
+            buildUsersP1ServiceRow('users-p1-r1', 'seed-node', ReplicaStatus.ACTIVE),
+          ],
         },
       });
 
@@ -813,22 +726,6 @@ export async function registerReplaceReplicaWorkflowTailTests({
         // transition compare-and-swaps on it.
         await coordinator.repository.persistOperationUpdate(operation,
           {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
-
-        // The universal remove-safety floor (audit finding 1, lenient
-        // REPLACE) evaluates the REPLACE source-removal against the
-        // replacement replica holding quorum. Seed the target replica as
-        // voter-ready so the lenient branch sees it; otherwise the floor
-        // fails closed on an empty replica-row read.
-        coordinator.systemTableCache.upsert('services', {
-          service_id: operation.replicaId,
-          replica_id: operation.replicaId,
-          partition_id: 'users-p1',
-          node_id: 'node-2',
-          service_type: 'partition',
-          status: 'active',
-          raft_role: 'leader',
-          address: `node-2/partition/${operation.replicaId}`,
-        });
 
         await coordinator.reconcileSyncingOperation(operation);
 
