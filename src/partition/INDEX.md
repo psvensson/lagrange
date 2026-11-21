@@ -102,6 +102,7 @@ documentClass: generated
 - [partition-placement-admission-identity.js](partition-placement-admission-identity.js) - The identity of every operation the placement admission applier admits (quest replica-placement-admission-owner,... (importers: many)
 - [partition-placement-admission.js](partition-placement-admission.js) - Request one admission on this replica_operations partition: the placement owner's local call, and the... (importers: many)
 - [partition-placement-founder-proof.js](partition-placement-founder-proof.js) - No leading comment; first export: provePlacementFounders. (importers: few)
+- [partition-placement-retained-repair.js](partition-placement-retained-repair.js) - The placement owner's retained-row decision, inside the ledger apply transaction. (importers: few)
 - [partition-raft-storage.js](partition-raft-storage.js) - Partition Raft Storage - SQLite-backed Raft log storage for partitions. (importers: many)
 - [partition-read-statement-owner.js](partition-read-statement-owner.js) - Retain one most-recent SELECT statement per SQLite database handle. (importers: one)
 - [partition-reopen-options.js](partition-reopen-options.js) - A replacement of an existing local replica opens its durable membership record. (importers: one)
