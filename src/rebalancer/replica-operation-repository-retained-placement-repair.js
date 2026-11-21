@@ -318,7 +318,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
         if (binding.state === BINDING.REMOTE) {
           this.recordRetainedRepairCustody(attempt, answer, binding);
         }
-        return this.retainUncommittedRepairAnswer(attempt, answer, releaseSequence);
+        return this.retainUncommittedRepairAnswer(attempt, answer, releaseSequence, binding);
       }
       attempt.minimumLedgerIndex = Math.max(attempt.minimumLedgerIndex, answer.logIndex);
       attempt.minimumLedgerTerm = Math.max(attempt.minimumLedgerTerm, answer.term);
@@ -361,7 +361,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
         RETAINED_REPAIR_WAIT.OUTCOME_UNKNOWN);
     },
 
-    retainUncommittedRepairAnswer(attempt, answer, releaseSequence) {
+    retainUncommittedRepairAnswer(attempt, answer, releaseSequence, binding) {
       const failureCode = answer.failureCode;
       if (failureCode === PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE) {
         return this.oweRetainedRepair(attempt, OBSERVATION.CLEARING, failureCode);
@@ -374,6 +374,13 @@ function assignRetainedPlacementRepairMethods(Repository) {
         this.logger.error(REPAIR_LOG.AUTHORITY_REFUSED,
           {operationId: attempt.operation.operationId, reason: failureCode});
         return false;
+      }
+      // A bound remote receiver refusing for want of ledger leadership holds no
+      // tenure: that refusal is its disclaim (it answers before its repository).
+      // The sender owns the reconsideration; the recorded trigger stays.
+      if (binding.state === BINDING.REMOTE && trigger === PLACEMENT_TRIGGER.LEADERSHIP_START) {
+        return this.oweRetainedRepair(attempt, OBSERVATION.CLEARING | OBSERVATION.ROUTE,
+          RETAINED_REPAIR_DISCLAIM);
       }
       attempt.clearingTrigger = trigger;
       const released = this.retainedPlacementRepairReleaseSequence > releaseSequence;
