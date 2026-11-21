@@ -416,12 +416,36 @@ function ownerOf(node) {
   return node.ledger?.replicaPlacementOwnerAttachment?.owner ?? null;
 }
 
+// Whether the status read in progress is the write kernel's leadership read
+// of a placement proposal (partition-service-raft-write-commit.js
+// partitionWriteLeadershipRefusalOf called by partition-placement-admission.js
+// proposePlacementCommand): read from the synchronous call stack.
+const KERNEL_PLACEMENT_LEADERSHIP_READ =
+  /partitionWriteLeadershipRefusalOf[\s\S]*proposePlacementCommand/u;
+function isKernelPlacementLeadershipRead() {
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = TIMER_STACK_FRAMES;
+  const {stack} = new Error();
+  Error.stackTraceLimit = limit;
+  return KERNEL_PLACEMENT_LEADERSHIP_READ.test(stack);
+}
+
 // A ledger replica's port as the double builds it, with the rs-raft status
 // field currentTermApplied answered by the fixture's ledger log. Installed
 // right after the replica started, before any subscriber or delivery holds
 // the port; every other operation is the double's own.
 function withTermStartStatus(port, currentTermApplied, node) {
   return createRaftOperationPort({...port, readStatus: () => {
+    // A status read that runs a consensus turn announcing a renewed term
+    // (readStatusNow drains inbound; announce emits TERM_CHANGE): armed once
+    // by a witness, for the read the write kernel's leadership check makes
+    // for a placement proposal, and run before the status is answered.
+    if (typeof node.renewInsideKernelLeadershipRead === 'function' &&
+        isKernelPlacementLeadershipRead()) {
+      const renew = node.renewInsideKernelLeadershipRead;
+      node.renewInsideKernelLeadershipRead = null;
+      renew();
+    }
     // A status read that runs a consensus turn and announces applied
     // progress synchronously (raft-rs-runtime-owner.js readStatusNow drains
     // inbound): armed once by a witness.
