@@ -459,9 +459,11 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       await router.initialize();
 
       let capturedOptions = null;
+      let remainingMs = null;
       router.setQueryMessageGroupServiceResolver(() => ({
         async sendMessage(_targetService, _message, options = {}) {
-          capturedOptions = options;
+          capturedOptions = options.transportDeliveryOptions;
+          remainingMs = capturedOptions.deliveryLifetime.remainingMs();
           return {delivery: buildDeliveryEnvelope({acknowledged: true},
             {success: true, rows: []})};
         },
@@ -479,14 +481,17 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
       t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
         'query transport send should still succeed');
-      t.ok(capturedOptions?.transportDeliveryOptions?.timeoutMs >= 1200,
-        'query transport sends should inherit timeoutMs from router delivery');
-      t.equal(capturedOptions?.transportDeliveryOptions?.deliveryPriority,
+      t.ok(remainingMs > 0 && remainingMs <= 1234,
+        'query transport sends observe the remaining grant from router delivery');
+      t.equal(capturedOptions.signal, capturedOptions.deliveryLifetime.signal,
+        'the transport receives the original grant and its abort signal together');
+      t.notOk(Object.hasOwn(capturedOptions, 'timeoutMs'), 'no replacement duration is supplied');
+      t.equal(capturedOptions?.deliveryPriority,
         'critical',
         'query transport sends should inherit delivery priority from router ' +
           'delivery');
       t.equal(
-        capturedOptions?.transportDeliveryOptions?.deliverySource,
+        capturedOptions?.deliverySource,
         QUERY_TRANSPORT_DELIVERY_SOURCE,
         'query transport sends should preserve explicit delivery-source ownership',
       );

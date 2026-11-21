@@ -1,12 +1,16 @@
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {createMockSystemCache} from '../query/query-executor-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
+import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
 import {ConnectionState} from '../../src/transport/message-router.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {createUnknownOutcomeRedelivery} from '../../src/query/query-executor-unknown-outcome.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
-import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  TRANSPORT_DELIVERY_OUTCOME_STATE} from
   '../../src/transport/transport-semantic-outcome.js';
 import {createRouterEnvelopeFixture, serviceAddress, settleUntil} from './router-envelope-witness-fixture.js';
 
@@ -143,3 +147,130 @@ test('QUERY/MG finite reply loss recovers under the original write entry', async
   t.equal(group.pendingMessages.size, 0, 'MG custody is closed');
   t.equal(sender.router.pendingResponses.size, 0, 'router answer custody is closed');
 });
+
+const GRANT_MS = 1000;
+const HANDOFF_SPEND_MS = 200;
+const QUERY_SOURCE = 'query-grant-source';
+const QUERY_TARGET = 'query-grant-target';
+const QUERY_PARTITION_ID = 'grant-p1';
+const LIVE_QUERY = 'SELECT 1';
+const EXPIRED_BEFORE_HANDOFF = 'SELECT 2';
+const EXPIRED_AFTER_HANDOFF = 'SELECT 3';
+
+function holdGroupDispatch(group) {
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const dispatch = group.deliverDirectOnlyMessage.bind(group);
+  group.deliverDirectOnlyMessage = (envelope, options) => {
+    const settled = release.promise.then(() => dispatch(envelope, options));
+    entered.resolve({messageId: envelope.id, settled});
+    return settled;
+  };
+  return {entered: entered.promise, release: release.resolve,
+    restore: () => { group.deliverDirectOnlyMessage = dispatch; }};
+}
+
+function holdTargetAck(router, expectedId) {
+  const raw = router.sendRaw.bind(router);
+  let release = null;
+  router.sendRaw = (ws, frame) => {
+    if (frame.type === ROUTER_MESSAGE_TYPE.ACK && frame.messageId === expectedId) {
+      release = () => raw(ws, frame);
+      return;
+    }
+    raw(ws, frame);
+  };
+  return {held: () => release !== null, release: () => release?.(),
+    restore: () => { router.sendRaw = raw; }};
+}
+
+function holdWriteCallback(ws, expectedId) {
+  const send = ws.send.bind(ws);
+  let release = null;
+  ws.send = (bytes, options, callback) => {
+    const frame = JSON.parse(String(bytes));
+    if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE && frame.messageId === expectedId) {
+      send(bytes, options, (error) => { release = () => callback(error); });
+      return;
+    }
+    send(bytes, options, callback);
+  };
+  return {held: () => release !== null, release: () => release?.(),
+    restore: () => { ws.send = send; }};
+}
+
+test('QUERY/MG preserves the original grant through local dispatch and wire ACK custody',
+  async (t) => {
+    const fixture = createRouterEnvelopeFixture(import.meta.url, QUERY_SOURCE);
+    await fixture.setup();
+    t.teardown(() => fixture.teardown());
+    const timeSource = new VirtualTimeSource({startMs: Date.now()});
+    const sender = await fixture.start(QUERY_SOURCE, true, {timeSource});
+    const target = await fixture.start(QUERY_TARGET);
+    await fixture.connect(sender, target);
+    const group = new MessageGroupService(withTestDbPath({groupId: 'query-grant',
+      replicaId: 'query-grant-r1', nodeId: QUERY_SOURCE, transport: sender.router}));
+    group.initialized = true;
+    sender.router.setQueryMessageGroupServiceResolver(() => ({service: group}));
+
+    const localAddress = `${QUERY_SOURCE}/partition/${QUERY_PARTITION_ID}`;
+    const remoteAddress = `${QUERY_TARGET}/partition/${QUERY_PARTITION_ID}`;
+    const received = new Map();
+    const handle = (message) => {
+      received.set(message.payload.payload.sql, message);
+      return {success: true};
+    };
+    sender.router.register(localAddress, handle);
+    target.router.register(remoteAddress, handle);
+    const query = (address, sql) => sender.router.deliver(address,
+      {type: QUERY_MESSAGE_TYPE.QUERY, sql, params: []}, {timeoutMs: GRANT_MS});
+
+    t.equal(deliveryTransportOf(await query(localAddress, LIVE_QUERY)).deliveryState,
+      TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED, 'local query transport reaches the registered owner');
+    t.equal(received.get(LIVE_QUERY)?.sourceNodeId, QUERY_SOURCE);
+
+    const before = holdGroupDispatch(group);
+    const first = query(remoteAddress, EXPIRED_BEFORE_HANDOFF);
+    const neverSubmitted = await before.entered;
+    timeSource.advance(GRANT_MS);
+    t.equal(deliveryTransportOf(await first).reasonCode,
+      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT, 'outer deadline expires while MG is held');
+    before.release();
+    await Promise.allSettled([neverSubmitted.settled]);
+    before.restore();
+    t.notOk(received.has(EXPIRED_BEFORE_HANDOFF), 'spent outer grant authorizes no handler effect');
+    t.notOk(sender.router.pendingMessages.has(neverSubmitted.messageId), 'no wire ACK custody remains');
+
+    const after = holdGroupDispatch(group);
+    const second = query(remoteAddress, EXPIRED_AFTER_HANDOFF);
+    const submitted = await after.entered;
+    const {messageId} = submitted;
+    const ack = holdTargetAck(target.router, messageId);
+    const {ws} = sender.router.nodeConnections.get(QUERY_TARGET);
+    const write = holdWriteCallback(ws, messageId);
+    try {
+      timeSource.advance(HANDOFF_SPEND_MS);
+      after.release();
+      await settleUntil(t, () => ack.held() && write.held() && received.has(EXPIRED_AFTER_HANDOFF),
+        'production WS frame and write callback with exact ACK withheld');
+      t.equal(received.get(EXPIRED_AFTER_HANDOFF)?.messageId, messageId, 'actual wire identity');
+      t.ok(sender.router.pendingMessages.has(messageId), 'the exact wire ACK waiter is live');
+      const queue = sender.router.getOutboundQueue(QUERY_TARGET);
+      t.equal(queue.inFlight, 1, 'the write owns one actual dispatch slot');
+
+      timeSource.advance(GRANT_MS - HANDOFF_SPEND_MS);
+      t.equal(deliveryTransportOf(await second).reasonCode,
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT, 'outer grant exhausted');
+      t.notOk(sender.router.pendingMessages.has(messageId), 'that grant retires the exact wire waiter');
+      t.equal(queue.inFlight, 1, 'caller timeout does not release the actual write slot');
+      ack.release();
+      write.release();
+      await Promise.allSettled([submitted.settled]);
+      await settleUntil(t, () => queue.inFlight === 0, 'raw write slot released after callback');
+    } finally {
+      write.release();
+      write.restore();
+      ack.restore();
+      after.restore();
+    }
+  });

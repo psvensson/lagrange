@@ -209,14 +209,11 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     throw failure;
   },
 
-  buildQueryTransportSendOptions(options = {}) {
-    const transportDeliveryOptions = {};
-    if (
-      Number.isFinite(options?.timeoutMs) &&
-      options.timeoutMs > TRANSPORT_NUM.ZERO
-    ) {
-      transportDeliveryOptions.timeoutMs = Math.floor(options.timeoutMs);
-    }
+  buildQueryTransportSendOptions(options) {
+    // The local group submits through this router. Its new message ID owns a
+    // distinct wire waiter, while the originating attempt owns the grant.
+    const {deliveryLifetime} = options;
+    const transportDeliveryOptions = {deliveryLifetime, signal: deliveryLifetime.signal};
     if (
       typeof options?.deliveryPriority === TRANSPORT_TYPEOF.STRING &&
       options.deliveryPriority.length > TRANSPORT_NUM.ZERO
@@ -229,12 +226,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     ) {
       transportDeliveryOptions.deliverySource = options.deliverySource;
     }
-    if (Object.keys(transportDeliveryOptions).length === TRANSPORT_NUM.ZERO) {
-      return {};
-    }
-    return {
-      transportDeliveryOptions,
-    };
+    return {transportDeliveryOptions};
   },
 
   async resolveQueryTransportDeliveryOutcome(
