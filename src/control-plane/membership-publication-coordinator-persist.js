@@ -253,7 +253,8 @@ class MembershipPublicationCoordinatorPersist extends
     }
     const {idempotencyKey, ...writeOptions} = publicationOptions;
     const writeIdentity = controlPlaneWriteIdentity(
-      PUBLICATION_WRITE_IDENTITY_SUBJECT, this.nodeId, publicationId, idempotencyKey ?? null);
+      PUBLICATION_WRITE_IDENTITY_SUBJECT, this.nodeId, publicationId, ownerKey,
+      idempotencyKey ?? null);
     const readOptions = buildPublicationReadOptions(publicationOptions);
     const maxAttempts = normalizePositiveInteger(
       options.publicationWriteMaxAttempts, PUBLICATION_WRITE_MAX_ATTEMPTS);

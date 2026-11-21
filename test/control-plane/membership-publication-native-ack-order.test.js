@@ -16,6 +16,8 @@ import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
+import {FORMATION_PUBLICATION_ID} from
+  '../../src/control-plane/membership-publication-formation-record.js';
 import {MEMBERSHIP_PUBLICATION_STATUS as STATUS} from
   '../../src/control-plane/membership-publication-row-contract.js';
 import {ControlPlanePublicationsOwner} from
@@ -206,3 +208,69 @@ test('a late old-publication ACK has no authority to reopen a superseded revisio
   () => exerciseAcknowledgementOrder({
     slowNode: NODES[0], fastNode: NODES[1], successor: 'node-c',
   }));
+
+test('native publication confirmation resolves a lost final answer and refuses unavailable readback',
+  async () => {
+    const {directory, dbPath} = temporaryDbPath();
+    let leader;
+    let writer;
+    try {
+      const ledger = await openPublicationsLedger(dbPath);
+      leader = ledger.leader;
+      writer = createPublicationWriter(leader, NODES[0], WRITER_TIME);
+      const first = publicationRow(3, NODES, WRITER_TIME - 10);
+      const second = publicationRow(4, NODES, WRITER_TIME - 10);
+      for (const row of [first, second]) {
+        await writer.coordinator.persistPublicationRow(row);
+      }
+      const write = writer.owner.upsertPublication.bind(writer.owner);
+      writer.owner.upsertPublication = async (...args) => {
+        await write(...args);
+        throw Object.assign(new Error('lost the last committed reply'), {deferRetry: true});
+      };
+      const firstAck = await writer.coordinator.acknowledgePublication(
+        first.publication_id, NODES[0], {publicationWriteMaxAttempts: 1});
+      assert.deepEqual(normalizeControlPlanePublicationRow(firstAck).acknowledgedNodeIds,
+        [NODES[0]], 'the final committed attempt is resolved by actual SQLite readback');
+
+      let loseReadback = false;
+      const read = writer.owner.getPublication.bind(writer.owner);
+      writer.owner.getPublication = async (...args) => {
+        if (loseReadback) {
+          throw Object.assign(new Error('publication read authority unavailable'), {deferRetry: true});
+        }
+        return read(...args);
+      };
+      writer.owner.upsertPublication = async (...args) => {
+        const result = await write(...args);
+        loseReadback = true;
+        return result;
+      };
+      await assert.rejects(
+        writer.coordinator.acknowledgePublication(second.publication_id, NODES[0]),
+        {code: 'PUBLICATION_WRITE_UNCONFIRMED', deferRetry: true},
+        'the owner has no successful answer while confirmation is unavailable');
+      assert.deepEqual(readDurablePublication(leader, second.publication_id).acknowledgedNodeIds,
+        [NODES[0]], 'the committed effect survives unavailability at its consumer');
+
+      loseReadback = false;
+      const writes = ledger.applied.length;
+      const settled = await writer.coordinator
+        .acknowledgePublication(second.publication_id, NODES[0]);
+      assert.deepEqual(normalizeControlPlanePublicationRow(settled).acknowledgedNodeIds,
+        [NODES[0]]);
+      assert.equal(ledger.applied.length, writes, 'a subsequent read reconstructs the exact ACK');
+      await assert.rejects(write({...second, publication_id: FORMATION_PUBLICATION_ID}, {
+        expectedPublicationRow: null,
+      }), {code: 'INVALID_PUBLICATION_MUTATION'});
+      assert.equal(readDurablePublication(leader, FORMATION_PUBLICATION_ID).publicationId, null,
+        'ordinary publication writes cannot create the formation latch row');
+    } finally {
+      writer?.cdc.markShuttingDown();
+      try {
+        await shutdownAll(leader);
+      } finally {
+        fs.rmSync(directory, {recursive: true, force: true});
+      }
+    }
+  });

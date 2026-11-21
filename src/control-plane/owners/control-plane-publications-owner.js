@@ -42,8 +42,14 @@ function assertPublicationMutationRow(row, preimage) {
   }
 }
 
+function isStoredPublicationValue(value) {
+  return value === null || typeof value === 'string' ||
+    typeof value === 'bigint' || Number.isSafeInteger(value);
+}
+
 function publicationWritePredicate(row) {
-  if (PUBLICATION_COLUMNS.some((column) => !Object.hasOwn(row, column))) {
+  if (PUBLICATION_COLUMNS.some((column) =>
+    !Object.hasOwn(row, column) || !isStoredPublicationValue(row[column]))) {
     throw publicationAuthorityUnavailable(row.publication_id);
   }
   return Object.fromEntries(PUBLICATION_COLUMNS.map((column) => [column, row[column]]));
