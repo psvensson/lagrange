@@ -143,10 +143,8 @@ function createTimeoutTestCoordinator(options = {}) {
     },
   };
 
-  const gateway = {
-    ...createMockControlPlaneSystemTableGateway(sqlEngine),
-    submitMutation: ledgerStore.submitMutation,
-  };
+  const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
+  gateway.submitMutation = ledgerStore.submitMutation;
   installCommittedOperationMutationFixture(gateway);
 
   const coordinator = new RebalanceCoordinator({

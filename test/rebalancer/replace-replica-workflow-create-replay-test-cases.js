@@ -22,6 +22,7 @@ function createCriticalReplaceCreateReplay({
   answerCreateReplay = async () => ReplicaOperationResponseStatus.COMPLETED,
   answerRemove = {status: ReplicaOperationResponseStatus.INITIATED},
   witness,
+  observedTargetStatus = null,
   makeCoordinator = createTestCoordinator,
 } = {}) {
   const PARTITION_ID = 'nodes-p1';
@@ -99,7 +100,7 @@ function createCriticalReplaceCreateReplay({
     },
   });
   coordinator.initialize();
-  installActualReplicaObservationResolver(coordinator, null);
+  installActualReplicaObservationResolver(coordinator, observedTargetStatus);
 
   const create = () => coordinator.createOperation({
     type: OperationType.REPLACE,
@@ -225,96 +226,11 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
     'RebalanceCoordinator keeps critical REPLACE create ownership in ' +
       'CREATING when observed target status remains creating',
     async (t) => {
-      const PARTITION_ID = 'nodes-p1';
-      const SOURCE_NODE_ID = 'node-a';
-      const TARGET_NODE_ID = 'node-d';
-      const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
-      const deliveries = [];
-      let createDispatchCount = 0;
-      const messageRouter = {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          if (payload?.type ===
-              ReplicaOperationMessageType.CREATE_REPLICA) {
-            createDispatchCount += 1;
-            return buildDeliveryEnvelope({acknowledged: true}, {
-              status: createDispatchCount === 1 ?
-                ReplicaOperationResponseStatus.INITIATED :
-                ReplicaOperationResponseStatus.COMPLETED,
-            });
-          }
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            status: ReplicaOperationResponseStatus.INITIATED,
-          });
-        },
-        getConnectionState: () => 'connected',
-        pingNode: async () => true,
-        isOutboundQueueAvailable: () => true,
-      };
-
-      const coordinator = createTestCoordinator({
-        nodeId: TARGET_NODE_ID,
-        enableTimeouts: false,
-        messageRouter,
-        cacheData: {
-          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
-            (nodeId) => ({
-              node_id: nodeId,
-              status: 'active',
-              connection_state: 'ready',
-              ready_lease_expires_at: Date.now() + 60_000,
-            }),
-          ),
-          services: [
-            {
-              service_id: SOURCE_REPLICA_ID,
-              replica_id: SOURCE_REPLICA_ID,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: SOURCE_NODE_ID,
-              status: 'active',
-              address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
-            },
-            {
-              service_id: `${PARTITION_ID}-r2`,
-              replica_id: `${PARTITION_ID}-r2`,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: 'node-b',
-              status: 'active',
-              raft_role: 'follower',
-              address: `node-b/partition/${PARTITION_ID}-r2`,
-            },
-            {
-              service_id: `${PARTITION_ID}-r3`,
-              replica_id: `${PARTITION_ID}-r3`,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: 'node-c',
-              status: 'active',
-              raft_role: 'follower',
-              address: `node-c/partition/${PARTITION_ID}-r3`,
-            },
-          ],
-        },
+      const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay({
+        observedTargetStatus: ReplicaStatus.CREATING,
       });
-      coordinator.initialize();
-      installActualReplicaObservationResolver(
-        coordinator,
-        ReplicaStatus.CREATING,
-      );
-
       try {
-        const operation = await coordinator.createOperation({
-          type: OperationType.REPLACE,
-          partitionId: PARTITION_ID,
-          entityType: 'partition',
-          entityId: PARTITION_ID,
-          nodeId: TARGET_NODE_ID,
-          sourceNodeId: SOURCE_NODE_ID,
-          replicaId: SOURCE_REPLICA_ID,
-        });
-
+        const operation = await create();
         await coordinator.executeOperation(operation);
 
         t.equal(
@@ -371,96 +287,11 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
     'RebalanceCoordinator keeps critical REPLACE create ownership in ' +
       'CREATING when observed target status remains pending',
     async (t) => {
-      const PARTITION_ID = 'nodes-p1';
-      const SOURCE_NODE_ID = 'node-a';
-      const TARGET_NODE_ID = 'node-d';
-      const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
-      const deliveries = [];
-      let createDispatchCount = 0;
-      const messageRouter = {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          if (payload?.type ===
-              ReplicaOperationMessageType.CREATE_REPLICA) {
-            createDispatchCount += 1;
-            return buildDeliveryEnvelope({acknowledged: true}, {
-              status: createDispatchCount === 1 ?
-                ReplicaOperationResponseStatus.INITIATED :
-                ReplicaOperationResponseStatus.COMPLETED,
-            });
-          }
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            status: ReplicaOperationResponseStatus.INITIATED,
-          });
-        },
-        getConnectionState: () => 'connected',
-        pingNode: async () => true,
-        isOutboundQueueAvailable: () => true,
-      };
-
-      const coordinator = createTestCoordinator({
-        nodeId: TARGET_NODE_ID,
-        enableTimeouts: false,
-        messageRouter,
-        cacheData: {
-          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
-            (nodeId) => ({
-              node_id: nodeId,
-              status: 'active',
-              connection_state: 'ready',
-              ready_lease_expires_at: Date.now() + 60_000,
-            }),
-          ),
-          services: [
-            {
-              service_id: SOURCE_REPLICA_ID,
-              replica_id: SOURCE_REPLICA_ID,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: SOURCE_NODE_ID,
-              status: 'active',
-              address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
-            },
-            {
-              service_id: `${PARTITION_ID}-r2`,
-              replica_id: `${PARTITION_ID}-r2`,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: 'node-b',
-              status: 'active',
-              raft_role: 'follower',
-              address: `node-b/partition/${PARTITION_ID}-r2`,
-            },
-            {
-              service_id: `${PARTITION_ID}-r3`,
-              replica_id: `${PARTITION_ID}-r3`,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: 'node-c',
-              status: 'active',
-              raft_role: 'follower',
-              address: `node-c/partition/${PARTITION_ID}-r3`,
-            },
-          ],
-        },
+      const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay({
+        observedTargetStatus: ReplicaStatus.PENDING,
       });
-      coordinator.initialize();
-      installActualReplicaObservationResolver(
-        coordinator,
-        ReplicaStatus.PENDING,
-      );
-
       try {
-        const operation = await coordinator.createOperation({
-          type: OperationType.REPLACE,
-          partitionId: PARTITION_ID,
-          entityType: 'partition',
-          entityId: PARTITION_ID,
-          nodeId: TARGET_NODE_ID,
-          sourceNodeId: SOURCE_NODE_ID,
-          replicaId: SOURCE_REPLICA_ID,
-        });
-
+        const operation = await create();
         await coordinator.executeOperation(operation);
 
         t.equal(
