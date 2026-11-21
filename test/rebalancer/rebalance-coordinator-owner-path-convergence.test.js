@@ -510,8 +510,9 @@ test('Owner-path convergence: all progression entry points ' +
         t.ok(pointReadFaults > 0, 'the ACTIVE removal turn hits the exact operation read fault');
         t.same(removalDispatchSteps, [], 'the cache cannot authorize the source removal effect');
 
-        const retained = owner.dispatchRetryTimerByOperationId.get(operationId);
-        t.ok(retained && !retained.cleared, 'the exact operation retains its owned dispatch retry');
+        const retained = owner.safetyDeferredRetryTimerByOperationId.get(operationId);
+        t.ok(timers.scheduled.includes(retained) && !retained.cleared,
+          'the exact operation retains its live removal-safety retry');
         blockOperationPointRead = false;
         await retained?.callback();
         const stopping = operationMap.get(operationId);
