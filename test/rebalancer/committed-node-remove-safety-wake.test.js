@@ -138,3 +138,22 @@ test('remaining peer liveness degradation during evaluateRemoveSafety awaits aft
     await settleOwnerTurns();
     t.equal(h.state.effects.length, 1, 'subsequent recovery re-evaluates and permits one removal');
   });
+
+test('the removal owner observes the committed ACTIVE row before evaluating the voter floor',
+  async (t) => {
+    const h = await createCommittedFloorHarness({replace: true});
+    t.teardown(() => h.shutdown());
+    await h.readiness.readServeEligibility();
+    const {entityType, entityId, operationId, partitionId} = h.operation;
+    const operations = await h.coordinator.repository.getRequiredOperationsByEntity(
+      entityType, entityId,
+    );
+    const committed = operations.find((operation) => operation.operationId === operationId);
+    t.equal(committed?.workflowStep, WORKFLOW_STEP.ACTIVE,
+      'the authority reports the same replacement already eligible to evaluate removal');
+    t.equal(committed?.partitionId, partitionId);
+    const evaluation = await h.owner.evaluateRemoveSafety(h.operation);
+    t.notMatch(String(evaluation?.error), /operation ledger is unavailable/u,
+      String(evaluation?.error));
+    t.comment(JSON.stringify(evaluation));
+  });

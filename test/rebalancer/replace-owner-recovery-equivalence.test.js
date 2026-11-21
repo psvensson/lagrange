@@ -31,6 +31,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CDC_OPERATION,
   NODE_STATE,
+  SYSTEM_TABLE_NAME,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {
@@ -370,12 +371,13 @@ function isTerminalStep(step) {
 }
 
 // One step of the authoritative evolution, identical for every run.
-function evolveWorld(world) {
+async function evolveWorld(world) {
   if (world.concurrentOperationOpen) {
     world.concurrentOperationOpen = false;
-    world.cache.upsert('replica_operations', {...CONCURRENT_OPERATION_ROW,
-      status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
-      completed_at: Date.now()});
+    await world.cache.replicateRemoteRow(world.coordinator.controlPlaneSystemTableGateway,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, {...CONCURRENT_OPERATION_ROW,
+        status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
+        completed_at: Date.now()});
     world.readiness.publish(PEER_NODE_C);
   }
   // A named-target handoff moves leadership to the target (whoever led).
@@ -423,7 +425,7 @@ const BACKSTOPS = Object.freeze({
 async function runToQuiescence(world, operationId,
   backstops = Object.values(BACKSTOPS)) {
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
-    evolveWorld(world);
+    await evolveWorld(world);
     await settle();
     const persisted = await readPersisted(world, operationId);
     if (isTerminalStep(persisted?.workflowStep)) {
@@ -452,7 +454,14 @@ const PHASE_DRIVERS = Object.freeze({
   [REPLACE_OWNER_PHASE.ACTIVE_DEFERRING]: async (world, operation) => {
     // Remove safety defers behind a concurrent operation on the partition
     // (CL-043 serialization), owned by another node.
-    world.cache.upsert('replica_operations', CONCURRENT_OPERATION_ROW);
+    const persisted = await world.coordinator.controlPlaneSystemTableGateway.submitMutation({
+      tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operation: 'insert',
+      row: CONCURRENT_OPERATION_ROW,
+    });
+    if (persisted?.partitionResult?.affectedRows !== 1) {
+      throw new Error('the competing REMOVE must commit to the fixture ledger');
+    }
     world.concurrentOperationOpen = true;
     await execute(world, operation);
   },
