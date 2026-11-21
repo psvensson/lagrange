@@ -424,12 +424,14 @@ test('P4 bound over repeated transfers: N transfers with every leadership-start 
   const [a, b] = nodes;
   const gates = [holdLeadershipStartDrives(a), holdLeadershipStartDrives(b)];
   const samples = [];
+  const timerCensus = [];
   try {
     for (let transfer = 1; transfer <= 6; transfer += 1) {
       await world.electLedger(transfer % 2 === 1 ? a : b);
       await world.idle({except: nodes});
       samples.push({transfer, ...outstandingWork(nodes),
         heldDrives: gates.reduce((sum, gate) => sum + gate.calls, 0)});
+      timerCensus.push({transfer, timers: world.timers.aliveCreators()});
     }
   } finally {
     for (const gate of gates) gate.releaseAll();
@@ -437,6 +439,8 @@ test('P4 bound over repeated transfers: N transfers with every leadership-start 
   await world.idle();
   const report = reportOf(t, world);
   t.diagnostic(JSON.stringify(samples));
+  t.diagnostic(`timer census (src creators of the ref'd timers alive after each transfer): ${
+    JSON.stringify(timerCensus)}`);
   // Steady state from transfer 3 on (each owner then holds one suspended pass
   // and, while it leads, one queued LEADERSHIP_START): compare equal parity,
   // transfer k with k + 2.

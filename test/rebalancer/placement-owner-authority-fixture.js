@@ -99,6 +99,14 @@ function trackWorldTimers() {
       globalThis.setTimeout = originals.setTimeout;
       globalThis.setInterval = originals.setInterval;
     },
+    // The src creators of the ref'd timers alive now (a diagnostic census).
+    aliveCreators() {
+      return created.filter(({timer}) => timer && timer._destroyed !== true &&
+        typeof timer.hasRef === 'function' && timer.hasRef()).map(({kind, timer, stack}) => ({
+        kind, ms: timer._idleTimeout ?? null,
+        creator: stack.split('\n').filter((line) => line.includes('/src/')).slice(0, 2)
+          .map((line) => line.trim().replace(/^at /u, '').replace(/\(.*\/src\//u, '(src/'))}));
+    },
     // Ref'd timers still alive: reported as a teardown finding, then cleared
     // so the test process can exit.
     reclaim(label) {
@@ -927,6 +935,7 @@ async function withPlacementWorld(spec, measure) {
   await runtimeBuildProvenance();
   const timers = trackWorldTimers();
   const world = new PlacementWorld(spec);
+  world.timers = timers;
   let failure = null;
   let result;
   try {
