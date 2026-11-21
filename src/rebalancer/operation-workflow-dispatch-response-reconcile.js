@@ -27,7 +27,8 @@ import {didOperationReconcileAdvanceOrComplete, OPERATION_RECONCILE_OUTCOME} fro
   './operation-workflow-reconcile-outcome.js';
 import {reconcileSatisfiedCreateResponse} from
   './operation-workflow-create-satisfied-response.js';
-import {repairStrandedRemoveAfterResponse} from './operation-workflow-stranded-remove-repair.js';
+import {captureStrandedRemovePreimage, repairStrandedRemoveAfterResponse} from
+  './operation-workflow-stranded-remove-repair.js';
 import {
   applyGrowthPromoteRequestFields,
   isHeldGrowthPromoteOperation,
@@ -678,8 +679,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ] =
         attemptSeq;
     }
-    // Carry the planning epoch into the executor request (audit finding 7)
-    // so ADD/REPLACE execution can reject staleness against it.
+    // ADD/REPLACE execution rejects a stale planning epoch (audit finding 7).
     if (
       isBoundMembershipPublicationEpoch(
         operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
@@ -726,7 +726,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
     }
-    // The committed-membership stamp crosses unchanged (owner decision O1).
     if (operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]) {
       request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
@@ -745,10 +744,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       entityId,
       replaceRemovePhase: replaceRemoveDispatchPhase,
     });
-    // Delivery owns transport status; the target separately supplies its answer.
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;
+    const strandedRemovePreimage = captureStrandedRemovePreimage(operation);
     try {
       const delivery = await this.deliverReplicaOperationRequest(
         operation,
@@ -849,7 +848,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         }
         return retainedCreateDeliveryResolution.result;
       }
-      const corrected = await repairStrandedRemoveAfterResponse(this, operation, response);
+      const corrected = await repairStrandedRemoveAfterResponse(
+        this, operation, response, strandedRemovePreimage);
       if (corrected === OPERATION_RECONCILE_OUTCOME.FAILED) {
         return this.buildFailedOperationResult(operation.operationId, operation.errorMessage);
       }

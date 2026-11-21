@@ -106,6 +106,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
   class ReplicaOperationRepositoryMutationUpdateMethods {
     isReplicaOperationUpdateSatisfied(expected, observed) {
       return this.isReplicaOperationVisibilitySatisfied(expected, observed) &&
+        expected.createdAt === observed.createdAt &&
         isDeepStrictEqual(this.buildReplicaOperationUpdateData(expected),
           this.buildReplicaOperationUpdateData(observed));
     }
@@ -395,6 +396,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         }
         assertOperationUpdateRecord(observed);
         assertOperationUpdateSubject(operation, observed);
+        if (options.expectedStepsHistory && observed.createdAt !== operation.createdAt) {
+          throw invalidOperationPersistenceOutcome(UPDATE_NOT_CONFIRMED);
+        }
         const exact = this.isReplicaOperationUpdateSatisfied(operation, observed);
         if (!exact && observed.completedAt === null) {
           throw invalidOperationPersistenceOutcome(UPDATE_NOT_CONFIRMED);
@@ -576,7 +580,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
         if (
-          options.elapsedWorkflowPreimage || options.requireExactCreateTarget === true ||
+          options.elapsedWorkflowPreimage || options.expectedStepsHistory !== undefined ||
+          options.requireExactCreateTarget === true ||
           operationCarriesReplicaCreateAdmission(operation) ||
           operationCarriesMessageGroupMembership(operation)
         ) {

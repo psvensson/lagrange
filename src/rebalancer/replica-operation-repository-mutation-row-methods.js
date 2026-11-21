@@ -160,6 +160,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       // history the writer read must still be the durable one.
       if (typeof options?.expectedStepsHistory === 'string') {
         whereClause.steps_history = options.expectedStepsHistory;
+        whereClause.created_at = operation.createdAt;
+        whereClause.completed_at = null;
       }
       // Terminal-transition guard (audit finding 6): a terminal write must
       // overwrite any lagging NON-terminal step (deliberately no
@@ -202,7 +204,7 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         params.push(expectedWorkflowStep);
       }
       if (typeof expectedStepsHistory === 'string') {
-        params.push(expectedStepsHistory);
+        params.push(expectedStepsHistory, operation.createdAt);
       }
       return params;
     }

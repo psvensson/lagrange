@@ -4,6 +4,7 @@ import {OperationType, ReplicaStatus} from './replica-status.js';
 import {ReplicaOperationResponseStatus} from './replica-operation-constants.js';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
+  copyOperationOutcomeData,
 } from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
@@ -31,6 +32,20 @@ function isSameStrandedRemovePreimage(requested, durable) {
     isDeepStrictEqual(requested.stepsHistory, durable.stepsHistory);
 }
 
+function captureStrandedRemovePreimage(operation) {
+  return isStrandedRemove(operation) ? copyOperationOutcomeData(operation) : null;
+}
+
+async function readCurrentRemoveSubject(repository, preimage) {
+  const rows = await repository.readRequiredEntityOperationRows(
+    preimage.entityType, preimage.entityId);
+  const row = rows.find((candidate) => candidate.operation_id === preimage.operationId);
+  if (!row) return null;
+  const durable = repository.rowToOperation(row);
+  assertOperationUpdateSubject(preimage, durable);
+  return durable.createdAt === preimage.createdAt ? durable : null;
+}
+
 async function adoptTerminal(owner, operation, durable) {
   const outcome = buildOperationTransitionOutcome(buildOperationUpdateOutcome({persisted: false,
     disposition: DISPOSITION.TERMINAL_ADOPTED, operation: durable}));
@@ -44,19 +59,15 @@ async function adoptTerminal(owner, operation, durable) {
  * reply. ACTIVE remains invalid as a new operation outcome; this conditional
  * correction enters the ordinary STOPPING owner before processing that reply.
  */
-async function repairStrandedRemoveAfterResponse(owner, operation, response) {
-  if (!isStrandedRemove(operation) || !ACCEPTED_REMOVE_RESPONSES.has(response?.status)) return null;
-  const observation = await owner.repository.queryReplicaOperationPersistenceAuthorityObservation(
-    operation, {requireAbsenceConfirmation: true});
-  const durable = observation.operation;
+async function repairStrandedRemoveAfterResponse(owner, operation, response, preimage) {
+  if (!preimage || !ACCEPTED_REMOVE_RESPONSES.has(response?.status)) return null;
+  const durable = await readCurrentRemoveSubject(owner.repository, preimage);
   if (!durable) return OUTCOME.WAITING;
-  assertOperationUpdateSubject(operation, durable);
-  if (!isStrandedRemove(durable)) {
-    assertOperationUpdateRecord(durable);
-    if (durable.completedAt !== null) return adoptTerminal(owner, operation, durable);
-    Object.assign(operation, structuredClone(durable));
-    return null;
+  if (durable.completedAt !== null) {
+    assertOperationUpdateRecord(durable, {terminal: true});
+    return adoptTerminal(owner, operation, durable);
   }
+  if (!isSameStrandedRemovePreimage(preimage, durable)) return OUTCOME.WAITING;
   const now = Date.now();
   const projected = {...durable, workflowStep: WORKFLOW_STEP.STOPPING,
     status: ReplicaStatus.REMOVING, updatedAt: now,
@@ -66,7 +77,7 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response) {
     }]};
   const persisted = await owner.repository.persistOperationUpdate(projected, {
     ...owner.buildOperationTransitionPersistOptions(),
-    expectedWorkflowStep: WORKFLOW_STEP.ACTIVE, expectedStepsHistory: durable.stepsHistory,
+    expectedWorkflowStep: WORKFLOW_STEP.ACTIVE, expectedStepsHistory: preimage.stepsHistory,
   });
   const outcome = buildOperationTransitionOutcome(persisted,
     {repository: owner.repository, requestedOperation: projected});
@@ -77,13 +88,13 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response) {
   }
   // The same CAS may lose to terminal completion. Its refusal is not proof of
   // absence: consult the winner before deciding whether the reply can proceed.
-  const current = await owner.repository.queryReplicaOperationPersistenceAuthorityObservation(
-    operation, {requireAbsenceConfirmation: true});
-  if (current.operation && current.operation.completedAt !== null) {
-    assertOperationUpdateSubject(operation, current.operation);
-    return adoptTerminal(owner, operation, current.operation);
+  const current = await readCurrentRemoveSubject(owner.repository, preimage);
+  if (current && current.completedAt !== null) {
+    return adoptTerminal(owner, operation, current);
   }
   return OUTCOME.WAITING;
 }
 
-export {isSameStrandedRemovePreimage, repairStrandedRemoveAfterResponse};
+export {
+  captureStrandedRemovePreimage, isSameStrandedRemovePreimage, repairStrandedRemoveAfterResponse,
+};
