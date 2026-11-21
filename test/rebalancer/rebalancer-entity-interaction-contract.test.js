@@ -39,6 +39,7 @@ import {
   createMockCache,
   createTestCoordinator,
 } from './test-helpers.js';
+import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 
 const {
   OPERATION_HANDLER,
@@ -394,6 +395,9 @@ test('entity interaction contracts are explicit and unknown types fail closed',
 test('untyped operation rows are outside canonical entity reads',
   async (t) => {
     const entityId = 'shared-looking-id';
+    // Only the identity is malformed: the row otherwise carries the durable
+    // shape (JSON-text producer history), so the identity owner is what
+    // refuses it.
     const untypedRow = {
       operation_id: 'untyped-partition-op',
       type: OperationType.ADD,
@@ -402,6 +406,9 @@ test('untyped operation rows are outside canonical entity reads',
       target_node_id: 'node-a',
       status: ReplicaStatus.PENDING,
       workflow_step: 'PENDING',
+      created_at: 1000,
+      updated_at: 1000,
+      steps_history: JSON.stringify(workflowFixtureHistory('PENDING', 1000)),
       entity_type: null,
       entity_id: null,
     };

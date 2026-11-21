@@ -10,7 +10,7 @@ documentClass: generated
 - [addresses.js](addresses.js) - No leading comment; first export: ADDRESS. (importers: hub)
 - [booleans.js](booleans.js) - Canonical owner for shared boolean scalar constants. (importers: few)
 - [cdc-lifecycle-constants.js](cdc-lifecycle-constants.js) - No leading comment; first export: CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS. (importers: hub)
-- [cdc.js](cdc.js) - No leading comment; first export: CDC_OPERATION. (importers: many)
+- [cdc.js](cdc.js) - No leading comment; first export: CDC_OPERATION. (importers: hub)
 - [columns.js](columns.js) - No leading comment; first export: COLUMN. (importers: many)
 - [deployment-binding.js](deployment-binding.js) - No leading comment; first export: DEPLOYMENT_BINDING_BUDGET_FIELDS. (importers: few)
 - [entrypoint.js](entrypoint.js) - No leading comment; first export: ENTRYPOINT_APP. (importers: hub)

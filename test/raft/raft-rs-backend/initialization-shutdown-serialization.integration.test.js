@@ -17,11 +17,21 @@ function handlerFor(fixture, createPartitionService) {
     timeSource: fixture.clock,
   });
 }
+// A controlled stand-in for the CREATE admission owner holding one physical
+// worker claim: it owns that claim until the claim is released (the owner's
+// ownsPhysicalWorker / releasePhysicalWorker port, as the handler consumes it).
 function releaseOwner(claim, onRelease) {
-  return {releasePhysicalWorker(value) {
-    assert.equal(value, claim);
-    onRelease();
-  }};
+  let held = claim;
+  return {
+    ownsPhysicalWorker(value) {
+      return held !== null && value === held;
+    },
+    releasePhysicalWorker(value) {
+      assert.equal(value, claim);
+      held = null;
+      onRelease();
+    },
+  };
 }
 for (const kind of ['partition', 'message-group']) {
   test(kind + ' concurrent initialize callers join one native opening', async (t) => {
