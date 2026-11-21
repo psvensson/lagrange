@@ -195,11 +195,17 @@ async function freshLeaderBehindCommit(group, raft, {from, to, write}) {
   return {committedIndex};
 }
 
-// Cut a replica off from all consensus traffic until it names no leader.
-async function isolateFromConsensus(group, raft, service) {
+// Hold every raft message to or from a replica (nothing waits: a leader cut
+// off this way still believes it leads until check_quorum steps it down).
+function cutOffFromConsensus(raft, service) {
   const peer = peerOf(service);
   raft.hold((_address, packet) =>
     String(packet?.from) === peer || String(packet?.to) === peer);
+}
+
+// Cut a replica off from all consensus traffic until it names no leader.
+async function isolateFromConsensus(group, raft, service) {
+  cutOffFromConsensus(raft, service);
   assert.equal(await group.waitFor(() =>
     service.raft.readStatus().leaderId === null), true,
   'setup: the isolated replica knows no leader');
@@ -208,6 +214,7 @@ async function isolateFromConsensus(group, raft, service) {
 export {
   awaitKnownLeader,
   createHeldRaftNetwork,
+  cutOffFromConsensus,
   freshLeaderBehindCommit,
   isolateFromConsensus,
   settleGroupLeader,

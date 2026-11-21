@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2708,
+    "ordinary": 2709,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2734,
-  "digest": "fnv1a32-dca5ff90",
+  "censusSize": 2735,
+  "digest": "fnv1a32-0e7844e5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2178,6 +2178,7 @@
     "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js": "ordinary",
     "test/rebalancer/timeout-triggers-failure.property.test.js": "ordinary",
     "test/rebalancer/topology-guard-inventory-authority.test.js": "ordinary",
+    "test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js": "ordinary",
     "test/rebalancer/topology-guard-owner-fact-inventory.test.js": "ordinary",
     "test/rebalancer/topology-guard-owner-fact-read-point.test.js": "ordinary",
     "test/rebalancer/topology-owner-contracts.test.js": "ordinary",

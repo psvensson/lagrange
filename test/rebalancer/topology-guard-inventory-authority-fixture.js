@@ -89,6 +89,7 @@ import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.j
 import {
   awaitKnownLeader,
   createHeldRaftNetwork,
+  cutOffFromConsensus,
   freshLeaderBehindCommit,
   settleGroupLeader,
   transferGroupLeadership,
@@ -366,6 +367,19 @@ async function openServicesWorld({leaderNodeId, ports}) {
           to: replicaOn(toNodeId), write: () => writeThroughLeader(group,
             replicaOn(fromNodeId), {...servicesRowInsert(row), entryId})}),
       releaseRaftHolds: () => raft.release(),
+      // The replica's raft traffic is held both ways; its query transport
+      // still answers.
+      cutOffFromConsensus: (nodeId) => cutOffFromConsensus(raft, replicaOn(nodeId)),
+      async awaitLeaderOtherThan(nodeId) {
+        const leads = () => group.services.find((replica) => replica.nodeId !== nodeId &&
+          replica.raft.readStatus().role === RAFT_ROLE.LEADER) ?? null;
+        if (!await group.waitFor(() => leads() !== null)) {
+          throw new Error(`setup: no replica other than ${nodeId} leads services-p1`);
+        }
+        return leads().nodeId;
+      },
+      seedRowOnNodes: (nodeIds, row) => nodeIds.forEach((nodeId) =>
+        insertTableRow(replicaOn(nodeId).db, row)),
       settleLeader: (nodeId) => settleGroupLeader(group, replicaOn(nodeId)),
       holdNextStatementAfterRead: (nodeId) => holdNextStatementAfterRead(replicaOn(nodeId)),
       tableRowsOn: (nodeId, sql, params = []) =>
