@@ -1,3 +1,4 @@
+import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 /**
  * Durable rejoin reaches READY: the registration / durable-rejoin verb owns
  * the boot-incarnation transition (one CAS on the observed older incarnation
@@ -1095,48 +1096,54 @@ function createBlindBirthReplayHarness(initialRow) {
 
   const rawInsert = base.gateway.insertSystemTableRow;
   base.gateway.insertSystemTableRow = (tableName, row, options = {}) =>
-    runControlPlaneWrite(options, {tableName, row}, async (idempotencyKey) => {
-      let replayed = true;
-      if (tableName === TABLES.NODES && !outcomesByKey.has(idempotencyKey)) {
-        replayed = false;
-        physicalInserts += 1;
-        if (base.current()) {
-          outcomesByKey.set(idempotencyKey, {
-            success: false,
-            error: 'UNIQUE constraint failed: nodes.node_id',
-            committed: true,
-          });
-        } else {
-          await rawInsert(tableName, {
-            ...row,
-            [COLUMN.UPDATED_AT_HLC]: '1710000000000-004c-nodes',
-          });
-          outcomesByKey.set(idempotencyKey, {
-            success: true,
-            originHlc: '1710000000000-004c-nodes',
-            partitionResult: {
-              affectedRows: 1,
+    runControlPlaneWrite(options, {tableName, row}, 'native-registration-fixture',
+      async ({tableName, row}, idempotencyKey) => {
+        const partitionId = 'nodes-p1';
+        const entryId = deriveParticipantEntryId(idempotencyKey, partitionId);
+        let replayed = true;
+        if (tableName === TABLES.NODES && !outcomesByKey.has(idempotencyKey)) {
+          replayed = false;
+          physicalInserts += 1;
+          if (base.current()) {
+            outcomesByKey.set(idempotencyKey, {
+              success: false,
+              error: 'UNIQUE constraint failed: nodes.node_id',
+              failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+              outcome: 'statement_failed', committed: true, logIndex: 1, partitionId, entryId,
+            });
+          } else {
+            await rawInsert(tableName, {
+              ...row,
+              [COLUMN.UPDATED_AT_HLC]: '1710000000000-004c-nodes',
+            });
+            outcomesByKey.set(idempotencyKey, {
+              success: true, committed: true,
               originHlc: '1710000000000-004c-nodes',
-            },
-          });
+              partitionResult: {
+                success: true, partitionId,
+                durableCommitWitness: {partitionId, entryId, term: 1, logIndex: 1},
+                affectedRows: 1,
+                originHlc: '1710000000000-004c-nodes',
+              },
+            });
+          }
+        } else if (tableName !== TABLES.NODES) {
+          return rawInsert(tableName, row);
         }
-      } else if (tableName !== TABLES.NODES) {
-        return rawInsert(tableName, row);
-      }
-      if (tableName === TABLES.NODES && dropInsertAckOnce) {
-        dropInsertAckOnce = false;
-        return {
-          success: false,
-          error: 'write_outcome_unknown',
-          failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
-          entryId: idempotencyKey,
-        };
-      }
-      const stored = outcomesByKey.get(idempotencyKey);
-      return replayed && stored.success ?
-        {...stored, settledReplay: 'outcome_retained'} :
-        {...stored};
-    });
+        if (tableName === TABLES.NODES && dropInsertAckOnce) {
+          dropInsertAckOnce = false;
+          return {
+            success: false,
+            error: 'write_outcome_unknown',
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+            entryId, partitionId,
+          };
+        }
+        const stored = outcomesByKey.get(idempotencyKey);
+        return replayed && stored.success ?
+          {...stored, settledReplay: 'outcome_retained'} :
+          {...stored};
+      });
 
   return {
     durable: base,

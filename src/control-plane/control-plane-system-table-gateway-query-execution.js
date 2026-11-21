@@ -6,7 +6,6 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   GATEWAY_ERROR_MSG,
-  GATEWAY_LOG_MSG,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   SQL,
@@ -19,7 +18,6 @@ import {
   normalizeCoalescingToken,
   normalizeDistinctStringArray,
   normalizeMutationOperation,
-  normalizePhaseScope,
   normalizeSqlOperationKind,
   normalizeSystemTableName,
   stableSerialize,
@@ -28,7 +26,11 @@ import {
   getSchemaByTableName,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {runControlPlaneWrite} from './control-plane-write-identity.js';
+import {
+  CONTROL_PLANE_WRITE_ROUTE,
+  controlPlaneWriteIdentity,
+  runControlPlaneWrite,
+} from './control-plane-write-identity.js';
 
 function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   const schema = getSchemaByTableName(tableName);
@@ -242,35 +244,9 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   assertCdcIntegrationService() {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
     if (!cdcIntegrationService) {
-      throw new Error(GATEWAY_ERROR_MSG.CDC_REQUIRED);
+      throw Object.assign(new Error(GATEWAY_ERROR_MSG.CDC_REQUIRED), {deferRetry: true});
     }
     return cdcIntegrationService;
-  },
-
-  // A phase-scoped write (bootstrap, join admission) issued before this
-  // node has a CDC integration owner commits through the SQL engine. Every
-  // routed write answers at its commit, so no cache-wait opt-out gates it
-  // any more (replica-admission-from-committed-operation, attempt 2).
-  shouldUseSqlMutationFallback(options = {}, tableName = null) {
-    const phaseScope = normalizePhaseScope(options?.phaseScope);
-    if (!phaseScope) {
-      return false;
-    }
-    // B3 (scale-safety): membership writes must stay on the CDC/Raft
-    // proposeWrite path — the Raft term fence is the single source of truth
-    // for cluster membership, and the SQL fallback would bypass it. Fail loud
-    // (caller throws CDC_REQUIRED) rather than commit an unfenced write.
-    if (tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
-      this.emitGatewayWarning(GATEWAY_LOG_MSG.MUTATION_FALLBACK_FENCED, {
-        nodeId: this.nodeId,
-        tableName,
-        phaseScope,
-      });
-      return false;
-    }
-    return (
-      typeof this.resolveSqlQueryEngine()?.executeQuery === 'function'
-    );
   },
 
   buildSqlMutationPlan(mutation = {}) {
@@ -366,21 +342,19 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     };
   },
 
-  async executeSqlMutationFallback(
-    mutation = {},
-    writeOptions = {},
-    attemptContext = {},
-  ) {
-    const sqlQueryEngine = this.assertSqlQueryEngine();
+  async executeStartupSqlMutation(mutation, writeOptions, attemptContext) {
     const {sql, params} = this.buildSqlMutationPlan(mutation);
     return this.normalizeMutationResult(
-      await sqlQueryEngine.executeQuery(sql, params, writeOptions),
+      await this.executeQuery(sql, params, {
+        ...writeOptions,
+        controlPlaneTableName: mutation.tableName,
+        controlPlaneOperationKind: CONTROL_PLANE_SQL_OPERATION.WRITE,
+      }),
       attemptContext,
     );
   },
 
   async executeQuery(sql, params = [], options = {}) {
-    const sqlQueryEngine = this.assertSqlQueryEngine();
     const descriptor = this.resolveSystemTableQueryDescriptor(sql, options);
     const pressureDecision = await this.admitExecuteQueryPressure(
       descriptor,
@@ -409,14 +383,19 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       sql,
       operationKind: descriptor.sqlOperation || null,
     });
+    const route = controlPlaneWriteIdentity(CONTROL_PLANE_WRITE_ROUTE.SQL,
+      this.nodeId, descriptor.tableName);
+    const command = {sql, params, sessionId: queryOptions.sessionId};
+    const execute = (statement, idempotencyKey) => this.assertSqlQueryEngine().executeQuery(
+      statement.sql, statement.params, {
+        ...queryOptions, sessionId: statement.sessionId, idempotencyKey,
+      });
     const result = await this.runSingleFlight(
       this.inFlightQueryRequestsByKey,
       queryKey,
       () => (descriptor.operationKind === CONTROL_PLANE_SQL_OPERATION.WRITE ?
-        runControlPlaneWrite(options, {sql, params}, (idempotencyKey) =>
-          sqlQueryEngine.executeQuery(sql, params,
-            {...queryOptions, idempotencyKey})) :
-        sqlQueryEngine.executeQuery(sql, params, queryOptions)),
+        runControlPlaneWrite(options, command, route, execute) :
+        this.assertSqlQueryEngine().executeQuery(sql, params, queryOptions)),
       {
         joinMetricName: 'querySingleFlightJoinCount',
         bypassMetricName: 'queryTrackingBypassCount',

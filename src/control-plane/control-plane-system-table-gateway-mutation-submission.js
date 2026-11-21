@@ -9,12 +9,17 @@ import {
   canonicalizeControlPlaneMutation,
   normalizeCoalescingToken,
   normalizeMutationOperation,
+  normalizePhaseScope,
   normalizeSystemTableName,
 } from './control-plane-system-table-gateway-shared.js';
 import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {runControlPlaneWrite} from './control-plane-write-identity.js';
+import {
+  CONTROL_PLANE_WRITE_ROUTE,
+  controlPlaneWriteIdentity,
+  runControlPlaneWrite,
+} from './control-plane-write-identity.js';
 
 const LOCAL_STR_MUTATIONSINGLEFLIGHTJOINCOUNT = 'mutationSingleFlightJoinCount';
 const GATEWAY_REPLICA_OPERATION_ID_FIELD = 'operation_id';
@@ -182,7 +187,6 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       tableName,
       operationKind: operation,
     });
-    const cdcIntegrationService = this.resolveCdcIntegrationService();
     const {requestKey, mergePolicy} = this.buildMutationCoalescingDescriptor(
       normalizedMutation,
       writeOptions,
@@ -240,33 +244,31 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       this.recordMutationTelemetry(telemetryContext, mutationReadinessFailure);
       return mutationReadinessFailure;
     }
-    const executeIntent = async (deliveryOptions) => {
+    const executesStartupSql = this.startupSqlMutationPhase !== null &&
+      normalizePhaseScope(mutationOptions.phaseScope) === this.startupSqlMutationPhase &&
+      tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
+    const executeIntent = async (command, idempotencyKey) => {
+      const {mutation: retained, ignoreExisting, sessionId} = command;
+      const operation = retained.operation;
+      this.assertSystemTableMutationAllowed(operation, tableName);
+      const deliveryOptions = {...writeOptions, ignoreExisting, sessionId, idempotencyKey};
+      const cdcIntegrationService = this.assertCdcIntegrationService();
       const attemptContext = {
         coalescingKey: deliveryOptions?.coalescingKey,
         requestKey,
         idempotencyKey: deliveryOptions?.idempotencyKey,
       };
-      if (!cdcIntegrationService) {
-        if (this.shouldUseSqlMutationFallback(deliveryOptions, tableName)) {
-          return this.executeSqlMutationFallback(
-            normalizedMutation,
-            deliveryOptions,
-            attemptContext,
-          );
-        }
-        throw new Error(GATEWAY_ERROR_MSG.CDC_REQUIRED);
-      }
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT) {
         if (
-          !normalizedMutation?.row ||
-          typeof normalizedMutation.row !== 'object'
+          !retained?.row ||
+          typeof retained.row !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
         return this.normalizeMutationResult(
           await cdcIntegrationService.insertSystemTableRow(
             tableName,
-            normalizedMutation.row,
+            retained.row,
             deliveryOptions,
           ),
           attemptContext,
@@ -274,22 +276,22 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       }
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
         if (
-          !normalizedMutation?.whereClause ||
-          typeof normalizedMutation.whereClause !== 'object'
+          !retained?.whereClause ||
+          typeof retained.whereClause !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
         }
         if (
-          !normalizedMutation?.data ||
-          typeof normalizedMutation.data !== 'object'
+          !retained?.data ||
+          typeof retained.data !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
         }
         return this.normalizeMutationResult(
           await cdcIntegrationService.updateSystemTableRow(
             tableName,
-            normalizedMutation.whereClause,
-            normalizedMutation.data,
+            retained.whereClause,
+            retained.data,
             deliveryOptions,
           ),
           attemptContext,
@@ -297,30 +299,30 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       }
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
         if (
-          !normalizedMutation?.row ||
-          typeof normalizedMutation.row !== 'object'
+          !retained?.row ||
+          typeof retained.row !== 'object'
         ) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
         return this.normalizeMutationResult(
           await cdcIntegrationService.upsertSystemTableRow(
             tableName,
-            normalizedMutation.row,
+            retained.row,
             deliveryOptions,
           ),
           attemptContext,
         );
       }
       if (
-        !normalizedMutation?.whereClause ||
-        typeof normalizedMutation.whereClause !== 'object'
+        !retained?.whereClause ||
+        typeof retained.whereClause !== 'object'
       ) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
       }
       return this.normalizeMutationResult(
         await cdcIntegrationService.deleteSystemTableRow(
           tableName,
-          normalizedMutation.whereClause,
+          retained.whereClause,
           deliveryOptions,
         ),
         attemptContext,
@@ -329,9 +331,20 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
     // Every attempt of this logical write - the engine's, the CDC service's
     // and its caller's - is delivered under its one identity (the caller's
     // key, a named write's instance, or one for this call).
-    const executionFactory = () => runControlPlaneWrite(mutationOptions,
-      normalizedMutation, (idempotencyKey) =>
-        executeIntent({...writeOptions, idempotencyKey}));
+    const route = controlPlaneWriteIdentity(CONTROL_PLANE_WRITE_ROUTE.CDC,
+      this.nodeId, tableName);
+    const command = {mutation: normalizedMutation, ignoreExisting: writeOptions.ignoreExisting,
+      sessionId: writeOptions.sessionId};
+    const executionFactory = () => {
+      if (executesStartupSql) {
+        return this.executeStartupSqlMutation(normalizedMutation, {
+          ...mutationOptions, ...writeOptions,
+        }, {requestKey, coalescingKey: writeOptions.coalescingKey});
+      }
+      this.assertCdcIntegrationService();
+      return runControlPlaneWrite(mutationOptions, command, route, executeIntent);
+    };
+
 
     if (
       mergePolicy === CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING &&

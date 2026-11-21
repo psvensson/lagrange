@@ -40,6 +40,7 @@ function createControlPlaneRuntimeBundle(options = {}) {
     options.controlPlaneSystemTableGateway ||
     new ControlPlaneSystemTableGateway({
       nodeId: options.nodeId || null,
+      startupSqlMutationPhase: options.startupSqlMutationPhase,
       sqlQueryEngine,
       cdcIntegrationService,
       systemTableCache,

@@ -45,6 +45,7 @@ import {
 class ControlPlaneSystemTableGateway {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
+    this.startupSqlMutationPhase = options.startupSqlMutationPhase ?? null;
     this._sqlQueryEngine = options.sqlQueryEngine || null;
     this._cdcIntegrationService = options.cdcIntegrationService || null;
     this._systemTableCache = options.systemTableCache || null;

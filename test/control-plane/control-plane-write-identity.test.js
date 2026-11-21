@@ -17,6 +17,10 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
 
 const BOUND = 4096;
 const SCOPE = 'identity-bound-witness';
+const replyFor = (idempotencyKey) => ({
+  success: true, idempotencyKey, operationId: 'complete-statement', affectedRows: 0,
+  partitions: [], mirrorPartitions: [], participantResults: [],
+});
 const UNKNOWN_ANSWER = Object.freeze({success: false,
   failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
   entryId: 'entry-unknown'});
@@ -28,7 +32,7 @@ test('at the bound a new named write is refused typed before delivery; no ' +
     for (let index = 0; index < BOUND; index += 1) {
       await runControlPlaneWrite(
         {writeIdentity: controlPlaneWriteIdentity(SCOPE, index)},
-        {index}, async (key) => {
+        {index}, SCOPE, async (_content, key) => {
           keys.push(key);
           return UNKNOWN_ANSWER;
         });
@@ -36,9 +40,9 @@ test('at the bound a new named write is refused typed before delivery; no ' +
     let delivered = false;
     const refused = await runControlPlaneWrite(
       {writeIdentity: controlPlaneWriteIdentity(SCOPE, 'one-more')},
-      {index: 'one-more'}, async () => {
+      {index: 'one-more'}, SCOPE, async (_content, key) => {
         delivered = true;
-        return {success: true};
+        return replyFor(key);
       });
     assert.equal(delivered, false, 'nothing was delivered');
     assert.equal(refused.success, false, 'refused');
@@ -48,8 +52,8 @@ test('at the bound a new named write is refused typed before delivery; no ' +
     assert.equal(refused.heldWriteIdentities, BOUND, 'and what is held');
     let redriveKey = null;
     await runControlPlaneWrite(
-      {writeIdentity: controlPlaneWriteIdentity(SCOPE, 0)}, {index: 0},
-      async (key) => {
+      {writeIdentity: controlPlaneWriteIdentity(SCOPE, 0)}, {index: 0}, SCOPE,
+      async (_content, key) => {
         redriveKey = key;
         return UNKNOWN_ANSWER;
       });
@@ -60,10 +64,10 @@ test('at the bound a new named write is refused typed before delivery; no ' +
   }
   let afterRelease = null;
   await runControlPlaneWrite(
-    {writeIdentity: controlPlaneWriteIdentity(SCOPE, 0)}, {index: 0},
-    async (key) => {
+    {writeIdentity: controlPlaneWriteIdentity(SCOPE, 0)}, {index: 0}, SCOPE,
+    async (_content, key) => {
       afterRelease = key;
-      return {success: true};
+      return replyFor(key);
     });
   assert.notEqual(afterRelease, keys[0], 'a released name is a new instance');
 });
@@ -73,17 +77,18 @@ test('a durable confirmation can release only the exact observed instance and ef
   const first = {publication: 'first-content'};
   const second = {publication: 'second-content'};
   const keys = [];
-  const unknown = async (key) => {
+  const unknown = async (_content, key) => {
     keys.push(key);
     return UNKNOWN_ANSWER;
   };
   const write = (effect) => runControlPlaneWrite({
     writeIdentity: name, confirmWriteEffect: (observed) => observed === effect,
-  }, effect, unknown);
+  }, effect, SCOPE, unknown);
   try {
     await write(first);
     const delayed = captureControlPlaneWriteConfirmation(name);
-    await runControlPlaneWrite({writeIdentity: name}, first, async () => ({success: true}));
+    await runControlPlaneWrite({writeIdentity: name}, first, SCOPE,
+      async (_content, key) => replyFor(key));
     await write(second);
 
     const current = captureControlPlaneWriteConfirmation(name);

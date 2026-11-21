@@ -316,6 +316,7 @@ function answerSettledStatement(service, {recorded, command}) {
     ...refusalLayerFieldOf(recorded.failureCode, recorded.failureMessage),
     committed: true,
     outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    entryId: command.entryId,
     ...settledAt,
   };
 }
@@ -389,6 +390,7 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
     ...refusalLayerFieldOf(failureCodeOf(error), String(error.message)),
     committed: true,
     outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    entryId: command.entryId,
     ...identity,
   }));
   return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
