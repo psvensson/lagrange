@@ -1,12 +1,79 @@
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {
-  createCommittedTimeoutLedger, createTimeoutVisibilityCache,
+  createCommittedTimeoutLedger, createTimeoutSweepCoordinator, createTimeoutVisibilityCache,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
 import {createCoordinatorSqlStore} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
+
+function buildActiveHandoffTimeoutFixture(operationId, step, status) {
+  const nowMs = Date.now();
+  const staleUpdatedAtMs = nowMs - 70000;
+  const observedServiceRow = {
+    service_id: 'partition-1-r2',
+    replica_id: 'partition-1-r2',
+    partition_id: 'partition-1',
+    node_id: 'node-2',
+    address: 'node-2/partition/partition-1-r2',
+    status: 'active',
+    created_at: staleUpdatedAtMs - 700,
+    state_entered_at: staleUpdatedAtMs - 600,
+    updated_at: staleUpdatedAtMs - 500,
+    raft_role: 'follower',
+    service_type: 'partition',
+  };
+  const operationRow = {
+    operation_id: operationId,
+    type: 'ADD',
+    partition_id: 'partition-1',
+    replica_id: 'partition-1-r2',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status,
+    workflow_step: step,
+    created_at: staleUpdatedAtMs - 5000,
+    updated_at: staleUpdatedAtMs,
+    completed_at: null,
+    error_message: null,
+    steps_history: JSON.stringify([
+      {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
+      {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
+      ...(step === 'CREATING' ? [{step, timestamp: staleUpdatedAtMs - 800}] : []),
+    ]),
+    entity_type: 'partition',
+    entity_id: 'partition-1',
+  };
+  const gatewayCalls = [];
+
+  const notifications = [];
+  const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow], {
+    scheduleCacheChangeNotification: (notify) => notifications.push(notify),
+  });
+  const authorityRow = {...observedServiceRow, updated_at: nowMs, state_entered_at: nowMs};
+  let activeAuthority = false;
+  const ledger = createCommittedTimeoutLedger(operationRow, {
+    cache,
+    readServices(sql, params) {
+      gatewayCalls.push({sql, params});
+      const rows = activeAuthority && params[0] === observedServiceRow.service_id ?
+        [authorityRow] : [];
+      return {success: true, rows, rowSetComplete: rows.length === 1};
+    },
+  });
+
+  const coordinator = createTimeoutSweepCoordinator({
+    nodeId: operationRow.source_node_id,
+    systemTableCache: cache,
+    ...ledger.options,
+    setTimeoutFn: (callback) => ({callback}),
+    clearTimeoutFn() {},
+  });
+
+  return {authorityRow, cache, coordinator, gatewayCalls, ledger, notifications,
+    releaseServiceAuthority() { activeAuthority = true; }};
+}
 
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests({
   test,
@@ -498,91 +565,20 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
   test(
     'checkTimeouts retains creating operations until exact ACTIVE services handoff',
     async (t) => {
-      const nowMs = Date.now();
-      const staleUpdatedAtMs = nowMs - 70000;
-      const observedServiceRow = {
-        service_id: 'partition-1-r2',
-        replica_id: 'partition-1-r2',
-        partition_id: 'partition-1',
-        node_id: 'node-2',
-        address: 'node-2/partition/partition-1-r2',
-        status: 'active',
-        created_at: staleUpdatedAtMs - 700,
-        state_entered_at: staleUpdatedAtMs - 600,
-        updated_at: staleUpdatedAtMs - 500,
-        raft_role: 'follower',
-        service_type: 'partition',
-      };
-      const operationRow = {
-        operation_id: 'op-cache-visible-active',
-        type: 'ADD',
-        partition_id: 'partition-1',
-        replica_id: 'partition-1-r2',
-        source_node_id: 'node-1',
-        target_node_id: 'node-2',
-        status: 'creating',
-        workflow_step: 'CREATING',
-        created_at: staleUpdatedAtMs - 5000,
-        updated_at: staleUpdatedAtMs,
-        completed_at: null,
-        error_message: null,
-        steps_history: JSON.stringify([
-          {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
-          {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
-          {step: 'CREATING', timestamp: staleUpdatedAtMs - 800},
-        ]),
-        entity_type: 'partition',
-        entity_id: 'partition-1',
-      };
-      const gatewayCalls = [];
-
-      const notifications = [];
-      const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow], {
-        scheduleCacheChangeNotification: (notify) => notifications.push(notify),
-      });
-      const authorityRow = {...observedServiceRow, updated_at: nowMs, state_entered_at: nowMs};
-      let activeAuthority = false;
-      const ledger = createCommittedTimeoutLedger(operationRow, {
-        cache,
-        readServices(sql, params) {
-          gatewayCalls.push({sql, params});
-          const rows = activeAuthority && params[0] === observedServiceRow.service_id ?
-            [authorityRow] : [];
-          return {success: true, rows, rowSetComplete: rows.length === 1};
-        },
-      });
-
-      const coordinator = createCoordinator({
-        nodeId: 'node-1',
-        transactionCoordinator: buildTransactionCoordinator(),
-        systemTableCache: cache,
-        ...ledger.options,
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-          },
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        enableTimeouts: false,
-        setTimeoutFn: (callback) => ({callback}),
-        clearTimeoutFn() {},
-      });
+      const operationId = 'op-cache-visible-active';
+      const fixture = buildActiveHandoffTimeoutFixture(operationId, 'CREATING', 'creating');
+      const {authorityRow, cache, coordinator, gatewayCalls, ledger, notifications, releaseServiceAuthority} = fixture;
 
       coordinator.initialize();
       try {
         await coordinator.checkTimeouts();
         const owner = coordinator.workflowOwner;
-        const {operation_id: operationId} = operationRow;
         t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === operationId),
           'the operation is exact and current while the services read is incomplete');
         t.equal(ledger.read().workflow_step, 'CREATING');
         t.equal(ledger.read().error_message, null);
         t.same(ledger.terminalChanges, [], 'incomplete services proof cannot fail the ADD');
-        t.ok(gatewayCalls.some(({params}) => params[0] === observedServiceRow.service_id),
+        t.ok(gatewayCalls.some(({params}) => params[0] === authorityRow.service_id),
           'the authoritative services lookup targets exactly the nominated replica');
         const pendingRetry = () => owner.observedProgressRetryTimerByOperationId.get(operationId);
         const retry = pendingRetry();
@@ -597,7 +593,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           consumed = successor;
         }
 
-        activeAuthority = true;
+        releaseServiceAuthority();
         cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, authorityRow);
         for (const deliver of notifications.splice(0)) deliver();
         await owner.operationWorkflowRunExclusive(
@@ -605,7 +601,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         const committed = ledger.read();
         t.equal(committed.workflow_step, 'ACTIVE', 'the real services CDC wakes and completes the original ADD');
         t.equal(committed.status, 'active');
-        const aligned = cache.get('services', observedServiceRow.service_id);
+        const aligned = cache.get('services', authorityRow.service_id);
         t.match(aligned, authorityRow,
           'the production CDC handoff observes the exact target and its new lifecycle version');
         t.equal(owner.observedProgressRetryTimerByOperationId.has(operationId), false);
@@ -877,100 +873,30 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
   test(
     'checkTimeouts retains sending operations until exact ACTIVE services handoff',
     async (t) => {
-      const nowMs = Date.now();
-      const staleUpdatedAtMs = nowMs - 70000;
-      const observedServiceRow = {
-        service_id: 'partition-1-r2',
-        replica_id: 'partition-1-r2',
-        partition_id: 'partition-1',
-        node_id: 'node-2',
-        address: 'node-2/partition/partition-1-r2',
-        status: 'active',
-        created_at: staleUpdatedAtMs - 700,
-        state_entered_at: staleUpdatedAtMs - 600,
-        updated_at: staleUpdatedAtMs - 500,
-        raft_role: 'follower',
-        service_type: 'partition',
-      };
-      const operationRow = {
-        operation_id: 'op-cache-visible-sending-active',
-        type: 'ADD',
-        partition_id: 'partition-1',
-        replica_id: 'partition-1-r2',
-        source_node_id: 'node-1',
-        target_node_id: 'node-2',
-        status: 'pending',
-        workflow_step: 'SENDING',
-        created_at: staleUpdatedAtMs - 5000,
-        updated_at: staleUpdatedAtMs,
-        completed_at: null,
-        error_message: null,
-        steps_history: JSON.stringify([
-          {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
-          {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
-        ]),
-        entity_type: 'partition',
-        entity_id: 'partition-1',
-      };
-      const gatewayCalls = [];
-
-      const notifications = [];
-      const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow], {
-        scheduleCacheChangeNotification: (notify) => notifications.push(notify),
-      });
-      const authorityRow = {...observedServiceRow, updated_at: nowMs, state_entered_at: nowMs};
-      let activeAuthority = false;
-      const ledger = createCommittedTimeoutLedger(operationRow, {
-        cache,
-        readServices(sql, params) {
-          gatewayCalls.push({sql, params});
-          const rows = activeAuthority && params[0] === observedServiceRow.service_id ?
-            [authorityRow] : [];
-          return {success: true, rows, rowSetComplete: rows.length === 1};
-        },
-      });
-
-      const coordinator = createCoordinator({
-        nodeId: 'node-1',
-        transactionCoordinator: buildTransactionCoordinator(),
-        systemTableCache: cache,
-        ...ledger.options,
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-          },
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        enableTimeouts: false,
-        setTimeoutFn: (callback) => ({callback}),
-        clearTimeoutFn() {},
-      });
+      const operationId = 'op-cache-visible-sending-active';
+      const fixture = buildActiveHandoffTimeoutFixture(operationId, 'SENDING', 'pending');
+      const {authorityRow, cache, coordinator, gatewayCalls, ledger, releaseServiceAuthority} = fixture;
 
       coordinator.initialize();
       try {
         await coordinator.checkTimeouts();
         const owner = coordinator.workflowOwner;
-        const {operation_id: operationId} = operationRow;
         t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === operationId),
           'the operation is exact and current while the services read is incomplete');
         t.equal(ledger.read().workflow_step, 'SENDING');
         t.equal(ledger.read().error_message, null);
         t.same(ledger.terminalChanges, [], 'incomplete services proof cannot fail the ADD');
-        t.ok(gatewayCalls.some(({params}) => params[0] === observedServiceRow.service_id),
+        t.ok(gatewayCalls.some(({params}) => params[0] === authorityRow.service_id),
           'the authoritative services lookup targets exactly the nominated replica');
         const retry = owner.observedProgressRetryTimerByOperationId.get(operationId);
         t.ok(retry, 'cache ACTIVE preserves the existing owner wake');
 
-        activeAuthority = true;
+        releaseServiceAuthority();
         await retry.timeoutHandle.callback();
         const committed = ledger.read();
         t.equal(committed.workflow_step, 'ACTIVE', 'the retained wake completes the original ADD');
         t.equal(committed.status, 'active');
-        const aligned = cache.get('services', observedServiceRow.service_id);
+        const aligned = cache.get('services', authorityRow.service_id);
         t.match(aligned, authorityRow,
           'the production CDC handoff observes the exact target and its new lifecycle version');
         t.equal(owner.observedProgressRetryTimerByOperationId.has(operationId), false);
