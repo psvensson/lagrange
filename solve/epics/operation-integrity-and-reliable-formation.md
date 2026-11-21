@@ -175,7 +175,9 @@ Three contracts link the physical symptoms to the current repairs.
   workflow identities. A founder can grant custody only through the admission
   evidence in its original creation record. `5f20429e4` reproduced two
   late-history violations across the native and SQL readers. The SQL owner
-  repaired both at `7024f677d`. Recovery of an unresolved native proposal
+  repaired both at `7024f677d`. Four affected files passed on two hosts
+  (191 assertions), and a separate three-process public SQL journey passed
+  on tv-dator in 37.658 seconds. Recovery of an unresolved native proposal
   across the loss of the proposing process remains unmeasured.
   [Founding and caller identity originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--founding-identity-sqlite-6294-nov21.tar.gz).
 * A timeout and a late reply must settle the operation they observed. At
@@ -183,10 +185,12 @@ Three contracts link the physical symptoms to the current repairs.
   before the late CREATE reply. Dispatch reported the durable failure without
   sending REMOVE. Five files passed on two hosts. At `0ae5f1dfb`, the three
   previously failing epoch and ownership consumer files passed with 381
-  assertions. Three additional schedules at `dfa871208` reproduced a stale
-  PENDING timeout failing a fresh SENDING row, including a race at the
-  conditional write. The timeout owner must retain the original phase and
-  attempt through that write and any interrupted recovery. Classified closure
+  assertions. At `dfa871208`, one stale PENDING timeout failed a fresh
+  SENDING row. A second schedule preserved SENDING but counted a refused
+  write as a timeout. The initial deferred-read test stopped before its
+  intended race. The timeout owner must bind the original phase at the
+  conditional write and preserve the valid unchanged-row timeout on REPLACE.
+  Classified closure
   and review on the composed source remain open (historical receipt 4/6).
   [Epoch controls and native timeout original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-epoch-ownership-0ae5-nov21.tar.gz).
 
