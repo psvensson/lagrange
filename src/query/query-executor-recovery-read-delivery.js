@@ -1,6 +1,6 @@
-import {AddressManager} from '../address/address-manager.js';
 import {RealTimeSource} from '../time/time-source.js';
 
+const RECOVERY_REDIRECT_REFUSED = Symbol('recovery redirect route is ineligible');
 const ROUTING_PROBE_ELAPSED = Symbol('routing probe elapsed');
 const READ_DELIVERY_CLOSED = 'Recovery read delivery closed';
 const READ_ROUTE_SUPERSEDED = 'Recovery read route superseded';
@@ -128,20 +128,24 @@ function createRecoveryReadDelivery(executor, options) {
     hasUnstarted: (candidates, mayRetry) => candidates.some((candidate) =>
       !pending.has(candidate.address) && canSelect(candidate, mayRetry)),
     throwIfAborted: () => signal.throwIfAborted(),
-    async redirect(address, request, routerOptions, submit) {
-      const {nodeId, serviceId: replicaId} = AddressManager.getInstance().parse(address);
-      const result = await start(
-        {address, request, serviceInfo: {address, nodeId, replicaId}, submit}, routerOptions);
+    async redirect({origin, address, request, routerOptions, submit,
+      resolveRoutes, redirectCandidate}) {
+      const initial = resolveRoutes();
+      const target = redirectCandidate(address, initial);
+      if (!target || !currentIn(origin, initial.candidates)) return RECOVERY_REDIRECT_REFUSED;
+      const result = await start({address, request, serviceInfo: target, submit}, routerOptions);
       signal.throwIfAborted();
       pending.delete(address);
       if (result.error) throw result.error;
-      return result;
-    },
-    redirectedRouteIsCurrent(origin, target, candidates) {
+      const latest = resolveRoutes();
+      const eligibleTarget = redirectCandidate(address, latest);
       // A typed redirect from the still-selected owner may lead publication.
-      // A third or now-unavailable canonical route cannot inherit that grant.
-      return isCurrentPeer(router, target) &&
-        (currentIn(target, candidates) || currentIn(origin, candidates));
+      // A third or unavailable canonical route cannot inherit that grant.
+      if (!eligibleTarget || !currentIn(result.ticket, [eligibleTarget]) ||
+          (!currentIn(result.ticket, latest.candidates) && !currentIn(origin, latest.candidates))) {
+        return RECOVERY_REDIRECT_REFUSED;
+      }
+      return result.delivery;
     },
     dispose() {
       close.abort(new Error(READ_DELIVERY_CLOSED));
@@ -152,4 +156,7 @@ function createRecoveryReadDelivery(executor, options) {
   };
 }
 
-export {createRecoveryReadDelivery, executorShutdownError, ROUTING_PROBE_ELAPSED};
+export {
+  createRecoveryReadDelivery, executorShutdownError,
+  RECOVERY_REDIRECT_REFUSED, ROUTING_PROBE_ELAPSED,
+};
