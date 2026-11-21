@@ -2,6 +2,8 @@ import {createHash, randomUUID} from 'node:crypto';
 import {deserialize, serialize} from 'node:v8';
 import {NAMED_WRITE_ATTEMPT, belongsToNamedWrite, judgeNamedWriteOutcome} from
   './control-plane-named-write-outcome.js';
+import {createNamedWriteCaller, requireNamedWriteWaitBudget, waitForNamedWriteDelivery} from
+  './control-plane-named-write-wait.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {ERRORS} from '../constants/errors.js';
 import {
@@ -95,6 +97,11 @@ const NAME_PART_SEPARATOR = ',';
 
 const heldInstances = new Map();
 const NAMED_WRITE_RECEIPT = Symbol();
+const WRITE_DELIVERY = Object.freeze({
+  ANSWER: 'answer',
+  ERROR: 'error',
+  WAIT_INTERRUPTED: 'wait_interrupted',
+});
 
 function isNonEmptyString(value) {
   return typeof value === STRING_TYPE && value.length > 0;
@@ -139,7 +146,7 @@ function releaseControlPlaneWriteIdentities(...parts) {
   let released = 0;
   for (const name of [...heldInstances.keys()]) {
     if (name === exact || name.startsWith(prefix)) {
-      heldInstances.delete(name);
+      releaseControlPlaneWriteIdentity(name);
       released += 1;
     }
   }
@@ -151,7 +158,17 @@ function releaseControlPlaneWriteIdentities(...parts) {
  * @param {string} writeIdentity - The name.
  */
 function releaseControlPlaneWriteIdentity(writeIdentity) {
-  heldInstances.delete(writeIdentity);
+  const record = heldInstances.get(writeIdentity);
+  if (!record) return;
+  record.releaseRequested = true;
+  releaseSettledInstance(record);
+}
+
+function releaseSettledInstance(record) {
+  if (record.delivery === null && heldInstances.get(record.name) === record &&
+      (record.settlement !== null || record.releaseRequested)) {
+    heldInstances.delete(record.name);
+  }
 }
 
 // Capture before an authoritative read. Readback must prove the original
@@ -160,11 +177,12 @@ function captureControlPlaneWriteConfirmation(writeIdentity) {
   const record = heldInstances.get(writeIdentity);
   return (observation) => {
     if (!record?.confirmWriteEffect || heldInstances.get(writeIdentity) !== record ||
-        !record.confirmWriteEffect(observation)) {
+        record.settlement !== null || !record.confirmWriteEffect(observation)) {
       return false;
     }
     record.settlement = NAMED_WRITE_ATTEMPT.APPLIED;
-    return heldInstances.delete(writeIdentity);
+    releaseSettledInstance(record);
+    return true;
   };
 }
 
@@ -208,40 +226,71 @@ function findLinkedEntryId(answer, record) {
 
 function rememberWriteReceipt(answer, record) {
   if (answer && typeof answer === OBJECT_TYPE) {
-    Object.defineProperty(answer, NAMED_WRITE_RECEIPT, {value: record.settlement});
+    const own = answer instanceof Error ?
+      Object.assign(new Error(answer.message, {cause: answer}), answer) :
+      {...answer};
+    Object.defineProperty(own, NAMED_WRITE_RECEIPT, {value: record.settlement});
+    return own;
   }
   return answer;
 }
 
 function settleInstance(record, answer) {
-  // Later receipts settle the exact entry the producer sent under this key.
+  if (record.settlement !== null) return;
   record.entryId ??= findLinkedEntryId(answer, record);
   const verdict = someLinkedAnswer(answer, isWriteOutcomeUnknown) ?
     NAMED_WRITE_ATTEMPT.UNKNOWN : judgeNamedWriteOutcome(answer, record);
   const releases = verdict === NAMED_WRITE_ATTEMPT.APPLIED ||
     verdict === NAMED_WRITE_ATTEMPT.FAILED ||
     (verdict === NAMED_WRITE_ATTEMPT.NOT_PROPOSED && !record.unresolved);
-  if (!releases) {
-    record.unresolved = true;
-  } else {
+  if (releases) {
     record.settlement = verdict;
-    if (heldInstances.get(record.name) === record) heldInstances.delete(record.name);
+  } else {
+    record.unresolved = true;
   }
-  return verdict;
 }
 
-// Reconstruct the original bytes for every delivery. The live caller supplies
-// routing, current authority and wait budget; an old service is never retained.
-async function attemptInstance(record, attempt) {
-  let answer;
+function deliveryObservation(state, answer) {
+  return {state, answer};
+}
+
+// All joiners see the one real transport answer. Each waiter owns its own
+// deadline and cancellation, while the exposed delivery keeps its custody.
+function beginDelivery(record, attempt, caller) {
+  const delivery = Promise.resolve().then(async () => {
+    try {
+      requireNamedWriteWaitBudget(caller);
+    } catch (answer) {
+      if (!record.unresolved && record.settlement === null) {
+        record.settlement = NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
+      }
+      return deliveryObservation(WRITE_DELIVERY.ERROR, answer);
+    }
+    try {
+      const answer = await attempt(deserialize(record.content), record.key, caller.budget);
+      settleInstance(record, answer);
+      return deliveryObservation(WRITE_DELIVERY.ANSWER, answer);
+    } catch (answer) {
+      settleInstance(record, answer);
+      return deliveryObservation(WRITE_DELIVERY.ERROR, answer);
+    }
+  }).finally(() => {
+    record.delivery = null;
+    releaseSettledInstance(record);
+  });
+  record.delivery = delivery;
+  return delivery;
+}
+
+async function observeDelivery(record, attempt, caller) {
+  const delivery = record.delivery ?? beginDelivery(record, attempt, caller);
   try {
-    answer = await attempt(deserialize(record.content), record.key);
+    return await waitForNamedWriteDelivery(delivery, caller);
   } catch (error) {
-    settleInstance(record, error);
-    throw error;
+    const pending = describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
+    return deliveryObservation(
+      WRITE_DELIVERY.WAIT_INTERRUPTED, withPendingInstance(error, pending));
   }
-  settleInstance(record, answer);
-  return record.settlement === null ? unresolvedAnswer(record, answer) : answer;
 }
 
 function holdNewInstance(name, digest, content, route, confirmWriteEffect) {
@@ -251,7 +300,7 @@ function holdNewInstance(name, digest, content, route, confirmWriteEffect) {
     .digest(DIGEST_ENCODING)
     .slice(0, KEY_DIGEST_LENGTH)}`;
   const record = {name, instance, digest, key, content, routeId: route.id,
-    partitionId: route.partitionId, unresolved: false,
+    partitionId: route.partitionId, unresolved: false, delivery: null, releaseRequested: false,
     entryId: null, settlement: null, confirmWriteEffect};
   heldInstances.set(name, record);
   return record;
@@ -299,20 +348,15 @@ function unresolvedAnswer(record, answer) {
   };
 }
 
-async function resolvePendingInstance(record, attempt) {
-  let answer;
-  let thrown = false;
-  try {
-    answer = await attemptInstance(record, attempt);
-  } catch (error) {
-    answer = error;
-    thrown = true;
-  }
-  if (record.settlement !== NAMED_WRITE_ATTEMPT.APPLIED &&
-      record.settlement !== NAMED_WRITE_ATTEMPT.FAILED) {
-    const pendingInstance = describePendingInstance(
-      record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
-    if (thrown) throw withPendingInstance(answer, pendingInstance);
+async function resolvePendingInstance(record, attempt, caller) {
+  const delivery = await observeDelivery(record, attempt, caller);
+  const {answer, state} = delivery;
+  if (state === WRITE_DELIVERY.WAIT_INTERRUPTED) throw answer;
+  if (record.settlement === null) {
+    const pending = describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
+    if (state === WRITE_DELIVERY.ERROR) {
+      throw rememberWriteReceipt(withPendingInstance(answer, pending), record);
+    }
     return {unresolved: unresolvedAnswer(record, answer)};
   }
   const outcome = record.settlement === NAMED_WRITE_ATTEMPT.APPLIED ?
@@ -326,8 +370,7 @@ function withPendingInstance(answer, pendingInstance) {
     return answer;
   }
   if (answer instanceof Error) {
-    answer.pendingInstance = pendingInstance;
-    return answer;
+    return Object.assign(new Error(answer.message, {cause: answer}), answer, {pendingInstance});
   }
   return {...answer, pendingInstance};
 }
@@ -343,14 +386,15 @@ function pendingInstanceAppliedAnswer(pendingInstance) {
   };
 }
 
-async function runNamedControlPlaneWrite(options, content, route, attempt) {
+async function runNamedControlPlaneWrite(options, content, route, attempt, caller) {
+  requireNamedWriteWaitBudget(caller);
   const name = options.writeIdentity;
   const digest = digestWriteContent(content);
   let record = heldInstances.get(name);
   let pendingInstance = null;
   if (record !== undefined && record.routeId !== route.id) return unresolvedAnswer(record);
   if (record !== undefined && record.digest !== digest) {
-    const resolution = await resolvePendingInstance(record, attempt);
+    const resolution = await resolvePendingInstance(record, attempt, caller);
     if (resolution.unresolved) {
       return resolution.unresolved;
     }
@@ -363,21 +407,27 @@ async function runNamedControlPlaneWrite(options, content, route, attempt) {
     if (record !== undefined && (record.digest !== digest || record.routeId !== route.id)) {
       // Another write of the name took the slot meanwhile: resolve that
       // one too before this one is issued.
-      return runNamedControlPlaneWrite(options, content, route, attempt);
+      return runNamedControlPlaneWrite(options, content, route, attempt, caller);
     }
   }
+  requireNamedWriteWaitBudget(caller);
   if (record === undefined) {
     if (heldInstances.size >= MAX_HELD_WRITE_INSTANCES) {
       return capacityRefusal(name);
     }
     record = holdNewInstance(name, digest, content, route, options.confirmWriteEffect);
   }
-  try {
-    return rememberWriteReceipt(
-      withPendingInstance(await attemptInstance(record, attempt), pendingInstance), record);
-  } catch (error) {
-    throw rememberWriteReceipt(withPendingInstance(error, pendingInstance), record);
-  }
+  const observation = await observeDelivery(record, attempt, caller);
+  return observedWriteResult(record, observation, pendingInstance);
+}
+
+function observedWriteResult(record, {answer, state}, pendingInstance) {
+  if (state === WRITE_DELIVERY.WAIT_INTERRUPTED) throw answer;
+  const result = state === WRITE_DELIVERY.ANSWER && record.settlement === null ?
+    unresolvedAnswer(record, answer) : answer;
+  const observed = rememberWriteReceipt(withPendingInstance(result, pendingInstance), record);
+  if (state === WRITE_DELIVERY.ERROR) throw observed;
+  return observed;
 }
 
 /**
@@ -391,6 +441,10 @@ async function runNamedControlPlaneWrite(options, content, route, attempt) {
  * @param {Function} attempt - (content, idempotencyKey) => Promise of the answer.
  * @return {Promise<*>} The attempt's answer.
  */
+function isNamedControlPlaneWrite(options) {
+  return !isNonEmptyString(options?.idempotencyKey) && isNonEmptyString(options?.writeIdentity);
+}
+
 function runControlPlaneWrite(options, content, route, attempt) {
   if (isNonEmptyString(options?.idempotencyKey)) {
     return attempt(content, options.idempotencyKey);
@@ -398,7 +452,8 @@ function runControlPlaneWrite(options, content, route, attempt) {
   if (!isNonEmptyString(options?.writeIdentity)) {
     return attempt(content, mintControlPlaneWriteKey());
   }
-  return runNamedControlPlaneWrite(options, serialize(content), route, attempt);
+  return runNamedControlPlaneWrite(options, serialize(content), route, attempt,
+    createNamedWriteCaller(options));
 }
 
 /**
@@ -443,6 +498,7 @@ export {
   controlPlaneWriteRoute,
   isControlPlaneWriteDefinitivelyUnappliedError,
   isControlPlaneWriteOutcomeUnknown,
+  isNamedControlPlaneWrite,
   isPendingInstanceApplied,
   mintControlPlaneWriteKey,
   releaseControlPlaneWriteIdentities,

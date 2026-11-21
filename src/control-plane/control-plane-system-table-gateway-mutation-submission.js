@@ -1,3 +1,4 @@
+import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -18,6 +19,7 @@ import {
 import {
   CONTROL_PLANE_WRITE_ROUTE,
   controlPlaneWriteRoute,
+  isNamedControlPlaneWrite,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
 
@@ -247,11 +249,17 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
     const executesStartupSql = this.startupSqlMutationPhase !== null &&
       normalizePhaseScope(mutationOptions.phaseScope) === this.startupSqlMutationPhase &&
       tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
-    const executeIntent = async (command, idempotencyKey) => {
+    const executeIntent = async (command, idempotencyKey, timeoutBudget) => {
       const {mutation: retained, ignoreExisting, sessionId} = command;
       const operation = retained.operation;
       this.assertSystemTableMutationAllowed(operation, tableName);
       const deliveryOptions = {...writeOptions, ignoreExisting, sessionId, idempotencyKey};
+      if (timeoutBudget) {
+        deliveryOptions.timeoutBudget = timeoutBudget;
+        deliveryOptions.queryTimeoutMs = resolveControlPlaneQueryTimeoutMs({
+          requestedTimeoutMs: writeOptions.queryTimeoutMs, timeoutBudget, now: this.now,
+        });
+      }
       const cdcIntegrationService = this.assertCdcIntegrationService();
       const attemptContext = {
         coalescingKey: deliveryOptions?.coalescingKey,
@@ -342,7 +350,9 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         }, {requestKey, coalescingKey: writeOptions.coalescingKey});
       }
       this.assertCdcIntegrationService();
-      return runControlPlaneWrite(mutationOptions, command, route, executeIntent);
+      return runControlPlaneWrite({
+        ...mutationOptions, timeoutMs: writeOptions.queryTimeoutMs, now: this.now,
+      }, command, route, executeIntent);
     };
 
 
@@ -360,7 +370,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
 
     if (
       mergePolicy === CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT &&
-      requestKey
+      requestKey && !isNamedControlPlaneWrite(mutationOptions)
     ) {
       return this.executeMutationWithDiagnostics(
         () => this.runSingleFlight(
