@@ -1,4 +1,9 @@
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {
+  buildDeliveryEnvelope,
+  deliveryTransportOf,
+  isDeliveredTransportDeliveryOutcome,
+} from '../../src/transport/transport-semantic-outcome.js';
+import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -128,7 +133,7 @@ test('raft-rs runtime emits a semantic envelope instead of a native packet',
     }
   });
 
-test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
+test('MessageRouter carries the semantic raft-rs envelope as one consensus frame',
   async (t) => {
     const router = new MessageRouter({
       bootIncarnation: TEST_BOOT_INCARNATION,
@@ -162,15 +167,13 @@ test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
       },
     };
 
-    const result = router.tryDeliverRaftDirect(
-      'node-r2/partition/transport-p1-r2',
-      'raft-rs-message-1',
-      payload,
-      'node-r2',
-    );
+    const result = router.deliverConsensusEnvelope(
+      'node-r2/partition/transport-p1-r2', payload);
 
-    t.equal(result.acknowledged, true,
-      'semantic raft-rs traffic uses the existing consensus fast path');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
+      'semantic raft-rs traffic is written as the consensus delivery class');
+    t.equal(transmitted?.type, ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE,
+      'the sending router declares the class on the frame');
     t.same(transmitted?.payload, payload,
       'MessageRouter preserves the semantic envelope unchanged');
     t.equal(transmitted?.payload?.type, undefined,

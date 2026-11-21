@@ -19,7 +19,7 @@ import Database from 'better-sqlite3';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {SERVICE_TYPE, isPartitionCleanupServiceRow} from
   '../constants/service.js';
-import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
+import {sendRaftEnvelope} from '../raft/raft-packet-utils.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {
   RAFT_COMMITTED_ENTRY_APPLY_MODE,
@@ -170,11 +170,7 @@ function wasmServiceConsensusRequest(replica) {
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(replica),
     [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: false,
     [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, envelope) =>
-      replica.transport.deliver(peerAddress, envelope,
-        resolveRaftTransportDeliveryOptions({
-          ...envelope,
-          targetAddress: peerAddress,
-        })),
+      sendRaftEnvelope(replica.transport, peerAddress, envelope),
     [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (replicaIdentity) =>
       resolveWasmServicePeerAddress(replica, replicaIdentity),
     // Runs inside the transaction that also advances the applied state.

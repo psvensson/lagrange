@@ -18,6 +18,7 @@ import {defineMessageRouterConnectionCloseReconnect} from './message-router-conn
 import {defineMessageRouterHandlerRegistry} from './message-router-handler-registry.js';
 import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
+import {createConsensusDeliveryRecord} from './message-router-consensus-delivery.js';
 import {resolveInProcessConnectionEnvironment} from './in-process-connection-environment.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {requireIssuedBootIncarnation} from
@@ -265,6 +266,8 @@ class MessageRouter extends EventEmitter {
     this.lastUnmatchedServiceResponseWarnAtMs = null;
     this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
     this.serviceResponseDispositionCounts = /* @__PURE__ */ new Map();
+    // The consensus delivery class's own counts (sent and refused).
+    this.consensusDelivery = createConsensusDeliveryRecord();
     this.initialized = false;
     this.server = null;
     this.messageCount = TRANSPORT_NUM.ZERO;

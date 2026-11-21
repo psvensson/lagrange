@@ -129,6 +129,12 @@ class MessageRouterInboundDispatch {
       this.handleServiceResponse(message);
       return;
     }
+    if (message.type === RouterMessageType.CONSENSUS_ENVELOPE) {
+      // No ACK and no SERVICE_RESPONSE: the consensus delivery class.
+      this.receiveConsensusEnvelope(message,
+        this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws));
+      return;
+    }
     if (message.type === RouterMessageType.SERVICE_MESSAGE) {
       const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
       this.handleServiceMessage(ws, message, delivery);

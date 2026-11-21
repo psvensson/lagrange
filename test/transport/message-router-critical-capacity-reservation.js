@@ -18,11 +18,6 @@ import {
   selectCriticalPendingSourcePreemptionCandidateIndex,
 } from '../../src/transport/message-router-outbound-queue-admission.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {resolveRaftTransportDeliveryOptions} from '../../src/raft/constants.js';
-import {
-  RAFT_RS_MESSAGE_TYPE,
-  RAFT_RS_TRANSPORT_PROTOCOL,
-} from '../../src/raft/raft-rs-ingress-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 /**
@@ -451,103 +446,6 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
           {source: 'query:update:services', count: 1},
         ],
         'warning should summarize the queued source mix',
-      );
-
-      releaseFirstSend();
-      await firstDelivery;
-      await secondDelivery;
-      await router.shutdown();
-    });
-
-  t.test('should attribute raft-rs saturation to the consensus owner delivery sources',
-    async (t) => {
-      const router = new MessageRouter({
-        bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId: 'test-node',
-        outboundQueueMaxConcurrent: 1,
-        outboundQueueMaxPending: 1,
-        outboundQueueCriticalReserve: 0,
-      });
-      await router.initialize();
-
-      const warnEntries = [];
-      const originalWarn = router.logger.warn.bind(router.logger);
-      router.logger.warn = (message, context) => {
-        warnEntries.push({message, context});
-        return originalWarn(message, context);
-      };
-
-      let releaseFirstSend = null;
-      const blockingDeliverFn = async () => {
-        await new Promise((resolve) => {
-          releaseFirstSend = resolve;
-        });
-        return {acknowledged: true};
-      };
-
-      const firstDelivery = router.enqueueOutbound(
-        'remote-node',
-        blockingDeliverFn,
-        {deliveryPriority: 'critical'},
-      );
-      await Promise.resolve();
-
-      // The production send path: the consensus owner classifies the
-      // semantic raft-rs envelope; the router only consumes that decision.
-      const enqueueRaftRsEnvelope = (targetAddress, message) => {
-        const envelope = {
-          protocol: RAFT_RS_TRANSPORT_PROTOCOL,
-          groupId: 'users-p1',
-          from: 'users-p1-r1',
-          to: targetAddress,
-          message,
-        };
-        return router.enqueueOutbound(
-          'remote-node',
-          async () => ({acknowledged: true}),
-          {
-            ...resolveRaftTransportDeliveryOptions({
-              ...envelope,
-              targetAddress,
-            }),
-            targetAddress,
-            message: envelope,
-          },
-        );
-      };
-
-      const appendTarget = 'remote-node/partition/users-p1-r2';
-      const secondDelivery = enqueueRaftRsEnvelope(appendTarget, {
-        msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
-        entries: [{index: 7, term: 2}],
-      });
-      await Promise.resolve();
-
-      const voteTarget = 'remote-node/partition/users-p1-r3';
-      await t.rejects(
-        enqueueRaftRsEnvelope(voteTarget, {
-          msgType: RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE,
-          entries: [],
-        }),
-        /queue/i,
-        'third delivery should surface queue saturation',
-      );
-
-      const saturationEntry = warnEntries.find((entry) =>
-        entry.message === 'Outbound queue saturated for node delivery');
-      t.ok(saturationEntry, 'router should emit one saturation warning');
-      t.equal(
-        saturationEntry.context.attemptedDeliverySource,
-        `target:${voteTarget}`,
-        'a raft-rs control envelope without an owner source is attributed ' +
-          'to its target, never to an inferred native append source',
-      );
-      t.same(
-        saturationEntry.context.pendingSourceSummary,
-        [
-          {source: `raft:append:entries:${appendTarget}`, count: 1},
-        ],
-        'warning should summarize the owner-declared append-entries source',
       );
 
       releaseFirstSend();

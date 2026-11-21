@@ -7,18 +7,20 @@
 // The connection owner is the router's close handling: every closed non-self
 // peer connection with a remembered address schedules reconnect attempts
 // (message-router-connection-close-reconnect.js handleConnectionClose ->
-// scheduleReconnect), 1 s then x1.5 each, at most transport.reconnectMaxAttempts
-// (10, about 113 s in all). Two cases, raft traffic flowing both ways all the
-// time:
+// scheduleReconnect). Measured on d6cfa14ab and f0892b478 (lab
+// raftframes-s2e-before-r1/-r2): the dialing end was still scheduling after
+// 20 virtual minutes (attempt 9, 118 refused dials), and the adopted end's
+// record carries no reconnectAttempts, so its schedule is NaN and it re-dials
+// on every turn (240001 refused dials in 20 minutes at a 5 ms step) - a
+// transport defect recorded for its owner, not repaired here. Two cases, raft
+// traffic flowing both ways all the time:
 //   1. a short outage: both ends schedule their reconnect and it restores the
 //      link - no raft frame is needed (green before and after (e));
-//   2. an outage that lasts until the dialing end has spent its whole
-//      schedule: the link comes back after the heal only if some owner still
-//      dials. Before (e) a raft frame on the fallback path could; the
-//      contract asks that the link come back after (e) too. If it does not,
-//      (e) changed this outcome and the line stops on it. The adopted end's
-//      record carries no reconnectAttempts, so its schedule never ends: the
-//      witness reports its attempts and the dials it had refused.
+//   2. a 20-minute outage: the link comes back after the heal only if some
+//      owner still dials. Before (e) a raft frame on the fallback path could;
+//      the contract asks that the link come back after (e) too, and that both
+//      ends were still dialing during the outage. If it does not, (e) changed
+//      this outcome and the line stops on it.
 //
 // Real: two MessageRouters on their nodes' network clocks (keepalive,
 // reconnect schedule and delivery lifetimes on virtual time). Substituted:
@@ -39,10 +41,7 @@ const NODES = Object.freeze([NODE_A, NODE_B]);
 const RAFT_SEND_EVERY_MS = 60;
 const STEP_MS = 5;
 const SHORT_OUTAGE_MS = 3000;
-// The dialing end's schedule (10 attempts, x1.5 backoff from 1 s) ends well
-// inside this; the outage lasts until it has.
-const LONG_OUTAGE_CAP_MS = 1200000;
-const OUTAGE_POLL_MS = 1000;
+const LONG_OUTAGE_MS = 1200000;
 const RESTORE_BOUND_MS = 60000;
 // Up to three minutes of virtual time on a shared, slow lab host.
 const WITNESS_TIMEOUT_MS = 300000;
@@ -89,22 +88,13 @@ function reconnectState(world) {
   }));
 }
 
-// The outage lasts `outageMs`, or - when `untilDialerSpent` - until the
-// dialing end no longer has a reconnect scheduled (capped).
-async function outageThenHeal({world, received}, outageMs, untilDialerSpent = false) {
+async function outageThenHeal({world, received}, outageMs) {
   world.blackout(NODES);
   world.severLink(NODE_A, NODE_B);
   const severedAt = world.network.now();
   await world.driveFor(STEP_MS * 2, STEP_MS);
   const afterSever = reconnectState(world);
-  if (untilDialerSpent) {
-    while (reconnectState(world)[NODE_A].scheduled &&
-        world.network.now() < severedAt + outageMs) {
-      await world.driveFor(OUTAGE_POLL_MS, STEP_MS);
-    }
-  } else {
-    await world.driveFor(outageMs, STEP_MS);
-  }
+  await world.driveFor(outageMs, STEP_MS);
   const atHeal = reconnectState(world);
   const outageLastedMs = world.network.now() - severedAt;
   const refusedDialsByTarget = world.refusedDials.reduce((counts, dial) =>
@@ -147,17 +137,17 @@ test('C13: a short outage is repaired by the routers\' own reconnect ' +
   }
 });
 
-test('C13: after an outage that outlasts the dialing end\'s reconnect ' +
-  'schedule, the link still comes back once the network heals',
-{timeout: WITNESS_TIMEOUT_MS}, async () => {
+test('C13: after a 20-minute outage the link comes back once the network ' +
+  'heals, and both ends were still dialing', {timeout: WITNESS_TIMEOUT_MS},
+async () => {
   const traffic = await trafficWorld();
   try {
-    const measured = await outageThenHeal(traffic, LONG_OUTAGE_CAP_MS, true);
+    const measured = await outageThenHeal(traffic, LONG_OUTAGE_MS);
     const report = `measured ${JSON.stringify(measured)} sendErrors ${
       JSON.stringify(traffic.sendErrors)}`;
-    // Anti-vacuity: the outage really outlasted the dialing end's schedule.
-    assert.equal(measured.atHeal[NODE_A].scheduled, false,
-      `the dialing end had spent its reconnect schedule: ${report}`);
+    // Who dialed during the outage: both ends' connection owners.
+    assert.ok(NODES.every((nodeId) => (measured.refusedDialsByTarget[nodeId] ?? 0) > 0),
+      `both ends kept dialing through the outage: ${report}`);
     assert.ok(measured.restoredAfterMs !== null,
       `the link came back within ${RESTORE_BOUND_MS} ms of the heal: ${report}`);
     assert.ok(Object.values(measured.raftReceivedAfterHeal).every((count) => count > 0),

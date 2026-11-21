@@ -52,8 +52,11 @@ import {
   CDC_PIPELINE_METRIC,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
-import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
-import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
+import {
+  isRaftRsTransportEnvelope,
+  sendRaftEnvelope,
+  stepRaftEnvelope,
+} from '../raft/raft-packet-utils.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
@@ -362,9 +365,10 @@ export const PARTITION_SERVICE_SHARED = {
   resolvePartitionSplitTargetPartitionId,
   resolvePartitionWriteCommitMode,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
   routePartitionSplitMirroredWrite,
   routePartitionSplitSnapshotBatch,
   runRetryableControlPlaneWrite,
+  sendRaftEnvelope,
+  stepRaftEnvelope,
   wireReplicaLifecycleEvents,
 };

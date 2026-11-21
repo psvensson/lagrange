@@ -22,6 +22,10 @@ const CONNECTION_STATE = Object.freeze({
 
 const ROUTER_MESSAGE_TYPE = Object.freeze({
   SERVICE_MESSAGE: 'service_message',
+  // The consensus delivery class: a raft-rs envelope for a peer replica,
+  // declared by the sending router. It is answered by nothing - no ACK and no
+  // SERVICE_RESPONSE - because raft re-sends what a peer did not receive.
+  CONSENSUS_ENVELOPE: 'consensus_envelope',
   SERVICE_RESPONSE: 'service_response',
   ACK: 'ack',
   IDENTIFY: 'identify',
@@ -288,11 +292,19 @@ const ROUTER_LOG_MSG = Object.freeze({
   JOIN_COMPLETE_RECEIVED: 'Join complete received',
   JOIN_COMPLETE_ACK_SENT: 'Join complete acknowledgment sent',
   JOIN_COMPLETE_FAILED: 'Failed to process join complete message',
-  RAFT_DIRECT_DELIVERY: 'Delivering raft packet directly',
-  RAFT_DIRECT_DELIVERY_FAILED: 'Failed to deliver raft packet directly',
+  CONSENSUS_ENVELOPE_REFUSED:
+    'Consensus envelope refused by the receiving router',
   BULK_CHANNEL_ADOPTED: 'Adopted identified bulk-channel socket',
   BULK_CHANNEL_NO_REGISTRY:
     'Closing bulk-channel socket: no bulk channel registry attached',
+});
+
+// Why a receiving router took no step for a consensus envelope: the record
+// stays with the receiver, since nothing is answered to the sender.
+const CONSENSUS_RECEIPT_REFUSAL = Object.freeze({
+  MALFORMED_ENVELOPE: 'malformed-envelope',
+  NO_HANDLER: 'no-handler',
+  HANDLER_FAILED: 'handler-failed',
 });
 
 const ROUTER_ERROR_MSG = Object.freeze({
@@ -372,6 +384,7 @@ export {
   BULK_CHANNEL_EMPTY_STATS,
   BULK_TRANSFER_CHANNEL_DEFAULT,
   CONNECTION_STATE,
+  CONSENSUS_RECEIPT_REFUSAL,
   OUTBOUND_DELIVERY_PRIORITY,
   ROUTER_IDENTIFY_CHANNEL,
   ROUTER_MESSAGE_TYPE,

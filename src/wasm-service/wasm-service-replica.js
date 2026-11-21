@@ -16,7 +16,7 @@ import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
 import {RAFT_ROLE} from '../raft/constants.js';
-import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
+import {isRaftRsTransportEnvelope, stepRaftEnvelope} from '../raft/raft-packet-utils.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {SERVICE_TYPE} from '../constants/service.js';
@@ -362,10 +362,7 @@ class WasmServiceReplica extends EventEmitter {
   async handleMessage(message) {
     const payload = message.payload || message;
     if (isRaftRsTransportEnvelope(payload)) {
-      if (this.raft) {
-        await turnChainValue(this.raft.step(payload));
-      }
-      return null;
+      return stepRaftEnvelope(this.raft, payload);
     }
     const refusal = this.heldCreationRefusal();
     if (refusal !== null) return refusal;

@@ -82,7 +82,6 @@ registerFormationPartitionApplyHooks({
   startPartitionRaftWriteCommit,
 });
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
-import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -120,6 +119,7 @@ const {
   buildDurableCommitWitness,
   SYSTEM_TABLE_NAME,
   isRaftRsTransportEnvelope,
+  stepRaftEnvelope,
 } = PARTITION_SERVICE_SHARED;
 
 // A refusal of the committed-command gate: the application fails closed,
@@ -360,10 +360,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       // A shut-down or no-longer-registered incarnation refuses the envelope
       // it would drop, so the sender never records it as taken (F1).
       assertReplicaHandlerServing(this);
-      if (this.raft) {
-        await turnChainValue(this.raft.step(payload));
-      }
-      return null;
+      return stepRaftEnvelope(this.raft, payload);
     }
     return this.handleCanonicalApplicationPayload(payload);
   }

@@ -137,6 +137,7 @@ class MessageRouterStatsShutdown {
       pendingMessages: this.pendingMessages.size,
       pendingResponses: this.pendingResponses.size,
       serviceResponseDispositions: this.getServiceResponseDispositionCounts(),
+      consensusDelivery: this.getConsensusDeliveryStats(),
       handlers: this.handlers.size,
       connections: connectionStats,
       connectedNodes: this.getConnectedNodes().length,

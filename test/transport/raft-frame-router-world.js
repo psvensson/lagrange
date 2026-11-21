@@ -3,13 +3,13 @@
 // frame delivery witnesses (raft-frame-delivery record, stage 1).
 //
 // Production code exercised: MessageRouter (construction, IDENTIFY and
-// connection adoption, deliver, tryDeliverRaftDirect, inbound dispatch, ACK
-// and SERVICE_RESPONSE, the delivery lifetime and the pending-response
-// ledger); the raft-rs operation port as PartitionNodeCluster builds it
-// (createRaftRsOperationPort, its runtime owner, raft-rs-peer-delivery's
-// sendMessages and its durable store over SQLite); and the SEND_TO_PEER
-// closure body of partition-service-raft-init-base.js (transport.deliver
-// with resolveRaftTransportDeliveryOptions).
+// connection adoption, deliver and the consensus delivery class, inbound
+// dispatch, ACK and SERVICE_RESPONSE for everything else, the delivery
+// lifetime and the pending-response ledger); the raft-rs operation port as
+// PartitionNodeCluster builds it (createRaftRsOperationPort, its runtime
+// owner, raft-rs-peer-delivery's sendMessages and its durable store over
+// SQLite); and the one SEND_TO_PEER closure of every consensus group
+// (raft-packet-utils.js sendRaftEnvelope).
 //
 // Substituted: the physical link (VirtualNetwork and the virtual connection
 // environment, LINK_DELAY_MS per frame); the raft ports' clock (their node's
@@ -26,8 +26,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {RealTimeSource} from '../../src/time/time-source.js';
-import {RAFT_ROLE, resolveRaftTransportDeliveryOptions} from '../../src/raft/constants.js';
-import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  isRaftRsTransportEnvelope, sendRaftEnvelope,
+} from '../../src/raft/raft-packet-utils.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
@@ -283,7 +285,7 @@ class RaftRouterWorld {
   }
 
   // A raft-rs envelope through the router's send entry, as the SEND_TO_PEER
-  // closure sends one (without the closure's priority options).
+  // closure sends one.
   sendRaftEnvelope(fromNode, targetAddress, envelope) {
     return this.routers.get(fromNode).deliver(targetAddress, envelope);
   }
@@ -339,8 +341,8 @@ class RaftRouterWorld {
       });
   }
 
-  // SEND_TO_PEER: the production closure body over the sender's router, or
-  // the substituted in-process return leg for a node named inProcessFrom.
+  // SEND_TO_PEER: the production closure over the sender's router, or the
+  // substituted in-process return leg for a node named inProcessFrom.
   send(from, address, envelope) {
     const fromNode = this.nodeOfReplica.get(from);
     const to = this.replicaOfAddress(address);
@@ -352,8 +354,7 @@ class RaftRouterWorld {
     }
     this.raftSends.push({atMs: this.network.now(), from, to, fromNode,
       toNode: this.nodeOfReplica.get(to)});
-    return this.routers.get(fromNode).deliver(address, envelope,
-      resolveRaftTransportDeliveryOptions({...envelope, targetAddress: address}));
+    return sendRaftEnvelope(this.routers.get(fromNode), address, envelope);
   }
 
   node(replicaId) {

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2704,
+    "ordinary": 2703,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2730,
-  "digest": "fnv1a32-d8ca9e63",
+  "censusSize": 2729,
+  "digest": "fnv1a32-f357daf3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1760,7 +1760,6 @@
     "test/raft/leader-activation-scheduler.test.js": "ordinary",
     "test/raft/leadership-transfer-single-path.test.js": "ordinary",
     "test/raft/learner-promotion-progress-proof-contract.test.js": "ordinary",
-    "test/raft/message-group-readiness-delivery-priority.test.js": "ordinary",
     "test/raft/raft-cleanup-verification.test.js": "ordinary",
     "test/raft/raft-id-mapper.test.js": "ordinary",
     "test/raft/raft-log-write-owner.test.js": "ordinary",

@@ -29,13 +29,9 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-} from '../../src/raft/constants.js';
-import {
   RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_TRANSPORT_PROTOCOL,
 } from '../../src/raft/raft-rs-ingress-constants.js';
-import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../src/raft/raft-operation-port-request.js';
 import {RAFT_MEMBERSHIP_OPERATION} from
@@ -843,80 +839,31 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
 
 // Tests for the consensus-port architecture (Requirements 14.1, 14.2, 14.3, 14.4)
 
-test('PartitionService - non-critical Raft peer writes use background delivery',
-  async (t) => {
-    const deliveries = [];
-    const mockTransport = {
-      ...createIdentityTransport(),
-      deliver: async (_address, _payload, options) => {
-        deliveries.push(options);
-        return buildDeliveryEnvelope({acknowledged: true});
-      },
-    };
-
-    const consensusPort = new RecordingOutboundConsensusPort();
-    const partition = createControllablePartitionService({
-      partitionId: 'sql_transaction_participants-p1',
-      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-      replicaId: 'sql_transaction_participants-p1-r1',
-      replicaIds: [
-        'sql_transaction_participants-p1-r1',
-        'sql_transaction_participants-p1-r4',
-      ],
-      peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
-      transport: mockTransport,
-      dbPath: ':memory:',
-    }, consensusPort);
-
-    await partition.initialize();
-
-    try {
-      await consensusPort.sendToPeer(
-        'node-2/partition/sql_transaction_participants-p1-r4',
-        {
-          protocol: RAFT_RS_TRANSPORT_PROTOCOL,
-          groupId: 'sql_transaction_participants-p1',
-          from: 'sql_transaction_participants-p1-r1',
-          to: 'sql_transaction_participants-p1-r4',
-          message: {
-            msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
-            entries: [{index: 2, term: 1}],
-          },
-        },
-      );
-
-      t.same(
-        deliveries,
-        [{
-          ...RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-          deliverySource:
-            'raft:append:entries:node-2/partition/sql_transaction_participants-p1-r4',
-        }],
-        'non-critical transaction-state append traffic should not consume the critical lane',
-      );
-    } finally {
-      await partition.shutdown();
-    }
-  });
-
-test('PartitionService - append-fail peer writes prefer target priority over ' +
-  'sender address', async (t) => {
+test('PartitionService - every raft peer write goes through the one send ' +
+  'closure: the address and the unchanged envelope, no delivery options',
+async (t) => {
+  // The consensus delivery class is the router's (raft frame delivery
+  // record, repair (e)): no raft envelope carries a priority, a delivery
+  // source or a replacement key into the transport any more.
   const deliveries = [];
   const mockTransport = {
     ...createIdentityTransport(),
-    deliver: async (_address, _payload, options) => {
-      deliveries.push(options);
+    deliver: async (...args) => {
+      deliveries.push(args);
       return buildDeliveryEnvelope({acknowledged: true});
     },
   };
 
   const consensusPort = new RecordingOutboundConsensusPort();
   const partition = createControllablePartitionService({
-    partitionId: 'tbl-bench-p1',
-    tableId: 'tbl-bench',
-    replicaId: 'tbl-bench-p1-r1',
-    replicaIds: ['tbl-bench-p1-r1', 'tbl-bench-p1-r2'],
-    peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
+    partitionId: 'sql_transaction_participants-p1',
+    tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+    replicaId: 'sql_transaction_participants-p1-r1',
+    replicaIds: [
+      'sql_transaction_participants-p1-r1',
+      'sql_transaction_participants-p1-r4',
+    ],
+    peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
     transport: mockTransport,
     dbPath: ':memory:',
   }, consensusPort);
@@ -924,42 +871,21 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
   await partition.initialize();
 
   try {
-    // A rejected append response whose sender is a priority control-plane
-    // replica: the lane is decided by the target partition alone.
-    const rejectFrom = (from) => ({
+    const peerAddress = 'node-2/partition/sql_transaction_participants-p1-r4';
+    const envelope = {
       protocol: RAFT_RS_TRANSPORT_PROTOCOL,
-      groupId: 'tbl-bench-p1',
-      from,
-      to: 'tbl-bench-p1-r2',
-      address: from,
+      groupId: 'sql_transaction_participants-p1',
+      from: 'sql_transaction_participants-p1-r1',
+      to: 'sql_transaction_participants-p1-r4',
       message: {
-        msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
-        reject: true,
-        entries: [],
+        msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
+        entries: [{index: 2, term: 1}],
       },
-    });
-    await consensusPort.sendToPeer(
-      'node-2/partition/tbl-bench-p1-r2',
-      rejectFrom('node-1/partition/control_plane_publications-p1-r1'),
-    );
-    await consensusPort.sendToPeer(
-      'node-2/partition/tbl-bench-p1-r2',
-      rejectFrom('node-1/partition/tbl-bench-p1-r1'),
-    );
-
-    t.equal(deliveries.length, 2, 'both rejections were sent');
-    t.same(
-      deliveries[0],
-      deliveries[1],
-      'a rejected append response follows the target partition lane, not ' +
-        'the sender partition lane',
-    );
-    t.not(
-      deliveries[0].deliveryPriority,
-      OUTBOUND_DELIVERY_PRIORITY.READINESS,
-      'a control-plane sender does not lift user-partition traffic onto ' +
-        'the readiness lane',
-    );
+    };
+    await consensusPort.sendToPeer(peerAddress, envelope);
+    t.same(deliveries, [[peerAddress, envelope]],
+      'the transport receives the peer address and the unchanged envelope, ' +
+        'and nothing else');
   } finally {
     await partition.shutdown();
   }
