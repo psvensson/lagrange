@@ -570,6 +570,8 @@ for (const [answer, generation] of [
 for (const [boundary, change] of [
   ['completion entry', 'replacement terminal'],
   ['completion entry', 'same-generation terminal'],
+  ['mirror refusal', 'replacement terminal'],
+  ['mirror refusal', 'same-generation terminal'],
   ['terminal CAS', 'generation'],
   ['terminal CAS', 'history'],
   ['terminal CAS', 'absence'],
@@ -623,6 +625,17 @@ for (const [boundary, change] of [
         owner.completeOperation = async (...args) => {
           if (!mutationRan) await changeStoppingSubject();
           return complete(...args);
+        };
+      } else if (boundary === 'mirror refusal') {
+        const workflow = owner.operationWorkflowCoordinator;
+        const transition = workflow.transitionStep.bind(workflow);
+        workflow.transitionStep = async (operationId, request, ...args) => {
+          if (!mutationRan && operationId === ACTIVE_OPERATION_ID &&
+              request.nextStep === WORKFLOW_STEP.REMOVED) {
+            await changeStoppingSubject();
+            workflow.removeWorkflow(operationId);
+          }
+          return transition(operationId, request, ...args);
         };
       } else {
         const execute = gateway.executeQuery.bind(gateway);
