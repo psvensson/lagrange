@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
@@ -259,7 +261,7 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
 
       t.equal(
         progressed,
-        true,
+        OPERATION_RECONCILE_OUTCOME.WAITING,
         'timeout reconciliation should re-enter the remove dispatch lane for safety-deferred REMOVE operations',
       );
       t.equal(

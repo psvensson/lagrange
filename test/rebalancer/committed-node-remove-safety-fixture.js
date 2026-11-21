@@ -1,10 +1,16 @@
+import Database from 'better-sqlite3';
+import {SERVICES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {assertOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
 import {
   buildMockPolicyAuthorityWitness,
   createMockCache,
@@ -54,6 +60,7 @@ async function createCommittedFloorHarness(options = {}) {
     replica_id: `${FLOOR_PARTITION_ID}-r${index + 1}`,
     service_type: 'partition', partition_id: FLOOR_PARTITION_ID,
     node_id: id, status: 'active', raft_role: 'follower',
+    created_at: FLOOR_NOW_MS, updated_at: FLOOR_NOW_MS, state_entered_at: FLOOR_NOW_MS,
     address: `${id}/partition/${FLOOR_PARTITION_ID}-r${index + 1}`,
   }));
   const cache = createMockCache({
@@ -140,25 +147,49 @@ async function createCommittedFloorHarness(options = {}) {
   state.effects = [];
   const gateway = coordinator.controlPlaneSystemTableGateway;
   const readRows = gateway.readAuthoritativeRows.bind(gateway);
-  gateway.readAuthoritativeRows = (tableName, ...args) => tableName === TABLES.SERVICES ?
-    Promise.resolve({
+  const authority = new Database(':memory:');
+  authority.exec(generateCreateTableSQL(SERVICES_SCHEMA));
+  const planner = new ControlPlaneSystemTableGateway();
+  for (const row of services) {
+    const {sql, params} = planner.buildSqlMutationPlan({
+      operation: 'insert', tableName: TABLES.SERVICES, row,
+    });
+    authority.prepare(sql).run(...params);
+  }
+  gateway.readAuthoritativeRows = async (tableName, sql, params = [], readOptions) => {
+    if (tableName !== TABLES.SERVICES) return readRows(tableName, sql, params, readOptions);
+    return {
       success: true,
-      rows: services,
+      rows: authority.prepare(sql).all(...params),
       rowSetComplete: true,
       readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
-    }) : readRows(tableName, ...args);
+    };
+  };
   owner.timeSource = {now: () => state.nowMs};
-  const operation = await coordinator.createOperation({
+  let operation = await coordinator.createOperation({
     type: options.replace ? OperationType.REPLACE : OperationType.REMOVE,
     partitionId: FLOOR_PARTITION_ID,
     nodeId: FLOOR_NODE_IDS[options.replace ? 3 : 0], sourceNodeId: FLOOR_NODE_IDS[0],
     replicaId: `${FLOOR_PARTITION_ID}-r1`,
   });
   if (options.replace) {
-    operation.replicaId = `${FLOOR_PARTITION_ID}-r4`;
-    operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-    operation.status = 'active';
-    await coordinator.repository.persistOperationUpdate(operation);
+    const active = {
+      ...operation,
+      replicaId: `${FLOOR_PARTITION_ID}-r4`,
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+      status: ReplicaStatus.ACTIVE,
+    };
+    const outcome = assertOperationUpdateOutcome(
+      await coordinator.repository.persistOperationUpdate(active, {
+        expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+      }),
+    );
+    if (!outcome.persisted || outcome.operation.workflowStep !== WORKFLOW_STEP.ACTIVE ||
+        outcome.operation.replicaId !== active.replicaId ||
+        outcome.operation.sourceReplicaId !== `${FLOOR_PARTITION_ID}-r1`) {
+      throw new Error('fixture could not commit its exact ACTIVE REPLACE');
+    }
+    operation = structuredClone(outcome.operation);
   }
   return {
     owner, coordinator, readiness, state, cache, operation, timers,
@@ -169,6 +200,7 @@ async function createCommittedFloorHarness(options = {}) {
     async shutdown() {
       state.heldPlanningDeliveries.length = 0;
       await coordinator.shutdown();
+      authority.close();
       readiness.shutdown();
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();

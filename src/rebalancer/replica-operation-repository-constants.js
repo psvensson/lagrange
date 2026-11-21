@@ -5,6 +5,7 @@ const REPLICA_OPERATION_REPOSITORY_ERROR_CODE = Object.freeze({
 
 const REPLICA_OPERATION_REPOSITORY_ERROR_MSG = Object.freeze({
   ENTITY_OPERATION_OBSERVATION_MALFORMED: 'Required entity operation observation is malformed',
+  ENTITY_OPERATION_OBSERVATION_INCOMPLETE: 'Required entity operation observation is incomplete',
   TERMINAL_FAILED_CREATE_CLEANUP_RECOVERY_READ_UNAVAILABLE:
     'Terminal failed-create cleanup recovery read unavailable',
 });

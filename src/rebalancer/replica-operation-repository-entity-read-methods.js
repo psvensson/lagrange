@@ -1,4 +1,4 @@
-import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
+import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
@@ -28,16 +28,30 @@ function assertEntityOperationRows(rows, entityType, entityId) {
   }
 }
 
-function isAuthorityMatchedOwnerTransition(operation, transition) {
+const OWNER_TRANSITION_SUBJECT = Object.freeze({
+  MATCHED: 'matched',
+  NOT_APPLICABLE: 'not_applicable',
+  MISMATCHED: 'mismatched',
+});
+
+function observeOwnerTransitionSubject(operation, transition) {
   if (!transition || operation === transition ||
       operation.completedAt !== null ||
-      operation.createdAt !== transition.createdAt) return false;
+      operation.createdAt !== transition.createdAt) {
+    return {state: OWNER_TRANSITION_SUBJECT.NOT_APPLICABLE};
+  }
   try {
     assertOperationUpdateSubject(operation, transition);
-    return true;
-  } catch {
-    return false;
+    return {state: OWNER_TRANSITION_SUBJECT.MATCHED};
+  } catch (cause) {
+    return Object.freeze({state: OWNER_TRANSITION_SUBJECT.MISMATCHED, cause});
   }
+}
+
+function describeTerminalCleanupReadFailure(result) {
+  if (result?.error) return result.error;
+  return REPLICA_OPERATION_REPOSITORY_ERROR_MSG
+    .TERMINAL_FAILED_CREATE_CLEANUP_RECOVERY_READ_UNAVAILABLE;
 }
 
 function assignReplicaOperationRepositoryEntityReadMethods(
@@ -76,8 +90,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         LOCAL_PREFERRED_AUTHORITATIVE_READ_OPTIONS,
       );
       if (!result.success || !Array.isArray(result.rows)) {
-        throw new Error(result?.error || REPLICA_OPERATION_REPOSITORY_ERROR_MSG
-          .TERMINAL_FAILED_CREATE_CLEANUP_RECOVERY_READ_UNAVAILABLE);
+        throw new Error(describeTerminalCleanupReadFailure(result));
       }
       return result.rows.map((row) => this.rowToOperation(row))
         .filter((operation) => operation?.type === OperationType.REMOVE &&
@@ -177,6 +190,35 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       return result.rows.map((row) => this.rowToOperation(row));
     }
 
+    async readEntityOperationOwnerResult(entityType, entityId, leaderMode) {
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_OPERATIONS_BY_ENTITY, [entityType, entityId],
+        {...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS, leaderMode},
+      );
+      if (!result || typeof result.success !== 'boolean') throw malformedEntityOperationRead();
+      if (result.success) assertEntityOperationRows(result.rows, entityType, entityId);
+      return result;
+    }
+
+    // Effect arbitration requires a complete leader census, independent of
+    // the separate projection policy below for planning and recovery.
+    async getRequiredOperationsByEntity(entityType, entityId) {
+      const result = await this.readEntityOperationOwnerResult(
+        entityType, entityId, CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      );
+      if (!result.success || result.rowSetComplete !== true) {
+        throw Object.assign(new Error(
+          REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+          {cause: result.error},
+        ), {
+          reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+        });
+      }
+      const ids = new Set(result.rows.map((row) => row.operation_id));
+      if (ids.size !== result.rows.length) throw malformedEntityOperationRead();
+      return result.rows.map((row) => assertOperationUpdateRecord(this.rowToOperation(row)));
+    }
+
     /**
    * Get operations for an entity from the authoritative replica_operations
    * owner path without consulting the cache projection first.
@@ -186,17 +228,10 @@ function assignReplicaOperationRepositoryEntityReadMethods(
    */
     async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
       const queryStartedAtMs = this.timeSource.now();
-      const result = await this.executeReplicaOperationsRead(
-        SQL.SELECT_OPERATIONS_BY_ENTITY,
-        [entityType, entityId],
-        {
-          ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-        },
+      const result = await this.readEntityOperationOwnerResult(
+        entityType, entityId, CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       );
-      if (!result || typeof result.success !== 'boolean') throw malformedEntityOperationRead();
       const completeRead = result.success && result.rowSetComplete === true;
-      if (result.success) assertEntityOperationRows(result.rows, entityType, entityId);
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
       const cachedRows = this.getEntityInFlightOperationRows({
@@ -273,7 +308,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       const ownerTransitionOperations = operations
         .map((operation) => this.resolveEntityOperationVisibilityWithPersistedTransition(operation))
         .filter((transition, index) =>
-          isAuthorityMatchedOwnerTransition(operations[index], transition));
+          observeOwnerTransitionSubject(operations[index], transition).state ===
+            OWNER_TRANSITION_SUBJECT.MATCHED);
       // Local post-commit progress is tied to a row returned by this census.
       // It remains owner progress, separate from the census membership.
       return Object.freeze({...observation, ownerTransitionOperations});

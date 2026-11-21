@@ -1,3 +1,4 @@
+import {SERVICE_TYPE} from '../constants/service.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
@@ -301,6 +302,13 @@ class OperationWorkflowTransitionOrchestration
       return replay.reconcileOutcome;
     }
     const previousStep = operation.workflowStep;
+    // CREATE attempts re-enter from their committed phase. Dispatch itself
+    // cannot reopen the initial SENDING edge after ADD or REPLACE progress.
+    if (step === WORKFLOW_STEP.SENDING && previousStep !== WORKFLOW_STEP.PENDING &&
+        operation.entityType === SERVICE_TYPE.PARTITION &&
+        (operation.type === OperationType.ADD || operation.type === OperationType.REPLACE)) {
+      return OPERATION_RECONCILE_OUTCOME.REFUSED;
+    }
     const transitionReason =
       reason || this.resolveTransitionReason(previousStep, step);
     const now = Date.now();

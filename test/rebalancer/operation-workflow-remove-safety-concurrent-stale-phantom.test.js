@@ -3,7 +3,7 @@
 //
 // The concurrent-partition-operation safety gate in evaluateRemoveSafety
 // (operation-workflow-remove-safety-evaluator.js ~283-298) defers a critical
-// REMOVE/REPLACE whenever getOperationsByEntity returns ANY non-terminal op on
+// REMOVE/REPLACE whenever getRequiredOperationsByEntity returns ANY non-terminal op on
 // the same partition. CL-043: a REPLACE whose replica_operations coordination
 // row NEVER PERSISTED (control-plane write timeout) is stuck non-terminal with
 // no terminal-timeout anchor — so it stays "active" forever, blocking every
@@ -114,7 +114,7 @@ function buildCoordinatorWithConcurrentOp(concurrentOp) {
 
   coordinator.initialize();
   // The exact seam the gate reads. workflowOwner.repository === coordinator.repository.
-  coordinator.repository.getOperationsByEntity = async () => [concurrentOp];
+  coordinator.repository.getRequiredOperationsByEntity = async () => [concurrentOp];
   return coordinator;
 }
 

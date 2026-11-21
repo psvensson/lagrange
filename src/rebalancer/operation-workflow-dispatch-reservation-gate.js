@@ -118,17 +118,20 @@ function handleTerminalReservationAttempt(owner, operation, attempt) {
  *   dispatch may proceed.
  * @private
  */
-async function ensureDispatchReservationOrSkip(owner, operation) {
+async function ensureDispatchReservationOrSkip(owner, operation, options = {}) {
   if (
     !isStorageIncreasingOperationType(operation?.type) ||
     !isDispatchReservationGateEngaged(owner)
   ) {
     return null;
   }
-  const attempt = await owner.ensureReservationForOperation(operation);
+  const attempt = options.allowCreateReservation === false ?
+    await owner.ensureReservationForOperation(operation, {allowCreate: false}) :
+    await owner.ensureReservationForOperation(operation);
   if (
-    attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED ||
-    attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE
+    attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE ||
+    (options.allowCreateReservation !== false &&
+      attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED)
   ) {
     await repairGateRepairedOperationRow(owner, operation, attempt);
     return null;

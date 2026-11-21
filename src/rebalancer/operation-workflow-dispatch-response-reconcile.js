@@ -16,7 +16,8 @@ import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
 import {
-  bindReplaceCreateTargetReplicaId, requiresPlacementCreateBootstrapTopology,
+  resolveDispatchTargetBinding, placementBootstrapDeliveryExpired,
+  requiresPlacementCreateBootstrapTopology,
 } from './operation-workflow-replace-target-binding.js';
 import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
@@ -248,8 +249,6 @@ async function settleDispatchFailure(owner, operation, error, options) {
   });
 }
 
-// A replica-operation answer may carry a nested error object; its fields
-// read as the error (this is the answer's shape, never a transport one).
 function resolveDispatchDeliveryErrorLike(response) {
   if (!response || typeof response !== 'object') {
     return response;
@@ -278,9 +277,7 @@ function buildReplicaOperationDispatchTimeoutError(operation) {
   error.operationId = operation?.operationId;
   return error;
 }
-// After its durable removal intent a partition REPLACE has one owner
-// decision (R-1e/T5'/R-1f/D2); only that owner's own T5' re-send comes back
-// through the effect path.
+// After durable removal intent, only the REPLACE owner's T5' re-send re-enters.
 function isReplaceStoppingOwnerEntry(operation, options) {
   return isReplaceRemovalIntentDurable(operation) &&
     options?.replaceStoppingEffect !== true;
@@ -421,12 +418,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     const replaceSourceReplicaId =
       this.repository.getReplaceSourceReplicaId(operation);
     const dispatchOperationId = operation.operationId;
-    operation = await bindReplaceCreateTargetReplicaId(
-      this,
-      operation,
-      replaceRemoveDispatchPhase,
-      replaceSourceReplicaId,
+    operation = await resolveDispatchTargetBinding(
+      this, operation, replaceRemoveDispatchPhase, replaceSourceReplicaId,
     );
+    if (operation?.skipped === true) return operation;
     if (!operation) {
       return this.buildSkippedOperationResult(
         OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
@@ -736,6 +731,12 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
     }
+    if (placementBootstrapDeliveryExpired(
+      this, operation, replaceRemoveDispatchPhase, hasDurableCreateDispatchTuple(operation))) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE, operation.operationId,
+      );
+    }
     logSendOperationAttempt(this, operation, {
       operationId: operation.operationId,
       target,
@@ -744,8 +745,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       entityId,
       replaceRemovePhase: replaceRemoveDispatchPhase,
     });
-    // `transport` is the router's outcome; `response` is the target's answer
-    // (an answer-less delivery is an answer without a status).
+    // Delivery owns transport status; the target separately supplies its answer.
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;

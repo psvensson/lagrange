@@ -1,3 +1,6 @@
+import {
+  isPlacementBootstrapAwaitingAuthority, isPlacementBootstrapBeforeDeadline,
+} from './operation-workflow-placement-bootstrap-phase.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OperationWorkflowRecoveryStatusReconcile} from './operation-workflow-recovery-status-reconcile.js';
 import {
@@ -367,17 +370,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       );
     });
   }
-
-  /**
-   * Level-triggered safety net for orphaned existing operations whose edge
-   * triggers were lost across owner/leadership churn. Drives the
-   * non-destructive PROGRESS reconcileOperationLifecycle path (inheriting
-   * single-flight locking and quorum/remove-safety) for locally-owned
-   * non-terminal ops that are stale past step timeout or behind actionable
-   * replica truth, throttled to empty-scan backoff cadence. Does not create
-   * ops or fix transport/2PC dispatch failures.
-   * @return {Promise<void>}
-   */
+  // Reconcile stale or materially advanced orphaned operations through their
+  // existing serialized progress turn, at the empty-scan backoff cadence.
   async reconcileOrphanedOperations() {
     if (this.isShuttingDown || !this.isInitialized) {
       return;
@@ -543,7 +537,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     }
 
     if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
-      if (this.isPreSyncStep(operation.workflowStep)) {
+      if (this.isPreSyncStep(operation.workflowStep) &&
+          !isPlacementBootstrapAwaitingAuthority(operation)) {
         return OPERATION_LIFECYCLE_ACTION.FAIL_PRE_SYNC_RECOVERY;
       }
       if (operation.workflowStep === WORKFLOW_STEP.STOPPING) {
@@ -644,6 +639,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     operation,
     now = this.resolveTimeoutCheckNowMs(),
   ) {
+    if (isPlacementBootstrapAwaitingAuthority(operation)) {
+      return !isPlacementBootstrapBeforeDeadline(operation, now);
+    }
     const ageMs = this.resolvePriorityRecoveryOperationDrainStepAgeMs(
       operation,
       now,
@@ -690,9 +688,9 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     if (isReplaceExemptFromTimeBudget(operation)) {
       return isTargetFailureDetectorDead(this, operation);
     }
+    // Arbitration and retirement consume the same durable phase deadline.
     return this.isPriorityRecoveryOperationDrainStepStale(operation, now);
   }
-
   // CL-044: a concurrent op stuck SYNCING/moving to a down or unreachable target
   // cannot make progress, yet it head-of-line-blocks peer recovery that targets
   // LIVE nodes via the concurrent-partition-operation serialization gate. Its
@@ -706,6 +704,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // A6: for a partition REPLACE in its owner phases a failed ping is not the
   // failure detector's verdict; only a FAILED target ends its hold.
   async isConcurrentOperationTargetUncontactable(operation) {
+    // The source owns bootstrap authority until CREATE can reach the target.
+    if (isPlacementBootstrapAwaitingAuthority(operation)) return false;
     if (isReplaceExemptFromTimeBudget(operation)) {
       return isTargetFailureDetectorDead(this, operation);
     }
