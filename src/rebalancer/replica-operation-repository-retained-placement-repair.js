@@ -28,7 +28,8 @@ import {isDeepStrictEqual} from 'node:util';
 import {PLACEMENT_CLEARING_TRIGGER, PLACEMENT_TRIGGER, PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
 
 const REPAIR_LOG = Object.freeze({ANSWER_UNAVAILABLE: 'Retained placement repair answer unavailable',
-  AUTHORITY_REFUSED: 'Retained placement repair authority refused'});
+  AUTHORITY_REFUSED: 'Retained placement repair authority refused',
+  DEFINITELY_REFUSED: 'Retained placement repair entry definitely refused'});
 // Owed revalidation waits: the binding is unavailable (next route publication,
 // no timer), or the native outcome is unknown (the continuation re-presents).
 const RETAINED_REPAIR_WAIT = Object.freeze({ROUTE_UNAVAILABLE: 'route_unavailable',
@@ -371,8 +372,13 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       const trigger = PLACEMENT_CLEARING_TRIGGER[failureCode];
       if (!trigger) {
-        this.logger.error(REPAIR_LOG.AUTHORITY_REFUSED,
-          {operationId: attempt.operation.operationId, reason: failureCode});
+        // A definite refusal (the table's null row: nothing to wait for): the
+        // pinned entry can never be admitted as presented. The record retires,
+        // visibly; the origin's workflow owner keeps the operation obligation
+        // and its next arrival starts a fresh record with a fresh entry.
+        this.logger.error(REPAIR_LOG.DEFINITELY_REFUSED, {reason: failureCode,
+          operationId: attempt.operation.operationId, entryId: attempt.entry.entryId});
+        this.retireRetainedRepair(attempt);
         return false;
       }
       // A bound remote receiver refusing for want of ledger leadership holds no

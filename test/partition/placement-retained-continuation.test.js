@@ -13,10 +13,13 @@ import {raiseParticipantCutoverPause} from
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {PLACEMENT_TRIGGER} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {PLACEMENT_CLEARING_TRIGGER, PLACEMENT_TRIGGER} from
+  '../../src/rebalancer/replica-placement-owner-constants.js';
+import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipantAdmission,
   settleTicks} from '../test-helpers/participant-transaction-fixture.js';
-import {NODE} from './placement-admission-fixture.js';
+import {NODE, placementStatement} from './placement-admission-fixture.js';
 import {stepRetainedLedgerRow, withRepairLedger} from './placement-retained-row-repair-fixture.js';
 import {READ_FAULT, admitCompetitor, advanceContinuation, bounded, controlOwnerReads, idleRepairs,
   installVirtualClock, ledgerRow, remoteSender, repairCommands, repairMessages,
@@ -654,4 +657,63 @@ test('Q9 an event storm during an outage reads once in flight plus once owed', (
     assert.ok(repository.retainedPlacementRepairs.get(retained.operationId));
     assert.equal(clock.pendingTimerCount(), 1, 'the outage leaves exactly one bounded continuation');
     reads.restore();
+  }));
+
+// Interaction with W1b (definite refusals). Another command already sits under
+// the pinned entry's key, committed through the real native admission, so the
+// presentation is refused definitely (BYTES or another row whose clearing
+// trigger is null: nothing to wait for). Runs green only once W1b's clearing
+// rows (38708b6fa: BYTES, ORIGIN, TARGET, REMOVE_INTENT_UNSCOPED, RESULT -> null)
+// are merged; before that BYTES has no row and the first assertion says so.
+test('a definite native refusal of the pinned entry retires the record, visibly, with nothing armed', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const repository = world.coordinator.repository;
+    const clock = installVirtualClock(repository);
+    const errors = [];
+    const logError = repository.logger.error;
+    repository.logger.error = (message, fields) => {
+      errors.push({message, fields});
+      return logError.call(repository.logger, message, fields);
+    };
+    const native = repository.repairRetainedPlacement;
+    const presented = [];
+    const answers = [];
+    repository.repairRetainedPlacement = async (payload) => {
+      if (presented.length === 0) {
+        const other = await requestPlacementAdmission(world.leader, {entryId: payload.entryId,
+          body: placementStatement({partitionId: PARTITION_ID, type: OperationType.REMOVE,
+            target: NODE.C, replicaId: `${PARTITION_ID}-r2`,
+            voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}})});
+        assert.equal(other.committed, true, 'another command committed under the same entry key');
+      }
+      presented.push(payload);
+      const answer = await native(payload);
+      answers.push(answer);
+      return answer;
+    };
+    try {
+      assert.equal(await bounded(repository.repairRetainedOperation(retained), 'definite refusal'),
+        false);
+      await idleRepairs(repository);
+      const code = answers[0].failureCode;
+      assert.ok(answers[0].committed !== true && Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, code) &&
+        PLACEMENT_CLEARING_TRIGGER[code] === null,
+      `the native answer ${code} is a definite refusal row of the clearing table (W1b 38708b6fa)`);
+      assert.equal(repository.retainedPlacementRepairs.size, 0,
+        'a definite refusal retires the record: no entry is left without a wake or an owner');
+      assert.equal(clock.pendingTimerCount(), 0, 'nothing is armed for a refusal with nothing to wait for');
+      assert.equal(presented.length, 1, 'the refused entry is never re-presented');
+      assert.equal(repairCommands(world).length, 0, 'no repair proposal');
+      assert.ok(errors.some(({fields}) => fields?.operationId === retained.operationId &&
+        fields.reason === code && fields.entryId === presented[0].entryId),
+      'the refusal is visible with its reason and the refused entry');
+      // The origin keeps the obligation: its next arrival starts a fresh record.
+      await bounded(repository.repairRetainedOperation(retained), 'later caller');
+      assert.equal(presented.length, 2);
+      assert.notEqual(presented[1].entryId, presented[0].entryId,
+        'a fresh record presents a fresh entry, never the definitely refused one');
+    } finally {
+      repository.logger.error = logError;
+    }
   }));
