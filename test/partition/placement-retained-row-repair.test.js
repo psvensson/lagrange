@@ -311,8 +311,8 @@ test('current actual deficit policy preserves same-ID copies and native capacity
     const result = await world.coordinator.repository.persistOperationUpdate(retained,
       {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
     assert.equal(result.disposition, DISPOSITION.REFUSED);
-    assert.equal(world.commands.at(-1).body.admissionStatement.repair, true,
-      'UNDER_REPLICATED is classified repair by the ordinary actual deficit owner');
+    assert.equal(world.commands.at(-1).body.admissionStatement.repair, false,
+      'the actual one-voter LEARNER_DEFICIT remains ordinary policy, with no quota promotion');
     assert.equal(world.commands.at(-1).body.operation.operationId, retained.operationId);
     const outcome = readCommittedStatementOutcome(world.leader,
       `entry:${world.commands.at(-1).entryId}`);
@@ -447,7 +447,10 @@ test('remote-only current copy preparation succeeds and changed target boot stay
       assert.deepEqual(remote.messages.map(({payload}) => payload.type),
         ['PLACEMENT_REPAIR_PREPARE', 'PLACEMENT_REPAIR']);
       const wire = remote.messages[1].payload;
-      assert.equal(wire.body.admissionStatement.moves[0].replicaId, retained.replicaId);
+      assert.equal(wire.body.admissionStatement.moves[0].replicaId, null,
+        'ordinary canonical resource policy mints no identity');
+      assert.equal(wire.body.operation.replicaId, retained.replicaId,
+        'the retained envelope alone owns the existing identity');
       assert.equal(wire.body.admissionStatement.moves[0].targetNodeBootIncarnation, 1);
       await world.gateway.submitMutation({tableName: 'replica_operations', operation: 'delete',
         whereClause: {operation_id: retained.operationId}});
@@ -486,4 +489,48 @@ test('remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
     } finally {
       await remote.coordinator.shutdown();
     }
+  }));
+
+test('a retained ordinary copy consumes source capacity and resumes on its actual release', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world, OperationType.ADD);
+    const holders = [];
+    for (const [index, target] of [NODE.B, NODE.C, NODE.D].entries()) {
+      const answer = await placementAdmission.requestPlacementAdmission(world.leader,
+        {entryId: `source-holder-${index}`, body: placementStatement({
+          partitionId: `source-holder-${index}-p1`, target})});
+      assert.equal(answer.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+      holders.push(answer.placementResult.operationIds[0]);
+    }
+    const result = await world.coordinator.repository.persistOperationUpdate(retained,
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    assert.equal(result.disposition, DISPOSITION.REFUSED);
+    const command = world.commands.at(-1);
+    const outcome = readCommittedStatementOutcome(world.leader, `entry:${command.entryId}`);
+    assert.equal(JSON.parse(outcome.ownerResultText).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
+    assert.equal(command.body.admissionStatement.repair, false);
+    stepLedgerRow(world.leader, holders[2], WORKFLOW_STEP.FAILED);
+    await settleRepair(world);
+    assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId));
+  }));
+
+test('retained-copy-first occupies the ordinary target lane until its own committed release', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world, OperationType.ADD);
+    const result = await world.coordinator.repository.persistOperationUpdate(retained,
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    assert.equal(result.disposition, DISPOSITION.REINSERTED);
+    const body = (partitionId) => placementStatement({partitionId, target: NODE.B});
+    const second = await placementAdmission.requestPlacementAdmission(world.leader,
+      {entryId: 'second-copy', body: body('second-copy-p1')});
+    assert.equal(second.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+    const full = await placementAdmission.requestPlacementAdmission(world.leader,
+      {entryId: 'third-copy-full', body: body('third-copy-p1')});
+    assert.equal(full.placementResult.reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
+    stepLedgerRow(world.leader, retained.operationId, WORKFLOW_STEP.ACTIVE);
+    const cleared = await placementAdmission.requestPlacementAdmission(world.leader,
+      {entryId: 'third-copy-cleared', body: body('third-copy-p1')});
+    assert.equal(cleared.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+    assert.equal(ledgerRows(world.leader).filter((row) =>
+      row.operation_id === retained.operationId).length, 1);
   }));

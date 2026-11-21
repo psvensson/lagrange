@@ -42,14 +42,15 @@ function buildCurrentRetainedCopyStatement(owner, operation) {
     entry.move.copySourceNodeId === operation.copySourceNodeId &&
     (entry.move.sourceReplicaId ?? null) === (operation.sourceReplicaId ?? null));
   const identity = resolveTargetNodeIncarnationSnapshot(owner.systemTableCache, operation.targetNodeId);
-  if (!candidate || !Number.isSafeInteger(operation.targetNodeBootIncarnation) ||
+  if (!candidate || typeof operation.replicaId !== 'string' || operation.replicaId.length === 0 ||
+      !Number.isSafeInteger(operation.targetNodeBootIncarnation) ||
       !Number.isSafeInteger(operation.targetNodeStorageIncarnation) ||
       nodeInput.eligibility.nodeBoots.get(operation.targetNodeId) !==
         operation.targetNodeBootIncarnation || identity.bootIncarnation !==
         operation.targetNodeBootIncarnation || identity.storageIncarnation !==
         operation.targetNodeStorageIncarnation) return null;
   return buildPlacementAdmissionStatement({...candidate,
-    move: {...candidate.move, replicaId: operation.replicaId,
+    move: {...candidate.move,
       targetNodeBootIncarnation: operation.targetNodeBootIncarnation,
       targetNodeStorageIncarnation: operation.targetNodeStorageIncarnation ?? null}}, {
     sourceNodeId: owner.resolveStatementSourceNodeId(candidate, inputsByPartition),

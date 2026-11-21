@@ -10,11 +10,15 @@ const PREPARATION_TIMEOUT_MS = 5000;
 
 async function prepareRetainedPlacementRepairBody(coordinator, operation) {
   let answer;
+  let expectedOwner;
   const local = coordinator.resolveActiveLocalLedgerLeaderService();
   if (local) {
+    expectedOwner = {nodeId: local.nodeId, replicaId: local.replicaId};
     answer = requestPlacementRepairPreparation(local, {operation});
   } else {
-    const address = coordinator.resolveRemoteLedgerLeaderAddress();
+    const leader = coordinator.resolveRemoteLedgerLeader();
+    const address = leader?.address;
+    expectedOwner = leader;
     const transport = wrapPlacementTransport(coordinator.messageRouter);
     if (!address || !transport) return {state: 'unavailable',
       reason: PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE};
@@ -27,6 +31,10 @@ async function prepareRetainedPlacementRepairBody(coordinator, operation) {
   }
   if (answer?.state !== 'prepared') return answer?.reason || answer?.failureCode ? answer :
     {state: 'unavailable', reason: PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE};
+  if (answer.owner?.nodeId !== expectedOwner?.nodeId ||
+      answer.owner?.replicaId !== expectedOwner?.replicaId) {
+    return {state: 'unavailable', reason: PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE};
+  }
   const canonical = canonicalRetainedPlacementRepair(answer.body);
   if (canonical.validity !== PLACEMENT_STATEMENT_VALIDITY.VALID ||
       JSON.stringify(canonical.statement.operation) !== JSON.stringify(operation)) {

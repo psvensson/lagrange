@@ -251,11 +251,16 @@ const operationCreationSupportMethods = {
   },
 
   resolveRemoteLedgerLeaderAddress() {
+    return this.resolveRemoteLedgerLeader()?.address ?? null;
+  },
+
+  resolveRemoteLedgerLeader() {
     const cache = this.systemTableCache;
     if (!cache?.getAll) return null;
     const rows = (cache.getAll(TABLES.SERVICES) || []).filter(isLedgerServiceRow);
     const roleLeader = rows.find((row) => row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER);
-    if (roleLeader) return formatLedgerReplicaAddress(roleLeader);
+    if (roleLeader) return {nodeId: roleLeader[COLUMN.NODE_ID],
+      replicaId: roleLeader[COLUMN.REPLICA_ID], address: formatLedgerReplicaAddress(roleLeader)};
     const partitions = cache.getAll(TABLES.PARTITIONS) || [];
     const ledgerPartition = partitions.find(
       (row) => row?.[COLUMN.PARTITION_ID] === LEDGER_PARTITION_ID,
@@ -263,7 +268,9 @@ const operationCreationSupportMethods = {
     const leaderNodeId = ledgerPartition?.leader_node_id;
     const nodeLeader = typeof leaderNodeId === 'string' ?
       rows.find((row) => row[COLUMN.NODE_ID] === leaderNodeId) : null;
-    return formatLedgerReplicaAddress(nodeLeader || rows[0] || null);
+    const selected = nodeLeader || rows[0];
+    return selected ? {nodeId: selected[COLUMN.NODE_ID], replicaId: selected[COLUMN.REPLICA_ID],
+      address: formatLedgerReplicaAddress(selected)} : null;
   },
 
   resolveFormationLatchEpochForPlacement(placementClass, partitionId) {

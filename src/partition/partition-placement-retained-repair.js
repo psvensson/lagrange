@@ -55,7 +55,10 @@ function matchesRepairStatement(operation, statement) {
     statement.membershipPublicationEpoch === (operation.membershipPublicationEpoch ?? null) &&
     statement.placementClass === classifyPlacementClass(operation.partitionId) &&
     statement.moves.length === 1 && move.type === operation.type &&
-    move.replicaId === operation.replicaId && move.targetNodeId === operation.targetNodeId &&
+    // Ordinary policy leaves a copy's new replica unallocated. The retained
+    // operation envelope, not this resource policy, owns its existing identity.
+    move.replicaId === null && typeof operation.replicaId === 'string' &&
+    operation.replicaId.length > 0 && move.targetNodeId === operation.targetNodeId &&
     move.copySourceNodeId === operation.copySourceNodeId &&
     (move.targetNodeBootIncarnation ?? null) === (operation.targetNodeBootIncarnation ?? null) &&
     (move.targetNodeStorageIncarnation ?? null) === (operation.targetNodeStorageIncarnation ?? null) &&

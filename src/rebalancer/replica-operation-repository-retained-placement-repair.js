@@ -1,3 +1,4 @@
+import {RAFT_ROLE} from '../raft/constants.js';
 import {readCommittedStatementOutcome} from '../partition/partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
   '../partition/partition-committed-statement-outcome-constants.js';
@@ -54,10 +55,6 @@ function assignRetainedPlacementRepairMethods(Repository) {
           JSON.stringify(attempt.body) !== JSON.stringify(payload.body)) {
         return {success: false, failureCode: PLACEMENT_ADMISSION_ERROR.BYTES};
       }
-      if (attempt.entryId === null && !attempt.pending) {
-        attempt.entryId = payload.entryId;
-        attempt.body = payload.body;
-      }
       attempt.submitNative = submitNative;
       attempt.nativeService = service;
       const custody = {nodeId: service.nodeId, replicaId: service.replicaId,
@@ -67,8 +64,14 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (attempt.entryId !== payload.entryId) {
         const recorded = readCommittedStatementOutcome(service,
           service.getCommittedEntryKey({entryId: payload.entryId}));
-        answer = recorded.state === RECORD.SETTLED ? await submitNative(payload) :
-          {success: false, failureCode: PLACEMENT_ADMISSION_ERROR.REPAIR_PENDING};
+        if (recorded.state === RECORD.SETTLED) {
+          answer = await submitNative(payload);
+        } else {
+          if (!attempt.pending) {
+            this.wakeRetainedPlacementRepairs((candidate) => candidate === attempt);
+          }
+          answer = {success: false, failureCode: PLACEMENT_ADMISSION_ERROR.REPAIR_PENDING};
+        }
       } else if (attempt.nativeAnswerPromise && attempt.pending) {
         answer = await attempt.nativeAnswerPromise;
       } else if (attempt.pending) {
@@ -119,6 +122,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       if (!isDeepStrictEqual(attempt.operation, operation)) return false;
       if (attempt.pending) return attempt.pending;
+      if (attempt.delegated) return false;
       attempt.pending = this.submitRetainedPlacementRepairAttempt(operation, attempt)
         .finally(() => { attempt.pending = null; });
       return attempt.pending;
@@ -289,11 +293,16 @@ function assignRetainedPlacementRepairMethods(Repository) {
         }
       }
       this.wakeRetainedPlacementRepairs((attempt) => {
-        if (attempt.delegated) {
-          return tableName === SYSTEM_TABLE_NAME.SERVICES &&
-            row?.partition_id === LEDGER_PARTITION_ID && row.raft_role === 'leader' &&
-            row.replica_id !== attempt.delegated.replicaId;
+        if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+            row?.partition_id === LEDGER_PARTITION_ID && row.raft_role === RAFT_ROLE.LEADER &&
+            typeof row.node_id === 'string' && typeof row.replica_id === 'string' &&
+            attempt.expectedOwner && row.replica_id !== attempt.expectedOwner.replicaId) {
+          // Leadership transfer changes the receiving owner, never the pinned
+          // attempt bytes. The former native completer cannot propose as leader.
+          attempt.expectedOwner = {nodeId: row.node_id, replicaId: row.replica_id};
+          return true;
         }
+        if (attempt.delegated) return false;
         if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
           return attempt.clearingTrigger === PLACEMENT_TRIGGER.LEADERSHIP_START ||
             attempt.clearingTrigger === PLACEMENT_TRIGGER.NODES_OR_FORMATION;
