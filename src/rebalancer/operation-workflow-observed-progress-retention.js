@@ -165,6 +165,8 @@ function withObservedProgressRetention(Base) {
         existing.operationSnapshot = this.cloneOperationSnapshot(
           incoming.operationSnapshot || existing.operationSnapshot,
         );
+      } else if (!existing.operationSnapshot && incoming.operationSnapshot) {
+        existing.operationSnapshot = this.cloneOperationSnapshot(incoming.operationSnapshot);
       }
     }
 
@@ -192,6 +194,7 @@ function withObservedProgressRetention(Base) {
       cacheOperation,
       delayMs = OBSERVED_PROGRESS_RETRY_DELAY_MS,
       deadlineMs = null,
+      operationSnapshot = null,
     ) {
       return this.armObservedProgressRetry({
         operationId,
@@ -199,6 +202,7 @@ function withObservedProgressRetention(Base) {
         cacheOperation,
         delayMs,
         deadlineMs,
+        operationSnapshot,
       });
     }
 
@@ -209,7 +213,7 @@ function withObservedProgressRetention(Base) {
       return this.scheduleObservedProgressRetry(
         operation.operationId, SYSTEM_TABLE_NAME.SERVICES,
         OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
-        Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs), deadlineMs,
+        Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs), deadlineMs, operation,
       );
     }
 
@@ -331,6 +335,12 @@ function withObservedProgressRetention(Base) {
         retryEntry.deadlineMs <= this.resolveTimeoutCheckNowMs();
     }
 
+    isCurrentActiveReplicaHandoffRetry({entry, fenceEpoch}) {
+      return this.isInitialized && !this.isShuttingDown &&
+        this.getOperationOwnershipFenceEpoch() === fenceEpoch &&
+        !this.isActiveReplicaHandoffRetrySpent(entry);
+    }
+
     runObservedProgressRetry(operationId, expectedTimeoutHandle = null) {
       const retryEntry =
         this.observedProgressRetryTimerByOperationId.get(operationId);
@@ -349,15 +359,15 @@ function withObservedProgressRetention(Base) {
         this.rearmObservedProgressRetry(operationId, retryEntry);
         return;
       }
+      const fenceEpoch = this.getOperationOwnershipFenceEpoch();
+      const context = {entry: retryEntry, fenceEpoch};
       const reconcile =
         retryEntry.kind ===
           OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS ?
           () => this.reconcileDeliveredCreateProgress(retryEntry) :
-          () => {
-            if (!this.isActiveReplicaHandoffRetrySpent(retryEntry)) {
-              return this.reconcileObservedProgressOperation(operationId);
-            }
-          };
+          Number.isFinite(retryEntry.deadlineMs) ?
+            () => this.runActiveReplicaHandoffRetry(operationId, context) :
+            () => this.reconcileObservedProgressOperation(operationId);
       return this.operationWorkflowRunExclusive(
         this.getOperationOwnerSingleFlightKey(operationId),
         reconcile,
@@ -391,7 +401,8 @@ function withObservedProgressRetention(Base) {
         if (remainingMs <= 0) return;
         this.scheduleObservedProgressRetry(
           operationId, retryEntry.tableName, retryEntry.cacheOperation,
-          Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs), retryEntry.deadlineMs,
+          Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs),
+          retryEntry.deadlineMs, retryEntry.operationSnapshot,
         );
       }
     }
