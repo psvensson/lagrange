@@ -11,7 +11,9 @@ import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE} from
   '../../src/rebalancer/replica-operation-repository-constants.js';
 import {REBALANCE_COORDINATOR_SHARED} from '../../src/rebalancer/rebalance-coordinator-shared.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
-import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
+import {
+  createTestCoordinator, createTestRebalancer, withExecutorMutationPort,
+} from './test-helpers.js';
 import {createMockCache, createNodeEndpoint, initializeTestEnvironment} from './unified-rebalancer-test-support.js';
 
 const {REPLICA_OPERATION_VISIBILITY_READ_MODE, REBALANCER_SKIP_REASON} =
@@ -46,7 +48,7 @@ function fixture(t, retained = false) {
     table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, replica_count: 3}], [], rows,
   nodes.map((node) => createNodeEndpoint(node.node_id)));
   const coordinator = createTestCoordinator({nodeId: 'node-1', systemTableCache: cache,
-    controlPlaneSystemTableGateway: {
+    controlPlaneSystemTableGateway: withExecutorMutationPort({
       async readAuthoritativeRows(table) {
         if (table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
           reads++;
@@ -57,7 +59,7 @@ function fixture(t, retained = false) {
       async executeQuery() {
         return {success: true, rows: []};
       },
-    }});
+    })});
   const rebalancer = createTestRebalancer({nodeId: 'node-1', ...ENTITY,
     systemTableCache: cache, rebalanceCoordinator: coordinator});
   t.teardown(async () => {
