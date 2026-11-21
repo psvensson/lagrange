@@ -416,7 +416,12 @@ for (const treatment of [
             });
           }
           learner = createLearner({...options, dbPath: previous.dbPath,
-            systemTableCache: cache, replicaStateMachine});
+            systemTableCache: cache, replicaStateMachine,
+            // Use the placement-enabled membership relay to project only
+            // the actual committed native voter into the service role.
+            ...(treatment.cacheLast ? {rebalanceCoordinator: {placementAdmissionEnabled: true}} :
+              {}),
+          });
           completePartitionConstructionFixture(learner, options);
           await learner.initialize();
           assert.equal(router.getRegisteredHandler(learner.unifiedAddress),
@@ -493,10 +498,15 @@ for (const treatment of [
         }
         if (treatment.cacheLast) {
           held.resolve();
-          assert.equal(await waitForCondition(() =>
+          const voterEstablished = await waitForCondition(() =>
             learner.getRole() === RAFT_ROLE.FOLLOWER &&
-            learner.raft.readStatus().memberRole === 'voter', OBSERVATION_BOUND_MS), true,
-          'the real target becomes a voter before SERVICES arrives');
+            learner.raft.readStatus().memberRole === 'voter', OBSERVATION_BOUND_MS);
+          assert.equal(voterEstablished, true, JSON.stringify({
+            actor: 'real target before SERVICES arrives', role: learner.getRole(),
+            memberRole: learner.raft.readStatus().memberRole,
+            leader: learner.raft.readStatus().leaderAddress,
+            outcome: learner.replicaAdmissionRequest?.lastOutcome,
+          }));
           assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null,
             'the actual CDC projection is still missing its usable address');
         }
