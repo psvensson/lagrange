@@ -27,6 +27,12 @@ import {
 } from '../../src/partition/partition-write-kernel.js';
 import {partitionWriteLeadershipRefusalOf} from
   '../../src/partition/partition-service-raft-write-commit.js';
+import {PARTITION_SERVICE_DEFAULT} from '../../src/partition/partition-service-constants.js';
+import {PARTICIPANT_CUTOVER_OUTCOME} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {readParticipantReleaseFacts} from
+  '../../src/partition/partition-participant-transaction-pause.js';
+import {PROPOSAL_QUEUE_PROPOSAL_STATE} from '../../src/partition/proposal-queue-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
 import {
@@ -34,7 +40,7 @@ import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
-import {RealTimeSource} from '../../src/time/time-source.js';
+import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 import {
   INSERT_SQL, OTHER_ROW, REPLICAS, ROW, ROW_2, V3, applyCommitted, clearFixtureSingletons,
   decisionCommandOf, generationOf, identityOf, onFixtureLeader, operationOf, pick,
@@ -77,10 +83,10 @@ function creationStack() {
   return stack;
 }
 
-// The replica's own clock (a real one), keeping the kernel-armed timers that
-// are still live: created, not fired, not cleared.
-function kernelTimerClock() {
-  const clock = new RealTimeSource();
+// The replica's own clock (a real one unless the witness gives a virtual one),
+// keeping the kernel-armed timers that are still live: created, not fired, not
+// cleared.
+function kernelTimerClock(clock = new RealTimeSource()) {
   const live = new Set();
   const timeSource = {
     now: () => clock.now(),
@@ -455,3 +461,170 @@ test('kernel tenure fence (ownership): a stale hand-off waking in its retry loop
     handed: handed.map(({entryId: id, portTerm, deferred}) => ({id, portTerm, deferred})),
     second: second.value ?? null})}`);
 }));
+
+// --- The participant cutover pause across a renewal (lead brief 2026-11-21, item 2) ---
+// A renewal raises the participant cutover pause (its admission proof carries
+// the term), and the release resumes only on a drained census
+// (partition-participant-release-contract.js isReleaseDrained: no prepared
+// participant, no queued proposal, no pending outcome). How long does a write
+// of the ended tenure, not yet handed to consensus, keep the partition paused?
+// Measured on the virtual clock, each schedule beside the same schedule without
+// that write (the control): the release is attempted at the renewal and again
+// as the clock moves, until it resumes.
+const VIRTUAL_START_MS = 1_000_000;
+const RESERVATION_HELD_MS = 5_000;
+const RESUMED = PARTICIPANT_CUTOVER_OUTCOME.RESUMED;
+const RELEASE_REFUSED_TEXT = /^fixture participant release refused: /u;
+const RETRY_MAX_DELAY_MS = PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS;
+const CLOCK_STEP_MS = 1;
+
+function withVirtualKernelLeader(measure) {
+  const virtual = new VirtualTimeSource({startMs: VIRTUAL_START_MS});
+  const clock = {...kernelTimerClock(virtual), advance: (ms) => virtual.advance(ms)};
+  return onFixtureLeader((leader) => measure({leader, clock}),
+    {timeSource: clock.timeSource});
+}
+
+// What the release's census reads of the replica's accepted work, read the way
+// the release reads it (no join, no side effect on the kernel).
+async function drainWorkOf(leader) {
+  const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
+    localServices: new Map([[leader.replicaId, leader]])};
+  const facts = await readParticipantReleaseFacts(handler, leader);
+  return facts.work ? pick(facts.work, ['participantPrepared', 'proposals', 'pendingOutcomes']) :
+    facts.outcome;
+}
+
+// One attempt of the participant release on the replica: RESUMED, or the
+// outcome it refused with (its census defect).
+async function releaseAttempt(leader) {
+  try {
+    await resumeFixtureParticipantAdmission(leader);
+    return RESUMED;
+  } catch (error) {
+    return String(error?.message ?? error).replace(RELEASE_REFUSED_TEXT, '');
+  }
+}
+
+const answerOf = (write) => {
+  if (write === null) return 'none';
+  return write.settled ? pick(write.value, ['success', 'failureCode']) : 'pending';
+};
+
+// Reserved by a holder's PREPARE; optionally a write parked under T1; renewed
+// to T2; the reservation is held RESERVATION_HELD_MS longer, then decided.
+async function pauseAcrossRenewalWhileReserved({leader, clock}, {parkWrite}) {
+  const entryId = 'kernel-fence-pause-parked';
+  const {handed} = recordHandOvers(leader);
+  const holder = identityOf('kernel-fence-pause-holder');
+  const prepare = prepareCommandOf(holder, [operationOf(ROW)], generationOf(leader));
+  assert.equal(applyCommitted(leader, prepare), null, 'premise: the partition is reserved');
+  const write = parkWrite ? track(leader.executeQuery(INSERT_SQL,
+    [OTHER_ROW.id, OTHER_ROW.value], {entryId})) : null;
+  await settleTicks();
+  renewWithoutRoleEdge(leader);
+  const renewedAt = clock.timeSource.now();
+  const atRenewal = {work: await drainWorkOf(leader), release: await releaseAttempt(leader),
+    answer: answerOf(write)};
+  clock.advance(RESERVATION_HELD_MS);
+  await settleTicks();
+  const whileReserved = {release: await releaseAttempt(leader), answer: answerOf(write)};
+  const decidedAt = clock.timeSource.now();
+  assert.equal(applyCommitted(leader, decisionCommandOf(holder, V3.DECISION.COMMIT,
+    prepare.preparedDigest)), null, 'premise: the decision applied (its readmit ran)');
+  await settleTicks();
+  const atDecision = {work: await drainWorkOf(leader), release: await releaseAttempt(leader),
+    answer: answerOf(write)};
+  return {atRenewal, whileReserved, atDecision,
+    pauseMs: clock.timeSource.now() - renewedAt,
+    pauseBeyondReservationMs: clock.timeSource.now() - decidedAt,
+    handedOver: handOversOf(handed, entryId).length, kernelTimers: clock.live.size};
+}
+
+test('kernel tenure fence (pause, parked): a write parked under an ended tenure never keeps ' +
+  'the partition paused beyond its reservation, which pauses it alone (control: no write)',
+async () => {
+  const withWrite = await withVirtualKernelLeader((fixture) =>
+    pauseAcrossRenewalWhileReserved(fixture, {parkWrite: true}));
+  const control = await withVirtualKernelLeader((fixture) =>
+    pauseAcrossRenewalWhileReserved(fixture, {parkWrite: false}));
+  const drainPending = PARTICIPANT_CUTOVER_OUTCOME.DRAIN_PENDING;
+  const drained = {participantPrepared: 0, proposals: 0, pendingOutcomes: 0};
+  assert.deepEqual({withWrite, control}, {
+    withWrite: {
+      atRenewal: {work: {participantPrepared: 1, proposals: 1, pendingOutcomes: 1},
+        release: drainPending, answer: 'pending'},
+      whileReserved: {release: drainPending, answer: 'pending'},
+      atDecision: {work: drained, release: RESUMED, answer: RELEASED_NOT_LEADER},
+      pauseMs: RESERVATION_HELD_MS, pauseBeyondReservationMs: 0, handedOver: 0,
+      kernelTimers: 0},
+    control: {
+      atRenewal: {work: {participantPrepared: 1, proposals: 0, pendingOutcomes: 0},
+        release: drainPending, answer: 'none'},
+      whileReserved: {release: drainPending, answer: 'none'},
+      atDecision: {work: drained, release: RESUMED, answer: 'none'},
+      pauseMs: RESERVATION_HELD_MS, pauseBeyondReservationMs: 0, handedOver: 0,
+      kernelTimers: 0},
+  }, 'the pause lasts as long as the reservation with and without the parked write, and ' +
+    'ends at the decision that readmits (and releases) it, not at its ' +
+    `${PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS} ms commit deadline; ` +
+    JSON.stringify({withWrite, control}));
+});
+
+// Optionally a write the port defers once under T1 (its kernel retry armed on
+// the virtual clock); renewed to T2; the release is attempted at the renewal
+// and after every millisecond until it resumes (bounded by the retry's own
+// maximum delay plus one step).
+async function pauseAcrossRenewalWithDeferredWrite({leader, clock}, {deferWrite}) {
+  const entryId = 'kernel-fence-pause-deferred';
+  const {handed, firstHandOver} = recordHandOvers(leader, {deferOnce: [entryId]});
+  const write = deferWrite ? track(leader.executeQuery(INSERT_SQL,
+    [OTHER_ROW.id, OTHER_ROW.value], {entryId})) : null;
+  if (deferWrite) {
+    assert.equal(await firstHandOver(entryId), true, 'premise: the port received the write');
+  }
+  await settleTicks();
+  if (deferWrite) {
+    assert.equal(leader.committedWriteProposalOf(entryId), PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED,
+      'premise: deferred by the port, queued on its kernel retry');
+  }
+  const renewedTerm = renewWithoutRoleEdge(leader);
+  const renewedAt = clock.timeSource.now();
+  const atRenewal = {work: await drainWorkOf(leader), release: await releaseAttempt(leader)};
+  let release = atRenewal.release;
+  while (release !== RESUMED &&
+      clock.timeSource.now() - renewedAt <= RETRY_MAX_DELAY_MS + CLOCK_STEP_MS) {
+    clock.advance(CLOCK_STEP_MS);
+    await settleTicks();
+    release = await releaseAttempt(leader);
+  }
+  return {atRenewal, release, pauseMs: clock.timeSource.now() - renewedAt,
+    answer: answerOf(write), enteredUnderRenewedTerm: enteredUnder(handed, entryId, renewedTerm),
+    queued: leader.proposalQueue.size, pendingOutcomes: leader.pendingWriteOutcomes.size,
+    kernelTimers: clock.live.size};
+}
+
+test('kernel tenure fence (pause, deferred): a write the port deferred under an ended tenure ' +
+  'keeps the partition paused for at most one kernel retry delay (control: no write)',
+async () => {
+  const withWrite = await withVirtualKernelLeader((fixture) =>
+    pauseAcrossRenewalWithDeferredWrite(fixture, {deferWrite: true}));
+  const control = await withVirtualKernelLeader((fixture) =>
+    pauseAcrossRenewalWithDeferredWrite(fixture, {deferWrite: false}));
+  const facts = {withWrite: {...withWrite, pauseMs: withWrite.pauseMs <= RETRY_MAX_DELAY_MS},
+    control};
+  assert.deepEqual(facts, {
+    withWrite: {
+      atRenewal: {work: {participantPrepared: 0, proposals: 1, pendingOutcomes: 1},
+        release: PARTICIPANT_CUTOVER_OUTCOME.DRAIN_PENDING},
+      release: RESUMED, pauseMs: true, answer: RELEASED_NOT_LEADER, enteredUnderRenewedTerm: 0,
+      queued: 0, pendingOutcomes: 0, kernelTimers: 0},
+    control: {
+      atRenewal: {work: {participantPrepared: 0, proposals: 0, pendingOutcomes: 0},
+        release: RESUMED},
+      release: RESUMED, pauseMs: 0, answer: 'none', enteredUnderRenewedTerm: 0,
+      queued: 0, pendingOutcomes: 0, kernelTimers: 0},
+  }, `the deferred write held the pause ${withWrite.pauseMs} ms (bound: the kernel's maximum ` +
+    `retry delay, ${RETRY_MAX_DELAY_MS} ms), released NOT_LEADER at its retry, never ` +
+    `proposed; ${JSON.stringify({withWrite, control})}`);
+});
