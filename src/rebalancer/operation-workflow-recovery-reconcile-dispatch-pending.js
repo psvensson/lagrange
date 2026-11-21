@@ -1,3 +1,4 @@
+import {setTimeout as waitForTimer} from 'node:timers/promises';
 import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
 import {PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE} from
   './operation-workflow-priority-recovery-superseded-target-decision.js';
@@ -189,11 +190,9 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_OWNER_EFFECT_ACTION_BY_COMMAND =
     ],
   ]));
 
-const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_LOG_MESSAGE = Object.freeze({
-  BYPASS_REENTRANT_SCHEDULING:
-    'Bypassing re-entrant priority recovery dispatch scheduling',
-  ERROR_DURING_REENTRY:
-    'Error during priority recovery dispatch reentry',
+const PRIORITY_DISPATCH_PENDING_LANE_SCOPE = Object.freeze({
+  ARM: 'priority-dispatch-pending-arm',
+  RECORD_RETRY_PROGRESS: 'priority-dispatch-pending-retry-progress',
 });
 
 function resolvePriorityRecoveryDispatchPendingDecisionSnapshotCapturedAt(
@@ -402,6 +401,29 @@ function resolvePriorityRecoveryDispatchPendingReentryAction(
   );
 }
 
+function isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) {
+  return !owner.isShuttingDown && owner.getOperationOwnershipFenceEpoch() === fenceEpoch;
+}
+
+function schedulePriorityDispatchPendingContinuation(owner, operation, scope, run) {
+  // The continuation may enter the operation lane later. Its own key keeps
+  // shutdown joining it without recursively acquiring that lane.
+  const key = owner.buildOperationSingleFlightKey(scope, operation.operationId);
+  if (owner.isShuttingDown ||
+      owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey.has(key)) {
+    return false;
+  }
+  const fenceEpoch = owner.getOperationOwnershipFenceEpoch();
+  owner.operationWorkflowRunExclusive(key, () => Promise.resolve().then(() => {
+    return isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) ? run(fenceEpoch) : false;
+  }).catch((error) => {
+    if (isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) {
+      owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(operation, error);
+    }
+  }));
+  return true;
+}
+
 function applyPriorityRecoveryDispatchPendingReentryAction(
   owner,
   operation,
@@ -409,65 +431,32 @@ function applyPriorityRecoveryDispatchPendingReentryAction(
   decisionSnapshot = null,
   options = {},
 ) {
-  if (
-    action ===
-    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.ARM_NOW
-  ) {
-    owner.applyPriorityRecoveryDispatchPendingOwnerProgress(
-      operation,
-      decisionSnapshot,
-      options,
-    ).catch((error) => {
-      owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
-        operation,
-        error,
-      );
-    });
-    return true;
-  }
-  if (
-    action ===
-    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
-      .RETRY_AFTER_OWNER_LANE
-  ) {
-    return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
-      operation,
-      TRANSITION_RETRY_DELAY_MS,
+  if (owner.isShuttingDown) return false;
+  if (action === PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.ARM_NOW) {
+    return schedulePriorityDispatchPendingContinuation(
+      owner, operation, PRIORITY_DISPATCH_PENDING_LANE_SCOPE.ARM, async (fenceEpoch) => {
+        await waitForTimer(0);
+        if (!isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) return false;
+        return owner.applyPriorityRecoveryDispatchPendingOwnerProgress(
+          operation, decisionSnapshot, options,
+        );
+      },
     );
   }
-  if (
-    action ===
-    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
-      .RECORD_REMOTE_RETRY_PROGRESS
-  ) {
-    const operationId = operation?.operationId || null;
-    if (
-      !operationId ||
-      hasPriorityRecoveryDispatchPendingRemoteRetryProgress(
-        owner,
-        operation,
-      )
-    ) {
-      return false;
-    }
-    owner._remoteRetryProgressLocks =
-      owner._remoteRetryProgressLocks || new Set();
-    if (owner._remoteRetryProgressLocks.has(operationId)) {
-      return false;
-    }
-    owner._remoteRetryProgressLocks.add(operationId);
-    owner.runOperationWorkflowOwnerAdapter(
-      operation,
-      {mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE},
-    ).catch((error) => {
-      owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
-        operation,
-        error,
-      );
-    }).finally(() => {
-      owner._remoteRetryProgressLocks.delete(operationId);
-    });
-    return false;
+  if (action === PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.RETRY_AFTER_OWNER_LANE) {
+    return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+      operation, TRANSITION_RETRY_DELAY_MS,
+    );
+  }
+  if (action === PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.RECORD_REMOTE_RETRY_PROGRESS) {
+    if (!operation?.operationId ||
+        hasPriorityRecoveryDispatchPendingRemoteRetryProgress(owner, operation)) return false;
+    schedulePriorityDispatchPendingContinuation(
+      owner, operation, PRIORITY_DISPATCH_PENDING_LANE_SCOPE.RECORD_RETRY_PROGRESS,
+      () => owner.runOperationWorkflowOwnerAdapter(
+        operation, {mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE},
+      ),
+    );
   }
   return false;
 }
@@ -541,6 +530,8 @@ async function applyPriorityRecoveryDispatchPendingOwnerProgress(
   decisionSnapshot,
   options = {},
 ) {
+  if (owner.isShuttingDown) return false;
+  const fenceEpoch = owner.getOperationOwnershipFenceEpoch();
   if (
     shouldLeavePriorityRecoveryDispatchPendingToParkedLane(owner, operation)
   ) {
@@ -557,6 +548,7 @@ async function applyPriorityRecoveryDispatchPendingOwnerProgress(
       operation,
       decisionSnapshot,
       options,
+      fenceEpoch,
     );
   }
   if (
@@ -575,6 +567,7 @@ async function applyPriorityRecoveryDispatchPendingOwnerProgress(
     operation,
     decisionSnapshot,
     options,
+    fenceEpoch,
   );
 }
 
@@ -804,87 +797,17 @@ function schedulePriorityRecoveryDispatchPendingReentry(
   operations = [],
   options = {},
 ) {
-  const operation =
-    owner.selectPriorityRecoveryDispatchPendingReentryOperation(
-      snapshot,
-      operations,
-    );
-  if (!operation || !operation.operationId) {
-    return false;
-  }
-  const immediateAction =
-    owner.resolvePriorityRecoveryDispatchPendingReentryAction(
-      snapshot,
-      operation,
-      options,
-    );
-  if (
-    immediateAction ===
-    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.SKIP
-  ) {
-    return false;
-  }
-  if (
-    immediateAction ===
-    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
-      .RETRY_AFTER_OWNER_LANE
-  ) {
-    return owner.applyPriorityRecoveryDispatchPendingReentryAction(
-      operation,
-      immediateAction,
-      snapshot,
-      options,
-    );
-  }
-  if (
-    immediateAction ===
-    PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION
-      .RECORD_REMOTE_RETRY_PROGRESS
-  ) {
-    return owner.applyPriorityRecoveryDispatchPendingReentryAction(
-      operation,
-      immediateAction,
-      snapshot,
-      options,
-    );
-  }
-  const operationId = operation.operationId;
-  owner._reentryLocks = owner._reentryLocks || new Set();
-  if (owner._reentryLocks.has(operationId)) {
-    owner.logger.debug(
-      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_LOG_MESSAGE
-        .BYPASS_REENTRANT_SCHEDULING,
-      {
-        operationId,
-        partitionId: operation.partitionId,
-      },
-    );
-    return false;
-  }
-  owner._reentryLocks.add(operationId);
-
-  setTimeout(() => {
-    try {
-      owner.applyPriorityRecoveryDispatchPendingReentryAction(
-        operation,
-        immediateAction,
-        snapshot,
-        options,
-      );
-    } catch (error) {
-      owner.logger.error(
-        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_LOG_MESSAGE
-          .ERROR_DURING_REENTRY,
-        {
-          operationId,
-          error: error.message,
-        },
-      );
-    } finally {
-      owner._reentryLocks.delete(operationId);
-    }
-  }, 0);
-  return true;
+  if (owner.isShuttingDown) return false;
+  const operation = owner.selectPriorityRecoveryDispatchPendingReentryOperation(
+    snapshot, operations,
+  );
+  if (!operation?.operationId) return false;
+  const action = owner.resolvePriorityRecoveryDispatchPendingReentryAction(
+    snapshot, operation, options,
+  );
+  return owner.applyPriorityRecoveryDispatchPendingReentryAction(
+    operation, action, snapshot, options,
+  );
 }
 
 function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
@@ -923,13 +846,17 @@ async function applyPriorityRecoveryDispatchPendingOwnerEffectOrArm(
   operation,
   decisionSnapshot,
   options,
+  fenceEpoch,
 ) {
   // The local arm already reads the operation inside its owner lane.
   // An observer's queued remote handoff has no such preflight: the ledger may
   // have settled or replaced its routing tuple while the work was queued.
+  if (!isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) ||
+      owner.repository.isOperationTerminal(operation)) return false;
   let current = operation;
   if (!owner.repository.isOperationLocallyOwned(operation)) {
     const observation = await observeRemoteReentryAuthority(owner.repository, operation);
+    if (!isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) return false;
     if (observation.deferredOutcome) {
       return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
         operation,
