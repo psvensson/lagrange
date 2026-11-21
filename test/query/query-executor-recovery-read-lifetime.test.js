@@ -106,10 +106,13 @@ function observeWire(source, target, address, clock, {holdAck, holdReply = true}
   };
 }
 
-function seedRows(partition, cache) {
+function seedRows(partition) {
   const insert = partition.db.prepare(`INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`);
   insert.run(HELD_KEY, 'original row');
   insert.run(PEER_KEY, 'independent row');
+}
+
+function publishPartition(cache, partition) {
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     service_id: partition.replicaId, replica_id: partition.replicaId,
     service_type: SERVICE_TYPE.PARTITION, partition_id: PARTITION, node_id: partition.nodeId,
@@ -117,9 +120,9 @@ function seedRows(partition, cache) {
   });
 }
 
-async function openPartitions(t, fixture, target, cache, resources, withAlternate) {
+async function openPartitions(t, fixture, target, cache, resources, options) {
   const serviceOptions = {tableId: TABLE, tableName: TABLE, schema: SCHEMA};
-  if (withAlternate) {
+  if (options.withAlternate) {
     const group = await formAdmittedGroup({
       partitionId: PARTITION, members: [[REPLICA, TARGET], [ALTERNATE_REPLICA, ALTERNATE]],
       tempPrefix: 'read-grant-admitted-', serviceOptions, budgetMs: FIXTURE_BUDGET_MS,
@@ -133,7 +136,10 @@ async function openPartitions(t, fixture, target, cache, resources, withAlternat
     // handlers. Only the fixture's native Raft/admission traffic uses loopback.
     target.router.register(leader.unifiedAddress, leader.transportHandler);
     alternate.router.register(follower.unifiedAddress, follower.transportHandler);
-    group.services.forEach((partition) => seedRows(partition, cache));
+    group.services.forEach(seedRows);
+    publishPartition(cache, leader);
+    const publishAlternate = () => publishPartition(cache, follower);
+    if (!options.hideAlternate) publishAlternate();
     const handoff = async () => {
       assert.equal((await turnChainValue(leader.requestLeadershipTransfer({
         successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: follower.replicaId,
@@ -148,7 +154,7 @@ async function openPartitions(t, fixture, target, cache, resources, withAlternat
     };
     return {
       primaryAddress: leader.unifiedAddress, alternate,
-      alternateAddress: follower.unifiedAddress, handoff,
+      alternateAddress: follower.unifiedAddress, handoff, publishAlternate,
     };
   }
   const partition = new PartitionService(withFoundingStamp(withTestDbPath({
@@ -160,11 +166,13 @@ async function openPartitions(t, fixture, target, cache, resources, withAlternat
   partition.startElection();
   await settleUntil(t, () => partition.raft.readStatus().role === RAFT_ROLE.LEADER,
     'actual SQLite partition becomes its singleton Raft leader');
-  seedRows(partition, cache);
+  seedRows(partition);
+  publishPartition(cache, partition);
   return {primaryAddress: partition.unifiedAddress};
 }
 
-async function openFixture(t, {holdAck = true, withAlternate = false} = {}) {
+async function openFixture(t, options = {}) {
+  const {holdAck = true} = options;
   const fixture = createRouterEnvelopeFixture(import.meta.url, SOURCE);
   const clock = new VirtualTimeSource({startMs: Date.now()});
   await fixture.setup();
@@ -191,8 +199,8 @@ async function openFixture(t, {holdAck = true, withAlternate = false} = {}) {
   resources.group = group;
   await group.initialize();
   sender.router.setQueryMessageGroupServiceResolver(() => ({service: group}));
-  const {primaryAddress, alternate, alternateAddress, handoff} =
-    await openPartitions(t, fixture, target, cache, resources, withAlternate);
+  const {primaryAddress, alternate, alternateAddress, handoff, publishAlternate} =
+    await openPartitions(t, fixture, target, cache, resources, options);
   cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     partition_id: PARTITION, table_id: TABLE, leader_node_id: TARGET,
   });
@@ -215,6 +223,12 @@ async function openFixture(t, {holdAck = true, withAlternate = false} = {}) {
     }),
   });
   executor.readRetryAttempts = READ_ATTEMPTS;
+  const resolve = executor.resolvePartitionServiceCandidates.bind(executor);
+  let routingInspections = 0;
+  executor.resolvePartitionServiceCandidates = (...args) => {
+    routingInspections += 1;
+    return resolve(...args);
+  };
   const probeMs = sender.router.reconnectIntervalMs;
   function read(key, deadlineMs, {readAuthority, cancellationToken} = {}) {
     return executor.executeOnPartition(PARTITION, SQL, [key], true, true, false, {
@@ -223,7 +237,8 @@ async function openFixture(t, {holdAck = true, withAlternate = false} = {}) {
     });
   }
   return {
-    clock, group, probeMs, read, executor, handoff, source: sender.router,
+    clock, group, probeMs, read, executor, handoff, publishAlternate, source: sender.router,
+    routingInspections: () => routingInspections,
     alternateSends: () => [...resources.alternateWire.deliveries.values()],
     withdrawPrimary: () => {
       cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE,
@@ -431,3 +446,41 @@ test('withdrawing the only eligible service retires the held answer before the d
     t.equal(f.held().length, 1, 'the withdrawn route is not resubmitted');
     assertRetired(f, t);
   });
+
+for (const advertiseAlternate of [true, false]) {
+  const expectation = advertiseAlternate ? 'a newly eligible alternate' : 'the unchanged route';
+  test(`after the initial read-probe passes, ${expectation} can still settle`, async (t) => {
+    const f = await openFixture(t, {withAlternate: true, hideAlternate: true});
+    const deadline = f.clock.now() + GRANT_PROBES * f.probeMs;
+    const settled = f.read(HELD_KEY, deadline);
+    await settleUntil(t, () => f.held()[0]?.answer?.success === true,
+      'the initial route answered natively with both frames still held');
+    const [first] = f.held();
+    for (let probe = 1; probe < READ_ATTEMPTS; probe += 1) {
+      const inspections = f.routingInspections();
+      f.clock.advance(f.probeMs + LATE_MS);
+      await settleUntil(t, () => f.routingInspections() > inspections,
+        'unchanged route inspected on its bounded routing wake');
+    }
+    t.equal(f.held().length, 1, 'the routing inspections each kept the same native execution');
+    t.equal(f.alternateSends().length, 0, 'an unadvertised route received no submission');
+    t.ok(f.source.pendingResponses.has(first.id));
+    if (advertiseAlternate) f.publishAlternate();
+    f.clock.advance(f.probeMs + LATE_MS);
+    if (advertiseAlternate) {
+      await settleUntil(t, () => f.alternateSends().length === 1,
+        'the next probe finds and submits to the newly eligible route');
+      t.ok(f.alternateSends()[0].pendingAtSend.has(first.id));
+    } else {
+      releaseFrames(first);
+      await settleUntil(t, () => first.receivedAt !== undefined, 'the original reply arrived');
+    }
+    const answer = await settled;
+    t.equal(answer.success, true);
+    t.equal(answer.readAuthorityWitness?.servingNodeId, advertiseAlternate ? ALTERNATE : TARGET);
+    t.equal(f.alternateSends().length, advertiseAlternate ? 1 : 0);
+    t.equal(first.sends, 1, 'the original endpoint has one actual socket submission');
+    t.ok(f.clock.now() < deadline);
+    assertRetired(f, t);
+  });
+}
