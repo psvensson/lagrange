@@ -366,7 +366,7 @@ test('pre-remove REPLACE admission wins against its sender timeout CAS and can p
       return commit();
     });
     try {
-      await run.expire();
+      assert.equal(await run.expire(), OPERATION_RECONCILE_OUTCOME.WAITING);
       assertRetained(run, admitted);
       assert.equal(await run.target.revalidatePhysicalWorker(worker), true);
       assert.equal(run.failWrites[0].whereClause.create_admission_state, null);

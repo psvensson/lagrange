@@ -552,19 +552,22 @@ async function revalidateCreateTerminalFailure(
  */
 async function admitReplaceTerminalRepair(owner, projectedOperation,
   persistOptions = {}, durableOperation = null) {
-  if (isPartitionAdd(projectedOperation) &&
-      projectedOperation.workflowStep === WORKFLOW_STEP.FAILED) {
+  const partitionAdd = isPartitionAdd(projectedOperation);
+  const partitionReplace = isPartitionReplace(projectedOperation);
+  if ((partitionAdd || partitionReplace) &&
+      projectedOperation.workflowStep === WORKFLOW_STEP.FAILED &&
+      persistOptions.requireCreateAdmissionAbsent === true &&
+      owner.retainGuardedCreateAdmission(projectedOperation, durableOperation)) {
+    // The retained compare-and-set cannot succeed against real admission.
+    // The observed-progress owner now tracks the existing admitted CREATE.
+    return Object.freeze({admitted: false, persistOptions});
+  }
+  if (partitionAdd && projectedOperation.workflowStep === WORKFLOW_STEP.FAILED) {
     if (!durableOperation) return Object.freeze({admitted: false, persistOptions});
-    if (persistOptions.requireCreateAdmissionAbsent === true &&
-        owner.retainGuardedCreateAdmission(projectedOperation, durableOperation)) {
-      // The retained compare-and-set cannot succeed against real admission.
-      // The observed-progress owner now tracks the existing admitted CREATE.
-      return Object.freeze({admitted: false, persistOptions});
-    }
     return admitFailedAddTerminalRepair(
       owner, durableOperation, projectedOperation, persistOptions);
   }
-  if (!isPartitionReplace(projectedOperation)) {
+  if (!partitionReplace) {
     return Object.freeze({admitted: true, persistOptions});
   }
   if (projectedOperation.workflowStep === WORKFLOW_STEP.REMOVED) {

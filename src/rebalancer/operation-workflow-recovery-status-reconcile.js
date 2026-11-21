@@ -658,6 +658,30 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     return null;
   }
 
+  async failTimedOutOperation(operation, elapsed, stepMetadata) {
+    const partitionAdd = operation.type === OperationType.ADD &&
+      operation.entityType === UNIFIED_SERVICE_TYPE.PARTITION;
+    const replaceSendingCreate = isPartitionReplace(operation) &&
+      operation.workflowStep === WORKFLOW_STEP.SENDING && !isReplacePromotionInLog(operation);
+    const guardCreateAdmission = partitionAdd || replaceSendingCreate;
+    const outcome = await this.failOperation(
+      operation,
+      `Timeout in ${operation.workflowStep} step ` + `after ${elapsed}ms`,
+      {
+        ...(guardCreateAdmission ? {
+          requireCreateAdmissionAbsent: true,
+          deferWhenCreateAdmissionWins: true,
+        } : {}),
+        stepMetadata,
+      },
+    );
+    if (guardCreateAdmission && outcome?.createAdmissionWon === true &&
+        this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation)) {
+      return OPERATION_RECONCILE_OUTCOME.WAITING;
+    }
+    this.stats.operationsTimedOut++;
+  }
+
   async reconcileTimeoutOperation(operation, now) {
     if (
       this.hasActiveTransitionRetryGrace(operation?.operationId || null, now)
@@ -751,31 +775,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         timeoutClassification,
       });
 
-      const timeoutCreateAdmissionFence = operation.type === OperationType.ADD &&
-        operation.entityType === UNIFIED_SERVICE_TYPE.PARTITION;
-      const outcome = await this.failOperation(
-        operation,
-        `Timeout in ${operation.workflowStep} step ` + `after ${elapsed}ms`,
-        {
-          ...(timeoutCreateAdmissionFence ? {
-            requireCreateAdmissionAbsent: true,
-            deferWhenCreateAdmissionWins: true,
-          } : {}),
-          stepMetadata: {
-            timeoutClassification,
-            timeoutMs: stepTimeout,
-            elapsedMs: elapsed,
-            timedOutAtMs: now,
-            budgetExhausted,
-          },
-        },
-      );
-
-      if (timeoutCreateAdmissionFence && outcome?.createAdmissionWon === true &&
-          this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation)) {
-        return OPERATION_RECONCILE_OUTCOME.WAITING;
-      }
-      this.stats.operationsTimedOut++;
+      return this.failTimedOutOperation(operation, elapsed, {
+        timeoutClassification,
+        timeoutMs: stepTimeout,
+        elapsedMs: elapsed,
+        timedOutAtMs: now,
+        budgetExhausted,
+      });
     }
   }
 }
