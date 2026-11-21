@@ -64,7 +64,9 @@ test('gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader re
     observed: {success: after.success, error: after.error ?? null,
       authorityFailureReason: after.authorityFailureReason ?? null, rows: after.rows,
       witness: witness ?? null, deposedServiceRole: deposed.role,
-      deposedCoreRole: deposed.raft.readStatus().role, asked: summarize(asked)},
+      deposedCoreRole: deposed.raft.readStatus().role,
+      deposedKnownLeader: deposed.raft.readStatus().leaderId ?? null,
+      asked: summarize(asked)},
   }));
 
   t.equal(after.success, true,
