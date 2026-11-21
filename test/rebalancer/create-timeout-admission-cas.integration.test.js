@@ -88,6 +88,8 @@ async function withExpiredStep(measure, {
     const otherTables = createCoordinatorSqlStore(cache);
     let exactPointReadUnavailable = false;
     let unavailableExactPointReads = 0;
+    let exactTargetReadUnavailable = false;
+    const targetReads = [];
     const sql = {async executeQuery(statement, params = []) {
       if (/\breplica_operations\b/u.test(statement)) {
         if (exactPointReadUnavailable && statement.includes('WHERE operation_id = ?') &&
@@ -103,6 +105,14 @@ async function withExpiredStep(measure, {
       if (/\bFROM nodes\b/u.test(statement)) {
         const rows = params[0] === NODE.B ? [{node_id: NODE.B, boot_incarnation: OWNER_BOOT}] : [];
         return {success: true, rowSetComplete: true, rows};
+      }
+      if (/\bFROM services\b/u.test(statement) &&
+          statement.includes('service_id = ?') && params[0] === replicaId) {
+        const result = exactTargetReadUnavailable ?
+          {success: true, rows: [], rowSetComplete: false} :
+          otherTables.execute(statement, params);
+        targetReads.push({rowSetComplete: result.rowSetComplete, rows: result.rows});
+        return result;
       }
       return otherTables.execute(statement, params);
     }};
@@ -176,7 +186,10 @@ async function withExpiredStep(measure, {
         ({operation: failed}) => failures.push(failed));
       const request = createRequest(row());
       await measure({
-        owner, target, request, row, reservation, failures, failWrites, operation,
+        owner, target, request, row, reservation, failures, failWrites, operation, targetReads,
+        deferExactTargetRead(value) {
+          exactTargetReadUnavailable = value;
+        },
         async drain() {
           const current = operation();
           const snapshot = await owner.buildPriorityRecoveryOperationDrainSnapshot(current);
@@ -668,6 +681,43 @@ test('repair of a refused pre-remove REPLACE timeout yields to later admitted CR
     assert.equal(run.row().workflow_step, WORKFLOW_STEP.CREATING);
   });
 });
+
+test('elapsed REPLACE repair waits for complete target absence before the retained CAS',
+  async () => {
+    await withHeldReplaceCreate(async (run) => {
+      run.interceptFailureWrite(async () => ({success: false, error: 'injected refused write'}));
+      await assert.rejects(run.expire(), /injected refused write/u);
+      const original = run.row();
+      const initialReads = run.targetReads.length;
+      assert.ok(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID));
+
+      run.deferExactTargetRead(true);
+      await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
+      assert.ok(run.targetReads.slice(initialReads).some(({rowSetComplete}) => !rowSetComplete),
+        'repair really encountered an incomplete exact-key target result');
+      assert.deepEqual(run.row(), original);
+      assert.equal(run.failWrites.length, 1, 'repair submits no failure while target truth is unknown');
+      assert.equal(run.reservation().released_at, null);
+      assert.deepEqual(run.failures, []);
+      assert.ok(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID));
+
+      run.deferExactTargetRead(false);
+      const unknownReads = run.targetReads.length;
+      await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
+      assert.ok(run.targetReads.slice(unknownReads).some(({rowSetComplete, rows}) =>
+        rowSetComplete === true && rows.length === 0),
+      'a complete exact target read proves absence before the retained write');
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED);
+      assert.equal(run.failWrites.length, 2);
+      assert.deepEqual(run.failWrites[0].whereClause, run.failWrites[1].whereClause);
+      assert.ok(Number.isFinite(run.reservation().released_at));
+      assert.equal(run.failures.length, 1);
+      assert.equal(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID), false);
+      run.reply({status: ReplicaOperationResponseStatus.ERROR,
+        error: CREATE_ADMISSION_ERROR_CODE.REFUSED_TERMINAL});
+      assert.equal((await run.execution).success, false);
+    });
+  });
 
 test('a positively claimed pre-remove REPLACE target failure settles with the source still voting',
   async () => {
