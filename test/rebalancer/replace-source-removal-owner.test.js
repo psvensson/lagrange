@@ -21,6 +21,12 @@ import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workfl
  *   W7  step 0 + step 1: the waiting owner is woken by the node's consensus
  *       relay (a committed membership change), with no timer firing.
  */
+import Database from 'better-sqlite3';
+import {generateCreateTableSQL} from '../../src/bootstrap/system-table-schema-sql.js';
+import {SERVICES_SCHEMA, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -35,7 +41,8 @@ import {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
   armTerminalTransitionRepair,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {buildMockPolicyAuthorityWitness, createTestCoordinator} from './test-helpers.js';
+import {installServicesAuthorityFixture} from './operation-outcome-fixture.js';
 import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
@@ -64,6 +71,7 @@ function targetRow(status) {
     raft_role: 'leader',
     address: `${TARGET_NODE_ID}/partition/${TARGET_REPLICA_ID}`,
     created_at: 1,
+    updated_at: 1,
     state_entered_at: 1,
   };
 }
@@ -79,6 +87,7 @@ function sourceRow(status) {
     raft_role: 'follower',
     address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
     created_at: 1,
+    updated_at: 1,
     state_entered_at: 1,
   };
 }
@@ -91,7 +100,35 @@ function parseSteps(row) {
   }
 }
 
-async function createHarness({
+function installCommittedServices(t, coordinator, initialRows) {
+  const authority = new Database(':memory:');
+  t.after(() => authority.close());
+  authority.exec(generateCreateTableSQL(SERVICES_SCHEMA));
+  const planner = new ControlPlaneSystemTableGateway();
+  const serviceIds = new Set();
+  const tableName = SYSTEM_TABLE_NAME.SERVICES;
+  function commitServiceRow(row) {
+    const mutation = serviceIds.has(row.service_id) ?
+      {operation: 'update', tableName, whereClause: {service_id: row.service_id}, data: row} :
+      {operation: 'insert', tableName, row};
+    const {sql, params} = planner.buildSqlMutationPlan(mutation);
+    const result = authority.prepare(sql).run(...params);
+    if (result.changes !== 1) throw new Error(`uncommitted service fixture row: ${row.service_id}`);
+    serviceIds.add(row.service_id);
+    coordinator.systemTableCache.upsert(tableName, row);
+  }
+  initialRows.forEach(commitServiceRow);
+  installServicesAuthorityFixture(coordinator.controlPlaneSystemTableGateway,
+    (sql, params) => ({
+      success: true,
+      rows: authority.prepare(sql).all(...params),
+      rowSetComplete: true,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+    }));
+  return commitServiceRow;
+}
+
+async function createHarness(t, {
   witness = createReplaceWitness({leaderReplicaId: TARGET_REPLICA_ID}),
   sourceStatus = ReplicaStatus.ACTIVE,
   // Other members' own ports, by replica id (D2 target death): each answers
@@ -118,9 +155,9 @@ async function createHarness({
         payload,
         options,
         // The durable row as it stands when the effect leaves the owner.
-        durableRow: operationId ?
-          {...coordinator.repository.getReplicaOperationRowFromCache?.(
-            operationId)} : null,
+        durableRow: operationId ? (await coordinator.sqlQueryEngine.executeQuery(
+          'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
+        )).rows[0] : null,
       });
       return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
     },
@@ -147,25 +184,11 @@ async function createHarness({
         }),
       ),
     },
-    sqlQueryResults: {
-      get 'FROM services WHERE service_id = ?'() {
-        const currentTarget =
-          coordinator?.systemTableCache?.get?.('services', TARGET_REPLICA_ID);
-        return {
-          success: true,
-          rows: [
-            sourceRow(sourceStatus),
-            ...(currentTarget ? [currentTarget] : []),
-          ],
-          affectedRows: 1,
-        };
-      },
-    },
   });
   const owner = coordinator.workflowOwner;
   owner.timeSource = {now: () => Date.now() + clock.offsetMs};
-  coordinator.systemTableCache.upsert('services',
-    targetRow(ReplicaStatus.ACTIVE));
+  const commitServiceRow = installCommittedServices(t, coordinator,
+    [sourceRow(sourceStatus), targetRow(ReplicaStatus.ACTIVE)]);
   const operation = await coordinator.createOperation({
     type: OperationType.REPLACE,
     partitionId: PARTITION_ID,
@@ -178,7 +201,7 @@ async function createHarness({
   operation.replicaId = TARGET_REPLICA_ID;
   operation.sourceReplicaId = SOURCE_REPLICA_ID;
   return {coordinator, owner, operation, witness, deliveries, clock,
-    heldTimers};
+    heldTimers, commitServiceRow};
 }
 
 function removalEffects(deliveries) {
@@ -203,7 +226,7 @@ async function persistedOperation(harness) {
 
 test('W1: the removal intent is durable before REMOVE_REPLICA is sent',
   async (t) => {
-    const harness = await createHarness();
+    const harness = await createHarness(t);
     try {
       await driveToRemovalIntent(harness);
       const effects = removalEffects(harness.deliveries);
@@ -225,7 +248,7 @@ test('W1: the removal intent is durable before REMOVE_REPLICA is sent',
 
 test('W2 (C1): completion is refused while the witness counts the source ' +
   'as a voter, and granted once its removal is committed', async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     await driveToRemovalIntent(harness);
     await harness.owner.completeOperation(harness.operation);
@@ -243,7 +266,7 @@ test('W2 (C1): completion is refused while the witness counts the source ' +
 
 test('W3 (AN11): an absence read below the intent\'s commit index is not ' +
   'a retirement', async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     await driveToRemovalIntent(harness);
     // A lagging witness: the source is absent in a configuration older than
@@ -272,7 +295,7 @@ test('W3 (AN11): an absence read below the intent\'s commit index is not ' +
 
 test('W4 (R-1f): a retired source still in the configuration is re-driven ' +
   'once per changed level, never on an unchanged wake', async (t) => {
-  const harness = await createHarness({sourceStatus: ReplicaStatus.FAILED});
+  const harness = await createHarness(t, {sourceStatus: ReplicaStatus.FAILED});
   try {
     // A STOPPING row another writer left without an intent: the owner
     // records its intent (C0) from a fresh witness read first.
@@ -312,7 +335,7 @@ test('W4 (R-1f): a retired source still in the configuration is re-driven ' +
 
 test('W5 (D2/P4): time past the former budgets fails nothing after the ' +
   'removal intent', async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     await driveToRemovalIntent(harness);
     harness.clock.offsetMs = LONG_AFTER_MS;
@@ -334,7 +357,7 @@ test('W5 (D2/P4): time past the former budgets fails nothing after the ' +
 
 test('W5b (D2): the exempt REPLACE budget check reports no ' +
   'wait_bound_spent (as at base, it only records its diagnostic)', async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     await driveToRemovalIntent(harness);
     const lines = [];
@@ -370,11 +393,10 @@ test('W5b (D2): the exempt REPLACE budget check reports no ' +
 test('W6 (P6): target death after the intent', async (t) => {
   await t.test('the source still a voter: FAILED, the source retained',
     async (t) => {
-      const harness = await createHarness();
+      const harness = await createHarness(t);
       try {
         await driveToRemovalIntent(harness);
-        harness.coordinator.systemTableCache.upsert('services',
-          targetRow(ReplicaStatus.FAILED));
+        harness.commitServiceRow(targetRow(ReplicaStatus.FAILED));
         await harness.coordinator.reconcileOperationLifecycle(
           harness.operation);
         const persisted = await persistedOperation(harness);
@@ -389,11 +411,10 @@ test('W6 (P6): target death after the intent', async (t) => {
       }
     });
   await t.test('the witness unreadable: the REPLACE waits', async (t) => {
-    const harness = await createHarness();
+    const harness = await createHarness(t);
     try {
       await driveToRemovalIntent(harness);
-      harness.coordinator.systemTableCache.upsert('services',
-        targetRow(ReplicaStatus.FAILED));
+      harness.commitServiceRow(targetRow(ReplicaStatus.FAILED));
       harness.witness.available = false;
       await harness.coordinator.reconcileOperationLifecycle(harness.operation);
       harness.clock.offsetMs = LONG_AFTER_MS;
@@ -407,12 +428,11 @@ test('W6 (P6): target death after the intent', async (t) => {
   });
   await t.test('the source already absent: completed, no rollback',
     async (t) => {
-      const harness = await createHarness();
+      const harness = await createHarness(t);
       try {
         await driveToRemovalIntent(harness);
         harness.witness.commitRemoval();
-        harness.coordinator.systemTableCache.upsert('services',
-          targetRow(ReplicaStatus.FAILED));
+        harness.commitServiceRow(targetRow(ReplicaStatus.FAILED));
         await harness.coordinator.reconcileOperationLifecycle(
           harness.operation);
         t.equal((await persistedOperation(harness)).workflowStep,
@@ -441,7 +461,7 @@ test('W7: a committed membership change relayed by the node wakes the ' +
       return () => listeners.delete(listener);
     },
   };
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     harness.coordinator.attachReplicaConsensusEvents(relay);
     t.equal(listeners.size, 1, 'the owner holds one relay subscription');
@@ -514,7 +534,7 @@ function staleActiveCopy(operation) {
 
 test('W8 (D2 boundary is durable): a stale in-memory copy cannot FAIL a ' +
   'REPLACE past its durable removal intent', async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     await driveToRemovalIntent(harness);
     enforceDurableStepCas(harness);
@@ -562,7 +582,7 @@ test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
   'to a REPLACE terminal', async (t) => {
   await t.test('a retained REMOVED is re-decided by R-1a before it is ' +
     're-asserted', async (t) => {
-    const harness = await createHarness();
+    const harness = await createHarness(t);
     try {
       await driveToRemovalIntent(harness);
       const persisted = await persistedOperation(harness);
@@ -586,7 +606,7 @@ test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
   });
   await t.test('a refused FAILED is not re-asserted past the durable intent',
     async (t) => {
-      const harness = await createHarness();
+      const harness = await createHarness(t);
       try {
         await driveToRemovalIntent(harness);
         enforceDurableStepCas(harness);
@@ -614,7 +634,7 @@ test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
 test('W10 (C0): the removal intent\'s witness commit index is recorded at ' +
   'the first intent write and preserved; never re-derived as 0',
 async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     await driveToRemovalIntent(harness);
     const recorded = await persistedOperation(harness);
@@ -669,11 +689,11 @@ function parseStepsFromOperation(operation) {
 // D2 / P6: target death is decided from committed membership, never by
 // elapsed time and never by waiting forever for the dead target to answer.
 // The source's own port is the surviving member read here.
-async function targetDeathOutcome({targetStatus, sourceMember,
+async function targetDeathOutcome(t, {targetStatus, sourceMember,
   afterIntent = true}) {
   const witness = createReplaceWitness({leaderReplicaId: TARGET_REPLICA_ID});
   const members = sourceMember ? {[SOURCE_REPLICA_ID]: sourceMember} : {};
-  const harness = await createHarness({witness, members});
+  const harness = await createHarness(t, {witness, members});
   try {
     if (afterIntent) {
       await driveToRemovalIntent(harness);
@@ -685,8 +705,7 @@ async function targetDeathOutcome({targetStatus, sourceMember,
     }
     const effectsBefore = removalEffects(harness.deliveries).length;
     witness.available = false;
-    harness.coordinator.systemTableCache.upsert('services',
-      targetRow(targetStatus));
+    harness.commitServiceRow(targetRow(targetStatus));
     await harness.coordinator.reconcileOperationLifecycle(
       await persistedOperation(harness));
     const persisted = await persistedOperation(harness);
@@ -709,7 +728,7 @@ function sourceMemberSaying(sourceVoter) {
 test('W11 (D2/P6): target death after the intent is decided from committed ' +
   'membership', async (t) => {
   for (const targetStatus of [ReplicaStatus.FAILED, ReplicaStatus.REMOVED]) {
-    const retained = await targetDeathOutcome({targetStatus,
+    const retained = await targetDeathOutcome(t, {targetStatus,
       sourceMember: sourceMemberSaying(true)});
     t.equal(retained.workflowStep, WORKFLOW_STEP.FAILED,
       `target ${targetStatus}, source still a voter: FAILED`);
@@ -717,13 +736,13 @@ test('W11 (D2/P6): target death after the intent is decided from committed ' +
       `target ${targetStatus}: the source is retained`);
     t.equal(retained.retirements, 0,
       `target ${targetStatus}: no removal is proposed`);
-    const removed = await targetDeathOutcome({targetStatus,
+    const removed = await targetDeathOutcome(t, {targetStatus,
       sourceMember: sourceMemberSaying(false)});
     t.equal(removed.workflowStep, WORKFLOW_STEP.REMOVED,
       `target ${targetStatus}, source already absent: completed, no ` +
         'rollback');
   }
-  const unknowable = await targetDeathOutcome({
+  const unknowable = await targetDeathOutcome(t, {
     targetStatus: ReplicaStatus.FAILED, sourceMember: null});
   t.equal(unknowable.workflowStep, WORKFLOW_STEP.STOPPING,
     'no member can be read: nothing is concluded (waits visibly)');
@@ -732,7 +751,7 @@ test('W11 (D2/P6): target death after the intent is decided from committed ' +
 test('W12 (D2 pre-effect): target death before the intent fails the ' +
   'REPLACE with the source retained and no removal effect', async (t) => {
   for (const targetStatus of [ReplicaStatus.FAILED, ReplicaStatus.REMOVED]) {
-    const outcome = await targetDeathOutcome({targetStatus,
+    const outcome = await targetDeathOutcome(t, {targetStatus,
       sourceMember: sourceMemberSaying(true), afterIntent: false});
     t.equal(outcome.workflowStep, WORKFLOW_STEP.FAILED,
       `target ${targetStatus} before the intent: FAILED`);
@@ -754,7 +773,7 @@ async function deferredSnapshotOf(harness) {
 
 test('W13 (BR12): a deferred-visibility snapshot waits at the removal ' +
   'effect boundary', async (t) => {
-  const harness = await createHarness();
+  const harness = await createHarness(t);
   try {
     harness.operation.workflowStep = WORKFLOW_STEP.ACTIVE;
     harness.operation.status = ReplicaStatus.ACTIVE;
@@ -798,7 +817,7 @@ async function completionAfterTargetSeesAbsence(harness, leaderReplicaId) {
 test('W14 (F1): the leader-answered committed configuration decides ' +
   'completion; an unknown, unreachable or non-leading answer waits', async (t) => {
   await t.test('no leader known: WAIT, nothing written', async (t) => {
-    const harness = await createHarness();
+    const harness = await createHarness(t);
     try {
       const persisted = await completionAfterTargetSeesAbsence(harness, null);
       t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
@@ -808,7 +827,7 @@ test('W14 (F1): the leader-answered committed configuration decides ' +
     }
   });
   await t.test('the named leader unreachable (no route): WAIT', async (t) => {
-    const harness = await createHarness();
+    const harness = await createHarness(t);
     try {
       const persisted = await completionAfterTargetSeesAbsence(harness,
         PEER_REPLICA_ID);
@@ -823,10 +842,10 @@ test('W14 (F1): the leader-answered committed configuration decides ' +
       const elsewhere = createReplaceWitness({
         leaderReplicaId: SOURCE_REPLICA_ID, sourceVoter: false,
         commitIndex: INTENT_COMMIT_INDEX + 5});
-      const harness = await createHarness({
+      const harness = await createHarness(t, {
         members: {[PEER_REPLICA_ID]: elsewhere}});
       try {
-        harness.coordinator.systemTableCache.upsert('services', peerRow());
+        harness.commitServiceRow(peerRow());
         const persisted = await completionAfterTargetSeesAbsence(harness,
           PEER_REPLICA_ID);
         t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
@@ -839,11 +858,11 @@ test('W14 (F1): the leader-answered committed configuration decides ' +
     'STILL_VOTER and R-1f re-drives; its absence then completes', async (t) => {
     const leader = createReplaceWitness({leaderReplicaId: PEER_REPLICA_ID,
       sourceVoter: true, commitIndex: INTENT_COMMIT_INDEX + 5});
-    const harness = await createHarness({
+    const harness = await createHarness(t, {
       members: {[PEER_REPLICA_ID]: leader},
       sourceStatus: ReplicaStatus.FAILED});
     try {
-      harness.coordinator.systemTableCache.upsert('services', peerRow());
+      harness.commitServiceRow(peerRow());
       const persisted = await completionAfterTargetSeesAbsence(harness,
         PEER_REPLICA_ID);
       t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
@@ -864,7 +883,7 @@ test('W14 (F1): the leader-answered committed configuration decides ' +
 
 test('W15 (F-3, O1 round 2): an absence in a configuration applied below ' +
   'the answer\'s commit index is not a retirement', async (t) => {
-  const harness = await createHarness({witness: createReplaceWitness({
+  const harness = await createHarness(t, {witness: createReplaceWitness({
     leaderReplicaId: TARGET_REPLICA_ID, appliedLag: 1})});
   try {
     await driveToRemovalIntent(harness);
@@ -889,7 +908,7 @@ test('W15 (F-3, O1 round 2): an absence in a configuration applied below ' +
 
 test('ensureReplaceRemovalIntentRecorded transitions non-terminal pre-STOPPING durable row to STOPPING with intent',
   async (t) => {
-    const harness = await createHarness();
+    const harness = await createHarness(t);
     try {
       const initialDurable = await persistedOperation(harness);
       t.equal(initialDurable.workflowStep, WORKFLOW_STEP.PENDING,
