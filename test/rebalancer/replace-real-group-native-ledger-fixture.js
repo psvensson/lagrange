@@ -83,6 +83,7 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
   const sourceNode = isCopy ? NODE.SOURCE : NODE.PEER_C;
   const targetNode = isCopy ? NODE.PEER_B : NODE.PEER_C;
   const requests = [];
+  const repairAnswers = [];
   const holder = createTestCoordinator({nodeId: sourceNode,
     controlPlaneSystemTableGateway: ledger.gateway,
     cacheData: {services: [{replica_id: ledger.leader.replicaId, node_id: ledger.leader.nodeId,
@@ -92,6 +93,7 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
       const answer = await send(ledger.leader, payload);
       requests.push({type: payload.type, reason: answer.reason ?? answer.placementResult?.reason,
         state: answer.state, failureCode: answer.failureCode});
+      if (payload.type === 'PLACEMENT_REPAIR') repairAnswers.push({payload, answer});
       return buildDeliveryEnvelope({acknowledged: true}, answer);
     }},
   });
@@ -113,7 +115,7 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
   const removed = await ledger.gateway.submitMutation({tableName: 'replica_operations',
     operation: 'delete', whereClause: {operation_id: HISTORICAL_ID}});
   assert.equal(removed.partitionResult.affectedRows, 1);
-  return {holder, retained, historicalRow, requests};
+  return {holder, retained, historicalRow, requests, repairAnswers};
 }
 
 function effectViolations(observation) {
