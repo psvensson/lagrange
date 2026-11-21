@@ -279,7 +279,7 @@ function track(operation) {
 }
 
 function startPublication(composed, persistOptions = undefined) {
-  return track(composed.coordinator.persistPublicationRow({
+  return track(composed.coordinator.persistPublicationBirth({
     publication_id: PUBLICATION_ID,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
     publication_epoch: 1,
@@ -513,7 +513,7 @@ function persistThroughCommittingOwner(failure) {
     nodeId: NODE_ID, controlPlanePublicationsOwner: owner,
     logger: QUIET_LOGGER,
   });
-  const box = track(coordinator.persistPublicationRow({
+  const box = track(coordinator.persistPublicationBirth({
     publication_id: PUBLICATION_ID,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
     publication_epoch: 1,

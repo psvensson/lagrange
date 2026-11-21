@@ -48,7 +48,7 @@ test('an unconfirmed publication write logs one wait_bound_spent ERROR and ' +
   'refuses with retryable debt', async (t) => {
   const {host, capture, calls} = createPersistHost({readback: 'never'});
 
-  await t.rejects(host.persistPublicationRow(PUBLICATION_ROW), {
+  await t.rejects(host.persistPublicationBirth(PUBLICATION_ROW), {
     code: 'PUBLICATION_WRITE_UNCONFIRMED', deferRetry: true,
   }, 'an untyped write never proves that the desired row persisted');
   t.equal(calls.upserts, PUBLICATION_WRITE_MAX_ATTEMPTS,
@@ -67,7 +67,7 @@ test('a publication write confirmed by its readback logs no ' +
   'wait_bound_spent ERROR', async (t) => {
   const {host, capture, calls} = createPersistHost({readback: 'stored'});
 
-  const returned = await host.persistPublicationRow(PUBLICATION_ROW);
+  const returned = await host.persistPublicationBirth(PUBLICATION_ROW);
 
   t.equal(calls.upserts, 1);
   t.equal(returned.publication_id, 'pub-7');
@@ -76,7 +76,7 @@ test('a publication write confirmed by its readback logs no ' +
 
 test('a lost reply on the final attempt still reads authoritative completion', async (t) => {
   const {host, capture, calls} = createPersistHost({readback: 'stored', loseReply: true});
-  const returned = await host.persistPublicationRow(PUBLICATION_ROW, {
+  const returned = await host.persistPublicationBirth(PUBLICATION_ROW, {
     publicationWriteMaxAttempts: 1, skipPublicationWriteReadback: true,
   });
   t.equal(returned.publication_id, 'pub-7', 'readback confirms the committed row');

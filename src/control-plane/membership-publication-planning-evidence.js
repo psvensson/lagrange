@@ -473,13 +473,25 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
   if (!publicationRow || typeof publicationRow !== 'object') {
     return publicationRow;
   }
-  const closureDecision = buildPublicationMetadataRefreshDecision({
-    publicationRow,
-  });
-  if (closureDecision.shouldClose !== true) {
-    return publicationRow;
-  }
+  let closureDecision = buildPublicationMetadataRefreshDecision({publicationRow});
+  const normalized = normalizeControlPlanePublicationRow(publicationRow);
   const nowMs = resolveNowMs(options.nowMs);
+  if (normalized.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+      closureDecision.allRequiredAcknowledged) {
+    const lastState = normalized.transitionHistory.at(-1)?.state;
+    if (lastState === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
+      return materializeAcknowledgedPublication(publicationRow, nowMs, null);
+    }
+    // Only actual retained pending history can establish a missing closure.
+    if (lastState !== MEMBERSHIP_PUBLICATION_STATUS.OPEN &&
+        lastState !== MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING) {
+      return publicationRow;
+    }
+    closureDecision = buildPublicationMetadataRefreshDecision({
+      publicationRow: {...publicationRow, status: lastState},
+    });
+  }
+  if (!closureDecision.shouldClose) return publicationRow;
   return materializeAcknowledgedPublication(publicationRow, nowMs,
     buildTransitionHistoryEntry({
       state: closureDecision.nextStatus, reasonCode: closureDecision.reasonCode, at: nowMs,
@@ -513,38 +525,6 @@ function materializeAcknowledgedPublication(publicationRow, nowMs, closingTransi
     membershipLifecycleSummary,
     transition_history: transitionHistory,
   };
-}
-
-// The merge can find a complete ACK set in two individually open rows.
-// Materialize its closure from the existing publication state machine.
-function finalizeMergedAcknowledgedPublication(merged, requested, current) {
-  const candidate = normalizeControlPlanePublicationRow(merged);
-  if (candidate.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
-      !buildPublicationMetadataRefreshDecision({
-        publicationRow: merged,
-      }).allRequiredAcknowledged) return merged;
-  const durable = normalizeControlPlanePublicationRow(current);
-  if (durable.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
-      requested.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
-    return closeAcknowledgedMetadataRefreshRow({
-      publicationRow: {...merged, status: durable.status},
-      nowMs: merged.updated_at,
-    });
-  }
-  const finalized = durable.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
-    current : requested;
-  // An established closure keeps its actual timestamp and history. A later
-  // metadata refresh can still supply other projected membership details.
-  const transitionHistory = normalizeControlPlanePublicationRow(finalized).transitionHistory;
-  const carriesClosure =
-    transitionHistory.at(-1)?.state === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
-  const publication = carriesClosure ? {
-    ...merged,
-    published_at: finalized.published_at,
-    closed_at: finalized.closed_at,
-    transition_history: transitionHistory,
-  } : merged;
-  return materializeAcknowledgedPublication(publication, merged.updated_at, null);
 }
 
 function buildPublicationMetadataRefreshRow(options = {}) {
@@ -753,10 +733,9 @@ export {
   buildPublicationMetadataRefreshDecision,
   buildPublicationMetadataRefreshRow,
   buildPublicationReadOptions,
-  buildServingMemberStatesByNodeId,
   comparePlanningEvidenceRows,
   closeAcknowledgedMetadataRefreshRow,
-  finalizeMergedAcknowledgedPublication,
+  materializeAcknowledgedPublication,
   countPlanningEvidenceRowFields,
   deriveMembershipPublicationCandidate,
   deriveMembershipPublicationId,

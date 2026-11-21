@@ -133,6 +133,7 @@ documentClass: generated
 - [membership-publication-row-contract.js](membership-publication-row-contract.js) - No leading comment; first export: DISPATCH_RETRY_READY_NODE_PHASE. (importers: hub)
 - [membership-publication-row-helpers.js](membership-publication-row-helpers.js) - No leading comment; first export: abandonMembershipPublication. (importers: many)
 - [membership-publication-target-selection.js](membership-publication-target-selection.js) - No leading comment; first export: buildMembershipPublicationAckCompletionSnapshot. (importers: few)
+- [membership-publication-write-intent.js](membership-publication-write-intent.js) - Publication writers retain intent across conditional writes: birth fixes one revision, ACK owns one node, and... (importers: few)
 - [membership-swim-detector.js](membership-swim-detector.js) - SWIM + Lifeguard failure detector - pure state machine (cutover plan S5 step 3, increment 1). (importers: many)
 - [membership-swim-prober.js](membership-swim-prober.js) - SWIM probe loop + indirect ping-req relay (cutover plan S5 step 3, increment 3a). (importers: few)
 - [membership-swim-runtime.js](membership-swim-runtime.js) - SWIM failure-detector runtime owner (cutover plan S5 step 3, increment 3c-ii). (importers: few)

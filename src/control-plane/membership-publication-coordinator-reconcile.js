@@ -17,10 +17,8 @@ import {
 import {
   normalizeNodeIdList,
 } from './membership-publication-row-helpers.js';
-import {
-  buildMembershipPublicationRow,
-  buildPublicationMetadataRefreshRow,
-} from './membership-publication-planning-evidence.js';
+import {buildMembershipPublicationRow} from './membership-publication-planning-evidence.js';
+import {publicationRefreshIntent} from './membership-publication-write-intent.js';
 import {MembershipPublicationCoordinatorPersist} from './membership-publication-coordinator-persist.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD,
@@ -293,17 +291,18 @@ class MembershipPublicationCoordinatorReconcile extends
               shouldRefreshAcknowledgements ||
               shouldRefreshStatus
             ) {
-              const refreshedRow = buildPublicationMetadataRefreshRow({
-                publicationRow: latestPublicationRow,
-                priorityPartitionSummary: candidate.priorityPartitionSummary,
-                membershipLifecycleSummary: candidate.membershipLifecycleSummary,
-                acknowledgedNodeIds: candidate.acknowledgedNodeIds,
+              const intent = publicationRefreshIntent(latestPublicationRow, {
+                priorityPartitionSummary: shouldRefreshPriorityMetadata ?
+                  candidate.priorityPartitionSummary : undefined,
+                membershipLifecycleSummary: shouldRefreshMembershipLifecycleMetadata ?
+                  candidate.membershipLifecycleSummary : undefined,
+                acknowledgedNodeIds: shouldRefreshAcknowledgements ?
+                  candidate.acknowledgedNodeIds : undefined,
+                requirePublished: shouldRefreshStatus &&
+                  candidate.publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
                 nowMs: this.now(),
               });
-              const persistedRow = await this.persistPublicationRow(
-                refreshedRow,
-                convergenceOptions,
-              );
+              const persistedRow = await this.persistPublicationIntent(intent, convergenceOptions);
               const publicationRow =
                 normalizeControlPlanePublicationRow(persistedRow);
               if (
@@ -345,7 +344,7 @@ class MembershipPublicationCoordinatorReconcile extends
             candidate,
             nowMs: this.now(),
           });
-          const persistedRow = await this.persistPublicationRow(
+          const persistedRow = await this.persistPublicationBirth(
             row,
             convergenceOptions,
           );

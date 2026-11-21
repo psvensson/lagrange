@@ -8,9 +8,6 @@ import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   isControlPlaneWriterShutDown,
 } from './control-plane-error-classification.js';
-import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
-import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
-import {isPublicationOwnerFailureStatus} from './publication-owner-decision.js';
 import {assertPublicationWriteRevision} from './owners/control-plane-publications-owner.js';
 import {
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -33,16 +30,15 @@ import {shouldDeferMembershipReconcileToWriteLeader} from
 import {PARTITION_SERVICE_EVENT} from
   '../partition/partition-service-constants.js';
 import {
-  listEquals,
   normalizePositiveInteger,
 } from './membership-publication-row-helpers.js';
 import {
   buildPublicationReadOptions,
-  finalizeMergedAcknowledgedPublication,
-  mergePublicationRows,
   serializeMembershipPublicationRow,
 } from './membership-publication-planning-evidence.js';
-import {acknowledgeMembershipPublication} from './membership-publication-acknowledgement.js';
+import {PUBLICATION_INTENT_DECISION, decidePublicationIntent,
+  publicationAcknowledgementIntent, publicationBirthIntent} from
+  './membership-publication-write-intent.js';
 import {MembershipPublicationCoordinatorPlanning} from './membership-publication-coordinator-planning.js';
 import {
   readActiveGateMembershipPublicationVisibleRow,
@@ -227,25 +223,22 @@ class MembershipPublicationCoordinatorPersist extends
     });
   }
 
-  async persistPublicationRow(row, options = {}) {
-    const ownerKey =
-      options[CONTROL_PLANE_CONVERGENCE_FIELD
-        .CONTROL_PLANE_CONVERGENCE_OWNER_KEY] || this.buildOwnerKey();
+  async persistPublicationBirth(row, options = {}) {
+    return this.persistPublicationIntent(publicationBirthIntent(row), options);
+  }
+
+  async persistPublicationIntent(intent, options) {
+    const {
+      [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_OWNER_KEY]:
+        ownerKey = this.buildOwnerKey(),
+      [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_OPERATION]:
+        operation = CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION,
+    } = options;
     const publicationOptions = buildCriticalControlPlaneConvergenceOptions(
-      options,
-      {
-        ownerKey,
-        operation:
-          options[CONTROL_PLANE_CONVERGENCE_FIELD
-            .CONTROL_PLANE_CONVERGENCE_OPERATION] ||
-          CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION,
-      },
-    );
-    const desired = serializeMembershipPublicationRow(row);
-    const publicationId = desired.publication_id;
+      options, {ownerKey, operation});
+    const publicationId = intent.revision.publication_id;
     const owner = this.controlPlanePublicationsOwner;
-    if (!owner || typeof owner.getPublication !== 'function' ||
-        typeof owner.upsertPublication !== 'function' || !publicationId) {
+    if (!owner || !publicationId) {
       throw publicationWriteUnconfirmed(publicationId);
     }
     const {idempotencyKey, ...writeOptions} = publicationOptions;
@@ -256,16 +249,11 @@ class MembershipPublicationCoordinatorPersist extends
     const maxAttempts = normalizePositiveInteger(
       options.publicationWriteMaxAttempts, PUBLICATION_WRITE_MAX_ATTEMPTS);
     let current = await owner.getPublication(publicationId, readOptions);
+    let decision = decidePublicationIntent(intent, current);
     let failure;
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      assertPublicationWriteRevision(desired, current);
-      if (isPublicationOwnerFailureStatus(readUpperStateField(current?.status))) {
-        releaseControlPlaneWriteIdentity(writeIdentity);
-        return serializeMembershipPublicationRow(current);
-      }
-      const merged = mergePublicationRows(desired, current);
-      const candidate = serializeMembershipPublicationRow(
-        finalizeMergedAcknowledgedPublication(merged, desired, current));
+    for (let attempt = 0; attempt < maxAttempts &&
+        decision.state === PUBLICATION_INTENT_DECISION.WRITE; attempt += 1) {
+      const candidate = decision.row;
       try {
         const result = await owner.upsertPublication(candidate, {
           ...writeOptions, writeIdentity, expectedPublicationRow: current,
@@ -288,16 +276,15 @@ class MembershipPublicationCoordinatorPersist extends
         });
         throw publicationWriteUnconfirmed(publicationId, error);
       }
-      assertPublicationWriteRevision(desired, current);
-      if (isPublicationOwnerFailureStatus(readUpperStateField(current?.status)) ||
-          publicationRowSatisfiesDesiredState(current, candidate)) {
-        releaseControlPlaneWriteIdentity(writeIdentity);
-        const confirmed = serializeMembershipPublicationRow(current);
-        await this._maybeLatchFormationAfterPublicationWrite(confirmed);
-        return confirmed;
-      }
+      decision = decidePublicationIntent(intent, current);
     }
-    reportPublicationWriteUnconfirmed(this, {maxAttempts, publicationId, row: desired});
+    if (decision.state === PUBLICATION_INTENT_DECISION.CONFIRMED) {
+      releaseControlPlaneWriteIdentity(writeIdentity);
+      const confirmed = serializeMembershipPublicationRow(decision.row);
+      await this._maybeLatchFormationAfterPublicationWrite(confirmed);
+      return confirmed;
+    }
+    reportPublicationWriteUnconfirmed(this, {maxAttempts, publicationId, row: decision.row});
     throw publicationWriteUnconfirmed(publicationId, failure);
   }
 
@@ -471,28 +458,15 @@ class MembershipPublicationCoordinatorPersist extends
         const baseRow = await owner.getPublication(
           publicationId, buildPublicationReadOptions(acknowledgementOptions));
         if (!baseRow) return null;
-        if (isPublicationOwnerFailureStatus(readUpperStateField(baseRow.status))) {
-          return serializeMembershipPublicationRow(baseRow);
+        if (acknowledgementOptions.publicationRow) {
+          assertPublicationWriteRevision(baseRow, acknowledgementOptions.publicationRow);
         }
-        const normalizedBaseRow = normalizeControlPlanePublicationRow(baseRow);
-        const acknowledgedRow = acknowledgeMembershipPublication({
-          publicationRow: baseRow,
+        return this.persistPublicationIntent(publicationAcknowledgementIntent(baseRow, {
           nodeId,
           nowMs: this.now(),
           timeoutMs: acknowledgementOptions.timeoutMs,
           timeoutReasonCode: acknowledgementOptions.timeoutReasonCode,
-        });
-        const normalizedAcknowledgedRow = normalizeControlPlanePublicationRow(acknowledgedRow);
-        const acknowledgementChanged =
-          normalizedAcknowledgedRow.status !== normalizedBaseRow.status ||
-          !listEquals(
-            normalizedAcknowledgedRow.acknowledgedNodeIds,
-            normalizedBaseRow.acknowledgedNodeIds,
-          );
-        if (!acknowledgementChanged) {
-          return serializeMembershipPublicationRow(baseRow);
-        }
-        return this.persistPublicationRow(acknowledgedRow, acknowledgementOptions);
+        }), acknowledgementOptions);
       },
     );
   }

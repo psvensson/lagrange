@@ -7,7 +7,7 @@ documentClass: generated
 
 ## Files
 
-- [control-plane-publications-owner.js](control-plane-publications-owner.js) - No leading comment; first export: ControlPlanePublicationsOwner. (importers: few)
+- [control-plane-publications-owner.js](control-plane-publications-owner.js) - No leading comment; first export: ControlPlanePublicationsOwner. (importers: many)
 - [create-system-metadata-owners.js](create-system-metadata-owners.js) - No leading comment; first export: createSystemMetadataOwners. (importers: few)
 - [deployment-binding-contract.js](deployment-binding-contract.js) - No leading comment; first export: DEPLOYMENT_BINDING_ERROR_CODE. (importers: hub)
 - [deployment-binding-owner.js](deployment-binding-owner.js) - No leading comment; first export: ARTIFACT_PAYLOAD_NOT_INTERNALIZED. (importers: few)

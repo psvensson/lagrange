@@ -127,7 +127,7 @@ async function exerciseAcknowledgementOrder({slowNode, fastNode, successor}) {
     fastWriter = createPublicationWriter(leader, fastNode, WRITER_TIME + 10);
     const original = publicationRow(3, NODES, WRITER_TIME - 10);
     const publicationId = original.publication_id;
-    await slowWriter.coordinator.persistPublicationRow(original);
+    await slowWriter.coordinator.persistPublicationBirth(original);
     assert.equal(readDurablePublication(leader, publicationId).status, STATUS.OPEN);
 
     held = holdFirstAcknowledgement(leader);
@@ -147,11 +147,12 @@ async function exerciseAcknowledgementOrder({slowNode, fastNode, successor}) {
     if (successor) {
       const next = publicationRow(4, [fastNode, successor], WRITER_TIME + 30);
       nextId = next.publication_id;
-      await fastWriter.coordinator.persistPublicationRow(next);
+      await fastWriter.coordinator.persistPublicationBirth(next);
       await fastWriter.coordinator.acknowledgePublication(nextId, fastNode);
-      await fastWriter.coordinator.persistPublicationRow({
-        ...original, status: STATUS.SUPERSEDED, updated_at: WRITER_TIME + 30,
-      });
+      const preimage = await fastWriter.owner.getPublication(publicationId);
+      await fastWriter.owner.upsertPublication({
+        ...preimage, status: STATUS.SUPERSEDED, updated_at: WRITER_TIME + 30,
+      }, {expectedPublicationRow: preimage});
       assert.equal(readDurablePublication(leader, publicationId).status, STATUS.SUPERSEDED);
     }
 
@@ -237,7 +238,7 @@ test('native publication confirmation resolves a lost final answer and refuses u
       const first = publicationRow(3, NODES, WRITER_TIME - 10);
       const second = publicationRow(4, NODES, WRITER_TIME - 10);
       for (const row of [first, second]) {
-        await writer.coordinator.persistPublicationRow(row);
+        await writer.coordinator.persistPublicationBirth(row);
       }
       const write = writer.owner.upsertPublication.bind(writer.owner);
       writer.owner.upsertPublication = async (...args) => {
@@ -279,7 +280,7 @@ test('native publication confirmation resolves a lost final answer and refuses u
       await assert.rejects(write({...second, publication_id: FORMATION_PUBLICATION_ID}, {
         expectedPublicationRow: null,
       }), {code: 'INVALID_PUBLICATION_MUTATION'});
-      assert.equal(readDurablePublication(leader, FORMATION_PUBLICATION_ID).publicationId, null,
+      assert.equal(leader.db.prepare(SELECT_ROW).get(FORMATION_PUBLICATION_ID), undefined,
         'ordinary publication writes cannot create the formation latch row');
     } finally {
       writer?.cdc.markShuttingDown();
@@ -337,7 +338,7 @@ test('a refused lifecycle-summary-only reconcile keeps its obligation until nati
       publicationRow: publicationRow(3, NODES, WRITER_TIME - 10),
       nowMs: WRITER_TIME - 10,
     });
-    await writer.coordinator.persistPublicationRow(row);
+    await writer.coordinator.persistPublicationBirth(row);
     const baseline = readDurablePublication(ledger.leader, row.publication_id);
     const requested = {...baseline.membershipLifecycleSummary, locallyEligibleNodeIds: NODES};
     writer.coordinator.deriveClusterMembershipCandidate = async () => ({
@@ -362,7 +363,7 @@ test('a refused lifecycle-summary-only reconcile keeps its obligation until nati
 test('an adopted supersession does not open the reconciliation workflow',
   () => withPublicationLedger(async (ledger, writer) => {
     const row = publicationRow(3, NODES, WRITER_TIME - 10);
-    await writer.coordinator.persistPublicationRow(row);
+    await writer.coordinator.persistPublicationBirth(row);
     const baseline = readDurablePublication(ledger.leader, row.publication_id);
     writer.coordinator.deriveClusterMembershipCandidate = async () => ({
       ...baseline, changed: true,
@@ -398,17 +399,17 @@ test('explicit publication identity cannot be rebound to another revision or coh
   () => withPublicationLedger(async (ledger, writer) => {
     const explicit = {...publicationRow(3, NODES, WRITER_TIME - 10),
       publication_id: 'explicit-membership-publication'};
-    const ordinary = await writer.coordinator.persistPublicationRow(explicit);
+    const ordinary = await writer.coordinator.persistPublicationBirth(explicit);
     assert.equal(ordinary.publication_id, explicit.publication_id);
     const writes = ledger.applied.length;
     const different = publicationRow(4, [NODES[1], 'node-c'], WRITER_TIME);
-    await assert.rejects(writer.coordinator.persistPublicationRow({
+    await assert.rejects(writer.coordinator.persistPublicationBirth({
       ...different, publication_id: explicit.publication_id,
     }), {code: 'PUBLICATION_REVISION_MISMATCH'});
     assert.equal(ledger.applied.length, writes);
     assert.deepEqual(readDurablePublication(ledger.leader, explicit.publication_id)
       .publishedActiveNodeIds, NODES);
-    const next = await writer.coordinator.persistPublicationRow(different);
+    const next = await writer.coordinator.persistPublicationBirth(different);
     assert.equal(next.publication_id, different.publication_id);
   }));
 
@@ -451,7 +452,7 @@ for (const order of ['ack-late', 'refresh-late', 'serial']) {
           publicationRow: publicationRow(3, NODES, WRITER_TIME - 10),
           nowMs: WRITER_TIME - 10,
         });
-        await metadataWriter.coordinator.persistPublicationRow(row);
+        await metadataWriter.coordinator.persistPublicationBirth(row);
         const acknowledge = () => ackWriter.coordinator
           .acknowledgePublication(row.publication_id, NODES[1]);
         const refresh = installLifecycleRefresh(metadataWriter, row);
