@@ -881,16 +881,19 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_TEST_NAME,
         async getPublication(publicationId) {
           const persistedRow = persistedRows[persistedRows.length - 1];
           if (!persistedRow) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           if (publicationId !== persistedRow.publication_id) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           if (
             persistedRows.length <
             PUBLICATION_CONVERGENCE_HANDOFF_RETRY_VISIBLE_PERSISTED_COUNT
           ) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           return {
             ...persistedRow,
@@ -1009,10 +1012,12 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
               PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_PERSISTED_INDEX
             ];
           if (!persistedRow) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           if (publicationId !== persistedRow.publication_id) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           staleWriteReadbackCount +=
             PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_READBACK_COUNT;
@@ -1020,7 +1025,8 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_VISIBLE_TEST_NAME,
             staleWriteReadbackCount ===
             PUBLICATION_CONVERGENCE_HANDOFF_TARGET_STALE_READBACK_COUNT
           ) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           return {
             ...persistedRow,
@@ -1144,7 +1150,8 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READBACK_FAILURE_TEST_NAME,
             PUBLICATION_CONVERGENCE_HANDOFF_TARGET_FIRST_PERSISTED_INDEX
           ];
           if (!persistedRow || publicationId !== persistedRow.publication_id) {
-            return latestPublicationRow;
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           return persistedRow;
         },

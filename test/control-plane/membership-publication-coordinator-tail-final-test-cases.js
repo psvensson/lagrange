@@ -1,3 +1,7 @@
+import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {serializeMembershipPublicationRow} from
+  '../../src/control-plane/membership-publication-planning-evidence.js';
 import {
   COLUMN,
   SERVICE_STATUS,
@@ -47,14 +51,20 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         closed_at: 1200,
       };
       const persistedRows = [];
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
           async upsertPublication(row) {
+            durablePublicationRow = row;
             persistedRows.push(row);
           },
         },
@@ -201,14 +211,20 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         closed_at: 1200,
       };
       const persistedRows = [];
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
           async upsertPublication(row) {
+            durablePublicationRow = row;
             persistedRows.push(row);
           },
         },
@@ -526,10 +542,15 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       let upsertCallCount = 0;
       let cacheReadCount = 0;
       let authoritativeReadCount = 0;
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async listPublicationsFromCache() {
             cacheReadCount += 1;
             return {rows: []};
@@ -538,7 +559,8 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             authoritativeReadCount += 1;
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication() {
+          async upsertPublication(row) {
+            durablePublicationRow = row;
             upsertCallCount += 1;
           },
         },
@@ -641,10 +663,18 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         published_at: 1200,
         closed_at: 1200,
       };
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
+          async upsertPublication(row) {
+            durablePublicationRow = row;
+          },
           async listPublications(options = {}) {
             authoritativeReadOptions = options;
             return {rows: [latestPublicationRow]};
@@ -713,39 +743,44 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
   test('acknowledgePublication persists canonical snake_case fields when the latest publication was read from cache',
     async (t) => {
       const persistedRows = [];
+      const cachedPublicationRow = {
+        publicationId: 'publication-13',
+        publicationKind: 'cluster_membership',
+        publicationEpoch: 13,
+        status: 'ACK_PENDING',
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+        requiredAckNodeIds: ['node-1', 'node-2'],
+        acknowledgedNodeIds: ['node-1'],
+        membershipLifecycleSummary: {
+          lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
+          epochBoundary: 'publication_pending',
+        },
+        updatedAt: 1200,
+        createdAt: 1100,
+      };
+      let durablePublicationRow = serializeMembershipPublicationRow(cachedPublicationRow);
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async upsertPublication(row) {
             persistedRows.push(row);
+            durablePublicationRow = row;
           },
         },
       });
-
       await coordinator.acknowledgePublication(
         'publication-13',
         'node-2',
         {
-          publicationRow: {
-            publicationId: 'publication-13',
-            publicationKind: 'cluster_membership',
-            publicationEpoch: 13,
-            status: 'ACK_PENDING',
-            publishedActiveNodeIds: ['node-1', 'node-2'],
-            requiredAckNodeIds: ['node-1', 'node-2'],
-            acknowledgedNodeIds: ['node-1'],
-            membershipLifecycleSummary: {
-              lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
-              epochBoundary: 'publication_pending',
-            },
-            updatedAt: 1200,
-            createdAt: 1100,
-          },
+          publicationRow: cachedPublicationRow,
           nowMs: 1300,
         },
       );
-
       t.equal(persistedRows.length, 1);
       t.match(
         persistedRows[0],
@@ -761,7 +796,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         'acknowledgement writes should preserve canonical system-table field names',
       );
     });
-
   test('acknowledgePublication refreshes the authoritative publication row before persisting acknowledgements',
     async (t) => {
       const persistedRows = [];
@@ -793,7 +827,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           },
         },
       });
-
       await coordinator.acknowledgePublication(
         'publication-14',
         'node-3',
@@ -810,7 +843,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           nowMs: 1400,
         },
       );
-
       t.equal(persistedRows.length, 1);
       t.match(
         persistedRows[0],
@@ -827,7 +859,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
       }, 'acknowledgement refresh should request owner-rpc preferred publication reads');
     });
-
   test('acknowledgePublication unwraps owner read envelopes before persisting acknowledgements',
     async (t) => {
       const persistedRows = [];
@@ -840,6 +871,11 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
         acknowledged_node_ids: ['node-1', 'node-2'],
       };
+      const canonicalRow = serializeMembershipPublicationRow(durableRow);
+      durableRow = Object.fromEntries(CONTROL_PLANE_PUBLICATIONS_SCHEMA.columns.map(({name}) => {
+        const value = canonicalRow[name] ?? null;
+        return [name, value !== null && typeof value === 'object' ? JSON.stringify(value) : value];
+      }));
       const publicationsOwner = new ControlPlanePublicationsOwner({
         controlPlaneSystemTableGateway: {
           async readAuthoritativeRows(_tableName, _sql, params) {
@@ -850,12 +886,15 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
             );
             return {
               success: true,
+              rowSetComplete: true,
               rows: [durableRow],
             };
           },
-          async upsertSystemTableRow(_tableName, row) {
+          async updateSystemTableRow(_tableName, whereClause, row) {
+            t.same(whereClause, durableRow, 'owner update must match the complete exact stored preimage');
             persistedRows.push(row);
-            durableRow = row;
+            durableRow = Object.fromEntries(Object.entries(row).map(([name, value]) =>
+              [name, value !== null && typeof value === 'object' ? JSON.stringify(value) : value]));
           },
         },
       });
@@ -863,7 +902,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         nodeId: 'node-3',
         controlPlanePublicationsOwner: publicationsOwner,
       });
-
       await coordinator.acknowledgePublication(
         'publication-15',
         'node-3',
@@ -880,7 +918,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           nowMs: 1500,
         },
       );
-
       t.equal(persistedRows.length, 1);
       t.match(
         persistedRows[0],
@@ -893,7 +930,6 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         'gateway read envelopes should be unwrapped to their row before acknowledgement persistence',
       );
     });
-
   test('acknowledgePublication does not persist duplicate acknowledgements that are already durable',
     async (t) => {
       let upsertCallCount = 0;

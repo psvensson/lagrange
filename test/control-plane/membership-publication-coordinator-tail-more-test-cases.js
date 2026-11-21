@@ -148,14 +148,20 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         closed_at: 1200,
       };
       let upsertCallCount = 0;
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
-          async upsertPublication() {
+          async upsertPublication(row) {
+            durablePublicationRow = row;
             upsertCallCount += 1;
           },
         },
@@ -962,14 +968,20 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         closed_at: 1200,
       };
       const persistedRows = [];
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
           async upsertPublication(row) {
+            durablePublicationRow = row;
             persistedRows.push(row);
           },
         },
@@ -1125,14 +1137,20 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       };
       const persistedRows = [];
       const readinessRefreshModes = [];
+      let durablePublicationRow = latestPublicationRow;
       const coordinator = new MembershipPublicationCoordinator({
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         nodeId: 'node-1',
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async listPublications() {
             return {rows: [latestPublicationRow]};
           },
           async upsertPublication(row) {
+            durablePublicationRow = row;
             persistedRows.push(row);
           },
         },

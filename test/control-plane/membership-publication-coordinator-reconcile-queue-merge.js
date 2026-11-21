@@ -140,8 +140,9 @@ test('reconcileActiveGateMembershipPublication reports bounded critical queue pr
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication() {
-          return latestPublicationRow;
+        async getPublication(publicationId) {
+          return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
         },
         async upsertPublication(row) {
           return row;
