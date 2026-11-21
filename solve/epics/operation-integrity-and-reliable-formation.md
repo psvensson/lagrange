@@ -201,16 +201,20 @@ Three contracts link the physical symptoms to the current repairs.
   exact current operation authorizes its owner turn.
   [Timeout predecessor outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--timeout-point-matched-predecessors-nov21.tar.gz).
 
-  Target state is a separate decision. The cache visibility suite failed on
-  both adam-laptop and adams-gamla. Its fixture omitted the CDC refresh
-  required to confirm ACTIVE. The two ADD cases retained their nonterminal
-  rows. The PENDING REPLACE committed FAILED after the target read was
-  unavailable. The timeout and placement owners must distinguish complete
-  absence from an unavailable target, preserve terminal and release debt
-  where effects remain possible, and exercise both arrival orders through
-  the real mutation and CDC ports. The retry-grace control also needs to
-  reach the intended owner turn.
-  [Current point-read and cache results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--timeout-current-read-8cee-nov21.tar.gz).
+  A current operation row alone cannot authorize failing a REPLACE while
+  its target is unreadable. With the same test on tv-dator, `cb34fb5ee`
+  recorded FAILED while the target was unavailable. At `12e6388ab`, the
+  row stayed pending during the outage and a wrong-host answer. Once the
+  exact target became ACTIVE and CDC aligned it, the workflow progressed.
+  On the retained terminal-write path, `92849a8ce` also failed a REPLACE
+  while its target was unconfirmed. At `506f8dea7`, all 23 native cases
+  passed, including recovery through the same guarded write once complete
+  target absence was established. Two ADD controls completed when target
+  authority returned but still failed their final cache timestamp check.
+  Verify the source of the canonical service version and that a second
+  unavailable read cannot lose an already-scheduled successor wake.
+  [Matched target and retained repair originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--core-timeout-repair-orders-nov21.tar.gz).
+
 
 The separate 65-file composition run on `3b929de6a` passed 61 files and
 reported 3,100 assertions. The four failures cover the native point-read
@@ -228,8 +232,13 @@ seeding SQLite or intercepted a positional SQL update after the producer had
 moved to conditional mutation ingress. Check both the real conditional
 write and the subsequent durable row when repairing these controls. On
 `52dd113bb`, five focused growth, self-move and replay files passed (406
-assertions). Review still requires the unchanged terminal precondition to
-be observed before the refusal in the hold witness. The strict Quest's
+assertions). The follow-up at `ed5edb513` verified the unchanged terminal
+precondition on both guarded submissions. Both files passed on adams-gamla
+(36 assertions). At `8bcb583ca`, real service queries and a committed
+competing operation restored the source-removal and scheduling controls
+on adam-laptop (two files, 251 assertions). A matched recorder witness on
+tv-dator still counted an idempotent terminal replay as another write.
+[Source-removal and replay originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--source-removal-and-replay-control-nov21.tar.gz). The strict Quest's
 historical receipt remains at four of six obligations.
 [Interrupted managed requests](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-shard-9567-thermal-5519-5520-nov21.tar.gz)
 and [completed classified selections](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict85-9567-and-52dd-controls-nov21.tar.gz).
