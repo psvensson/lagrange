@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2374,
+    "unit": 2375,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-aea63a21",
+  "censusSize": 2734,
+  "digest": "fnv1a32-92bbd04f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2180,6 +2180,7 @@
     "test/rebalancer/timeout-triggers-failure.property.test.js": "unit",
     "test/rebalancer/topology-guard-inventory-authority.test.js": "unit",
     "test/rebalancer/topology-guard-owner-fact-inventory.test.js": "unit",
+    "test/rebalancer/topology-guard-owner-fact-read-point.test.js": "unit",
     "test/rebalancer/topology-owner-contracts.test.js": "unit",
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": "unit",
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": "unit",

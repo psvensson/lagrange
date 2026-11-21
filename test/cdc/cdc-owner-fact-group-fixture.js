@@ -38,27 +38,11 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
 import {OWNER_FACT_UNAVAILABLE_REASON} from
   '../../src/control-plane/control-plane-owner-fact-read-contract.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {releaseIdentityOf} from
-  '../../src/partition/partition-participant-release-contract.js';
-import {PARTICIPANT_CUTOVER_OUTCOME} from
-  '../../src/partition/partition-participant-transaction-cutover-constants.js';
-import {
-  participantCutoverPauseOf,
-  readParticipantReleaseFacts,
-  resumeParticipantCutoverAdmission,
-} from '../../src/partition/partition-participant-transaction-pause.js';
-import {enableParticipantTransactionAdmission} from
-  '../../src/partition/partition-participant-transaction-request.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {QUERY_RESPONSE_TYPE} from '../../src/query/query-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {createDefaultPartitionRequestBuilder} from
   '../../src/query/query-executor-partition-request-builders.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR, RAFT_OPERATION_OUTCOME} from
-  '../../src/raft/raft-operation-port-constants.js';
-import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
-import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {buildDeliveryEnvelope, deliveryAnswerOf} from
@@ -66,7 +50,15 @@ import {buildDeliveryEnvelope, deliveryAnswerOf} from
 import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
-import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
+import {
+  awaitKnownLeader,
+  createHeldRaftNetwork,
+  freshLeaderBehindCommit,
+  isolateFromConsensus,
+  settleGroupLeader,
+  transferGroupLeadership,
+  writeThroughLeader,
+} from '../partition/partition-group-raft-controls.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
@@ -96,24 +88,9 @@ const HOSTED_BY = Object.freeze({
   BOOTSTRAP_AND_HANDLER: 'bootstrap-and-handler',
   HANDLER_ONLY: 'handler-only',
 });
-// The raft messages that tell a follower how far the leader committed.
-const COMMIT_CARRYING = new Set([RAFT_RS_MESSAGE_TYPE.APPEND, RAFT_RS_MESSAGE_TYPE.HEARTBEAT]);
 const REFUSES_CREATION = () => {
   throw new Error('the read fixture creates no replica');
 };
-
-// The handler a member's release facts are read through (the hosted-service
-// identity the release owner checks).
-function releaseHandlerOf(service) {
-  return {nodeId: service.nodeId, ownerIncarnation: 1,
-    localServices: new Map([[service.replicaId, service]])};
-}
-
-function hasAppliedItsCommit(service) {
-  const status = service.raft.readStatus();
-  return Number.isSafeInteger(status.commitIndex) &&
-    status.commitIndex === status.appliedIndex;
-}
 
 /**
  * The owner-fact request the read arms send a replica, built by the query
@@ -130,22 +107,6 @@ function ownerFactRequestTo(service, params) {
     },
     forRead: true, params, partitionId: service.partitionId, sql: READ_SQL,
   })();
-}
-
-function createHeldRaftNetwork() {
-  const network = createLoopbackTransport();
-  const deliver = network.deliver.bind(network);
-  let holds = () => false;
-  network.deliver = async (address, payload, options) => (holds(address, payload) ?
-    buildDeliveryEnvelope({acknowledged: false, noHandler: true}) :
-    deliver(address, payload, options));
-  return {
-    network,
-    hold(predicate) {
-      const previous = holds;
-      holds = (address, payload) => previous(address, payload) || predicate(address, payload);
-    },
-  };
 }
 
 /**
@@ -187,7 +148,6 @@ async function openLedgerGroupSurface(t, testFileUrl) {
   const serviceOfNode = (nodeId) => services[NODES.indexOf(nodeId)];
   const nodeOfAddress = (address) =>
     services.find((service) => service.unifiedAddress === address)?.nodeId ?? null;
-  const peerOf = (service) => String(service.raft.readStatus().peerId);
   for (const service of services) {
     const router = new MessageRouter({
       nodeId: service.nodeId, wsPort: ports.getPort(), inProcess: true,
@@ -326,55 +286,12 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     };
   }
 
-  async function transferLeadership(from, to) {
-    const requested = await turnChainValue(from.requestLeadershipTransfer({
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId,
-    }));
-    assert.equal(requested.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-      `setup: the transfer was accepted (${JSON.stringify(requested)})`);
-    assert.equal(await group.waitFor(() =>
-      from.raft.readStatus().role === RAFT_ROLE.FOLLOWER &&
-      to.raft.readStatus().role === RAFT_ROLE.LEADER &&
-      to.role === RAFT_ROLE.LEADER && hasAppliedItsCommit(to)), true,
-    'setup: actual Raft leadership transferred and the new leader applied its commit');
-  }
-
-  // The group's write path, opened as the participant release owner opens
-  // it: the generation origin committed, then one release resumed on the
-  // leader over the census of every member.
-  async function openWriteAdmission(leader) {
-    if (participantCutoverPauseOf(leader) === null) return;
-    const enabled = await enableParticipantTransactionAdmission(leader);
-    assert.equal(enabled?.success, true,
-      `setup: the leader committed the participant origin (${JSON.stringify(enabled)})`);
-    let census = [];
-    assert.equal(await group.waitFor(async () => {
-      census = await Promise.all(services.map((service) =>
-        readParticipantReleaseFacts(releaseHandlerOf(service), service)));
-      return census.every((facts) =>
-        facts.outcome === PARTICIPANT_CUTOVER_OUTCOME.OBSERVED &&
-        facts.origin !== null && facts.leaderReplicaId === leader.replicaId);
-    }), true, 'setup: every member observes the origin and the leader');
-    const local = census[services.indexOf(leader)];
-    const release = releaseIdentityOf({partitionId: PARTITION,
-      targetBuildDigest: local.buildDigest,
-      configurationKey: local.membership.configurationKey,
-      membershipGenerationIndex: local.membership.membershipGenerationIndex});
-    const outcome = await resumeParticipantCutoverAdmission(releaseHandlerOf(leader), leader,
-      {release, census});
-    assert.equal(outcome, PARTICIPANT_CUTOVER_OUTCOME.RESUMED,
-      `setup: the leader's write path opened (${JSON.stringify(outcome)})`);
-  }
+  const transferLeadership = (from, to) => transferGroupLeadership(group, from, to);
 
   // A raft write through the leader; answers the applied index it reached.
-  async function writeRow(leader, operationId) {
-    await openWriteAdmission(leader);
-    const written = await leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
-      {entryId: `owner-fact-write-${operationId}`});
-    assert.equal(written?.success, true,
-      `setup: the leader committed the row (${JSON.stringify(written)})`);
-    return leader.raft.readStatus().appliedIndex;
-  }
+  const writeRow = (leader, operationId) => writeThroughLeader(group, leader, {
+    sql: INSERT_SQL, params: [operationId, leader.replicaId],
+    entryId: `owner-fact-write-${operationId}`});
 
   return {
     services,
@@ -405,62 +322,13 @@ async function openLedgerGroupSurface(t, testFileUrl) {
         {timeoutMs: READ_TIMEOUT_MS, deliveryPriority: 'critical'});
       return deliveryAnswerOf(delivery);
     },
-    async awaitKnownLeader(service, leader) {
-      assert.equal(await group.waitFor(() =>
-        service.raft.readStatus().leaderId === leader.replicaId), true,
-      `setup: ${service.replicaId} knows ${leader.replicaId} leads`);
-    },
-    async settleLeader(service) {
-      assert.equal(await group.waitFor(() => {
-        const status = service.raft.readStatus();
-        return status.role === RAFT_ROLE.LEADER && service.role === RAFT_ROLE.LEADER &&
-          status.confChangePending === false && hasAppliedItsCommit(service);
-      }), true, 'setup: the leader has applied its election log and everything it committed');
-    },
-    /**
-     * Make `to` a leader that holds, unapplied, a row `from` committed, and
-     * that cannot commit an entry of its own term: `to` receives the row's
-     * entry but no message telling it the entry committed, and, once it
-     * leads, none of its appends leave it. Heartbeats still flow, so it keeps
-     * its quorum contact and stays leader.
-     * @param {Object} from - The current leader.
-     * @param {Object} to - A follower.
-     * @param {string} operationId - The row's key.
-     * @return {Promise<Object>} {committedIndex}: the row's log index.
-     */
-    async freshLeaderBehindCommit(from, to, operationId) {
-      const fromPeer = peerOf(from);
-      const toPeer = peerOf(to);
-      await openWriteAdmission(from);
-      const committedIndex = from.raft.readStatus().lastIndex + 1;
-      raft.hold((_address, packet) => String(packet?.from) === fromPeer &&
-        String(packet?.to) === toPeer && COMMIT_CARRYING.has(packet?.message?.msgType) &&
-        Number(packet.message.commit) >= committedIndex);
-      assert.equal(await writeRow(from, operationId) >= committedIndex, true,
-        'setup: the row committed at the expected index');
-      assert.equal(await group.waitFor(() => {
-        const status = to.raft.readStatus();
-        return status.lastIndex >= committedIndex && status.commitIndex < committedIndex;
-      }), true, 'setup: the follower holds the entry and does not know it committed');
-      raft.hold((_address, packet) => String(packet?.from) === toPeer &&
-        packet?.message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND);
-      await transferLeadership(from, to);
-      const status = to.raft.readStatus();
-      assert.equal(status.confChangePending, true,
-        'setup: the new leader has not applied the log it held when elected');
-      assert.equal(status.commitIndex < committedIndex, true,
-        'setup: the new leader has not applied the row its predecessor committed');
-      return {committedIndex};
-    },
+    awaitKnownLeader: (service, leader) => awaitKnownLeader(group, service, leader),
+    settleLeader: (service) => settleGroupLeader(group, service),
+    // A leader holding, unapplied, the row `from` committed (shared control).
+    freshLeaderBehindCommit: (from, to, operationId) => freshLeaderBehindCommit(group, raft,
+      {from, to, write: () => writeRow(from, operationId)}),
     // Cut a replica off from all consensus traffic until it names no leader.
-    async isolateFromConsensus(service) {
-      const peer = peerOf(service);
-      raft.hold((_address, packet) =>
-        String(packet?.from) === peer || String(packet?.to) === peer);
-      assert.equal(await group.waitFor(() =>
-        service.raft.readStatus().leaderId === null), true,
-      'setup: the isolated replica knows no leader');
-    },
+    isolateFromConsensus: (service) => isolateFromConsensus(group, raft, service),
   };
 }
 

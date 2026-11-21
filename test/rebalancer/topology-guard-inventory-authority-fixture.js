@@ -37,8 +37,11 @@
 // holds the planner's services-p1 replica, as bootstrap attaches it, so the
 // CDC service's in-process read arm consults the production owner of the
 // replicas the node hosts.
-// Consensus traffic between the replicas runs on the group fixture's
-// loopback. The SERVICES table content is seeded into each replica's
+// Consensus traffic between the replicas runs on a loopback transport whose
+// messages a case can hold back and release (partition-group-raft-controls.js:
+// a fresh leader behind its predecessor's commit, raft writes through the
+// leader, leadership transfer); a case may also hold the leader's statement
+// after it ran. The SERVICES table content is seeded into each replica's
 // database directly (it is table content, not the subject). The planner's
 // cache carries the published shape: partition SERVICES rows from the
 // production row builder (which publishes every partition replica as a
@@ -70,9 +73,6 @@ import {deriveParticipantEntryId} from
   '../../src/query/distributed/distributed-write-coordinator.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR, RAFT_OPERATION_OUTCOME} from
-  '../../src/raft/raft-operation-port-constants.js';
-import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {ENTITY_SERVICE_ROW_READ_SQL} from
   '../../src/rebalancer/entity-service-row-read.js';
 import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
@@ -86,6 +86,14 @@ import {serializeServiceDefinition} from '../../src/wasm-service/wasm-service-mo
 import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
+import {
+  awaitKnownLeader,
+  createHeldRaftNetwork,
+  freshLeaderBehindCommit,
+  settleGroupLeader,
+  transferGroupLeadership,
+  writeThroughLeader,
+} from '../partition/partition-group-raft-controls.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {
   buildMockPolicyAuthorityWitness,
@@ -192,11 +200,35 @@ function buildPlannerAddMove() {
   };
 }
 
-function insertTableRow(db, tableName, row) {
+// One SERVICES row as an INSERT statement over the table's own columns.
+function servicesRowInsert(row) {
   const entries = Object.entries(row).filter(([column, value]) =>
     SERVICES_COLUMNS.has(column) && value !== undefined);
-  db.prepare(`INSERT INTO ${tableName} (${entries.map(([column]) => column).join(', ')}) ` +
-    `VALUES (${entries.map(() => '?').join(', ')})`).run(...entries.map(([, value]) => value));
+  return {sql: `INSERT INTO ${SYSTEM_TABLE_NAME.SERVICES} ` +
+    `(${entries.map(([column]) => column).join(', ')}) ` +
+    `VALUES (${entries.map(() => '?').join(', ')})`,
+  params: entries.map(([, value]) => value)};
+}
+
+function insertTableRow(db, row) {
+  const {sql, params} = servicesRowInsert(row);
+  db.prepare(sql).run(...params);
+}
+
+// Hold the next statement a replica executes, after it ran, until released
+// (an event can then land while the read is in flight).
+function holdNextStatementAfterRead(replica) {
+  const original = replica.executeQuery;
+  const entered = Promise.withResolvers();
+  const released = Promise.withResolvers();
+  replica.executeQuery = async function heldOnce(...args) {
+    replica.executeQuery = original;
+    const result = await original.apply(replica, args);
+    entered.resolve();
+    await released.promise;
+    return result;
+  };
+  return {entered: entered.promise, release: () => released.resolve()};
 }
 
 // The production publication of one partition replica's SERVICES row.
@@ -264,7 +296,9 @@ function countReplicaReads(replica) {
 async function openServicesWorld({leaderNodeId, ports}) {
   const memberOrder = [leaderNodeId,
     ...NODE_ORDER.filter((nodeId) => nodeId !== leaderNodeId)];
+  const raft = createHeldRaftNetwork();
   const group = await formAdmittedGroup({
+    transport: raft.network,
     partitionId: SERVICES_PARTITION_ID,
     members: memberOrder.map((nodeId) => [REPLICA_ID_BY_NODE[nodeId], nodeId]),
     tempPrefix: GROUP_TEMP_PREFIX,
@@ -300,7 +334,7 @@ async function openServicesWorld({leaderNodeId, ports}) {
     const publishedRows = group.services.map(publishedPartitionRow);
     for (const replica of group.services) {
       for (const row of publishedRows) {
-        insertTableRow(replica.db, SYSTEM_TABLE_NAME.SERVICES, row);
+        insertTableRow(replica.db, row);
       }
     }
     const replicaOn = (nodeId) => group.services.find((replica) =>
@@ -314,26 +348,34 @@ async function openServicesWorld({leaderNodeId, ports}) {
       connectionStateOf: (nodeId) =>
         routers.get(NODE.PLANNER).getConnectionState(nodeId),
       // A row the leader holds that the lagging replicas do not.
-      seedLeaderOnlyRow: (row) => insertTableRow(
-        replicaOn(leaderNodeId).db, SYSTEM_TABLE_NAME.SERVICES, row),
+      seedLeaderOnlyRow: (row) => insertTableRow(replicaOn(leaderNodeId).db, row),
+      // A row every replica holds (table content, not raft history).
+      seedRowOnAll: (row) => group.services.forEach((replica) =>
+        insertTableRow(replica.db, row)),
+      // The leader's copy of a row changes status; the others' do not.
+      setLeaderRowStatus: (serviceId, status) => replicaOn(leaderNodeId).db.prepare(
+        `UPDATE ${SYSTEM_TABLE_NAME.SERVICES} SET status = ? WHERE service_id = ?`)
+        .run(status, serviceId),
+      // A SERVICES row committed through raft by the replica that leads.
+      writeRowThroughLeader: (nodeId, row, entryId) => writeThroughLeader(group,
+        replicaOn(nodeId), {...servicesRowInsert(row), entryId}),
+      // `toNodeId` leads, holding unapplied the row `fromNodeId` committed
+      // (partition-group-raft-controls.js); releaseRaftHolds() ends it.
+      freshLeaderBehindCommit: (fromNodeId, toNodeId, row, entryId) =>
+        freshLeaderBehindCommit(group, raft, {from: replicaOn(fromNodeId),
+          to: replicaOn(toNodeId), write: () => writeThroughLeader(group,
+            replicaOn(fromNodeId), {...servicesRowInsert(row), entryId})}),
+      releaseRaftHolds: () => raft.release(),
+      settleLeader: (nodeId) => settleGroupLeader(group, replicaOn(nodeId)),
+      holdNextStatementAfterRead: (nodeId) => holdNextStatementAfterRead(replicaOn(nodeId)),
       tableRowsOn: (nodeId, sql, params = []) =>
         replicaOn(nodeId).db.prepare(sql).all(...params),
       readCountsOf: (nodeId) => Object.freeze({...readCounts.get(nodeId)}),
-      // Actual raft leadership moves; no projection is told.
+      // Actual raft leadership moves, and the deposed replica learns its
+      // successor; no projection is told.
       async transferLeadership(fromNodeId, toNodeId) {
-        const from = replicaOn(fromNodeId);
-        const to = replicaOn(toNodeId);
-        const requested = await turnChainValue(from.requestLeadershipTransfer({
-          successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-          replicaIdentity: to.replicaId}));
-        if (requested?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-          throw new Error(`setup: transfer refused ${JSON.stringify(requested)}`);
-        }
-        const moved = await group.waitFor(() =>
-          from.raft.readStatus().role === RAFT_ROLE.FOLLOWER &&
-          to.raft.readStatus().role === RAFT_ROLE.LEADER &&
-          from.raft.readStatus().leaderId === to.replicaId);
-        if (!moved) throw new Error('setup: services-p1 leadership did not move');
+        await transferGroupLeadership(group, replicaOn(fromNodeId), replicaOn(toNodeId));
+        await awaitKnownLeader(group, replicaOn(fromNodeId), replicaOn(toNodeId));
       },
       close,
     });
@@ -351,13 +393,16 @@ function seedReadyNodes(cache) {
   }
 }
 
-function seedPlannerCache(cache, world) {
+function seedPlannerCache(cache, world, {publishedLeaderNodeId, publishedRows, ledgerRows}) {
   cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     partition_id: SERVICES_PARTITION_ID,
     table_id: SYSTEM_TABLE_NAME.SERVICES,
-    leader_node_id: world.leaderNodeId,
+    leader_node_id: publishedLeaderNodeId,
   });
-  for (const row of world.publishedRows) {
+  for (const row of ledgerRows) {
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, CDC_OPERATION.INSERT, row);
+  }
+  for (const row of [...world.publishedRows, ...publishedRows]) {
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, row);
   }
   cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, CDC_OPERATION.INSERT, {
@@ -518,15 +563,19 @@ function openPlannerTurn(t, host, {clock, scheduledRetry = true}, rebalancers) {
  * The planner node's owners for one case, on the world's services-p1 group.
  * @param {Object} t - The case's tap test (owns the teardown).
  * @param {Object} world - openServicesWorld().
- * @param {Object} [options] - {unreachableNodeIds, readyNodes}: nodes whose
- *   hop refuses (setReachable changes it later); whether the host's cache
- *   publishes the three nodes as ready.
+ * @param {Object} [options] - {unreachableNodeIds, readyNodes,
+ *   publishedLeaderNodeId, publishedRows, ledgerRows}: nodes whose hop
+ *   refuses (setReachable changes it later); whether the host's cache
+ *   publishes the three nodes as ready; the services-p1 leader its cache
+ *   publishes (default the world's); further SERVICES rows its cache holds;
+ *   replica_operations rows its ledger and cache start with.
  * @return {Object} The host.
  */
-function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false} = {}) {
+function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
+  publishedLeaderNodeId = world.leaderNodeId, publishedRows = [], ledgerRows = []} = {}) {
   const observed = {servicesReads: [], ownerRpc: [], hops: [], engineRefusals: []};
   const cache = new SystemTableCache();
-  seedPlannerCache(cache, world);
+  seedPlannerCache(cache, world, {publishedLeaderNodeId, publishedRows, ledgerRows});
   if (readyNodes) seedReadyNodes(cache);
   const store = createCoordinatorSqlStore(cache);
   let ledgerLogIndex = 0;
