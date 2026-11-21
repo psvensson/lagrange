@@ -72,7 +72,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         return this.readAuthoritativeRows(tableName, sql, params, options);
       },
       async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
-        authoritativeReadCalls.push({tableName, sql, options});
+        authoritativeReadCalls.push({tableName, sql, params, options});
         if (tableName === 'replica_operations' &&
             options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
           return {success: false, error: 'owner-rpc-read-failed'};
@@ -172,14 +172,14 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       ),
       'observed progress should stay on the non-strict local owner read path',
     );
-    t.ok(
-      authoritativeReadCalls.every((call) =>
-        call.tableName !== 'replica_operations' ||
-      call.options.authoritativeReadMode !==
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      ),
-      'observed progress should not widen replica_operations reads to strict owner-rpc',
-    );
+    const strictOperationReads = authoritativeReadCalls.filter((call) =>
+      call.tableName === 'replica_operations' &&
+      call.options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+    t.ok(strictOperationReads.length > 0,
+      'the owner attempts the optional strict check for a more advanced REPLACE winner');
+    t.ok(strictOperationReads.every((call) => call.sql.includes('operation_id = ?') &&
+      call.params[0] === operationRow.operation_id),
+    'the strict winner check remains scoped to this operation');
   });
 
   test('observed progress prefers local authoritative target status over ' +
