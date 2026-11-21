@@ -1,3 +1,6 @@
+import {clearTerminalTransitionRepair} from './operation-workflow-terminal-transition-repair.js';
+import {assertOperationUpdateRecord, assertOperationUpdateSubject} from
+  './replica-operation-update-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
@@ -164,6 +167,24 @@ function withObservedProgressRetention(Base) {
           Math.min(existing.deadlineMs, incoming.deadlineMs) :
           incoming.deadlineMs;
       }
+    }
+
+    retainGuardedCreateAdmission(expected, observed) {
+      // Placement planning does not claim target execution. Require the actual
+      // admission column that prevented the guarded terminal SQL from applying.
+      if (observed?.createAdmissionState == null ||
+          observed.completedAt !== null || observed.createdAt !== expected.createdAt) return false;
+      assertOperationUpdateRecord(observed);
+      assertOperationUpdateSubject(expected, observed);
+      const operationId = observed.operationId;
+      const scheduled = this.scheduleObservedProgressRetry(operationId, SYSTEM_TABLE_NAME.SERVICES,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT);
+      if (!scheduled) return false;
+      const repair = this.terminalTransitionRepairStateByOperationId.get(operationId);
+      if (repair?.persistOptions?.requireCreateAdmissionAbsent === true) {
+        clearTerminalTransitionRepair(this, operationId);
+      }
+      return true;
     }
 
     scheduleObservedProgressRetry(

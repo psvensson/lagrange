@@ -751,10 +751,16 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         timeoutClassification,
       });
 
-      await this.failOperation(
+      const timeoutCreateAdmissionFence = operation.type === OperationType.ADD &&
+        operation.entityType === UNIFIED_SERVICE_TYPE.PARTITION;
+      const outcome = await this.failOperation(
         operation,
         `Timeout in ${operation.workflowStep} step ` + `after ${elapsed}ms`,
         {
+          ...(timeoutCreateAdmissionFence ? {
+            requireCreateAdmissionAbsent: true,
+            deferWhenCreateAdmissionWins: true,
+          } : {}),
           stepMetadata: {
             timeoutClassification,
             timeoutMs: stepTimeout,
@@ -765,6 +771,10 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         },
       );
 
+      if (timeoutCreateAdmissionFence && outcome?.createAdmissionWon === true &&
+          this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation)) {
+        return OPERATION_RECONCILE_OUTCOME.WAITING;
+      }
       this.stats.operationsTimedOut++;
     }
   }

@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 288,
+    "placement-rebalance": 289,
     "query-sql": 205,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2709,
-  "digest": "fnv1a32-595f0ee2",
+  "censusSize": 2710,
+  "digest": "fnv1a32-1c8a203b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e5d9412b",
+  "observationDigest": "fnv1a32-1c588ffe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1950,6 +1950,7 @@
     "test/rebalancer/coordinator-reused-operation-rearm-guard.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-shared-readiness-policy.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-timeout-check-serialization.test.js": "placement-rebalance",
+    "test/rebalancer/create-timeout-admission-cas.integration.test.js": "placement-rebalance",
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": "placement-rebalance",
     "test/rebalancer/critical-topology-committed-lease.test.js": "placement-rebalance",
     "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js": "placement-rebalance",
@@ -18228,6 +18229,38 @@
     "test/rebalancer/coordinator-timeout-check-serialization.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway-constants.js"
+      ]
+    },
+    "test/rebalancer/create-timeout-admission-cas.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": {

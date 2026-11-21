@@ -555,6 +555,12 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
   if (isPartitionAdd(projectedOperation) &&
       projectedOperation.workflowStep === WORKFLOW_STEP.FAILED) {
     if (!durableOperation) return Object.freeze({admitted: false, persistOptions});
+    if (persistOptions.requireCreateAdmissionAbsent === true &&
+        owner.retainGuardedCreateAdmission(projectedOperation, durableOperation)) {
+      // The retained compare-and-set cannot succeed against real admission.
+      // The observed-progress owner now tracks the existing admitted CREATE.
+      return Object.freeze({admitted: false, persistOptions});
+    }
     return admitFailedAddTerminalRepair(
       owner, durableOperation, projectedOperation, persistOptions);
   }

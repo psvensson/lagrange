@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2683,
+    "ordinary": 2684,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2709,
-  "digest": "fnv1a32-18e4568b",
+  "censusSize": 2710,
+  "digest": "fnv1a32-a5772cc7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1930,6 +1930,7 @@
     "test/rebalancer/coordinator-reused-operation-rearm-guard.test.js": "ordinary",
     "test/rebalancer/coordinator-shared-readiness-policy.test.js": "ordinary",
     "test/rebalancer/coordinator-timeout-check-serialization.test.js": "ordinary",
+    "test/rebalancer/create-timeout-admission-cas.integration.test.js": "ordinary",
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": "ordinary",
     "test/rebalancer/critical-topology-committed-lease.test.js": "ordinary",
     "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js": "ordinary",

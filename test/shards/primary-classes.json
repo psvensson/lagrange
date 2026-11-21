@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2352,
-    "integration": 124,
+    "integration": 125,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2709,
-  "digest": "fnv1a32-6538070a",
+  "censusSize": 2710,
+  "digest": "fnv1a32-186c382e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1931,6 +1931,7 @@
     "test/rebalancer/coordinator-reused-operation-rearm-guard.test.js": "unit",
     "test/rebalancer/coordinator-shared-readiness-policy.test.js": "unit",
     "test/rebalancer/coordinator-timeout-check-serialization.test.js": "unit",
+    "test/rebalancer/create-timeout-admission-cas.integration.test.js": "integration",
     "test/rebalancer/critical-spread-terminal-stall-repro.test.js": "unit",
     "test/rebalancer/critical-topology-committed-lease.test.js": "unit",
     "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js": "unit",
