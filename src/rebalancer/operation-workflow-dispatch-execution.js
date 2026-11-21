@@ -419,13 +419,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     }
     const unscopedRemoval = await reconcileUnscopedPlacementRemoval(this, operation);
     if (unscopedRemoval !== null) return unscopedRemoval;
-    // The durable waiter is registered at creation, but physical dispatch is
-    // forbidden until this last responsible moment proves the ledger idle
-    // cluster-wide. This runs on EVERY dispatch entry of a PENDING ledger
-    // self-move — including the dispatch-wake preemption route below, whose
-    // reconcile claims PENDING itself — before every reservation/epoch gate
-    // and before PENDING is claimed into SENDING (where the interlock hold
-    // engages). It is a no-op for every other operation.
+    // Before any PENDING claim, a ledger move must prove cluster-wide idle.
     const ledgerSelfMoveIdleSkip =
       await this.ensureOperationLedgerSelfMoveDispatchIdleOrSkip(operation);
     if (ledgerSelfMoveIdleSkip) {

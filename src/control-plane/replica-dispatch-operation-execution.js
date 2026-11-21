@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from '../rebalancer/operation-workflow-reconcile-outcome.js';
+import {isTerminalReplicaOperationRecord} from '../rebalancer/replica-operation-progress.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {
   buildDispatchReadinessGateError,
@@ -175,7 +177,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
     if (!row || !row.operation_id) {
       return;
     }
-    if (!isCoordinatorOwnedOperationType(row.type)) {
+    if (!isCoordinatorOwnedOperationType(row.type) || isTerminalReplicaOperationRecord(row)) {
       return;
     }
     if (this.isBootstrapTopologyDispatchDeferred(row)) {
@@ -323,6 +325,8 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
         if (this.isTerminalDispatchResult(dispatchResult)) {
           this.clearDeferredOperationDispatchRetry(operationId);
           this.dispatchFailureSignaturesByOperationId.delete(operationId);
+          if (dispatchResult?.terminal === true && dispatchResult.operationId === operationId &&
+              dispatchResult.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.SUPERSEDED) return;
           this.recordDispatchFailure({
             operationId,
             targetNodeId,

@@ -505,8 +505,11 @@ class OperationWorkflowOwnerExecutionLane
       return this.buildSuccessfulOperationResult(operationId,
         {...extra, reconcileOutcome: outcome.reconcileOutcome});
     }
-    return this.buildSkippedOperationResult(outcome.reconcileOutcome, operationId,
-      {reconcileOutcome: outcome.reconcileOutcome});
+    return this.buildSkippedOperationResult(outcome.reconcileOutcome, operationId, {
+      reconcileOutcome: outcome.reconcileOutcome,
+      ...(outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.SUPERSEDED ?
+        {terminal: true} : {}),
+    });
   }
 
   /**

@@ -64,7 +64,7 @@ async function observesCurrentRisk(handler, scope, row) {
   return node[COLUMN.NODE_ID] === scope.targetNodeId &&
     node[COLUMN.BOOT_INCARNATION] === scope.nodeBootIncarnation && relevantLoss &&
     isCatchupLearnerRaftRole(row[COLUMN.RAFT_ROLE]) ?
-    LEARNER_LIFECYCLE_CUSTODY.ACQUIRED : LEARNER_LIFECYCLE_CUSTODY.CHANGED;
+    LEARNER_LIFECYCLE_CUSTODY.ACQUIRED : LEARNER_LIFECYCLE_CUSTODY.UNKNOWN;
 }
 
 async function readAdmittedRemoval(handler, scope) {

@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {DISPATCH_EVENT} from '../../../src/control-plane/replica-dispatch-service-constants.js';
+import {createService as createReplicaDispatchService} from
+  '../../control-plane/replica-dispatch-node-state-update-test-support.js';
 import {REPLICA_OPERATIONS_SCHEMA, SERVICES_SCHEMA} from '../../../src/bootstrap/system-table-schemas-constants.js';
 import {generateCreateTableSQL} from '../../../src/bootstrap/system-table-schema-sql.js';
 import {SERVICE_TYPE, STATE, TABLES, WORKFLOW_STEP} from '../../../src/constants/index.js';
@@ -209,6 +212,45 @@ function openDispatchOwner({source, rows, removal, nodes, cluster, deliveries,
   return coordinator;
 }
 
+async function dispatchHistoricalRowThroughReplicaDispatch(coordinator, operation) {
+  const dispatched = coordinator.dispatchOperation.bind(coordinator);
+  let result;
+  coordinator.dispatchOperation = async (...args) => {
+    result = await dispatched(...args);
+    return result;
+  };
+  let visibilityReads = 0;
+  const ready = (nodeId, {decisionDimension}) => ({
+    nodeId, observedAt: new Date().toISOString(),
+    dimensions: {[decisionDimension]: true}, reasons: [],
+  });
+  const service = createReplicaDispatchService({
+    nodeId: SEED,
+    rebalanceCoordinator: coordinator,
+    controlPlaneReadinessService: {getNodeReadinessSync: ready, getNodeReadiness: ready},
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(table) {
+        if (table === TABLES.REPLICA_OPERATIONS) visibilityReads += 1;
+        return {success: false, error: 'post-dispatch visibility temporarily unavailable'};
+      },
+    },
+  });
+  const events = [];
+  service.on(DISPATCH_EVENT.OPERATION_DISPATCHED, (event) => events.push(event));
+  service.on(DISPATCH_EVENT.OPERATION_FAILED, (event) => events.push(event));
+  try {
+    await service.dispatchOperationRow(operation);
+    assert.equal(result?.terminal, true, 'the real workflow returned neutral durable terminal');
+    assert.equal(visibilityReads, 0, 'terminal result needs no visibility recovery');
+    assert.deepEqual(events, [], 'supersession is neither successful dispatch nor failure');
+    assert.equal(service.operationDispatchDeferredRetries.size, 0);
+    return result;
+  } finally {
+    service.stop();
+    coordinator.dispatchOperation = dispatched;
+  }
+}
+
 async function deliverCommittedSourceChange(source, cluster) {
   const deliver = rowDrivenRetirements({cluster, partitionId: cluster.partitionId,
     replicaIds: [...cluster.replicaIds], logger: QUIET_LOGGER});
@@ -314,7 +356,9 @@ for (const schedule of ['undispatched', 'dispatched', 'concurrent dispatch claim
           return persist(operation, options);
         };
       }
-      const dispatch = coordinator.dispatchOperation(historical);
+      const dispatch = schedule === 'undispatched' ?
+        dispatchHistoricalRowThroughReplicaDispatch(coordinator, historical) :
+        coordinator.dispatchOperation(historical);
       try {
         if (concurrentClaim) {
           const options = await waitForHeldRequest(supersessionReached);
@@ -740,7 +784,8 @@ async function waitForHeldRequest(entered) {
   }
 }
 
-for (const change of ['boot', 'service birth']) {
+for (const change of ['boot', 'service birth', 'missing service', 'older service',
+  'foreign host', 'ordinary lifecycle version']) {
   test(`a held native proposal cannot overtake a committed newer ${change}`,
     {timeout: 7000}, async (t) => withPlacementLeaseAuthority(async (context) => {
       const {cluster, initial, nodes, clock} = context;
@@ -775,16 +820,29 @@ for (const change of ['boot', 'service birth']) {
             row.connection_state === STATE.READY);
           await assertDurableRejoinStorageAdmission(source.handler.replicaStateMachine,
             restoreAuthorityOf(target));
+        } else if (change === 'missing service') {
+          leader.lifecycleStore.durable.services.delete(target.replica_id);
         } else {
-          const next = {...target, created_at: target.created_at + 1};
+          const next = {...target};
+          if (change === 'service birth') next.created_at += 1;
+          if (change === 'older service') next.created_at -= 1;
+          if (change === 'foreign host') next.node_id = 'foreign-host';
+          if (change === 'ordinary lifecycle version') next.state_entered_at += 1;
           leader.lifecycleStore.durable.services.set(target.replica_id, next);
-          coordinator.repository.systemTableCache.upsert(TABLES.SERVICES, next);
         }
         resume.resolve();
-        await run;
+        const result = await run;
+        const current = await coordinator.getOperation(removal.operation_id);
+        if (change === 'boot' || change === 'service birth') {
+          assert.equal(result.terminal, true);
+          assert.equal(current.workflowStep, WORKFLOW_STEP.SUPERSEDED);
+        } else {
+          assert.equal(current.completedAt, null);
+          assert.equal(current.workflowStep, WORKFLOW_STEP.SENDING);
+        }
         const peer = peerIdOf(cluster, SEED_REPLICA, initial.replica_id);
         const retained = appliedStateOf(cluster, SEED_REPLICA).learners.includes(peer);
-        t.diagnostic(JSON.stringify({change, node: nodes.nodeRow(), retained, deliveries}));
+        t.diagnostic(JSON.stringify({change, result, node: nodes.nodeRow(), retained, deliveries}));
         assert.equal(retained, true, 'a newer committed authority retained the native member');
         assert.equal(source.serviceChanges.some((row) =>
           row.status !== ReplicaStatus.ACTIVE || row.cleanup_token !== null), false);
