@@ -1,0 +1,306 @@
+# W1b transition record: placement settled-outcome replay and its persisted format
+
+Status: STAGE 1 (facts, witnesses, recommendation). No source change made.
+Stage 2 waits for the lead's ruling (section 6).
+
+- Worktree / branch: `/mnt/data/peter/projects/.worktrees/placement-outcome-format-20261121`,
+  `work/placement-outcome-format-20261121`, created at `0993265e5`.
+- Witness commit (pushed): `645c70cf1d13d2510d27c8a0715f433c4b48ff5a`.
+- Steering loaded: `CLAUDE.md`, `docs/steering/rules.md` (rule set revision 5,
+  last_reviewed 2026-11-13), `docs/steering/router.md`,
+  `architecture/contracts/authority-and-recovery.md`,
+  `docs/steering/workflow-guidelines/solver-quests.md` (Contract-first owner work +
+  checklist), `test/guidelines/INDEX.md`.
+- Labels: **[exec]** = executed (where, sha); **[read]** = read-only (source,
+  git history, docs).
+
+## 1. Facts
+
+### 1.1 Where the outcome row lives [read]
+
+- There is no placement-owned table or column. The row is one row of the
+  shared committed-statement outcome table `_partition_statement_outcomes`,
+  owned by the committed-statement outcome owner:
+  `src/partition/partition-committed-statement-outcome-constants.js:22-51`
+  (`entry_key TEXT PRIMARY KEY, outcome, log_index, term, failure_code,
+  failure_message, changes INTEGER, last_insert_rowid INTEGER,
+  owner_result_text TEXT`, all result columns nullable).
+- The key is `entry:<entryId>` for every committed command on the partition
+  (`partition-committed-statement-outcome.js:86-89`): SQL statements,
+  placement commands, CDC/participant/formation/coordinator commands all share
+  the namespace of one partition.
+- The placement owner writes its result as `owner_result_text` and its
+  command identity ("fingerprint") into the GENERIC `last_insert_rowid`
+  column: `src/partition/partition-placement-admission.js:296-299`
+  (`result: {changes: rows.length, lastInsertRowid: commandFingerprintOf(command)}`).
+  The fingerprint is the first 48 bits of `sha256("<type>:<bodyText>")`
+  (`partition-placement-admission.js:59-64`). The generic owner's contract for
+  that column is the nullable insert-result contract
+  (`partition-committed-statement-outcome.js:35-46`: "a consumer reads null as
+  'no inserted-row identity', never as a row id"). The formation owner
+  overloads the same column the same way
+  (`src/control-plane/membership-publication-formation-transition-command.js:470-475, 713-722`).
+- Store-open steps today (`src/partition/partition-service-raft-init-base.js:242-252`):
+  `detectLegacyPartitionConsensusState` (read-only, typed refusal to start on
+  retired-backend content), then `createCommittedStatementOutcomeTable`
+  (`partition-committed-statement-outcome.js:123-134`: `CREATE TABLE IF NOT
+  EXISTS` plus an `ADD COLUMN` presence loop for `changes`,
+  `last_insert_rowid`, `owner_result_text` that leaves old rows NULL; added in
+  `54dd2d7ce`, 0.2.6), then `openParticipantTransactionStore`.
+- Snapshot install adopts an image by creating a replacement PartitionService
+  on the same `dbPath` (`src/raft/snapshot-catchup.js:379-391`,
+  `src/partition/partition-reopen-options.js`), so it passes the same store-open
+  steps. Images carry `_partition_statement_outcomes`
+  (`src/raft/snapshot-application-content.js:86-96`).
+
+### 1.2 History of the identity column [read]
+
+| Commit | Date (+0100) | Fact |
+| --- | --- | --- |
+| `54dd2d7ce` | 2026-10-27 | 0.2.6: outcome table gains `changes`, `last_insert_rowid`, `owner_result_text` via ADD COLUMN; `PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED` for old NULL rows. |
+| `73c06f635` | 2026-11-19 09:45 | `PLACEMENT_ADMIT` apply and `CLUSTER_FORMAT_REVISION = 1` introduced. Placement rows written as `changes NULL, last_insert_rowid NULL, owner_result_text JSON` (pre-fingerprint). |
+| `8b7b0ad5b`, `6349f4bc8`, `da526999f`, `0970ab012` | 2026-11-19 10:58-14:08 | Same pre-fingerprint writer (`0970ab012:src/partition/partition-placement-admission.js:204-205`). |
+| `114bd4200` | 2026-11-19 16:57 | Fingerprint introduced (written into `last_insert_rowid`); exact replay or BYTES. |
+| `ab901b40f` | 2026-11-19 19:14 | Review repair adds the pre-fingerprint heuristic (`matchesPreFingerprintAdmittedResult`/`isPreFingerprintCommandReplay`) AND a durable backfill `UPDATE _partition_statement_outcomes SET last_insert_rowid = ? WHERE entry_key = ? AND last_insert_rowid IS NULL` with the replaying command's fingerprint. |
+| `4ef9423c0` | 2026-11-19 20:41 | Backfill removed (heuristic kept, extended later). Backfill existed in `ab901b40f`, `d504b4acf`, `58e420741`, `fa22c2438` (19:14-20:11). |
+| `ad4ea3610`, `4833ab4dc` | 2026-11-21 10:54-10:55 | WIP: heuristic deleted; NULL fingerprint -> `OUTCOME_IDENTITY_UNAVAILABLE`. |
+
+Release exposure:
+
+- Tags `v0.1.0` .. `v0.4.0` (latest `v0.4.0` = `07206ba1c`, 2026-10-31): none
+  contains `73c06f635` or any later commit above (`git tag --contains`
+  empty). `git grep` of `PLACEMENT_ADMIT|applyPlacementCommand` is empty at
+  `v0.4.0` and at `origin/main` (`0dbed1718`). No released version and no main
+  head ever wrote a placement outcome row, with or without a fingerprint.
+- The five pre-fingerprint commits are ancestors only of `candidate/*`,
+  `wip/*` and `preserve/*` branches; every remote branch containing
+  `73c06f635` also contains `114bd4200` (no branch tip inside the window).
+- Whether any long-lived lab/GCP data directory was founded by one of the
+  five window builds (or touched by the backfill build) and still exists is
+  NOT verified (no filesystem-wide scan was made).
+
+### 1.3 Persisted-format and upgrade owners that exist [read]
+
+- **Cluster format revision** (support-envelope owner,
+  `src/bootstrap/owners/support-envelope-owner.js:15-24`;
+  `docs/operations-readiness.md:214-276`): release-keyed, write-once in the
+  seed's original allocation; an absent or different revision is refused at
+  join (`OUTSIDE_SUPPORT_ENVELOPE`) and at seed start
+  (`ORIGINAL_ALLOCATION_FOUNDING_LAYOUT_UNSUPPORTED`); no in-place upgrade or
+  downgrade across a revision; remedy is re-founding on empty data
+  directories. "Revision 1 is the release that ships ... the placement
+  owner"; introduced in the same `73c06f635`, unreleased. Every released store
+  carries no revision and is refused by every revision-1 build. Window
+  stores carry revision 1 and are NOT distinguished by this fence.
+- **Legacy consensus detector** (`src/partition/partition-legacy-consensus-state.js`):
+  the existing precedent of a read-only, content-based, typed refusal at store
+  open.
+- **Snapshot payload version** (`src/raft/snapshot-checkpoint-constants.js:33-36`):
+  `raft_rs_replica_image` = 2 since 0.2.6, unchanged through the window, so
+  it does not distinguish window images either.
+- No partition-store schema version or `user_version` marker exists. The
+  support envelope declares a policy id `schemaBoundary: raft-sqlite-schema-v1`
+  (`docs/support-envelope.json:6`), which is not an executable store marker.
+- No supported upgrade contract exists on 0.x
+  (`docs/operations-readiness.md:189-199`, `architecture/INDEX.md:147`,
+  `docs/current-capabilities-and-limitations.md:158,206`).
+- Precedent for an unreleased format change: the committed learner-origin
+  contract (`architecture/contracts/message-group-committed-learner-origin.md:210-217`)
+  makes the old UNRELEASED version "explicitly unsupported ..., not silently
+  treated as containing proof. No supported upgrade claim is made."
+
+### 1.4 Row states for `entry:<id>` on `replica_operations-p1` today [read]
+
+Rows are written only at terminal settlement inside the apply transaction;
+there is no "reserved / no result yet" row in this table.
+
+| State | Shape | Current writer | Replay at HEAD |
+| --- | --- | --- | --- |
+| S0 UNSETTLED | no row (proposed, pending, parked by a reservation, rolled back) | none; pending fingerprints are in memory (`pendingPlacementCommandFingerprints`), unresolved attempts in `_placement_owner_unresolved_attempts` | proposal / pending join |
+| S1 placement, current | `applied`, `changes = rows.length`, `last_insert_rowid = fingerprint`, `owner_result_text` JSON (ADMITTED/RELEASED/REFUSED incl. CDC_CAPACITY) | `applyPlacementCommand` (`partition-placement-admission.js:295-299`) | equal -> original receipt; else `BYTES` (request) / throw `BYTES` (apply) |
+| S2 placement, pre-fingerprint | `applied`, `changes NULL`, `last_insert_rowid NULL`, `owner_result_text` JSON | none at HEAD; only window builds `73c06f635`..`0970ab012`; enters a HEAD store only by reopening a window data dir or installing a window image | `OUTCOME_IDENTITY_UNAVAILABLE` (request refusal; apply returns REPLAYED and resolves that refusal) |
+| S2b backfilled | looks like S1, but its fingerprint was inferred from mutable operation rows by the heuristic and written back | none at HEAD; only the four backfill builds (`ab901b40f`..`fa22c2438`) | indistinguishable from S1 |
+| S3 foreign, current | another owner's row under the same key: generic SQL `applied` (`last_insert_rowid` NULL for UPDATE/DELETE/DO UPDATE/zero-row statements, `owner_result_text` NULL; `partition-service-entry-apply-base.js:748-754`) or `statement_failed` (all result columns NULL; `partition-committed-statement-outcome.js:372-378`) | generic SQL apply | NULL rowid -> `OUTCOME_IDENTITY_UNAVAILABLE` (**misclassified as S2**); non-NULL rowid -> `BYTES` |
+| S4 corrupt | e.g. `owner_result_text` not a placement result | none | `retainedResult` throws `RESULT` |
+
+(Coordinator-settlement rows exist only on `sql_transactions` partitions;
+participant operation rows use `txop:` keys.)
+
+### 1.5 Every reader of the NULL condition [read]
+
+Direct (decides on `lastInsertRowid === null`):
+
+1. `recordedReplayRefusal` `partition-placement-admission.js:66-73`
+   - request path: `recordedRequestAnswer` `:106-113` <- `proposePlacementCommand`
+     `:127-131` <- `requestPlacementCommand` <- `requestPlacementAdmission`,
+     `requestPlacementHoldRelease`, and `requestPlacementRepair` via
+     `replica-operation-retained-repair-ingress.js:56-58` (SETTLED delegates to
+     native) - the retained-repair writer's files consume it unchanged;
+   - apply path: `applyPlacementCommand` `:281-290` (NULL -> REPLAYED with the
+     refusal as the committed write's answer).
+
+Readers of the same record that decide without command identity:
+
+2. `isSettledInStatementOutcomes` (`src/rebalancer/replica-placement-owner-attempts.js:76-80, 90-96`):
+   any row under `entry:<attempt.entryId>` (hand-built key) deletes the
+   durable unresolved attempt; an S2 or S3 row discharges an obligation it does
+   not identify.
+3. Generic `settledAppliedResult` (`partition-committed-statement-outcome.js:198-207`):
+   `changes === null` -> `OUTCOME_NOT_RETAINED` (NULL-means-old-format, 0.2.6);
+   a SQL command colliding with an S1 key is answered the placement
+   fingerprint as `lastInsertRowid` with `OUTCOME_RETAINED`.
+4. `readCommittedStatementCensusIn` (`partition-committed-statement-outcome.js:92-114`)
+   reports the fingerprint as `lastInsertRowid`.
+
+## 2. Defects
+
+- **D1** S3 with a NULL rowid (a current-format record of another owner,
+  including a statement failure, which retains no result) is classified as an
+  old placement format: request answers `OUTCOME_IDENTITY_UNAVAILABLE`
+  instead of the collision; apply consumes the committed placement entry as
+  REPLAYED instead of failing closed like every other collision.
+- **D2** The NULL branch is a permanent hot-path compatibility branch: no
+  persisted format marker, no migration, no owner/event/operator action that
+  ever retires it; the outcome table is not compacted ("grows one row per
+  committed statement", `partition-committed-statement-outcome-constants.js` header).
+- **D3** `OUTCOME_IDENTITY_UNAVAILABLE` has no `PLACEMENT_CLEARING_TRIGGER`
+  row, nor do `ORIGIN`, `BYTES`, `REMOVE_INTENT_UNSCOPED`, `TARGET`, `RESULT`.
+- **D4** The identity lives in another owner's column (`last_insert_rowid`),
+  so absence cannot be made impossible per owner at the schema boundary, and
+  generic readers reinterpret it (section 1.5 items 3-4). R08/R06.
+- **D5** (pause) `d1ad6aea7` moved `pausedWriteAnswerOf` after the settled
+  check for all placement commands; it had no witness. The generic SQL write
+  path already answers settled redeliveries before the pause
+  (`startAdmittedPartitionWrite`, `partition-service-raft-write-commit.js:433-450`);
+  the formation owner keeps pause-before-settled
+  (`membership-publication-formation-transition-command.js:520-537`).
+
+## 3. Contract-first checklist
+
+1. **Producer/consumer symbols**: producer `applyPlacementCommand` ->
+   `recordCommittedStatementOutcome`; consumers `proposePlacementCommand`,
+   `applyPlacementCommand`, retained-repair ingress (delegates),
+   `reconcilePlacementAttempts`/`isSettledInStatementOutcomes`, generic
+   `settledAppliedResult`, `readCommittedStatementCensusIn`.
+2. **Owner-defined shape**: today none (identity borrowed from the generic
+   `last_insert_rowid`). Option (i) below defines it in the outcome owner.
+3. **Identity/generation**: subject = entry key `entry:<entryId>` on one
+   partition; identity = digest of `(type, bodyText)`; timestamps/proposer are
+   excluded so a new leader's rebuilt command is the same command. Cluster
+   format revision 1 is the store's format generation; there is no finer one.
+4. **Ordering**: the row is written in the apply transaction at the entry's
+   log index; leadership -> committed-command admission -> settled replay ->
+   cutover pause -> pending join -> proposal (`proposePlacementCommand`).
+5. **Absent vs unavailable**: an absent row is `UNSETTLED` (named). A settled
+   row without identity is not "unavailable identity": in a supported store
+   it cannot exist (i), so meeting one is a typed format refusal at open, and
+   a foreign row is the collision.
+6. **Durable commit**: the outcome row and ledger rows commit in
+   `applyCommittedEntrySliceTransaction` with the applied index.
+7. **Retained obligations**: unresolved attempts
+   (`_placement_owner_unresolved_attempts`), pending in-memory fingerprints,
+   parked reserved writes; none is stored in the outcome table.
+8. **Wake/cleanup**: a refusal's wake is its `PLACEMENT_CLEARING_TRIGGER`
+   row; a store refused at open is retired by re-founding (support-envelope
+   procedure), not by any runtime event.
+
+## 4. Options
+
+### (i) No supported persisted store can contain pre-fingerprint rows (RECOMMENDED)
+
+Why it holds: no release and no main head ever wrote a placement row; every
+released store is refused by the revision-1 fence; 0.x has no supported
+upgrade; revision 1 is unreleased and the repository's precedent makes an
+unreleased old format "explicitly unsupported". The only stores that can
+hold S2/S2b are data directories of nine development builds of 2026-11-19
+(five pre-fingerprint writers, four backfill builds).
+
+Shape (stage 2):
+
+1. Placement replay identity is exact equality; delete the NULL branch and
+   `OUTCOME_IDENTITY_UNAVAILABLE`. A settled record that is not this command
+   (S3, any shape) is the collision `BYTES` at request and at apply (D1).
+2. Identity required at the schema/write boundary: the outcome owner gains an
+   owner-identity column (e.g. `command_digest TEXT`, full digest), with
+   `CHECK (owner_result_text IS NULL OR command_digest IS NOT NULL)` in its
+   `CREATE TABLE`; `recordCommittedStatementOutcome` refuses an owner result
+   without a digest. `last_insert_rowid` returns to its single generic meaning
+   (D4); placement and formation write `command_digest`.
+3. Format boundary: `createCommittedStatementOutcomeTable` (already the
+   store-open step, also reached by snapshot install) refuses typed, read-only,
+   a table that lacks `command_digest`, instead of migrating it (no ADD COLUMN
+   path). Because every supported table then carries the CHECK, no row can
+   violate it; the existing 0.2.6 ADD COLUMN loop and
+   `OUTCOME_NOT_RETAINED` become unreachable in supported stores and are
+   deleted with it.
+
+Durable outstanding data: a pre-stage-2 development data directory (S1, S2,
+S2b alike) is refused typed at open, with nothing rewritten; its ledger rows
+and unresolved attempts stay on disk, unadopted. Retirement: re-founding on
+empty data directories, the support-envelope owner's documented remedy for a
+store outside the build's format. Released stores were already refused by the
+revision fence. No code path remains for the old format.
+
+Cost: every development data directory written before stage 2 must be
+re-founded (not only window stores), because current S1 rows carry no
+`command_digest`. S2b (heuristically backfilled) rows are refused rather than
+trusted.
+
+### (ii) Such rows can exist: one-time transition at store open (NOT recommended)
+
+`createCommittedStatementOutcomeTable` would give each S2 row a named format
+state at open. There is no defined terminal treatment that is safe:
+answering a named refusal for those keys forever keeps a hot-path branch;
+deleting the rows makes the entry key UNSETTLED and lets a re-proposed entry
+execute again (R14); the table has no compaction owner that could retire them.
+S2b rows cannot be distinguished from S1 at all. Durable outstanding data:
+ledger rows already admitted proceed under the ledger; only their receipts
+stay unanswerable. Retirement: none exists. This option cannot reach "no NULL
+branch" without inventing a retention owner.
+
+## 5. Witnesses (stage 1)
+
+Commit `645c70cf1d13d2510d27c8a0715f433c4b48ff5a` (tests only; the pre-commit
+hook also regenerated derived metadata: owner-debt inventory, impact-graph
+seal, shard classes).
+
+- `test/partition/placement-settled-replay-cutover-pause.test.js` (W1):
+  settled E0 under the cutover pause answers its original receipt (deep equal,
+  frozen result), new E1 and unresolved E1u stay `CUTOVER_PAUSED` with E1u
+  neither resolved nor dropped, a changed command under E0 is `BYTES`, a
+  committed duplicate of E0 is a no-effect replay, nothing is proposed; a
+  demoted leader answers `NOT_LEADER` for E0.
+- `test/partition/placement-outcome-format.test.js` (W2): D1 for an applied
+  SQL row and a statement-failure row under the same key (request and apply);
+  D2 as "an S2 row is refused typed when its store opens".
+- `test/partition/placement-admission-trigger-coverage.test.js` (W3): every
+  code of `PLACEMENT_ADMISSION_ERROR`, `PLACEMENT_REFUSAL`,
+  `PARTITION_WRITE_LEADERSHIP_REFUSAL` has a row; a probe proves an added code
+  is reported.
+
+Lab results: see section 7.
+
+## 6. Rulings needed from the lead
+
+1. Select (i) (recommended) or (ii).
+2. Widen stage-2 scope to the outcome owner
+   (`partition-committed-statement-outcome.js`, `-constants.js`), its store-open
+   caller only if needed (`partition-service-raft-init-base.js`), and the
+   formation owner's recorder/replay
+   (`membership-publication-formation-transition-command.js`), so the identity
+   column is required at the schema boundary (D4). Without this widening, only
+   step 1 of (i) fits the writable set, and absence stays possible.
+3. Accept that all pre-stage-2 development data directories are re-founded.
+4. Trigger rows for the six unmapped codes (proposal: `BYTES`, `ORIGIN`,
+   `TARGET`, `REMOVE_INTENT_UNSCOPED`, `RESULT` -> `null` definite answers;
+   `OUTCOME_IDENTITY_UNAVAILABLE` deleted under (i)). The existing F11 test
+   `test/rebalancer/replica-placement-owner-clearing-triggers.test.js`
+   hard-lists the null set and is outside this writable set.
+5. Delete WIP test F5b in `test/partition/placement-admission-apply.test.js`
+   (it pins `OUTCOME_IDENTITY_UNAVAILABLE`) under (i).
+6. Whether the formation owner's pause-before-settled ordering should follow
+   the placement/generic ordering (separate owner).
+
+## 7. Lab results
+
+(filled below)

@@ -1,0 +1,9 @@
+lab test: tv-dator: ordinary (4 files) cores=12 mem=15.4GiB speed x1.47
+[tv-dator] placement-shell=2736897
+[tv-dator] placement-head=7b0b427b251d01c389f301d64533352be084b7ff
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar

@@ -1,0 +1,454 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.38
+[tv-dator] placement-shell=2734120
+[tv-dator] placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.4 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2734570
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 58C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+[tv-dator] ok test/partition/placement-retained-leadership.test.js (5 assertions, 3237ms)
+[tv-dator] not ok test/partition/placement-retained-row-repair.test.js (49 assertions, 5414ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.024Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.107Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: native entity repair and ordinary admission serialize: normal first
+[tv-dator] ok 1 - native entity repair and ordinary admission serialize: normal first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1825.837334
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: native entity repair and ordinary admission serialize: retained first
+[tv-dator] ok 2 - native entity repair and ordinary admission serialize: retained first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 68.661431
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.219Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.325Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: reservation gate consumes native repair refusal and retains the original reservation
+[tv-dator] ok 3 - reservation gate consumes native repair refusal and retains the original reservation
+[tv-dator]   ---
+[tv-dator]   duration_ms: 64.954058
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: lost committed answer reuses pinned bytes and preserves the retained lease
+[tv-dator] ok 4 - lost committed answer reuses pinned bytes and preserves the retained lease
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.653828
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: exact existing row succeeds; changed birth and history refuse without replacement
+[tv-dator] ok 5 - exact existing row succeeds; changed birth and history refuse without replacement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 52.123757
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.380Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"FAILED","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.430Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: a clearing holder commit during the old BUSY reply owns a successor attempt
+[tv-dator] ok 6 - a clearing holder commit during the old BUSY reply owns a successor attempt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 59.212492
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal evidence restoration does not consume the live entity or copy lane
+[tv-dator] ok 7 - terminal evidence restoration does not consume the live entity or copy lane
+[tv-dator]   ---
+[tv-dator]   duration_ms: 49.089886
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.734Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: current actual deficit policy preserves same-ID copies and native capacity clearing
+[tv-dator] ok 8 - current actual deficit policy preserves same-ID copies and native capacity clearing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 56.87015
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: foreign and malformed native answers retain one exact unknown attempt
+[tv-dator] ok 9 - foreign and malformed native answers retain one exact unknown attempt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 176.5059
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: shutdown retires volatile custody and late committed replies cannot rearm it
+[tv-dator] ok 10 - shutdown retires volatile custody and late committed replies cannot rearm it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 39.891666
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+[tv-dator] ok 11 - an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 38.607261
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.781Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: retained ledger self-move global exclusion: normal first
+[tv-dator] ok 12 - retained ledger self-move global exclusion: normal first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 47.676977
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: retained ledger self-move global exclusion: ledger first
+[tv-dator] ok 13 - retained ledger self-move global exclusion: ledger first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.333245
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote-only current copy preparation succeeds and changed target boot stays debt
+[tv-dator] ok 14 - remote-only current copy preparation succeeds and changed target boot stays debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 43.381265
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.917Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+[tv-dator] not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.359203
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:413:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     false !== true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:434:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:11.963Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: a retained ordinary copy consumes source capacity and resumes on its actual release
+[tv-dator] ok 16 - a retained ordinary copy consumes source capacity and resumes on its actual release
+[tv-dator]   ---
+[tv-dator]   duration_ms: 50.617956
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: retained-copy-first occupies the ordinary target lane until its own committed release
+[tv-dator] ok 17 - retained-copy-first occupies the ordinary target lane until its own committed release
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.464158
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+[tv-dator] ok 18 - different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.469127
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote E2 joins active E1 and retains renewed BUSY without spending its entry
+[tv-dator] ok 19 - remote E2 joins active E1 and retains renewed BUSY without spending its entry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 60.732654
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote E2 owns one authoritative own-row observation: CDC-before-answer
+[tv-dator] ok 20 - remote E2 owns one authoritative own-row observation: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 39.901577
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote E2 owns one authoritative own-row observation: answer-before-CDC
+[tv-dator] ok 21 - remote E2 owns one authoritative own-row observation: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.663046
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an in-flight stale own-row observation reads absence once; genuine successor still confirms
+[tv-dator] ok 22 - an in-flight stale own-row observation reads absence once; genuine successor still confirms
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.891342
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+[tv-dator] ok 23 - remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.983691
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+[tv-dator] ok 24 - remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.007552
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+[tv-dator] ok 25 - still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.406201
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+[tv-dator] ok 26 - still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 44.347989
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary source capacity release crosses entities: CDC-before-answer
+[tv-dator] ok 27 - remote ordinary source capacity release crosses entities: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 48.906527
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary source capacity release crosses entities: answer-before-CDC
+[tv-dator] ok 28 - remote ordinary source capacity release crosses entities: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 51.15064
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary target capacity release crosses entities: CDC-before-answer
+[tv-dator] ok 29 - remote ordinary target capacity release crosses entities: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 58.733267
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary target capacity release crosses entities: answer-before-CDC
+[tv-dator] ok 30 - remote ordinary target capacity release crosses entities: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.370439
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: impossible source capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator] ok 31 - impossible source capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.453654
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: impossible target capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator] ok 32 - impossible target capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.235295
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: partial capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 33 - partial capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.281251
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:976:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     one bounded authoritative read for the whole release burst
+[tv-dator]     
+[tv-dator]     2 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:999:16
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: failed capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 34 - failed capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.180209
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:976:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     one bounded authoritative read for the whole release burst
+[tv-dator]     
+[tv-dator]     2 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:999:16
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: stale capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 35 - stale capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.163246
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:976:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     one bounded authoritative read for the whole release burst
+[tv-dator]     
+[tv-dator]     2 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:999:16
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: wrong-partition capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 36 - wrong-partition capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.370769
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:976:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     one bounded authoritative read for the whole release burst
+[tv-dator]     
+[tv-dator]     2 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:999:16
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:12.934Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+[tv-dator] ok 37 - incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.908921
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T10:36:12.991Z","nodeId":"test-node","pid":2734592,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: mutation shares serial repair decision when clearing is sender-first
+[tv-dator] ok 38 - mutation shares serial repair decision when clearing is sender-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 51.184241
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: mutation shares serial repair decision when clearing is receiver-first
+[tv-dator] ok 39 - mutation shares serial repair decision when clearing is receiver-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 59.598574
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ACTIVE-reservation shares serial repair decision when clearing is sender-first
+[tv-dator] ok 40 - ACTIVE-reservation shares serial repair decision when clearing is sender-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 43.887967
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+[tv-dator] ok 41 - ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 44.995096
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: queued real E2 joins E1 winner and confirms exact authority without relabeling
+[tv-dator] ok 42 - queued real E2 joins E1 winner and confirms exact authority without relabeling
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.568952
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: queued real E2 joins E1 winner and confirms changed authority without relabeling
+[tv-dator] ok 43 - queued real E2 joins E1 winner and confirms changed authority without relabeling
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.200478
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+[tv-dator] not ok 44 - queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.986577
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:1167:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     1 !== 0
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 0
+[tv-dator]   actual: 1
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair.test.js:1206:18
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwq9vdn1-759301/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+[tv-dator] ok 45 - real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.341698
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: unknown native BUSY retains its only clearing observation: clear-before-answer
+[tv-dator] ok 46 - unknown native BUSY retains its only clearing observation: clear-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.530413
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: unknown native BUSY retains its only clearing observation: answer-before-clear
+[tv-dator] ok 47 - unknown native BUSY retains its only clearing observation: answer-before-clear
+[tv-dator]   ---
+[tv-dator]   duration_ms: 43.220449
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: registered owner read backoff recovers without a new caller or row/role event
+[tv-dator] ok 48 - registered owner read backoff recovers without a new caller or row/role event
+[tv-dator]   ---
+[tv-dator]   duration_ms: 146.18573
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: shutdown cancels actual registered read-dependency wake and cannot rearm replaced debt
+[tv-dator] ok 49 - shutdown cancels actual registered read-dependency wake and cannot rearm replaced debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.872313
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..49
+[tv-dator] # tests 49
+[tv-dator] # suites 0
+[tv-dator] # pass 43
+[tv-dator] # fail 6
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 4339.882741
+[tv-dator] # time=5414ms
+[tv-dator] # test-files total=2 pass=1 fail=1 assertions=54
+lab test: tv-dator: # test-files total=2 pass=1 fail=1 assertions=54
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=1 fail=1 assertions=54
+exit=1
