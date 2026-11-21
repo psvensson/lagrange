@@ -97,6 +97,10 @@ import {createRemovalSourceHandler} from
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
+import {assertOperationUpdateOutcome} from
+  '../../src/rebalancer/replica-operation-update-outcome.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // A priority control-plane partition: the named-target handoff (BR11) is
@@ -878,17 +882,20 @@ async function deliver(world, target, payload) {
     });
 }
 
-// Every terminal write is captured with the oracle read at that instant.
+const TERMINAL_MUTATION_DISPOSITIONS = new Set([
+  DISPOSITION.UPDATED, DISPOSITION.RECOVERED, DISPOSITION.REINSERTED,
+]);
+
 function isCapturedTerminalWrite(operation, persistOptions, result) {
-  return TERMINAL_STEPS.has(operation?.workflowStep) &&
-    persistOptions?.terminalTransition === true &&
-    result?.persisted !== false;
+  if (!TERMINAL_STEPS.has(operation?.workflowStep) ||
+      persistOptions?.terminalTransition !== true) return false;
+  const {disposition} = assertOperationUpdateOutcome(result);
+  return TERMINAL_MUTATION_DISPOSITIONS.has(disposition);
 }
 
-// One terminal write with the oracle read at that instant. The durable row
-// after the write comes from the authority read: the test double's SQL
-// fallback answers a terminal statement without its affected-row count, so
-// the disposition alone is not the durable outcome.
+// Observe the committed ledger row and membership after an actual mutation.
+// Re-insertion writes a row and remains visible here even though it earns no
+// workflow progress. A replay of an existing terminal row writes nothing.
 async function captureTerminalWrite(world, repository, operation, result) {
   const durable = await repository
     .queryReplicaOperationPersistenceAuthorityOperation(operation);
