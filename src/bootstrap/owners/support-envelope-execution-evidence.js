@@ -31,6 +31,7 @@ const EXECUTION_ERROR = Object.freeze({
   MISSING_DRILLS: 'original physical drill observations are incomplete or outside the support policy',
 });
 const arrayIsArray = Array.isArray;
+const numberIsSafeInteger = Number.isSafeInteger;
 
 function recordedCertifications(logPath) {
   const stat = lstatSync(logPath);
@@ -341,7 +342,7 @@ function mixedArtifactsMatch(pair, execution, local, peer) {
 
 function nodeCountOutsideEnvelope(topology, validation, nodeCount) {
   if (!validation.policyValid || nodeCount === undefined) return false;
-  return !Number.isSafeInteger(nodeCount) ||
+  return !numberIsSafeInteger(nodeCount) ||
     nodeCount < topology.minNodes || nodeCount > topology.maxNodes;
 }
 
