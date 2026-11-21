@@ -70,6 +70,23 @@ test('Q12: SupportEnvelopeOwner contract, constants, and digest verification', a
   assert.equal(validateSupportEnvelopeRecord(parsedDoc).valid, false);
 });
 
+test('support pair diagnostics reject fractional nodes after an ambient integer check changes',
+  (t) => {
+    const envelope = buildSupportEnvelopeRecord();
+    const check = t.mock.method(Number, 'isSafeInteger', () => true);
+    let result;
+    try {
+      result = validateVersionPairAdmission(envelope, {
+        ...envelope.versionPair,
+        nodeCount: envelope.topologyEnvelope.minNodes + 0.5,
+      });
+    } finally {
+      check.mock.restore();
+    }
+    assert.equal(result.admitted, false);
+    assert.equal(result.reasonCode, SUPPORT_ENVELOPE_REASON_CODE.TOPOLOGY_OUTSIDE_ENVELOPE);
+  });
+
 test('support policy applies exact pair, rollback cutoff and mixed-version boundaries', () => {
   const envelope = buildSupportEnvelopeRecord();
   const outside = SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE;
