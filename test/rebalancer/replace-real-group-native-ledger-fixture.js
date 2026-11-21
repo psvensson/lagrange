@@ -134,7 +134,7 @@ async function withNativeLedgerReplace(measure, {
         AND completed_at IS NULL ORDER BY operation_id`);
     const observation = {effects: [], unavailable: false, refusedReads: 0,
       readCommitted: (id) => statement.get(id),
-      readRepairOutcome: (command) => readCommittedStatementOutcome(
+      readPlacementOutcome: (command) => readCommittedStatementOutcome(
         {db: reader}, ledger.leader.getCommittedEntryKey(command)),
       readLiveCompetitors: (entityId, incumbentId) => live.all(entityId, incumbentId)};
     let world;
