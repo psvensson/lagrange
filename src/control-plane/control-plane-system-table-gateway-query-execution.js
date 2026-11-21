@@ -134,6 +134,11 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   },
 
   resolveSystemTableQueryDescriptor(sql, options = {}) {
+    const statementKind = extractSqlOperationKind(sql);
+    if (statementKind === CONTROL_PLANE_SQL_OPERATION.WRITE) {
+      const tableName = extractSystemTableNameFromSql(sql);
+      return {tableName, operationKind: statementKind, isSystemTable: Boolean(tableName)};
+    }
     const tableName = normalizeSystemTableName(
       options?.controlPlaneTableName ||
         options?.tableName ||
@@ -142,7 +147,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     const operationKind = normalizeSqlOperationKind(
       options?.controlPlaneOperationKind ||
         options?.operationKind ||
-        extractSqlOperationKind(sql),
+        statementKind,
     );
     return {
       tableName,

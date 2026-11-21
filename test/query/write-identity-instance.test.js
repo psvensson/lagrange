@@ -112,10 +112,10 @@ async () => {
     deliveries, of}) => {
     const surface = of(TABLES.STORAGE_RESERVATIONS);
     const now = Date.now();
-    const birth = (bytes) => gateway.executeQuery(RESERVATION_INSERT,
+    const birth = (bytes, options = {}) => gateway.executeQuery(RESERVATION_INSERT,
       ['res-op-v3', 'op-v3', 'partition', 'p-1', 'p-1', 'n-1', bytes, 1,
         'active', now, now, now + 1000],
-      {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`});
+      {...options, writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`});
     const {first} = await spendFirstAttempt({engine, surface,
       attempt: () => birth(111)});
     assert.equal(first.success, false, 'setup: the first birth is unknown');
@@ -126,13 +126,19 @@ async () => {
       ['res-op-v3'], {});
     assert.equal(removed.success, true, 'setup: the row is deleted');
     const firstEntry = deliveries[0].entryId;
-    const again = await birth(222);
+    const rebirthMark = deliveries.length;
+    const again = await birth(222, {
+      controlPlaneTableName: TABLES.REPLICA_OPERATIONS,
+      controlPlaneOperationKind: 'read',
+    });
     assert.deepEqual(selectRows(surface.dbPath, 'SELECT reservation_id, ' +
       `estimated_bytes FROM ${TABLES.STORAGE_RESERVATIONS}`),
     [{reservation_id: 'res-op-v3', estimated_bytes: 222}],
     `the second birth executed (${JSON.stringify(again)})`);
     assert.equal(again.success, true, 'and is answered applied');
     assert.equal(again.affectedRows, 1, 'with its own count');
+    assert.equal(deliveries[rebirthMark]?.entryId, firstEntry,
+      'the statement still resolves its prior exact write despite conflicting hints');
     assert.ok(deliveries.at(-1).entryId !== firstEntry,
       'under its own entry, never the first birth\'s');
   });
