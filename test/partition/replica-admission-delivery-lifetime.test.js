@@ -14,7 +14,8 @@ import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_EVENT, PARTITION_SERVICE_MESSAGE_TYPE} from
+  '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
@@ -380,6 +381,8 @@ for (const treatment of [
   {name: 'budget expires before the first delivery', beforeDelivery: true},
   {name: 'critical REPLACE observes the exact SERVICES route last', cacheLast: true},
   {name: 'queued SERVICES publication after shutdown', cacheLast: true, lateCache: true},
+  {name: 'wrong SERVICES attempt before expiry', cacheLast: true, earlyCache: 'wrong'},
+  {name: 'exact SERVICES attempt before expiry', cacheLast: true, earlyCache: 'exact'},
 ]) {
   test(`materialized native CREATE retains its learner at expiry: ${treatment.name}`,
     {timeout: TEST_TIMEOUT_MS}, async (t) => {
@@ -420,6 +423,22 @@ for (const treatment of [
       handler.registerWithRouter(router);
       handler.syncTimeoutMs = CREATE_BUDGET_MS;
       const held = Promise.withResolvers();
+      const reply = Promise.withResolvers();
+      const voterChecks = [];
+      if (treatment.earlyCache) {
+        const deliver = router.deliver.bind(router);
+        router.deliver = async (address, payload, options) => {
+          const result = await deliver(address, payload, options);
+          if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA) await reply.promise;
+          return result;
+        };
+        const check = handler.isReplicaVoterReady.bind(handler);
+        handler.isReplicaVoterReady = (...args) => {
+          const ready = check(...args);
+          voterChecks.push(ready);
+          return ready;
+        };
+      }
       let leaderReads = 0;
       const gateway = leader.controlPlaneSystemTableGateway;
       const read = gateway.readAuthoritativeRows.bind(gateway);
@@ -478,6 +497,25 @@ for (const treatment of [
         const claim = owner.activePhysicalWorkerOperationIds.get(row.operation_id);
         assert.ok(tracker && claim);
         worker = Promise.all([...handler.operationTasks]);
+        if (treatment.earlyCache) {
+          const current = readAdmittedLifecycle(authority, replicaId);
+          const exact = treatment.earlyCache === 'exact';
+          cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+            ...current,
+            create_attempt_token: exact ? current.create_attempt_token : 'another-attempt',
+          });
+          reply.resolve();
+          assert.equal(await waitForCondition(() => voterChecks.length > 0,
+            OBSERVATION_BOUND_MS), true, 'the original live voter gate consumes the published row');
+          assert.deepEqual(voterChecks, [exact], 'only the original CREATE attempt can be ready');
+          if (exact) {
+            await worker;
+            assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]);
+            assert.equal(readAdmittedLifecycle(authority, replicaId).status, ReplicaStatus.ACTIVE);
+            assert.equal(handler.getTrackedService(replicaId), learner);
+            return;
+          }
+        }
         if (!treatment.beforeDelivery) createClock.advance(CREATE_BUDGET_MS);
         assert.equal(await waitForCondition(() =>
           handler.operationTasks.size === 0, OBSERVATION_BOUND_MS), true,
@@ -504,6 +542,10 @@ for (const treatment of [
         if (treatment.readiness) {
           assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
             'the spent readiness wait parks without a rearm loop');
+        }
+        if (treatment.earlyCache) {
+          assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null);
+          return;
         }
         if (treatment.cacheLast) {
           await observeCriticalServicePublication(
@@ -547,6 +589,8 @@ for (const treatment of [
         assert.equal(owner.ownsPhysicalWorker(claim), false);
       } finally {
         held.resolve();
+        reply.resolve();
+        createClock.advance(CREATE_BUDGET_MS);
         await worker;
         await handler.shutdown();
         authority.close();
