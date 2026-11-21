@@ -24,7 +24,7 @@ import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 import {storedTransitionOf} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_SPLIT_CHILD_PROVISIONING = 'split_child_provisioning';
+const LOCAL_STR_CHILD_PROVISIONING = 'partition_child_provisioning';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_MANAGED_SPLIT_CHILD_PROVISIONING_PRECHEC = 'Managed split child provisioning precheck could not satisfy ';
 const LOCAL_STR_MINIMUM_ROUTABLE_COHORTS = 'minimum routable cohorts: ';
@@ -78,6 +78,19 @@ function canonicalSplitParticipantSpecsOf(workflow) {
 
 // A canonical participant no acknowledgement has reached yet.
 const NOT_YET_ACKNOWLEDGED = PARTICIPANT_STATUS_NOT_YET_ACKNOWLEDGED;
+
+function assertChildProvisioningAttempt({timeoutBudget, cancellationToken}, now) {
+  throwIfCancellationRequested(cancellationToken);
+  if (timeoutBudget && getRemainingBudgetMs(timeoutBudget, {now}) === 0) {
+    throw createTimeoutBudgetError({
+      message: QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+      budget: timeoutBudget,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
+      nestedOperation: LOCAL_STR_CHILD_PROVISIONING,
+      now,
+    });
+  }
+}
 
 class ManagedSplitWorkflowStateMethods {
   /**
@@ -411,19 +424,6 @@ class ManagedSplitWorkflowStateMethods {
     });
   }
 
-  assertChildProvisioningAttempt({timeoutBudget, cancellationToken}) {
-    throwIfCancellationRequested(cancellationToken);
-    if (timeoutBudget && getRemainingBudgetMs(timeoutBudget, {now: this.now}) === 0) {
-      throw createTimeoutBudgetError({
-        message: QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
-        budget: timeoutBudget,
-        classification: TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
-        nestedOperation: LOCAL_STR_SPLIT_CHILD_PROVISIONING,
-        now: this.now,
-      });
-    }
-  }
-
   /**
    * Probe each planned child cohort before any child partition metadata is
    * inserted so the workflow can defer instead of leaving metadata-only
@@ -448,7 +448,7 @@ class ManagedSplitWorkflowStateMethods {
     for (const [childPartitionId, targetNodeIdsRaw] of Object.entries(
       childProvisioningTargetNodeIdsByPartitionId,
     )) {
-      this.assertChildProvisioningAttempt(options);
+      assertChildProvisioningAttempt(options, this.now);
       const targetNodeIds = this.normalizeNodeIdList(targetNodeIdsRaw);
       const precheck = typeof this.probeInitialTablePartitionProvisioning ===
         'function' ?
@@ -460,7 +460,7 @@ class ManagedSplitWorkflowStateMethods {
           cancellationToken: options.cancellationToken,
         }) :
         null;
-      this.assertChildProvisioningAttempt(options);
+      assertChildProvisioningAttempt(options, this.now);
       const existingRoutableNodeIds = this.normalizeNodeIdList(
         precheck?.existingRoutableNodeIds,
       );
@@ -754,4 +754,4 @@ class ManagedSplitWorkflowStateMethods {
   }
 }
 
-export {ManagedSplitWorkflowStateMethods};
+export {assertChildProvisioningAttempt, ManagedSplitWorkflowStateMethods};

@@ -34,10 +34,30 @@ import {
   classifyPlacementClass,
 } from '../rebalancer/replica-placement-owner-order.js';
 
-const DEFAULT_FOUND_SCHEMA_JOB_ID = 'provision';
-const DEFAULT_FOUND_SOURCE_NODE_ID = 'node-1';
+const PLACEMENT_FOUND_IDENTITY_REQUIRED = 'PLACEMENT_FOUND_IDENTITY_REQUIRED';
+const PLACEMENT_FOUND_IDENTITY_ERROR =
+  'Founding placement requires one durable workflow and its hosting node';
 const FOUND_ENTRY_PREFIX = 'found';
+const LOCAL_STR_STRING = 'string';
 const PLACEMENT_FOUND_REFUSED_CODE = 'PLACEMENT_FOUND_REFUSED';
+
+function requireFoundingIdentity(context, coordinator) {
+  const schemaJobId = context?.schemaJobId;
+  const partitionWorkflowId = context?.partitionWorkflowId;
+  const workflowId = schemaJobId ?? partitionWorkflowId;
+  const sourceNodeId = coordinator.nodeId;
+  if ((schemaJobId != null && partitionWorkflowId != null) ||
+      !isNonemptyIdentity(workflowId) || !isNonemptyIdentity(sourceNodeId)) {
+    const error = new Error(PLACEMENT_FOUND_IDENTITY_ERROR);
+    error.code = PLACEMENT_FOUND_IDENTITY_REQUIRED;
+    throw error;
+  }
+  return {workflowId, sourceNodeId};
+}
+
+function isNonemptyIdentity(value) {
+  return typeof value === LOCAL_STR_STRING && value.length > 0 && value.trim() === value;
+}
 
 function isFoundingPlacementAccepted(answer, result, foundingIntentId) {
   if (answer?.committed !== true || answer[RETAINED_PLACEMENT_ATTEMPT] ||
@@ -68,7 +88,6 @@ function throwFoundingPlacementError(partitionId, answer, result) {
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ONE_THOUSAND = 1000;
 const LOCAL_STR_DISPATCH_OPERATIONS = 'dispatch_operations';
 const LOCAL_STR_WAIT_REPLICA_METADATA = 'wait_replica_metadata';
@@ -684,9 +703,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     prepareFreshTargets,
   }) {
     const coordinator = this.rebalanceCoordinator;
-    const jobPrefix = context?.schemaJobId || DEFAULT_FOUND_SCHEMA_JOB_ID;
-    const foundingIntentId = `${jobPrefix}:${partitionId}`;
-    const sourceNodeId = this.nodeId || DEFAULT_FOUND_SOURCE_NODE_ID;
+    const {workflowId, sourceNodeId} = requireFoundingIdentity(context, coordinator);
+    const foundingIntentId = `${workflowId}:${partitionId}`;
     const placementClass = classifyPlacementClass(partitionId);
     const buildStatement = (targets) => buildFoundingAdmissionStatement({
       partitionId,

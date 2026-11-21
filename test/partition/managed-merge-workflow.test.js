@@ -110,6 +110,9 @@ test('managed merge - successful start runs the durable lifecycle in ' +
     result.targetPartitionId,
   );
 
+  t.equal(fixture.provisionCalls[0].partitionWorkflowId, result.workflowId,
+    'the durable merge owner names the target provisioning');
+
   // Both sources received the merge replication start with fan-in
   // metadata pointing at the single merged target.
   t.equal(fixture.startMergeCalls.length, 2);

@@ -25,6 +25,7 @@ import {
 import {resolvePartitionRowKeyRange} from './partition-transition-overlap-guard.js';
 import {resolveDeclaredPartitionKeyType} from './partition-boundary-representation.js';
 import {
+  assertChildProvisioningAttempt,
   ManagedSplitWorkflowStateMethods,
 } from './managed-split-workflow-state-methods.js';
 import {
@@ -463,8 +464,8 @@ class ManagedSplitWorkflow {
         timeoutBudget: executionTimeoutBudget,
         cancellationToken: executionContext.cancellationToken,
       };
-      const assertChildProvisioningAttempt = () =>
-        this.assertChildProvisioningAttempt(childProvisioningAttempt);
+      const assertCurrentAttempt = () =>
+        assertChildProvisioningAttempt(childProvisioningAttempt, this.now);
       const childProvisioningAdmissionByPartitionId =
         await this.probeChildProvisioningAdmissions({
           ...childProvisioningAttempt,
@@ -508,7 +509,7 @@ class ManagedSplitWorkflow {
       };
       const prepared = await this.workflowCoordinator.updateWorkflow(
         workflowId, (current) => {
-          assertChildProvisioningAttempt();
+          assertCurrentAttempt();
           return {...current,
             status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
             metadata: {...current.metadata, ...planDelta}};
@@ -559,7 +560,7 @@ class ManagedSplitWorkflow {
       await this.ensureChildPartitionMetadata({
         leftPartitionMetadata,
         rightPartitionMetadata,
-        assertEffectAllowed: assertChildProvisioningAttempt,
+        assertEffectAllowed: assertCurrentAttempt,
       });
       await Promise.all([
         this.waitForTablePartitionMetadata(
@@ -574,10 +575,11 @@ class ManagedSplitWorkflow {
         ),
       ]);
 
-      assertChildProvisioningAttempt();
+      assertCurrentAttempt();
       await markTargetProvisioningDispatched(this, workflowId,
         splitPlan.leftPartition.partitionId);
       await this.provisionInitialTablePartition({
+        partitionWorkflowId: workflowId,
         tableId,
         tableName,
         tableMetadata: tableInfo,
@@ -598,10 +600,11 @@ class ManagedSplitWorkflow {
         routingReadinessDimension:
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
-      assertChildProvisioningAttempt();
+      assertCurrentAttempt();
       await markTargetProvisioningDispatched(this, workflowId,
         splitPlan.rightPartition.partitionId);
       await this.provisionInitialTablePartition({
+        partitionWorkflowId: workflowId,
         tableId,
         tableName,
         tableMetadata: tableInfo,

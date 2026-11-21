@@ -546,6 +546,7 @@ class ManagedMergeWorkflow {
         childProvisioningTargetNodeIdsByPartitionId:
           targetNodeIdsByPartitionId,
         minimumRoutableReplicaCount: input.mergeBootstrapReplicaCount,
+        timeoutBudget: input.executionTimeoutBudget,
       });
     const targetProvisioningAdmission =
       provisioningAdmissionByPartitionId[input.mergedPartitionId] || null;
@@ -676,6 +677,7 @@ class ManagedMergeWorkflow {
     await markTargetProvisioningDispatched(this, input.workflowId,
       input.mergedPartitionId);
     await this.provisionInitialTablePartition({
+      partitionWorkflowId: input.workflowId,
       tableId: input.tableId,
       tableName: input.tableName,
       tableMetadata: input.tableInfo,
