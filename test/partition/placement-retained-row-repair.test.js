@@ -576,3 +576,190 @@ test('remote E2 joins active E1 then takes actual custody after its definite BUS
       await remote.coordinator.shutdown();
     }
   }));
+
+async function holdRemotePendingReply(world, retained) {
+  const owner = world.coordinator.repository;
+  raiseParticipantCutoverPause(world.leader);
+  assert.equal(await owner.repairRetainedOperation(retained), false);
+  const remote = remoteCaller(world);
+  const sender = remote.coordinator.repository;
+  const native = sender.repairRetainedPlacement;
+  let release;
+  let received;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const arrived = new Promise((resolve) => {
+    received = resolve;
+  });
+  sender.repairRetainedPlacement = async (payload) => {
+    const reply = await native(payload);
+    assert.equal(reply.failureCode, 'placement_repair_pending');
+    assert.equal(reply.repairCustody, undefined);
+    received();
+    await held;
+    return reply;
+  };
+  const observe = sender.queryReplicaOperationPersistenceAuthorityObservation;
+  let reads = 0;
+  sender.queryReplicaOperationPersistenceAuthorityObservation = async (...args) => {
+    reads += 1;
+    return observe.apply(sender, args);
+  };
+  const result = sender.repairRetainedOperation(retained);
+  await arrived;
+  return {remote, sender, result, release, reads: () => reads};
+}
+
+for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
+  test(`remote E2 owns one authoritative own-row observation: ${order}`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world);
+      const pending = await holdRemotePendingReply(world, retained);
+      try {
+        pending.sender.observeRetainedPlacementRepairCommit('replica_operations', {
+          operation_id: 'unrelated-operation', entity_type: 'partition', entity_id: 'unrelated-p1'});
+        await settleTicks();
+        assert.equal(pending.reads(), 0, 'unrelated rows do not request a confirmation');
+        if (order === 'answer-before-CDC') {
+          pending.release();
+          assert.equal(await pending.result, false);
+        }
+        const before = world.commands.length;
+        await resumeFixtureParticipantAdmission(world.leader);
+        await settleRepair(world);
+        const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId);
+        assert.ok(row, 'E1 actually restored before controlled CDC delivery to remote-only E2');
+        pending.sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+        pending.sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+        if (order === 'CDC-before-answer') {
+          await settleTicks();
+          assert.equal(pending.reads(), 0, 'confirmation waits for the active attempt to settle');
+          pending.release();
+          assert.equal(await pending.result, false);
+        }
+        await settleTicks();
+        await pending.sender.retainedPlacementRepairDrain;
+        await settleTicks();
+        assert.equal(pending.reads(), 1, 'the coalesced observation is confirmed once after settlement');
+        assert.equal(pending.sender.retainedPlacementRepairs.size, 0);
+        assert.equal(world.commands.length, before + 1, 'confirmation does not propose E2 or poll');
+        pending.sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+        await settleTicks();
+        assert.equal(pending.reads(), 1, 'retired custody retains no observer or follow-up work');
+      } finally {
+        pending.release();
+        await pending.remote.coordinator.shutdown();
+      }
+    }));
+}
+
+test('an in-flight stale own-row observation reads absence once; genuine successor still confirms', () =>
+  withRepairLedger(async (world) => {
+    const mutate = world.gateway.submitMutation;
+    let originalRow;
+    world.gateway.submitMutation = async (mutation, ...args) => {
+      if (mutation.operation === 'delete') {
+        originalRow = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(mutation.whereClause.operation_id);
+      }
+      return mutate(mutation, ...args);
+    };
+    const retained = await retainMissing(world);
+    world.gateway.submitMutation = mutate;
+    const pending = await holdRemotePendingReply(world, retained);
+    try {
+      pending.sender.observeRetainedPlacementRepairCommit('replica_operations', originalRow);
+      pending.sender.observeRetainedPlacementRepairCommit('replica_operations', originalRow);
+      pending.release();
+      assert.equal(await pending.result, false);
+      await settleTicks();
+      await pending.sender.retainedPlacementRepairDrain;
+      await settleTicks();
+      assert.equal(pending.reads(), 1);
+      assert.equal(pending.sender.retainedPlacementRepairs.size, 1,
+        'stale CDC cannot retire an authoritatively absent operation');
+      const commands = world.commands.length;
+      pending.sender.observeRetainedPlacementRepairCommit('replica_operations', {
+        operation_id: 'unrelated-operation', entity_type: 'partition', entity_id: 'unrelated-p1'});
+      await settleTicks();
+      assert.equal(pending.reads(), 1);
+      assert.equal(world.commands.length, commands, 'absence confirmation does not self-reschedule');
+      await resumeFixtureParticipantAdmission(world.leader);
+      await settleRepair(world);
+      const successor = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(retained.operationId);
+      assert.deepEqual(successor, originalRow, 'genuine restoration can have the same retained row bytes');
+      pending.sender.observeRetainedPlacementRepairCommit('replica_operations', successor);
+      await settleTicks();
+      await pending.sender.retainedPlacementRepairDrain;
+      await settleTicks();
+      assert.equal(pending.reads(), 2, 'a later genuine event is a new observation even with identical bytes');
+      assert.equal(pending.sender.retainedPlacementRepairs.size, 0);
+    } finally {
+      pending.release();
+      await pending.remote.coordinator.shutdown();
+    }
+  }));
+
+for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
+  test(`remote BUSY reply retains an in-flight blocker observation: ${order}`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world);
+      const competitor = await compete(world);
+      const remote = remoteCaller(world);
+      const sender = remote.coordinator.repository;
+      const submit = sender.repairRetainedPlacement;
+      let release;
+      let received;
+      const held = new Promise((resolve) => {
+        release = resolve;
+      });
+      const arrived = new Promise((resolve) => {
+        received = resolve;
+      });
+      let first = true;
+      sender.repairRetainedPlacement = async (payload) => {
+        const reply = await submit(payload);
+        if (first) {
+          first = false;
+          assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+          received();
+          await held;
+        }
+        return reply;
+      };
+      const result = sender.repairRetainedOperation(retained);
+      await arrived;
+      try {
+        if (order === 'answer-before-CDC') {
+          release();
+          assert.equal(await result, false);
+        }
+        stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+        const clearing = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(competitor.operationIds[0]);
+        sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
+        sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
+        if (order === 'CDC-before-answer') {
+          release();
+          assert.equal(await result, false);
+        }
+        await settleRepair(world);
+        await sender.retainedPlacementRepairDrain;
+        await settleTicks();
+        assert.ok(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId));
+        assert.equal(sender.retainedPlacementRepairs.size, 0,
+          'the blocker event is owed before its BUSY response too; no own-row CDC is delivered');
+        const commands = world.commands.length;
+        sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
+        await settleTicks();
+        assert.equal(world.commands.length, commands, 'retirement cannot retain a repeated clearing event');
+      } finally {
+        release();
+        await remote.coordinator.shutdown();
+      }
+    }));
+}
