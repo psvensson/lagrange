@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3774446,
-        "sha256": "186fb288898aaa43faa75f24e4b9daf9f821aa51c7246a9683563bcdc2c8aa60"
+        "bytes": 3775177,
+        "sha256": "499de991e147a57505fc682127fd8d20d9847eda5dc40b907b681a652eda1f7d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1a14d4c129c42c0980b4c925acdd30450e2d52b915362ca017891a24d98cadd8"
+        "sha256": "72536d8390cd9e8fb477c3693ab187ef15349a819b431d7e25070d534978cd01"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "47ab7aaaa83d8dc61643bb712be26fe83c671c2925f96f3bd8b4796375fc23ee"
+    "inputDigest": "8cb1148cf6923864a8682af00e66a4519e479edef2efa3ed86a145a5f7134897"
   },
   "reconciliation": {
     "complexity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1a14d4c129c42c0980b4c925acdd30450e2d52b915362ca017891a24d98cadd8"
+          "sha256": "72536d8390cd9e8fb477c3693ab187ef15349a819b431d7e25070d534978cd01"
         },
         "cloneGroups": 606,
         "duplicatedLines": 21632,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3774446,
-        "sha256": "186fb288898aaa43faa75f24e4b9daf9f821aa51c7246a9683563bcdc2c8aa60"
+        "bytes": 3775177,
+        "sha256": "499de991e147a57505fc682127fd8d20d9847eda5dc40b907b681a652eda1f7d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "7729d53146b7325e3c1ff5d27834c057d76421c77b685000dfc5a0718f6e8438",
+      "sourceDigest": "2ce3d28aa142207054acd804ce2481ca08234f472271597c2503610bd90317ed",
       "moduleCount": 6375,
-      "edgeCount": 37998,
+      "edgeCount": 38011,
       "unresolvedCount": 39
     }
   },
@@ -422,7 +422,7 @@
       "cycleGroups": 0,
       "lintExclusions": 1,
       "importIn": 5,
-      "importOut": 419,
+      "importOut": 422,
       "score": 418.7,
       "topPaths": [
         "test/bootstrap/connect-websocket-phase-mesh-test-cases.js",
@@ -1397,7 +1397,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 402,
+      "importIn": 407,
       "importOut": 82,
       "score": 52,
       "topPaths": [
@@ -1537,7 +1537,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 83,
+      "importIn": 84,
       "importOut": 58,
       "score": 36,
       "topPaths": [

@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3e9d843e",
+  "observationDigest": "fnv1a32-158ad62f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3229,8 +3229,10 @@
     },
     "test/bootstrap/bootstrap-topology-snapshot-owner.test.js": {
       "files": [
+        "src/bootstrap/owners/bootstrap-topology-snapshot-owner-contract.js",
         "src/bootstrap/owners/bootstrap-topology-snapshot-owner.js",
         "src/constants/index.js",
+        "src/partition/partition-service-row-owner.js",
         "src/query/canonical-leader-routing.js"
       ]
     },
@@ -11851,6 +11853,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
+        "src/partition/group-retirement-redrive.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
@@ -11859,6 +11862,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-row-owner.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -19581,6 +19585,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
@@ -20389,6 +20394,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/partition/partition-service-row-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },

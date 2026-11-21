@@ -9,11 +9,20 @@ import {
 import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 
-function createActivationHarness({raftRole = 'leader'} = {}) {
+// The lifecycle owner answers activation with the registered row made ACTIVE:
+// the row this owner built for the registering service (its raft_role is the
+// owner's published projection, never leader for a partition).
+function createActivationHarness({registeredService = null} = {}) {
   const lifecycleCalls = [];
   const updates = [];
+  const inserts = [];
   const systemTableWriter = {
+    async insertSystemTableRow(tableName, row, options) {
+      inserts.push({tableName, row, options});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
     async updateSystemTableRow(tableName, whereClause, updateData, options) {
       updates.push({tableName, whereClause, updateData, options});
       return {success: true, partitionResult: {affectedRows: 1}};
@@ -23,17 +32,20 @@ function createActivationHarness({raftRole = 'leader'} = {}) {
     async activateRegisteredReplica(options) {
       lifecycleCalls.push(options);
       return {
-        service_id: options.replicaId,
-        service_type: 'partition',
-        partition_id: options.partitionId,
-        node_id: options.nodeId,
-        raft_role: raftRole,
+        ...PartitionServiceRowOwner.buildServiceRow({
+          partitionId: options.partitionId,
+          replicaId: options.replicaId,
+          nodeId: options.nodeId,
+          service: registeredService,
+          timestamp: options.timestamp,
+        }),
         status: 'active',
         updated_at: options.timestamp,
       };
     },
   };
-  return {lifecycleCalls, replicaStateMachine, systemTableWriter, updates};
+  return {inserts, lifecycleCalls, replicaStateMachine, systemTableWriter,
+    updates};
 }
 
 test('PartitionServiceRowOwner - activateReplica delegates lifecycle to ReplicaStateMachine',
@@ -147,7 +159,7 @@ test('PartitionServiceRowOwner - critical system partitions use critical service
 
 test('PartitionServiceRowOwner - follower activation does not rewrite canonical partition leader',
   async (t) => {
-    const harness = createActivationHarness({raftRole: 'follower'});
+    const harness = createActivationHarness();
     const owner = new PartitionServiceRowOwner({
       now: () => 1234,
       systemTableWriter: harness.systemTableWriter,
@@ -399,4 +411,42 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
   });
   t.equal(joinAdmissionOwner.getLeaderPartitionForTable('multi_part_table'), null,
     'explicitly refuses multi-partition tables');
+});
+
+// Necessity witness for the row arm of the canonical leader publication
+// (publishCanonicalLeaderNodeId, leader-authority census N2). Registration
+// and activation publish partitions.leader_node_id; the decision reads the
+// live service's leadership and, beside it, the row's raft_role. The row is
+// the one this owner built, whose role never reads leader for a partition,
+// so for every role the enum owns as the tracked role the decision is the
+// live leadership's (the anchor: live leadership changes it).
+test('necessity: the canonical leader publication follows the live leader ' +
+  'only; the row role the owner publishes never decides it', async (t) => {
+  for (const trackedRole of Object.values(RAFT_ROLE)) {
+    for (const liveLeader of [true, false]) {
+      const service = {isLeaderReplica: () => liveLeader,
+        getRole: () => trackedRole};
+      const label = `tracked ${trackedRole}, live leader ${liveLeader}`;
+      const harness = createActivationHarness({registeredService: service});
+      const owner = new PartitionServiceRowOwner({
+        now: () => 1234,
+        systemTableWriter: harness.systemTableWriter,
+        replicaStateMachine: harness.replicaStateMachine,
+      });
+      const registered = await owner.registerReplica({partitionId: 'p1',
+        replicaId: 'p1-r1', nodeId: 'node-a', service});
+      t.not(registered.raft_role, RAFT_ROLE.LEADER,
+        `${label}: the registered row carries no leader role`);
+      const activated = await owner.activateReplica({partitionId: 'p1',
+        replicaId: 'p1-r1', nodeId: 'node-a', service});
+      t.not(activated.raft_role, RAFT_ROLE.LEADER,
+        `${label}: the activated row carries no leader role`);
+      const publications = harness.updates.filter((update) =>
+        update.tableName === 'partitions');
+      t.same(publications.map((update) => update.updateData.leader_node_id),
+        liveLeader ? ['node-a', 'node-a'] : [],
+        `${label}: registration and activation publish the leader exactly ` +
+          'when the service leads');
+    }
+  }
 });
