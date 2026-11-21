@@ -1,3 +1,5 @@
+import {claimPlacementBootstrapDispatch} from './operation-workflow-replace-target-binding.js';
+import {requiresPlacementCreateBootstrapTopology} from './operation-workflow-placement-bootstrap-phase.js';
 import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
@@ -171,6 +173,9 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
    * @private
    */
   async claimPendingDispatchOperationInternal(operation, options) {
+    if (requiresPlacementCreateBootstrapTopology(operation, false)) {
+      return claimPlacementBootstrapDispatch(this, operation);
+    }
     if (this.shouldUsePriorityDispatchClaimNarrowPath(operation)) {
       const claimedOperation =
         await this.claimPriorityDispatchTransition(operation, options);
@@ -401,7 +406,6 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
-  // Clear the dispatch gates before routing the candidate by its durable phase.
   async advanceDispatchCandidateStep(operationInput, operation, options = {}) {
     if (isBootstrapTopologyDispatchDeferred(operation)) {
       return this.buildSkippedOperationResult(

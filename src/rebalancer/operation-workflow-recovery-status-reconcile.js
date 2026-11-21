@@ -1,3 +1,6 @@
+import {
+  isPlacementBootstrapAwaitingAuthority, isPlacementBootstrapBeforeDeadline,
+} from './operation-workflow-placement-bootstrap-phase.js';
 import {assertOperationTransitionOutcome, terminalOperationReconcileOutcome} from './operation-workflow-transition-outcome.js';
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
@@ -674,8 +677,10 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   }
 
   async reconcileTimeoutOperation(operation, now) {
+    const bootstrapWaiting = isPlacementBootstrapAwaitingAuthority(operation);
     if (
-      this.hasActiveTransitionRetryGrace(operation?.operationId || null, now)
+      this.hasActiveTransitionRetryGrace(operation?.operationId || null, now) &&
+      (!bootstrapWaiting || isPlacementBootstrapBeforeDeadline(operation, now))
     ) {
       if (
         didOperationReconcileAdvanceOrComplete(
@@ -692,10 +697,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       }
       return;
     }
-    const progressed = await this.reconcileOperationLifecycle(operation, {
-      cause: 'timeout',
-      now,
-    });
+    const progressed = bootstrapWaiting ? OPERATION_RECONCILE_OUTCOME.WAITING :
+      await this.reconcileOperationLifecycle(operation, {cause: 'timeout', now});
     if (
       didOperationReconcileAdvanceOrComplete(progressed) ||
       progressed === OPERATION_RECONCILE_OUTCOME.STOPPING_REDRIVE_CONFIRMED ||
@@ -717,10 +720,9 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       now: () => now,
     });
 
-    const stepTimeout = this.getTimeoutForStep(
-      operation.workflowStep,
-      operation,
-    );
+    const stepTimeout = bootstrapWaiting ?
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS :
+      this.getTimeoutForStep(operation.workflowStep, operation);
     const stepAllocation = createChildTimeoutBudget(operationBudget, {
       requestedBudgetMs: stepTimeout,
       minimumBudgetMs: TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
@@ -734,7 +736,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     // Report time-in-current-step (the anchor isOperationStepTimedOut now uses),
     // not time-since-updatedAt, so the timeout log/message is not under-reported
     // for an op whose dispatch retry loop kept re-stamping updatedAt (CL-044).
-    const elapsedAnchorMs = this.resolveOperationStepEnteredAtMs?.(operation);
+    const elapsedAnchorMs = bootstrapWaiting ? startedAtMs :
+      this.resolveOperationStepEnteredAtMs?.(operation);
     const elapsed = now - (Number.isFinite(elapsedAnchorMs) ?
       elapsedAnchorMs :
       (operation.updatedAt ?? operation.updatedAtMs));
