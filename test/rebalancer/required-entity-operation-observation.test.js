@@ -314,7 +314,9 @@ test('malformed retained work cannot disappear into a bounded zero-row observati
 
 // Hold the first real gateway execution. A second caller reaches the actual
 // single-flight registry before release; only the ledger RPC result is controlled.
-async function readThroughHeldLedger(t, answer, firstRead, secondRead) {
+const HELD_LEDGER_ENTRY_TIMEOUT_MS = 2000;
+
+async function readThroughHeldLedger(answer, firstRead, secondRead) {
   const executions = [];
   let notifyFirst;
   const firstEntered = new Promise((resolve) => {
@@ -324,7 +326,6 @@ async function readThroughHeldLedger(t, answer, firstRead, secondRead) {
   const held = new Promise((resolve) => {
     release = resolve;
   });
-  t.teardown(release);
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: 'node-1',
     cdcIntegrationService: {
@@ -347,13 +348,28 @@ async function readThroughHeldLedger(t, answer, firstRead, secondRead) {
     nodeId: 'node-1',
     controlPlaneSystemTableGateway: gateway,
   });
-  const first = firstRead(repository);
-  // Attach the rejection observer before releasing either operation.
-  const firstResult = Promise.allSettled([first]);
-  await firstEntered;
-  const second = Promise.allSettled([secondRead(repository)]);
-  release();
-  return {executions, settled: (await firstResult).concat(await second)};
+  let entryTimeout;
+  try {
+    const first = Promise.allSettled([firstRead(repository)]);
+    await Promise.race([
+      firstEntered,
+      first.then(([result]) => {
+        throw new Error(`Read settled before reaching the held ledger: ${result.status}`,
+          {cause: result.reason});
+      }),
+      new Promise((_, reject) => {
+        entryTimeout = setTimeout(() => {
+          reject(new Error('Read never reached the held ledger'));
+        }, HELD_LEDGER_ENTRY_TIMEOUT_MS);
+      }),
+    ]);
+    const second = Promise.allSettled([secondRead(repository)]);
+    release();
+    return {executions, settled: (await first).concat(await second)};
+  } finally {
+    clearTimeout(entryTimeout);
+    release();
+  }
 }
 
 const SHARED_ENTITY_ID = 'shared:entity-id';
@@ -370,7 +386,7 @@ for (const firstType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP]) {
         entity_type: type,
         entity_id: entityId,
       }];
-      const {executions, settled} = await readThroughHeldLedger(t, answer,
+      const {executions, settled} = await readThroughHeldLedger(answer,
         readRemovalCensus(firstType), readRemovalCensus(secondType));
       t.same(executions, [[firstType, SHARED_ENTITY_ID], [secondType, SHARED_ENTITY_ID]],
         'both exact owner RPCs execute despite their equal entity ID');
@@ -385,7 +401,7 @@ for (const firstType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP]) {
 
 test('identical typed required removal reads still join one gateway execution', async (t) => {
   const read = readRemovalCensus(SERVICE_TYPE.PARTITION);
-  const {executions, settled} = await readThroughHeldLedger(t, () => [], read, read);
+  const {executions, settled} = await readThroughHeldLedger(() => [], read, read);
   t.same(executions, [[SERVICE_TYPE.PARTITION, SHARED_ENTITY_ID]]);
   t.same(settled, [{status: 'fulfilled', value: []}, {status: 'fulfilled', value: []}]);
 });
@@ -403,7 +419,7 @@ for (const [scope, first, second] of [
     ['p', 'q:n', SERVICE_TYPE.PARTITION, 'id']],
 ]) {
   test(`in-flight owner reads preserve ${scope} in gateway coalescing`, async (t) => {
-    const {executions} = await readThroughHeldLedger(t, () => [],
+    const {executions} = await readThroughHeldLedger(() => [],
       readInFlight(first), readInFlight(second));
     t.same(executions, [first, second]);
   });
