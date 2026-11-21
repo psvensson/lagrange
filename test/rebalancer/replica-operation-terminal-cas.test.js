@@ -2,7 +2,7 @@ import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-wo
 // Audit finding 6 (quest replica-operation-terminal-cas): terminal
 // replica-operation transitions are first-terminal-wins, never
 // last-writer-wins. The terminal UPDATE guards on `completed_at IS NULL`
-// (gateway whereClause null-sentinel AND the raw-SQL fallback variant) while
+// (the gateway whereClause null-sentinel) while
 // keeping the deliberate no-expected-step design, and a writer whose guarded
 // write changes zero rows ADOPTS the winning terminal outcome instead of
 // re-asserting its own.
@@ -28,13 +28,7 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-import {
-  ReplicaOperationRepository,
-  SQL as REPOSITORY_SQL,
-} from '../../src/rebalancer/replica-operation-repository.js';
-import {
-  REBALANCE_COORDINATOR_SHARED,
-} from '../../src/rebalancer/rebalance-coordinator-shared.js';
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from '../../src/rebalancer/replica-operation-update-disposition.js';
@@ -272,24 +266,6 @@ test(
         'claim) fails the whereClause');
     t.equal(mutations[0].whereClause.created_at, held.createdAt);
     t.equal(mutations[0].whereClause.completed_at, null);
-    t.equal(
-      repository.resolveOperationUpdateSql(
-        WORKFLOW_STEP.PENDING, false, false, observedHistory),
-      REPOSITORY_SQL.UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY,
-    );
-    t.ok(
-      REPOSITORY_SQL.UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY.includes(
-        'WHERE operation_id = ? AND workflow_step = ? AND steps_history = ?'),
-      'the raw-SQL fallback carries the same predicate',
-    );
-    t.match(REPOSITORY_SQL.UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY,
-      /AND created_at = \? AND completed_at IS NULL/u,
-      'the raw-SQL fallback also pins the observed incomplete generation');
-    t.same(
-      repository.buildReplicaOperationUpdateParams(
-        released, WORKFLOW_STEP.PENDING, observedHistory).slice(-4),
-      [TEST_OPERATION_ID, WORKFLOW_STEP.PENDING, observedHistory, held.createdAt],
-    );
     await t.rejects(
       repository.persistOperationUpdate(released, {
         expectedStepsHistory: held.stepsHistory,
@@ -344,29 +320,6 @@ test(
       'the mutation retains the first-terminal-wins guard');
     t.equal(mutations[0].whereClause.create_admission_state, null,
       'the same mutation requires CREATE admission to remain absent');
-  },
-);
-
-test(
-  'the raw-SQL fallback terminal statement guards on completed_at IS NULL in both SQL blocks',
-  async (t) => {
-    t.ok(
-      REPOSITORY_SQL.UPDATE_OPERATION_TERMINAL.includes(
-        'WHERE operation_id = ? AND completed_at IS NULL',
-      ),
-      'the repository SQL block carries the guarded terminal statement',
-    );
-    t.ok(
-      REBALANCE_COORDINATOR_SHARED.SQL.UPDATE_OPERATION_TERMINAL.includes(
-        'WHERE operation_id = ? AND completed_at IS NULL',
-      ),
-      'the shared.js drift copy carries the same guarded terminal statement',
-    );
-    t.equal(
-      REPOSITORY_SQL.UPDATE_OPERATION_TERMINAL,
-      REBALANCE_COORDINATOR_SHARED.SQL.UPDATE_OPERATION_TERMINAL,
-      'the two copies cannot drift apart',
-    );
   },
 );
 

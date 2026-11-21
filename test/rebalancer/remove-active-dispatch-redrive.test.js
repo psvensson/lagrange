@@ -320,12 +320,13 @@ test('stranded REMOVE correction preserves a competing durable terminal failure'
     removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND});
   const repository = coordinator.repository;
   const gateway = repository.controlPlaneSystemTableGateway;
-  const execute = gateway.executeQuery.bind(gateway);
+  const submit = gateway.submitMutation.bind(gateway);
   let winner = null;
   let correctionAttempts = 0;
-  gateway.executeQuery = async (sql, params, options) => {
-    if (sql.includes('UPDATE replica_operations') && sql.includes('AND steps_history = ?') &&
-        params[1] === WORKFLOW_STEP.STOPPING) {
+  gateway.submitMutation = async (mutation, options) => {
+    if (mutation.operation === 'update' && mutation.tableName === 'replica_operations' &&
+        typeof mutation.whereClause.steps_history === 'string' &&
+        mutation.data.workflow_step === WORKFLOW_STEP.STOPPING) {
       correctionAttempts += 1;
       const now = Date.now();
       const failed = {...repository.rowToOperation(operationRow),
@@ -336,15 +337,20 @@ test('stranded REMOVE correction preserves a competing durable terminal failure'
       // An independent writer wins at the storage boundary. Keep the
       // owner's terminal CAS guard and parameter encoding while bypassing
       // the correcting owner's pre-read of the deliberately stranded row.
-      const result = await execute(
-        repository.resolveOperationUpdateSql(WORKFLOW_STEP.ACTIVE, true),
-        repository.buildReplicaOperationUpdateParams(failed, WORKFLOW_STEP.ACTIVE, null),
+      const result = await submit(
+        {
+          operation: 'update',
+          tableName: 'replica_operations',
+          whereClause: repository.buildReplicaOperationUpdateWhereClause(
+            failed, WORKFLOW_STEP.ACTIVE, {terminalTransition: true}),
+          data: repository.buildReplicaOperationUpdateData(failed),
+        },
         options,
       );
-      t.equal(result.changes, 1, 'the competing guarded terminal write commits in SQLite');
+      t.equal(repository.extractMutationChangeCount(result), 1, 'the competing guarded terminal write commits in SQLite');
       winner = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
     }
-    return execute(sql, params, options);
+    return submit(mutation, options);
   };
   try {
     await coordinator.reconcileOrphanedOperations();

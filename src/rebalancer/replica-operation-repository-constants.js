@@ -1,34 +1,34 @@
 const REPLICA_OPERATION_REPOSITORY_ERROR_CODE = Object.freeze({
+  MUTATION_PORT_REQUIRED: 'replica_operation_mutation_port_required',
   ENTITY_OPERATION_OBSERVATION_INCOMPLETE: 'entity_operation_observation_incomplete',
   ENTITY_OPERATION_OBSERVATION_MALFORMED: 'entity_operation_observation_malformed',
 });
 
 const REPLICA_OPERATION_REPOSITORY_ERROR_MSG = Object.freeze({
+  MUTATION_PORT_REQUIRED: 'ReplicaOperationRepository requires a structured mutation port',
   ENTITY_OPERATION_OBSERVATION_MALFORMED: 'Required entity operation observation is malformed',
   ENTITY_OPERATION_OBSERVATION_INCOMPLETE: 'Required entity operation observation is incomplete',
   TERMINAL_FAILED_CREATE_CLEANUP_RECOVERY_READ_UNAVAILABLE:
     'Terminal failed-create cleanup recovery read unavailable',
 });
 
-const REPLICA_OPERATION_INSERT_SQL = `INSERT INTO replica_operations (
-  operation_id, type, partition_id, replica_id, target_claim_key, source_node_id,
-  target_node_id, status, workflow_step, created_at, updated_at,
-  completed_at, error_message, steps_history,
-  entity_type, entity_id, membership_publication_epoch,
-  source_replica_id, message_group_membership_lane_key,
-  message_group_membership_phase, message_group_membership_obligation_state,
-  message_group_membership_identity, message_group_learner_stamp,
-  message_group_voter_stamp, message_group_removal_stamp,
-  message_group_source_lifecycle_claim,
-  create_admission_state, create_admission_token,
-  create_admission_replica_created_at, create_admission_attempt_token,
-  create_admission_previous_attempt_token, create_admission_attempt_seq,
-  create_admission_workflow_updated_at, create_admission_owner_incarnation
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?, ?)`;
+function unavailableReplicaOperationMutation() {
+  const error = new Error(REPLICA_OPERATION_REPOSITORY_ERROR_MSG.MUTATION_PORT_REQUIRED);
+  error.code = REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED;
+  throw error;
+}
+
+function bindReplicaOperationMutationPort(gateway, required) {
+  const submit = gateway?.submitMutation;
+  if (typeof submit === 'function') {
+    return (mutation, options) => gateway.submitMutation(mutation, options);
+  }
+  if (required) unavailableReplicaOperationMutation();
+  return unavailableReplicaOperationMutation;
+}
 
 export {
-  REPLICA_OPERATION_INSERT_SQL,
   REPLICA_OPERATION_REPOSITORY_ERROR_CODE,
   REPLICA_OPERATION_REPOSITORY_ERROR_MSG,
+  bindReplicaOperationMutationPort,
 };

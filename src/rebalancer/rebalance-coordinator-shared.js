@@ -136,33 +136,6 @@ const SQL = Object.freeze({
     AND entity_type = ? AND entity_id = ?`,
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
-  INSERT_OPERATION: `INSERT INTO replica_operations (
-    operation_id, type, partition_id, replica_id, target_claim_key,
-    source_node_id, target_node_id,
-    status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
-    entity_type, entity_id, membership_publication_epoch,
-    source_replica_id, message_group_membership_lane_key,
-    message_group_membership_phase, message_group_membership_obligation_state,
-    message_group_membership_identity, message_group_learner_stamp,
-    message_group_voter_stamp, message_group_removal_stamp,
-    message_group_source_lifecycle_claim,
-    create_admission_state, create_admission_token,
-    create_admission_replica_created_at, create_admission_attempt_token,
-    create_admission_previous_attempt_token, create_admission_attempt_seq,
-    create_admission_workflow_updated_at, create_admission_owner_incarnation
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?, ?)`,
-  UPDATE_OPERATION: `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ?`,
-  // Terminal-transition guard: no expected-step CAS (terminal must overwrite
-  // lagging non-terminal steps) but completed_at IS NULL so a different
-  // durable terminal is never clobbered (first-terminal-wins; finding 6).
-  UPDATE_OPERATION_TERMINAL: `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND completed_at IS NULL`,
   UPDATE_OPERATION_OWNER_LEASE: `UPDATE replica_operations SET
     lease_expires_at = ?
     WHERE operation_id = ? AND completed_at IS NULL`,

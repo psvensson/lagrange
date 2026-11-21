@@ -1,3 +1,4 @@
+import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 /**
@@ -153,6 +154,8 @@ function createTestRepository(overrides = {}) {
     },
     ...baseGateway,
   };
+  mockGateway.submitMutation ??= createMockControlPlaneSystemTableGateway(
+    {executeQuery: (...args) => mockGateway.executeQuery(...args)}).submitMutation;
   const mockCache = overrides.systemTableCache || {
     get: () => null,
     getAll: () => [],

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {REPLICA_OPERATION_REPOSITORY_ERROR_CODE} from
+  '../../src/rebalancer/replica-operation-repository-constants.js';
 import {OperationType, createOperation} from '../../src/rebalancer/replica-status.js';
 import {NODE_ID, selectRows, withSurface} from './unknown-outcome-surface-fixture.js';
 
@@ -21,19 +23,20 @@ function newRepository(engine, gateway, cdcIntegrationService, options = {}) {
 }
 
 function operation(operationId) {
-  return createOperation({
+  return Object.assign(createOperation({
     operationId,
     type: OperationType.ADD,
     partitionId: 'user-p1',
-    entityType: 'partition',
-    entityId: 'user-p1',
     sourceNodeId: NODE_ID,
     targetNodeId: 'other-node',
-  });
+  }), {entityType: 'partition', entityId: 'user-p1'});
 }
 
 const readRows = (of) => selectRows(of(LEDGER_TABLE).dbPath,
   'SELECT operation_id, workflow_step, updated_at FROM replica_operations');
+
+const writeCount = (deliveries) => deliveries
+  .filter(({sql}) => /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql)).length;
 
 async function observeRejectedInsert(repository, op) {
   try {
@@ -48,7 +51,7 @@ test('structured operation writes do not switch to routable SQL when CDC is unav
     await withSurface([LEDGER_TABLE], async ({engine, gateway, deliveries, of}) => {
       const repository = newRepository(engine, gateway, null);
       const refused = await observeRejectedInsert(repository, operation('no-cdc'));
-      assert.deepEqual({wrote: refused.result === true, deliveries: deliveries.length,
+      assert.deepEqual({wrote: refused.result === true, deliveries: writeCount(deliveries),
         rows: readRows(of)}, {wrote: false, deliveries: 0, rows: []}, JSON.stringify(refused));
       assert.match(refused.error, /requires cdcIntegrationService/u);
     });
@@ -66,10 +69,24 @@ test('a read-only repository cannot use legacy row methods; the canonical writer
       };
       const reader = newRepository(engine, legacyGateway, cdcIntegrationService);
       const refused = await observeRejectedInsert(reader, operation('legacy-row'));
-      assert.deepEqual({wrote: refused.result === true, deliveries: deliveries.length,
+      assert.deepEqual({wrote: refused.result === true, deliveries: writeCount(deliveries),
         rows: readRows(of)}, {wrote: false, deliveries: 0, rows: []}, JSON.stringify(refused));
 
-      const writer = newRepository(engine, gateway, cdcIntegrationService);
+      assert.equal(refused.code, REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED);
+      assert.throws(
+        () => newRepository(engine, legacyGateway, cdcIntegrationService, {
+          requireMutationPort: true,
+        }),
+        {code: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED},
+      );
+
+      const writer = newRepository(engine, gateway, cdcIntegrationService, {
+        requireMutationPort: true,
+      });
+      assert.throws(
+        () => writer.syncOwnerDependencies({controlPlaneSystemTableGateway: legacyGateway}),
+        {code: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED},
+      );
       const prior = operation('canonical-write');
       assert.equal(await writer.persistNewOperation(prior), true);
       const update = {...prior, updatedAt: prior.updatedAt + 1};

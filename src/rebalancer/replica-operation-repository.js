@@ -80,7 +80,7 @@ import {
 import {buildControlPlaneFailurePayload, cloneControlPlaneFailureParticipants} from
   './replica-operation-repository-control-plane-failure.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
-import {REPLICA_OPERATION_INSERT_SQL} from
+import {bindReplicaOperationMutationPort} from
   './replica-operation-repository-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
@@ -137,8 +137,6 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
     'Entity in-flight operation owner read unavailable',
   CONTROL_PLANE_PRESSURE: ' control-plane pressure',
   AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED: 'Authoritative replica operation not confirmed: ',
-  REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS:
-    'ReplicaOperationRepository requires a control-plane mutation ingress',
   OBJECT: 'object',
   FUNCTION: 'function',
   CRITICAL: 'critical',
@@ -184,31 +182,6 @@ const SQL = Object.freeze({
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
   SELECT_ALL_OPERATIONS: 'SELECT * FROM replica_operations ORDER BY created_at DESC',
-  INSERT_OPERATION: REPLICA_OPERATION_INSERT_SQL,
-  UPDATE_OPERATION: `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ?`,
-  UPDATE_OPERATION_EXPECTING_STEP: `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND workflow_step = ?`,
-  // Observed-state CAS: the step AND the exact steps history the writer
-  // read. A same-step change (a released hold, a stamped cohort) is a lost
-  // update a step-only CAS cannot see.
-  UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY: `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND workflow_step = ? AND steps_history = ?
-      AND created_at = ? AND completed_at IS NULL`,
-  // Terminal-transition writes deliberately carry NO expected-step CAS (a
-  // lagging non-terminal durable step must still be overwritten) but guard on
-  // completed_at IS NULL so a DIFFERENT durable terminal that already won is
-  // never clobbered (first-terminal-wins; audit finding 6).
-  UPDATE_OPERATION_TERMINAL: `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND completed_at IS NULL`,
   // Owner-lease heartbeat touch (audit findings 5+14): re-stamps only the
   // lease column on a live (non-terminal) row owned by this node's write
   // path. Carries no status/step payload, so it is issued AFTER the
@@ -493,6 +466,7 @@ class ReplicaOperationRepository {
    * @param {object} options.systemTableCache
    * @param {object} options.cdcIntegrationService
    * @param {object} options.controlPlaneSystemTableGateway
+   * @param {boolean} [options.requireMutationPort] - Validate the writer binding.
    * @param {object} options.logger
    * @param {object} [options.emitter] - EventEmitter for divergence events
    */
@@ -505,7 +479,8 @@ class ReplicaOperationRepository {
     this.retainedPlacementRepairWakes = new Map();
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
-    this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
+    this.requireMutationPort = options.requireMutationPort === true;
+    this.setControlPlaneSystemTableGateway(options.controlPlaneSystemTableGateway);
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.logger = options.logger;
     this.emitter = options.emitter || null;
@@ -556,21 +531,27 @@ class ReplicaOperationRepository {
   isShuttingDownRequested() {
     return this._shuttingDown === true;
   }
+  setControlPlaneSystemTableGateway(gateway) {
+    this.submitOperationMutation = bindReplicaOperationMutationPort(
+      gateway, this.requireMutationPort);
+    this.controlPlaneSystemTableGateway = gateway;
+  }
+
   /**
    * Synchronize mutable runtime dependencies after construction.
    * @param {Object} [options={}]
    */
   syncOwnerDependencies(options = {}) {
+    if (
+      Object.hasOwn(options, REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROLPLANESYSTEMTABLEGATEWAY)
+    ) {
+      this.setControlPlaneSystemTableGateway(options.controlPlaneSystemTableGateway);
+    }
     if (Object.hasOwn(options, REPLICA_OPERATION_REPOSITORY_LITERAL.SYSTEMTABLECACHE)) {
       this.systemTableCache = options.systemTableCache || null;
     }
     if (Object.hasOwn(options, REPLICA_OPERATION_REPOSITORY_LITERAL.CDCINTEGRATIONSERVICE)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
-    }
-    if (
-      Object.hasOwn(options, REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROLPLANESYSTEMTABLEGATEWAY)
-    ) {
-      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway || null;
     }
     if (Object.hasOwn(options, REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROLPLANEREADINESSSERVICE)) {
       this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;

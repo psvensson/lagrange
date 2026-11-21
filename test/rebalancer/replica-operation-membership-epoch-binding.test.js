@@ -43,9 +43,8 @@ import {NUM} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from
   '../../src/partition/partition-service.js';
-import {
-  REBALANCE_COORDINATOR_SHARED,
-} from '../../src/rebalancer/rebalance-coordinator-shared.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {
@@ -64,7 +63,6 @@ import {
 } from './epoch-fence-test-harness.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
-const {SQL} = REBALANCE_COORDINATOR_SHARED;
 const {BOUND, UNBOUND, INVALID} = MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE;
 const EPOCH_FIELD = ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH;
 
@@ -298,26 +296,27 @@ function buildAddMove(partitionId, epoch) {
 
 function insertMalformedDurableRow(db, operationId, partitionId, rawEpoch) {
   const now = Date.now();
-  db.prepare(SQL.INSERT_OPERATION).run(
-    operationId,
-    MALFORMED_TYPE,
-    partitionId,
-    `${partitionId}-r1`,
-    null,
-    TEST_NODE_ID,
-    TEST_TARGET_NODE_ID,
-    MALFORMED_STATUS,
-    MALFORMED_WORKFLOW_STEP,
-    now,
-    now,
-    null,
-    null,
-    EMPTY_STEPS_HISTORY,
-    MALFORMED_ENTITY_TYPE,
-    partitionId,
-    rawEpoch,
-    ...Array(17).fill(null),
-  );
+  const {sql, params} = new ControlPlaneSystemTableGateway().buildSqlMutationPlan({
+    operation: 'insert',
+    tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    row: {
+      operation_id: operationId,
+      type: MALFORMED_TYPE,
+      partition_id: partitionId,
+      replica_id: `${partitionId}-r1`,
+      source_node_id: TEST_NODE_ID,
+      target_node_id: TEST_TARGET_NODE_ID,
+      status: MALFORMED_STATUS,
+      workflow_step: MALFORMED_WORKFLOW_STEP,
+      created_at: now,
+      updated_at: now,
+      steps_history: EMPTY_STEPS_HISTORY,
+      entity_type: MALFORMED_ENTITY_TYPE,
+      entity_id: partitionId,
+      membership_publication_epoch: rawEpoch,
+    },
+  });
+  db.prepare(sql).run(...params);
 }
 
 async function expectInvalidBindingRejection(t, readOperation, label) {

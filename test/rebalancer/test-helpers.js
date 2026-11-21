@@ -400,6 +400,8 @@ function withAuthoritativeReadDefaults(tableName, rawResult) {
   return next;
 }
 
+const MUTATION_SQL_PLANNER = new ControlPlaneSystemTableGateway();
+
 function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
   const gateway = {
     async executeQuery(sql, params = [], _queryOptions = {}) {
@@ -407,6 +409,10 @@ function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
         return sqlQueryEngine.executeQuery(sql, params, _queryOptions);
       }
       return {success: true, rows: [], rowSetComplete: true};
+    },
+    async submitMutation(mutation, options) {
+      const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan(mutation);
+      return gateway.executeQuery(sql, params, options);
     },
     async readAuthoritativeRows(tableName, sql, params = [], queryOptions = {}) {
       return withAuthoritativeReadDefaults(
@@ -903,7 +909,6 @@ const STORE_OWNED_TABLE_NAMES = Object.freeze(new Set([
   SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
 ]));
 // The product's one translation of a system-table mutation into SQL.
-const MUTATION_SQL_PLANNER = new ControlPlaneSystemTableGateway();
 
 // The owner's tables are built once; each store opens its own copy of them.
 const SQL_STORE_DATABASE_IMAGE = (() => {
