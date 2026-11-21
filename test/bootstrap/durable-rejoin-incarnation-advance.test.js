@@ -13,8 +13,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeRegistrationOwner} from
   '../../src/bootstrap/shared/node-registration-owner.js';
-import {buildNodeRegistrationRow} from
-  '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
+import {
+  buildAuthoritativeRowSourceUnavailableError,
+  buildNodeRegistrationRow,
+} from '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
 import {getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {MembershipPublicationRuntimeOwner} from
@@ -34,6 +36,7 @@ import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
+  ISSUE_INDETERMINATE_MODE,
   NODE_IDENTITY_TWIN_SUSPECTED,
   NODE_REGISTRATION_CLOCK_REQUIRED,
   NODE_REGISTRATION_INCARNATION_REQUIRED,
@@ -42,9 +45,15 @@ import {
   buildSupersededRegistrationError,
   classifyNodeIncarnationRelation,
   createNodeRegistrationIssueRecord,
+  matchesIndeterminateAttemptRow,
   recordNodeRegistrationIssue,
+  requireRegistrationClockReading,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
+import {runControlPlaneWrite} from
+  '../../src/control-plane/control-plane-write-identity.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {buildClusterIncarnationFence} from
   '../../src/bootstrap/cluster-incarnation-fence.js';
 import {
@@ -821,28 +830,365 @@ test('M1-1B: transient observe + insert + reread failure leaves the same ' +
 });
 
 // ---------------------------------------------------------------------------
+// R2-1 (4A, 4B, 4C) + R2-2a: cross-call same-lifecycle retry after lost ACK +
+// failed inline readback settles via R07 named indeterminate state instead of
+// self-fencing as REFUSED_STALE / STALE_NODE_INCARNATION.
+
+test('R2-1 (4A) + R2-2a: cross-call authoritative OLDER advance after lost ' +
+  'ACK + unavailable inline reread promotes on healed retry, while address ' +
+  'or host mismatch refuses stale', async (t) => {
+  const attemptedRow = {
+    [COLUMN.NODE_ID]: NODE_ID,
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
+    [COLUMN.NODE_ADDRESS]: NODE_ADDRESS,
+  };
+  let committedRow = previousBootRow({[COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID});
+  let advanceCalls = 0;
+  let observeCalls = 0;
+  const issueRecord = createNodeRegistrationIssueRecord();
+
+  const callRegistration = () => writeNodeRegistrationAtIncarnation({
+    row: attemptedRow,
+    bootIncarnation: THIS_BOOT,
+    issueRecord,
+    nowMs: NOW,
+    observe: async () => {
+      observeCalls += 1;
+      if (observeCalls === 2) {
+        return {available: false, row: null};
+      }
+      return {available: true, row: committedRow ? {...committedRow} : null};
+    },
+    insert: async () => ({success: true, partitionResult: {affectedRows: 1}}),
+    advance: async (_where, stamped) => {
+      advanceCalls += 1;
+      committedRow = {
+        ...stamped,
+        [COLUMN.UPDATED_AT_HLC]: '1710000000000-004a-nodes',
+      };
+      throw new Error('acknowledgement lost');
+    },
+  });
+
+  const first = await callRegistration();
+  t.equal(first.outcome, NODE_REGISTRATION_OUTCOME.UNRESOLVED,
+    'Call 1 ends UNRESOLVED when both ACK and inline reread fail');
+  t.equal(issueRecord.issuedAtIncarnation, null);
+  t.equal(issueRecord.indeterminateMode, ISSUE_INDETERMINATE_MODE.AUTHORITATIVE);
+  t.equal(issueRecord.indeterminateAtIncarnation, THIS_BOOT);
+  t.same(issueRecord.indeterminateRow, {
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
+    [COLUMN.NODE_ADDRESS]: NODE_ADDRESS,
+  });
+
+  const second = await callRegistration();
+  t.equal(second.outcome, NODE_REGISTRATION_OUTCOME.ACCEPTED,
+    'healed Call 2 promotes authoritative indeterminate issue to ACCEPTED');
+  t.equal(second.originHlc, '1710000000000-004a-nodes',
+    'healed Call 2 preserves committed updated_at_hlc');
+  t.equal(advanceCalls, 1, 'no duplicate CAS write on Call 2');
+  t.equal(issueRecord.issuedAtIncarnation, THIS_BOOT);
+  t.equal(issueRecord.indeterminateMode, null);
+  t.equal(issueRecord.indeterminateAtIncarnation, null);
+  t.equal(issueRecord.indeterminateRow, null);
+
+  // R2-2a: a row at THIS_BOOT whose node_address differs does NOT match the
+  // pending indeterminate attempt and is refused stale.
+  t.equal(
+    matchesIndeterminateAttemptRow(
+      attemptedRow,
+      {
+        ...attemptedRow,
+        [COLUMN.BOOT_INCARNATION]: THIS_BOOT,
+        [COLUMN.NODE_ADDRESS]: 'twin-host:9090',
+      },
+      THIS_BOOT,
+    ),
+    false,
+    'R2-2a: mismatched node_address rejects indeterminate promotion',
+  );
+  const mismatchedIssue = createNodeRegistrationIssueRecord();
+  let mismatchObs = 0;
+  await writeNodeRegistrationAtIncarnation({
+    row: attemptedRow,
+    bootIncarnation: THIS_BOOT,
+    issueRecord: mismatchedIssue,
+    nowMs: NOW,
+    observe: async () => {
+      mismatchObs += 1;
+      return mismatchObs === 1 ?
+        {available: true, row: previousBootRow()} :
+        {available: false, row: null};
+    },
+    insert: async () => ({success: true, partitionResult: {affectedRows: 1}}),
+    advance: async () => {
+      throw new Error('acknowledgement lost');
+    },
+  });
+  const mismatchedRetry = await writeNodeRegistrationAtIncarnation({
+    row: attemptedRow,
+    bootIncarnation: THIS_BOOT,
+    issueRecord: mismatchedIssue,
+    nowMs: NOW,
+    observe: async () => ({
+      available: true,
+      row: {
+        ...attemptedRow,
+        [COLUMN.BOOT_INCARNATION]: THIS_BOOT,
+        [COLUMN.NODE_ADDRESS]: 'twin-host:9090',
+      },
+    }),
+    insert: async () => ({success: true, partitionResult: {affectedRows: 1}}),
+    advance: async () => ({success: true, partitionResult: {affectedRows: 0}}),
+  });
+  t.equal(mismatchedRetry.outcome, NODE_REGISTRATION_OUTCOME.REFUSED_STALE,
+    'mismatched node_address on Call 2 clears indeterminate state and refuses');
+  t.equal(mismatchedIssue.issuedAtIncarnation, null);
+  t.equal(mismatchedIssue.indeterminateMode, null);
+});
+
+test('R2-1 (4B): intact DURABLE_REJOIN lost-ACK + unavailable readback ' +
+  'recovers on healed Call 2 on the same NodeRegistrationOwner', async (t) => {
+  const durable = createDurableNodes(previousBootRow({
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+    [COLUMN.UPDATED_AT_HLC]: '1710000000000-0000-prev',
+  }));
+  let nodesUpdates = 0;
+  let loseAckOnce = true;
+  let failReadbackOnce = false;
+  const rawUpdate = durable.gateway.updateSystemTableRow;
+  attachOriginHlcStamping(durable.gateway, {prefix: '1710000000000-004b-'});
+  const stampedUpdate = durable.gateway.updateSystemTableRow;
+  durable.gateway.updateSystemTableRow = async (tableName, whereClause, data) => {
+    const res = await stampedUpdate(tableName, whereClause, data);
+    if (tableName === TABLES.NODES) {
+      if (res?.originHlc) {
+        await rawUpdate(tableName, {[COLUMN.NODE_ID]: NODE_ID},
+          {[COLUMN.UPDATED_AT_HLC]: res.originHlc});
+      }
+      nodesUpdates += 1;
+      if (loseAckOnce) {
+        loseAckOnce = false;
+        failReadbackOnce = true;
+        throw new Error('acknowledgement lost after durable CAS commit');
+      }
+    }
+    return res;
+  };
+
+  const owner = createRejoiningOwner(durable, THIS_BOOT);
+  owner.readAuthoritativeDurableRejoinNodeRow = async () => {
+    if (failReadbackOnce) {
+      failReadbackOnce = false;
+      throw buildAuthoritativeRowSourceUnavailableError(TABLES.NODES);
+    }
+    return durable.current() ? {...durable.current()} : null;
+  };
+
+  const firstErr = await t.rejects(owner.registerNodeInCluster());
+  t.equal(firstErr?.deferRetry, true, 'Call 1 defers when inline readback fails');
+  t.equal(owner.registrationIssueRecord.issuedAtIncarnation, null);
+  t.equal(owner.registrationIssueRecord.indeterminateMode,
+    ISSUE_INDETERMINATE_MODE.AUTHORITATIVE);
+  t.equal(owner.registrationIssueRecord.indeterminateAtIncarnation, THIS_BOOT);
+
+  const second = await owner.registerNodeInCluster();
+  t.equal(second?.reusedExistingMembership, true,
+    'healed Call 2 on the same NodeRegistrationOwner succeeds');
+  t.equal(nodesUpdates, 1, 'exactly one NODES CAS write across both calls');
+  t.equal(owner.registrationIssueRecord.issuedAtIncarnation, THIS_BOOT);
+  t.equal(owner.registrationIssueRecord.indeterminateMode, null);
+  t.equal(second.nodeRow?.[COLUMN.UPDATED_AT_HLC],
+    `1710000000000-004b-1-${TABLES.NODES}`,
+    'Call 2 preserves the committed updated_at_hlc from Call 1');
+  t.same(durable.endpoints().map((row) => row[COLUMN.BOOT_INCARNATION]),
+    [THIS_BOOT, THIS_BOOT]);
+});
+
+function createBlindBirthReplayHarness(initialRow) {
+  const base = createDurableNodes(initialRow);
+  const outcomesByKey = new Map();
+  let authorityDown = true;
+  let dropInsertAckOnce = true;
+  let physicalInserts = 0;
+
+  base.gateway.readAuthoritativeRows = async (tableName = TABLES.NODES) => {
+    if (authorityDown) {
+      return {success: false, error: 'leader_not_ready'};
+    }
+    const row = tableName === TABLES.NODES ? base.current() : null;
+    return {success: true, rows: row ? [{...row}] : []};
+  };
+
+  const rawInsert = base.gateway.insertSystemTableRow;
+  base.gateway.insertSystemTableRow = (tableName, row, options = {}) =>
+    runControlPlaneWrite(options, {tableName, row}, async (idempotencyKey) => {
+      let replayed = true;
+      if (tableName === TABLES.NODES && !outcomesByKey.has(idempotencyKey)) {
+        replayed = false;
+        physicalInserts += 1;
+        if (base.current()) {
+          outcomesByKey.set(idempotencyKey, {
+            success: false,
+            error: 'UNIQUE constraint failed: nodes.node_id',
+            committed: true,
+          });
+        } else {
+          await rawInsert(tableName, {
+            ...row,
+            [COLUMN.UPDATED_AT_HLC]: '1710000000000-004c-nodes',
+          });
+          outcomesByKey.set(idempotencyKey, {
+            success: true,
+            originHlc: '1710000000000-004c-nodes',
+            partitionResult: {
+              affectedRows: 1,
+              originHlc: '1710000000000-004c-nodes',
+            },
+          });
+        }
+      } else if (tableName !== TABLES.NODES) {
+        return rawInsert(tableName, row);
+      }
+      if (tableName === TABLES.NODES && dropInsertAckOnce) {
+        dropInsertAckOnce = false;
+        return {
+          success: false,
+          error: 'write_outcome_unknown',
+          failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+          entryId: idempotencyKey,
+        };
+      }
+      const stored = outcomesByKey.get(idempotencyKey);
+      return replayed && stored.success ?
+        {...stored, settledReplay: 'outcome_retained'} :
+        {...stored};
+    });
+
+  return {
+    durable: base,
+    setAuthorityDown: (down) => {
+      authorityDown = down;
+    },
+    getPhysicalInserts: () => physicalInserts,
+  };
+}
+
+test('R2-1 (4C): blind BIRTH lost-ACK + unavailable reread replays held ' +
+  'writeIdentity when observe heals (ACCEPTED if ours, REFUSED_STALE if ' +
+  'foreign wiped life)', async (t) => {
+  // 4C-ours: blind BIRTH commits on Call 1, ACK + reread fail; on Call 2
+  // authority heals AND fence allows progress reuse AND clock advances (rebuilt
+  // row digest), yet pending blind_birth forces registerJoinNodeRow -> replay!
+  const ours = createBlindBirthReplayHarness(null);
+  const oursOwner = createFreshStorageOwner(ours.durable, THIS_BOOT);
+  let fenceAllowed = false;
+  oursOwner.delegates.getClusterIncarnationFence = () =>
+    (fenceAllowed ? {allowed: true} : null);
+
+  const firstOursErr = await t.rejects(oursOwner.registerNodeInCluster());
+  t.match(firstOursErr?.message || '', /write_outcome_unknown/);
+  t.equal(oursOwner.registrationIssueRecord.issuedAtIncarnation, null);
+  t.equal(oursOwner.registrationIssueRecord.indeterminateMode,
+    ISSUE_INDETERMINATE_MODE.BLIND_BIRTH);
+  t.equal(oursOwner.registrationIssueRecord.indeterminateAtIncarnation,
+    THIS_BOOT);
+  t.equal(oursOwner.registrationIssueRecord.indeterminateRow, null);
+
+  ours.setAuthorityDown(false);
+  fenceAllowed = true;
+  oursOwner.delegates.getNow = () => () => NOW + 5_000;
+  const secondOurs = await oursOwner.registerNodeInCluster();
+  t.equal(secondOurs.nodeRow?.[COLUMN.BOOT_INCARNATION], THIS_BOOT);
+  t.equal(secondOurs.nodeRow?.[COLUMN.UPDATED_AT_HLC],
+    '1710000000000-004c-nodes',
+    '4C-ours preserves Call 1 committed updated_at_hlc');
+  t.equal(ours.getPhysicalInserts(), 1,
+    '4C-ours executes one physical INSERT and settles Call 2 by replay');
+  t.equal(oursOwner.registrationIssueRecord.issuedAtIncarnation, THIS_BOOT);
+  t.equal(oursOwner.registrationIssueRecord.indeterminateMode, null);
+
+  // 4C-foreign: wiped Life 1 already holds node_id at THIS_BOOT (even with
+  // identical host_id, node_address, and JOINING status); Call 1 blind BIRTH
+  // loses ACK before hearing UNIQUE; healed Call 2 replays writeIdentity,
+  // settles unapplied, and refuses STALE_NODE_INCARNATION!
+  const foreignRow = earlierLifeRow({
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID,
+    [COLUMN.NODE_ADDRESS]: NODE_ADDRESS,
+  });
+  const foreign = createBlindBirthReplayHarness(foreignRow);
+  const foreignOwner = createFreshStorageOwner(foreign.durable, THIS_BOOT);
+  let foreignFenceAllowed = false;
+  foreignOwner.delegates.getClusterIncarnationFence = () =>
+    (foreignFenceAllowed ? {allowed: true} : null);
+
+  await t.rejects(foreignOwner.registerNodeInCluster(), /write_outcome_unknown/);
+  t.equal(foreignOwner.registrationIssueRecord.indeterminateMode,
+    ISSUE_INDETERMINATE_MODE.BLIND_BIRTH);
+
+  foreign.setAuthorityDown(false);
+  foreignFenceAllowed = true;
+  const foreignErr = await t.rejects(foreignOwner.registerNodeInCluster());
+  t.equal(foreignErr?.code, STALE_NODE_INCARNATION_CODE,
+    '4C-foreign refuses wiped Life 1 row as STALE after writeIdentity replay');
+  t.equal(foreignErr?.knownIncarnation, THIS_BOOT);
+  t.equal(foreignOwner.registrationIssueRecord.issuedAtIncarnation, null);
+  t.equal(foreignOwner.registrationIssueRecord.indeterminateMode, null);
+});
+
+// ---------------------------------------------------------------------------
 // M3.2 + M4.2 + M4.3: strict parameter/issueRecord validation and T3/T5/storage
 // witnesses.
 
-test('M3.2 + M4.2: issueRecord rejects missing, malformed, Proxy and getter ' +
-  'shapes; clock and declaredHostId are required across D-7 entrypoints',
+test('M3.2 + M4.2 + R2-2b: issueRecord rejects missing, malformed, Proxy, ' +
+  'getter and inconsistent 4-field tuples; clock requires non-negative safe ' +
+  'integer and rejects -0/floats/negatives',
 async (t) => {
   const validRecord = createNodeRegistrationIssueRecord();
+  t.equal(Object.isSealed(validRecord), true, 'issueRecord is sealed');
   const proxyRecord = new Proxy(createNodeRegistrationIssueRecord(), {});
-  const getterRecord = {};
+  const getterRecord = {
+    indeterminateAtIncarnation: null,
+    indeterminateMode: null,
+    indeterminateRow: null,
+  };
   Object.defineProperty(getterRecord, 'issuedAtIncarnation', {
     get: () => null,
     set: () => {},
     enumerable: true,
   });
-  const frozenRecord = Object.freeze({issuedAtIncarnation: null});
+  const frozenRecord = Object.freeze({
+    issuedAtIncarnation: null,
+    indeterminateAtIncarnation: null,
+    indeterminateMode: null,
+    indeterminateRow: null,
+  });
 
   for (const badRecord of [
     undefined,
     null,
     {},
-    {issuedAtIncarnation: 0},
-    {issuedAtIncarnation: -1},
+    {issuedAtIncarnation: null},
+    {...createNodeRegistrationIssueRecord(), issuedAtIncarnation: 0},
+    {...createNodeRegistrationIssueRecord(), issuedAtIncarnation: -1},
+    {...createNodeRegistrationIssueRecord(), indeterminateMode: 'bogus'},
+    {...createNodeRegistrationIssueRecord(), indeterminateAtIncarnation: 3},
+    {
+      ...createNodeRegistrationIssueRecord(),
+      indeterminateMode: ISSUE_INDETERMINATE_MODE.BLIND_BIRTH,
+      indeterminateAtIncarnation: 3,
+      indeterminateRow: {[COLUMN.HOST_ID]: LOCAL_MACHINE_HOST_ID},
+    },
+    {
+      ...createNodeRegistrationIssueRecord(),
+      indeterminateMode: ISSUE_INDETERMINATE_MODE.AUTHORITATIVE,
+      indeterminateAtIncarnation: 3,
+      indeterminateRow: null,
+    },
     proxyRecord,
     getterRecord,
     frozenRecord,
@@ -854,6 +1200,27 @@ async (t) => {
     t.throws(
       () => recordNodeRegistrationIssue(badRecord, THIS_BOOT),
       {code: NODE_REGISTRATION_ISSUE_RECORD_REQUIRED},
+    );
+  }
+
+  // R2-2b: requireRegistrationClockReading accepts 0 and positive safe
+  // integers, while rejecting -0, negatives, floats, and > MAX_SAFE_INTEGER.
+  t.equal(requireRegistrationClockReading(0), 0);
+  t.equal(requireRegistrationClockReading(NOW), NOW);
+  for (const badClock of [
+    undefined,
+    null,
+    -0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    '1000',
+  ]) {
+    t.throws(
+      () => requireRegistrationClockReading(badClock),
+      {code: NODE_REGISTRATION_CLOCK_REQUIRED},
     );
   }
 
