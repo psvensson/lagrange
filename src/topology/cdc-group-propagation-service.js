@@ -11,6 +11,7 @@ import {CDC_EVENT_METADATA_FIELD} from '../cdc/cdc-event-envelope.js';
 import {isDenseDataArray} from '../utils/canonical-json-data.js';
 import {isCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {propagateDurableCdcEvent} from './cdc-group-propagation-durable-delivery.js';
+import {assertPropagationCollaborators} from './cdc-group-propagation-collaborators.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -108,32 +109,37 @@ class CDCGroupPropagationService extends EventEmitter {
    * Initialize dependencies.
    * @param {Object} options
    */ initialize(options = {}) {
-    this.retireInFlightDurableWaves();
-    this.durablePropagationLifetime = Object.freeze({});
+    // The wiring is validated before it is taken: a refused wiring leaves the
+    // service as it was (an unwired service refuses work until initialized).
+    const wiring = {nodeId: this.nodeId, systemTableCache: this.systemTableCache,
+      messageRouter: this.messageRouter, latencyTreeService: this.latencyTreeService,
+      config: this.config};
     if (options.nodeId) {
-      this.nodeId = options.nodeId;
+      wiring.nodeId = options.nodeId;
     }
     if (options.systemTableCache) {
-      this.systemTableCache = options.systemTableCache;
+      wiring.systemTableCache = options.systemTableCache;
     }
     if (options.messageRouter) {
-      this.messageRouter = options.messageRouter;
+      wiring.messageRouter = options.messageRouter;
     }
     if (options.latencyTreeService) {
-      this.latencyTreeService = options.latencyTreeService;
+      wiring.latencyTreeService = options.latencyTreeService;
     }
+    assertCritical(wiring.nodeId, CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_NODE_ID);
+    assertCritical(wiring.systemTableCache, CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CACHE);
+    assertCritical(wiring.latencyTreeService,
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_TREE_SERVICE);
+    assertPropagationCollaborators(wiring);
+    this.retireInFlightDurableWaves();
+    this.durablePropagationLifetime = Object.freeze({});
+    this.nodeId = wiring.nodeId;
+    this.systemTableCache = wiring.systemTableCache;
+    this.messageRouter = wiring.messageRouter;
+    this.latencyTreeService = wiring.latencyTreeService;
     if (options.nowFn) {
       this.nowFn = options.nowFn;
     }
-    this.nodeId = assertCritical(this.nodeId, CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_NODE_ID);
-    this.systemTableCache = assertCritical(
-      this.systemTableCache,
-      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CACHE,
-    );
-    this.latencyTreeService = assertCritical(
-      this.latencyTreeService,
-      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_TREE_SERVICE,
-    );
     this.refreshConfig();
     this.state = CDC_GROUP_PROPAGATION_STATE.INITIALIZED;
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.INITIALIZED, {

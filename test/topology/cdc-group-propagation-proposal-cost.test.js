@@ -12,7 +12,8 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
 import {pump, recipientFixture, NODE_ID} from '../message-group/message-group-native-custody-fixture.js';
 import {createDurableCdcEvent, createDurablePropagationRequest, createGroupRow,
-  createMessageGroupServiceRow, createTopologyCache, setupConfig, teardownConfig} from
+  createMessageGroupServiceRow, createStatedRoutingTree,
+  createTopologyCache, setupConfig, teardownConfig} from
   './cdc-group-propagation-service-harness.js';
 
 const WAVES = 4;
@@ -70,7 +71,7 @@ async function healthyWaves(t, duplicateProposals) {
         await target.handleLatencyCdcPropagationMessage(`cost-${deliveries}`,
           options.prepareDeliveryMessage(payload, options.remainingMs())));
     }},
-    latencyTreeService: {getRoutingOrder: () => services.map((s) => s.groupId)},
+    latencyTreeService: createStatedRoutingTree(services.map((s) => s.groupId)),
     nowFn: () => fixtures[0].clocks[0].now(),
   });
   topology.initialize();

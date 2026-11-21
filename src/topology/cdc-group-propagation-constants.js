@@ -1,8 +1,32 @@
 /**
  * Constants for CDCGroupPropagationService.
  */
+import {TABLES} from '../constants/index.js';
 
 const CDC_GROUP_PROPAGATION_SUBSYSTEM = 'cdc-group-propagation';
+
+// The one list of system tables the propagation plan reads. The routing owner
+// (cdc-group-propagation-routing.js) reads tables only through it, and the
+// plan's stamp (cdc-group-propagation-durable-plan.js) iterates it, so a table
+// cannot be read by the plan without its version being in the stamp.
+const CDC_PROPAGATION_PLAN_TABLE = Object.freeze({
+  SERVICES: TABLES.SERVICES,
+  NODES: TABLES.NODES,
+  LATENCY_GROUPS: TABLES.LATENCY_GROUPS,
+  MESSAGE_GROUPS: TABLES.MESSAGE_GROUPS,
+});
+
+// The collaborators whose versions the plan stamp reads, as named in a
+// wiring refusal.
+const CDC_GROUP_PROPAGATION_COLLABORATOR = Object.freeze({
+  SYSTEM_TABLE_CACHE: 'systemTableCache',
+  LATENCY_TREE_SERVICE: 'latencyTreeService',
+  CONFIGURATION: 'config',
+});
+
+const CDC_GROUP_PROPAGATION_ERROR_CODE = Object.freeze({
+  COLLABORATOR_INVALID: 'cdc_group_propagation_collaborator_invalid',
+});
 const CDC_MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 
 const CDC_GROUP_PROPAGATION_STATE = Object.freeze({
@@ -88,7 +112,9 @@ const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
 
 export {
   CDC_GROUP_FOREGROUND_RETRY_STATE,
+  CDC_GROUP_PROPAGATION_COLLABORATOR,
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
+  CDC_GROUP_PROPAGATION_ERROR_CODE,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
@@ -100,4 +126,5 @@ export {
   CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
   CDC_MESSAGE_GROUP_REPLICA_SUFFIX,
+  CDC_PROPAGATION_PLAN_TABLE,
 };

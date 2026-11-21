@@ -28,7 +28,7 @@
   "censusSize": 2727,
   "digest": "fnv1a32-991183a9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0c2770f7",
+  "observationDigest": "fnv1a32-4c13d8bc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -24817,6 +24817,11 @@
         "scripts",
         "src",
         "test"
+      ]
+    },
+    "test/topology/cdc-recipient-domain-and-retained-debt.test.js": {
+      "files": [
+        "src/constants/index.js"
       ]
     },
     "test/topology/node-host-identity-start-site-census.test.js": {

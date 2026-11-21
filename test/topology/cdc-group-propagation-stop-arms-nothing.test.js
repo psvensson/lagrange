@@ -81,6 +81,7 @@ import {
   createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
+  createStatedRoutingTree,
   createTopologyCache,
   setupConfig,
   teardownConfig,
@@ -143,7 +144,7 @@ function compose(mode, options = {}) {
         lane.routerCalls.push({address, afterStop: lane.stopped, answer});
       }),
     },
-    latencyTreeService: {getRoutingOrder: () => GROUP_IDS},
+    latencyTreeService: createStatedRoutingTree(GROUP_IDS),
     nowFn: () => 1000,
     ...options.service,
   });

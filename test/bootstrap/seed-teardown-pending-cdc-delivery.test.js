@@ -44,6 +44,7 @@ import {
   createMessageGroupServiceRow,
   createDurableSourceMessageGroupService,
   createMessageRouter,
+  createStatedRoutingTree,
   createTopologyCache,
   setupConfig,
 } from '../topology/cdc-group-propagation-service-harness.js';
@@ -107,7 +108,7 @@ function startPropagationService() {
         'node-b/message-group/mg-node-b', RAFT_ROLE.LEADER, 'mg-node-b')],
     }),
     messageRouter: createMessageRouter([unknownCdcAcceptance()]),
-    latencyTreeService: {getRoutingOrder: () => ['g-1', 'g-2']},
+    latencyTreeService: createStatedRoutingTree(['g-1', 'g-2']),
     deliveryRetryDelayMs: HELD_RETRY_DELAY_MS,
   });
   service.initialize();

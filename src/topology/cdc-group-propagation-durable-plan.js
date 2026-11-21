@@ -5,24 +5,23 @@
 // One plan per stamp (propagationPlanAtStamp): for each source the owner holds
 // (in its propagationPlansAtStamp field) the frozen plan it last observed, with
 // the stamp of every input that observation read, and answers that same plan
-// while the stamp is unchanged. Each versioned component is exposed by the
-// input's own owner: the cache's per-table mutation versions, the
-// configuration revision and the latency tree's routing generation; the rest
-// are the identities and plain values the observation reads. A component an
-// owner does not expose reads as no version, which makes the stamp unknown,
-// and an unknown stamp always observes anew. The plan never decides
-// currentness: every identity and field check of the caller still runs.
-import {TABLES} from '../constants/index.js';
+// while the stamp is unchanged. The stamp is the cache's version of every table
+// in CDC_PROPAGATION_PLAN_TABLE (the one list the routing owner reads tables
+// through), the configuration revision and the latency tree's routing
+// generation, each a required capability validated when the service is wired
+// (cdc-group-propagation-collaborators.js), plus the wired cache, tree and
+// router and the values the observation reads that a re-wiring can change
+// (nodeId, the replica suffix). Each input is read through its owner, never
+// probed. A plan is held only when no input moved during its observation. The
+// plan never decides currentness: every identity and field check of the
+// caller still runs.
 import {deepFreeze} from '../utils/deep-freeze.js';
 import {buildGroupedContext, buildSafeTargets} from './cdc-group-propagation-routing.js';
 import {LATENCY_PROPAGATION_MODE} from './latency-topology-constants.js';
-import {CDC_GROUP_PROPAGATION_REASON, CDC_MESSAGE_GROUP_REPLICA_SUFFIX} from
-  './cdc-group-propagation-constants.js';
+import {CDC_GROUP_PROPAGATION_REASON, CDC_MESSAGE_GROUP_REPLICA_SUFFIX,
+  CDC_PROPAGATION_PLAN_TABLE} from './cdc-group-propagation-constants.js';
 
-// Every system table the observation reads (cdc-group-propagation-routing.js).
-const PLAN_TABLES = Object.freeze([TABLES.SERVICES, TABLES.NODES, TABLES.LATENCY_GROUPS,
-  TABLES.MESSAGE_GROUPS]);
-const UNKNOWN_STAMP = null;
+const PLAN_TABLES = Object.freeze(Object.values(CDC_PROPAGATION_PLAN_TABLE));
 
 function groupedSourceMismatch(grouped, sourceGroupId) {
   return grouped !== null && grouped.sourceGroupId !== null &&
@@ -48,18 +47,11 @@ function captureDurablePropagationPlan(owner, source) {
   return {targets, fallbackReason, useGrouped, sourceMismatch};
 }
 
-function isOwnerVersion(value) {
-  return Number.isSafeInteger(value) && value >= 0;
-}
-
-function planStampOf(owner, source) {
-  const {systemTableCache: cache, config, latencyTreeService: tree, messageRouter: router} =
-    owner;
-  const versions = [config?.getRevision?.(), tree?.getRoutingGeneration?.(),
-    ...PLAN_TABLES.map((tableName) => cache?.getTableMutationVersion?.(tableName))];
-  if (!versions.every(isOwnerVersion)) return UNKNOWN_STAMP;
-  return [cache, config, tree, router, router?.deliver, owner.nodeId,
-    owner.messageGroupReplicaSuffix, owner.propagationMode, source.groupId, ...versions];
+function planStampOf(owner) {
+  const {systemTableCache: cache, latencyTreeService: tree} = owner;
+  return [cache, tree, owner.messageRouter, owner.nodeId, owner.messageGroupReplicaSuffix,
+    owner.config.getRevision(), tree.getRoutingGeneration(),
+    ...PLAN_TABLES.map((tableName) => cache.getTableMutationVersion(tableName))];
 }
 
 function sameStamp(held, current) {
@@ -67,25 +59,20 @@ function sameStamp(held, current) {
     held.every((component, index) => Object.is(component, current[index]));
 }
 
-function heldPlanOf(owner, source, stamp) {
-  if (stamp === UNKNOWN_STAMP) return null;
-  const held = owner.propagationPlansAtStamp?.get(source);
-  return held !== undefined && sameStamp(held.stamp, stamp) ? held.plan : null;
-}
-
-function holdPlan(owner, source, plan) {
-  // Stamped after the observation, whose only writes (refreshConfig) settle
-  // owner.propagationMode from the configuration it reads.
-  const stamp = planStampOf(owner, source);
-  if (stamp === UNKNOWN_STAMP) return;
-  owner.propagationPlansAtStamp?.set(source, {stamp, plan});
-}
-
 function propagationPlanAtStamp(owner, source) {
-  const held = heldPlanOf(owner, source, planStampOf(owner, source));
-  if (held !== null) return held;
+  const stamp = planStampOf(owner);
+  const held = owner.propagationPlansAtStamp.get(source);
+  if (held !== undefined && sameStamp(held.stamp, stamp)) return held.plan;
   const plan = deepFreeze(captureDurablePropagationPlan(owner, source));
-  holdPlan(owner, source, plan);
+  // Held only when no stamped input moved during the observation: a move (an
+  // apply reached through a call the observation made) leaves the next read
+  // to observe anew, instead of holding a plan read before the move under the
+  // stamp after it.
+  if (sameStamp(planStampOf(owner), stamp)) {
+    owner.propagationPlansAtStamp.set(source, {stamp, plan});
+  } else {
+    owner.propagationPlansAtStamp.delete(source);
+  }
   return plan;
 }
 

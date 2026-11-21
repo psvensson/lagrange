@@ -5,7 +5,10 @@ import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, ROUTER_CONNECTION_CLOSED_ERROR_C
 // with controlled route projections and recipient answers. These answers are
 // deliberately not evidence of a native recipient commit or a system-row write.
 import assert from 'node:assert/strict';
-import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION, COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {getSystemCachePrimaryKeyField} from '../../src/cache/system-cache-key-descriptor.js';
+import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -47,23 +50,64 @@ function serviceRow(groupId, nodeId) {
   create_attempt_token: `${groupId}-birth-1`};
 }
 
-function controlledProjection() {
-  const nodes = new Map([
-    [SOURCE_NODE, {[COLUMN.NODE_ID]: SOURCE_NODE, [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP}],
-    [TARGET_NODE, {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.BOOT_INCARNATION]: 1}],
-  ]);
-  assert.equal(isIssuedBootIncarnation(nodes.get(TARGET_NODE)[COLUMN.BOOT_INCARNATION]), true);
-  const projection = {nodes, groups: [], services: [serviceRow(TARGET_GROUP, TARGET_NODE)]};
-  projection.cache = {
-    get: (table, key) => table === TABLES.NODES ? nodes.get(key) ?? null : null,
-    getAll: (table) => table === TABLES.LATENCY_GROUPS ? projection.groups : [],
-    filter: (table, predicate) => table === TABLES.SERVICES ?
-      projection.services.filter(predicate) : [],
+const TARGET_SERVICE = `${TARGET_GROUP}-r1`;
+
+// The route projection: the real system table cache owner, changed only
+// through its own applySystemTableChange (each write a newer row version), so
+// its per-table versions move with every change a case makes.
+function controlledProjection(clock) {
+  const cache = new SystemTableCache({timeSource: clock});
+  const state = {updatedAt: 1000};
+  const write = (tableName, row, operation = CDC_OPERATION.UPSERT) => {
+    state.updatedAt += 1;
+    cache.applySystemTableChange(tableName, operation,
+      {...row, [COLUMN.UPDATED_AT]: state.updatedAt});
   };
-  return projection;
+  const rowOf = (tableName, key) => cache.get(tableName, key);
+  const remove = (tableName, key) => cache.applySystemTableChange(tableName,
+    CDC_OPERATION.DELETE, {[getSystemCachePrimaryKeyField(tableName)]: key});
+  const rename = (tableName, key, nextKey) => {
+    const row = rowOf(tableName, key);
+    remove(tableName, key);
+    write(tableName, {...row, [getSystemCachePrimaryKeyField(tableName)]: nextKey},
+      CDC_OPERATION.INSERT);
+  };
+  write(TABLES.NODES, {[COLUMN.NODE_ID]: SOURCE_NODE, [COLUMN.LATENCY_GROUP_ID]: SOURCE_GROUP},
+    CDC_OPERATION.INSERT);
+  write(TABLES.NODES, {[COLUMN.NODE_ID]: TARGET_NODE, [COLUMN.BOOT_INCARNATION]: 1},
+    CDC_OPERATION.INSERT);
+  assert.equal(isIssuedBootIncarnation(rowOf(TABLES.NODES, TARGET_NODE)[COLUMN.BOOT_INCARNATION]),
+    true);
+  write(TABLES.SERVICES, serviceRow(TARGET_GROUP, TARGET_NODE), CDC_OPERATION.INSERT);
+  return {
+    cache,
+    node: (nodeId) => rowOf(TABLES.NODES, nodeId),
+    service: (serviceId) => rowOf(TABLES.SERVICES, serviceId),
+    putService: (row) => write(TABLES.SERVICES, row, CDC_OPERATION.INSERT),
+    updateService: (serviceId, fields) =>
+      write(TABLES.SERVICES, {...rowOf(TABLES.SERVICES, serviceId), ...fields}),
+    renameService: (serviceId, nextServiceId) =>
+      rename(TABLES.SERVICES, serviceId, nextServiceId),
+    updateNode: (nodeId, fields) =>
+      write(TABLES.NODES, {...rowOf(TABLES.NODES, nodeId), ...fields}),
+    putGroup: (row) => write(TABLES.LATENCY_GROUPS, row, CDC_OPERATION.INSERT),
+    updateGroup: (groupId, fields) =>
+      write(TABLES.LATENCY_GROUPS, {...rowOf(TABLES.LATENCY_GROUPS, groupId), ...fields}),
+    renameGroup: (groupId, nextGroupId) => rename(TABLES.LATENCY_GROUPS, groupId, nextGroupId),
+  };
 }
 
-function buildTopology(f) {
+// The real latency tree owner over the projection's cache.
+function startProjectionTree(f, t) {
+  const tree = new LatencyTreeService({nodeId: SOURCE_NODE,
+    systemTableCache: f.projection.cache});
+  tree.initialize();
+  tree.start();
+  t.after(() => tree.stop());
+  return tree;
+}
+
+function buildTopology(f, t) {
   const source = createDurableSourceMessageGroupService(SOURCE_GROUP, {
     canAcceptCDCEvent: () => f.ready,
     applyCDCBatch: (events) => {
@@ -82,7 +126,7 @@ function buildTopology(f) {
   }};
   const topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: router,
-    latencyTreeService: {getRoutingOrder: () => f.projection.groups.map((row) => row.group_id)},
+    latencyTreeService: startProjectionTree(f, t),
     nowFn: () => f.clock.now(), ...FAST_FOREGROUND_RETRY});
   topology.initialize();
   topology.start();
@@ -115,7 +159,7 @@ function buildSubscriber(f, index) {
 async function topologyProgressFixture(t) {
   const clock = new VirtualTimeSource({startMs: 100});
   const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
-  const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
+  const f = {clock, leader, proposed, ready: false, projection: controlledProjection(clock),
     sourceCalls: [], targetCalls: [], subscriberCalls: [], hooks: [],
     sourceMode: RESPONSE.NATIVE, targetMode: RESPONSE.WEAK, otherMode: RESPONSE.NATIVE,
     expireOther: false, duringTarget: null, duringOther: null};
@@ -123,7 +167,7 @@ async function topologyProgressFixture(t) {
     f.topology?.stop();
     await shutdownAll(leader);
   });
-  Object.assign(f, buildTopology(f));
+  Object.assign(f, buildTopology(f, t));
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
   for (let index = 0; index < 2; index += 1) {
     await leader.subscribeToCDCWithHandshake(buildSubscriber(f, index),
@@ -153,12 +197,12 @@ function assertDebtWithoutAck(f) {
 
 function addRequiredGroup(f, groupId = 'progress-group-c') {
   const row = serviceRow(groupId, 'node-c');
-  f.projection.services.push(row);
+  f.projection.putService(row);
   return row;
 }
 
 function omitTarget(f) {
-  f.projection.services[0][COLUMN.STATUS] = SERVICE_STATUS.STOPPED;
+  f.projection.updateService(TARGET_SERVICE, {[COLUMN.STATUS]: SERVICE_STATUS.STOPPED});
 }
 
 // One source lane over the shared topology owner: a partition leader of
@@ -257,10 +301,10 @@ async function multiLaneTopologyFixture(t, laneSpecs) {
     return response === null ? null : envelope(call, response);
   });
   f.release = (call, response = LEAF.NATIVE) => call.answer(envelope(call, response));
-  f.projection = controlledProjection();
+  f.projection = controlledProjection(clock);
   f.topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: f.router,
-    latencyTreeService: {getRoutingOrder: () => []},
+    latencyTreeService: startProjectionTree(f, t),
     nowFn: () => clock.now(), ...FAST_FOREGROUND_RETRY});
   f.topology.initialize();
   f.topology.start();
@@ -279,6 +323,6 @@ async function multiLaneTopologyFixture(t, laneSpecs) {
   return f;
 }
 
-export {LEAF, RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE,
+export {LEAF, RESPONSE, SOURCE_GROUP, SOURCE_NODE, TARGET_GROUP, TARGET_NODE, TARGET_SERVICE,
   addRequiredGroup, assertDebtWithoutAck, multiLaneTopologyFixture, omitTarget,
   topologyProgressFixture};

@@ -44,8 +44,8 @@ import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {LATENCY_GROUP_STATE, LATENCY_PROPAGATION_MODE, LATENCY_TOPOLOGY_CONFIG_KEY} from
   '../../src/topology/latency-topology-constants.js';
-import {CDC_GROUP_PROPAGATION_STATE, CDC_MESSAGE_GROUP_REPLICA_SUFFIX} from
-  '../../src/topology/cdc-group-propagation-constants.js';
+import {CDC_GROUP_PROPAGATION_STATE, CDC_MESSAGE_GROUP_REPLICA_SUFFIX,
+  CDC_PROPAGATION_PLAN_TABLE} from '../../src/topology/cdc-group-propagation-constants.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
 import {propagationPlanAtStamp} from '../../src/topology/cdc-group-propagation-durable-plan.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
@@ -73,6 +73,8 @@ const SOURCE_NODE = 'node-a';
 const PEER = CDC_ROUTER_TEST.PEER;
 const SOURCE_GROUP = 'stamp-group-a';
 const TARGET_GROUP = 'stamp-group-b';
+// Two latency groups ordered by id while no latency edge exists.
+const ORDERED_GROUPS = Object.freeze(['stamp-lg-a', 'stamp-lg-b']);
 const START_MS = 1000;
 const SERVICE_BIRTH_MS = 100;
 const RESPONSE = Object.freeze({NATIVE: 'native', UNKNOWN: 'unknown'});
@@ -251,16 +253,9 @@ async function startRouterAndPeer(f, t) {
 
 // One plan observation (captureDurablePropagationPlan) reads the routing order
 // exactly once, in safe and grouped mode alike, so a plan rebuild is counted at
-// the tree collaborator. The real tree owner by default (its routing views are
-// recomputed from this cache, as in production); a stated routing order only
-// where a case changes that order by hand.
-function startTree(f, t, stubTree) {
-  if (stubTree) {
-    return {getRoutingOrder: () => {
-      f.counts.planBuilds += 1;
-      return [...f.routingOrder];
-    }};
-  }
+// the tree collaborator: the real tree owner, its routing views recomputed from
+// this cache, as in production.
+function startTree(f, t) {
   const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: f.cache,
     nowFn: f.clock.now});
   tree.initialize();
@@ -280,8 +275,8 @@ function startTree(f, t, stubTree) {
 }
 
 // `routerLate`: the service is wired without a router; the case wires it later.
-function startTopology(f, t, {stubTree = false, routerLate = false} = {}) {
-  f.tree = startTree(f, t, stubTree);
+function startTopology(f, t, {routerLate = false} = {}) {
+  f.tree = startTree(f, t);
   f.topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE, systemTableCache: f.cache,
     messageRouter: routerLate ? null : f.router, latencyTreeService: f.tree,
     nowFn: f.clock.now, ...FAST_FOREGROUND_RETRY,
@@ -293,16 +288,15 @@ function startTopology(f, t, {stubTree = false, routerLate = false} = {}) {
 
 // One owed row on a leading partition with one production subscriber; no
 // subscriber callback runs during setup (readiness is withheld until the end).
-async function currentnessFixture(t, {targets = [TARGET_GROUP], stubTree = false,
-  routerLate = false} = {}) {
+async function currentnessFixture(t, {targets = [TARGET_GROUP], routerLate = false} = {}) {
   const clock = heldDispatchClock(START_MS);
   const f = {clock, cache: new SystemTableCache({timeSource: clock}), updatedAt: START_MS,
-    ready: false, closed: false, targetMode: RESPONSE.NATIVE, routingOrder: [],
+    ready: false, closed: false, targetMode: RESPONSE.NATIVE,
     targetCalls: [], duringTarget: null, duringError: null, captured: null,
     counts: {planBuilds: 0, checkSelections: 0, deliverySelections: 0}};
   seedTopologyRows(f, targets);
   await startRouterAndPeer(f, t);
-  startTopology(f, t, {stubTree, routerLate});
+  startTopology(f, t, {routerLate});
   f.source = createDurableSourceMessageGroupService(SOURCE_GROUP,
     {canAcceptCDCEvent: () => f.ready});
   f.selected = f.source;
@@ -458,7 +452,9 @@ const TOPOLOGY_AND_SOURCE_INPUTS = [
     }},
   {id: 'topology.tree-identity', reads: 'cdc-propagation-progress.js:145',
     kind: KIND.NOT_CURRENT, mutate: (f) => {
-      f.topology.latencyTreeService = {getRoutingOrder: () => []};
+      const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: f.cache});
+      tree.initialize();
+      f.topology.latencyTreeService = tree;
     }},
   {id: 'topology.router-identity', reads: 'cdc-propagation-progress.js:146',
     kind: KIND.NOT_CURRENT, mutate: (f) => {
@@ -503,12 +499,25 @@ const TOPOLOGY_AND_SOURCE_INPUTS = [
   mutate: () => ConfigurationManager.getInstance().setByPath(
     LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE, LATENCY_PROPAGATION_MODE.GROUPED)},
   {id: 'tree.routing-order', reads: 'cdc-group-propagation-routing.js:412-421',
-    kind: KIND.UNCHANGED, discriminating: false, fixture: {stubTree: true},
+    kind: KIND.UNCHANGED, discriminating: false,
     // The routing order only orders the required set; the set itself is the
     // cache's (routing.js:351-367), so an order change alone changes neither
     // the answer nor the leaves. Kept so the list stays complete.
+    prepare: (f) => {
+      for (const groupId of ORDERED_GROUPS) {
+        writeRow(f, TABLES.LATENCY_GROUPS, latencyGroupRow(groupId, PEER), CDC_OPERATION.INSERT);
+      }
+      f.tree.recompute();
+    },
     mutate: (f) => {
-      f.routingOrder = ['stamp-unknown-group', TARGET_GROUP];
+      // The tree owner's path: a latency edge (no plan table) and a recompute
+      // reverse the order of the two groups.
+      const before = f.tree.getRoutingOrder(SOURCE_GROUP);
+      writeRow(f, TABLES.INTER_GROUP_LATENCIES, latencyEdge(SOURCE_GROUP, ORDERED_GROUPS[1]),
+        CDC_OPERATION.INSERT);
+      f.tree.recompute();
+      assert.notDeepEqual(f.tree.getRoutingOrder(SOURCE_GROUP), before,
+        'setup: the routing order changed');
     }, observe: (f) => progressOf(f).targets.map((leaf) => leaf.groupId).join()},
 ];
 
@@ -873,6 +882,17 @@ test('CDCGroupPropagationService refuses wiring a latency tree without a routing
       refusesWiring('latencyTreeService', 'getRoutingGeneration'));
   });
 
+test('CDCGroupPropagationService refuses wiring a configuration without a revision', () => {
+  const cache = new SystemTableCache();
+  const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: cache});
+  tree.initialize();
+  const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE, systemTableCache: cache,
+    latencyTreeService: tree});
+  const config = ConfigurationManager.getInstance();
+  service.config = {get: config.get.bind(config)};
+  assert.throws(() => service.initialize(), refusesWiring('config', 'getRevision'));
+});
+
 test('the production topology composition wires a known plan stamp: a second identical ' +
   'delivery reuses the plan', async (t) => {
   const clock = heldDispatchClock(START_MS);
@@ -953,8 +973,6 @@ async function commitAnotherRow(f, id) {
   await settleTicks();
   f.ready = true;
 }
-
-const ORDERED_GROUPS = Object.freeze(['stamp-lg-a', 'stamp-lg-b']);
 
 // Two target groups that are also latency groups, ordered by id while no
 // latency edge exists; the plan is held after the first, drained delivery.
@@ -1053,6 +1071,64 @@ test('stamp component: the router identity (a router wired late makes grouped ta
   if (f.duringError) throw f.duringError;
   assert.deepEqual(targetOrder(f), [TARGET_GROUP],
     'the new progress takes the plan observed with the wired router');
+});
+
+// --- witness 7: the plan reads system tables only through the stamped list ---
+
+const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
+
+// The cache seam: every call the plan makes on the wired cache, recorded by
+// table. The cache's own internal calls run on the cache itself, unrecorded.
+function recordingCache(cache, reads) {
+  return new Proxy(cache, {get(target, property) {
+    const member = Reflect.get(target, property, target);
+    if (!(member instanceof Function)) return member;
+    return (...args) => {
+      if (SYSTEM_TABLE_NAMES.has(args[0])) reads.push({method: property, tableName: args[0]});
+      return member.apply(target, args);
+    };
+  }});
+}
+
+test('the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its ' +
+  'stamp iterates', (t) => {
+  const clock = heldDispatchClock(START_MS);
+  const f = {clock, cache: new SystemTableCache({timeSource: clock}), updatedAt: START_MS};
+  seedTopologyRows(f, [TARGET_GROUP]);
+  writeRow(f, TABLES.LATENCY_GROUPS, latencyGroupRow(SOURCE_GROUP, SOURCE_NODE),
+    CDC_OPERATION.INSERT);
+  writeRow(f, TABLES.LATENCY_GROUPS, latencyGroupRow(TARGET_GROUP, PEER), CDC_OPERATION.INSERT);
+  writeRow(f, TABLES.MESSAGE_GROUPS, {[COLUMN.GROUP_ID]: TARGET_GROUP}, CDC_OPERATION.INSERT);
+  const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: f.cache});
+  tree.initialize();
+  tree.start();
+  t.after(() => tree.stop());
+  const reads = [];
+  const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+    systemTableCache: recordingCache(f.cache, reads), latencyTreeService: tree,
+    messageRouter: {deliver: async () => assert.fail('the plan delivers nothing')}});
+  service.initialize();
+  const source = createDurableSourceMessageGroupService(SOURCE_GROUP);
+  const listed = Object.values(CDC_PROPAGATION_PLAN_TABLE).sort();
+  const rowTables = new Set();
+  for (const mode of [LATENCY_PROPAGATION_MODE.SAFE, LATENCY_PROPAGATION_MODE.GROUPED]) {
+    ConfigurationManager.getInstance().setByPath(LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE,
+      mode);
+    reads.length = 0;
+    propagationPlanAtStamp(service, source);
+    const versionReads = reads.filter((read) => read.method === 'getTableMutationVersion');
+    const rowReads = reads.filter((read) => read.method !== 'getTableMutationVersion');
+    assert.ok(rowReads.length > 0, `setup: the ${mode} plan was observed through the seam`);
+    for (const read of rowReads) {
+      assert.ok(listed.includes(read.tableName), `the ${mode} plan read ${read.tableName} ` +
+        `(${read.method}) outside CDC_PROPAGATION_PLAN_TABLE, so outside its stamp`);
+      rowTables.add(read.tableName);
+    }
+    assert.deepEqual([...new Set(versionReads.map((read) => read.tableName))].sort(), listed,
+      `the ${mode} stamp iterates exactly CDC_PROPAGATION_PLAN_TABLE`);
+  }
+  assert.deepEqual([...rowTables].sort(), listed,
+    'every listed table is read by the plan: the list holds no table the plan does not read');
 });
 
 // --- anchor: one production selection evaluation is one raft status read ---
