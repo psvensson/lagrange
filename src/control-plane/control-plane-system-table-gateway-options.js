@@ -49,6 +49,11 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
   if (typeof options?.preferLeader === 'boolean') {
     queryOptions.preferLeader = options.preferLeader;
   }
+  // readOwnerFact's read point floor travels to the request builder, which
+  // sends it to the receiver (control-plane-owner-fact-read-contract.js).
+  if (options?.ownerFactFloor !== undefined) {
+    queryOptions.ownerFactFloor = options.ownerFactFloor;
+  }
   queryOptions = copyOption(
     queryOptions,
     options,

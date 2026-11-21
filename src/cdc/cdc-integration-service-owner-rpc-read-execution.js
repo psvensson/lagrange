@@ -2,8 +2,8 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
 import {resolveAuthoritativeReadModeContract} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {isValidLeaderReadAuthorityWitness} from
-  '../control-plane/control-plane-authoritative-read-witness.js';
+import {leaderReadRequestOf, leaderReadWitnessRefusal} from
+  '../control-plane/control-plane-owner-fact-read-contract.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
@@ -94,24 +94,33 @@ function isRequiredLeaderReadSuccess(queryResult, readAuthority) {
     readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
 }
 
+// The verification of what was received: the receiver's own leader-read
+// predicate, applied again to the witness that came back (a coalesced answer
+// or a receiver that never saw the request's leaderRead field is still
+// refused). A refused answer keeps none of the served rows.
 function enforceRequiredLeaderReadAuthority(
   queryResult,
   partitionId,
   readAuthority,
+  ownerFactFloor,
 ) {
   if (!isRequiredLeaderReadSuccess(queryResult, readAuthority)) {
     return queryResult;
   }
-  const witness = queryResult?.readAuthorityWitness;
-  if (isValidLeaderReadAuthorityWitness(witness, partitionId)) {
+  const refusal = leaderReadWitnessRefusal(queryResult?.readAuthorityWitness,
+    {partitionId, read: leaderReadRequestOf(ownerFactFloor)});
+  if (refusal === null) {
     return queryResult;
   }
+  const {rowSet: _rowSet, rawRows: _rawRows, columns: _columns,
+    ...withoutRows} = queryResult;
   return {
-    ...queryResult,
+    ...withoutRows,
     success: false,
     rows: [],
     error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
     authorityFailureReason: AUTHORITATIVE_LEADER_WITNESS_FAILURE,
+    failureCode: refusal,
   };
 }
 
@@ -486,6 +495,7 @@ async function executeAuthoritativeOwnerRpcRead(
           retryResult?.success ? retryResult : retryResult || queryResult,
           partitionId,
           readAuthority,
+          options?.queryOptions?.ownerFactFloor,
         ),
       });
     }
@@ -498,6 +508,7 @@ async function executeAuthoritativeOwnerRpcRead(
       queryResult,
       partitionId,
       readAuthority,
+      options?.queryOptions?.ownerFactFloor,
     ),
   });
 }
