@@ -408,12 +408,12 @@ function isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) {
 function schedulePriorityDispatchPendingContinuation(owner, operation, scope, run) {
   // The continuation may enter the operation lane later. Its own key keeps
   // shutdown joining it without recursively acquiring that lane.
-  const key = owner.buildOperationSingleFlightKey(scope, operation.operationId);
-  if (owner.isShuttingDown ||
-      owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey.has(key)) {
-    return false;
-  }
+  if (owner.isShuttingDown) return false;
   const fenceEpoch = owner.getOperationOwnershipFenceEpoch();
+  // Scope finalizers to their generation after a spent join and restart.
+  const identity = JSON.stringify([fenceEpoch, operation.operationId]);
+  const key = owner.buildOperationSingleFlightKey(scope, identity);
+  if (owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey.has(key)) return false;
   owner.operationWorkflowRunExclusive(key, () => Promise.resolve().then(() => {
     return isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) ? run(fenceEpoch) : false;
   }).catch((error) => {
