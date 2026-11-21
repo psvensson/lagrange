@@ -45,6 +45,19 @@ function advanceOperationFixture(operation, workflowStep, updatedAt = operation.
   };
 }
 
+// The coordinator-created record after its owner committed each step of its
+// type's workflow up to `workflowStep`, all at `committedAt`.
+function buildCommittedOperationFixture(params, workflowStep, committedAt) {
+  const steps = getWorkflowSteps(params.type);
+  const reached = steps.indexOf(workflowStep);
+  if (reached < 0) {
+    throw new Error(`${workflowStep} is not a ${params.type} workflow step`);
+  }
+  return steps.slice(1, reached + 1).reduce(
+    (operation, step) => advanceOperationFixture(operation, step, committedAt),
+    buildCreatedOperationFixture({...params, createdAt: committedAt}));
+}
+
 // The record the repository's reads (rowToOperation, queryIncompleteOperations)
 // answer once `operation` is durable: the one row decoder over the one row builder.
 function readBackOperationFixture(operation, leaseExpiresAt = null) {
@@ -109,6 +122,7 @@ function buildTerminalOperationFixtureOutcome(operation, {
 
 export {
   advanceOperationFixture,
+  buildCommittedOperationFixture,
   buildCreatedOperationFixture,
   buildTerminalOperationFixtureOutcome,
   completeServicesFixtureRead,
