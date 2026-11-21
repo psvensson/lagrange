@@ -24,7 +24,9 @@ import {
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
+import {CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {ReplicaOperationMessageType} from '../../src/rebalancer/replica-operation-constants.js';
 import {
   OperationType,
@@ -125,6 +127,8 @@ function createConvergenceCoordinator(options = {}) {
     serviceRows = [],
     beforeSql,
     onDelivery,
+    submitMutation,
+    transactionCoordinator = buildTransactionCoordinator(),
   } = options;
 
   const emitter = new ExecutorOutcomeEmitter({logger: console});
@@ -179,9 +183,15 @@ function createConvergenceCoordinator(options = {}) {
     },
   };
 
+  const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
+  if (submitMutation) {
+    gateway.submitMutation = (mutation) => submitMutation(mutation, store.submitMutation);
+    installCommittedOperationMutationFixture(gateway);
+  }
+
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
-    transactionCoordinator: buildTransactionCoordinator(),
+    transactionCoordinator,
     systemTableCache: {
       onCacheChange(listener) {
         cacheListeners.add(listener);
@@ -229,8 +239,7 @@ function createConvergenceCoordinator(options = {}) {
       },
     },
     sqlQueryEngine: sqlEngine,
-    controlPlaneSystemTableGateway:
-      createMockControlPlaneSystemTableGateway(sqlEngine),
+    controlPlaneSystemTableGateway: gateway,
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -263,7 +272,13 @@ function createConvergenceCoordinator(options = {}) {
     coordinator,
     emitter,
     recordedOwnerKeys,
+    workflowCoordinator,
     operationMap,
+    readOperation(operationId) {
+      return store.execute(
+        'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
+      );
+    },
     applyCacheChange,
     cacheListeners,
   };
@@ -749,225 +764,177 @@ test('Owner-path convergence: all progression entry points ' +
     },
   );
 
-  await t.test(
-    'timeout and executor outcomes serialize through the same owner key ' +
-    'for FAILED transitions',
-    async (t) => {
-      const operationId = 'op-shared-failed-path';
-      const now = Date.now();
-      const opRow = buildOperationRow({
-        operationId,
-        type: OperationType.REMOVE,
-        workflowStep: WORKFLOW_STEP.STOPPING,
-        status: ReplicaStatus.REMOVING,
-        updatedAt: now - 600000,
-        createdAt: now - 600000,
-      });
-
-      const emitter = new ExecutorOutcomeEmitter({logger: console});
-      const workflowCoordinator = new DurableWorkflowCoordinator();
-      const recordedOwnerKeys = [];
-      const originalRunExclusive =
-        workflowCoordinator.runExclusive.bind(workflowCoordinator);
-      workflowCoordinator.runExclusive = (ownerKey, factory) => {
-        recordedOwnerKeys.push(ownerKey);
-        return originalRunExclusive(ownerKey, factory);
-      };
-
-      const operationMap = new Map([[operationId, {...opRow}]]);
-      const serviceRows = [{
-        service_id: TEST_REPLICA_ID,
-        replica_id: TEST_REPLICA_ID,
-        partition_id: TEST_PARTITION_ID,
-        node_id: TEST_NODE_ID,
-        service_type: SERVICE_TYPE.PARTITION,
-        status: ReplicaStatus.REMOVING,
-      }];
-      let failedPersistStartedResolve;
-      const failedPersistStarted = new Promise((resolve) => {
-        failedPersistStartedResolve = resolve;
-      });
-      let releaseFailedPersistResolve;
-      const releaseFailedPersist = new Promise((resolve) => {
-        releaseFailedPersistResolve = resolve;
-      });
-      let blockedFailedPersist = false;
-      let failedCommittedChanges = 0;
-      let transactionCoordinatorCalls = 0;
-
-      const store = createCoordinatorSqlStore({
-        getAll(table) {
-          if (table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) return [...operationMap.values()];
-          if (table === SYSTEM_TABLE_NAME.SERVICES) return serviceRows;
-          return [];
-        },
-        upsert(_table, row) {
-          operationMap.set(row.operation_id, row);
-        },
-      });
-      const sqlEngine = {
-        async executeQuery(sql, params) {
-          const writesFailedForThisOperation = sql.includes('UPDATE replica_operations') &&
-            sql.includes('completed_at IS NULL') &&
-            params[1] === WORKFLOW_STEP.FAILED && params[7] === operationId;
-          if (writesFailedForThisOperation && !blockedFailedPersist) {
-            blockedFailedPersist = true;
-            failedPersistStartedResolve();
-            await releaseFailedPersist;
-          }
-          const result = store.execute(sql, params);
-          if (writesFailedForThisOperation && result.success) {
-            failedCommittedChanges += result.changes;
-          }
-          return result;
-        },
-      };
-
-      const coordinator = new RebalanceCoordinator({
-        nodeId: TEST_NODE_ID,
-        transactionCoordinator: {
-          async begin() {
-            transactionCoordinatorCalls += 1;
-            throw new Error('rebalancer must not own SQL transactions');
-          },
-        },
-        systemTableCache: {
-          getAll(tableName) {
-            if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-              return Array.from(operationMap.values());
-            }
-            if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
-              return [...serviceRows];
-            }
-            return [];
-          },
-          get(tableName, key) {
-            if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-              return operationMap.get(key) || null;
-            }
-            if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
-              return serviceRows.find((row) => {
-                return row.service_id === key || row.replica_id === key;
-              }) || null;
-            }
-            return null;
-          },
-          filter(tableName, predicate) {
-            const rows = this.getAll(tableName);
-            return rows.filter(predicate);
-          },
-        },
-        cdcIntegrationService: {
-          refreshAuthoritativeCacheRow: async () => true,
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {
-              success: false,
-              reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-            });
-          },
-        },
-        sqlQueryEngine: sqlEngine,
-        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
-        storageAdmissionService: {
-          checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-          checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-        },
-        storageAccountingService: {estimateReplicaBytes: () => 1},
-        controlPlaneReadinessService: createMockControlPlaneReadinessService({
-          defaultRepairEligible: true,
-        }),
-        operationWorkflowCoordinator: workflowCoordinator,
-        executorOutcomeEmitter: emitter,
-        enableTimeouts: false,
-      });
-      coordinator.workflowOwner.recoverReplicaCleanupReleaseDebt =
-        async () => 0;
-      coordinator.initialize();
-
-      let gateDeadline;
-      const timeoutPromise = coordinator.checkTimeouts();
-      try {
-        await Promise.race([
-          failedPersistStarted,
-          timeoutPromise.then(() => {
-            throw new Error('Timeout check returned before the FAILED persistence gate');
-          }),
-          new Promise((_, reject) => {
-            gateDeadline = setTimeout(() => {
-              reject(new Error('Timed out waiting for FAILED persistence gate'));
-            }, 2000);
-          }),
-        ]);
-        clearTimeout(gateDeadline);
-
-        emitter.emitOutcome(
-          EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
+  for (const timeoutFirst of [true, false]) {
+    const first = timeoutFirst ? 'timeout' : 'executor';
+    await t.test(
+      `timeout and executor FAILED transitions share an owner key (${first} first)`,
+      async (t) => {
+        const operationId = 'op-shared-failed-path';
+        const executorFailure = 'replica removal failed';
+        const now = Date.now();
+        const elapsedAt = now - 600_000;
+        const opRow = buildOperationRow({
           operationId,
-          WORKFLOW_STEP.FAILED,
-          {errorMessage: 'replica removal failed'},
-        );
+          type: OperationType.REMOVE,
+          workflowStep: WORKFLOW_STEP.STOPPING,
+          status: ReplicaStatus.REMOVING,
+          updatedAt: elapsedAt,
+          createdAt: elapsedAt,
+        });
 
-        await new Promise((resolve) => setImmediate(resolve));
-        releaseFailedPersistResolve();
-        await timeoutPromise;
-        await workflowCoordinator
-          .inFlightExecutionsByOwnerKey
-          .get(buildOperationOwnerKey(operationId));
+        const failedPersistStarted = Promise.withResolvers();
+        const releaseFailedPersist = Promise.withResolvers();
+        const secondLaneSubmitted = Promise.withResolvers();
+        const writes = [];
+        let transactionCoordinatorCalls = 0;
+        let unavailableServiceReads = 0;
+        const {coordinator, emitter, recordedOwnerKeys, workflowCoordinator, readOperation} =
+          createConvergenceCoordinator({
+            operationRows: [opRow],
+            serviceRows: [{
+              service_id: TEST_REPLICA_ID,
+              replica_id: TEST_REPLICA_ID,
+              partition_id: TEST_PARTITION_ID,
+              node_id: TEST_NODE_ID,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.REMOVING,
+            }],
+            // The replica remains present. With its point read unavailable, the
+            // timeout may use the exact elapsed ledger preimage, and cannot
+            // claim that a REMOVE effect is already confirmed or complete.
+            beforeSql(sql, params) {
+              if (sql.includes('FROM services') && params[0] === TEST_REPLICA_ID) {
+                unavailableServiceReads += 1;
+                return {success: false, rowSetComplete: false,
+                  errorCode: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR.AUTHORITATIVE_READ_OWNER_UNAVAILABLE};
+              }
+              return null;
+            },
+            transactionCoordinator: {
+              async begin() {
+                transactionCoordinatorCalls += 1;
+                throw new Error('rebalancer must not own SQL transactions');
+              },
+            },
+            async submitMutation(mutation, commit) {
+              if (mutation.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+                  mutation.whereClause?.operation_id !== operationId ||
+                  mutation.data?.workflow_step !== WORKFLOW_STEP.FAILED) {
+                return commit(mutation);
+              }
+              const write = {guard: mutation.whereClause, changes: null};
+              writes.push(write);
+              if (writes.length === 1) {
+                failedPersistStarted.resolve();
+                await releaseFailedPersist.promise;
+              }
+              const result = commit(mutation);
+              write.changes = result.partitionResult?.affectedRows;
+              return result;
+            },
+          });
+        const owner = coordinator.workflowOwner;
+        const runExclusive = workflowCoordinator.runExclusive.bind(workflowCoordinator);
+        workflowCoordinator.runExclusive = (key, factory) => {
+          const turn = runExclusive(key, factory);
+          if (recordedOwnerKeys.length === 2) secondLaneSubmitted.resolve();
+          return turn;
+        };
+        const redrive = owner.redriveExecutorOutcomeReconcile.bind(owner);
+        let executorTurn;
+        owner.redriveExecutorOutcomeReconcile = (id) => {
+          executorTurn = redrive(id);
+          return executorTurn;
+        };
+        const emitFailure = () => emitter.emitOutcome(
+          EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED, operationId, WORKFLOW_STEP.FAILED,
+          {errorMessage: executorFailure, replicaId: TEST_REPLICA_ID,
+            partitionId: TEST_PARTITION_ID},
+        );
+        const readDurable = () => readOperation(operationId).rows[0];
+        let timeoutTurn;
+        let gateDeadline;
+        const missingGate = new Promise((_, reject) => {
+          gateDeadline = setTimeout(() => {
+            reject(new Error('Both triggers did not reach the FAILED serialization gate'));
+          }, 2000);
+        });
 
-        t.equal(
-          transactionCoordinatorCalls,
-          0,
-          'the rebalancer must not own SQL transaction sessions',
-        );
-        t.equal(
-          failedCommittedChanges,
-          1,
-          'exactly one guarded FAILED write changed a SQLite row',
-        );
-        const readback = store.execute(
-          'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
-        );
-        t.equal(readback.rowSetComplete, true,
-          'the exact-key SQLite read is complete');
-        t.equal(readback.rows.length, 1, 'the operation has one durable row');
-        const [durable] = readback.rows;
-        t.equal(durable.workflow_step, WORKFLOW_STEP.FAILED);
-        t.equal(durable.status, ReplicaStatus.FAILED);
-        t.ok(Number.isFinite(durable.completed_at), 'the committed failure is terminal');
-        t.equal(JSON.parse(durable.steps_history).filter(
-          ({step}) => step === WORKFLOW_STEP.FAILED,
-        ).length, 1, 'durable history has one FAILED transition');
-        // CL-029: the outcome arriving while the timeout path holds the
-        // lane is coalesced away by runExclusive and then RE-DRIVEN after
-        // the holder settles (redriveExecutorOutcomeReconcile), so the
-        // outcome path may enter the lane more than once — every entry
-        // must still use the same per-operation key. The re-driven reconcile
-        // leaves a single committed change and durable terminal history.
-        t.ok(
-          recordedOwnerKeys.length >= 2,
-          'timeout and outcome paths must both enter the owner lane',
-        );
-        t.same(
-          [...new Set(recordedOwnerKeys)],
-          [buildOperationOwnerKey(operationId)],
-          'timeout and outcome paths must share the same owner key',
-        );
-      } finally {
-        clearTimeout(gateDeadline);
-        releaseFailedPersistResolve();
-        await Promise.allSettled([timeoutPromise]);
-        await coordinator.shutdown();
-        store.suspend();
-      }
-    },
-  );
+        try {
+          if (timeoutFirst) timeoutTurn = coordinator.checkTimeouts();
+          else emitFailure();
+          await Promise.race([
+            failedPersistStarted.promise,
+            (timeoutFirst ? timeoutTurn : executorTurn).then(() => {
+              throw new Error(`${first} returned before its guarded FAILED write`);
+            }),
+            missingGate,
+          ]);
+
+          if (timeoutFirst) emitFailure();
+          else timeoutTurn = coordinator.checkTimeouts();
+          await Promise.race([secondLaneSubmitted.promise, missingGate]);
+          t.equal(writes.length, 1, 'the second trigger cannot cross the held write');
+          t.equal(readDurable().workflow_step, WORKFLOW_STEP.STOPPING,
+            'the complete SQLite preimage remains live while the write is blocked');
+          t.equal(readDurable().completed_at, null);
+          t.match(owner.executorOutcomeRetryPayloadByOperationId.get(operationId), {
+            operationId,
+            replicaId: TEST_REPLICA_ID,
+            errorMessage: executorFailure,
+          }, 'executor evidence remains retained across the contested lane');
+          t.equal(writes[0].guard.completed_at, null, 'first terminal writer wins');
+          if (timeoutFirst) {
+            t.ok(unavailableServiceReads > 0, 'the exact removal observation was unavailable');
+            t.same(writes[0].guard, {
+              operation_id: operationId,
+              type: opRow.type,
+              partition_id: opRow.partition_id,
+              source_node_id: opRow.source_node_id,
+              source_replica_id: opRow.source_replica_id,
+              target_node_id: opRow.target_node_id,
+              replica_id: opRow.replica_id,
+              status: opRow.status,
+              workflow_step: opRow.workflow_step,
+              created_at: opRow.created_at,
+              updated_at: opRow.updated_at,
+              steps_history: opRow.steps_history,
+              completed_at: null,
+            }, 'elapsed authorization guards the exact committed STOPPING preimage');
+          }
+
+          releaseFailedPersist.resolve();
+          await Promise.all([timeoutTurn, executorTurn]);
+          t.equal(transactionCoordinatorCalls, 0,
+            'the rebalancer must not own SQL transaction sessions');
+          t.same(writes.map(({changes}) => changes), [1],
+            'only the first guarded FAILED write reaches and changes SQLite');
+          const readback = readOperation(operationId);
+          t.equal(readback.rowSetComplete, true, 'the exact-key SQLite read is complete');
+          t.equal(readback.rows.length, 1, 'the operation has one durable row');
+          const [durable] = readback.rows;
+          t.equal(durable.workflow_step, WORKFLOW_STEP.FAILED);
+          t.equal(durable.status, ReplicaStatus.FAILED);
+          t.ok(Number.isFinite(durable.completed_at), 'the failure commit is terminal');
+          t.equal(JSON.parse(durable.steps_history).filter(
+            ({step}) => step === WORKFLOW_STEP.FAILED,
+          ).length, 1, 'durable history has one FAILED transition');
+          t.match(durable.error_message,
+            timeoutFirst ? /Timeout in STOPPING step/ : executorFailure,
+            'the first trigger remains the durable winner');
+          t.notOk(owner.executorOutcomeRetryPayloadByOperationId.has(operationId),
+            'the executor evidence settles after terminal commit');
+          t.same([...new Set(recordedOwnerKeys)], [buildOperationOwnerKey(operationId)],
+            'timeout and executor progression share the exact operation owner key');
+        } finally {
+          clearTimeout(gateDeadline);
+          releaseFailedPersist.resolve();
+          await Promise.allSettled([timeoutTurn, executorTurn]);
+          await coordinator.shutdown();
+        }
+      },
+    );
+  }
 
   await t.test(
     'recovery reconciles SYNCING operations through the ' +

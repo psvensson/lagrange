@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "fc2ce231f99856a03e32020a98f5ed0a6c4e55fc9d1ea4b94034813c1c793f2a"
+        "sha256": "7b40a8349dbb105ab623915c9db14656414177c178686b7ddc58943115bf6fbf"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3741674,
-        "sha256": "2388cb0f42ab2c17d6de0b3f25dbf42183c515b3e65b6890f88c3e92bdcc1693"
+        "bytes": 3741745,
+        "sha256": "5bab55a72b45aa911bbef6fd1912e7c7146f5d0118cada6798b339d4a495bb71"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "affa89d95fc6485768b2b55fad37a3c76f936d9cd021f1f04647941fa15bbd1c"
+    "inputDigest": "0050414041248875b2f2d211f3673031f7b6c89309658b5761c8562054432a85"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "fc2ce231f99856a03e32020a98f5ed0a6c4e55fc9d1ea4b94034813c1c793f2a"
+        "sha256": "7b40a8349dbb105ab623915c9db14656414177c178686b7ddc58943115bf6fbf"
       },
       "declaredCount": 1741,
       "observedCount": 1741,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3741674,
-        "sha256": "2388cb0f42ab2c17d6de0b3f25dbf42183c515b3e65b6890f88c3e92bdcc1693"
+        "bytes": 3741745,
+        "sha256": "5bab55a72b45aa911bbef6fd1912e7c7146f5d0118cada6798b339d4a495bb71"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "0a85c4a2c34b8b899e1f445428fe0dbf77899b8c675ffd9bfcc486fadec50ccd",
+      "sourceDigest": "c8623186f96ef81295075026b385167e906faa50873442a922337d05ff3424a1",
       "moduleCount": 6345,
-      "edgeCount": 37604,
+      "edgeCount": 37605,
       "unresolvedCount": 39
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2417,
     "assignedSignalCount": 2417,
     "uniqueAssignmentCount": 2417,
-    "digest": "cec1ae5372ff3064bb30b89a0257e38edd10bffa58f09d29e56d3e39c593e39a"
+    "digest": "7fea07cb8d398d83184256e000f94fc757da2929729b8b6cdb98581397f5b6e1"
   },
   "signalCounts": {
     "cognitive": 147,
@@ -254,7 +254,7 @@
       "cycleGroups": 0,
       "lintExclusions": 15,
       "importIn": 253,
-      "importOut": 885,
+      "importOut": 886,
       "score": 1378.8,
       "topPaths": [
         "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
