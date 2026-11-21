@@ -17,6 +17,13 @@ import {
   buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
+import {mintServiceRowCreatedAt} from '../../src/node/service-row-incarnation.js';
+import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admission-decision.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {REPAIR_OBSERVATION} from '../../src/rebalancer/replica-operation-retained-repair-observation.js';
+import {RETAINED_REPAIR_CONTINUATION} from
+  '../../src/rebalancer/replica-operation-retained-repair-record.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
 import {
@@ -31,6 +38,28 @@ const PARTITION_ID = 'sql_transactions-p1';
 const VOTER_ID = `${PARTITION_ID}-r1`;
 const MEMBERSHIP = committedStampFor([VOTER_ID]);
 const planner = new ControlPlaneSystemTableGateway();
+// The ledger route in the cache of the coordinator (NODE.A; the ledger leader
+// runs on the fixture's own node). PUBLISHED names the replica that serves the
+// owner read; PREVIOUS_LEADER still names an earlier leader's node while the
+// current leader serves it; UNPUBLISHED has neither half of the publication.
+const LEDGER_ROUTE = Object.freeze({PUBLISHED: 'published',
+  PREVIOUS_LEADER: 'previous-leader', UNPUBLISHED: 'unpublished'});
+const PREVIOUS_LEDGER_REPLICA_ID = `${LEDGER_PARTITION_ID}-previous`;
+
+// Production-shaped route rows: PARTITIONS owns the leader; the endpoint is a
+// partition SERVICES row, published as follower like every partition row.
+function ledgerRouteRows(ledgerRoute, leader) {
+  if (ledgerRoute === LEDGER_ROUTE.UNPUBLISHED) return {partitions: [], services: []};
+  const [nodeId, replicaId] = ledgerRoute === LEDGER_ROUTE.PUBLISHED ?
+    [leader.nodeId, leader.replicaId] : [NODE.D, PREVIOUS_LEDGER_REPLICA_ID];
+  const birth = mintServiceRowCreatedAt(Date.now());
+  return {partitions: [{partition_id: LEDGER_PARTITION_ID, leader_node_id: nodeId}],
+    services: [{service_id: replicaId, replica_id: replicaId, node_id: nodeId,
+      partition_id: LEDGER_PARTITION_ID, service_type: SERVICE_TYPE.PARTITION,
+      address: `${nodeId}/${SERVICE_TYPE.PARTITION}/${replicaId}`, group_id: null,
+      status: SERVICE_STATUS.ACTIVE, raft_role: RAFT_ROLE.FOLLOWER, cleanup_token: null,
+      create_attempt_token: null, created_at: birth, updated_at: birth}]};
+}
 
 function committedUpdate(leader, entryId, sql, params) {
   assert.equal(commitLedgerStatement(leader, entryId, sql, params), null);
@@ -39,23 +68,29 @@ function committedUpdate(leader, entryId, sql, params) {
   return outcome.changes;
 }
 
-async function withPlacementExecution(measure, {duringCreate} = {}) {
+async function withPlacementExecution(measure, {duringCreate, ledgerRoute} = {}) {
   await onLedgerLeader(async (leader, proposed) => {
     const {command} = await admitOnLeader(leader, proposed, 'execution-mirror:placement',
       placementStatement({partitionId: PARTITION_ID, target: NODE.B}));
     assert.ok(command, 'the placement owner proposed the operation');
     const [initial] = ledgerRows(leader);
     assert.equal(initial.workflow_step, WORKFLOW_STEP.PENDING);
-    const cache = createMockCache({services: [{
+    const route = ledgerRoute === undefined ? {partitions: [], services: []} :
+      ledgerRouteRows(ledgerRoute, leader);
+    const cache = createMockCache({partitions: route.partitions, services: [{
       service_id: VOTER_ID, replica_id: VOTER_ID, partition_id: PARTITION_ID,
       node_id: NODE.A, address: `${NODE.A}/partition/${VOTER_ID}`,
-    }]});
+    }, ...route.services]});
+    // With a declared ledger route, an owner read carries the witness of the
+    // ledger replica that actually served it.
+    const servedBy = () => ledgerRoute === undefined ? {} :
+      {readAuthorityWitness: leader.buildRemoteReadAuthorityWitness(false)};
     const reservations = createCoordinatorSqlStore(createMockCache());
     const sqlQueryEngine = {async executeQuery(sql, params = []) {
       if (!/\breplica_operations\b/u.test(sql)) return reservations.execute(sql, params);
       const statement = leader.db.prepare(sql);
       assert.equal(statement.reader, true, 'only committed apply writes this operation ledger');
-      return {success: true, rowSetComplete: true, rows: statement.all(...params)};
+      return {success: true, rowSetComplete: true, rows: statement.all(...params), ...servedBy()};
     }};
     const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
     let nextMutation = 0;
@@ -98,7 +133,7 @@ async function withPlacementExecution(measure, {duringCreate} = {}) {
       },
     };
     try {
-      await measure({owner, leader, initial, deliveries});
+      await measure({owner, leader, initial, deliveries, proposed});
     } finally {
       try {
         await coordinator.shutdown();
@@ -155,6 +190,52 @@ test('a SENDING placement CREATE re-entered by ledger CDC advances through real 
       assert.equal(ledgerRows(leader)[0].workflow_step, WORKFLOW_STEP.CREATING);
     });
   });
+
+// The coordinator composes the retained owner's three ports itself
+// (rebalance-coordinator-lifecycle); the dispatch gate asks that owner to
+// confirm the row of every storage-increasing dispatch. A present row is
+// confirmed by the ledger leader's own qualified read, whichever route the
+// coordinator's cache holds at that moment.
+for (const ledgerRoute of Object.values(LEDGER_ROUTE)) {
+  test('a present placement row dispatches its CREATE once, without delay, through the ' +
+    `retained owner's confirmation (cached ledger route: ${ledgerRoute})`, async () => {
+    await withPlacementExecution(async ({owner, leader, initial, deliveries, proposed}) => {
+      const operation = owner.repository.rowToOperation(initial);
+      const claimed = await owner.claimPendingDispatchOperation(operation);
+      assert.equal(claimed?.workflowStep, WORKFLOW_STEP.SENDING, 'the real owner claimed dispatch');
+      const proposals = proposed.length;
+      const [sending] = ledgerRows(leader);
+      owner.handleObservedReplicaStateChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'UPSERT', sending);
+      await owner.operationWorkflowRunExclusive(
+        owner.getOperationOwnerSingleFlightKey(initial.operation_id), async () => {});
+      assertCreateDelivery(deliveries, initial);
+      assert.equal(ledgerRows(leader)[0].workflow_step, WORKFLOW_STEP.CREATING);
+      assert.equal(proposed.length, proposals, 'a present row needs no native repair proposal');
+      assert.equal(owner.repository.retainedPlacementRepairs.size, 0,
+        'the confirmed row leaves no retained obligation behind');
+    }, {ledgerRoute});
+  });
+}
+
+test('an absent placement row is withheld from dispatch while no ledger route is published; ' +
+  'the retained owner keeps the obligation, owed to the route publication', async () => {
+  await withPlacementExecution(async ({owner, leader, initial, deliveries, proposed}) => {
+    const operation = owner.repository.rowToOperation(initial);
+    assert.equal(committedUpdate(leader, 'execution-mirror:lost-row',
+      'DELETE FROM replica_operations WHERE operation_id = ?', [initial.operation_id]), 1);
+    const proposals = proposed.length;
+    assert.equal(await owner.repository.ensureRetainedOperationRow(operation), false,
+      'the dispatch gate question: no row and no route confirm nothing');
+    assert.equal(deliveries.length, 0);
+    assert.equal(proposed.length, proposals, 'without a route nothing is presented');
+    const record = owner.repository.retainedPlacementRepairs.get(initial.operation_id);
+    assert.ok(record, 'the retained owner keeps the obligation');
+    assert.notEqual(record.owed & REPAIR_OBSERVATION.ROUTE, 0,
+      'the next ledger route publication owns the reconsideration');
+    assert.equal(record.continuation.state, RETAINED_REPAIR_CONTINUATION.IDLE,
+      'no timer: the route publication is the wake');
+  }, {ledgerRoute: LEDGER_ROUTE.UNPUBLISHED});
+});
 
 test('a competing terminal result survives acknowledgement of a previously stamped CREATE',
   async () => {

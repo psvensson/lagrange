@@ -222,7 +222,7 @@ documentClass: generated
 - [replica-operation-retained-repair-answer.js](replica-operation-retained-repair-answer.js) - Canonical native repair answers; validation never substitutes for a grant. (importers: one)
 - [replica-operation-retained-repair-authority.js](replica-operation-retained-repair-authority.js) - The retained owner consumes one complete leader read per coalesced hint. (importers: few)
 - [replica-operation-retained-repair-ingress.js](replica-operation-retained-repair-ingress.js) - No leading comment; first export: assignRetainedRepairIngressMethods. (importers: one)
-- [replica-operation-retained-repair-observation.js](replica-operation-retained-repair-observation.js) - Observations are hints for the retained-record owner, never row authority. (importers: few)
+- [replica-operation-retained-repair-observation.js](replica-operation-retained-repair-observation.js) - Observations are hints for the retained-record owner, never row authority. (importers: many)
 - [replica-operation-retained-repair-read-retry.js](replica-operation-retained-repair-read-retry.js) - One bounded continuation per retained record: the owner of reconsideration a failed authority read left owed. (importers: one)
 - [replica-operation-retained-repair-record.js](replica-operation-retained-repair-record.js) - No leading comment; first export: RETAINED_REPAIR_DECISION. (importers: many)
 - [replica-operation-retained-repair-reply.js](replica-operation-retained-repair-reply.js) - A current-row/contended observation is not a committed answer for an incoming entry. (importers: few)

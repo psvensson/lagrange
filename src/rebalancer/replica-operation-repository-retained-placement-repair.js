@@ -10,7 +10,7 @@ import {RETAINED_REPAIR_DECISION as DECISION, RETAINED_REPAIR_MODE as MODE, PROP
   entryBody, retainedRepairRecord, materializeRepairContention} from './replica-operation-retained-repair-record.js';
 import {RETAINED_REPAIR_DISCLAIM, matchesRetainedRepairObservation} from
   './replica-operation-retained-repair-reply.js';
-import {REPAIR_AUTHORITY, REPAIR_AUTHORITY_REFUSAL, REPAIR_READ_SCOPE,
+import {REPAIR_AUTHORITY, REPAIR_AUTHORITY_REFUSAL, REPAIR_READ_SCOPE, REPAIR_READ_SERVICE,
   TRANSIENT_AUTHORITY_REFUSALS, readRetainedRepairAuthority} from
   './replica-operation-retained-repair-authority.js';
 import {retainedPlacementContentionDecision, retainedPlacementEntityDecision} from
@@ -144,8 +144,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       const {binding, changed} = this.bindRetainedRepairDecision(attempt);
       if (mode === MODE.HANDOFF && !changed && kinds === OBSERVATION.ROUTE) return false;
       if (binding.state === BINDING.UNAVAILABLE) {
-        return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE,
-          RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE);
+        return this.confirmUnboundRetainedRepair(attempt, kinds, binding);
       }
       // The node that would propose evaluates contention first; a remote
       // sender presents the exact entry and its receiver evaluates it.
@@ -168,8 +167,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     async joinRetainedRepairDecision(attempt, kinds) {
       const {binding} = this.bindRetainedRepairDecision(attempt);
       if (binding.state === BINDING.UNAVAILABLE) {
-        return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE,
-          RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE);
+        return this.confirmUnboundRetainedRepair(attempt, kinds, binding);
       }
       const satisfied = await this.submitRetainedPlacementRepairAttempt(attempt, UNFENCED, binding);
       if (satisfied || !this.retainedRepairAttemptIsCurrent(attempt)) return satisfied;
@@ -185,6 +183,20 @@ function assignRetainedPlacementRepairMethods(Repository) {
         return this.settleRetainedRepairDecision(attempt, current);
       }
       return this.submitRetainedRepairAtTerm(attempt, current.term, binding);
+    },
+
+    // Without a binding nothing can be presented, but a qualified read still
+    // proves a present row: EXACT or CHANGED settles it. Absence, contention or
+    // a failed read leave the obligation to the next route publication.
+    async confirmUnboundRetainedRepair(attempt, kinds, binding) {
+      const decision = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.SUBJECT,
+        binding);
+      if (decision.state !== DECISION.EXACT && decision.state !== DECISION.CHANGED) {
+        return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE,
+          RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE);
+      }
+      this.satisfyRetainedRepairRevalidation(attempt);
+      return this.settleRetainedRepairDecision(attempt, decision);
     },
 
     async confirmRetainedRepair(attempt, kinds, scope) {
@@ -432,16 +444,22 @@ function assignRetainedPlacementRepairMethods(Repository) {
       return false;
     },
 
+    // A present row is a committed fact any qualified ledger leader proves at
+    // or above the floors, whoever served it. Absence and contention may lead
+    // to a proposal or a blocker: only the decision's binding may serve them.
     async readRetainedRepairDecision(attempt, scope, binding) {
       const authority = await readRetainedRepairAuthority(this, attempt, scope, binding);
       if (authority.state !== REPAIR_AUTHORITY.READY) {
         return {state: DECISION.UNAVAILABLE, reason: authority.reason};
       }
+      const row = authority.rows.find((candidate) =>
+        candidate.operation_id === attempt.operation.operationId);
+      if (!row && authority.service !== REPAIR_READ_SERVICE.BOUND) {
+        return {state: DECISION.UNAVAILABLE, reason: REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING};
+      }
       attempt.minimumLedgerIndex =
         Math.max(attempt.minimumLedgerIndex, authority.witness.appliedIndex);
       attempt.minimumLedgerTerm = Math.max(attempt.minimumLedgerTerm, authority.witness.term);
-      const row = authority.rows.find((candidate) =>
-        candidate.operation_id === attempt.operation.operationId);
       if (row) {
         const operation = this.rowToOperation(row);
         const exact = operation.createdAt === attempt.operation.createdAt &&

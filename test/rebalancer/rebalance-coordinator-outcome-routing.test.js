@@ -200,9 +200,8 @@ function createTestCoordinator(options = {}) {
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createTransactionCoordinator(),
-    systemTableCache: {get() {
-      return null;
-    }},
+    // An empty cache: no row by key, no rows of a table (the ledger route reads both).
+    systemTableCache: {get: () => null, getAll: () => []},
     cdcIntegrationService: {
       async refreshAuthoritativeCacheRow() {
         return true;

@@ -19,12 +19,17 @@ const REPAIR_AUTHORITY = Object.freeze({UNAVAILABLE: 'unavailable', READY: 'read
 // READ_FAILED, UNQUALIFIED_LEADERSHIP (the serving replica is not leader) and
 // UNQUALIFIED_POSITION are transient: the continuation owns a bounded retry.
 // SHAPE and INVALID_ROW are typed refusals that arm no timer; their wake is a
-// change of the offending row or of the binding. UNQUALIFIED_BINDING (served
-// by another replica than the decision bound) waits for the route publication.
+// change of the offending row or of the binding. UNQUALIFIED_BINDING (an
+// absence or contention served by another replica than the decision bound)
+// waits for the route publication.
 const REPAIR_AUTHORITY_REFUSAL = Object.freeze({READ_FAILED: 'owner_read_failed',
   UNQUALIFIED_LEADERSHIP: 'unqualified_leadership', UNQUALIFIED_POSITION: 'unqualified_position',
   UNQUALIFIED_BINDING: 'unqualified_binding', UNQUALIFIED_SHAPE: 'unqualified_shape',
   INVALID_ROW: 'invalid_operation_row'});
+// Which replica served a qualified read, against the decision's binding. A
+// present row is a committed fact whoever served it; only absence and
+// contention, which may lead to a proposal or a blocker, need the binding.
+const REPAIR_READ_SERVICE = Object.freeze({BOUND: 'bound', UNBOUND: 'unbound'});
 const TRANSIENT_AUTHORITY_REFUSALS = new Set([REPAIR_AUTHORITY_REFUSAL.READ_FAILED,
   REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_LEADERSHIP, REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_POSITION]);
 const OBSERVED_WITNESS = 'observed';
@@ -56,10 +61,13 @@ function readPlan(attempt, scope) {
 }
 
 // A read is judged against the binding its decision resolved when it began.
-function witnessServesBinding(witness, binding) {
-  if (binding.state !== BINDING.LOCAL && binding.state !== BINDING.REMOTE) return false;
+function readService(witness, binding) {
+  if (binding.state !== BINDING.LOCAL && binding.state !== BINDING.REMOTE) {
+    return REPAIR_READ_SERVICE.UNBOUND;
+  }
   return witness.servingNodeId === binding.nodeId &&
-    witness.servingReplicaId === binding.replicaId;
+    witness.servingReplicaId === binding.replicaId ?
+    REPAIR_READ_SERVICE.BOUND : REPAIR_READ_SERVICE.UNBOUND;
 }
 
 function witnessPosition(witness, attempt) {
@@ -69,7 +77,7 @@ function witnessPosition(witness, attempt) {
     Number.isSafeInteger(witness.term) && witness.term >= attempt.minimumLedgerTerm;
 }
 
-function witnessRefusal(witness, attempt, binding) {
+function witnessRefusal(witness, attempt) {
   if (witness?.state === OBSERVED_WITNESS && witness.partitionId === LEDGER_PARTITION_ID &&
       witness.role !== RAFT_ROLE.LEADER) {
     return REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_LEADERSHIP;
@@ -77,9 +85,7 @@ function witnessRefusal(witness, attempt, binding) {
   if (!isValidLeaderReadAuthorityWitness(witness, LEDGER_PARTITION_ID)) {
     return REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_SHAPE;
   }
-  if (!witnessPosition(witness, attempt)) return REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_POSITION;
-  return witnessServesBinding(witness, binding) ? null :
-    REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING;
+  return witnessPosition(witness, attempt) ? null : REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_POSITION;
 }
 
 function canonicalRowObservation(repository, row) {
@@ -120,15 +126,16 @@ async function readRetainedRepairAuthority(repository, attempt, scope, binding) 
   if (!isCompleteAuthoritativeReadResult(answer)) {
     return unavailableRepairAuthority(REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_SHAPE);
   }
-  const refusal = witnessRefusal(answer.readAuthorityWitness, attempt, binding);
+  const refusal = witnessRefusal(answer.readAuthorityWitness, attempt);
   if (refusal !== null) return unavailableRepairAuthority(refusal);
   if (!completeRows(repository, answer.rows, attempt, plan)) {
     return unavailableRepairAuthority(REPAIR_AUTHORITY_REFUSAL.INVALID_ROW);
   }
   return {state: REPAIR_AUTHORITY.READY, rows: answer.rows,
     census: answer.rows.map(censusRowOf), completeCensus: plan.ids === null,
-    witness: answer.readAuthorityWitness};
+    witness: answer.readAuthorityWitness,
+    service: readService(answer.readAuthorityWitness, binding)};
 }
 
-export {REPAIR_AUTHORITY, REPAIR_AUTHORITY_REFUSAL, REPAIR_READ_SCOPE,
+export {REPAIR_AUTHORITY, REPAIR_AUTHORITY_REFUSAL, REPAIR_READ_SCOPE, REPAIR_READ_SERVICE,
   TRANSIENT_AUTHORITY_REFUSALS, readRetainedRepairAuthority};
