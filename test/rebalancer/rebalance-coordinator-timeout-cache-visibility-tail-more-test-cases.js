@@ -538,6 +538,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         entity_id: 'partition-1',
       };
       const gatewayCalls = [];
+      const routedMessages = [];
 
       const notifications = [];
       const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow], {
@@ -561,7 +562,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         systemTableCache: cache,
         ...ledger.options,
         messageRouter: {
-          async deliver() {
+          async deliver(address, payload) {
+            routedMessages.push({address, payload});
             return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
@@ -591,8 +593,12 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         const pendingRetry = () => owner.observedProgressRetryTimerByOperationId.get(operationId);
         const retry = pendingRetry();
         t.ok(retry, 'cache ACTIVE preserves the existing owner wake');
+        const progressStore = owner.operationProgressStore;
+        const priorProgress = progressStore.loadOperationProgress({operationId});
+        const originalEvents = progressStore.listOperationProgressEvents();
         let consumed = retry;
-        for (let turn = 0; turn < 2 && consumed; turn++) {
+        const measurementTurns = priorProgress.maxStepBound + 1;
+        for (let turn = 0; turn < measurementTurns && consumed; turn++) {
           await consumed.timeoutHandle.callback();
           const successor = pendingRetry();
           t.ok(successor && successor.timeoutHandle !== consumed.timeoutHandle,
@@ -600,6 +606,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           t.equal(ledger.read().workflow_step, 'CREATING');
           consumed = successor;
         }
+        t.same(progressStore.loadOperationProgress({operationId}), priorProgress,
+          'unavailable observations do not advance or spend a progress version');
+        t.same(progressStore.listOperationProgressEvents(), originalEvents,
+          'unchanged owner observations emit no dispatch or transition event');
+        t.same(routedMessages, [], 'the held owner turns do not send another CREATE');
 
         if (consumed) {
           await retry.timeoutHandle.callback();
@@ -626,7 +637,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         const completedTurn = owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey
           .get(owner.getOperationOwnerSingleFlightKey(operationId));
         t.ok(completedTurn, 'the cache event starts the real operation owner turn');
-        await completedTurn;
+        const applied = await completedTurn;
+        t.equal(applied?.applied, true, 'the adapter reports the committed owner effect');
         const committed = ledger.read();
         t.equal(committed.workflow_step, 'ACTIVE', 'the real services CDC wakes and completes the original ADD');
         t.equal(committed.status, 'active');
@@ -634,6 +646,15 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         t.match(aligned, authorityRow,
           'the production CDC handoff observes the exact target and its new lifecycle version');
         t.equal(owner.observedProgressRetryTimerByOperationId.has(operationId), false);
+
+        cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, authorityRow);
+        for (const deliver of notifications.splice(0)) deliver();
+        await owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey
+          .get(owner.getOperationOwnerSingleFlightKey(operationId));
+        t.same(ledger.read(), committed, 'a repeated ACTIVE notification leaves the terminal row intact');
+        t.equal(JSON.parse(committed.steps_history).filter(({step}) => step === 'ACTIVE').length, 1,
+          'the operation has exactly one committed ACTIVE entry');
+        t.same(routedMessages, [], 'the event and its replay send no duplicate CREATE');
       } finally {
         try {
           await coordinator.shutdown();
