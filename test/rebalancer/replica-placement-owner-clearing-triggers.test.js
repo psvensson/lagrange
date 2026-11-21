@@ -92,6 +92,26 @@ function unmappedCodesOf(vocabularies) {
       .map(([name, code]) => `${vocabulary}.${name}=${code}`));
 }
 
+// The independent second statement of the DEFINITE set (N4): this test's own
+// list, one reason per code. A code moved into or out of the owner's
+// PLACEMENT_DEFINITE_ANSWER_CODES fails here until this list is changed too,
+// deliberately, with its reason.
+const PINNED_DEFINITE_ANSWERS = Object.freeze(new Map([
+  [PLACEMENT_ADMISSION_ERROR.ORIGIN, 'a command from another origin is never this owner\'s'],
+  [PLACEMENT_ADMISSION_ERROR.BYTES, 'invalid or colliding bytes never become valid by waiting'],
+  [PLACEMENT_ADMISSION_ERROR.TARGET, 'a command for another table never becomes this table\'s'],
+  [PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED, 'an unscoped REMOVE stays unscoped'],
+  [PLACEMENT_ADMISSION_ERROR.RESULT, 'a settled record whose result is unreadable stays so'],
+  [PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED, 'the retained identity is replaced, not retried'],
+  [PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED, 'the retained row changed: replaced, not retried'],
+  [PLACEMENT_REFUSAL.RETAINED_ADMISSION_REQUIRED, 'the grant belongs to the original owner'],
+  [PLACEMENT_REFUSAL.HOLD_NOT_HELD, 'a release of a row that holds nothing has nothing to wait for'],
+  [PLACEMENT_REFUSAL.TARGET_CLAIM_TAKEN, 'a runtime-service identity is claimed for ever'],
+  [PLACEMENT_REFUSAL.ALREADY_FOUNDED, 'the provisioning owner adopts the founders\' ids'],
+  [PLACEMENT_REFUSAL.SYSTEM_PARTITION_SEED_FOUNDED, 'permanent by partition kind'],
+  [PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED, 'the canonical ledger partition never changes'],
+]));
+
 test('F11: every code on the admission path maps to a definite answer (null) or a ' +
   'trigger whose subscription exists, and none clears on RESYNC or a retry delay', () => {
   assert.deepEqual(unmappedCodesOf(ADMISSION_PATH_VOCABULARIES), []);
@@ -109,6 +129,9 @@ test('F11: every code on the admission path maps to a definite answer (null) or 
   // and no code is declared both ways or twice.
   const definite = new Set(PLACEMENT_DEFINITE_ANSWER_CODES);
   assert.equal(definite.size, PLACEMENT_DEFINITE_ANSWER_CODES.length, 'declared once');
+  assert.deepEqual([...definite].sort(), [...PINNED_DEFINITE_ANSWERS.keys()].sort(),
+    'the owner\'s DEFINITE declaration equals this test\'s pinned list');
+  assert.ok([...PINNED_DEFINITE_ANSWERS.values()].every((reason) => reason.length > 0));
   assert.deepEqual(Object.keys(PLACEMENT_CLEARING_TRIGGER)
     .filter((code) => PLACEMENT_CLEARING_TRIGGER[code] === null).sort(),
   [...definite].sort(), 'the null rows are exactly the declared DEFINITE codes');
