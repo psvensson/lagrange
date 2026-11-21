@@ -123,7 +123,8 @@ async function withExpiredStep(measure, {
     installCommittedOperationMutationFixture(gateway);
     gateway.updateSystemTableRow = gateway.cdcIntegrationService.updateSystemTableRow;
     const coordinator = createTestCoordinator({
-      nodeId, controlPlaneReadinessService, systemTableCache: cache, sqlQueryEngine: sql,
+      nodeId, systemTableCache: cache, sqlQueryEngine: sql,
+      ...(controlPlaneReadinessService ? {controlPlaneReadinessService} : {}),
       controlPlaneSystemTableGateway: gateway,
     });
     const owner = coordinator.workflowOwner;
@@ -194,6 +195,7 @@ async function withExpiredStep(measure, {
       });
     } finally {
       try {
+        owner.clearCreatedOperationHandoffRetry(OPERATION_ID);
         await coordinator.shutdown();
       } finally {
         otherTables.suspend();
