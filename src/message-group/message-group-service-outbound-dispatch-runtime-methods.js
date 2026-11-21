@@ -1,3 +1,4 @@
+import {traceMessageGroupQuery} from '../diagnostics/services-query-delivery-trace.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
@@ -68,6 +69,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
         );
       }
       const messageId = uuidv4();
+      traceMessageGroupQuery(this, message, targetService, messageId);
       const timestamp = this.hlcClock.now();
       const messageEnvelope = {
         id: messageId,

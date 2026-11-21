@@ -1,3 +1,5 @@
+import {recordServicesQueryTrace, traceOutboundServicesQuery} from
+  '../diagnostics/services-query-delivery-trace.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
@@ -58,6 +60,15 @@ function reportAckTimeout(router, pending, connection, targetAddress) {
 function sendWithAck(router, connection, targetAddress, messageId, payload, targetNodeId, options) {
   const write = Promise.withResolvers();
   write.promise.catch(() => {});
+  const trace = traceOutboundServicesQuery(
+    router, targetAddress, payload, messageId, targetNodeId, connection?.connectionId);
+  const observe = trace && ((stage, fields) => {
+    recordServicesQueryTrace(router, stage, {
+      messageId, targetAddress, targetNodeId, connectionId: connection?.connectionId,
+      activeConnectionId: router.nodeConnections.get(targetNodeId)?.connectionId,
+      ...fields,
+    });
+  });
   let writeStarted = false;
   let writeClosed = false;
   const finishWrite = (error) => {
@@ -74,6 +85,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
     }
     const ws = connection?.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
+      observe?.('service_socket_not_open');
       rejectBeforeSend(router, connection, targetNodeId, reject);
       return;
     }
@@ -106,6 +118,12 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       if (router.pendingMessages.get(messageId) === pending) {
         router.pendingMessages.delete(messageId);
       }
+      observe?.('ack_wait_retired', {
+        accepted: settle === resolve,
+        observedAtMs: clock.now(),
+        sentAtMs: pending.sentAt,
+        boundMs: pending.deliveryTimeoutMs,
+      });
       settle(value);
     };
     function onAbort() {
@@ -146,15 +164,20 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       bytes = encoded.stamp();
       assertDeliveryOpen(options);
     } catch (error) {
+      observe?.('service_pre_handoff_refused');
       finish(reject, error);
       return;
     }
+    const handoffAtMs = observe ? clock.now() : null;
     try {
       writeStarted = true;
       ws.send(bytes, {binary: false}, (error) => {
         if (finishWrite(error) && error) pending.reject(error);
+        observe?.('service_write_callback', {failed: Boolean(error), observedAtMs: clock.now()});
       });
+      observe?.('service_socket_handoff', {handoffAtMs});
     } catch (_sendError) {
+      observe?.('service_write_threw', {handoffAtMs});
       // Once ws.send has been entered, a thrown error is not proof that its
       // compression/write child released the encoded copy. The existing close
       // owner may induce the actual callback; until then cleanup stays owed.

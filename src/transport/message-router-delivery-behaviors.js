@@ -1,3 +1,5 @@
+import {traceOuterServicesQuery} from
+  '../diagnostics/services-query-delivery-trace.js';
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 export {sendMessage} from './message-router-ack-delivery.js';
@@ -155,6 +157,7 @@ export async function deliver(
   const messageId = message.messageId || uuidv4();
   const correlationId = message.correlationId || messageId;
   let targetNodeId = options.targetNodeId;
+  const traceQuery = traceOuterServicesQuery(router, message, targetAddress, messageId);
   return withDeliveryLifetime(router, options, async (options) => {
     const deliverStartMs = options.deliveryLifetime.clock.now();
     assertDeliveryOpen(options);
@@ -203,6 +206,9 @@ export async function deliver(
       normalizedOutcome.answer,
       {messageId, correlationId},
     );
+    traceQuery?.('outer_outcome', {targetNodeId,
+      state: deliveryTransportOf(delivered).deliveryState,
+      answered: normalizedOutcome.answer != null});
     recordDeliveryMetric(router, {
       targetNodeId, messageId, correlationId, requestId, operationId,
       result: deliveryTransportOf(delivered), queueWaitMs: normalizedOutcome.queueWaitMs,
@@ -210,6 +216,7 @@ export async function deliver(
     });
     return delivered;
   }, (error, lifetime) => {
+    traceQuery?.('outer_retired', {targetNodeId, timeout: lifetime.ownsTimeout(error)});
     if (lifetime.ownsShutdown(error)) {
       return buildDeliveryEnvelope({
         messageId, correlationId, acknowledged: false, error: error.message,
@@ -571,9 +578,24 @@ export async function resolveRecoverableDeliveryError(
   return null;
 }
 
-export function sendRaw(router, ws, message) {
+export function sendRaw(router, ws, message, trace) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+    if (!trace) {
+      ws.send(JSON.stringify(message));
+      return;
+    }
+    const handoffAtMs = router.timeSource.now();
+    try {
+      ws.send(JSON.stringify(message), (error) => {
+        trace('write_callback', {failed: Boolean(error)});
+      });
+    } catch (error) {
+      trace('write_threw', {handoffAtMs});
+      throw error;
+    }
+    trace('socket_handoff', {handoffAtMs});
+  } else {
+    trace?.('socket_not_open');
   }
 }
 

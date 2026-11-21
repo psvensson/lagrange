@@ -456,7 +456,7 @@ class MessageRouterConnectionLifecycleMethods {
           resolve();
         });
         ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
-          this.handleMessage(connectionInfo.nodeId, ws, data);
+          this.handleMessage(connectionInfo.nodeId, ws, data, connectionInfo.connectionId);
         });
         ws.on(TRANSPORT_EVENT.CLOSE, () => {
           if (!connectionEstablished) {

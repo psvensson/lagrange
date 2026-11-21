@@ -1,3 +1,4 @@
+import {SERVICES_QUERY_TRACE_ENV} from '../../../src/diagnostics/services-query-delivery-trace.js';
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {waitForState} from './wait-for-state.js';
@@ -63,6 +64,7 @@ const FORWARDED_HOST_ENV_KEYS = Object.freeze([
   'LAGRANGE_CAPTURE_LOGS',
   'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD',
   'LAGRANGE_LOOP_GAP_PROFILE',
+  SERVICES_QUERY_TRACE_ENV,
 ]);
 // The formation attribution window (src/diagnostics/formation-attribution-
 // window.js) measures the seed only; these cross into the seed container and

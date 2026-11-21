@@ -254,7 +254,7 @@ class MessageRouterServerLifecycle {
       routerId: this.routerId,
     });
     ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
-      this.handleMessage(connectionInfo.nodeId || connectionId, ws, data);
+      this.handleMessage(connectionInfo.nodeId || connectionId, ws, data, connectionId);
     });
     ws.on(TRANSPORT_EVENT.CLOSE, () => {
       this.handleConnectionClose(

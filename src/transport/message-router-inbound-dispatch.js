@@ -1,3 +1,9 @@
+import {
+  getOutboundServicesQueryTrace,
+  isServicesQueryTraceOpen,
+  isTracedServicesAddress,
+  recordServicesQueryTrace,
+} from '../diagnostics/services-query-delivery-trace.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 import {
@@ -38,6 +44,30 @@ function doesConnectionBelongToSocket(connection, connectionId, ws) {
   return isUnidentifiedPlaceholderSocket(connection, connectionId);
 }
 
+function inboundQueryTrace(router, message, nodeKey, connectionId) {
+  const {messageId, payload, targetAddress, sourceNodeId, type} = message;
+  if (type === RouterMessageType.SERVICE_MESSAGE) {
+    if (!isTracedServicesAddress(targetAddress) ||
+        !(router.isQueryDataPlaneMessage(payload) ||
+          (payload?.messageId === messageId && router.isQueryDataPlaneMessage(payload.payload)))) {
+      return null;
+    }
+    return (stage, fields) => recordServicesQueryTrace(router, stage, {
+      messageId, targetAddress, sourceNodeId, connectionId,
+      activeConnectionId: router.nodeConnections.get(nodeKey)?.connectionId,
+      ...fields,
+    });
+  }
+  if (type !== RouterMessageType.ACK && type !== RouterMessageType.SERVICE_RESPONSE) return null;
+  const outbound = getOutboundServicesQueryTrace(router, messageId);
+  if (!outbound) return null;
+  return (stage, fields) => recordServicesQueryTrace(router, stage, {
+    ...outbound, messageId, connectionId, frameType: type,
+    activeConnectionId: router.nodeConnections.get(nodeKey)?.connectionId,
+    ...fields,
+  });
+}
+
 /**
  * Inbound dispatch for the message router: parse incoming frames, record peer
  * liveness, route control frames (IDENTIFY/PING/PONG/ACK), adopt or rekey
@@ -63,13 +93,16 @@ class MessageRouterInboundDispatch {
   getNodeInboundActivityAt(nodeId) {
     return this.nodeInboundActivityAt.get(nodeId) ?? null;
   }
-  handleMessage(connectionId, ws, data) {
+  handleMessage(connectionId, ws, data, socketConnectionId) {
     return runTransportInboundActivity(() =>
-      this.dispatchInboundMessage(connectionId, ws, data));
+      this.dispatchInboundMessage(connectionId, ws, data, socketConnectionId));
   }
-  dispatchInboundMessage(connectionId, ws, data) {
+  dispatchInboundMessage(connectionId, ws, data, socketConnectionId) {
     try {
       const message = JSON.parse(data.toString());
+      const trace = isServicesQueryTraceOpen() ?
+        inboundQueryTrace(this, message, connectionId, socketConnectionId) : null;
+      trace?.('frame_parsed', {observedAtMs: this.timeSource.now()});
       this.recordNodeInboundActivity(connectionId);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
@@ -81,9 +114,10 @@ class MessageRouterInboundDispatch {
         return;
       }
       if (!this.ensureInboundConnectionAuthenticated(connectionId, ws)) {
+        trace?.('frame_auth_refused');
         return;
       }
-      this.routeAuthenticatedInboundFrame(connectionId, ws, message);
+      this.routeAuthenticatedInboundFrame(connectionId, ws, message, trace);
     } catch (error) {
       this.logger.error(ROUTER_LOG_MSG.MESSAGE_PARSE_FAILED, {
         connectionId,
@@ -103,7 +137,7 @@ class MessageRouterInboundDispatch {
     }
     return false;
   }
-  routeAuthenticatedInboundFrame(connectionId, ws, message) {
+  routeAuthenticatedInboundFrame(connectionId, ws, message, trace) {
     if (message.type === RouterMessageType.PING) {
       this.sendRaw(ws, {
         type: RouterMessageType.PONG,
@@ -122,16 +156,18 @@ class MessageRouterInboundDispatch {
       return;
     }
     if (message.type === RouterMessageType.ACK) {
+      trace?.('ack_received', {pending: this.pendingMessages.has(message.messageId),
+        acknowledged: message.acknowledged === true, observedAtMs: this.timeSource.now()});
       this.handleAcknowledgment(message);
       return;
     }
     if (message.type === RouterMessageType.SERVICE_RESPONSE) {
-      this.handleServiceResponse(message);
+      this.handleServiceResponse(message, trace);
       return;
     }
     if (message.type === RouterMessageType.SERVICE_MESSAGE) {
       const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
-      this.handleServiceMessage(ws, message, delivery);
+      this.handleServiceMessage(ws, message, delivery, trace);
       return;
     }
     this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
@@ -471,7 +507,7 @@ class MessageRouterInboundDispatch {
    * @param {Object|null} delivery - Owner-bound local delivery lifetime.
    * @private
    */
-  handleServiceMessage(ws, message, delivery = null) {
+  handleServiceMessage(ws, message, delivery = null, trace = null) {
     const {targetAddress, messageId, payload} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
@@ -480,13 +516,16 @@ class MessageRouterInboundDispatch {
       registeredHandlers: Array.from(this.handlers.keys()),
       hasHandler: this.handlers.has(targetAddress),
     });
+    const traceAck = trace && ((stage, fields) => trace(`ack_${stage}`, fields));
+    const traceResponse = trace && ((stage, fields) => trace(`response_${stage}`, fields));
     this.sendRaw(ws, {
       type: RouterMessageType.ACK,
       messageId,
       acknowledged: true,
-    });
+    }, traceAck);
     const handler = this.handlers.get(targetAddress);
     if (!handler) {
+      trace?.('partition_handler_missing');
       this.emit(TRANSPORT_EVENT.MESSAGE, {
         messageId,
         targetAddress,
@@ -501,7 +540,7 @@ class MessageRouterInboundDispatch {
         sourceAddress: message.sourceAddress,
         noHandler: true,
         error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
-      });
+      }, traceResponse);
       return;
     }
     const envelope = {
@@ -514,7 +553,10 @@ class MessageRouterInboundDispatch {
     };
     Promise.resolve()
       // The local-only second argument is not part of the wire envelope.
-      .then(() => handler(envelope, delivery))
+      .then(() => {
+        trace?.('partition_dispatch', {hasDeliveryAuthority: delivery !== null});
+        return handler(envelope, delivery);
+      })
       .then((result) => {
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
           messageId,
@@ -525,7 +567,7 @@ class MessageRouterInboundDispatch {
           messageId,
           sourceAddress: message.sourceAddress,
           result,
-        });
+        }, traceResponse);
       })
       .catch((error) => {
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
@@ -538,7 +580,7 @@ class MessageRouterInboundDispatch {
           messageId,
           sourceAddress: message.sourceAddress,
           error: error.message,
-        });
+        }, traceResponse);
       });
   }
   /**
@@ -546,7 +588,7 @@ class MessageRouterInboundDispatch {
    * @param {Object} message - Service response message.
    * @private
    */
-  handleServiceResponse(message) {
+  handleServiceResponse(message, trace) {
     const {messageId, result, error, noHandler} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_RECEIVED, {
       messageId,
@@ -558,6 +600,8 @@ class MessageRouterInboundDispatch {
       noHandler,
     });
     this.recordServiceResponseDisposition(disposition);
+    trace?.('response_received', {disposition: disposition.kind, absorbed: disposition.absorbed,
+      observedAtMs: this.timeSource.now()});
     if (disposition.kind === SERVICE_RESPONSE_DISPOSITION_KIND.SETTLED) {
       return;
     }
