@@ -3,6 +3,17 @@ import {
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
 
+const RESERVATION_RELEASE_UNCONFIRMED = 'RESERVATION_RELEASE_UNCONFIRMED';
+const RESERVATION_RELEASE_MALFORMED_RESPONSE = 'malformed authority response';
+const RESERVATION_RELEASE_IDENTITY_MISMATCH = 'reservation identity mismatch';
+const RESERVATION_OPERATION_BINDING = Object.freeze([
+  ['operation_id', 'operationId'],
+  ['entity_type', 'entityType'],
+  ['entity_id', 'entityId'],
+  ['partition_id', 'partitionId'],
+  ['target_node_id', 'targetNodeId'],
+]);
+
 const MEMBERSHIP_PUBLICATION_EPOCH_FIELD = 'membershipPublicationEpoch';
 
 const STORAGE_RESERVATION_AUTHORITY_ERROR = Object.freeze({
@@ -92,14 +103,36 @@ function storageReservationTimestampsAreValid(row) {
   );
 }
 
+function reservationOperationBindingMatches(row, operation) {
+  return RESERVATION_OPERATION_BINDING.every(([column, field]) =>
+    row[column] === operation[field]);
+}
+
+function reservationReleaseError(operation, reason) {
+  const error = new Error(`Reservation release unresolved for ${operation.operationId}: ${reason}`);
+  error.code = RESERVATION_RELEASE_UNCONFIRMED;
+  return error;
+}
+
+function requireReservationReleaseRows(result, operation) {
+  if (result?.success !== true || !Array.isArray(result.rows)) {
+    throw reservationReleaseError(
+      operation, result?.error || RESERVATION_RELEASE_MALFORMED_RESPONSE);
+  }
+  for (const row of result.rows) {
+    if (!row || typeof row.reservation_id !== 'string' || row.reservation_id.length === 0 ||
+        !reservationOperationBindingMatches(row, operation)) {
+      throw reservationReleaseError(
+        operation, RESERVATION_RELEASE_IDENTITY_MISMATCH);
+    }
+  }
+  return result.rows;
+}
+
 function storageReservationIdentityMatches(row, operation, options) {
   return (
     row.reservation_id === options.reservationId &&
-    row.operation_id === operation.operationId &&
-    row.entity_type === operation.entityType &&
-    row.entity_id === operation.entityId &&
-    row.partition_id === operation.partitionId &&
-    row.target_node_id === operation.targetNodeId &&
+    reservationOperationBindingMatches(row, operation) &&
     row.reason_code === options.reasonCode &&
     Number(row.amplification_factor) === options.amplificationFactor
   );
@@ -121,5 +154,7 @@ function activeStorageReservationMatchesOperation(row, operation, options) {
 export {
   STORAGE_RESERVATION_AUTHORITY_ERROR,
   activeStorageReservationMatchesOperation,
+  requireReservationReleaseRows,
+  reservationReleaseError,
   storageReservationOperationIdentityMatches,
 };

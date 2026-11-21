@@ -20,8 +20,11 @@ import {
   buildFailedReservationAdoption,
   observeAuthoritativeOperationForReservation,
 } from './rebalance-coordinator-reservation-adoption.js';
-import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
-  './storage-reservation-authority.js';
+import {
+  STORAGE_RESERVATION_AUTHORITY_ERROR,
+  requireReservationReleaseRows,
+  reservationReleaseError,
+} from './storage-reservation-authority.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
@@ -109,12 +112,9 @@ const RESERVATION_RELEASE_READ_QUERY_OPTIONS = Object.freeze({
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
-const RESERVATION_RELEASE_UNCONFIRMED = 'RESERVATION_RELEASE_UNCONFIRMED';
+const RESERVATION_RELEASE_UNPROVED = 'conditional release unproved';
 const RESERVATION_AUTHORITY_ERROR = Object.freeze({
-  MALFORMED_RESPONSE: 'malformed authority response',
-  IDENTITY_MISMATCH: 'reservation identity mismatch',
   INVALID_ACTIVE_TUPLE: 'invalid active reservation tuple',
-  RELEASE_UNCONFIRMED: 'conditional release unproved',
   OPERATION_AUTHORITY_UNAVAILABLE: 'reservation operation authority is unavailable',
   OPERATION_IDENTITY_MISMATCH: 'reservation operation identity differs',
 });
@@ -124,29 +124,6 @@ const RESERVATION_OPERATION_FIELD = Object.freeze({
 });
 const RESERVATION_RELEASE_WITNESS_SQL =
   'SELECT * FROM storage_reservations WHERE reservation_id = ?';
-
-function reservationReleaseError(operation, reason) {
-  const error = new Error(`Reservation release unresolved for ${operation.operationId}: ${reason}`);
-  error.code = RESERVATION_RELEASE_UNCONFIRMED;
-  return error;
-}
-
-function requireReservationReleaseRows(result, operation) {
-  if (result?.success !== true || !Array.isArray(result.rows)) {
-    throw reservationReleaseError(
-      operation, result?.error || RESERVATION_AUTHORITY_ERROR.MALFORMED_RESPONSE);
-  }
-  for (const row of result.rows) {
-    if (!row || typeof row.reservation_id !== 'string' || row.reservation_id.length === 0 ||
-        row.operation_id !== operation.operationId || row.entity_type !== operation.entityType ||
-        row.entity_id !== operation.entityId || row.partition_id !== operation.partitionId ||
-        row.target_node_id !== operation.targetNodeId) {
-      throw reservationReleaseError(operation, RESERVATION_AUTHORITY_ERROR.IDENTITY_MISMATCH);
-    }
-  }
-  return result.rows;
-}
-
 
 // The subject of a reservation's write identities.
 function reservationWriteSubject(reservationId) {
@@ -537,7 +514,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
             !TERMINAL_RESERVATION_STATUSES.includes(final.status) ||
             !Number.isFinite(final.released_at)) {
           throw reservationReleaseError(
-            operation, transition.error || RESERVATION_AUTHORITY_ERROR.RELEASE_UNCONFIRMED);
+            operation, transition.error || RESERVATION_RELEASE_UNPROVED);
         }
         releaseControlPlaneWriteIdentities(...reservationWriteSubject(row.reservation_id));
       }
