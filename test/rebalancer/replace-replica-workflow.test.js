@@ -218,7 +218,9 @@ test('REPLACE replica workflow', async (t) => {
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated',
+            operationId: payload.operationId, replicaId: payload.replicaId,
+            nodeId: options.targetNodeId});
         },
       };
 
@@ -605,6 +607,8 @@ test('REPLACE replica workflow', async (t) => {
         deliveries.push({target, payload, options});
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.COMPLETED,
+          replicaId: payload.replicaId,
+          nodeId: options.targetNodeId,
         });
       },
       getConnectionState: () => TEST_COMPLETED_REMOVE_CONNECTION_CONNECTED,
