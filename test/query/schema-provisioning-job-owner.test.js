@@ -236,8 +236,8 @@ function createServeRefreshClock() {
   return clock;
 }
 
-function serveRefreshPublication(epoch) {
-  const members = JSON.stringify(['serve-a', 'serve-b', 'serve-c']);
+function serveRefreshPublication(epoch, nodeIds = ['serve-a', 'serve-b', 'serve-c']) {
+  const members = JSON.stringify(nodeIds);
   return {publication_id: `cluster_membership-${epoch}`,
     publication_kind: 'cluster_membership', publication_epoch: epoch,
     publisher_node_id: 'serve-a', status: 'PUBLISHED',
@@ -286,6 +286,146 @@ function createServeRefreshFixture(t, gateway) {
   });
   t.teardown(() => readiness.shutdown());
   return {clock, cache, state, readiness, engine};
+}
+
+test('provisioning target selection projects one committed serve answer',
+  async (t) => {
+    const gateway = createGateway();
+    const first = createServeRefreshFixture(t, gateway);
+    first.state.nodes[2].ready_lease_expires_at = 900;
+    await first.readiness.readServeEligibility();
+    const earlier = first.readiness.answerServeCohort();
+
+    const second = createServeRefreshFixture(t, gateway);
+    second.state.nodes[1].ready_lease_expires_at = 900;
+    second.state.nodes[2].ready_lease_expires_at = 900;
+    second.state.publications = [serveRefreshPublication(4)];
+    await second.readiness.readServeEligibility();
+    const later = second.readiness.answerServeCohort();
+    t.same(earlier.eligibleNodeIds, ['serve-a', 'serve-b']);
+    t.same(later.eligibleNodeIds, ['serve-a']);
+
+    let answers = 0;
+    first.readiness.answerServeCohort = () => ++answers === 1 ? earlier : later;
+    const result = await first.engine.waitForProvisionTargetNodeIds({
+      partitionId: 'adjacent-cohorts', requiredReplicaCount: 3,
+      failOnTimeout: false,
+    });
+    t.equal(answers, 1, 'synchronous selection reads the owner once');
+    t.same(result.epoch, earlier.epoch, 'target IDs and epoch describe one answer');
+    t.same(result.nodeIds, earlier.eligibleNodeIds);
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  });
+
+test('public CREATE reports a real missing quorum without inventing a reason',
+  async (t) => {
+    const gateway = createGateway();
+    const {clock, cache, state, readiness, engine} =
+      createServeRefreshFixture(t, gateway);
+    state.nodes = state.nodes.slice(0, 1);
+    state.publications = [serveRefreshPublication(3, ['serve-a'])];
+    await readiness.readServeEligibility();
+    const observed = readiness.answerServeCohort();
+    t.same(observed.eligibleNodeIds, ['serve-a']);
+    t.same(observed.answers['serve-a'].reasons, []);
+
+    const {answer, attempts} = await queryInitialPartition(t, gateway, {
+      clock, cache, engine,
+    });
+    assertQuorumRefusal(t, answer, answer.outcome.detail);
+    t.equal(attempts.length, 0, 'one target cannot reach founding');
+    t.same(answer.outcome.reasons, [], 'the owner supplied no denial reason');
+    t.same(answer.outcome.detail.epoch, observed.epoch);
+    t.same(answer.outcome.detail.nodeReasons, {});
+    t.same(answer.outcome.detail.candidateTargetNodeIds, ['serve-a']);
+    t.equal(answer.outcome.detail.requiredReplicaCount, 3);
+    t.equal(answer.outcome.detail.quorumReplicaCount, 2);
+    t.equal(answer.outcome.detail.jobId, answer.outcome.jobId);
+    t.match(answer.outcome.detail.partitionId, /-p1$/);
+  });
+
+test('public CREATE rechecks serve freshness after admission prechecks',
+  async (t) => {
+    const gateway = createGateway();
+    const {clock, cache, state, readiness, engine} =
+      createServeRefreshFixture(t, gateway);
+    state.nodes[1].ready_lease_expires_at = 1100;
+    state.nodes[2].ready_lease_expires_at = 1100;
+    await readiness.readServeEligibility();
+    t.same(readiness.answerServeCohort().eligibleNodeIds,
+      ['serve-a', 'serve-b', 'serve-c']);
+
+    const prechecked = [];
+    const {answer, attempts} = await queryInitialPartition(t, gateway, {
+      clock, cache, engine,
+      async checkProvisioningAdmission({nodeId}) {
+        prechecked.push(nodeId);
+        clock.now = 1200;
+        return {allowed: true};
+      },
+    });
+    t.ok(prechecked.length > 0, 'the initial cohort reaches awaited admission');
+    t.equal(attempts.length, 0, 'stale approvals cannot reach founding');
+    if (answer.outcome.detail) {
+      assertQuorumRefusal(t, answer, answer.outcome.detail);
+      t.same(answer.outcome.detail.reasons, ['unavailable_stale']);
+      t.same(answer.outcome.detail.nodeReasons['serve-b'], ['unavailable_stale']);
+      t.same(answer.outcome.detail.nodeReasons['serve-c'], ['unavailable_stale']);
+      t.same(answer.outcome.detail.candidateTargetNodeIds, ['serve-a']);
+      t.equal(answer.outcome.detail.quorumReplicaCount, 2);
+      t.equal(answer.outcome.detail.jobId, answer.outcome.jobId);
+    } else {
+      t.fail('the refusal carries the latest committed serve observation');
+    }
+  });
+
+test('an admission precheck can reuse a healthy majority at a newer epoch',
+  async (t) => {
+    const gateway = createGateway();
+    const {state, readiness, engine} = createServeRefreshFixture(t, gateway);
+    state.nodes[2].ready_lease_expires_at = 900;
+    await readiness.readServeEligibility();
+    const checked = [];
+    engine.rebalanceCoordinator = {
+      async checkProvisioningAdmission({nodeId}) {
+        checked.push(nodeId);
+        if (checked.length === 1) {
+          state.publications = [serveRefreshPublication(4)];
+          await readiness.readServeEligibility();
+        }
+        return {allowed: true};
+      },
+    };
+    const result = await engine.waitForProvisionTargetNodeIds({
+      partitionId: 'healthy-majority', requiredReplicaCount: 3,
+    });
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+    t.same(result.nodeIds, ['serve-a', 'serve-b']);
+    t.same(checked, result.nodeIds, 'a newer epoch does not repeat admission');
+    t.equal(result.epoch?.publicationEpoch, 4, 'success uses the checked fresh cohort');
+  });
+
+async function queryInitialPartition(t, gateway, fixture) {
+  const {clock, cache, engine, checkProvisioningAdmission} = fixture;
+  const attempts = [];
+  engine.rebalanceCoordinator = {
+    checkProvisioningAdmission,
+    async createOperation(operation) {
+      attempts.push(operation);
+      throw new Error('unexpected CREATE operation for an unavailable cohort');
+    },
+    async executeOperation() {
+      throw new Error('unexpected replica dispatch for an unavailable cohort');
+    },
+  };
+  const service = createService(gateway, [], {
+    systemCache: cache, now: () => clock.now,
+    schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+    partitionProvisioner: (context) => engine.provisionInitialTablePartition(context),
+  });
+  const query = createSchemaWireClient(t, service, gateway, engine);
+  return {answer: await query(), attempts};
 }
 
 // Real public SQL -> schema custody -> provisioning cohort -> readiness owner
