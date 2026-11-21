@@ -22,6 +22,7 @@ import {
   buildTransactionCoordinator,
   createCommittedTimeoutLedger,
   createCoordinator,
+  createTimeoutVisibilityCache,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
 import {
   registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests,
@@ -474,7 +475,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
     );
   });
 
-test('checkTimeouts does not fail a stale operation while a deferred transition retry is still armed',
+test('the timeout owner retains a stale operation while a deferred transition retry is armed',
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
@@ -506,8 +507,8 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
         get() {
           return null;
         },
-        filter() {
-          return [];
+        getAll(tableName) {
+          return tableName === 'replica_operations' ? [operationRow] : [];
         },
       },
       messageRouter: {
@@ -528,7 +529,12 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
     let committed;
     try {
       const owner = coordinator.workflowOwner;
-      const operation = owner.repository.rowToOperation(ledger.read());
+      const {operation} = await owner.repository.queryAuthoritativeOperationVisibilityObservation(
+        operationRow.operation_id, {
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          requireCompleteExactKey: true,
+        });
+      t.equal(operation.workflowStep, 'PENDING', 'complete owner RPC observes the retained step');
       t.ok(owner.deferTransitionRetry(operation.operationId, {
         deferRetry: true, retryAfterMs: 1000,
       }, {
@@ -537,7 +543,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
         partitionId: operation.partitionId, operationSnapshot: operation,
       }), 'the owner arms a real transition retry');
       t.ok(owner.hasActiveTransitionRetryGrace(operation.operationId));
-      await coordinator.checkTimeouts();
+      await owner.reconcileTimeoutOperation(operation, Date.now());
       committed = ledger.read();
     } finally {
       try {
@@ -548,7 +554,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
     }
 
     t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === operationRow.operation_id),
-      'the sweep reaches the real pending owner row with retry grace active');
+      'the timeout decision uses the exact durable operation with retry grace active');
     t.same(ledger.terminalChanges, [],
       'timeout reconciliation does not submit failure while the transition retry is armed');
     t.equal(
@@ -698,8 +704,6 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     const TEST_WORKFLOW_STEP_PENDING = 'PENDING';
     const TEST_WORKFLOW_STEP_ACTIVE = 'ACTIVE';
     const TEST_STATUS_PENDING = 'pending';
-    const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
-    const TEST_SERVICES_TABLE = 'services';
     const TEST_RAFT_ROLE_FOLLOWER = 'follower';
     const TEST_ADDRESS_SEPARATOR = '/';
     const TEST_STEP_STALE_MS = 65_000;
@@ -718,8 +722,6 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       'authoritative services reads should be attempted before cache fallback';
     const TEST_ASSERT_EMPTY_AUTHORITATIVE_SERVICE_ROWS =
       'authoritative services reads should not provide target progress';
-    const TEST_ASSERT_TARGET_CACHE_READ =
-      'target services cache row should drive active progress';
 
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - TEST_STEP_STALE_MS;
@@ -752,6 +754,9 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       service_type: TEST_ENTITY_TYPE_PARTITION,
       status: ReplicaStatus.ACTIVE,
       raft_role: TEST_RAFT_ROLE_FOLLOWER,
+      created_at: staleUpdatedAtMs - 1000,
+      state_entered_at: staleUpdatedAtMs,
+      updated_at: staleUpdatedAtMs,
       address: [
         TEST_TARGET_NODE_ID,
         TEST_ENTITY_TYPE_PARTITION,
@@ -766,6 +771,9 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       service_type: TEST_ENTITY_TYPE_PARTITION,
       status: ReplicaStatus.ACTIVE,
       raft_role: TEST_RAFT_ROLE_FOLLOWER,
+      created_at: staleUpdatedAtMs - 1000,
+      state_entered_at: staleUpdatedAtMs,
+      updated_at: staleUpdatedAtMs,
       address: [
         TEST_SOURCE_NODE_ID,
         TEST_ENTITY_TYPE_PARTITION,
@@ -774,46 +782,23 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     };
     const serviceRows = [sourceServiceRow, targetServiceRow];
     const authoritativeServiceReadResults = [];
-    const serviceCacheReadKeys = [];
     const dispatchedMessages = [];
 
+    const cache = createTimeoutVisibilityCache(operationRow, serviceRows);
+    let targetAuthority = null;
     const ledger = createCommittedTimeoutLedger(operationRow, {
+      cache,
       readServices(sql, params) {
-        authoritativeServiceReadResults.push({sql, params, rowCount: 0});
-        return {success: true, rows: [], rowSetComplete: false};
+        const targetPointRead = params[0] === TEST_REPLICA_ID;
+        const rows = targetPointRead && targetAuthority ? [targetAuthority] : [];
+        authoritativeServiceReadResults.push({sql, params, rowCount: rows.length});
+        return {success: true, rows, rowSetComplete: rows.length === 1};
       },
     });
     const coordinator = createCoordinator({
       nodeId: TEST_TARGET_NODE_ID,
       transactionCoordinator: buildTransactionCoordinator(),
-      systemTableCache: {
-        get(tableName, key) {
-          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
-            return key === operationRow.operation_id ?
-              operationRow :
-              TEST_EMPTY_VALUE;
-          }
-          if (tableName === TEST_SERVICES_TABLE) {
-            serviceCacheReadKeys.push(key);
-            return serviceRows.find((row) =>
-              row.service_id === key,
-            ) || TEST_EMPTY_VALUE;
-          }
-          return TEST_EMPTY_VALUE;
-        },
-        getAll(tableName) {
-          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
-            return [operationRow];
-          }
-          if (tableName === TEST_SERVICES_TABLE) {
-            return serviceRows;
-          }
-          return [];
-        },
-        filter(tableName, predicate) {
-          return this.getAll(tableName).filter(predicate);
-        },
-      },
+      systemTableCache: cache,
       ...ledger.options,
       messageRouter: {
         async deliver(target, request) {
@@ -830,10 +815,40 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     });
 
     coordinator.initialize();
-    let committed;
     try {
+      const owner = coordinator.workflowOwner;
+      const original = ledger.read();
       await coordinator.checkTimeouts();
-      committed = ledger.read();
+      t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === TEST_OPERATION_ID),
+        'the sweep reads the exact committed operation before consulting services');
+      t.ok(authoritativeServiceReadResults.length > TEST_EMPTY_AFFECTED_ROW_COUNT,
+        TEST_ASSERT_AUTHORITATIVE_SERVICE_READS);
+      t.ok(authoritativeServiceReadResults.every(({rowCount}) => rowCount === 0),
+        TEST_ASSERT_EMPTY_AUTHORITATIVE_SERVICE_ROWS);
+      t.same(ledger.read(), original, 'unavailable SERVICES retains the exact original operation');
+      t.same(ledger.terminalChanges, [], TEST_ASSERT_NO_TIMEOUT_FAILURE);
+      const retry = owner.observedProgressRetryTimerByOperationId.get(TEST_OPERATION_ID);
+      t.ok(retry, 'the existing terminal-handoff wake stays armed');
+
+      targetAuthority = {
+        ...targetServiceRow,
+        node_id: TEST_SOURCE_NODE_ID,
+        address: [TEST_SOURCE_NODE_ID, TEST_ENTITY_TYPE_PARTITION, TEST_REPLICA_ID]
+          .join(TEST_ADDRESS_SEPARATOR),
+        updated_at: nowMs,
+      };
+      await coordinator.checkTimeouts();
+      t.same(ledger.read(), original, 'an ACTIVE row belonging to another host is inconclusive');
+      t.same(ledger.terminalChanges, [], 'wrong target authority cannot terminalize the operation');
+
+      targetAuthority = {...targetServiceRow, updated_at: nowMs + 1};
+      await coordinator.checkTimeouts();
+      t.equal(ledger.read().workflow_step, TEST_WORKFLOW_STEP_ACTIVE, TEST_ASSERT_ACTIVE_STEP);
+      t.equal(cache.get('services', TEST_REPLICA_ID)?.updated_at, nowMs + 1,
+        'the authoritative target row is applied by production CDC alignment');
+      t.equal(owner.observedProgressRetryTimerByOperationId.has(TEST_OPERATION_ID), false,
+        'the completed handoff clears the old retry owner');
+      t.same(dispatchedMessages, [], TEST_ASSERT_NO_UNSAFE_TRIM);
     } finally {
       try {
         await coordinator.shutdown();
@@ -841,39 +856,6 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
         ledger.close();
       }
     }
-
-    t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === TEST_OPERATION_ID),
-      'the sweep reads the exact committed operation before consulting services');
-
-    t.ok(
-      authoritativeServiceReadResults.length > TEST_EMPTY_AFFECTED_ROW_COUNT,
-      TEST_ASSERT_AUTHORITATIVE_SERVICE_READS,
-    );
-    t.ok(
-      authoritativeServiceReadResults.every((result) =>
-        result.rowCount === TEST_EMPTY_AFFECTED_ROW_COUNT,
-      ),
-      TEST_ASSERT_EMPTY_AUTHORITATIVE_SERVICE_ROWS,
-    );
-    t.ok(
-      serviceCacheReadKeys.includes(TEST_REPLICA_ID),
-      TEST_ASSERT_TARGET_CACHE_READ,
-    );
-    t.equal(
-      committed.error_message,
-      TEST_EMPTY_VALUE,
-      TEST_ASSERT_NO_TIMEOUT_FAILURE,
-    );
-    t.equal(
-      committed.workflow_step,
-      TEST_WORKFLOW_STEP_ACTIVE,
-      TEST_ASSERT_ACTIVE_STEP,
-    );
-    t.same(
-      dispatchedMessages,
-      [],
-      TEST_ASSERT_NO_UNSAFE_TRIM,
-    );
   });
 
 registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests();

@@ -1,3 +1,7 @@
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {applyCDCIntegrationServiceCacheVisibilityWait} from
+  '../../src/cdc/cdc-integration-service-cache-visibility-wait.js';
+import {CDC_OPERATION} from '../../src/constants/index.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway} from './test-helpers.js';
@@ -69,7 +73,30 @@ export function createCoordinator(overrides = {}) {
   })));
 }
 
-export function createCommittedTimeoutLedger(initial, {readServices} = {}) {
+class FixtureServiceCacheRefresh {}
+applyCDCIntegrationServiceCacheVisibilityWait(FixtureServiceCacheRefresh);
+
+function createServiceCacheRefresh(cache, gateway) {
+  const host = new FixtureServiceCacheRefresh();
+  host.systemTableCache = cache;
+  host.cacheMutationTarget = cache;
+  host.logger = {info() {}, warn() {}, debug() {}, error() {}};
+  host.getPrimaryKeyField = () => 'service_id';
+  host.executeAuthoritativeSystemTableRead = (table, sql, params, options) =>
+    gateway.readAuthoritativeRows(table, sql, params, options);
+  return Object.assign(host, gateway.cdcIntegrationService);
+}
+
+export function createTimeoutVisibilityCache(operationRow, serviceRows) {
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange('replica_operations', CDC_OPERATION.UPSERT, operationRow);
+  for (const row of serviceRows) {
+    cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, row);
+  }
+  return cache;
+}
+
+export function createCommittedTimeoutLedger(initial, {readServices, cache} = {}) {
   const store = createCoordinatorSqlStore({
     getAll: (table) => table === 'replica_operations' ? [initial] : [],
   });
@@ -103,7 +130,8 @@ export function createCommittedTimeoutLedger(initial, {readServices} = {}) {
     options: {
       sqlQueryEngine,
       controlPlaneSystemTableGateway: gateway,
-      cdcIntegrationService: gateway.cdcIntegrationService,
+      cdcIntegrationService: cache ?
+        createServiceCacheRefresh(cache, gateway) : gateway.cdcIntegrationService,
     },
     terminalChanges,
     pointReads,

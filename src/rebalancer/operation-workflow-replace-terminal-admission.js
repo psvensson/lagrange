@@ -180,6 +180,16 @@ async function observeCreateTarget(owner, operation) {
   );
 }
 
+async function observeElapsedReplaceFailureTarget(owner, operation) {
+  const observation = await observeCreateTarget(owner, operation);
+  const state = readAuthoritativeReplicaLifecycleObservationState(observation);
+  const unavailable = state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+  const targetProgressPending =
+    state === AUTHORITATIVE_REPLICA_OBSERVATION_STATE.OBSERVED &&
+    isLiveCreateTargetStatus(observation.lifecycleStatus);
+  return {admitted: !unavailable && !targetProgressPending, unavailable, targetProgressPending};
+}
+
 /**
  * D2's admission of a terminal FAILED for a partition REPLACE, decided on
  * the DURABLE step: before the durable intent every existing failure
@@ -217,7 +227,10 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
     {...operation, workflowStep: durableStep}) ||
     options?.replacePostIntentFailure ===
       REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
-  return Object.freeze({admitted,
+  const target = admitted && options.elapsedWorkflowPreimage &&
+    options.requireCreateAdmissionAbsent === true ?
+    await observeElapsedReplaceFailureTarget(owner, operation) : {admitted};
+  return Object.freeze({...target,
     expectedWorkflowStep: durableStep,
     completeInstead: false,
     stepMetadata: null,
@@ -595,6 +608,12 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
       admitted: decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
       persistOptions,
     });
+  }
+  if (persistOptions.elapsedWorkflowPreimage &&
+      persistOptions.requireCreateAdmissionAbsent === true) {
+    if (!durableOperation) return Object.freeze({admitted: false, persistOptions});
+    const target = await observeElapsedReplaceFailureTarget(owner, durableOperation);
+    return Object.freeze({...target, persistOptions});
   }
   const durableStep = await readReplaceDurableStep(owner, projectedOperation);
   const expectedStep = persistOptions.expectedWorkflowStep;

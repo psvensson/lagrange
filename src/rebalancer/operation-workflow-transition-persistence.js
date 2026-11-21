@@ -54,6 +54,7 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaStatus,
+  SYSTEM_TABLE_NAME,
   TRANSITION_STEP_OPTIONS,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
@@ -71,6 +72,11 @@ const CREATE_FAILURE_LIFECYCLE_UNAVAILABLE = Object.freeze({
     operation: null,
   }),
   refusal: CREATE_TARGET_LIFECYCLE_UNAVAILABLE,
+});
+
+const ELAPSED_REPLACE_TARGET_ACTIVE = Object.freeze({
+  ...CREATE_FAILURE_LIFECYCLE_UNAVAILABLE,
+  refusal: 'elapsed_replace_target_already_active',
 });
 
 const PRIORITY_TARGET_SUPERSESSION_CHANGED = Object.freeze({
@@ -598,6 +604,9 @@ class OperationWorkflowTransitionPersistence
           terminalAdmission},
         stepMetadata: admission.stepMetadata});
     }
+    if (admission.targetProgressPending) {
+      return Object.freeze({refused: true, targetProgressPending: true});
+    }
     if (admission.supersessionChanged) {
       return Object.freeze({refused: true, supersessionChanged: true});
     }
@@ -658,7 +667,19 @@ class OperationWorkflowTransitionPersistence
       await this.admitOperationFailure(operation, errorMessage, options);
     if (failureAdmission.refused) {
       if (failureAdmission.supersessionChanged) return PRIORITY_TARGET_SUPERSESSION_CHANGED;
-      if (failureAdmission.unavailable) return CREATE_FAILURE_LIFECYCLE_UNAVAILABLE;
+      if (failureAdmission.targetProgressPending) {
+        this.scheduleObservedProgressRetry(operation.operationId, SYSTEM_TABLE_NAME.SERVICES,
+          OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT);
+        return ELAPSED_REPLACE_TARGET_ACTIVE;
+      }
+      if (failureAdmission.unavailable) {
+        if (options.deferWhenCreateAdmissionWins === true &&
+            operationCarriesReplicaCreateAdmission(operation)) {
+          return reportConcurrentCreateAdmissionWinner(CREATE_FAILURE_LIFECYCLE_UNAVAILABLE,
+            operation);
+        }
+        return CREATE_FAILURE_LIFECYCLE_UNAVAILABLE;
+      }
       return failureAdmission.completeInstead ?
         this.completeOperation(operation) : buildReplaceFailureRefusal();
     }
