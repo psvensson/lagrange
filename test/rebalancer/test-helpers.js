@@ -517,6 +517,7 @@ function buildMockPolicyAuthorityWitness(partitionId) {
     term: 1,
     commitIndex: 1,
     appliedIndex: 1,
+    electionLogApplied: true,
     observedAtMs: 1_000_000,
   });
 }

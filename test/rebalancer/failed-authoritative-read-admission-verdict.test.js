@@ -6,17 +6,19 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createTestCoordinator,
 } from './test-helpers.js';
+import {readOwnerFact} from '../../src/control-plane/control-plane-owner-fact-read.js';
 
 // Verdict matrix for the failed-authoritative-read-admission-verdict
 // invariant (architecture/contracts/invariants.json; GP-8 of the
 // golden-capability-gold-plating epic). Each case drives one admission
 // predicate with a FAILED authoritative read and asserts the documented
-// verdict: safety gates fail CLOSED (typed throw), and the two named
-// fail-open holds admit with their deadlock witness. The fail-open rows
-// double as the red-on-revert witness: they go red if the hold ever
-// silently flips polarity or changes its read-gap semantics.
+// verdict: safety gates fail CLOSED (typed throw). The over-target
+// count-keyed create-lane hold no longer fails open: an unavailable SERVICES
+// owner fact defers it (lead ruling 2026-11-21, supersession of the
+// invariant's fail-open row pending in architecture/contracts/invariants.json).
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_NODE_ID = 'node-verdict-a';
@@ -79,6 +81,19 @@ async function createVerdictCoordinator(t, overrides) {
   return coordinator;
 }
 
+// The services-p1 owner fact the hold reads, issued by the production read
+// over a reader that answers as the leader (or fails).
+function servicesOwnerFact(answer) {
+  return () => readOwnerFact(async () => answer, {tableName: 'services',
+    sql: 'SELECT * FROM services WHERE service_type = ? AND partition_id = ?',
+    params: ['partition', TEST_PARTITION_ID], minimumIndex: 0, minimumTerm: 0});
+}
+
+function servicesOwnerRows(rows) {
+  return servicesOwnerFact({success: true, rowSetComplete: true, rows,
+    readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1')});
+}
+
 function addLikeContext() {
   return {
     move: {enforceConcurrentOperationBudget: true},
@@ -90,9 +105,9 @@ function addLikeContext() {
 }
 
 test(
-  'fail-open hold with deadlock witness: the over-target count-keyed ' +
-    'create-lane hold admits on a failed authoritative read (blocking on ' +
-    'the gap would strand the surplus drain it exists to release)',
+  'superseded fail-open: the over-target count-keyed create-lane hold ' +
+    'defers on an unavailable SERVICES owner fact (no decision; the ' +
+    'planner\'s scheduled turn re-evaluates it)',
   async (t) => {
     initializeTestEnvironment();
     const coordinator = await createVerdictCoordinator(t, {
@@ -101,7 +116,8 @@ test(
       // :429-442) discards availability and returns the empty rows of the
       // failed observation, which is exactly what the hold's :226-228
       // empty-read return consumes. Returning [] here IS the failed read.
-      getAuthoritativeEntityServiceRows: async () => [],
+      readEntityServiceOwnerFact: servicesOwnerFact({success: false,
+        error: READ_GAP_ERROR}),
       // The op-observation lane reports no conflict so the call reaches the
       // over-target hold itself.
       getEntityAuthoritativeOperationObservation: async () => ({
@@ -115,12 +131,10 @@ test(
         TARGET_REPLICA_COUNT,
     });
 
-    await coordinator.ensureCriticalPartitionCreateLaneAvailable(
-      addLikeContext(),
-    );
-    t.pass(
-      'the over-target hold returned without throwing on the read gap ' +
-        '(documented fail-open: never blocks on a read gap)',
+    await t.rejects(
+      coordinator.ensureCriticalPartitionCreateLaneAvailable(addLikeContext()),
+      {rebalanceSkipReason: 'services_inventory_unavailable'},
+      'the hold stays: a typed deferral, never a release on the read gap',
     );
   },
 );
@@ -133,7 +147,7 @@ test(
     const rows = overTargetServiceRows();
     t.equal(rows.length, OVER_TARGET_ROW_COUNT, 'fixture is over target');
     const coordinator = await createVerdictCoordinator(t, {
-      getAuthoritativeEntityServiceRows: async () => rows,
+      readEntityServiceOwnerFact: servicesOwnerRows(rows),
       getEntityAuthoritativeOperationObservation: async () => ({
         state: 'empty',
         operationCount: 0,
@@ -162,8 +176,8 @@ test(
   async (t) => {
     initializeTestEnvironment();
     const coordinator = await createVerdictCoordinator(t, {
-      getAuthoritativeEntityServiceRows: async () =>
-        overTargetServiceRows().slice(0, AT_TARGET_ROW_COUNT),
+      readEntityServiceOwnerFact: servicesOwnerRows(
+        overTargetServiceRows().slice(0, AT_TARGET_ROW_COUNT)),
       getEntityAuthoritativeOperationObservation: async () => ({
         state: 'empty',
         operationCount: 0,

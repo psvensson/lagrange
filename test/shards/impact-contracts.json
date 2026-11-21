@@ -2276,6 +2276,26 @@
         "test/bootstrap/release-version-fence.test.js",
         "test/bootstrap/support-envelope-owner.test.js"
       ]
+    },
+    "services-inventory-owner-fact": {
+      "description": "The coordinator's SERVICES inventory consumers (topology guard, replica-id allocator, critical create-lane over-target hold, retired REPLACE-source check, message-group bootstrap membership) decide only on the services-p1 leader's owner fact (readOwnerFact): READY rows through ownerFactRows; an UNAVAILABLE owner fact is no decision, a typed deferral that the caller's existing continuation (the planner's scheduled turn, the workflow's deferred dispatch retry) retries, never rows and never a permanent refusal. The partition bootstrap address book is a hint (readHint), nothing concluded from its absence.",
+      "owners": [
+        "src/control-plane/control-plane-owner-fact-read.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/partition/partition-service-remote-query-methods.js",
+        "src/rebalancer/entity-service-row-read.js",
+        "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
+        "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+        "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
+        "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js"
+      ],
+      "tests": [
+        "test/rebalancer/topology-guard-inventory-authority.test.js",
+        "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
+        "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4805,6 +4825,37 @@
       "witnessTests": [
         "test/bootstrap/release-version-fence.test.js",
         "test/bootstrap/support-envelope-owner.test.js"
+      ]
+    },
+    "services-inventory-owner-fact-read": {
+      "description": "The owner-fact read (producer), answered at the services-p1 receiver (publication), and the coordinator's SERVICES inventory consumers change together: what READY and UNAVAILABLE mean at the receiver is what the consumers decide and defer on.",
+      "endpoints": [
+        {
+          "id": "owner-fact-read",
+          "owners": [
+            "src/control-plane/control-plane-owner-fact-read.js",
+            "src/control-plane/control-plane-owner-fact-read-contract.js",
+            "src/partition/partition-service-remote-query-methods.js"
+          ]
+        },
+        {
+          "id": "services-inventory-consumers",
+          "owners": [
+            "src/rebalancer/entity-service-row-read.js",
+            "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
+            "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+            "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
+            "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation.js"
+          ]
+        }
+      ],
+      "contract": "services-inventory-owner-fact",
+      "witnessTests": [
+        "test/rebalancer/topology-guard-inventory-authority.test.js",
+        "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
+        "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js"
       ]
     }
   }

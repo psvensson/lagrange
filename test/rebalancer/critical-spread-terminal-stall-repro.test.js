@@ -25,11 +25,12 @@
  *   rebalance-coordinator-operation-read-methods.js:455-495.
  *
  * This test drives the REAL UnifiedRebalancer + REAL RebalanceCoordinator
- * in-process with the live topology and an unavailable authoritative
- * services read, and asserts that ONE evaluation cycle produces an admitted
- * spread-restoring operation (spread-typed ADD or count-neutral REPLACE)
- * targeting a free node. It FAILS on current source because the topology
- * guard blocks the cure with `replica_inventory_unusable`.
+ * in-process with the live topology. Superseded by the lead's ruling of
+ * 2026-11-21 (the conservative-union escapes are deleted; an unavailable
+ * SERVICES owner fact is no decision): one cycle while the services owner is
+ * unavailable admits nothing and defers; the first cycle after the owner
+ * answers as the leader produces the admitted spread-restoring operation
+ * (spread-typed ADD or count-neutral REPLACE) targeting a free node.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -161,9 +162,10 @@ function isSpreadRestoringOperationRow(operationRow) {
 // Shared coordinator + rebalancer wiring over a prepared cache: both stall
 // repros differ only in the seeded services topology.
 function createStallReproStack(cache, options = {}) {
-  const authoritativeServicesReadResult =
+  // Mutable: a case lets the services owner answer between two cycles.
+  const servicesRead = {[TEST_SERVICES_SQL_PATTERN]:
     options.authoritativeServicesReadResult ||
-    TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE;
+    TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE};
   const readinessService = createMockControlPlaneReadinessService({
     systemTableCache: cache,
     defaultRepairEligible: true,
@@ -176,9 +178,7 @@ function createStallReproStack(cache, options = {}) {
     storageAdmissionService,
     // The live suppressor precondition: every authoritative read of the
     // services owner fails while cache reads keep working.
-    sqlQueryResults: {
-      [TEST_SERVICES_SQL_PATTERN]: authoritativeServicesReadResult,
-    },
+    sqlQueryResults: servicesRead,
   });
   const rebalancer = createTestRebalancer({
     entityId: TEST_PARTITION_ID,
@@ -197,7 +197,23 @@ function createStallReproStack(cache, options = {}) {
     TEST_REBALANCE_BUDGET;
   rebalancer.getGlobalInFlightOperationCount = async () =>
     TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
-  return {coordinator, rebalancer};
+  return {coordinator, rebalancer, servicesRead};
+}
+
+// One cycle while the services owner is unavailable: nothing is admitted and
+// every add-like move is skipped. Then the owner answers (as the leader, with
+// the cache's rows) and the next cycle's result is returned.
+async function rebalanceAcrossOwnerOutage(t, {rebalancer, cache, servicesRead}) {
+  const deferred = await rebalancer.rebalance(TriggerType.PERIODIC);
+  const deferredAddLike = (deferred.moves || []).filter(isAddLikeMoveResult);
+  t.ok(deferredAddLike.every((moveResult) => moveResult.skipped === true),
+    'no add-like move is admitted while the services owner is unavailable: ' +
+      JSON.stringify(deferredAddLike.map((moveResult) => moveResult.reason)));
+  t.same(cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS), [],
+    'no operation exists after the unavailable cycle');
+  servicesRead[TEST_SERVICES_SQL_PATTERN] = Object.freeze({success: true,
+    rows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES)});
+  return rebalancer.rebalance(TriggerType.PERIODIC);
 }
 
 function createOverTargetCache() {
@@ -230,8 +246,8 @@ function createOverTargetCache() {
 }
 
 test('critical priority partition [A,A,B] with free active nodes gets a ' +
-'spread-restoring operation within one evaluation cycle even while the ' +
-'authoritative services read is unavailable', async (t) => {
+'spread-restoring operation on the first cycle after the services owner ' +
+'answers, and none while it is unavailable', async (t) => {
   initializeTestEnvironment();
 
   const cache = createMockCache({
@@ -262,7 +278,7 @@ test('critical priority partition [A,A,B] with free active nodes gets a ' +
     // rows in flight for this partition while the gate demanded creation.
     replicaOperations: [],
   });
-  const {coordinator, rebalancer} = createStallReproStack(cache);
+  const {coordinator, rebalancer, servicesRead} = createStallReproStack(cache);
 
   try {
     // Harness sanity: all 5 active nodes are visible, replicas read [A,A,B].
@@ -277,7 +293,8 @@ test('critical priority partition [A,A,B] with free active nodes gets a ' +
       'partition must observe its three ACTIVE replicas (harness sanity)',
     );
 
-    const result = await rebalancer.rebalance(TriggerType.PERIODIC);
+    const result = await rebalanceAcrossOwnerOutage(t,
+      {rebalancer, cache, servicesRead});
 
     t.equal(result.success, true, 'rebalance cycle must complete');
     const addLikeMoveResults = (result.moves || []).filter(
@@ -357,7 +374,7 @@ test('over-target [A,A,A,B] priority partition (the ec-postfix archived ' +
   // THREE replicas are co-located on node A plus one on node B, with zero
   // in-flight operations: the archived over-target terminal topology.
   const cache = createOverTargetCache();
-  const {coordinator, rebalancer} = createStallReproStack(cache);
+  const {coordinator, rebalancer, servicesRead} = createStallReproStack(cache);
 
   try {
     t.equal(
@@ -371,7 +388,8 @@ test('over-target [A,A,A,B] priority partition (the ec-postfix archived ' +
       'partition must observe its four ACTIVE replicas (harness sanity)',
     );
 
-    const result = await rebalancer.rebalance(TriggerType.PERIODIC);
+    const result = await rebalanceAcrossOwnerOutage(t,
+      {rebalancer, cache, servicesRead});
 
     t.equal(result.success, true, 'rebalance cycle must complete');
     const addLikeMoveResults = (result.moves || []).filter(

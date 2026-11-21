@@ -211,8 +211,9 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
    * reaches this lane, so the surplus-draining removal proceeds and the count
    * falls back to target -- EXCEPT when the planner is yielding that removal to
    * its one retained priority-spread cure ADD, which this hold would refuse:
-   * that pair is a static deadlock, so the cure ADD is exempted below. Fails
-   * OPEN if the authoritative row read is unavailable (never blocks on a read gap).
+   * that pair is a static deadlock, so the cure ADD is exempted below. An
+   * unavailable SERVICES owner fact defers (typed); the planner's scheduled
+   * turn re-evaluates (lead ruling 2026-11-21 superseded the fail-open).
    *
    * @param {Object} context
    * @return {Promise<void>}
@@ -227,14 +228,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= 0) {
       return;
     }
-    const serviceRows = await this.getAuthoritativeEntityServiceRows({
-      partitionId: context?.partitionId,
-      entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-      entityId: context?.entityId || context?.partitionId,
-    });
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
-      return;
-    }
+    const serviceRows = await this.readEntityServiceOwnerRows({entityId:
+      context?.entityId || context?.partitionId,
+    entityType: context?.entityType || SERVICE_TYPE.PARTITION});
+    if (serviceRows.length === 0) return;
     const capturedAtMs = this.nowFn();
     const inventory = this.replicaInventoryBuilder({
       entityType: context?.entityType || SERVICE_TYPE.PARTITION,
@@ -274,8 +271,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     // static deadlock, not a transient hold (live witness: run
     // public-path-multinode-baseline-20260811T135503Z, 700 held cycles while
     // priority spread stayed 2/3 all run). Admit the one cure ADD — the same
-    // conjunct isEngagedPrioritySpreadCureMove already encodes one step later
-    // — computed on this hold's own alive-guarded inventory: ADD-only (the
+    // conjunct, computed on this hold's own alive-guarded inventory: ADD-only (the
     // REPLACE-churn hold this lane exists for is untouched), spread-cure
     // typed, non-ledger priority partition, target node not already hosting,
     // and alive-distinct coverage still below target. Bound: one in-flight

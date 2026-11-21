@@ -443,6 +443,9 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
   NODE_NOT_READY: 'node_not_ready',
+  // The SERVICES owner fact a decision needs is unavailable: no decision now;
+  // the caller's existing continuation brings the turn back.
+  SERVICES_INVENTORY_UNAVAILABLE: 'services_inventory_unavailable',
   // Owner decision 2026-10-04 (raft-rs full cutover): a message group's
   // replica membership does not change - no ADD, REPLACE, MOVE or
   // CREATE_REPLICA - until the fresh-identity ADD/promote path for message

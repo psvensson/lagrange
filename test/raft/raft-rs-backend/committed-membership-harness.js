@@ -107,6 +107,15 @@ function metadataCache(partitionId, members, {leaderNodeId = null} = {}) {
   return cache;
 }
 
+// The node's projection of the partition's SERVICES rows (the address
+// book of a join is read from it).
+function projectedServices(cache, rows) {
+  for (const row of rows) {
+    cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {...row});
+  }
+  return cache;
+}
+
 function waitFor(predicate, boundMs = WAIT_BUDGET_MS) {
   const deadline = Date.now() + boundMs;
   return new Promise((resolve) => {
@@ -342,12 +351,9 @@ async function createJoinOperation(harness, {type = OperationType.ADD,
     nodeId: 'coordinator-node',
     now: () => Date.now(),
     stats: {operationsCreated: 0},
-    systemTableCache: metadataCache(harness.partitionId, [],
-      {leaderNodeId: leaderHint}),
+    systemTableCache: projectedServices(metadataCache(harness.partitionId, [],
+      {leaderNodeId: leaderHint}), rows),
     messageRouter: harness.router,
-    repository: {getEntityServiceRows: () => rows.map((row) => ({...row}))},
-    getAuthoritativeEntityServiceRowsObservation: async () => ({
-      available: true, rows: rows.map((row) => ({...row}))}),
     controlPlaneReadinessService: {getNodeReadinessSync: () => null},
     resolveEntitySizeBytes: () => 0,
     ensureProvisioningAdmissionAllowed: async () => undefined,

@@ -7,17 +7,11 @@ import {
   countsTowardVoterTarget,
   occupiesNode,
 } from './replica-inventory.js';
-import {
-  REPLICA_INVENTORY_CONSISTENCY,
-  REPLICA_INVENTORY_OBSERVATION_STATE,
-} from './replica-inventory-constants.js';
-import {
-  isEngagedLedgerQuorumSpreadCureMove,
-} from './operation-ledger-hold-policy.js';
-import {
-  isNonLedgerPriorityPlacementCurePartition,
-} from './replica-placement-cure-policy.js';
+import {REPLICA_INVENTORY_OBSERVATION_STATE} from './replica-inventory-constants.js';
 import {MOVE_REASON} from './rebalancer-constants.js';
+import {ownerFactEntityServiceRows} from './entity-service-row-read.js';
+import {OWNER_FACT_STATE} from '../control-plane/control-plane-owner-fact-read.js';
+import {OWNER_CONTRACT_NEXT_ACTION} from '../control-plane/owner-contract-outcome.js';
 import {
   evaluatePrioritySurplusRemovePlacementFence,
 } from './priority-surplus-remove-placement-fence.js';
@@ -27,7 +21,6 @@ const {
   CONTROL_PLANE_READ_LEADER_MODE,
   OperationType,
   REBALANCER_SKIP_REASON,
-  ReplicaStatus,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
   SYSTEM_TABLE_NAME,
@@ -96,191 +89,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
   isTopologyGuardTargetCountOperationType(normalizedMoveType) {
     return TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES.has(
       normalizedMoveType,
-    );
-  }
-
-  /**
-   * The operation ledger cannot make its own authoritative services owner
-   * readable until its concentrated quorum spreads. Permit only that
-   * declared spread cures to use the conservative cache/operation union when
-   * the services owner is unavailable. A REPLACE source must exist in actual
-   * cache rows, an ADD must target the feasible missing node, operation
-   * visibility must remain usable, and the ordinary occupied/target decisions
-   * still run after this exception.
-   * @param {Object} context
-   * @param {Object} inventory
-   * @param {Object} authoritativeObservation
-   * @return {boolean}
-   * @private
-   */
-  // Shared provenance precondition for BOTH conservative-union escapes:
-  // the authoritative services owner is unavailable, the merged
-  // cache/operation union is internally clean, and operation visibility is
-  // still usable — the exact situation where fail-closed would otherwise
-  // convert owner-unreachability into permanent denial of the cure.
-  hasConservativeUnionInventoryProvenance(inventory, authoritativeObservation) {
-    return !(
-      authoritativeObservation?.available !== false ||
-      inventory?.provenance?.consistency !==
-        REPLICA_INVENTORY_CONSISTENCY.SOURCE_UNAVAILABLE ||
-      inventory?.provenance?.committedRowsState !==
-        REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE ||
-      [
-        REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE,
-        REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
-      ].includes(inventory?.provenance?.inFlightOperationsState) ||
-      inventory?.anomalies?.length > 0
-    );
-  }
-
-  // REPLACE escapes must prove their source against union ACTUALS: an
-  // occupied ACTIVE/REMOVING voter row, never an inferred placement.
-  resolveConservativeUnionReplaceSource(context, inventory) {
-    const sourceReplicaId = String(context?.move?.replicaId || '').trim();
-    const sourceReplica = inventory.replicas.find(
-      (replica) => replica.replicaId === sourceReplicaId,
-    );
-    if (
-      !sourceReplica?.voter ||
-      ![
-        ReplicaStatus.ACTIVE,
-        ReplicaStatus.REMOVING,
-      ].includes(sourceReplica?.status) ||
-      !sourceReplica?.occupied
-    ) {
-      return null;
-    }
-    return sourceReplica;
-  }
-
-  isConcentratedLedgerRecoveryMove(
-    context,
-    inventory,
-    authoritativeObservation,
-  ) {
-    const partitionId = String(context?.partitionId || '').trim();
-    if (
-      !this.hasConservativeUnionInventoryProvenance(
-        inventory,
-        authoritativeObservation,
-      )
-    ) {
-      return false;
-    }
-    const isReplace = context?.normalizedMoveType === OperationType.REPLACE;
-    let sourceReplica = null;
-    if (isReplace) {
-      sourceReplica = this.resolveConservativeUnionReplaceSource(
-        context,
-        inventory,
-      );
-      if (!sourceReplica) {
-        return false;
-      }
-    }
-    // Relation side (cure-typed move of a concentrated ledger partition whose
-    // source sits on the hottest node) is an owner row; the provenance and
-    // source-replica actuals above are this guard's own mechanism.
-    return isEngagedLedgerQuorumSpreadCureMove({
-      systemTableCache: this.systemTableCache,
-      moveType: context?.normalizedMoveType,
-      partitionId,
-      sourceReplicaNodeId: sourceReplica?.nodeId || null,
-      targetNodeId: String(context?.move?.nodeId || '').trim(),
-    });
-  }
-
-  /**
-   * Conservative-union escape for PRIORITY control-plane spread cures — the
-   * generalization of the ledger escape to the partitions the schema
-   * admission gate waits on. Without it, an unavailable authoritative
-   * services read blocks the only cure for critical_system_spread_open
-   * while the gate keeps demanding it (the 2026-07-18T17:40 terminal
-   * stall: sql_write_operations-p1 at [A,A,B] with free nodes, every
-   * spread ADD denied replica_inventory_unusable for 3 minutes with a
-   * frozen observation watermark). The union view must itself PROVE the
-   * cure is needed and safe: distinct occupied nodes below the replica
-   * target, an unoccupied target node, and no topology-increasing
-   * operation already in flight. The occupied/target-count decision rows
-   * still run after this escape, and counted distinct node ids include
-   * in-flight targets, so the tick after one admitted cure re-blocks any
-   * repeat — the run4 over-target invariant stays closed coordinator-side
-   * while the planner-side guards (over-creation cap, spread-vs-count
-   * reconcile, REPLACE serialization) are untouched upstream.
-   * @param {Object} context
-   * @param {Object} inventory
-   * @param {Object} authoritativeObservation
-   * @param {number|null} targetReplicaCount
-   * @return {boolean}
-   * @private
-   */
-  isEngagedPrioritySpreadCureMove(
-    context,
-    inventory,
-    authoritativeObservation,
-    targetReplicaCount,
-  ) {
-    const partitionId = String(context?.partitionId || '').trim();
-    if (
-      partitionId.length === 0 ||
-      !Number.isFinite(targetReplicaCount) ||
-      !this.hasConservativeUnionInventoryProvenance(
-        inventory,
-        authoritativeObservation,
-      ) ||
-      // The operation ledger keeps its own, stricter cure relation
-      // (isConcentratedLedgerRecoveryMove); this escape covers the OTHER
-      // priority control-plane partitions only.
-      !isNonLedgerPriorityPlacementCurePartition(partitionId)
-    ) {
-      return false;
-    }
-    const moveType = context?.normalizedMoveType;
-    if (moveType === OperationType.ADD) {
-      // The cure-typing rides as moveReason on coordinator operation
-      // requests and as reason on planner move objects.
-      const moveReason =
-        context?.move?.moveReason ?? context?.move?.reason;
-      if (moveReason !== MOVE_REASON.SPREAD_REPLICAS) {
-        return false;
-      }
-    } else if (moveType === OperationType.REPLACE) {
-      const sourceReplica = this.resolveConservativeUnionReplaceSource(
-        context,
-        inventory,
-      );
-      if (!sourceReplica) {
-        return false;
-      }
-      // Only a REPLACE whose source sits on an over-represented node
-      // (hosting more than one occupied replica in the union) restores
-      // spread; relocating a lone replica keeps the distinct-node count
-      // unchanged and must not ride the spread-cure escape.
-      const sourceNodeOccupancy = inventory.replicas.filter(
-        (replica) =>
-          replica.occupied && replica.nodeId === sourceReplica.nodeId,
-      ).length;
-      if (sourceNodeOccupancy < 2) {
-        return false;
-      }
-    } else {
-      return false;
-    }
-    const targetNodeId = String(context?.move?.nodeId || '').trim();
-    return (
-      targetNodeId.length > 0 &&
-      !occupiesNode(inventory, targetNodeId) &&
-      inventory.occupiedNodeIds.length < targetReplicaCount &&
-      // Only a CREATION-PHASE add-like operation proves topology increase is
-      // already underway; the entity operation read carries no terminal
-      // filter, so a completed ADD/REPLACE row lingering after its drain
-      // (live 2026-07-19T07-22: ADD done 07:17:55, REMOVE done 07:18:57,
-      // denials through 07:21:46) must not re-block the only cure. The
-      // one-cure-per-tick re-block is preserved: an admitted cure's own
-      // PENDING row is add-transitional and closes this row next tick.
-      !inventory.operations.some((operation) =>
-        TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(operation.type) &&
-        operation.addTransitional)
     );
   }
 
@@ -428,15 +236,16 @@ class RebalanceCoordinatorTopologyGuardMethods {
       entityType,
       entityId,
     });
-    const authoritativeObservation =
-      await this.getAuthoritativeEntityServiceRowsObservation({
-        partitionId,
-        entityType,
-        entityId,
-      });
+    const identity = {entityType, entityId};
+    const inventoryFact = await this.readEntityServiceOwnerFact(identity);
+    if (inventoryFact.state !== OWNER_FACT_STATE.READY) {
+      return this.buildTopologyGuardUnavailableDecision(inventoryFact, targetNodeId);
+    }
+    // The owner's rows, with the node's projection only ever adding an
+    // occupant (it can refuse more, never admit more).
     const mergedServiceRows = this.mergeEntityServiceRows(
       cacheServiceRows,
-      authoritativeObservation.rows,
+      ownerFactEntityServiceRows(inventoryFact, identity),
     );
     const operationObservation =
       await this.getEntityRecoveryOperationObservation(
@@ -474,23 +283,21 @@ class RebalanceCoordinatorTopologyGuardMethods {
       entityId,
       capturedAtMs: cacheStateAfter.capturedAtMs,
       committedRowsObservation: {
-        state: authoritativeObservation.available === false ? 'unavailable' :
-          mergedServiceRows.length > 0 ? 'present' : 'empty',
+        state: mergedServiceRows.length > 0 ?
+          REPLICA_INVENTORY_OBSERVATION_STATE.PRESENT :
+          REPLICA_INVENTORY_OBSERVATION_STATE.EMPTY,
         rows: mergedServiceRows,
-        revision: authoritativeObservation.snapshotVersion,
+        revision: null,
         revisionBefore: cacheStateBefore.committedRows.revision,
         revisionAfter: cacheStateAfter.committedRows.revision,
         watermarkBefore: cacheStateBefore.committedRows.lastAppliedAtMs,
         watermarkAfter: cacheStateAfter.committedRows.lastAppliedAtMs,
         causeId: cacheStateAfter.committedRows.causeId,
-        // A local capture time is not a source observation time. In
-        // particular, two successful sequential owner reads can be slow while
-        // the operation ledger spreads; pairing the first read's local start
-        // with the second read's local end fabricates cross-source skew and
-        // circularly blocks the recovery REPLACE. Preserve null when the
-        // source supplies no timestamp so the inventory reports
-        // revision_unavailable without making an unsupported skew claim.
-        observedAtMs: authoritativeObservation.observedAtMs,
+        // A local capture time is not a source observation time, and the
+        // owner fact's witness time is the serving node's clock: neither is
+        // comparable with the operation capture, so no skew is claimed and
+        // the inventory reports revision_unavailable.
+        observedAtMs: null,
       },
       inFlightOperationObservation: {
         ...operationObservation,
@@ -524,19 +331,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
         partitionId,
         entityType,
       });
-    const concentratedLedgerRecoveryMove =
-      this.isConcentratedLedgerRecoveryMove(
-        context,
-        inventory,
-        authoritativeObservation,
-      );
-    const engagedPrioritySpreadCureMove =
-      this.isEngagedPrioritySpreadCureMove(
-        context,
-        inventory,
-        authoritativeObservation,
-        targetReplicaCount,
-      );
     const topologyGuardDecisionTable = Object.freeze([
       Object.freeze({
         matches: entityType === SERVICE_TYPE.PARTITION && targetReplicaCount === null,
@@ -544,10 +338,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
         blockingReason: TOPOLOGY_GUARD_REASON.PARTITION_TARGET_UNAVAILABLE,
       }),
       Object.freeze({
-        matches:
-          !inventory.provenance.topologyIncreaseUsable &&
-          !concentratedLedgerRecoveryMove &&
-          !engagedPrioritySpreadCureMove,
+        matches: !inventory.provenance.topologyIncreaseUsable,
         state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
         blockingReason: TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
       }),
@@ -594,13 +385,44 @@ class RebalanceCoordinatorTopologyGuardMethods {
           observedServiceRowCount: inventory.replicas.length,
           targetNodeId,
           targetReplicaCount,
-          authoritativeAvailable: authoritativeObservation.available === true,
-          authoritativeReasonCode: authoritativeObservation.reasonCode || null,
-          authoritativeRetryAfterMs:
-            authoritativeObservation.retryAfterMs || null,
+          authoritativeAvailable: true,
+          authoritativeReasonCode: null,
+          authoritativeRetryAfterMs: null,
           inventoryProvenance: inventory.provenance,
           inventorySourceRevisions: inventory.sourceRevisions,
           inventorySourceWatermarks: inventory.sourceWatermarks,
+        }),
+      }),
+    });
+  }
+
+  /**
+   * No decision: the SERVICES owner fact is UNAVAILABLE. A deferral naming
+   * the read's reason, with the retry its caller's scheduled turn makes;
+   * never the "read and unusable" refusal below.
+   * @param {Object} fact - The UNAVAILABLE owner fact.
+   * @param {string} targetNodeId
+   * @return {Object} The guard's deferred decision.
+   * @private
+   */
+  buildTopologyGuardUnavailableDecision(fact, targetNodeId) {
+    const reason = TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNAVAILABLE;
+    const retryAfterMs = Number.isSafeInteger(fact.retryAfterMs) ? fact.retryAfterMs : null;
+    return Object.freeze({
+      state: TOPOLOGY_GUARD_STATE.INVENTORY_UNAVAILABLE,
+      admissionResult: Object.freeze({
+        allowed: false,
+        decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+        blockingReasons: Object.freeze([reason]),
+        eligibleNodeIds: Object.freeze([]),
+        ineligibleNodes: Object.freeze([]),
+        reason,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+        topologySnapshot: Object.freeze({
+          targetNodeId,
+          authoritativeAvailable: false,
+          authoritativeReasonCode: fact.reason,
+          authoritativeRetryAfterMs: retryAfterMs,
         }),
       }),
     });

@@ -10,10 +10,11 @@
 // Each case drives the coordinator's createOperation with the planner's
 // request (and once the planner's own move execution) on the composition in
 // topology-guard-inventory-authority-fixture.js, which names what it
-// substitutes. "diagnosis" subtests pin today's mechanism, observation by
-// observation (a repair retires them); "contract" subtests state what the
-// guard owes instead and are red today; "anchor" subtests hold today and
-// after a repair. The guard keeps its authoritative-read requirement: no
+// substitutes. The "diagnosis" subtests that pinned the refusing mechanism
+// observation by observation were retired by the repair (the guard now reads
+// the SERVICES owner fact), as they announced; their observations are still
+// printed. "contract" subtests state what the guard owes; "anchor" subtests
+// hold before and after the repair. The guard keeps its authoritative-read requirement: no
 // contract here is met by accepting an incomplete or non-leader answer
 // (the leader-only occupant case fails any repair that does).
 import {test} from '../../src/test-helpers/tap.js';
@@ -26,10 +27,6 @@ import {isValidLeaderReadAuthorityWitness} from
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {REBALANCE_COORDINATOR_SHARED} from
   '../../src/rebalancer/rebalance-coordinator-shared.js';
-import {REPLICA_INVENTORY_OBSERVATION_STATE} from
-  '../../src/rebalancer/replica-inventory-constants.js';
-import {STORAGE_ADMISSION_DECISION_TYPE} from
-  '../../src/rebalancer/storage-admission-constants.js';
 import {
   NODE,
   RUNTIME_SERVICE,
@@ -52,10 +49,6 @@ const {TOPOLOGY_GUARD_REASON} = REBALANCE_COORDINATOR_SHARED;
 const CASE_TIMEOUT_MS = 120000;
 const CONNECTED = 'connected';
 const PORTS = createPortAllocator(import.meta.url);
-const UNUSABLE_OPERATION_STATES = Object.freeze([
-  REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE,
-  REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
-]);
 
 // Diagnostic capture of a rejection: frames enough for the whole call path
 // from createOperation (the V8 default keeps ten), and every cause.
@@ -191,98 +184,6 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
       secondOwnerRpcCalls: second.ownerRpc.filter(isGuardOwnerRpc).length,
     });
 
-    await t.test('diagnosis completeness: the guard\'s SERVICES read is the local ' +
-      'follower\'s success with an incomplete row set', async (t) => {
-      t.ok(firstRead, 'the guard issued its SERVICES inventory read');
-      t.equal(firstRead?.options.authoritativeReadMode, undefined,
-        'the read names no mode: the gateway default applies');
-      t.equal(firstRead?.result?.success, true, 'the read reports success');
-      t.equal(firstRead?.result?.rowSetComplete, false, 'its row set is incomplete');
-      t.same(firstRead?.result?.rows, [], 'and carries no rows');
-      t.equal(firstRead?.result?.source, AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA,
-        'it was answered by the local replica');
-      t.equal(firstRead?.result?.localReplicaFallbackHit, true,
-        'through the any-replica fallback after the local-leader pass found none');
-      t.notOk(firstRead?.result?.error, 'with no error');
-      t.notOk(firstRead?.result?.reasonCode, 'and no reason code');
-    });
-
-    await t.test('diagnosis witness: no leader witness accompanied that answer; the ' +
-      'replica that served it follows', async (t) => {
-      t.equal(firstRead?.result?.readAuthorityWitness, null, 'no witness accompanied it');
-      t.same(firstRead?.result?.readAuthorityWitnesses, [], 'none at all');
-      t.equal(route.plannerReplica.role, RAFT_ROLE.FOLLOWER,
-        'the serving replica is the planner node\'s follower');
-      t.equal(plannerOwnWitness.role, RAFT_ROLE.FOLLOWER,
-        'the witness it would build names a follower');
-      t.equal(isValidLeaderReadAuthorityWitness(plannerOwnWitness, SERVICES_PARTITION_ID),
-        false, 'which is not a leader witness');
-    });
-
-    await t.test('diagnosis routing: the owner RPC is never attempted although the ' +
-      'published leader is reachable', async (t) => {
-      t.equal(first.ownerRpc.filter(isGuardOwnerRpc).length, 0, 'no owner RPC for the read');
-      t.equal(first.hops.length, 0, 'no transport hop at all');
-      t.equal(firstRead?.result?.systemTableDiagnostics?.leaderNodeId, NODE.PEER_A,
-        'the answer\'s own diagnostics name the published leader node');
-      t.equal(firstRead?.result?.systemTableDiagnostics?.routedToNode, null,
-        'and route nowhere');
-      t.equal(route.publishedLeaderNodeId, NODE.PEER_A,
-        'partitions.leader_node_id names the leader');
-      t.equal(route.routingCanonicalLeaderNodeId, NODE.PEER_A,
-        'the query executor\'s routing names the same leader');
-      t.equal(route.correctTarget.consensusRole, RAFT_ROLE.LEADER,
-        `the correct target ${route.correctTarget.address} leads`);
-    });
-
-    await t.test('diagnosis guard decision: replica_inventory_unusable, no reason code, ' +
-      'nothing created, the planner skips', async (t) => {
-      const refusal = refusalOf(first.error);
-      t.ok(first.error, 'the request is refused');
-      t.equal(refusal?.reason, TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
-        'the refusal code is replica_inventory_unusable');
-      t.same(refusal?.blockingReasons, [TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE]);
-      t.equal(refusal?.decisionType, STORAGE_ADMISSION_DECISION_TYPE.BLOCKED);
-      t.equal(refusal?.authoritativeAvailable, false, 'the inventory read counts as unavailable');
-      t.equal(refusal?.authoritativeReasonCode, null, 'with no reason code');
-      t.equal(refusal?.authoritativeRetryAfterMs, null, 'and no retry-after');
-      t.equal(refusal?.inventoryProvenance?.committedRowsState,
-        REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE, 'the SERVICES rows are unavailable');
-      const operationState = refusal?.inventoryProvenance?.inFlightOperationsState;
-      t.ok(typeof operationState === 'string' &&
-        !UNUSABLE_OPERATION_STATES.includes(operationState),
-      `while the operation ledger read is usable (${operationState}): SERVICES alone refuses`);
-      t.equal(first.error?.rebalanceSkipReason, undefined, 'no typed skip reason');
-      t.equal(first.operation, null, 'no operation is returned');
-      t.same(ledger, [], 'no operation row exists');
-      t.equal(host.coordinator.stats.operationsCreated, 0, 'nothing was created');
-    });
-
-    await t.test('diagnosis planner: the planner records the refusal as a skipped move',
-      async (t) => {
-        t.notOk(planned.error, `the planner's move execution settles (${planned.error?.message})`);
-        t.equal(planned.result?.skipped, true, 'the move is skipped');
-        t.equal(planned.result?.reason, STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
-          'under the admission decision type');
-        t.equal(planned.result?.admission?.reason,
-          TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
-          'carrying the guard\'s refusal');
-        t.equal(planned.ownerRpc.filter(isGuardOwnerRpc).length, 0, 'again without owner RPC');
-      });
-
-    await t.test('diagnosis retry: an identical request gives a byte-identical refusal ' +
-      'with no owned wake', async (t) => {
-      t.ok(first.error && second.error, 'both requests are refused');
-      t.equal(refusalFingerprint(second.error), refusalFingerprint(first.error),
-        'the second refusal is byte-identical to the first');
-      t.equal(secondRead?.result?.rowSetComplete, false, 'from the same incomplete answer');
-      t.equal(secondRead?.result?.source, AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA);
-      t.equal(second.ownerRpc.filter(isGuardOwnerRpc).length, 0, 'still no owner RPC');
-      t.equal(reconsiderationOf(first.error), null,
-        'the refusal carries no retry deadline or next action');
-      t.same(ledger, [], 'and nothing was created');
-    });
-
     await t.test('contract (red today): the guard decides from the leader\'s complete, ' +
       'witnessed SERVICES inventory', async (t) => {
       const reads = first.servicesReads.filter(isGuardServicesRead);
@@ -341,19 +242,14 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
       printObservation(t, 'unreachable-owner-read', {observation: strict.observation,
         error: strict.error?.message, hops: strict.hops});
 
-      await t.test('diagnosis: the same untyped refusal from the local follower; the ' +
-        'owner-RPC lane itself reports the leader unavailable', async (t) => {
-        t.equal(refusalOf(first.error)?.reason, TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE);
-        t.equal(refusalOf(first.error)?.authoritativeReasonCode, null);
-        t.equal(firstRead?.result?.source, AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA);
-        t.equal(first.ownerRpc.filter(isGuardOwnerRpc).length, 0,
-          'the guard never reached the refused hop');
-        t.equal(strict.observation?.available, false,
-          'a leader-required owner read is unavailable');
-        const leaderHops = strict.hops.filter((hop) => hop.nodeId === NODE.PEER_A);
-        t.ok(leaderHops.length > 0 && leaderHops.every((hop) => hop.refused),
-          'every hop it made to the leader was refused');
-      });
+      await t.test('anchor: the owner-RPC lane itself reports the leader unavailable',
+        async (t) => {
+          t.equal(strict.observation?.available, false,
+            'a leader-required owner read is unavailable');
+          const leaderHops = strict.hops.filter((hop) => hop.nodeId === NODE.PEER_A);
+          t.ok(leaderHops.length > 0 && leaderHops.every((hop) => hop.refused),
+            'every hop it made to the leader was refused');
+        });
 
       await t.test('contract (red today): a typed unavailability with a named reason and ' +
         'an owned reconsideration', async (t) => {
@@ -424,8 +320,7 @@ test('anchor (a, green today): the planner node leading services-p1 admits the s
       target_node_id: NODE.PLANNER}], 'exactly one operation row targets the planner node');
     t.ok(isLeaderWitnessedComplete(firstRead, NODE.PLANNER),
       'the guard read its own replica as the leader: complete and witnessed');
-    t.equal(firstRead?.result?.source, AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA);
-    t.equal(firstRead?.result?.localReplicaFallbackHit, false,
-      'on the local-leader pass, not the any-replica fallback');
-    t.equal(first.ownerRpc.filter(isGuardOwnerRpc).length, 0, 'without owner RPC');
+    t.equal(first.hops.length, 0, 'answered on the planner node itself, no transport hop');
+    t.equal(first.ownerRpc.filter(isGuardOwnerRpc).length, 0,
+      'and not through the query engine\'s owner RPC');
   });

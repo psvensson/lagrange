@@ -22,11 +22,23 @@ import {
 } from '../../src/rebalancer/storage-admission-constants.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createMockCache,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
+
+// The services-p1 leader's witness on a complete SERVICES answer (an owner
+// fact the guard can decide on).
+const SERVICES_LEADER_WITNESS = buildMockPolicyAuthorityWitness(
+  `${SYSTEM_TABLE_NAME.SERVICES}-p1`);
+
+function withServicesLeaderWitness(tableName, answer) {
+  return tableName === SYSTEM_TABLE_NAME.SERVICES && answer?.success === true ?
+    {rowSetComplete: true, ...answer, readAuthorityWitness: SERVICES_LEADER_WITNESS} :
+    answer;
+}
 
 const ReplicaStatusForTest = {REMOVING: 'removing'};
 const TEST_NODE_ID = 'node-1';
@@ -184,8 +196,8 @@ function createCoordinator(options = {}) {
     controlPlaneReadinessService,
     controlPlaneSystemTableGateway: options.controlPlaneSystemTableGateway || {
       submitMutation: sqlEngine.submitMutation,
-      readAuthoritativeRows: async (_tableName, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
+      readAuthoritativeRows: async (tableName, sql, params = []) =>
+        withServicesLeaderWitness(tableName, await sqlEngine.executeQuery(sql, params)),
       readRows: async (_tableName, sql, params = []) =>
         sqlEngine.executeQuery(sql, params),
       executeQuery: async (sql, params = []) =>
@@ -320,8 +332,10 @@ test('RebalanceCoordinator fails topology increase closed when service owner row
     );
 
     t.same(error?.admissionResult?.blockingReasons,
-      ['replica_inventory_unusable'],
+      ['replica_inventory_unavailable'],
       'cache presence cannot turn unavailable owner evidence into empty');
+    t.equal(error?.admissionResult?.decisionType, STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      'no decision: a deferral, retried on the caller\'s scheduled turn');
     coordinator.shutdown();
   },
 );
@@ -344,11 +358,11 @@ test(
         if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
           return {success: true, rowSetComplete: true, rows: []};
         }
-        return {
+        return withServicesLeaderWitness(tableName, {
           success: true,
           rowSetComplete: true,
           rows: authoritativeServices,
-        };
+        });
       },
       readRows: async () => ({
         success: true,
@@ -383,8 +397,9 @@ test(
 );
 
 test(
-  'RebalanceCoordinator admits only declared concentrated-ledger recovery ' +
-    'moves when the services owner is circularly unavailable',
+  'RebalanceCoordinator decides nothing, not even the declared ' +
+    'concentrated-ledger cure, while the services owner fact is unavailable ' +
+    '(the conservative-union escapes are deleted: ruling 2026-11-21)',
   async (t) => {
     initializeTestEnvironment();
     const ledgerId = 'replica_operations-p1';
@@ -469,110 +484,24 @@ test(
       },
     };
 
-    const policyOwner = coordinator.tablePolicyService;
-    const unavailableOwners = [null,
-      ...[null, {}, {replicaCount: 3}, {targetReplicaCount: '3'},
-        {targetReplicaCount: 1.5}, {targetReplicaCount: 3}].map((policy) => ({
-        getPolicyForPartition: async () => policy,
-      })),
-      {getPolicyForPartition: async () => {
-        throw new Error('finite policy read fault');
-      }},
+    const moves = [
+      context,
+      {...context, move: {...context.move, nodeId: spreadNode}},
+      {...context, normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+        move: {...context.move, nodeId: firstReadyTarget, replicaId: null}},
+      ...[unreadyNode, staleTransportTarget, nonAuthorityTarget, targetNode].map(
+        (nodeId) => ({...context, normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+          move: {...context.move, nodeId, replicaId: null}})),
     ];
-    for (const owner of unavailableOwners) {
-      coordinator.tablePolicyService = owner;
-      for (const normalizedMoveType of [TEST_REPLACE_OPERATION_TYPE, TEST_ADD_OPERATION_TYPE]) {
-        const denied = await coordinator.buildTopologyGuardSnapshot({
-          ...context, normalizedMoveType,
-        });
-        t.equal(denied.state, 'target_unavailable',
-          'unavailable target precedes the recovery-cure exception');
-        t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
-      }
-      t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
-        'the surplus REMOVE fence also has no target permission');
+    for (const move of moves) {
+      const snapshot = await coordinator.buildTopologyGuardSnapshot(move);
+      t.equal(snapshot.state, 'inventory_unavailable',
+        `no decision for ${move.normalizedMoveType} to ${move.move.nodeId}`);
+      t.equal(snapshot.admissionResult.decisionType, STORAGE_ADMISSION_DECISION_TYPE.DEFERRED);
+      t.same(snapshot.admissionResult.blockingReasons, ['replica_inventory_unavailable']);
+      t.ok(snapshot.admissionResult.topologySnapshot.authoritativeReasonCode,
+        'the deferral names why the owner fact is unavailable');
     }
-    coordinator.tablePolicyService = policyOwner;
-    const recovery = await coordinator.buildTopologyGuardSnapshot(context);
-    t.equal(recovery.state, 'allowed',
-      'the count-neutral ledger spread cure breaks the owner-read circularity');
-
-    const occupied = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      move: {...context.move, nodeId: spreadNode},
-    });
-    t.equal(occupied.state, 'target_node_occupied',
-      'the exception never permits two replicas on one node');
-
-    const missingSource = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      move: {...context.move, replicaId: `${ledgerId}-missing`},
-    });
-    t.equal(missingSource.state, 'inventory_unusable',
-      'the recovery REPLACE must be anchored to an actual source row');
-
-    const nonHotSource = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      move: {...context.move, replicaId: `${ledgerId}-r3`},
-    });
-    t.equal(nonHotSource.state, 'inventory_unusable',
-      'a voter off the hottest node is not the quorum-spread cure');
-
-    const genericAdd = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
-      move: {...context.move, replicaId: null},
-    });
-    t.equal(genericAdd.state, 'inventory_unusable',
-      'a pre-ready target is not placement-eligible without a ready lease');
-
-    const firstFeasibleAdd = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
-      move: {
-        ...context.move,
-        nodeId: firstReadyTarget,
-        replicaId: null,
-      },
-    });
-    t.equal(firstFeasibleAdd.state, 'allowed',
-      'the first ready unoccupied target remains a valid cure');
-
-    const unreadyAdd = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
-      move: {
-        ...context.move,
-        nodeId: unreadyNode,
-        replicaId: null,
-      },
-    });
-    t.equal(unreadyAdd.state, 'inventory_unusable',
-      'the circularity exception must not admit an unready target');
-
-    const staleTransportAdd = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
-      move: {
-        ...context.move,
-        nodeId: staleTransportTarget,
-        replicaId: null,
-      },
-    });
-    t.equal(staleTransportAdd.state, 'inventory_unusable',
-      'startup authority cannot replace live transport evidence');
-
-    const nonAuthorityAdd = await coordinator.buildTopologyGuardSnapshot({
-      ...context,
-      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
-      move: {
-        ...context.move,
-        nodeId: nonAuthorityTarget,
-        replicaId: null,
-      },
-    });
-    t.equal(nonAuthorityAdd.state, 'inventory_unusable',
-      'live CONNECTED evidence cannot replace startup authority membership');
     coordinator.shutdown();
   },
 );

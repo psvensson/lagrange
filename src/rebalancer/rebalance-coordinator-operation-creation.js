@@ -3,6 +3,7 @@ import {
   requireCreationReplayOutcome,
 } from './replica-operation-creation-request.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {CONTROL_PLANE_HINT_STATE} from '../control-plane/control-plane-owner-fact-read.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
@@ -340,8 +341,9 @@ class RebalanceCoordinatorOperationCreation {
         });
     }
 
-    const serviceRows = await this.readBootstrapServiceRows(context);
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
+    // Membership from rows: decided on the owner fact, never the projection.
+    const serviceRows = await this.readEntityServiceOwnerRows({entityType, entityId});
+    if (serviceRows.length === 0) {
       throw new Error(
         `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
       );
@@ -371,33 +373,16 @@ class RebalanceCoordinatorOperationCreation {
     };
   }
 
-  async readBootstrapServiceRows({partitionId, entityType, entityId}) {
-    const cacheServiceRows = this.repository.getEntityServiceRows({
-      partitionId,
-      entityType,
-      entityId,
-    });
-    let authoritativeObservation = null;
-    try {
-      authoritativeObservation =
-        await this.getAuthoritativeEntityServiceRowsObservation({
-          partitionId,
-          entityType,
-          entityId,
-        });
-    } catch (_error) {
-      // An owner read error is indistinguishable from an unavailable owner
-      // here: fall back to the cache view, exactly like an unavailable
-      // observation.
-      authoritativeObservation = null;
+  // A partition join's address book: the node's projection, a hint (the
+  // committed stamp names the members); a row not yet projected is an
+  // address not yet known, nothing is concluded from its absence.
+  async readBootstrapServiceRows({entityType, entityId}) {
+    const identity = {entityType, entityId};
+    const hint = await this.readEntityServiceHint(identity);
+    if (hint.state !== CONTROL_PLANE_HINT_STATE.OBSERVED) {
+      throw this.buildServicesInventoryUnavailableError(hint, identity);
     }
-    return authoritativeObservation?.available === true &&
-      authoritativeObservation.rows.length > 0 ?
-      this.mergeEntityServiceRows(
-        cacheServiceRows,
-        authoritativeObservation.rows,
-      ) :
-      cacheServiceRows;
+    return hint.rows;
   }
 
   /**
