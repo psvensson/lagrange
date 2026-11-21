@@ -33,27 +33,29 @@ async function idle(...nodes) {
   await settleTicks();
 }
 
-test('A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B', () =>
-  withRetainedLeadershipPair(async ({a, b, messages, elect}) => {
-    const retained = await retainMissing(a);
-    const competitor = await requestPlacementAdmission(a.leader,
-      {entryId: 'transfer-incumbent', body: placementStatement({partitionId: PARTITION_ID,
-        type: OperationType.REMOVE, target: NODE.C, replicaId: `${PARTITION_ID}-r2`,
-        voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}})});
-    assert.equal(competitor.placementResult.outcome, 'ADMITTED');
-    assert.equal(await a.coordinator.repository.repairRetainedOperation(retained), false);
-    await elect(b);
-    await idle(a, b);
-    assert.ok(messages.some((message) => message.from === a && message.to === b &&
+for (const publicationOrder of ['partition-first', 'service-first']) {
+  test(`A-origin BUSY routes to B on canonical ${publicationOrder} publication and actual clearing`, () =>
+    withRetainedLeadershipPair(async ({a, b, messages, elect}) => {
+      const retained = await retainMissing(a);
+      const competitor = await requestPlacementAdmission(a.leader,
+        {entryId: 'transfer-incumbent', body: placementStatement({partitionId: PARTITION_ID,
+          type: OperationType.REMOVE, target: NODE.C, replicaId: `${PARTITION_ID}-r2`,
+          voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}})});
+      assert.equal(competitor.placementResult.outcome, 'ADMITTED');
+      assert.equal(await a.coordinator.repository.repairRetainedOperation(retained), false);
+      await elect(b, {publicationOrder});
+      await idle(a, b);
+      assert.ok(messages.some((message) => message.from === a && message.to === b &&
       message.payload.type === 'PLACEMENT_REPAIR'), 'A used current B route instead of saved A closure');
-    assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 1);
-    await stepRetainedLedgerRow(b, competitor.placementResult.operationIds[0],
-      WORKFLOW_STEP.FAILED);
-    await idle(a, b);
-    assert.ok(b.leader.db.prepare('SELECT operation_id FROM replica_operations WHERE operation_id = ?')
-      .get(retained.operationId), 'B actual commit clears and restores without another resync');
-    assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 0);
-  }));
+      assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 1);
+      await stepRetainedLedgerRow(b, competitor.placementResult.operationIds[0],
+        WORKFLOW_STEP.FAILED);
+      await idle(a, b);
+      assert.ok(b.leader.db.prepare('SELECT operation_id FROM replica_operations WHERE operation_id = ?')
+        .get(retained.operationId), 'B actual commit clears and restores without another resync');
+      assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 0);
+    }));
+}
 
 test('paused pinned A request survives B custody and genuine A recovery unchanged', () =>
   withRetainedLeadershipPair(async ({a, b, messages, elect}) => {

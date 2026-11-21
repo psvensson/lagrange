@@ -55,7 +55,7 @@ async function withRetainedLeadershipPair(measure) {
       };
       node.coordinator.syncOwnerDependencies({messageRouter: router});
     }
-    async function elect(next, {resume = true} = {}) {
+    async function elect(next, {resume = true, publicationOrder = 'partition-first'} = {}) {
       if (leader !== next) term += 1;
       leader = next;
       for (const node of nodes) {
@@ -65,25 +65,42 @@ async function withRetainedLeadershipPair(measure) {
       await settleTicks();
       for (const node of nodes) assert.equal(node.leader.isLeader, node === next);
       if (resume) await resumeFixtureParticipantAdmission(next.leader);
-      // Controlled SERVICES/CDC input from the actual role observation.
-      // Publication transport is doubled; native receipt still checks real role.
-      for (const receiver of nodes) {
+      // Normal service registration publishes follower even for the actual leader.
+      // PARTITIONS owns routing; the two publication channels may arrive either way.
+      const publishPartition = () => {
+        for (const receiver of nodes) {
+          receiver.coordinator.systemTableCache.applySystemTableChange('partitions',
+            CACHE_CDC_OPERATIONS.UPSERT, {partition_id: next.leader.partitionId,
+              leader_node_id: next.leader.nodeId});
+          assert.equal(receiver.coordinator.systemTableCache.get('partitions',
+            next.leader.partitionId).leader_node_id, next.leader.nodeId);
+        }
+      };
+      const publishServices = () => {
         for (const peer of nodes) {
           peer.lastRolePublication = Math.max(peer.leader.timeSource.now(),
             peer.lastRolePublication + 1);
           const row = {service_id: peer.leader.replicaId, replica_id: peer.leader.replicaId,
             node_id: peer.leader.nodeId, partition_id: 'replica_operations-p1',
             service_type: 'partition', address: peer.address, group_id: null,
-            status: 'active', raft_role: peer.leader.role, cleanup_token: null,
+            status: 'active', raft_role: RAFT_ROLE.FOLLOWER, cleanup_token: null,
             create_attempt_token: null, created_at: peer.serviceBirth,
             updated_at: peer.lastRolePublication};
-          const cache = receiver.coordinator.systemTableCache;
-          cache.applySystemTableChange('services', CACHE_CDC_OPERATIONS.UPSERT, row);
-          const published = cache.get('services', row.service_id);
-          assert.equal(published.created_at, peer.serviceBirth);
-          assert.equal(published.raft_role, peer === next ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER);
-          assert.equal(cache.get('services', undefined), undefined);
+          for (const receiver of nodes) {
+            const cache = receiver.coordinator.systemTableCache;
+            cache.applySystemTableChange('services', CACHE_CDC_OPERATIONS.UPSERT, row);
+            const published = cache.get('services', row.service_id);
+            assert.equal(published.created_at, peer.serviceBirth);
+            assert.equal(published.raft_role, RAFT_ROLE.FOLLOWER);
+            assert.equal(cache.get('services', undefined), undefined);
+          }
         }
+      };
+      const publications = publicationOrder === 'partition-first' ?
+        [publishPartition, publishServices] : [publishServices, publishPartition];
+      for (const publish of publications) {
+        publish();
+        await settleTicks();
       }
       await settleTicks();
     }

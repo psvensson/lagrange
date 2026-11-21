@@ -370,8 +370,11 @@ function remoteCaller(world) {
   const coordinator = createTestCoordinator({nodeId: NODE.A,
     replaceWitness: false, committedMembershipFixture: false,
     controlPlaneSystemTableGateway: world.gateway,
-    cacheData: {services: [{replica_id: world.leader.replicaId, node_id: world.leader.nodeId,
-      partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'}]},
+    cacheData: {partitions: [{partition_id: world.leader.partitionId,
+      leader_node_id: world.leader.nodeId}], services: [{service_id: world.leader.replicaId,
+      replica_id: world.leader.replicaId, node_id: world.leader.nodeId, service_type: 'partition',
+      address: `${world.leader.nodeId}/partition/${world.leader.replicaId}`,
+      partition_id: world.leader.partitionId, status: 'active', raft_role: 'follower'}]},
     messageRouter: {async deliver(address, payload) {
       messages.push({address, payload});
       return buildDeliveryEnvelope({acknowledged: true}, await send(world.leader, payload));
@@ -996,16 +999,23 @@ for (const [name, corrupt] of invalidCensusAnswers) {
         assert.equal(reads, 1, 'one bounded authoritative read for the whole release burst');
         assert.equal(sender.retainedPlacementRepairs.get(retained.operationId), held,
           'partial, stale or foreign authority cannot retire or replace the exact retained record');
-        receiver.executeReplicaOperationsRead = read;
         assert.equal(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(retained.operationId), undefined, 'unqualified census cannot authorize the native write');
-        receiver.observeRetainedPlacementRepairCommit('services', {
-          replica_id: world.leader.replicaId, node_id: world.leader.nodeId,
-          partition_id: world.leader.partitionId, raft_role: 'leader', status: 'active'});
+        const restored = new Promise((resolve) => {
+          const onCommitted = ({command}) => {
+            if (command.type !== 'PLACEMENT_REPAIR') return;
+            world.leader.off(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommitted);
+            resolve();
+          };
+          world.leader.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommitted);
+        });
+        assert.notEqual(receiver.retainedPlacementRepairReadRetry, null);
+        receiver.executeReplicaOperationsRead = read;
+        await restored;
         await settleRepair(world);
         const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(retained.operationId);
-        assert.ok(row, 'a genuine provider/leadership observation permits a new qualified owner read');
+        assert.ok(row, 'registered owner-read continuation recovers when the actual dependency returns');
         await observeBurst(sender, row);
         assert.equal(sender.retainedPlacementRepairs.size, 0,
           'a genuine correctly scoped successor observation can still confirm the actual winner');
