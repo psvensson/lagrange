@@ -55,6 +55,9 @@ import {
   attachReplicaPlacementOwner,
 } from '../../rebalancer/replica-placement-owner.js';
 import {
+  requireResyncTimerCollaborators,
+} from '../../rebalancer/replica-placement-owner-collaborators.js';
+import {
   StorageAdmissionService,
 } from '../../rebalancer/storage-admission-service.js';
 import {
@@ -412,23 +415,14 @@ class ControlPlaneSetup {
     if (!rebalanceCoordinator.transactionCoordinator) {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
-    rebalanceCoordinator.bindReplicaPlacementOwnerFactory?.(
-      (ledgerPartitionService) =>
-        ControlPlaneSetup.attachReplicaPlacementOwner({
-          nodeId,
-          ledgerPartitionService,
-          controlPlaneReadinessService,
-          rebalanceCoordinator,
-          systemTableCache,
-          storageAccountingService,
-          now: () => ledgerPartitionService.timeSource.now(),
-          logger: ledgerPartitionService.logger,
-          // The owner's one timer, the resync (sealed quest
-          // replica-placement-admission-owner, no-timer-no-bound-no-retry),
-          // on the ledger's time source; armed per custody, cleared with it.
-          setIntervalFn: (fn, ms) => ledgerPartitionService.timeSource.setInterval(fn, ms),
-          clearIntervalFn: (handle) => ledgerPartitionService.timeSource.clearInterval(handle),
-        }),
+    rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
+      ControlPlaneSetup.createReplicaPlacementOwnerFactory({
+        nodeId,
+        controlPlaneReadinessService,
+        rebalanceCoordinator,
+        systemTableCache,
+        storageAccountingService,
+      }),
     );
 
     const systemMetadataOwners = createSystemMetadataOwners({
@@ -629,26 +623,52 @@ class ControlPlaneSetup {
   }
 
   /**
+   * The node's one placement-owner factory, bound to its coordinator. At
+   * attach time it hands the owner the node authority through the readiness
+   * service's owning getter (created there if not yet: it exists whenever the
+   * attach runs), the coordinator's workflow owner, and the ledger replica's
+   * timer pair for the owner's one timer, the resync (sealed quest
+   * replica-placement-admission-owner, no-timer-no-bound-no-retry).
+   * @param {Object} options - {nodeId, controlPlaneReadinessService,
+   *   rebalanceCoordinator, systemTableCache, storageAccountingService}.
+   * @return {function(Object): Object} ledger replica -> attachment handle.
+   */
+  static createReplicaPlacementOwnerFactory(options) {
+    const {nodeId, controlPlaneReadinessService, rebalanceCoordinator,
+      systemTableCache, storageAccountingService} = options;
+    return (ledgerPartitionService) => ControlPlaneSetup.attachReplicaPlacementOwner({
+      nodeId,
+      ledgerPartitionService,
+      nodeAuthority: controlPlaneReadinessService.getServeEligibilityOwner(),
+      workflowOwner: rebalanceCoordinator.workflowOwner,
+      systemTableCache,
+      storageAccountingService,
+      now: () => ledgerPartitionService.timeSource.now(),
+      logger: ledgerPartitionService.logger,
+      setIntervalFn: (fn, ms) => ledgerPartitionService.timeSource.setInterval(fn, ms),
+      clearIntervalFn: (handle) => ledgerPartitionService.timeSource.clearInterval(handle),
+    });
+  }
+
+  /**
    * Construct and bind the replica placement owner to replica_operations-p1's
-   * leadership sink using the node's shared control-plane collaborators.
-   * @param {Object} options - Wiring options.
+   * leadership sink. The resync timer pair is required (typed
+   * REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID, collaborator resyncTimer);
+   * the coordinator registers the ledger replica, not this.
+   * @param {Object} options - The owner's collaborators: nodeId,
+   *   ledgerPartitionService, nodeAuthority, workflowOwner, systemTableCache,
+   *   storageAccountingService, now, logger, setIntervalFn, clearIntervalFn,
+   *   resyncIntervalMs.
    * @return {Object} Frozen attachment handle ({owner, ledgerPartitionService, detach}).
    */
-  static attachReplicaPlacementOwner(options = {}) {
-    const readiness = options.controlPlaneReadinessService;
-    const coordinator = options.rebalanceCoordinator;
-    if (
-      coordinator?.ledgerPartitionServices instanceof Set &&
-      options.ledgerPartitionService
-    ) {
-      coordinator.registerLedgerPartitionService(options.ledgerPartitionService);
-    }
+  static attachReplicaPlacementOwner(options) {
+    requireResyncTimerCollaborators(options);
     return attachReplicaPlacementOwner({
       nodeId: options.nodeId,
       ledgerPartitionService: options.ledgerPartitionService,
-      nodeAuthority: readiness ? readiness.serveEligibilityOwner : null,
+      nodeAuthority: options.nodeAuthority,
       systemTableCache: options.systemTableCache,
-      workflowOwner: coordinator ? coordinator.workflowOwner : null,
+      workflowOwner: options.workflowOwner,
       storageAccountingService: options.storageAccountingService,
       now: options.now,
       logger: options.logger,

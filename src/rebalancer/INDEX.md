@@ -233,7 +233,7 @@ documentClass: generated
 - [replica-placement-owner-admission-statement.js](replica-placement-owner-admission-statement.js) - The canonical admission statement of a raw input: exact fields, typed values, the moves its kind admits. (importers: many)
 - [replica-placement-owner-attempts.js](replica-placement-owner-attempts.js) - Public entry: persistUnresolvedPlacementAttempt, deleteUnresolvedPlacementAttempt, reconcilePlacementAttempts. (importers: one)
 - [replica-placement-owner-capacity.js](replica-placement-owner-capacity.js) - Public entry: summarizeCopyOccupancy, saturatedTargetsOf, isCopyWithinCapacity, recordAdmittedCopyOccupancy,... (importers: one)
-- [replica-placement-owner-collaborators.js](replica-placement-owner-collaborators.js) - Public entry: validateReplicaPlacementOwnerOptions, invalidCollaborator, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID. (importers: one)
+- [replica-placement-owner-collaborators.js](replica-placement-owner-collaborators.js) - Public entry: validateReplicaPlacementOwnerOptions, requireResyncTimerCollaborators, invalidCollaborator,... (importers: few)
 - [replica-placement-owner-constants.js](replica-placement-owner-constants.js) - No leading comment; first export: PLACEMENT_CLASS. (importers: hub)
 - [replica-placement-owner-deficits.js](replica-placement-owner-deficits.js) - The placement deficit model of the one replica placement owner (quest replica-placement-admission-owner, design... (importers: many)
 - [replica-placement-owner-order.js](replica-placement-owner-order.js) - The one admission order of the replica placement owner (quest replica-placement-admission-owner, design section... (importers: many)

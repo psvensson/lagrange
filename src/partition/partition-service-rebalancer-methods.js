@@ -123,27 +123,34 @@ class PartitionServiceRebalancerMethods {
    *   setters, leadership updates) keeps the unconditional re-apply.
    * @private
    */
+  // The node's one scheduler of partition placement: the placement owner on
+  // the replica_operations-p1 replica, attached by the coordinator. Each
+  // precondition becomes true only through an event that re-runs this attach:
+  // initialize (the replica opened: its database, then its consensus port),
+  // setSystemTableCache (cache), setRebalanceCoordinator /
+  // rebindCoordinator (coordinator); the coordinator's factory binding attaches
+  // every registered ledger still waiting. The attachment, once made, is kept
+  // until quiesce: no order attaches twice.
   ensureReplicaPlacementOwnerAttached() {
     if (
       this.partitionId !== LEDGER_PARTITION_ID ||
       this.isShutdown ||
       this.replicaPlacementOwnerAttachment ||
-      this.rebalancerLeadershipSink ||
+      !this.raft ||
       !this.systemTableCache ||
       !this.rebalanceCoordinator
     ) {
-      return;
-    }
-    if (!this.rebalanceCoordinator.attachLedgerReplicaPlacementOwner) {
       return;
     }
     this.replicaPlacementOwnerAttachment =
       this.rebalanceCoordinator.attachLedgerReplicaPlacementOwner(this);
   }
 
+  // A partition never constructs a scheduler of its own (partition placement
+  // is the placement owner's alone); this attaches the ledger's owner and
+  // drives the leadership sink.
   maybeInitializeRebalancer(options = {}) {
     const readinessTransitionOnly = options.readinessTransitionOnly === true;
-    const backgroundReady = this.isBackgroundWorkReady();
     this.ensureReplicaPlacementOwnerAttached();
     this.driveRebalancerLeadershipSink();
     if (this.rebalancer) {
@@ -176,19 +183,7 @@ class PartitionServiceRebalancerMethods {
         this.rebalancer.setLeader(desiredLeadership);
       }
       this.driveRebalancerLeadershipSink();
-      return;
     }
-    if (this.rebalanceCoordinator?.placementAdmissionEnabled === true) {
-      return;
-    }
-    if (!backgroundReady || !this.isLeader) {
-      return;
-    }
-    const bundle = this.buildRebalancerDependencyBundle();
-    if (!bundle) {
-      return;
-    }
-    this.initializeRebalancer(bundle);
   }
   /**
    * Initialize rebalancer components with required dependencies.

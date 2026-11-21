@@ -147,6 +147,8 @@ test('WP-G census: single placement admission path and per-partition UnifiedReba
     replicaPlacementOwnerAttachment: null,
     rebalancerLeadershipSink: null,
     rebalancer: null,
+    // An opened ledger replica (its consensus port): an attach precondition.
+    raft: {},
     systemTableCache: {},
     cdcIntegrationService: {},
     tablePolicyService: {},

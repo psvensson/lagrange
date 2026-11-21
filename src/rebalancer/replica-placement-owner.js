@@ -770,10 +770,13 @@ function createReplicaPlacementOwner(options) {
   return new ReplicaPlacementOwner(options);
 }
 
+// The ledger's leadership sink is the owner's slot (no other owner binds
+// replica_operations-p1): an occupied slot is a second scheduler, refused.
 function attachReplicaPlacementOwner(options = {}) {
   const owner = createReplicaPlacementOwner(options);
   const {ledgerPartitionService} = options;
-  if (!isFunction(ledgerPartitionService?.setRebalancerLeadershipSink)) {
+  if (!isFunction(ledgerPartitionService?.setRebalancerLeadershipSink) ||
+      ledgerPartitionService.rebalancerLeadershipSink) {
     invalidCollaborator(COLLABORATOR.LEDGER);
   }
   ledgerPartitionService.setRebalancerLeadershipSink(owner);

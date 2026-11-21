@@ -21,12 +21,12 @@
 // process started by the bootstrap.
 //
 // Anti-vacuity: every non-ledger service LEADS, is background-work ready and
-// holds all six rebalancer dependencies (asserted), so deleting the placement
-// guard (partition-service-rebalancer-methods.js:181-183) builds a
-// UnifiedRebalancer and turns every order red; skipping the factory binding
-// (control-plane-setup.js:415) leaves the flag false while the user and
-// priority partitions are bound before the ledger partition (join order) and
-// turns that order red.
+// holds all six rebalancer dependencies (asserted), the conditions under which
+// the retired per-partition construction built a UnifiedRebalancer, so any
+// construction from them turns the order red (the count); skipping the
+// factory binding (ControlPlaneSetup.create) leaves the ledger replica
+// registered and waiting with no owner and turns every order red (count and
+// progress).
 //
 // Stage 3 (counts and progress in every order): per order, the COUNT of
 // schedulers is asserted (zero per-partition schedulers; exactly one placement
@@ -43,6 +43,7 @@
 // while formation is in progress (readiness transition fan-out).
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
+import {SeedCleanupHandler} from '../../src/bootstrap/phases/seed-cleanup-handler.js';
 import {StartupRuntimeSurfaceOwner} from
   '../../src/bootstrap/shared/startup-runtime-surface-owner.js';
 import {
@@ -377,6 +378,63 @@ test('P0 ledger replica shut down and restarted on the node: zero owners while t
   assert.notEqual(ownerOf({ledger: second}), firstOwner, 'the new replica has its own owner');
   assert.equal(firstOwner.isLeader, false, 'the old owner stays ended');
   await assertSingleScheduler('restart: new ledger replica', [user, priority, second], second);
+}));
+
+// The node's cleanup (SeedCleanupHandler.quiesceRebalancers, the step both
+// cleanup paths run) quiesces every partition's rebalancing and shuts the
+// coordinator down; the partition services themselves are shut down only
+// later in the cleanup. Every attach entry that still reaches the ledger
+// replica in between must attach nothing and start no custody.
+test('P0 teardown: after the cleanup quiesced the node\'s rebalancing, a later leadership ' +
+  'edge or readiness transition on the still-running ledger replica attaches no placement ' +
+  'owner and starts no custody', () => withPlacementWorld(SPEC, async (world) => {
+  const node = await world.addNode('n1');
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
+  const user = createPartition(world, node, USER, node.coordinator);
+  const priority = createPartition(world, node, PRIORITY, node.coordinator);
+  const ledger = createPartition(world, node, LEDGER, node.coordinator);
+  const services = [user, priority, ledger];
+  await initializeAll(services);
+  await assertSingleScheduler('teardown: before the cleanup', services, ledger);
+  const owner = ownerOf({ledger});
+  let coordinator = node.coordinator;
+  const quiet = {debug() {}, info() {}, warn() {}, error() {}};
+  await new SeedCleanupHandler({delegates: {
+    getLogger: () => quiet,
+    getPartitionServices: () => new Map(services.map((service) => [service.replicaId, service])),
+    getMessageGroupServices: () => new Map(),
+    getRebalanceCoordinator: () => coordinator,
+    clearRebalanceCoordinator: () => {
+      coordinator = null;
+    },
+  }}).quiesceRebalancers();
+  assert.equal(ledger.isShutdown, false, 'premise: the cleanup has not shut the ledger down yet');
+  assert.equal(ledger.replicaPlacementOwnerAttachment, null, 'premise: the quiesce detached');
+  assert.equal(owner.isLeader, false, 'premise: the quiesced owner does not lead');
+  // Observation only: every attachment the coordinator hands out from here on.
+  const attachedAfterQuiesce = [];
+  const attach = node.coordinator.attachLedgerReplicaPlacementOwner;
+  node.coordinator.attachLedgerReplicaPlacementOwner = function observedAttach(service) {
+    const attachment = attach.call(this, service);
+    if (attachment) attachedAfterQuiesce.push(attachment);
+    return attachment;
+  };
+  ledger.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+  await settleTicks();
+  ledger.controllablePort.term += 1;
+  ledger.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await settleTicks();
+  ledger.handleMetadataPublicationReadinessTransition();
+  await settleTicks();
+  assert.equal(ledger.isLeader, true, 'premise: the ledger replica leads again');
+  assert.deepEqual(attachedAfterQuiesce.map((attachment) => ({
+    leads: attachment.owner.isLeader, passes: attachment.owner.observation.totals.passes,
+  })), [], 'no placement owner is attached after the quiesce');
+  assert.equal(ledger.replicaPlacementOwnerAttachment, null, 'the ledger holds no attachment');
+  assert.equal(ledger.rebalancerLeadershipSink, null, 'the ledger has no leadership sink');
+  assert.equal(owner.isLeader, false, 'the quiesced owner stays ended');
+  assert.equal(node.coordinator.ledgerPartitionServices.has(ledger), false,
+    'the quiesced ledger replica is not registered again');
 }));
 
 test('P0 join while formation is in progress: the partition services are bound while not ' +

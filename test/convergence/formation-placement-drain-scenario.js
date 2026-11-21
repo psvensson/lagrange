@@ -72,6 +72,7 @@ import {
 import {
   applyPlacementCommand,
 } from '../../src/partition/partition-placement-admission.js';
+import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
@@ -315,6 +316,9 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
     timeSource: {
       now: seedHosts.now,
       setTimeout: (fn, ms) => seedHosts.setTimeoutFn(fn, ms),
+      // The placement owner's resync timer, on the host's virtual time.
+      setInterval: (fn, ms) => seedHosts.setIntervalFn(fn, ms),
+      clearInterval: (handle) => seedHosts.clearIntervalFn(handle),
     },
     hlcClock: {now: () => `${seedHosts.now()}:0:${seedHosts.nodeId}`},
     logger: QUIET_LOGGER,
@@ -487,6 +491,17 @@ async function resumeSimulatedLedgerCutoverAdmission(service) {
 
 function mountPlacementDeciders({seedHosts, cache}) {
   const {service} = createSimulatedLedgerPartitionService({seedHosts, cache});
+  // The seed's coordinator gets the production factory as
+  // ControlPlaneSetup.create binds it (the hosts build the coordinator
+  // without the setup); the attach below goes through it.
+  seedHosts.rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
+    ControlPlaneSetup.createReplicaPlacementOwnerFactory({
+      nodeId: seedHosts.nodeId,
+      controlPlaneReadinessService: seedHosts.controlPlaneReadinessService,
+      rebalanceCoordinator: seedHosts.rebalanceCoordinator,
+      systemTableCache: seedHosts.rebalanceCoordinator.systemTableCache,
+      storageAccountingService: seedHosts.storageAccountingService,
+    }));
   service.ensureReplicaPlacementOwnerAttached();
   service.isLeader = true;
   void resumeSimulatedLedgerCutoverAdmission(service);
