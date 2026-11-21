@@ -406,46 +406,6 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
   }
 
-  async reconcileObservedProgressOperation(operationId) {
-    if (
-      typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
-      operationId.length === 0
-    ) {
-      return false;
-    }
-    const expectedTimeoutHandle =
-      this.observedProgressRetryTimerByOperationId.get(operationId)?.timeoutHandle;
-    const visibilityObservation =
-      await this.repository.getOperationByIdVisibilityObservation(
-        operationId,
-        {
-          allowPriorityRecoveryDeferredVisibility: true,
-        },
-      );
-    const operation = visibilityObservation?.operation || null;
-    const routeEvidence =
-      this.buildObservedProgressOperationRouteEvidence(operation);
-    const routeAction =
-      this.resolveObservedProgressOperationRouteAction(routeEvidence);
-    if (routeAction === OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.SKIP) {
-      this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
-      return false;
-    }
-    if (
-      routeAction ===
-      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.WAKE_REMOTE_OWNER
-    ) {
-      const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
-      this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
-      return woken;
-    }
-    const progressed = await this.reconcileOperationLifecycle(operation, {
-      cause: 'observed_progress',
-    });
-    this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
-    return progressed;
-  }
-
   selectCoordinatorCreatedCacheReentryOperation(
     tableState,
     cacheOperation,

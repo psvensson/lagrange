@@ -201,6 +201,7 @@ const OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE = Object.freeze({
 
 const OPERATION_WORKFLOW_TRANSITION_STATE = Object.freeze({
   AVAILABLE: 'workflow_transition_available',
+  OBSERVATION_REQUESTED: 'workflow_observation_requested',
   BLOCKED: 'workflow_transition_blocked',
   UNAVAILABLE: 'workflow_transition_unavailable',
 });

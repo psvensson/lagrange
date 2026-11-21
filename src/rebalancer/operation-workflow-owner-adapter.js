@@ -281,10 +281,12 @@ function createOperationWorkflowOwnerAdapter({ports}) {
         evidence,
         currentProgress,
       );
-      const persisted = await ports.persistOperationProgress({
-        expectedVersion: currentProgress.version,
-        progress: lifecycleResult.operationProgress,
-      });
+      const lifecycleChanged = lifecycleResult.emittedEvents.length > 0;
+      const persisted = lifecycleChanged ?
+        await ports.persistOperationProgress({
+          expectedVersion: currentProgress.version,
+          progress: lifecycleResult.operationProgress,
+        }) : Object.freeze({applied: false, progress: currentProgress});
       const appendedEvents = [];
       for (const event of lifecycleResult.emittedEvents) {
         appendedEvents.push(await ports.appendOperationProgressEvent(event));
@@ -316,10 +318,10 @@ function createOperationWorkflowOwnerAdapter({ports}) {
         persisted,
         appendedEvents,
         commandResultEvidence: Object.freeze([
-          buildOperationWorkflowAdapterPersistedEvidence({
+          ...(lifecycleChanged ? [buildOperationWorkflowAdapterPersistedEvidence({
             persisted,
             progress: persisted.progress,
-          }),
+          })] : []),
           ...commandResultEvidence,
         ]),
       });

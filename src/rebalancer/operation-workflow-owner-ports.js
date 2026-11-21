@@ -59,10 +59,6 @@ const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_ALLOWED_STATES =
 
 const OPERATION_WORKFLOW_OWNER_PORT_DISPATCH_STATE_TABLE = Object.freeze([
   Object.freeze({
-    state: OPERATION_WORKFLOW_DISPATCH_STATE.OBSERVED,
-    matches: (evidence) => evidence.observedProgressMode === true,
-  }),
-  Object.freeze({
     state: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
     matches: (evidence) =>
       evidence.dispatchPendingReentryCandidate === true,
@@ -84,7 +80,7 @@ const OPERATION_WORKFLOW_OWNER_PORT_DISPATCH_STATE_TABLE = Object.freeze([
 
 const OPERATION_WORKFLOW_OWNER_PORT_TRANSITION_STATE_TABLE = Object.freeze([
   Object.freeze({
-    state: OPERATION_WORKFLOW_TRANSITION_STATE.AVAILABLE,
+    state: OPERATION_WORKFLOW_TRANSITION_STATE.OBSERVATION_REQUESTED,
     matches: (evidence) => evidence.observedProgressMode === true,
   }),
   Object.freeze({
@@ -244,9 +240,6 @@ function resolveOperationWorkflowDispatchState(owner, operation, context) {
       OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE;
   const workflowStep = getOperationWorkflowOwnerPortWorkflowStep(operation);
   const evidence = Object.freeze({
-    observedProgressMode:
-      context.mode ===
-        OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS,
     dispatchPendingReentryCandidate:
       context.mode ===
         OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE &&
