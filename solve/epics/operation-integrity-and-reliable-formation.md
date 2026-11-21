@@ -176,6 +176,22 @@ The explicit target-order control passed. The SQL owner must bound the actual
 effect by the requested width and original attempt budget. The three-host
 run does not establish over-selection as its cause.
 
+The reviewed strict-outcome evidence at `2eda158e8` exercises three
+previously failing SQLite fixture families (621 assertions). The 85-file
+consumer selection on `7dfbdedd9` remains incomplete. One completed shard
+failed four files and another shard stopped at the lab thermal limit.
+The strict-outcome receipt admits four of six obligations. Its owners still
+owe classified closure and independent review on the composed source.
+[Strict outcome record](../quests/strict-operation-outcomes/log.ndjson).
+
+The separate support-evidence branch `wip/upgrade-support-admission-nov21`
+at `c435d5cb6` retains five managed files with 495 assertions for the
+forward upgrade admission and resumption decisions. Runtime source at
+`86112a282` prevents policy fields from authorizing those effects. The
+integration owner still owes composition of this correction. The pilot owner
+retains rollback and physical upgrade qualification under item 14.
+[Managed support admission originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-resume-authority-8611-nov21.tar.gz).
+
 The next composed trial still requires the original 420-second gate and
 public SQL journey on three distinct hosts. Historical PostgreSQL and TiDB
 smoke observations do not supply a Lagrange measurement. The registered
