@@ -23,7 +23,6 @@ const RETAINED_PLACEMENT_ATTEMPT = Symbol('retainedPlacementAttempt');
 const PLACEMENT_ADMISSION_ERROR = Object.freeze({
   ORIGIN: 'placement_admission_origin_refused',
   BYTES: 'placement_admission_bytes_invalid',
-  OUTCOME_IDENTITY_UNAVAILABLE: 'placement_outcome_identity_unavailable',
   REMOVE_INTENT_UNSCOPED: 'placement_remove_intent_unscoped',
   TARGET: 'placement_admission_target_invalid',
   OWNER_UNAVAILABLE: 'placement_repair_owner_unavailable',

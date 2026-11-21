@@ -63,13 +63,11 @@ function commandFingerprintOf(command) {
     .slice(0, FINGERPRINT_HEX_LENGTH), HEX_RADIX);
 }
 
-// Old outcome rows have no immutable original command identity. Their format is
-// admitted explicitly as unresolved debt; mutable operation rows cannot supply
-// missing bytes. Never rewrite these rows or repeat effects to guess identity.
-function recordedReplayRefusal(recorded, command) {
-  if (recorded.lastInsertRowid === null) return ERROR.OUTCOME_IDENTITY_UNAVAILABLE;
-  return Number.isSafeInteger(recorded.lastInsertRowid) &&
-    recorded.lastInsertRowid === commandFingerprintOf(command) ? null : ERROR.BYTES;
+// A settled record answers this command only when it retains this command's
+// identity. Any other record under the entry key - another command of this
+// owner, or another owner's record - is the same-entry collision (BYTES).
+function isSameCommandRecord(recorded, command) {
+  return recorded.lastInsertRowid === commandFingerprintOf(command);
 }
 
 function refusal(service, failureCode) {
@@ -104,8 +102,7 @@ function recordedAnswer(service, recorded, command) {
 }
 
 function recordedRequestAnswer(service, recorded, command) {
-  const replayRefusal = recordedReplayRefusal(recorded, command);
-  if (replayRefusal !== null) return refusal(service, replayRefusal);
+  if (!isSameCommandRecord(recorded, command)) return refusal(service, ERROR.BYTES);
   const answer = recordedAnswer(service, recorded, command);
   return command.type === PLACEMENT_ADMIT_TYPE &&
     command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
@@ -187,10 +184,11 @@ function requestPlacementRepair(service, payload) {
   const command = buildPlacementCommand(service, {type: PLACEMENT_REPAIR_TYPE,
     entryId: payload.entryId, body: payload.body});
   if (command === null) return refusal(service, ERROR.BYTES);
-  const repository = service.rebalancerLeadershipSink?.workflowOwner?.repository;
-  if (!repository?.acceptRetainedPlacementRepairRequest) {
-    return refusal(service, ERROR.OWNER_UNAVAILABLE);
-  }
+  // The repair owner is the attached placement owner's workflow repository. It
+  // is absent until the ledger attaches its placement owner
+  // (ensureReplicaPlacementOwnerAttached): a typed, retryable unavailability.
+  const repository = service.rebalancerLeadershipSink?.workflowOwner?.repository ?? null;
+  if (repository === null) return refusal(service, ERROR.OWNER_UNAVAILABLE);
   return repository.acceptRetainedPlacementRepairRequest(service,
     {entryId: command.entryId, body: command.body},
     (request) => requestPlacementCommand(service, PLACEMENT_REPAIR_TYPE, request));
@@ -281,10 +279,8 @@ function applyPlacementCommand(service, committed) {
   const entryKey = service.getCommittedEntryKey(command);
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
-    const replayRefusal = recordedReplayRefusal(recorded, command);
-    if (replayRefusal === ERROR.BYTES) throw new Error(ERROR.BYTES);
-    const answer = replayRefusal === null ? recordedAnswer(service, recorded, command) :
-      refusal(service, replayRefusal);
+    if (!isSameCommandRecord(recorded, command)) throw new Error(ERROR.BYTES);
+    const answer = recordedAnswer(service, recorded, command);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }

@@ -171,9 +171,18 @@ const TRIGGER = PLACEMENT_TRIGGER;
 // null is a definite answer that needs no clearing (the provisioning owner
 // adopts ALREADY_FOUNDED's ids; SYSTEM_PARTITION_SEED_FOUNDED is permanent by
 // partition kind; a claimed runtime-service identity is spent for ever; a
-// release of a row that holds nothing has nothing to wait for). A code reachable on the admission path without a row here
-// is a defect.
+// release of a row that holds nothing has nothing to wait for; a command from
+// another origin, for another table, with invalid or colliding bytes (its
+// entryId already settled for another command), an unscoped REMOVE intent, or
+// a settled record whose result is unreadable never becomes admissible by
+// waiting). A code reachable on the admission path without a row here is a
+// defect.
 const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
+  [PLACEMENT_ADMISSION_ERROR.ORIGIN]: null,
+  [PLACEMENT_ADMISSION_ERROR.BYTES]: null,
+  [PLACEMENT_ADMISSION_ERROR.TARGET]: null,
+  [PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED]: null,
+  [PLACEMENT_ADMISSION_ERROR.RESULT]: null,
   [PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE]: TRIGGER.LEADERSHIP_START,
   [PLACEMENT_ADMISSION_ERROR.REPAIR_PENDING]: TRIGGER.LEDGER_COMMIT,
   [PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED]: null,
