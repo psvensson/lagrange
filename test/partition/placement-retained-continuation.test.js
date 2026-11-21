@@ -143,6 +143,56 @@ test('W5 a receiver restart on the same node, replica and address returns the ob
     }
   }));
 
+// Stale custody: the receiver's tenure ends while its own decision on the
+// sender's re-presentation is reading, so it answers a typed disclaim without
+// custody. The delegated sender must take the obligation back at once.
+test('W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const receiver = world.coordinator.repository;
+    const receiverClock = installVirtualClock(receiver);
+    const reads = controlOwnerReads(receiver);
+    reads.fault = (ordinal) => ordinal === 1 ? READ_FAULT.THROW : null;
+    const remote = remoteSender(world);
+    const sender = remote.repository;
+    const senderClock = installVirtualClock(sender);
+    try {
+      assert.equal(await bounded(sender.repairRetainedOperation(retained), 'outage'), false);
+      const identity = identityOf(sender, retained.operationId);
+      assert.equal(sender.retainedPlacementRepairs.get(retained.operationId).custody.state,
+        'delegated', 'the receiver attested custody of the exact entry');
+      assert.equal(senderClock.pendingTimerCount(), 0, 'the custodian owns the continuation');
+      // The sender's later caller re-presents the entry; the receiver's read is
+      // held while the same replica moves to a later term (and is released).
+      const hold = reads.holdNext();
+      const later = sender.ensureRetainedOperationRow(retained);
+      await bounded(hold.arrived, 'the receiver decision is reading');
+      world.leader.controllablePort.term += 1;
+      await resumeFixtureParticipantAdmission(world.leader);
+      hold.release();
+      assert.equal(await bounded(later, 'later caller'), false);
+      assert.equal(world.commands.length, 0, 'a disclaiming receiver proposes nothing');
+      const attempt = sender.retainedPlacementRepairs.get(retained.operationId);
+      assert.equal(attempt.custody.state, 'self',
+        'a reply without attested custody leaves no custody: the disclaim is not trusted as custody');
+      assert.ok(senderClock.pendingTimerCount() > 0,
+        'the sender itself owns the owed reconsideration after the disclaim');
+      assert.equal(receiver.retainedPlacementRepairs.size, 0,
+        'the receiver released the record of its ended tenure');
+      assert.equal(receiverClock.pendingTimerCount(), 0);
+      await advanceContinuation(senderClock, [sender, receiver],
+        () => sender.retainedPlacementRepairs.size === 0);
+      assertRestoredOnce(world, retained, 'after the disclaim');
+      assert.equal(repairCommands(world).length, 1, 'exactly one native proposal');
+      assert.equal(repairCommands(world)[0].entryId, identity.entryId, 'the original entry');
+      assert.equal(sender.retainedPlacementRepairs.size, 0);
+      assert.equal(senderClock.pendingTimerCount(), 0);
+    } finally {
+      reads.restore();
+      await remote.coordinator.shutdown();
+    }
+  }));
+
 // The ledger leader's own attempt holds a committed BUSY refusal.
 async function retainBusy(world) {
   const retained = await retainMissing(world);
