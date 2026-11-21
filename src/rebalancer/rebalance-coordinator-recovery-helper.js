@@ -1,14 +1,10 @@
-import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
 
 const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  REBALANCE_COORDINATOR_EVENT,
-  REBALANCE_COORDINATOR_LOG_MSG,
   OperationType,
   SERVICE_TYPE,
-  WORKFLOW_STEP,
 } = REBALANCE_COORDINATOR_SHARED;
 
 function checkTimeouts(coordinator) {
@@ -43,95 +39,6 @@ function handleExecutorOutcome(coordinator, outcome) {
 
 async function reconcileExecutorOutcome(coordinator, outcome) {
   return coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
-}
-
-async function handleRecovery(coordinator) {
-  coordinator.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START, {
-    nodeId: coordinator.nodeId,
-  });
-
-  const result = {
-    totalIncomplete: 0,
-    markedFailed: 0,
-    reconciled: 0,
-    errors: [],
-  };
-
-  const canUseCacheObservationBoundary =
-    coordinator.repository.hasReplicaOperationCacheObservationBoundary();
-  const cachedIncompleteOps = canUseCacheObservationBoundary ?
-    await coordinator.queryCachedIncompleteOperations() :
-    [];
-  const incompleteOperationObservation =
-    await coordinator.repository.getIncompleteOperationVisibilityObservation({
-      cachedOperations: cachedIncompleteOps,
-      visibilityReadMode:
-        REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK,
-    });
-  const incompleteOps = Array.isArray(incompleteOperationObservation?.operations) ?
-    incompleteOperationObservation.operations :
-    [];
-  result.totalIncomplete = incompleteOps.length;
-
-  coordinator.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND, {
-    count: incompleteOps.length,
-    nodeId: coordinator.nodeId,
-  });
-
-  for (const op of incompleteOps) {
-    if (!coordinator.isOperationLocallyOwned(op)) {
-      continue;
-    }
-
-    const originalStep = op.workflowStep;
-    const singleFlightKey = coordinator.getOperationOwnerSingleFlightKey(
-      op.operationId,
-    );
-
-    try {
-      await coordinator.operationWorkflowRunExclusive(singleFlightKey, () =>
-        coordinator.reconcileRecoveryOperation(op),
-      );
-    } catch (error) {
-      result.errors.push({
-        operationId: op.operationId,
-        error: error.message,
-      });
-      coordinator.logger.error(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED, {
-        operationId: op.operationId,
-        workflowStep: originalStep,
-        partitionId: op.partitionId,
-        error: error.message,
-      });
-      continue;
-    }
-
-    if (
-      coordinator.workflowOwner.isRemoveInitialDispatchPhase({
-        type: op.type,
-        workflowStep: originalStep,
-      })
-    ) {
-      result.reconciled++;
-    } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
-      result.markedFailed++;
-    } else if (originalStep === WORKFLOW_STEP.SYNCING) {
-      result.reconciled++;
-    }
-  }
-
-  coordinator.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
-    nodeId: coordinator.nodeId,
-    ...result,
-  });
-
-  const reservationResult = await coordinator.reconcileReservations();
-  result.reservationsExpired = reservationResult.expired;
-  result.reservationsOrphansReleased = reservationResult.orphansReleased;
-
-  coordinator.emit(REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED, result);
-
-  return result;
 }
 
 function isPreSyncStep(coordinator, step) {
@@ -232,7 +139,6 @@ export {
   reconcileOperationLifecycle,
   handleExecutorOutcome,
   reconcileExecutorOutcome,
-  handleRecovery,
   isPreSyncStep,
   reconcileRecoveryOperation,
   reconcileMessageGroupMembershipDebt,

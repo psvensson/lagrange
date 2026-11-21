@@ -758,10 +758,9 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     ) {
       return reservationRecoveryOutcome;
     }
-    await this.reconcileOperationLifecycle(op, {
+    return this.reconcileOperationLifecycle(op, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
     });
-    return OPERATION_RESERVATION_RECOVERY_OUTCOME.LIFECYCLE_RECONCILED;
   }
 
   async reconcileSyncingOperation(operation) {

@@ -6,7 +6,6 @@ import {
   reconcileOperationLifecycle,
   handleExecutorOutcome,
   reconcileExecutorOutcome,
-  handleRecovery,
   isPreSyncStep,
   reconcileRecoveryOperation,
   reconcileMessageGroupMembershipDebt,
@@ -87,7 +86,7 @@ class RebalanceCoordinatorRecoveryBudgetBindings {
   }
 
   async handleRecovery() {
-    return handleRecovery(this);
+    return this.workflowOwner.handleRecovery();
   }
 
   isPreSyncStep(step) {

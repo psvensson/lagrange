@@ -16,7 +16,7 @@ const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES, OPERATION_LIFECYCLE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL, OperationType,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS, REBALANCE_COORDINATOR_LOG_MSG,
+  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
   RECONCILED_REPLICA_STATUS_ABSENT_VALUES,
   RECONCILED_REPLICA_STATUS_AUTHORITATIVE_TERMINAL_STATUSES,
   RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS,
@@ -425,11 +425,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         operation,
         OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_OPERATION,
       );
-      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED, {
-        operationId: operation.operationId,
-        workflowStep: operation.workflowStep,
-        partitionId: operation.partitionId,
-      });
       return classifyTerminalPersistOutcome(this, operation, outcome);
     }
     case OPERATION_LIFECYCLE_ACTION.FAIL_STOPPING_RECOVERY: {
@@ -447,14 +442,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       const outcome = await this.failOperation(
         operation,
         OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION,
-      );
-      this.logger.info(
-        REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_REMOVE_FAILED,
-        {
-          operationId: operation.operationId,
-          workflowStep: operation.workflowStep,
-          partitionId: operation.partitionId,
-        },
       );
       return classifyTerminalPersistOutcome(this, operation, outcome);
     }

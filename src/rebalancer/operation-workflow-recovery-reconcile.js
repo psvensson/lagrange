@@ -1,7 +1,7 @@
-import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
+import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from
+  './operation-workflow-reconcile-outcome.js';
 import {buildOperationTransitionOutcome, terminalOperationReconcileOutcome} from './operation-workflow-transition-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
-import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
 const LOCAL_STR_ACTIVE_REPLICAS_BELOW_MINIMUM =
   'would drop active replicas below minimum';
@@ -332,6 +332,8 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       totalIncomplete: 0,
       markedFailed: 0,
       reconciled: 0,
+      reservationBackedPendingRedriven: 0,
+      deferred: [],
       errors: [],
     };
 
@@ -378,68 +380,21 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         op.operationId,
       );
 
-      let recoveryOutcome;
-      try {
-        recoveryOutcome = await this.operationWorkflowRunExclusive(
-          singleFlightKey,
-          () => this.reconcileRecoveryOperation(op),
-        );
-      } catch (error) {
-        if (this.deferTransitionRetry(op.operationId, error, {
-          boundary: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
-          workflowStep: readStateField(op?.workflowStep),
-          partitionId: op?.partitionId || null,
-          updatedAt: op?.updatedAt,
-          createdAt: op?.createdAt,
-        })) {
-          continue;
-        }
-        result.errors.push({
-          operationId: op.operationId,
-          error: error.message,
-        });
-        this.logger.error(
-          REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED,
-          {
-            operationId: op.operationId,
-            workflowStep: originalStep,
-            partitionId: op.partitionId,
-            error: error.message,
-          },
-        );
-        continue;
-      }
-
-      if (
-        op.type === OperationType.GROWTH_PROMOTE ||
-        recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
-          .RESERVATION_BACKED_PENDING_REDRIVEN ||
-        this.isRemoveInitialDispatchPhase({
-          type: op.type,
-          workflowStep: originalStep,
-        })
-      ) {
-        result.reconciled++;
-      } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
-        result.markedFailed++;
-      } else if (originalStep === WORKFLOW_STEP.SYNCING) {
-        result.reconciled++;
-      }
+      await this.tryReconcileRecoveryOperation(op, originalStep, singleFlightKey, result);
     }
 
     // Membership debt outlives ordinary settlement, so the incomplete census
     // above cannot see it; the restart scan is one of its named triggers.
     result.membershipDebt = await this.reconcileMembershipDebtOnRecovery();
 
+    const reservationResult = await this.reconcileReservations();
+    result.reservationsExpired = reservationResult.expired;
+    result.reservationsOrphansReleased = reservationResult.orphansReleased;
+
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
       nodeId: this.nodeId,
       ...result,
     });
-
-    const reservationResult = await this.reconcileReservations();
-    result.reservationsExpired = reservationResult.expired;
-    result.reservationsOrphansReleased =
-      reservationResult.orphansReleased;
 
     this.emitter.emit(
       REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED,
@@ -447,6 +402,55 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     );
 
     return result;
+  }
+
+  async tryReconcileRecoveryOperation(operation, originalStep, singleFlightKey, result) {
+    let started = false;
+    let recoveryOutcome;
+    try {
+      await this.operationWorkflowRunExclusive(singleFlightKey, async () => {
+        started = true;
+        recoveryOutcome = await this.reconcileRecoveryOperation(operation);
+      });
+    } catch (error) {
+      // The lane can return another wake's in-flight promise without running
+      // this factory. Its outcome and errors are not startup recovery results.
+      if (started) this.recordRecoveryOperationError(operation, originalStep, error, result);
+    }
+    if (recoveryOutcome === OPERATION_RECONCILE_OUTCOME.FAILED) {
+      result.markedFailed++;
+      this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_OBSERVED_FAILURE, {
+        operationId: operation.operationId,
+        workflowStep: operation.workflowStep,
+        partitionId: operation.partitionId,
+      });
+    } else if (didOperationReconcileAdvanceOrComplete(recoveryOutcome)) {
+      result.reconciled++;
+    } else if (recoveryOutcome ===
+        OPERATION_RESERVATION_RECOVERY_OUTCOME.RESERVATION_BACKED_PENDING_REDRIVEN) {
+      result.reservationBackedPendingRedriven++;
+    }
+  }
+
+  recordRecoveryOperationError(operation, originalStep, error, result) {
+    const detail = {operationId: operation.operationId, error: error.message};
+    if (this.deferTransitionRetry(operation.operationId, error, {
+      boundary: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
+      workflowStep: readStateField(operation.workflowStep),
+      partitionId: operation.partitionId,
+      updatedAt: operation.updatedAt,
+      createdAt: operation.createdAt,
+      operationSnapshot: operation,
+    })) {
+      result.deferred.push(detail);
+      return;
+    }
+    result.errors.push(detail);
+    this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_OPERATION_ERROR, {
+      ...detail,
+      workflowStep: originalStep,
+      partitionId: operation.partitionId,
+    });
   }
 
   isSafetyPolicyFailure(errorMessage) {
