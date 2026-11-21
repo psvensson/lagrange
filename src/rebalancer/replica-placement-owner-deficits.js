@@ -7,10 +7,9 @@
 // declared hosts, co-located voters included: a count-neutral REPLACE) >
 // SURPLUS. Spread is counted in declared hosts (NODES.host_id,
 // read only through readNodeHostIdentity). Eligibility is per target: a node
-// without a valid READY lease, or without a declared host, is excluded as a
-// target and its replicas are repair deficits; it never holds admissions to
-// any other target. The copy source of a copy is the partition's current
-// Raft leader (WP-A). REBALANCE (load and affinity scoring) stays with the
+// without a valid READY lease or a declared host cannot receive new work.
+// Incumbent identities remain occupied until a scoped retirement is observed.
+// The copy source is the partition's current Raft leader (WP-A). REBALANCE (load and affinity scoring) stays with the
 // target scorer and is not derived here.
 import {projectNodeLivenessSemantics} from
   '../control-plane/node-liveness-semantic-projection.js';
@@ -19,7 +18,9 @@ import {NODE_HOST_IDENTITY_STATE, readNodeHostIdentity} from
   '../topology/node-host-identity.js';
 import {
   COLUMN,
+  NODE_STATE,
   SERVICE_STATUS,
+  STATE,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -67,17 +68,27 @@ function compareText(left, right) {
  */
 function buildPlacementNodeEligibility({nodeRows, nowMs}) {
   const hostOfNode = new Map();
+  const declaredHostOfNode = new Map();
+  const nodeIdentities = new Map();
   for (const nodeRow of nodeRows) {
     const nodeId = nodeRow[COLUMN.NODE_ID];
+    if (typeof nodeId !== 'string') continue;
     const host = readNodeHostIdentity(nodeRow);
-    if (typeof nodeId !== 'string' ||
-        host.state !== NODE_HOST_IDENTITY_STATE.DECLARED ||
-        projectNodeLivenessSemantics({nodeRow, nowMs}).projection.readyNow !== true) {
-      continue;
+    const boot = nodeRow[COLUMN.BOOT_INCARNATION];
+    const status = nodeRow[COLUMN.STATUS];
+    const disconnected = nodeRow[COLUMN.CONNECTION_STATE] === STATE.DISCONNECTED &&
+      nodeRow[COLUMN.READY_LEASE_EXPIRES_AT] === null;
+    nodeIdentities.set(nodeId, Object.freeze({
+      boot: Number.isSafeInteger(boot) && boot > 0 ? boot : null,
+      retired: disconnected || status === NODE_STATE.FAILED || status === NODE_STATE.STOPPED,
+    }));
+    if (host.state !== NODE_HOST_IDENTITY_STATE.DECLARED) continue;
+    declaredHostOfNode.set(nodeId, host.hostId);
+    if (projectNodeLivenessSemantics({nodeRow, nowMs}).projection.readyNow === true) {
+      hostOfNode.set(nodeId, host.hostId);
     }
-    hostOfNode.set(nodeId, host.hostId);
   }
-  return Object.freeze({hostOfNode,
+  return Object.freeze({hostOfNode, declaredHostOfNode, nodeIdentities,
     eligibleNodeIds: Object.freeze([...hostOfNode.keys()].sort(compareText)),
     eligibleHostIds: Object.freeze(new Set(hostOfNode.values()))});
 }
@@ -138,7 +149,7 @@ function shouldSkipServiceRow(row, isBusy) {
   return isBusy && (isCatchupLearnerRaftRole(role) || IN_FLIGHT_LEARNER_STATUSES.has(status));
 }
 
-function classifyServiceRow(row, promotedVoterReplicaIds = null) {
+function classifyServiceRow(row, promotedVoterReplicaIds = null, incumbentIdentities = null) {
   const replicaId = row[COLUMN.REPLICA_ID];
   const nodeId = row[COLUMN.NODE_ID];
   if (typeof replicaId !== 'string' || typeof nodeId !== 'string') return null;
@@ -154,15 +165,16 @@ function classifyServiceRow(row, promotedVoterReplicaIds = null) {
   const activeVoter = status === SERVICE_STATUS.ACTIVE && isVoterRole(role);
   const caughtUp = isLearner && status === SERVICE_STATUS.ACTIVE &&
     row.caught_up !== false && row.caughtUp !== false;
-  const activeLearner = isLearner &&
-    (caughtUp || status === ReplicaStatus.SYNCING);
+  const incumbent = incumbentIdentities?.get(replicaId);
+  const incumbentBoot = incumbent?.nodeId === nodeId ? incumbent.boot : null;
   return {
     replicaId,
     nodeId,
     role,
     isLearner,
     caughtUp,
-    failed: isLearner ? !activeLearner : !activeVoter,
+    failed: status === ReplicaStatus.FAILED || status === SERVICE_STATUS.STOPPED,
+    ...(incumbentBoot !== null ? {incumbentBoot, incumbentOperationId: incumbent.operationId} : {}),
     isLeader: activeVoter && role === RAFT_ROLE.LEADER,
   };
 }
@@ -172,11 +184,12 @@ function buildPartitionReplicaRows(
   leaderNodeId,
   isBusy,
   promotedVoterReplicaIds = null,
+  incumbentIdentities = null,
 ) {
   const filtered = [];
   for (const row of serviceRows) {
     if (shouldSkipServiceRow(row, isBusy)) continue;
-    const classified = classifyServiceRow(row, promotedVoterReplicaIds);
+    const classified = classifyServiceRow(row, promotedVoterReplicaIds, incumbentIdentities);
     if (classified !== null) filtered.push(classified);
   }
   if (!filtered.some((r) => r.isLeader) && typeof leaderNodeId === 'string') {
@@ -187,16 +200,22 @@ function buildPartitionReplicaRows(
   return filtered;
 }
 
-function liveReplicasOf(replicaRows, eligibility) {
-  return replicaRows.filter((replica) => replica.failed !== true &&
-    eligibility.hostOfNode.has(replica.nodeId));
+function isRetiredIncumbent(replica, eligibility) {
+  const node = eligibility.nodeIdentities.get(replica.nodeId);
+  if (replica.failed === true) return true;
+  return node?.retired === true && node.boot !== null &&
+    node.boot === replica.incumbentBoot;
+}
+
+function retainedReplicasOf(replicaRows, eligibility) {
+  return replicaRows.filter((replica) => !isRetiredIncumbent(replica, eligibility));
 }
 
 function hostCountsOf(replicas, eligibility) {
   const counts = new Map();
   for (const replica of replicas) {
-    const hostId = eligibility.hostOfNode.get(replica.nodeId);
-    counts.set(hostId, (counts.get(hostId) ?? 0) + 1);
+    const hostId = eligibility.declaredHostOfNode.get(replica.nodeId);
+    if (hostId !== undefined) counts.set(hostId, (counts.get(hostId) ?? 0) + 1);
   }
   return counts;
 }
@@ -204,7 +223,7 @@ function hostCountsOf(replicas, eligibility) {
 function findTargetNode(replicas, eligibility, {requireUnusedHost, excludedTargetNodeIds = null}) {
   const usedNodes = new Set(replicas.map((replica) => replica.nodeId));
   const usedHosts = new Set(replicas.map((replica) =>
-    eligibility.hostOfNode.get(replica.nodeId)));
+    eligibility.declaredHostOfNode.get(replica.nodeId)));
   const free = eligibility.eligibleNodeIds.filter((nodeId) =>
     !usedNodes.has(nodeId) && !excludedTargetNodeIds?.has(nodeId));
   const unusedHost = free.find((nodeId) =>
@@ -247,8 +266,8 @@ function targetNodeOf(replicas, eligibility, {
 function overRepresentedReplicaOf(live, eligibility) {
   const counts = hostCountsOf(live, eligibility);
   const ranked = [...live].sort((left, right) =>
-    counts.get(eligibility.hostOfNode.get(right.nodeId)) -
-      counts.get(eligibility.hostOfNode.get(left.nodeId)) ||
+    counts.get(eligibility.declaredHostOfNode.get(right.nodeId)) -
+      counts.get(eligibility.declaredHostOfNode.get(left.nodeId)) ||
     Number(left.isLeader === true) - Number(right.isLeader === true) ||
     compareText(left.replicaId, right.replicaId));
   return ranked[0];
@@ -262,6 +281,9 @@ function moveOf(type, fields) {
     sourceReplicaId: fields.sourceReplicaId ?? null,
     copySourceNodeId: fields.copySourceNodeId ?? null,
   };
+  if (fields.targetNodeBootIncarnation != null) {
+    move.targetNodeBootIncarnation = fields.targetNodeBootIncarnation;
+  }
   if (Array.isArray(fields.promoteReplicaIds)) {
     move.promoteReplicaIds = Object.freeze([...fields.promoteReplicaIds]);
   }
@@ -304,7 +326,8 @@ function copyMoveOf(context, deficitKind, type, fields) {
     return waitingOf(context, deficitKind, WAITING.LEADER_UNKNOWN);
   }
   return candidateOf(context, deficitKind, moveOf(type, {...fields,
-    targetNodeId: target, copySourceNodeId: context.leader.nodeId}));
+    targetNodeId: target, copySourceNodeId: context.leader.nodeId,
+    targetNodeBootIncarnation: context.eligibility.nodeIdentities.get(target)?.boot}));
 }
 
 function failedOrDeadDeficit(context) {
@@ -312,7 +335,8 @@ function failedOrDeadDeficit(context) {
     !context.live.includes(replica));
   if (context.live.length >= context.replicationFactor) {
     return candidateOf(context, KIND.FAILED_OR_DEAD, moveOf(OperationType.REMOVE,
-      {targetNodeId: dead.nodeId, replicaId: dead.replicaId}));
+      {targetNodeId: dead.nodeId, replicaId: dead.replicaId,
+        targetNodeBootIncarnation: dead.failed === true ? null : dead.incumbentBoot}));
   }
   return copyMoveOf({...context, live: context.liveReplicas}, KIND.FAILED_OR_DEAD,
     OperationType.REPLACE, {sourceReplicaId: dead.replicaId});
@@ -333,13 +357,13 @@ function surplusDeficit(context) {
 
 function promotableLearnersOf(liveLearners, liveVoters, eligibility) {
   const voterHosts = new Set(liveVoters.map((r) =>
-    eligibility.hostOfNode.get(r.nodeId)));
+    eligibility.declaredHostOfNode.get(r.nodeId)));
   const seenHosts = new Set();
   const promotable = [];
   for (const learner of liveLearners) {
     if (learner.caughtUp === false) continue;
     const hostId = eligibility.hostOfNode.get(learner.nodeId);
-    if (voterHosts.has(hostId) || seenHosts.has(hostId)) continue;
+    if (hostId === undefined || voterHosts.has(hostId) || seenHosts.has(hostId)) continue;
     seenHosts.add(hostId);
     promotable.push(learner);
   }
@@ -348,6 +372,9 @@ function promotableLearnersOf(liveLearners, liveVoters, eligibility) {
 
 function growthPromotionDeficit(context, voterTarget) {
   if (context.live.length >= voterTarget) return null;
+  if (context.live.some((replica) => !context.eligibility.declaredHostOfNode.has(replica.nodeId))) {
+    return waitingOf(context, KIND.PROMOTION_READY, WAITING.INCUMBENT_RETIREMENT_UNAVAILABLE);
+  }
   const neededForNextOdd = context.live.length % 2 === 1 ? 2 : 1;
   if (context.live.length + neededForNextOdd > voterTarget) return null;
   const promotable = promotableLearnersOf(
@@ -369,6 +396,9 @@ function growthPromotionDeficit(context, voterTarget) {
 }
 
 function underVoterTargetDeficit(context, requiredHosts) {
+  if (context.liveReplicas.length >= context.replicationFactor) {
+    return waitingOf(context, KIND.LEARNER_DEFICIT, WAITING.INCUMBENT_RETIREMENT_UNAVAILABLE);
+  }
   if (context.live.length % 2 === 1) {
     const replicaHosts = hostCountsOf(context.liveReplicas, context.eligibility).size;
     if (replicaHosts >= requiredHosts) return NONE;
@@ -398,8 +428,8 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   eligibility, saturatedTargetNodeIds = null, storageExcludedTargets = null}) {
   const voterRows = replicaRows.filter((r) => !isLearnerReplica(r));
   const learnerRows = replicaRows.filter(isLearnerReplica);
-  const live = liveReplicasOf(voterRows, eligibility);
-  const liveLearners = liveReplicasOf(learnerRows, eligibility);
+  const live = retainedReplicasOf(voterRows, eligibility);
+  const liveLearners = retainedReplicasOf(learnerRows, eligibility);
   const liveReplicas = [...live, ...liveLearners];
   const distinctHostCount = hostCountsOf(live, eligibility).size;
   const context = {replicaRows: voterRows, live, liveLearners, liveReplicas,
@@ -411,7 +441,10 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   const deadLearner = learnerRows.find((r) => !liveLearners.includes(r));
   if (deadLearner !== undefined) {
     return candidateOf(context, KIND.DEAD_LEARNER, moveOf(OperationType.REMOVE,
-      {targetNodeId: deadLearner.nodeId, replicaId: deadLearner.replicaId}));
+      {targetNodeId: deadLearner.nodeId,
+        replicaId: deadLearner.replicaId,
+        targetNodeBootIncarnation: deadLearner.failed === true ? null : deadLearner.incumbentBoot,
+      }));
   }
   if (live.length < voterRows.length) return failedOrDeadDeficit(context);
   const eligibleHostCount = eligibility.eligibleHostIds.size;
@@ -422,8 +455,13 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   if (live.length < replicationFactor) {
     return underVoterTargetDeficit(context, requiredHosts);
   }
-  if (distinctHostCount < requiredHosts) return spreadDeficit(context);
-  return live.length > replicationFactor ? surplusDeficit(context) : NONE;
+  if (distinctHostCount < requiredHosts || live.length > replicationFactor) {
+    if (live.some((replica) => !eligibility.declaredHostOfNode.has(replica.nodeId))) {
+      return waitingOf(context, KIND.HOST_SPREAD, WAITING.INCUMBENT_RETIREMENT_UNAVAILABLE);
+    }
+    return distinctHostCount < requiredHosts ? spreadDeficit(context) : surplusDeficit(context);
+  }
+  return NONE;
 }
 
 /**
