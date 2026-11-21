@@ -43,23 +43,47 @@ function requireNamedWriteWaitBudget(caller) {
   return remaining;
 }
 
-async function waitForNamedWriteDelivery(delivery, caller) {
-  const remaining = requireNamedWriteWaitBudget(caller);
-  const {timeSource, cancellationToken} = caller;
-  let timer = null;
-  let unsubscribe = null;
-  try {
-    const abandon = new Promise((_resolve, reject) => {
-      timer = timeSource.setTimeout(() => reject(namedWriteWaitTimeout(caller)), remaining);
-      unsubscribe = cancellationToken?.onCancel((reason) => reject(new Error(reason)));
-    });
-    const receipt = await Promise.race([delivery, abandon]);
-    requireNamedWriteWaitBudget(caller);
-    return receipt;
-  } finally {
-    if (timer !== null) timeSource.clearTimeout(timer);
-    unsubscribe?.();
-  }
+function createNamedWriteDelivery() {
+  return {observation: null, waiters: new Set()};
 }
 
-export {createNamedWriteCaller, requireNamedWriteWaitBudget, waitForNamedWriteDelivery};
+function completeNamedWriteDelivery(delivery, observation) {
+  delivery.observation = observation;
+  for (const waiter of delivery.waiters) waiter(observation);
+}
+
+async function waitForNamedWriteDelivery(delivery, caller) {
+  const remaining = requireNamedWriteWaitBudget(caller);
+  if (delivery.observation !== null) return delivery.observation;
+  const {timeSource, cancellationToken} = caller;
+  const receipt = await new Promise((resolve, reject) => {
+    let timer = null;
+    let unsubscribe = null;
+    function detach() {
+      delivery.waiters.delete(receive);
+      if (timer !== null) timeSource.clearTimeout(timer);
+      unsubscribe?.();
+    }
+    function receive(observation) {
+      detach();
+      resolve(observation);
+    }
+    function abandon(error) {
+      detach();
+      reject(error);
+    }
+    delivery.waiters.add(receive);
+    timer = timeSource.setTimeout(() => abandon(namedWriteWaitTimeout(caller)), remaining);
+    unsubscribe = cancellationToken?.onCancel((reason) => abandon(new Error(reason)));
+  });
+  requireNamedWriteWaitBudget(caller);
+  return receipt;
+}
+
+export {
+  completeNamedWriteDelivery,
+  createNamedWriteCaller,
+  createNamedWriteDelivery,
+  requireNamedWriteWaitBudget,
+  waitForNamedWriteDelivery,
+};

@@ -102,12 +102,26 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const RESERVATION_BIRTH_VERB = 'birth';
+const TERMINAL_RESERVATION_STATUSES = Object.freeze(
+  [RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.EXPIRED]);
 const RESERVATION_RELEASE_READ_QUERY_OPTIONS = Object.freeze({
   ...STORAGE_RESERVATION_READ_QUERY_OPTIONS,
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
 });
 const RESERVATION_RELEASE_UNCONFIRMED = 'RESERVATION_RELEASE_UNCONFIRMED';
+const RESERVATION_AUTHORITY_ERROR = Object.freeze({
+  MALFORMED_RESPONSE: 'malformed authority response',
+  IDENTITY_MISMATCH: 'reservation identity mismatch',
+  INVALID_ACTIVE_TUPLE: 'invalid active reservation tuple',
+  RELEASE_UNCONFIRMED: 'conditional release unproved',
+  OPERATION_AUTHORITY_UNAVAILABLE: 'reservation operation authority is unavailable',
+  OPERATION_IDENTITY_MISMATCH: 'reservation operation identity differs',
+});
+const RESERVATION_OPERATION_FIELD = Object.freeze({
+  OPERATION: 'operation',
+  DEFERRED_OUTCOME: 'deferredOutcome',
+});
 const RESERVATION_RELEASE_WITNESS_SQL =
   'SELECT * FROM storage_reservations WHERE reservation_id = ?';
 
@@ -119,14 +133,15 @@ function reservationReleaseError(operation, reason) {
 
 function requireReservationReleaseRows(result, operation) {
   if (result?.success !== true || !Array.isArray(result.rows)) {
-    throw reservationReleaseError(operation, result?.error || 'malformed authority response');
+    throw reservationReleaseError(
+      operation, result?.error || RESERVATION_AUTHORITY_ERROR.MALFORMED_RESPONSE);
   }
   for (const row of result.rows) {
     if (!row || typeof row.reservation_id !== 'string' || row.reservation_id.length === 0 ||
         row.operation_id !== operation.operationId || row.entity_type !== operation.entityType ||
         row.entity_id !== operation.entityId || row.partition_id !== operation.partitionId ||
         row.target_node_id !== operation.targetNodeId) {
-      throw reservationReleaseError(operation, 'reservation identity mismatch');
+      throw reservationReleaseError(operation, RESERVATION_AUTHORITY_ERROR.IDENTITY_MISMATCH);
     }
   }
   return result.rows;
@@ -217,11 +232,6 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     now,
     options = {},
   ) {
-    // The reservation leaves ACTIVE: its birth is a finished logical write,
-    // so an ensure after this transition is a new one, never answered from
-    // the old birth's outcome.
-    releaseControlPlaneWriteIdentities(
-      ...reservationWriteSubject(reservationId));
     const result = await this.executeOperationMutationWithRetry(
       SQL.UPDATE_RESERVATION_STATUS_BY_ID,
       [nextStatus, now, now, reservationId, RESERVATION_STATUS.ACTIVE],
@@ -240,6 +250,9 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     }
 
     const changeCount = this.extractMutationChangeCount(result);
+    if (changeCount === 1 && TERMINAL_RESERVATION_STATUSES.includes(nextStatus)) {
+      releaseControlPlaneWriteIdentities(...reservationWriteSubject(reservationId));
+    }
     return {
       success: true,
       changed: changeCount !== null && changeCount > 0,
@@ -502,7 +515,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     );
     const rows = requireReservationReleaseRows(activeResult, operation);
     if (rows.some((row) => row.status !== RESERVATION_STATUS.ACTIVE || row.released_at !== null)) {
-      throw reservationReleaseError(operation, 'invalid active reservation tuple');
+      throw reservationReleaseError(operation, RESERVATION_AUTHORITY_ERROR.INVALID_ACTIVE_TUPLE);
     }
 
     const now = this.nowFn();
@@ -521,10 +534,12 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         const finalRows = requireReservationReleaseRows(witness, operation);
         const final = finalRows[0];
         if (finalRows.length !== 1 || final.reservation_id !== row.reservation_id ||
-            ![RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.EXPIRED].includes(final.status) ||
+            !TERMINAL_RESERVATION_STATUSES.includes(final.status) ||
             !Number.isFinite(final.released_at)) {
-          throw reservationReleaseError(operation, transition.error || 'conditional release unproved');
+          throw reservationReleaseError(
+            operation, transition.error || RESERVATION_AUTHORITY_ERROR.RELEASE_UNCONFIRMED);
         }
+        releaseControlPlaneWriteIdentities(...reservationWriteSubject(row.reservation_id));
       }
       if (transition.changeCount > 0) {
         releasedCount++;
@@ -570,9 +585,11 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @private
    */
   buildReservationOrphanReconcileSnapshot(visibilityObservation, operationId) {
-    if (!visibilityObservation || !Object.hasOwn(visibilityObservation, 'operation') ||
-        !Object.hasOwn(visibilityObservation, 'deferredOutcome')) {
-      throw invalidOperationPersistenceOutcome('reservation operation authority is unavailable');
+    if (!visibilityObservation ||
+        !Object.hasOwn(visibilityObservation, RESERVATION_OPERATION_FIELD.OPERATION) ||
+        !Object.hasOwn(visibilityObservation, RESERVATION_OPERATION_FIELD.DEFERRED_OUTCOME)) {
+      throw invalidOperationPersistenceOutcome(
+        RESERVATION_AUTHORITY_ERROR.OPERATION_AUTHORITY_UNAVAILABLE);
     }
     const operation = visibilityObservation.operation;
     const deferredOutcome =
@@ -583,7 +600,8 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     if (!deferredOutcome && operation !== null) {
       assertOperationUpdateRecord(operation);
       if (operation.operationId !== operationId) {
-        throw invalidOperationPersistenceOutcome('reservation operation identity differs');
+        throw invalidOperationPersistenceOutcome(
+          RESERVATION_AUTHORITY_ERROR.OPERATION_IDENTITY_MISMATCH);
       }
     }
     const evidence = Object.freeze({

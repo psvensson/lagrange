@@ -199,13 +199,9 @@ async function mutateEndpointAtIncarnation(options) {
     return freezeOutcome(
       ENDPOINT_INCARNATION_OUTCOME.REFUSED_INCARNATION_REQUIRED);
   }
-  // The row's earlier writes ended with this mutation (a delete, a
-  // withdrawal): none of their names may answer a later write of the row.
-  releaseControlPlaneWriteIdentities(ENDPOINT_WRITE_IDENTITY_SCOPE,
-    options.whereClause?.[COLUMN.ENDPOINT_ID]);
   const attempt = await attemptWrite(() => options.write(
     endpointIncarnationPredicate(options.whereClause, bootIncarnation)));
-  return resolveAttempt(attempt, async () => {
+  const outcome = await resolveAttempt(attempt, async () => {
     const read = await options.observe();
     // A delete's destination is absence: this incarnation's row still
     // present means it did not apply.
@@ -216,6 +212,13 @@ async function mutateEndpointAtIncarnation(options) {
     return classifyEndpointReadback(read, bootIncarnation,
       options.destination || {});
   });
+  const effect = classifyControlPlaneMutationResult(attempt.result);
+  if (outcome.outcome === ENDPOINT_INCARNATION_OUTCOME.APPLIED &&
+      attempt.result?.success === true && effect.affectedRows === 1) {
+    releaseControlPlaneWriteIdentities(ENDPOINT_WRITE_IDENTITY_SCOPE,
+      options.whereClause?.[COLUMN.ENDPOINT_ID], bootIncarnation);
+  }
+  return outcome;
 }
 
 function withoutEndpointId(row) {
@@ -236,11 +239,11 @@ function endpointWriteIdentity(row, ...verb) {
     row[COLUMN.BOOT_INCARNATION], ...verb)};
 }
 
-// An endpoint write classified anything but "authority unavailable" (its
-// one unresolved outcome) is done: its names at this incarnation are
-// released, so the endpoint's next write is a new logical write.
+// Only an established destination can end this incarnation's write names.
+// Seeing an unchanged source row does not settle a write that may still apply.
 function settleEndpointWrite(row, outcome) {
-  if (outcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.AUTHORITY_UNAVAILABLE) {
+  if (outcome.outcome === ENDPOINT_INCARNATION_OUTCOME.APPLIED ||
+      outcome.outcome === ENDPOINT_INCARNATION_OUTCOME.RESOLVED_BY_READBACK) {
     releaseControlPlaneWriteIdentities(ENDPOINT_WRITE_IDENTITY_SCOPE,
       row[COLUMN.ENDPOINT_ID], row[COLUMN.BOOT_INCARNATION]);
   }
