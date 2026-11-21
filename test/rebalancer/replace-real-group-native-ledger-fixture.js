@@ -1,3 +1,4 @@
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 // The existing real rs-raft user-group world with a file-backed operation
 // ledger. Only ledger consensus transport and CDC delivery are controlled.
 // Every ledger write uses PartitionService committed apply; the user group,
@@ -51,6 +52,7 @@ function ledgerGatewayForWorld(world, ledger) {
     if (row) world.cache.upsert('replica_operations', row);
     return answer;
   };
+  installCommittedOperationMutationFixture(gateway);
   return gateway;
 }
 

@@ -34,6 +34,8 @@ import {PLACEMENT_DISPATCH_HOLD, PLACEMENT_MOVE_TYPE, PLACEMENT_OUTCOME,
 import {placementOperationIdOf, placementReplicaIdOf} from
   './partition-placement-admission-identity.js';
 
+const ENTITY_ADMISSION_STATE = Object.freeze({CLEAR: 'clear', REFUSED: 'refused'});
+const ENTITY_CLEAR = Object.freeze({state: ENTITY_ADMISSION_STATE.CLEAR});
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL_PARAMETER = '?';
 const SQL_LIST_SEPARATOR = ', ';
@@ -97,6 +99,11 @@ function idsOf(rows) {
 // A copy occupies its copy source and its target while its durable step is
 // in the copy phase. A founder ADD is not a copy (FOUND is exempt) and a
 // REMOVE copies nothing.
+function operationHoldsPlacementCopyCapacity(operation) {
+  return isOccupyingCopy(censusRowOf(buildCanonicalReplicaOperationRow(
+    operation, operation.ownerLeaseExpiresAt ?? null)));
+}
+
 function isOccupyingCopy(row) {
   return row.incomplete && COPY_TYPES.has(row.type) && !row.founder &&
     COPY_PHASE_WORKFLOW_STEPS.has(row.step) &&
@@ -170,7 +177,11 @@ function ledgerPartitionRefusal(command) {
       ledgerPartitionId: LEDGER_PARTITION_ID});
 }
 
-function entityAdmissionRefusal(statement, census) {
+function entityRefused(result) {
+  return {state: ENTITY_ADMISSION_STATE.REFUSED, result};
+}
+
+function entityAdmissionDecision(statement, census) {
   const entityRows = census.filter((row) => row.incomplete &&
     row.entityType === statement.entityType && row.entityId === statement.entityId);
   const ledgerRows = census.filter((row) => row.incomplete &&
@@ -178,28 +189,30 @@ function entityAdmissionRefusal(statement, census) {
     row.entityId === LEDGER_PARTITION_ID);
   if (statement.transitionKind === KIND.FOUND) {
     const founded = foundingRefusal(statement, census);
-    if (founded !== null) return founded;
+    if (founded !== null) return entityRefused(founded);
   }
   if (statement.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
       statement.entityId === LEDGER_PARTITION_ID &&
       statement.dispatchHold !== PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE) {
     const active = census.filter((row) => row.incomplete);
     if (active.length > 0) {
-      return refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED, {operationIds: idsOf(active)});
+      return entityRefused(refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
+        {operationIds: idsOf(active)}));
     }
   }
   if (entityRows.length > 0) {
-    return refused(REFUSAL.PARTITION_BUSY, {operationIds: idsOf(entityRows)});
+    return entityRefused(refused(REFUSAL.PARTITION_BUSY, {operationIds: idsOf(entityRows)}));
   }
   if (ledgerRows.length > 0) {
-    return refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
-      {operationIds: idsOf(ledgerRows)});
+    return entityRefused(refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
+      {operationIds: idsOf(ledgerRows)}));
   }
-  return null;
+  return ENTITY_CLEAR;
 }
 
 function admissionRefusal(db, statement, census) {
-  return entityAdmissionRefusal(statement, census) ??
+  const entity = entityAdmissionDecision(statement, census);
+  return entity.state === ENTITY_ADMISSION_STATE.REFUSED ? entity.result :
     capacityRefusal(statement, census) ?? claimRefusal(db, statement);
 }
 
@@ -333,10 +346,12 @@ function decideHoldRelease(db, {command, release}) {
 export {
   LEDGER_PARTITION_ID,
   admissionRefusal,
-  entityAdmissionRefusal,
+  entityAdmissionDecision,
+  ENTITY_ADMISSION_STATE,
   decideHoldRelease,
   decidePlacementAdmission,
   isOccupyingCopy,
   readPlacementCensus,
   readPlacementCopyOccupancy,
+  operationHoldsPlacementCopyCapacity,
 };

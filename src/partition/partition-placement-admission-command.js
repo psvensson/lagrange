@@ -1,6 +1,7 @@
-// The pinned committed form of the placement owner's two commands (quest
+// The pinned committed form of the placement owner's commands (quest
 // replica-placement-admission-owner, design section 2.5): PLACEMENT_ADMIT
-// carries the canonical admission statement, PLACEMENT_RELEASE_HOLD the one
+// carries the canonical admission statement; PLACEMENT_REPAIR carries the
+// retained operation and named current copy policy; PLACEMENT_RELEASE_HOLD the one
 // held operation it releases. The entryId names one proposal attempt and is
 // the proposer's (reused only to re-propose that attempt after an unknown
 // outcome). Every replica re-validates the exact bytes before it applies.

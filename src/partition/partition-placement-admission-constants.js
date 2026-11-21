@@ -1,11 +1,17 @@
 // The placement owner's committed command types at the partition boundary
-// (quest replica-placement-admission-owner, design section 2.5). PLACEMENT_ADMIT
+// (quest replica-placement-admission-owner, design section 2.5). REPAIR adds
+// same-identity restoration; PREPARE is a read-only owner request, not a command.
+// PLACEMENT_ADMIT
 // is also the partition message type that routes a request to the
 // replica_operations-p1 leader, as the coordinator settlement routes under
 // its own type. Their outcome vocabulary is the owner's
 // (rebalancer/replica-placement-owner-constants.js).
 const PLACEMENT_ADMIT_TYPE = 'PLACEMENT_ADMIT';
 const PLACEMENT_REPAIR_TYPE = 'PLACEMENT_REPAIR';
+const RETAINED_COPY_POLICY_STATE = Object.freeze({
+  NOT_REQUIRED: 'not_required', READY: 'ready', UNAVAILABLE: 'unavailable',
+});
+const REPAIR_PREPARATION_STATE = Object.freeze({PREPARED: 'prepared', UNAVAILABLE: 'unavailable'});
 const PLACEMENT_REPAIR_PREPARE_TYPE = 'PLACEMENT_REPAIR_PREPARE';
 const PLACEMENT_RELEASE_HOLD_TYPE = 'PLACEMENT_RELEASE_HOLD';
 const PLACEMENT_COMMAND_TYPES = Object.freeze([PLACEMENT_ADMIT_TYPE,
@@ -24,5 +30,6 @@ const PLACEMENT_ADMISSION_ERROR = Object.freeze({
   RESULT: 'placement_admission_result_unavailable',
 });
 
-export {PLACEMENT_REPAIR_PREPARE_TYPE, PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMISSION_ERROR, PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES,
+export {RETAINED_COPY_POLICY_STATE, REPAIR_PREPARATION_STATE, PLACEMENT_REPAIR_PREPARE_TYPE,
+  PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMISSION_ERROR, PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES,
   PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_RESULT_FIELD, RETAINED_PLACEMENT_ATTEMPT};

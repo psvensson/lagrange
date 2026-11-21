@@ -79,7 +79,7 @@ function isDispatchReservationGateEngaged(owner) {
  * @return {Promise<void>}
  * @private
  */
-async function repairGateRepairedOperationRow(owner, operation, attempt) {
+async function repairGateRepairedOperationRow(owner, operation, _attempt) {
   return repairOperationRowForGateRepairedReservation(owner, operation);
 }
 
@@ -115,6 +115,14 @@ function handleTerminalReservationAttempt(owner, operation, attempt) {
  *   dispatch may proceed.
  * @private
  */
+const OPERATION_ROW_REPAIR_REFUSED = 'retained operation row repair refused';
+
+function reservationAttemptIsActive(attempt, options) {
+  return attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE ||
+    (options.allowCreateReservation !== false &&
+      attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED);
+}
+
 async function ensureDispatchReservationOrSkip(owner, operation, options = {}) {
   if (
     !isStorageIncreasingOperationType(operation?.type) ||
@@ -125,17 +133,13 @@ async function ensureDispatchReservationOrSkip(owner, operation, options = {}) {
   const attempt = options.allowCreateReservation === false ?
     await owner.ensureReservationForOperation(operation, {allowCreate: false}) :
     await owner.ensureReservationForOperation(operation);
-  if (
-    attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE ||
-    (options.allowCreateReservation !== false &&
-      attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED)
-  ) {
+  if (reservationAttemptIsActive(attempt, options)) {
     const repaired = await repairGateRepairedOperationRow(owner, operation, attempt);
     if (repaired) return null;
     return owner.buildSkippedOperationResult(
       OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
       operation.operationId,
-      {error: 'retained operation row repair refused'},
+      {error: OPERATION_ROW_REPAIR_REFUSED},
     );
   }
   if (

@@ -15,7 +15,8 @@ import {NODE, commitLedgerStatement, onLedgerLeader} from './placement-admission
 const DEFAULT_PARTITION_ID = 'retained-repair-p1';
 const planner = new ControlPlaneSystemTableGateway();
 
-async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID} = {}) {
+async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
+  nodeId = NODE.A, replicaId, serviceNodeId, partitionRows} = {}) {
   const temporary = temporaryDbPath();
   try {
     await onLedgerLeader(async (leader, proposed) => {
@@ -34,7 +35,7 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID} = 
         return {success: true, partitionResult: {affectedRows: result.changes}};
       };
       installCommittedOperationMutationFixture(gateway);
-      const coordinator = createTestCoordinator({nodeId: NODE.A,
+      const coordinator = createTestCoordinator({nodeId,
         sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway});
       coordinator.registerLedgerPartitionService(leader);
       const commands = [];
@@ -43,7 +44,7 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID} = 
         commands.push(entry);
         queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
       });
-      const world = {leader, coordinator, gateway, commands, partitionId};
+      const world = {leader, coordinator, gateway, commands, partitionId, partitionRows};
       attachCurrentCopyOwner(world);
       try {
         await measure(world);
@@ -52,7 +53,7 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID} = 
         leader.setRebalancerLeadershipSink(null);
         await coordinator.shutdown();
       }
-    }, {dbPath: temporary.dbPath});
+    }, {dbPath: temporary.dbPath, replicaId, nodeId: serviceNodeId});
   } finally {
     fs.rmSync(temporary.directory, {recursive: true, force: true});
   }
@@ -68,15 +69,19 @@ function attachCurrentCopyOwner(world) {
       return table === 'nodes' ? {node_id: nodeId, boot_incarnation: 1, storage_incarnation: 1} : null;
     },
     getAll(table) {
-      if (table === 'partitions') return [{partition_id: partitionId, status: 'active',
-        replica_count: 3, leader_node_id: NODE.A}];
-      if (table === 'services') return [{replica_id: `${partitionId}-source`,
-        partition_id: partitionId, node_id: NODE.A, status: 'active', raft_role: 'leader'}];
+      if (table === 'partitions') {
+        return world.partitionRows ?? [{partition_id: partitionId, status: 'active',
+          replica_count: 3, leader_node_id: NODE.A}];
+      }
+      if (table === 'services') {
+        return [{replica_id: `${partitionId}-source`,
+          partition_id: partitionId, node_id: NODE.A, status: 'active', raft_role: 'leader'}];
+      }
       return [];
     },
     onCacheApplyChange() {}, offCacheApplyChange() {},
   };
-  const owner = createReplicaPlacementOwner({nodeId: NODE.A,
+  const owner = createReplicaPlacementOwner({nodeId: world.coordinator.nodeId,
     ledgerPartitionService: world.leader, systemTableCache: cache,
     workflowOwner: world.coordinator.workflowOwner,
     nodeAuthority: {

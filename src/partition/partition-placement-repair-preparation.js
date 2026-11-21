@@ -1,8 +1,12 @@
-import {OperationType} from '../rebalancer/replica-operation-progress.js';
+import {unavailableRepairPreparation, preparedRepairBody} from
+  './partition-placement-repair-preparation-result.js';
+import {RETAINED_COPY_POLICY_STATE as POLICY} from
+  './partition-placement-admission-constants.js';
+import {operationHoldsPlacementCopyCapacity} from './partition-placement-admission-decision.js';
 // Read-only preparation by the actual ledger owner. This grants no effect and
 // does not propose, install state, or retain a submitted command.
 import {canonicalRetainedPlacementRepair} from './partition-placement-retained-repair.js';
-import {buildCurrentRetainedCopyStatement} from
+import {buildCurrentRetainedCopyPolicy} from
   '../rebalancer/replica-placement-owner-retained-repair-statement.js';
 import {PLACEMENT_STATEMENT_VALIDITY} from
   '../rebalancer/replica-placement-owner-admission-statement.js';
@@ -14,17 +18,16 @@ function requestPlacementRepairPreparation(service, {operation}) {
   if (leadership !== null) return leadership;
   const canonical = canonicalRetainedPlacementRepair({operation});
   if (canonical.validity !== PLACEMENT_STATEMENT_VALIDITY.VALID) {
-    return {state: 'unavailable', reason: PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED};
+    return unavailableRepairPreparation(PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED);
   }
-  const copy = operation.completedAt === null &&
-    (operation.type === OperationType.ADD || operation.type === OperationType.REPLACE);
-  const admissionStatement = copy ? buildCurrentRetainedCopyStatement(
-    service.rebalancerLeadershipSink, canonical.statement.operation) : null;
-  if (copy && admissionStatement === null) {
-    return {state: 'unavailable', reason: PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE};
+  const copy = operationHoldsPlacementCopyCapacity(operation);
+  const copyPolicy = copy ? buildCurrentRetainedCopyPolicy(
+    service.rebalancerLeadershipSink, canonical.statement.operation) : {state: POLICY.NOT_REQUIRED};
+  if (copyPolicy.state === POLICY.UNAVAILABLE) {
+    return unavailableRepairPreparation(PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE);
   }
-  return {state: 'prepared', owner: {nodeId: service.nodeId, replicaId: service.replicaId},
-    body: {operation: canonical.statement.operation, admissionStatement}};
+  return preparedRepairBody({operation: canonical.statement.operation, copyPolicy},
+    {nodeId: service.nodeId, replicaId: service.replicaId});
 }
 
 export {requestPlacementRepairPreparation};

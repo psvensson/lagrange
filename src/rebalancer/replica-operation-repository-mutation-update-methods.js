@@ -104,6 +104,14 @@ function hasWinningTerminalOperation(repository, terminalTransition,
   return repository.isAuthoritativeOperationTerminal(authoritativeOperation);
 }
 
+function requiresExistingOperationRow(operation, options) {
+  return Boolean(options.elapsedWorkflowPreimage || options.acknowledgedRemovePreimage ||
+    options.expectedStepsHistory !== undefined ||
+    options.requireExactCreateTarget === true ||
+    operationCarriesReplicaCreateAdmission(operation) ||
+    operationCarriesMessageGroupMembership(operation));
+}
+
 function assignReplicaOperationRepositoryMutationUpdateMethods(
   ReplicaOperationRepository,
   options = {},
@@ -614,13 +622,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the snapshot was taken. Only admission-free operation rows retain
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
-        if (
-          options.elapsedWorkflowPreimage || options.acknowledgedRemovePreimage ||
-          options.expectedStepsHistory !== undefined ||
-          options.requireExactCreateTarget === true ||
-          operationCarriesReplicaCreateAdmission(operation) ||
-          operationCarriesMessageGroupMembership(operation)
-        ) {
+        if (requiresExistingOperationRow(operation, options)) {
           return buildOperationUpdateOutcome({
             persisted: false,
             disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
