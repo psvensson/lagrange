@@ -1016,8 +1016,7 @@ test('QueryExecutor - read delivery defers cold reconnect for an unobserved ' +
   );
 });
 
-test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
-  'timeout', async (t) => {
+test('QueryExecutor - sole recovery route preserves typed ACK timeout', async (t) => {
   const partitionId = 'p-read-stale-connected';
   const staleNodeId = 'node-stale';
   const staleAddress = `${staleNodeId}/partition/${partitionId}`;
@@ -1078,6 +1077,7 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     }),
     messageRouter,
     systemCache,
+    nowFn: () => 0,
   });
   executor.readRetryAttempts = 1;
   executor.leaderRetryDelayMs = 1;
@@ -1100,8 +1100,8 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     'read should defer when the connected recovery candidate does not ack');
   t.same(
     deliveries,
-    [{address: staleAddress, timeoutMs: reconnectIntervalMs}],
-    'connected stale recovery candidate should receive a bounded ack budget',
+    [{address: staleAddress, timeoutMs: queryTimeoutMs}],
+    'the connected candidate receives the bounded original caller grant',
   );
   t.equal(
     result.errorCode,
