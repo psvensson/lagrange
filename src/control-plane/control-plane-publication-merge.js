@@ -456,13 +456,21 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   });
 }
 
+function hasSamePublicationRevision(actual, desired) {
+  return actual.publicationId === desired.publicationId &&
+    actual.publicationKind === desired.publicationKind &&
+    actual.publicationEpoch === desired.publicationEpoch &&
+    actual.sourceTopologyEpoch === desired.sourceTopologyEpoch &&
+    actual.sourceSnapshotVersion === desired.sourceSnapshotVersion;
+}
+
 function publicationRowSatisfiesDesiredState(actualRow, desiredRow) {
   if (!actualRow || !desiredRow) {
     return false;
   }
   const actual = normalizeControlPlanePublicationRow(actualRow);
   const desired = normalizeControlPlanePublicationRow(desiredRow);
-  if (actual.publicationId !== desired.publicationId) {
+  if (!hasSamePublicationRevision(actual, desired)) {
     return false;
   }
   if (

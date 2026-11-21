@@ -36,10 +36,6 @@ const TABLE = TABLES.CONTROL_PLANE_PUBLICATIONS;
 const PARTITION_ID = `${TABLE}-p1`;
 const NODES = Object.freeze(['node-a', 'node-b']);
 const WRITER_TIME = 20_000;
-const ACK_KEY = Object.freeze({
-  'node-a': 'publication-native-ack-node-a',
-  'node-b': 'publication-native-ack-node-b',
-});
 const SELECT_ROW = `SELECT * FROM ${TABLE} WHERE publication_id = ?`;
 
 function publicationRow(epoch, nodes, nowMs) {
@@ -83,12 +79,12 @@ async function openPublicationsLedger(dbPath) {
   return {leader, applied};
 }
 
-function holdFirstAcknowledgement(leader, key) {
+function holdFirstAcknowledgement(leader) {
   const release = Promise.withResolvers();
   const execute = leader.executeQuery.bind(leader);
   const record = {request: null, replay: null, release: release.resolve};
   leader.executeQuery = async (sql, params, options) => {
-    if (options?.idempotencyKey !== key || record.request) {
+    if (!options?.idempotencyKey || record.request) {
       return execute(sql, params, options);
     }
     record.request = {sql, params, options};
@@ -125,17 +121,15 @@ async function exerciseAcknowledgementOrder({slowNode, fastNode, successor}) {
     await slowWriter.coordinator.persistPublicationRow(original);
     assert.equal(readDurablePublication(leader, publicationId).status, STATUS.OPEN);
 
-    held = holdFirstAcknowledgement(leader, ACK_KEY[slowNode]);
-    pending = track(slowWriter.coordinator.acknowledgePublication(publicationId, slowNode,
-      {idempotencyKey: ACK_KEY[slowNode]}));
+    held = holdFirstAcknowledgement(leader);
+    pending = track(slowWriter.coordinator.acknowledgePublication(publicationId, slowNode));
     await settleTicks();
     assert.ok(held.request, `the first owner reached the held write after its reads: ${JSON.stringify(pending.value)}`);
-    const slowEntryId = deriveParticipantEntryId(ACK_KEY[slowNode], PARTITION_ID);
+    const slowEntryId = deriveParticipantEntryId(held.request.options.idempotencyKey, PARTITION_ID);
     assert.equal(held.request.options.entryId, slowEntryId);
     assert.equal(ledger.applied.some((entry) => entry.entryId === slowEntryId), false);
 
-    const fast = await fastWriter.coordinator.acknowledgePublication(publicationId, fastNode,
-      {idempotencyKey: ACK_KEY[fastNode]});
+    const fast = await fastWriter.coordinator.acknowledgePublication(publicationId, fastNode);
     assert.deepEqual(normalizeControlPlanePublicationRow(fast).acknowledgedNodeIds, [fastNode]);
     assert.deepEqual(readDurablePublication(leader, publicationId).acknowledgedNodeIds,
       [fastNode], 'the other coordinator confirmed its actual durable ACK first');
@@ -158,6 +152,18 @@ async function exerciseAcknowledgementOrder({slowNode, fastNode, successor}) {
     assert.equal(ledger.applied.filter((entry) => entry.entryId === slowEntryId).length, 1,
       'identical content and participant identity cannot re-apply');
     assert.equal(statementState(leader, slowEntryId), 'settled');
+    assert.equal(held.replay.changes, 0, 'the replay of the stale CAS changes no row');
+    if (!successor) {
+      const rebased = ledger.applied.at(-1);
+      assert.notEqual(rebased.entryId, slowEntryId, 'the changed preimage has a distinct entry');
+      assert.equal(rebased.params.includes(JSON.stringify(NODES)), true,
+        'the rebased update carries the same-revision ACK union');
+      const committed = ledger.applied.length;
+      const unchanged = await slowWriter.coordinator
+        .acknowledgePublication(publicationId, slowNode);
+      assert.deepEqual(normalizeControlPlanePublicationRow(unchanged).acknowledgedNodeIds, NODES);
+      assert.equal(ledger.applied.length, committed, 'an already confirmed ACK needs no new write');
+    }
     const settled = readDurablePublication(leader, publicationId);
     await shutdownAll(leader);
     leader = null;

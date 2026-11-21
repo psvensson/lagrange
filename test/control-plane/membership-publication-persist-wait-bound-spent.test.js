@@ -2,9 +2,8 @@
  * Spent-wait witness for the publication row write: when every upsert is
  * answered but no readback within PUBLICATION_WRITE_MAX_ATTEMPTS satisfies
  * the desired row, the write logs exactly one wait_bound_spent ERROR and
- * still returns the same unconfirmed row it returned before (visibility
- * only; the unconfirmed-as-persisted return is a recorded owner finding). A
- * write confirmed by its readback logs none.
+ * refuses with a retryable unconfirmed result. A write confirmed by its
+ * readback logs none.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -23,7 +22,7 @@ const PUBLICATION_ROW = Object.freeze({
   acknowledged_node_ids: [],
 });
 
-function createPersistHost({readback}) {
+function createPersistHost({readback, loseReply = false}) {
   const host = Object.create(MembershipPublicationCoordinatorPersist.prototype);
   const capture = captureLogger();
   const calls = {upserts: 0, reads: 0};
@@ -35,6 +34,7 @@ function createPersistHost({readback}) {
     async upsertPublication(row) {
       calls.upserts += 1;
       stored = row;
+      if (loseReply) throw Object.assign(new Error('the write reply was lost'), {deferRetry: true});
     },
     async getPublication() {
       calls.reads += 1;
@@ -45,22 +45,21 @@ function createPersistHost({readback}) {
 }
 
 test('an unconfirmed publication write logs one wait_bound_spent ERROR and ' +
-  'still returns the unconfirmed row', async (t) => {
+  'refuses with retryable debt', async (t) => {
   const {host, capture, calls} = createPersistHost({readback: 'never'});
 
-  const returned = await host.persistPublicationRow(PUBLICATION_ROW);
-
+  await t.rejects(host.persistPublicationRow(PUBLICATION_ROW), {
+    code: 'PUBLICATION_WRITE_UNCONFIRMED', deferRetry: true,
+  }, 'an untyped write never proves that the desired row persisted');
   t.equal(calls.upserts, PUBLICATION_WRITE_MAX_ATTEMPTS,
     'every attempt is still taken');
-  t.equal(returned.publication_id, 'pub-7',
-    'the unconfirmed row is still returned (no throw)');
   const spent = capture.spent();
   t.equal(spent.length, 1, 'exactly one wait_bound_spent');
   t.equal(spent[0].context.wait, 'PUBLICATION_WRITE_MAX_ATTEMPTS');
   t.equal(spent[0].context.lastObserved.attempts,
     PUBLICATION_WRITE_MAX_ATTEMPTS);
   t.equal(spent[0].context.lastObserved.outcome,
-    'unconfirmed_row_returned_as_persisted');
+    'durable_publication_unconfirmed');
   t.equal(spent[0].context.scope.publicationId, 'pub-7');
 });
 
@@ -72,5 +71,15 @@ test('a publication write confirmed by its readback logs no ' +
 
   t.equal(calls.upserts, 1);
   t.equal(returned.publication_id, 'pub-7');
+  t.equal(capture.spent().length, 0);
+});
+
+test('a lost reply on the final attempt still reads authoritative completion', async (t) => {
+  const {host, capture, calls} = createPersistHost({readback: 'stored', loseReply: true});
+  const returned = await host.persistPublicationRow(PUBLICATION_ROW, {
+    publicationWriteMaxAttempts: 1, skipPublicationWriteReadback: true,
+  });
+  t.equal(returned.publication_id, 'pub-7', 'readback confirms the committed row');
+  t.same(calls, {upserts: 1, reads: 2}, 'there is no second write attempt');
   t.equal(capture.spent().length, 0);
 });
