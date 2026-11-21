@@ -1,6 +1,7 @@
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {isDeepStrictEqual} from 'node:util';
+import {buildStrandedRemoveCasFields} from './operation-workflow-stranded-remove-repair.js';
 import {elapsedWorkflowPreimageMatches} from './operation-workflow-elapsed-preimage.js';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
@@ -186,6 +187,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         expectedWorkflowStep,
         terminalTransition,
       );
+      const strandedRemoveCasFields = options.strandedRemovePreimage === undefined ? {} :
+        buildStrandedRemoveCasFields(options.strandedRemovePreimage, operation,
+          expectedWorkflowStep, expectedStepsHistory);
       const elapsedPreimage = options.elapsedWorkflowPreimage;
       let elapsedCasFields;
       if (terminalTransition) {
@@ -267,6 +271,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
                 options.requireCreateAdmissionAbsent === true,
               requireExactCreateTarget: options.requireExactCreateTarget === true,
               expectedStepsHistory,
+              strandedRemoveCasFields,
               elapsedWorkflowPreimage: elapsedCasFields,
             },
           ),
@@ -294,12 +299,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             terminalTransition,
             options.requireCreateAdmissionAbsent === true,
             expectedStepsHistory,
-          ),
-          params: this.buildReplicaOperationUpdateParams(
-            operation,
-            expectedWorkflowStep,
-            expectedStepsHistory,
-          ),
+          ) + Object.keys(strandedRemoveCasFields).map((field) => ` AND ${field} IS ?`).join(''),
+          params: [...this.buildReplicaOperationUpdateParams(operation, expectedWorkflowStep,
+            expectedStepsHistory), ...Object.values(strandedRemoveCasFields)],
         },
       );
       if (result.admissionRefused === true) {
@@ -331,7 +333,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           return this.resolveZeroChangeOperationUpdate(
             operation,
             expectedWorkflowStep,
-            {terminalTransition, requireExactCreateTarget: options.requireExactCreateTarget,
+            {terminalTransition, expectedStepsHistory: options.expectedStepsHistory,
+              requireExactCreateTarget: options.requireExactCreateTarget,
               elapsedWorkflowPreimage: options.elapsedWorkflowPreimage},
           );
         }

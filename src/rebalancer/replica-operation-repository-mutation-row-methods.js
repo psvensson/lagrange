@@ -149,7 +149,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       expectedWorkflowStep = null,
       options = {},
     ) {
-      const whereClause = {operation_id: operation.operationId, ...options.elapsedWorkflowPreimage};
+      const whereClause = {operation_id: operation.operationId,
+        ...options.elapsedWorkflowPreimage, ...options.strandedRemoveCasFields};
       if (
         typeof expectedWorkflowStep === 'string' &&
         expectedWorkflowStep.length > 0

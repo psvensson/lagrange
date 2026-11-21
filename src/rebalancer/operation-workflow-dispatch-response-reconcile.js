@@ -23,11 +23,11 @@ import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
-import {didOperationReconcileAdvanceOrComplete, OPERATION_RECONCILE_OUTCOME} from
+import {didOperationReconcileAdvanceOrComplete} from
   './operation-workflow-reconcile-outcome.js';
 import {reconcileSatisfiedCreateResponse} from
   './operation-workflow-create-satisfied-response.js';
-import {captureStrandedRemovePreimage, repairStrandedRemoveAfterResponse} from
+import {captureStrandedRemovePreimage, resolveStrandedRemoveReply} from
   './operation-workflow-stranded-remove-repair.js';
 import {
   applyGrowthPromoteRequestFields,
@@ -758,6 +758,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       transport = deliveryTransportOf(delivery);
       response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
+      if (strandedRemovePreimage) {
+        return resolveStrandedRemoveReply(this, operation, null, strandedRemovePreimage);
+      }
       const errorMsg = this.normalizeErrorMessage(
         error,
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
@@ -800,6 +803,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (!retainedCreateDeliveryResolution &&
         !isDeliveredTransportDeliveryOutcome(transport)) {
+      if (strandedRemovePreimage) {
+        return resolveStrandedRemoveReply(this, operation, null, strandedRemovePreimage);
+      }
       const errorLike = transport;
       const errorMsg = this.normalizeErrorMessage(
         errorLike,
@@ -848,15 +854,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         }
         return retainedCreateDeliveryResolution.result;
       }
-      const corrected = await repairStrandedRemoveAfterResponse(
+      const stranded = await resolveStrandedRemoveReply(
         this, operation, response, strandedRemovePreimage);
-      if (corrected === OPERATION_RECONCILE_OUTCOME.FAILED) {
-        return this.buildFailedOperationResult(operation.operationId, operation.errorMessage);
-      }
-      if (corrected === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
-        return this.buildSuccessfulOperationResult(operation.operationId, {status: corrected});
-      }
-      if (corrected) return this.buildSkippedOperationResult(corrected, operation.operationId);
+      if (stranded) return stranded;
       const reconciled = await this._handleDispatchResponse(
         operation,
         response,
