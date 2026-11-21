@@ -36,6 +36,7 @@ import {
   '../../src/transport/transport-semantic-outcome.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
+import {removalAuthorityDeferred} from '../../src/node/replica-removal-debt-errors.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -65,6 +66,7 @@ import {
   disposeWorld,
   driveToIntent,
   electAmongLive,
+  fireFallbackTimers,
   openReplaceWorld,
   readPersisted,
   runToQuiescence,
@@ -677,6 +679,66 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     await disposeWorld(world);
   }
 });
+
+for (const retryable of [false, true]) {
+  const refusal = retryable ? 'retryable source ERROR' : 'acknowledged empty reply';
+  test(`T5-prime redrives a ${refusal} on an existing owner timer`, async (t) => {
+    const world = await openReplaceWorld({sourceHandler: true});
+    try {
+      // Keep the old source serving until the first renewed attempt exposes
+      // the selected reply. Later sends go through the real source handler.
+      world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
+      await driveToIntent(world);
+      world.eventsSuppressed = true;
+      const operationId = world.operation.operationId;
+      const replicaId = world.sourceReplicaId;
+      const handler = world.sourceHandler.handler;
+      const owner = world.coordinator.workflowOwner;
+      const deliver = owner.deliverReplicaOperationRequest.bind(owner);
+      const refusalAnswer = retryable ? handler.answerFailedCreateCleanupDeferred({
+        operationId, replicaId, partitionId: world.partitionId,
+        deferral: removalAuthorityDeferred(replicaId),
+      }) : null;
+      if (retryable) world.removeEffectAnswer = refusalAnswer;
+      let nextRemove = true;
+      const observed = [];
+      owner.deliverReplicaOperationRequest = async (operation, target, request, ...rest) => {
+        const answer = await deliver(operation, target, request, ...rest);
+        if (request.type !== ReplicaOperationMessageType.REMOVE_REPLICA) return answer;
+        const first = nextRemove;
+        nextRemove = false;
+        const delivery = first && !retryable ? buildDeliveryEnvelope({acknowledged: true}, null) :
+          answer;
+        observed.push({
+          acknowledged: isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)),
+          reply: deliveryAnswerOf(delivery),
+        });
+        return delivery;
+      };
+      world.clockOffsetMs += 61_000;
+      await entry(world);
+      t.same(observed, [{acknowledged: true, reply: refusalAnswer}],
+        'the renewed owner turn receives the selected application answer');
+      t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+        'the reply does not settle the durable removal intent');
+      t.equal(owner.dispatchRetryTimerByOperationId.has(operationId), retryable,
+        'only source-declared retryability arms the dispatch retry timer');
+      world.removeEffectAnswer = null;
+      await fireFallbackTimers(world);
+      await settleTurns();
+      t.equal(world.removeEffects.length, 3,
+        'the existing owner timer sends again without another backstop interval');
+      t.match(observed.at(-1), {
+        acknowledged: true,
+        reply: {status: ReplicaOperationResponseStatus.INITIATED, operationId, replicaId},
+      }, 'the real source handler accepts that operation and replica');
+      t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+        'source acceptance alone does not prove committed membership removal');
+    } finally {
+      await disposeWorld(world);
+    }
+  });
+}
 
 test('S11: a retained REMOVE reinserted after SAFE blocks before CDC sees it', async (t) => {
   const world = await openReplaceWorld();
