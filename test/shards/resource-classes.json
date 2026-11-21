@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2687,
+    "ordinary": 2688,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2713,
-  "digest": "fnv1a32-3bd606c1",
+  "censusSize": 2714,
+  "digest": "fnv1a32-cafdada9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1676,6 +1676,7 @@
     "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "ordinary",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "ordinary",
     "test/query/schema-provisioning-job-owner.test.js": "ordinary",
+    "test/query/schema-provisioning-native-admission.test.js": "ordinary",
     "test/query/schema-provisioning-transient-collision.test.js": "ordinary",
     "test/query/select-no-from.test.js": "ordinary",
     "test/query/service-lifecycle-call-invocation.test.js": "ordinary",

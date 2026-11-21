@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 289,
-    "query-sql": 205,
+    "query-sql": 206,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2713,
-  "digest": "fnv1a32-1220ab5d",
+  "censusSize": 2714,
+  "digest": "fnv1a32-2108589c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c826cff7",
+  "observationDigest": "fnv1a32-8c3eab50",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1696,6 +1696,7 @@
     "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "query-sql",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "query-sql",
     "test/query/schema-provisioning-job-owner.test.js": "query-sql",
+    "test/query/schema-provisioning-native-admission.test.js": "query-sql",
     "test/query/schema-provisioning-transient-collision.test.js": "query-sql",
     "test/query/select-no-from.test.js": "query-sql",
     "test/query/service-lifecycle-call-invocation.test.js": "query-sql",
@@ -15580,9 +15581,39 @@
         "src/control-plane/timeout-budget.js",
         "src/query/schema-provisioning-intent.js",
         "src/query/schema-provisioning-job-constants.js",
-        "src/query/table-creation-service.js",
-        "src/runtime/pgwire-protocol-constants.js",
-        "src/runtime/pgwire-protocol-handler.js"
+        "src/runtime/pgwire-protocol-constants.js"
+      ]
+    },
+    "test/query/schema-provisioning-native-admission.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "test/partition/placement-admission-fixture.js",
+        "test/partition/placement-create-with-ledger-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/schema-provisioning-transient-collision.test.js": {
