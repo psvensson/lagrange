@@ -1218,6 +1218,8 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
       ],
     };
+    // The owner retains the OPEN birth; active-gate visibility still requires PUBLISHED.
+    let durablePublicationRow = latestPublicationRow;
     const pending = new Map();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
@@ -1250,10 +1252,11 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
           return {rows: [latestPublicationRow]};
         },
         async getPublication(publicationId) {
-          return latestPublicationRow.publication_id === publicationId ?
-            latestPublicationRow : null;
+          return durablePublicationRow.publication_id === publicationId ?
+            durablePublicationRow : null;
         },
         async upsertPublication(row) {
+          durablePublicationRow = row;
           return row;
         },
       },
