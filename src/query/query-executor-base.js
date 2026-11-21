@@ -64,6 +64,7 @@ function resolveSelectTableName(ast) {
 class QueryExecutorBase {
   constructor(options = {}) {
     this.messageRouter = options.messageRouter || null;
+    this.partitionReadShutdownController = new AbortController();
     this.systemCache = options.systemCache || null;
     this.resolveTableInfo = createExecutorTableInfoResolver(this, options);
     this.routingMetadataOverlay = options.routingMetadataOverlay || null;

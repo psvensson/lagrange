@@ -123,6 +123,10 @@ function createPartitionAttemptBudget({
       localDeadlineMs === null ?
         parentDeadlineMs :
         Math.min(parentDeadlineMs, localDeadlineMs);
+  const retainsRecoveryReadResponse = forRead && !executionOptions.transactionIdentity &&
+    executionDeadlineMs !== null &&
+    routingReadinessDimension ===
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
   const spentReporter = createPartitionSpentReporter({
     executor,
     partitionId,
@@ -258,6 +262,11 @@ function createPartitionAttemptBudget({
           RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS,
       );
     }
+    // The routing loop owns the connected-read probe. The transport
+    // retains an already issued response throughout the caller grant.
+    if (retainsRecoveryReadResponse && shouldBoundRecoveryCandidateAckTimeout(candidate)) {
+      return remainingBudgetMs;
+    }
     const remainingReadCandidates = countRemainingReadCandidates(
       candidateQueue,
       currentCandidateIndex,
@@ -291,6 +300,14 @@ function createPartitionAttemptBudget({
       READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS,
       Math.floor(remainingBudgetMs / remainingReadCandidates),
     ));
+  };
+  const recoveryReadProbeMs = (deliveryOptions, candidate) => {
+    if (!retainsRecoveryReadResponse || !shouldBoundRecoveryCandidateAckTimeout(candidate)) {
+      return null;
+    }
+    const interval = executor.messageRouter?.reconnectIntervalMs;
+    return Number.isFinite(interval) && interval > 0 && interval < deliveryOptions.timeoutMs ?
+      Math.floor(interval) : null;
   };
   const buildRouterDeliveryOptions = (
     candidateQueue = null,
@@ -326,6 +343,9 @@ function createPartitionAttemptBudget({
           PARTITION_EXECUTION_DEADLINE_WAIT.beforeDelivery,
         );
         return null;
+      }
+      if (retainsRecoveryReadResponse) {
+        routerOptions.remainingMs = getRemainingExecutionBudgetMs;
       }
       routerOptions.timeoutMs = resolveRouterDeliveryTimeoutMs(
         remainingBudgetMs,
@@ -384,6 +404,8 @@ function createPartitionAttemptBudget({
     );
   };
   return Object.freeze({
+    retainsRecoveryReadResponse,
+    recoveryReadProbeMs,
     buildRouterDeliveryOptions,
     getRemainingExecutionBudgetMs,
     waitForRetryBudget,
