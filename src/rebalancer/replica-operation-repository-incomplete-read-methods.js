@@ -2,7 +2,7 @@ import {GROWTH_PROMOTION_COHORT_UNRESOLVED} from './growth-promotion-subject.js'
 import {memoizedParseStepsHistoryString} from './steps-history-parse-memo.js';
 import {isGenesisFoundingCreateOperation, ReplicaOperationField} from
   './replica-operation-constants.js';
-import {getOperationMetadataObject, OPERATION_METADATA_KEY} from './replica-status.js';
+import {readOriginalCreateBootstrapMembership} from './replica-status.js';
 import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
@@ -32,7 +32,7 @@ function readOperationOccupancy(row) {
   const founder = isGenesisFoundingCreateOperation({
     type: row.type,
     [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
-      getOperationMetadataObject(stepsHistory, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP),
+      readOriginalCreateBootstrapMembership(stepsHistory),
   });
   return Object.freeze({
     operationId: row.operation_id,
