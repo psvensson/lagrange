@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2688,
+    "ordinary": 2689,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2714,
-  "digest": "fnv1a32-cafdada9",
+  "censusSize": 2715,
+  "digest": "fnv1a32-325edd9d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1902,6 +1902,7 @@
     "test/raft/sqlite-schema-migration.test.js": "ordinary",
     "test/random/dt5-jitter-seam.test.js": "ordinary",
     "test/random/random-source.test.js": "ordinary",
+    "test/rebalancer/active-handoff-operation-visibility.integration.test.js": "ordinary",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "ordinary",
     "test/rebalancer/admission-real-size-estimates.test.js": "ordinary",
     "test/rebalancer/application-write-formation-authority.test.js": "ordinary",

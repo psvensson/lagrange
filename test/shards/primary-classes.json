@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2356,
-    "integration": 125,
+    "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2714,
-  "digest": "fnv1a32-231c7374",
+  "censusSize": 2715,
+  "digest": "fnv1a32-9da050f4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1903,6 +1903,7 @@
     "test/raft/sqlite-schema-migration.test.js": "unit",
     "test/random/dt5-jitter-seam.test.js": "unit",
     "test/random/random-source.test.js": "unit",
+    "test/rebalancer/active-handoff-operation-visibility.integration.test.js": "integration",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "unit",
     "test/rebalancer/admission-real-size-estimates.test.js": "unit",
     "test/rebalancer/application-write-formation-authority.test.js": "unit",

@@ -1,3 +1,4 @@
+import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   './operation-workflow-recovery-reconcile-shared.js';
 import {readStateField} from '../utils/state-field-read.js';
@@ -312,13 +313,30 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     }
     const expectedTimeoutHandle =
       this.observedProgressRetryTimerByOperationId.get(operationId)?.timeoutHandle;
-    const visibilityObservation =
-      await this.repository.getOperationByIdVisibilityObservation(
-        operationId,
-        {
-          allowPriorityRecoveryDeferredVisibility: true,
-        },
-      );
+    const observation = await this.repository.getOperationByIdVisibilityObservation(operationId, {
+      allowPriorityRecoveryDeferredVisibility: true,
+    });
+    return this.reconcileObservedOperation(operationId, observation, expectedTimeoutHandle);
+  }
+
+  async runActiveReplicaHandoffRetry(operationId, retry) {
+    const {entry} = retry;
+    if (!entry.operationSnapshot || !this.isCurrentActiveReplicaHandoffRetry(retry)) return false;
+    // The timed turn has one bound operation. The exact reentry reader proves
+    // its current identity, including any existing physical CREATE admission.
+    const observation = await observeRemoteReentryAuthority(
+      this.repository, entry.operationSnapshot);
+    if (!this.isCurrentActiveReplicaHandoffRetry(retry)) return false;
+    if (observation.deferredOutcome) {
+      if (!this.observedProgressRetryTimerByOperationId.has(operationId)) {
+        this.rearmObservedProgressRetry(operationId, entry);
+      }
+      return false;
+    }
+    return this.reconcileObservedOperation(operationId, observation, entry.timeoutHandle);
+  }
+
+  async reconcileObservedOperation(operationId, visibilityObservation, expectedTimeoutHandle) {
     const operation = visibilityObservation?.operation || null;
     const routeEvidence =
       this.buildObservedProgressOperationRouteEvidence(operation);

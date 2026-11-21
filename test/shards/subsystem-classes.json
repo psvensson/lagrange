@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 289,
+    "placement-rebalance": 290,
     "query-sql": 206,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2714,
-  "digest": "fnv1a32-2108589c",
+  "censusSize": 2715,
+  "digest": "fnv1a32-5299f43b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3ebf8183",
+  "observationDigest": "fnv1a32-cfeb1a87",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1922,6 +1922,7 @@
     "test/raft/sqlite-schema-migration.test.js": "storage-raft",
     "test/random/dt5-jitter-seam.test.js": "runtime-primitives",
     "test/random/random-source.test.js": "runtime-primitives",
+    "test/rebalancer/active-handoff-operation-visibility.integration.test.js": "placement-rebalance",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/admission-real-size-estimates.test.js": "placement-rebalance",
     "test/rebalancer/application-write-formation-authority.test.js": "placement-rebalance",
@@ -18139,6 +18140,14 @@
     "test/raft/snapshot-recorded-gaps.test.js": {
       "files": [
         "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
+    "test/rebalancer/active-handoff-operation-visibility.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/rebalancer/add-workflow-step-progression.property.test.js": {
