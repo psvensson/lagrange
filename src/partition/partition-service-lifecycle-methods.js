@@ -107,6 +107,7 @@ class PartitionServiceLifecycleMethods {
     ) {
       this.rebalancerLeadershipSink.setLeader(false);
     }
+    this.rebalancerLeadershipSinkHeld = false;
     if (this.rebalancer) {
       if (
         typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION

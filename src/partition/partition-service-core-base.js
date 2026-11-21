@@ -238,6 +238,9 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.systemTableCacheChangeListener =
       this.handleSystemTableCacheChange.bind(this);
     this.rebalancer = null;
+    // The leadership this partition last drove to its leadership sink
+    // (resolveRebalancerLeadership retains it across a readiness dip).
+    this.rebalancerLeadershipSinkHeld = false;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.ownsRebalanceCoordinator = false;
     this.systemTableCache = options.systemTableCache || null;
