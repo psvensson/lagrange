@@ -167,7 +167,10 @@ function holdGroupDispatch(group) {
     return settled;
   };
   return {entered: entered.promise, release: release.resolve,
-    restore: () => { group.deliverDirectOnlyMessage = dispatch; }};
+    restore: () => {
+      group.deliverDirectOnlyMessage = dispatch;
+    },
+  };
 }
 
 function holdTargetAck(router, expectedId) {
@@ -181,7 +184,10 @@ function holdTargetAck(router, expectedId) {
     raw(ws, frame);
   };
   return {held: () => release !== null, release: () => release?.(),
-    restore: () => { router.sendRaw = raw; }};
+    restore: () => {
+      router.sendRaw = raw;
+    },
+  };
 }
 
 function holdWriteCallback(ws, expectedId) {
@@ -190,13 +196,18 @@ function holdWriteCallback(ws, expectedId) {
   ws.send = (bytes, options, callback) => {
     const frame = JSON.parse(String(bytes));
     if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE && frame.messageId === expectedId) {
-      send(bytes, options, (error) => { release = () => callback(error); });
+      send(bytes, options, (error) => {
+        release = () => callback(error);
+      });
       return;
     }
     send(bytes, options, callback);
   };
   return {held: () => release !== null, release: () => release?.(),
-    restore: () => { ws.send = send; }};
+    restore: () => {
+      ws.send = send;
+    },
+  };
 }
 
 test('QUERY/MG preserves the original grant through local dispatch and wire ACK custody',

@@ -49,6 +49,7 @@ function createRecoveryReadDelivery(executor, options) {
     close.abort(new Error(reason));
   });
   const pending = new Map();
+  const issued = new Map();
 
   function cancelSupersededRoute(address, record) {
     pending.delete(address);
@@ -66,6 +67,12 @@ function createRecoveryReadDelivery(executor, options) {
     }
   }
 
+  function canSelect(candidate, mayRetry) {
+    if (mayRetry || pending.has(candidate.address)) return true;
+    const previous = issued.get(candidate.address);
+    return !previous || !currentIn(previous, [candidate]);
+  }
+
   function start(ticket, routerOptions) {
     const {address, serviceInfo, request} = ticket;
     const existing = pending.get(address);
@@ -79,13 +86,14 @@ function createRecoveryReadDelivery(executor, options) {
       address, request, {...routerOptions, signal: deliverySignal},
     ).then((delivery) => ({ticket: boundTicket, delivery}),
       (error) => ({ticket: boundTicket, error}));
-    pending.set(address, {controller, ticket: boundTicket, completion});
+    pending.set(address, {controller, ticket: boundTicket, completion, probed: false});
+    issued.set(address, {address, serviceInfo, peer: boundTicket.peer});
     return completion;
   }
 
   async function select(ticket, routerOptions, candidateQueue, probeMs) {
     signal.throwIfAborted();
-    if (ticket) start(ticket, routerOptions);
+    start(ticket, routerOptions);
     let timer;
     const events = candidateQueue.flatMap(({address}) => {
       const record = pending.get(address);
@@ -99,7 +107,11 @@ function createRecoveryReadDelivery(executor, options) {
     try {
       const selected = await Promise.race(events);
       signal.throwIfAborted();
-      if (selected !== ROUTING_PROBE_ELAPSED) pending.delete(selected.ticket.address);
+      if (selected === ROUTING_PROBE_ELAPSED) {
+        pending.get(ticket.address).probed = true;
+      } else {
+        pending.delete(selected.ticket.address);
+      }
       return selected;
     } finally {
       if (timer !== undefined) clock.clearTimeout(timer);
@@ -110,12 +122,16 @@ function createRecoveryReadDelivery(executor, options) {
     select,
     reconcile,
     currentIn,
-    hasEligible: (candidates) => candidates.some(({address}) => pending.has(address)),
+    hasPending: () => pending.size > 0,
+    canSelect,
+    wasProbed: (candidate) => pending.get(candidate.address)?.probed === true,
+    hasUnstarted: (candidates, mayRetry) => candidates.some((candidate) =>
+      !pending.has(candidate.address) && canSelect(candidate, mayRetry)),
     throwIfAborted: () => signal.throwIfAborted(),
-    async redirect(address, request, routerOptions) {
+    async redirect(address, request, routerOptions, submit) {
       const {nodeId, serviceId: replicaId} = AddressManager.getInstance().parse(address);
-      const result = await start({address, request, serviceInfo: {address, nodeId, replicaId}},
-        routerOptions);
+      const result = await start(
+        {address, request, serviceInfo: {address, nodeId, replicaId}, submit}, routerOptions);
       signal.throwIfAborted();
       pending.delete(address);
       if (result.error) throw result.error;
@@ -131,6 +147,7 @@ function createRecoveryReadDelivery(executor, options) {
       close.abort(new Error(READ_DELIVERY_CLOSED));
       unsubscribe?.();
       pending.clear();
+      issued.clear();
     },
   };
 }
