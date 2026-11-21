@@ -1,3 +1,5 @@
+import {promotedVoterReplicaIdsByPartition} from
+  './replica-placement-owner-retained-repair-statement.js';
 // Public entry: createReplicaPlacementOwner, attachReplicaPlacementOwner, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
 // Required collaborators: nodeId, ledgerPartitionService (replica_operations-p1), nodeAuthority, systemTableCache, now, logger; optional workflowOwner, storageAccountingService, timer functions.
 // Durable authority / commit point: committed replica_operations rows via requestPlacementAdmission and requestPlacementHoldRelease on ledgerPartitionService.
@@ -5,7 +7,7 @@
 // Recovery / wake entry: setLeader(true) and PLACEMENT_TRIGGER notifications rebuild pass state from readPlacementCensus and committed node/table authorities.
 // Representative production tests: test/rebalancer/replica-placement-owner-core.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
 import {resolveDesiredReplicationFactor} from '../bootstrap/replication-target-authority.js';
-import {COLUMN, TABLES, WORKFLOW_STEP} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
@@ -224,20 +226,6 @@ function moveIntentKeyOf(partitionId, move) {
     `${move.sourceReplicaId ?? ''}:${move.replicaId ?? ''}:${move.copySourceNodeId ?? ''}`;
 }
 
-function promotedVoterReplicaIdsByPartition(census) {
-  const byPartition = new Map();
-  for (const row of census) {
-    if (row.entityType !== UNIFIED_SERVICE_TYPE.PARTITION ||
-        row.type !== OperationType.GROWTH_PROMOTE || row.incomplete ||
-        row.step !== WORKFLOW_STEP.ACTIVE || row.promoteReplicaIds === null) {
-      continue;
-    }
-    const promoted = byPartition.get(row.entityId) ?? new Set();
-    for (const replicaId of row.promoteReplicaIds) promoted.add(replicaId);
-    byPartition.set(row.entityId, promoted);
-  }
-  return byPartition;
-}
 
 class ReplicaPlacementOwner {
   constructor(options = {}) {
@@ -301,6 +289,8 @@ class ReplicaPlacementOwner {
       return;
     }
     this.attachListeners();
+    this.workflowOwner?.repository?.wakeRetainedPlacementRepairs?.((attempt) =>
+      attempt.clearingTrigger === PLACEMENT_TRIGGER.LEADERSHIP_START);
     this.notify(PLACEMENT_TRIGGER.LEADERSHIP_START);
   }
 

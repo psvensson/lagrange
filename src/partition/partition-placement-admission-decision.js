@@ -34,6 +34,8 @@ import {PLACEMENT_DISPATCH_HOLD, PLACEMENT_MOVE_TYPE, PLACEMENT_OUTCOME,
 import {placementOperationIdOf, placementReplicaIdOf} from
   './partition-placement-admission-identity.js';
 
+const ENTITY_ADMISSION_STATE = Object.freeze({CLEAR: 'clear', REFUSED: 'refused'});
+const ENTITY_CLEAR = Object.freeze({state: ENTITY_ADMISSION_STATE.CLEAR});
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL_PARAMETER = '?';
 const SQL_LIST_SEPARATOR = ', ';
@@ -97,6 +99,11 @@ function idsOf(rows) {
 // A copy occupies its copy source and its target while its durable step is
 // in the copy phase. A founder ADD is not a copy (FOUND is exempt) and a
 // REMOVE copies nothing.
+function operationHoldsPlacementCopyCapacity(operation) {
+  return isOccupyingCopy(censusRowOf(buildCanonicalReplicaOperationRow(
+    operation, operation.ownerLeaseExpiresAt ?? null)));
+}
+
 function isOccupyingCopy(row) {
   return row.incomplete && COPY_TYPES.has(row.type) && !row.founder &&
     COPY_PHASE_WORKFLOW_STEPS.has(row.step) &&
@@ -125,23 +132,37 @@ function foundingRefusal(statement, census) {
 
 // Step 7 (PLACEMENT copies only): occupancy over every committed copy-phase
 // row; a row without copy_source_node_id counts against every source.
-function capacityRefusal(statement, census) {
+function readPlacementCopyOccupancy(statement, census) {
   const move = statement.moves[0];
-  if (statement.transitionKind !== KIND.PLACEMENT || !COPY_TYPES.has(move.type)) {
-    return null;
-  }
   const copies = census.filter(isOccupyingCopy);
   const sourceOccupancy = copies.filter((row) => row.copySourceNodeId === null ||
     row.copySourceNodeId === move.copySourceNodeId).length;
   const targetOccupancy = copies.filter((row) =>
     row.targetNodeId === move.targetNodeId).length;
-  const occupancy = Object.freeze({copySourceNodeId: move.copySourceNodeId,
+  return Object.freeze({copySourceNodeId: move.copySourceNodeId,
     sourceOccupancy, sourceLimit: statement.kSrcForClass,
     targetNodeId: move.targetNodeId, targetOccupancy, targetLimit: statement.kTgt});
-  if (sourceOccupancy >= statement.kSrcForClass) {
+}
+
+// A CDC row for a live or just-finished copy can clear a retained capacity
+// refusal. Scope belongs to the same canonical founder/copy classifier as apply.
+function copyCapacityObservationAffects(statement, row) {
+  const peer = censusRowOf(row);
+  const move = statement.moves[0];
+  return COPY_TYPES.has(peer.type) && !peer.founder &&
+    peer.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
+    (peer.copySourceNodeId === null || peer.copySourceNodeId === move.copySourceNodeId ||
+      peer.targetNodeId === move.targetNodeId);
+}
+
+function capacityRefusal(statement, census) {
+  const move = statement.moves[0];
+  if (statement.transitionKind !== KIND.PLACEMENT || !COPY_TYPES.has(move.type)) return null;
+  const occupancy = readPlacementCopyOccupancy(statement, census);
+  if (occupancy.sourceOccupancy >= occupancy.sourceLimit) {
     return refused(REFUSAL.SOURCE_AT_CAPACITY, {occupancy});
   }
-  return targetOccupancy >= statement.kTgt ?
+  return occupancy.targetOccupancy >= occupancy.targetLimit ?
     refused(REFUSAL.TARGET_AT_CAPACITY, {occupancy}) : null;
 }
 
@@ -167,7 +188,11 @@ function ledgerPartitionRefusal(command) {
       ledgerPartitionId: LEDGER_PARTITION_ID});
 }
 
-function admissionRefusal(db, statement, census) {
+function entityRefused(result) {
+  return {state: ENTITY_ADMISSION_STATE.REFUSED, result};
+}
+
+function entityAdmissionDecision(statement, census) {
   const entityRows = census.filter((row) => row.incomplete &&
     row.entityType === statement.entityType && row.entityId === statement.entityId);
   const ledgerRows = census.filter((row) => row.incomplete &&
@@ -175,16 +200,31 @@ function admissionRefusal(db, statement, census) {
     row.entityId === LEDGER_PARTITION_ID);
   if (statement.transitionKind === KIND.FOUND) {
     const founded = foundingRefusal(statement, census);
-    if (founded !== null) return founded;
+    if (founded !== null) return entityRefused(founded);
+  }
+  if (statement.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
+      statement.entityId === LEDGER_PARTITION_ID &&
+      statement.dispatchHold !== PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE) {
+    const active = census.filter((row) => row.incomplete);
+    if (active.length > 0) {
+      return entityRefused(refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
+        {operationIds: idsOf(active)}));
+    }
   }
   if (entityRows.length > 0) {
-    return refused(REFUSAL.PARTITION_BUSY, {operationIds: idsOf(entityRows)});
+    return entityRefused(refused(REFUSAL.PARTITION_BUSY, {operationIds: idsOf(entityRows)}));
   }
   if (ledgerRows.length > 0) {
-    return refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
-      {operationIds: idsOf(ledgerRows)});
+    return entityRefused(refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
+      {operationIds: idsOf(ledgerRows)}));
   }
-  return capacityRefusal(statement, census) ?? claimRefusal(db, statement);
+  return ENTITY_CLEAR;
+}
+
+function admissionRefusal(db, statement, census) {
+  const entity = entityAdmissionDecision(statement, census);
+  return entity.state === ENTITY_ADMISSION_STATE.REFUSED ? entity.result :
+    capacityRefusal(statement, census) ?? claimRefusal(db, statement);
 }
 
 function admissionMetadataOf(command, statement, move) {
@@ -316,8 +356,14 @@ function decideHoldRelease(db, {command, release}) {
 
 export {
   LEDGER_PARTITION_ID,
+  admissionRefusal,
+  entityAdmissionDecision,
+  ENTITY_ADMISSION_STATE,
   decideHoldRelease,
   decidePlacementAdmission,
   isOccupyingCopy,
   readPlacementCensus,
+  readPlacementCopyOccupancy,
+  operationHoldsPlacementCopyCapacity,
+  copyCapacityObservationAffects,
 };

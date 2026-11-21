@@ -1,13 +1,15 @@
-// The pinned committed form of the placement owner's two commands (quest
+// The pinned committed form of the placement owner's commands (quest
 // replica-placement-admission-owner, design section 2.5): PLACEMENT_ADMIT
-// carries the canonical admission statement, PLACEMENT_RELEASE_HOLD the one
+// carries the canonical admission statement; PLACEMENT_REPAIR carries the
+// retained operation and named current copy policy; PLACEMENT_RELEASE_HOLD the one
 // held operation it releases. The entryId names one proposal attempt and is
 // the proposer's (reused only to re-propose that attempt after an unknown
 // outcome). Every replica re-validates the exact bytes before it applies.
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {PLACEMENT_STATEMENT_VALIDITY as VALIDITY, canonicalPlacementStatement} from
   '../rebalancer/replica-placement-owner-admission-statement.js';
-import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
+import {canonicalRetainedPlacementRepair} from './partition-placement-retained-repair.js';
+import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
   './partition-placement-admission-constants.js';
 
 const FIELDS = Object.freeze(['type', 'entryId', 'partitionId', 'body',
@@ -40,6 +42,7 @@ function canonicalHoldRelease(input) {
  *   or {validity: INVALID}.
  */
 function canonicalPlacementBody(type, body) {
+  if (type === PLACEMENT_REPAIR_TYPE) return canonicalRetainedPlacementRepair(body);
   if (type === PLACEMENT_ADMIT_TYPE) return canonicalPlacementStatement(body);
   return type === PLACEMENT_RELEASE_HOLD_TYPE ? canonicalHoldRelease(body) :
     INVALID_BODY;

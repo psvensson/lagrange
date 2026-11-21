@@ -36,7 +36,8 @@ import {LEDGER_PARTITION_ID, decideHoldRelease, decidePlacementAdmission} from
   './partition-placement-admission-decision.js';
 import {placementOperationIdOf, placementReplicaIdOf} from
   './partition-placement-admission-identity.js';
-import {PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADMIT_TYPE,
+import {decideRetainedPlacementRepair} from './partition-placement-retained-repair.js';
+import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADMIT_TYPE,
   PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_RESULT_FIELD} from
   './partition-placement-admission-constants.js';
 
@@ -207,9 +208,10 @@ function retainedResult(recorded) {
   return deepFreezeResult(result);
 }
 
-function recordedAnswer(service, recorded) {
+function recordedAnswer(service, recorded, command) {
   return placementAnswer(service, retainedResult(recorded), {committed: true,
-    logIndex: recorded.logIndex, term: recorded.term});
+    logIndex: recorded.logIndex, term: recorded.term,
+    ...(command.type === PLACEMENT_REPAIR_TYPE ? {entryId: command.entryId} : {})});
 }
 
 // The leader-local proposal of a built command: leadership, the cutover
@@ -230,7 +232,7 @@ function proposePlacementCommand(service, command) {
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
     if (!isSameCommandReplay(service, recorded, command)) return refusal(service, ERROR.BYTES);
-    const answer = recordedAnswer(service, recorded);
+    const answer = recordedAnswer(service, recorded, command);
     return command.type === PLACEMENT_ADMIT_TYPE &&
       command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
       {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} :
@@ -284,6 +286,21 @@ async function requestPlacementCommand(service, type, payload) {
  *   its admission statement.
  * @return {Promise<Object>|Object} The typed answer.
  */
+function requestPlacementRepair(service, payload) {
+  const leadership = partitionWriteLeadershipRefusalOf(service);
+  if (leadership !== null) return leadership;
+  const command = buildPlacementCommand(service, {type: PLACEMENT_REPAIR_TYPE,
+    entryId: payload.entryId, body: payload.body});
+  if (command === null) return refusal(service, ERROR.BYTES);
+  const repository = service.rebalancerLeadershipSink?.workflowOwner?.repository;
+  if (!repository?.acceptRetainedPlacementRepairRequest) {
+    return refusal(service, ERROR.OWNER_UNAVAILABLE);
+  }
+  return repository.acceptRetainedPlacementRepairRequest(service,
+    {entryId: command.entryId, body: command.body},
+    (request) => requestPlacementCommand(service, PLACEMENT_REPAIR_TYPE, request));
+}
+
 function requestPlacementAdmission(service, payload) {
   return requestPlacementCommand(service, PLACEMENT_ADMIT_TYPE, payload);
 }
@@ -340,6 +357,10 @@ function decide(service, committed) {
       reason: PLACEMENT_REFUSAL.CDC_CAPACITY}), rows: [], operation: null};
   }
   const {command, index} = committed;
+  if (command.type === PLACEMENT_REPAIR_TYPE) {
+    return {...decideRetainedPlacementRepair(service.db, command.body),
+      operation: OPERATION.INSERT};
+  }
   if (command.type === PLACEMENT_ADMIT_TYPE) {
     return {...decidePlacementAdmission(service.db,
       {command, statement: command.body, index}), operation: OPERATION.INSERT};
@@ -366,7 +387,7 @@ function applyPlacementCommand(service, committed) {
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
     if (!isSameCommandReplay(service, recorded, command)) throw new Error(ERROR.BYTES);
-    const answer = recordedAnswer(service, recorded);
+    const answer = recordedAnswer(service, recorded, command);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }
@@ -385,7 +406,8 @@ function applyPlacementCommand(service, committed) {
       advancePartitionWriteGeneration(service.db);
     }
     afterCommit(() => service.resolveCommittedWrite(command.entryId,
-      placementAnswer(service, result, {committed: true, logIndex: index, term})));
+      placementAnswer(service, result, {committed: true, logIndex: index, term,
+        ...(command.type === PLACEMENT_REPAIR_TYPE ? {entryId: command.entryId} : {})})));
     afterCommit(() => service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED,
       {partitionId: service.partitionId, command}));
     return APPLY.APPLIED;
@@ -395,5 +417,5 @@ function applyPlacementCommand(service, committed) {
   }
 }
 
-export {applyPlacementCommand, requestPlacementAdmission,
+export {requestPlacementRepair, applyPlacementCommand, requestPlacementAdmission,
   requestPlacementHoldRelease, routePlacementAdmission};
