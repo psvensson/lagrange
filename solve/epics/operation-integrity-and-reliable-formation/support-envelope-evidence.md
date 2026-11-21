@@ -10,8 +10,11 @@ Prepared 20 November 2026 for programme item 07 under the existing open
 `quest-evidence-and-candidate-binding` owner. Investigation source:
 `6c0bdff11f24e32459178e9d2c0d9f563e7cd790`, rule-set revision 5. The source investigation led to a managed negative witness.
 The existing [evidence Quest log](../../quests/quest-evidence-and-candidate-binding/log.ndjson)
-records its independent review and original execution. The support-envelope,
-management and rolling-upgrade owners now own the bounded admission repair.
+records its independent review and original execution. The current WIP
+includes the bounded admission repair in the support-envelope, management
+and rolling-upgrade owners. The design below records the original assignment.
+Current results and the physical qualification still owed are recorded in the
+[core integration handoff](../operation-integrity-and-reliable-formation.md#core-integration-handoff-21-november-2026).
 
 Loaded sources: AGENTS, rules/router, Quest workflow, artifact custody owner,
 the investigation/navigation skills, current operation-integrity summary and
@@ -332,10 +335,11 @@ drills plus any advertised full-stop case, admits original results and establish
 the runtime attachment before advertising support. No policy limit is enlarged
 retrospectively to certify a failed run.
 
-The support-envelope owner must remove default success records, validate
-execution evidence independently of policy fields, and pass the same admission
-decision to management summaries and rolling-upgrade preflight. Reuse the
-measured negative cases and the passing policy control. The integration owner
-must verify that a genuine original can be admitted at its measured scope
-and that synthetic records cannot reach drain or restart. Qualification of
-the five physical drills remains with the pilot owner.
+The bounded implementation separates policy validation from execution
+admission. Management and rolling-upgrade preflight use that admission
+decision. On `42d9199f8` the two affected suites passed on adams-gamla,
+including the typed refusal for a fractional topology request. The next
+integration action is to preserve those controls on the composed source.
+The pilot owner still needs genuine physical drill originals for a qualified
+version pair and an end-to-end positive through the runtime attachment.
+[Support decision results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-topology-capture-nov21.tar.gz).
