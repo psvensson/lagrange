@@ -1,4 +1,5 @@
 import {resolveClientStatementRefusal} from './sql-statement-ingress.js';
+import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   SQLQueryEngineServiceLifecycleExecution,
@@ -320,6 +321,10 @@ class SQLQueryEngineStatementExecution extends
       };
     }
 
+    if (COUNTED_WRITE_TYPES.has(ast.type)) {
+      const systemTable = resolveSystemTableName(ast.table);
+      if (systemTable !== null) ast.table = systemTable;
+    }
     const parseEndMs = Date.now();
     cancellationToken?.throwIfCancelled?.();
 

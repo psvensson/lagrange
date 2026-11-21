@@ -1,6 +1,7 @@
 import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
 import {AST_TYPE, SQLParser} from '../query/sql-parser.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
+import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
@@ -32,6 +33,7 @@ import {
 import {
   CONTROL_PLANE_WRITE_ROUTE,
   controlPlaneWriteRoute,
+  hasControlPlaneWriteName,
   isNamedControlPlaneWrite,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
@@ -61,7 +63,7 @@ function parseSqlWriteDescriptor(sql, dialect) {
   if (typeof ast.table !== 'string' || ast.table.length === 0) {
     return {failure: sqlWriteSubjectUnavailable()};
   }
-  const tableName = normalizeSystemTableName(ast.table);
+  const tableName = resolveSystemTableName(ast.table);
   return {
     tableName, writeTarget: ast.table, writeDialect: dialect,
     operationKind: CONTROL_PLANE_SQL_OPERATION.WRITE, isSystemTable: Boolean(tableName),
@@ -73,7 +75,7 @@ function inspectSqlWrite(sql, options, statementKind) {
     options.controlPlaneOperationKind || options.operationKind);
   const candidate = statementKind === CONTROL_PLANE_SQL_OPERATION.WRITE ||
     hintedKind === CONTROL_PLANE_SQL_OPERATION.WRITE;
-  const carriesWriteIdentity = isNamedControlPlaneWrite(options) ||
+  const carriesWriteIdentity = hasControlPlaneWriteName(options) ||
     typeof options.idempotencyKey === 'string';
   if (!candidate &&
       (statementKind !== CONTROL_PLANE_SQL_OPERATION.UNKNOWN || !carriesWriteIdentity)) {
@@ -412,6 +414,9 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   async executeQuery(sql, params = [], options = {}) {
     const descriptor = this.resolveSystemTableQueryDescriptor(sql, options);
     if (descriptor.failure) return descriptor.failure;
+    if (hasControlPlaneWriteName(options) && !descriptor.writeTarget) {
+      return sqlWriteSubjectUnavailable();
+    }
     const pressureDecision = await this.admitExecuteQueryPressure(
       descriptor,
       options,

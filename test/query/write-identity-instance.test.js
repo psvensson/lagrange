@@ -22,6 +22,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {TABLES} from '../../src/constants/index.js';
+import {CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE} from
+  '../../src/control-plane/control-plane-write-identity.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
 import {
@@ -157,7 +159,7 @@ test('a quoted named SQL write retains its entry until its own participant answe
         const insert = (table, row) => gateway.insertSystemTableRow(
           table, row, JOIN_WRITE_OPTIONS);
         assert.equal((await insert(TABLES.NODES, node)).success, true);
-        const sql = 'UPDATE "nodes" SET node_address = ? WHERE node_id = ?';
+        const sql = 'UPDATE "global.nodes" SET node_address = ? WHERE node_id = ?';
         const params = ['ws://quoted:2', JOINER_ID];
         const options = {writeIdentity: 'quoted-nodes-update'};
         const execute = engine.executeQuery.bind(engine);
@@ -226,6 +228,10 @@ test('exact-case user SQL cannot spend the named system write path',
 
         const refusal = await gateway.executeQuery(userSql, [2, entryId], options);
         assert.equal(refusal.success, false, 'the system name cannot authorize a user effect');
+        assert.equal(refusal.errorCode, CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE);
+        const conflicting = await gateway.executeQuery(userSql, [2, entryId],
+          {...options, idempotencyKey: 'provided-key-does-not-change-the-domain'});
+        assert.equal(conflicting.errorCode, CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE);
         assert.equal(deliveries.length, mark, 'no participant saw the named user statement');
         assert.deepEqual(selectRows(user.dbPath, 'SELECT n FROM "Logs"'), [{n: originalUserValue}]);
 
