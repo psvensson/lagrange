@@ -642,9 +642,6 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     if (isPlacementBootstrapAwaitingAuthority(operation)) {
       return !isPlacementBootstrapBeforeDeadline(operation, now);
     }
-    return this.isRegularOperationDrainStepStale(operation, now);
-  }
-  isRegularOperationDrainStepStale(operation, now) {
     const ageMs = this.resolvePriorityRecoveryOperationDrainStepAgeMs(
       operation,
       now,
@@ -691,7 +688,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     if (isReplaceExemptFromTimeBudget(operation)) {
       return isTargetFailureDetectorDead(this, operation);
     }
-    return this.isRegularOperationDrainStepStale(operation, now);
+    // Arbitration and retirement consume the same durable phase deadline.
+    return this.isPriorityRecoveryOperationDrainStepStale(operation, now);
   }
   // CL-044: a concurrent op stuck SYNCING/moving to a down or unreachable target
   // cannot make progress, yet it head-of-line-blocks peer recovery that targets
@@ -706,6 +704,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // A6: for a partition REPLACE in its owner phases a failed ping is not the
   // failure detector's verdict; only a FAILED target ends its hold.
   async isConcurrentOperationTargetUncontactable(operation) {
+    // The source owns bootstrap authority until CREATE can reach the target.
+    if (isPlacementBootstrapAwaitingAuthority(operation)) return false;
     if (isReplaceExemptFromTimeBudget(operation)) {
       return isTargetFailureDetectorDead(this, operation);
     }

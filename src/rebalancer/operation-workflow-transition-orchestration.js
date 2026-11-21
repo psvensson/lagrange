@@ -303,9 +303,10 @@ class OperationWorkflowTransitionOrchestration
     }
     const previousStep = operation.workflowStep;
     // CREATE attempts re-enter from their committed phase. Dispatch itself
-    // cannot send a partition ADD backwards once SENDING has progressed.
+    // cannot reopen the initial SENDING edge after ADD or REPLACE progress.
     if (step === WORKFLOW_STEP.SENDING && previousStep !== WORKFLOW_STEP.PENDING &&
-        operation.type === OperationType.ADD && operation.entityType === SERVICE_TYPE.PARTITION) {
+        operation.entityType === SERVICE_TYPE.PARTITION &&
+        (operation.type === OperationType.ADD || operation.type === OperationType.REPLACE)) {
       return OPERATION_RECONCILE_OUTCOME.REFUSED;
     }
     const transitionReason =

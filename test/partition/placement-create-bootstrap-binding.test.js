@@ -500,6 +500,25 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
           });
         await assert.rejects(() => admission(false), /only into an idle operation ledger/);
         await admission(true);
+        owner.messageRouter.pingNode = async () => false;
+        const peerRemoval = {
+          ...createOperationAt({
+            operationId: 'bootstrap-peer-remove',
+            type: OperationType.REMOVE,
+            partitionId: incumbent.partitionId,
+            sourceNodeId: NODE.A,
+            targetNodeId: NODE.B,
+            replicaId: VOTER_ID,
+          }, now),
+          entityType: incumbent.entityType,
+          entityId: incumbent.entityId,
+        };
+        const removeSafety = await owner.evaluateRemoveSafety(peerRemoval);
+        assert.match(String(removeSafety?.error), new RegExp(row.operation_id),
+          'an unreachable destination cannot discharge source-side bootstrap custody');
+        const deadline = row.created_at + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+        assert.equal(owner.isConcurrentOperationStalePastStepTimeout(incumbent, deadline), true,
+          'an unresolved incumbent is bounded by its original operation deadline');
 
         const completed = now + 1;
         assert.equal(commitLedgerStatement(leader, 'bootstrap:incumbent-terminal',

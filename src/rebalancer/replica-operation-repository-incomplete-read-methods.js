@@ -49,6 +49,7 @@ function readOperationOccupancy(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
+    createAdmissionState: row.create_admission_state,
     stepsHistory,
     founder,
   });
