@@ -52,6 +52,7 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
     membership_publication_epoch:
       nullableOperationValue(operation.membershipPublicationEpoch),
     source_replica_id: nullableOperationValue(operation.sourceReplicaId),
+    copy_source_node_id: nullableOperationValue(operation.copySourceNodeId),
     message_group_membership_lane_key:
       nullableOperationValue(operation.messageGroupMembershipLaneKey),
     message_group_membership_phase:
@@ -61,6 +62,10 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
         operation.messageGroupMembershipObligationState),
     message_group_membership_identity:
       nullableOperationValue(operation.messageGroupMembershipIdentity),
+    message_group_membership_owner_claim:
+      nullableOperationValue(operation.messageGroupMembershipOwnerClaim),
+    message_group_membership_permit:
+      nullableOperationValue(operation.messageGroupMembershipPermit),
     message_group_learner_stamp:
       nullableOperationValue(operation.messageGroupLearnerStamp),
     message_group_voter_stamp:
@@ -86,6 +91,10 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
     create_admission_owner_incarnation:
       nullableOperationValue(operation.createAdmissionOwnerIncarnation),
   };
+}
+
+function buildReplicaOperationWakeRow(operation) {
+  return buildCanonicalReplicaOperationRow(operation, operation.ownerLeaseExpiresAt ?? null);
 }
 
 function assignReplicaOperationRepositoryMutationRowMethods(
@@ -218,4 +227,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
   }
 }
 
-export {assignReplicaOperationRepositoryMutationRowMethods, buildCanonicalReplicaOperationRow};
+export {
+  assignReplicaOperationRepositoryMutationRowMethods,
+  buildCanonicalReplicaOperationRow,
+  buildReplicaOperationWakeRow,
+};

@@ -343,10 +343,13 @@ test('a malformed unresolved growth retains native occupancy without aborting he
   }));
 
 test('actual coordinator handoff ingress retains native subject and lease',
-  async () => withNativeGrowth(async ({coordinator, service, seen}, row) => {
+  async () => withNativeGrowth(async ({coordinator, service, seen, sends}, row, leader) => {
     const remote = createTestCoordinator({nodeId: NODE.B});
-    const subject = coordinator.repository.rowToOperation(row);
-    subject.ownerLeaseExpiresAt = row.updated_at + 20_000;
+    const leaseExpiresAt = row.updated_at + 20_000;
+    assert.equal(commitLedgerStatement(leader, 'growth:handoff-lease',
+      'UPDATE replica_operations SET lease_expires_at = ? WHERE operation_id = ?',
+      [leaseExpiresAt, row.operation_id]), null);
+    const subject = coordinator.repository.rowToOperation(ledgerRows(leader)[0]);
     let delivered;
     remote.workflowOwner.messageRouter = {
       async deliver(address, payload) {
@@ -363,6 +366,26 @@ test('actual coordinator handoff ingress retains native subject and lease',
       assert.equal(delivered.lease_expires_at, subject.ownerLeaseExpiresAt);
       assert.doesNotThrow(() => assertOperationUpdateSubject(
         service.buildOperationFromRow(seen[0].context.row), subject));
+      const missingSource = {...delivered};
+      delete missingSource.source_replica_id;
+      await assert.rejects(() => service.handleReplicaOperationDispatch({
+        [ControlPlaneField.OPERATION_ID]: row.operation_id,
+        [ControlPlaneField.OPERATION_ROW]: missingSource,
+      }), {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'});
+      assert.equal(seen.length, 1, 'refresh cannot legalize a malformed handoff command');
+      const foreign = 'foreign-learner';
+      const foreignHistory = JSON.parse(delivered.steps_history);
+      foreignHistory[0].promoteReplicaIds[1] = foreign;
+      await service.handleReplicaOperationDispatch({
+        [ControlPlaneField.OPERATION_ID]: row.operation_id,
+        [ControlPlaneField.OPERATION_ROW]: {...delivered,
+          source_replica_id: foreign, steps_history: JSON.stringify(foreignHistory)},
+      });
+      await assert.rejects(
+        () => service.reconcileOperationDispatch(row.operation_id, seen[1].context),
+        {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'},
+      );
+      assert.equal(sends.length, 0, 'refresh cannot substitute a different cohort for the command');
     } finally {
       await remote.shutdown();
     }

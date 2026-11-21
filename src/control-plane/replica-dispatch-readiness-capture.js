@@ -11,7 +11,7 @@ import {
   assertCanonicalRebalancerEntityIdentity,
 } from '../rebalancer/rebalancer-entity-identity.js';
 import {decodeReplicaOperationRow} from '../rebalancer/replica-operation-repository-row-methods.js';
-import {buildCanonicalReplicaOperationRow} from
+import {buildReplicaOperationWakeRow} from
   '../rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {
   isBootstrapTopologyDispatchDeferred as isBootstrapTopologyDispatchDeferredFn,
@@ -126,7 +126,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   buildOperationRowFromCoordinator(operation) {
-    return buildCanonicalReplicaOperationRow(operation, operation.leaseExpiresAt ?? null);
+    return buildReplicaOperationWakeRow(operation);
   }
 
   /**

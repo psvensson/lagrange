@@ -1,3 +1,4 @@
+import {GROWTH_PROMOTION_COHORT_UNRESOLVED} from './growth-promotion-subject.js';
 import {
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
@@ -89,7 +90,20 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    */
     mapAndSortIncompleteOperations(rows = []) {
       return rows
-        .map((row) => this.rowToOperation(row))
+        .filter((row) => isIncompleteOperationRowStep(row.type, row.workflow_step))
+        .flatMap((row) => {
+          try {
+            return [this.rowToOperation(row)];
+          } catch (error) {
+            if (error?.reasonCode !== GROWTH_PROMOTION_COHORT_UNRESOLVED) throw error;
+            // This list supplies executable operations; the native admission
+            // and ledger writer censuses still retain the unresolved row.
+            this.logger.warn(GROWTH_PROMOTION_COHORT_UNRESOLVED, {
+              operationId: row.operation_id, partitionId: row.partition_id,
+            });
+            return [];
+          }
+        })
         .filter((operation) =>
           this.shouldExposeIncompleteOperationToOwnerRead(operation))
         .sort((left, right) => {

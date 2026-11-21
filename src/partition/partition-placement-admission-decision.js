@@ -1,4 +1,5 @@
-import {buildGrowthPromotionCohort} from '../rebalancer/growth-promotion-subject.js';
+import {buildGrowthPromotionCohort, readGrowthPromotionCohortFromRow} from
+  '../rebalancer/growth-promotion-subject.js';
 // Public entry: decidePlacementAdmission, decideHoldRelease, readPlacementCensus, isOccupyingCopy, LEDGER_PARTITION_ID.
 // Required collaborators: PartitionService SQLite db connection inside apply transaction (replica_operations-p1).
 // Durable authority / commit point: replica_operations rows in SQLite read and mutated inside applyPlacementCommand's SQLite transaction.
@@ -11,7 +12,7 @@ import {classifySystemPartition, SYSTEM_PARTITION_CLASS} from
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
-import {OPERATION_METADATA_KEY, OperationType} from
+import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from
   '../rebalancer/replica-operation-progress.js';
 import {createOperationAt, getOperationMetadataObject, getOperationMetadataValue} from
   '../rebalancer/replica-status.js';
@@ -36,7 +37,7 @@ const SQL_LIST_SEPARATOR = ', ';
 const LEDGER_PARTITION_ID = `${TABLE}-p1`;
 const CENSUS_SQL = 'SELECT operation_id, type, entity_type, entity_id, ' +
   'replica_id, source_replica_id, ' +
-  'target_node_id, copy_source_node_id, target_claim_key, workflow_step, ' +
+  'target_node_id, copy_source_node_id, target_claim_key, workflow_step, status, completed_at, ' +
   `steps_history FROM ${TABLE} WHERE workflow_step IN ` +
   `(${INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS.map(() => SQL_PARAMETER)
     .join(SQL_LIST_SEPARATOR)}) ` +
@@ -52,20 +53,11 @@ function parsedHistory(row) {
     memoizedParseStepsHistoryString(row.steps_history) : [];
 }
 
-function censusRowPromoteReplicaIdsOf(row, history) {
-  if (row.type !== OperationType.GROWTH_PROMOTE) return null;
-  const fromHistory = getOperationMetadataValue(
-    history,
-    ReplicaOperationField.PROMOTE_REPLICA_IDS,
-  );
-  if (Array.isArray(fromHistory) && fromHistory.length > 0) {
-    return Object.freeze(fromHistory.filter(Boolean));
-  }
-  return Object.freeze([row.replica_id, row.source_replica_id].filter(Boolean));
-}
-
 function censusRowOf(row) {
   const history = parsedHistory(row);
+  const growth = row.type === OperationType.GROWTH_PROMOTE;
+  const unresolvedActiveGrowth = growth && row.workflow_step === WORKFLOW_STEP.ACTIVE &&
+    (row.status !== ReplicaStatus.ACTIVE || !Number.isFinite(row.completed_at));
   const founder = isGenesisFoundingCreateOperation({type: row.type,
     [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
       getOperationMetadataObject(history, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP)});
@@ -73,11 +65,12 @@ function censusRowOf(row) {
     entityType: row.entity_type, entityId: row.entity_id,
     targetNodeId: row.target_node_id, copySourceNodeId: row.copy_source_node_id,
     step: row.workflow_step, founder,
-    incomplete: isIncompleteOperationRowStep(row.type, row.workflow_step),
+    incomplete: unresolvedActiveGrowth || isIncompleteOperationRowStep(row.type, row.workflow_step),
     dispatchHold: getOperationMetadataValue(history, OPERATION_METADATA_KEY.DISPATCH_HOLD),
     admission: getOperationMetadataObject(history,
       OPERATION_METADATA_KEY.PLACEMENT_ADMISSION),
-    promoteReplicaIds: censusRowPromoteReplicaIdsOf(row, history)});
+    promoteReplicaIds: growth ?
+      Object.freeze(readGrowthPromotionCohortFromRow(row, history)) : null});
 }
 
 /**

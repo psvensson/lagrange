@@ -43,9 +43,18 @@ function readGrowthPromotionCohort(operation) {
   return cohort;
 }
 
+function readGrowthPromotionCohortFromRow(row, stepsHistory) {
+  return readGrowthPromotionCohort({
+    replicaId: row.replica_id,
+    sourceReplicaId: row.source_replica_id,
+    stepsHistory,
+  });
+}
+
 export {
   GROWTH_PROMOTION_COHORT_UNRESOLVED,
   buildGrowthPromotionCohort,
   matchGrowthPromotionCohort,
   readGrowthPromotionCohort,
+  readGrowthPromotionCohortFromRow,
 };

@@ -27,9 +27,10 @@ const PLACEMENT_FIELDS = [
   'targetNodeStorageIncarnation', 'promoteReplicaIds',
 ];
 
-function invalidOperationPersistenceOutcome(reason) {
-  const error = new Error(`Invalid replica operation persistence outcome: ${reason}`);
+function invalidOperationPersistenceOutcome(reason, cause) {
+  const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
   error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+  if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
   return error;
 }
 

@@ -3,7 +3,7 @@ import {
   invalidOperationPersistenceOutcome,
 } from './replica-operation-update-outcome.js';
 import {
-  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohort,
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohortFromRow,
 } from './growth-promotion-subject.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
@@ -94,6 +94,9 @@ function decodeReplicaOperationRow(row, onHistoryError) {
     stepsHistory = decodePersistedOperationHistory(row.steps_history);
   } catch (error) {
     onHistoryError?.(error);
+    if (row.type === OperationType.GROWTH_PROMOTE) {
+      throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED, error);
+    }
     throw error;
   }
   const {entityType, entityId} =
@@ -194,8 +197,8 @@ function decodeReplicaOperationRow(row, onHistoryError) {
     operation.status,
   );
   if (operation.type === OperationType.GROWTH_PROMOTE) {
-    const cohort = readGrowthPromotionCohort(operation);
-    if (row.source_replica_id === undefined || cohort === null) {
+    const cohort = readGrowthPromotionCohortFromRow(row, stepsHistory);
+    if (cohort === null) {
       throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED);
     }
     operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] = cohort;

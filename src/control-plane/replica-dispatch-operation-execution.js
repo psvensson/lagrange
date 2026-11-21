@@ -1,5 +1,9 @@
 import {OPERATION_RECONCILE_OUTCOME} from '../rebalancer/operation-workflow-reconcile-outcome.js';
-import {isTerminalReplicaOperationRecord} from '../rebalancer/replica-operation-progress.js';
+import {
+  isTerminalReplicaOperationRecord, OperationType,
+} from '../rebalancer/replica-operation-progress.js';
+import {invalidOperationPersistenceOutcome} from
+  '../rebalancer/replica-operation-update-outcome.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {
   buildDispatchReadinessGateError,
@@ -68,6 +72,14 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
       null;
     if (!operationId) {
       return;
+    }
+    if (operationRow?.type === OperationType.GROWTH_PROMOTE) {
+      if (operationRow.operation_id !== operationId) {
+        throw invalidOperationPersistenceOutcome('growth wake operation key differs');
+      }
+      // Refresh is still the disposition authority. A malformed carried
+      // subject cannot qualify as a complete handoff.
+      this.buildOperationFromRow(operationRow);
     }
 
     this.operationDispatchQueue.enqueue(
