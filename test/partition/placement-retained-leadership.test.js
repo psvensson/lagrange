@@ -82,7 +82,7 @@ test('paused pinned A request survives B custody and genuine A recovery unchange
   }));
 
 
-test('lost committed replies on A and B preserve the original pin through genuine A recovery', () =>
+test('a lost committed reply retires from the visible winner without another native proposal', () =>
   withRetainedLeadershipPair(async ({a, b, messages, elect}) => {
     const retained = await retainMissing(a);
     const repository = a.coordinator.repository;
@@ -102,9 +102,9 @@ test('lost committed replies on A and B preserve the original pin through genuin
       .get(retained.operationId), 'the first reply loss followed an actual commit');
     await elect(b);
     await idle(a, b);
-    assert.ok(messages.some((message) => message.from === a && message.to === b &&
-      message.payload.entryId === entryId));
-    assert.equal(repository.retainedPlacementRepairs.get(retained.operationId).entryId, entryId);
+    assert.equal(repository.retainedPlacementRepairs.size, 0,
+      'the actual row is visible on both appliers; no unknown write remains');
+    assert.equal(messages.filter((message) => message.payload.type === 'PLACEMENT_REPAIR').length, 0);
     await elect(a);
     await idle(a, b);
     assert.equal(repository.retainedPlacementRepairs.size, 0);
@@ -113,5 +113,36 @@ test('lost committed replies on A and B preserve the original pin through genuin
     assert.equal(restores.length, 1, 'both recovery turns read the original settled native outcome');
     assert.equal(restores[0].entryId, entryId);
     assert.equal(JSON.stringify(restores[0].body), bodyText);
-    assert.equal(answers, 3);
+    assert.equal(answers, 1, 'authoritative visible-winner confirmation requires no redundant send');
+  }));
+
+
+test('genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early', () =>
+  withRetainedLeadershipPair(async ({a, b, messages, elect}) => {
+    const retained = await retainMissing(a);
+    raiseParticipantCutoverPause(a.leader);
+    const repository = a.coordinator.repository;
+    assert.equal(await repository.repairRetainedOperation(retained), false);
+    const original = repository.retainedPlacementRepairs.get(retained.operationId);
+    const entryId = original.entryId;
+    const bodyText = JSON.stringify(original.body);
+    await elect(b, {resume: false});
+    await idle(a, b);
+    assert.ok(messages.some((message) => message.from === a && message.to === b &&
+      message.payload.entryId === entryId));
+    assert.equal(a.commands.length + b.commands.length, 0);
+    await elect(a, {resume: false});
+    await idle(a, b);
+    assert.equal(repository.retainedPlacementRepairs.get(retained.operationId).entryId, entryId);
+    assert.equal(JSON.stringify(repository.retainedPlacementRepairs.get(retained.operationId).body),
+      bodyText);
+    assert.equal(a.commands.length + b.commands.length, 0);
+    await resumeFixtureParticipantAdmission(a.leader);
+    await idle(a, b);
+    const restores = [...a.commands, ...b.commands].filter((command) =>
+      command.type === 'PLACEMENT_REPAIR');
+    assert.equal(restores.length, 1);
+    assert.equal(restores[0].entryId, entryId);
+    assert.equal(JSON.stringify(restores[0].body), bodyText);
+    assert.equal(repository.retainedPlacementRepairs.size, 0);
   }));
