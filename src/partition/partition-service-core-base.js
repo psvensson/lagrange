@@ -237,7 +237,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     });
     this.systemTableCacheChangeListener =
       this.handleSystemTableCacheChange.bind(this);
-    this.rebalancer = null;
     // The leadership this partition last drove to its leadership sink
     // (resolveRebalancerLeadership retains it across a readiness dip).
     this.rebalancerLeadershipSinkHeld = false;
@@ -320,9 +319,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this._systemTableCache = systemTableCache;
     this.roleMutationHelper?.setSystemTableCache(systemTableCache);
     this.leaderNodeMutationHelper?.setSystemTableCache(systemTableCache);
-    if (this.rebalancer) {
-      this.rebalancer.systemTableCache = systemTableCache;
-    }
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.systemTableCache = systemTableCache;
     }
@@ -345,9 +341,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.leaderNodeMutationHelper?.setCdcIntegrationService(
       cdcIntegrationService,
     );
-    if (this.rebalancer) {
-      this.rebalancer.cdcIntegrationService = cdcIntegrationService;
-    }
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
     }
@@ -466,7 +459,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     );
   }
   handleMetadataPublicationReadinessTransition() {
-    this.maybeInitializeRebalancer({readinessTransitionOnly: true});
+    this.maybeInitializeRebalancer();
     if (!this.isMetadataPublicationReady()) {
       return;
     }

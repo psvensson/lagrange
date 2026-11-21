@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 247,
+    "storage-partition": 246,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-9592f56f",
+  "censusSize": 2732,
+  "digest": "fnv1a32-a73a2611",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5953b4e2",
+  "observationDigest": "fnv1a32-7a9d77f8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1476,7 +1476,6 @@
     "test/partition/partition-raft-storage.test.js": "storage-partition",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
-    "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
     "test/partition/partition-registration-exact-birth.test.js": "storage-partition",
     "test/partition/partition-registration-readback-controls.test.js": "storage-partition",
     "test/partition/partition-replication-restart-attempt-handoff.test.js": "storage-partition",
@@ -13890,13 +13889,6 @@
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
-    "test/partition/partition-rebalancer-readiness-edge-gate.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
-      ]
-    },
     "test/partition/partition-registration-exact-birth.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js",
@@ -14085,7 +14077,6 @@
     "test/partition/partition-service-role-metadata-publication.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
-        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-operation-port-constants.js",

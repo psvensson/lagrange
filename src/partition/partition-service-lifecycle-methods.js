@@ -108,17 +108,6 @@ class PartitionServiceLifecycleMethods {
       this.rebalancerLeadershipSink.setLeader(false);
     }
     this.rebalancerLeadershipSinkHeld = false;
-    if (this.rebalancer) {
-      if (
-        typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION
-      ) {
-        this.rebalancer.setLeader(false);
-      }
-      if (typeof this.rebalancer.shutdown === PARTITION_SERVICE_TYPE.FUNCTION) {
-        this.rebalancer.shutdown();
-      }
-      this.rebalancer = null;
-    }
     if (this.rebalanceCoordinator && this.ownsRebalanceCoordinator) {
       try {
         await this.rebalanceCoordinator.shutdown();

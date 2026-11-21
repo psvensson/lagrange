@@ -103,8 +103,11 @@ function createPartition(world, node, partitionId, coordinator) {
 function schedulersOf(services) {
   return services.map((service) => ({partitionId: service.partitionId,
     leads: service.isLeader === true,
+    // A partition service no longer declares the field (stage 3b): absent or
+    // null is "no per-partition scheduler"; anything else is counted.
     rebalancer: service.rebalancer instanceof UnifiedRebalancer ? 'UnifiedRebalancer' :
-      service.rebalancer === null ? null : typeof service.rebalancer,
+      service.rebalancer === null || service.rebalancer === undefined ? null :
+        typeof service.rebalancer,
     placementOwner: Boolean(service.replicaPlacementOwnerAttachment?.owner),
     sinkIsOwner: Boolean(service.replicaPlacementOwnerAttachment?.owner) &&
       service.rebalancerLeadershipSink === service.replicaPlacementOwnerAttachment.owner}));
@@ -435,6 +438,16 @@ test('P0 teardown: after the cleanup quiesced the node\'s rebalancing, a later l
   assert.equal(owner.isLeader, false, 'the quiesced owner stays ended');
   assert.equal(node.coordinator.ledgerPartitionServices.has(ledger), false,
     'the quiesced ledger replica is not registered again');
+  // F4: the binder sweep is the one re-attach path left after a quiesce (it has
+  // no shutting-down check and runs after ControlPlaneSetup.create at both call
+  // sites): sweeping the quiesced node's services attaches nothing either.
+  bindLikeStartup(node, new Map(services.map((service) => [service.partitionId, service])));
+  await settleTicks();
+  assert.deepEqual(attachedAfterQuiesce.length, 0,
+    'the binder sweep after the quiesce attaches no placement owner');
+  assert.equal(ledger.replicaPlacementOwnerAttachment, null,
+    'after the binder sweep the ledger holds no attachment');
+  assert.equal(owner.isLeader, false, 'after the binder sweep the quiesced owner stays ended');
 }));
 
 test('P0 join while formation is in progress: the partition services are bound while not ' +
@@ -459,4 +472,51 @@ test('P0 join while formation is in progress: the partition services are bound w
   await settleTicks();
   assertPreconditionsForAPartitionScheduler([user, priority]);
   await assertSingleScheduler('formation complete', services, ledger);
+}));
+
+test('P0 re-entry during the attach (F1): a leadership event delivered synchronously by the ' +
+  'first pass\'s status read, while the coordinator\'s factory is still on the stack, is a ' +
+  'no-op: one factory call, no throw, one owner', () => withPlacementWorld(SPEC, async (world) => {
+  const node = await world.addNode('n1', {controlPlane: false});
+  const user = createPartition(world, node, USER, null);
+  const priority = createPartition(world, node, PRIORITY, null);
+  const ledger = createPartition(world, node, LEDGER, null);
+  const services = [user, priority, ledger];
+  await initializeAll(services);
+  await addControlPlaneAnsweringReads(world, node);
+  // Observation only: the coordinator's bound factory, counted and its depth
+  // tracked, still the production factory underneath.
+  const factory = node.coordinator.replicaPlacementOwnerFactory;
+  const calls = {factory: 0, depth: 0, reentries: 0, reentryWhileAttaching: 0, thrown: []};
+  node.coordinator.replicaPlacementOwnerFactory = (service) => {
+    calls.factory += 1;
+    calls.depth += 1;
+    try {
+      return factory(service);
+    } finally {
+      calls.depth -= 1;
+    }
+  };
+  // The substituted port delivers one leadership event to the partition from
+  // inside its status read (a read that may run a consensus turn and notify).
+  const readStatus = ledger.raft.readStatus.bind(ledger.raft);
+  ledger.raft.readStatus = () => {
+    if (calls.reentries === 0) {
+      calls.reentries += 1;
+      if (calls.depth > 0) calls.reentryWhileAttaching += 1;
+      try {
+        ledger.updateRebalancerLeadership();
+      } catch (error) {
+        calls.thrown.push(error?.code ?? error?.message ?? String(error));
+      }
+    }
+    return readStatus();
+  };
+  bindLikeStartup(node, new Map([[USER, user], [PRIORITY, priority], [LEDGER, ledger]]));
+  await settleTicks();
+  assert.equal(calls.reentryWhileAttaching, 1,
+    'anti-vacuity: the leadership event re-entered while the factory was on the stack');
+  assert.deepEqual(calls.thrown, [], 'the re-entrant leadership event does not throw');
+  assert.equal(calls.factory, 1, 'the factory runs once: the re-entry attaches nothing');
+  await assertSingleScheduler('re-entry during the attach', services, ledger);
 }));

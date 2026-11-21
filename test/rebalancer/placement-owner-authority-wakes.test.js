@@ -553,3 +553,113 @@ test('item 2 (c): handed over with no answer: the attempt stays retained and is 
       `the lost-answer deficit is admitted once; ${report()}`);
     assert.equal(admittedOperations(world, n1, other).length, 1, report());
   }));
+
+// Verifier F9: a pass woken by the resync alone admits a deficit and its later
+// local step (the durable delete of the settled attempt record) throws, so the
+// pass aborts with the admission recorded. The admission was caused by the
+// resync: placementResyncAdmissions (the sealed acceptance signal) counts it.
+// The other deficit stays inadmissible throughout, so no later pass admits.
+test('F9: a resync-only pass whose admission is followed by a local failure counts that ' +
+  'admission as a resync admission', (t) => withPlacementWorld(TWO_DEFICITS, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [n1] = nodes;
+  const owner = ownerOf(n1);
+  const snapshots = keepPassSnapshots(owner);
+  const admissible = owner.isCandidateAdmissibleNow;
+  let targetBlocked = true;
+  owner.isCandidateAdmissibleNow = function blockedUntilResync(candidate, ...rest) {
+    if (candidate.partitionId === SECOND || targetBlocked) {
+      throw new Error(`fixture: candidate ${candidate.partitionId} not admissible yet`);
+    }
+    return admissible.call(this, candidate, ...rest);
+  };
+  await world.electLedger(n1);
+  await world.idle();
+  const report = () => JSON.stringify({resyncAdmissions: owner.placementResyncAdmissions,
+    passes: n1.probe.passes.map((pass) => pass.triggers.join('+')),
+    snapshots: snapshots.map((snapshot) => ({stoppedAt: snapshot.stoppedAt,
+      admitted: snapshot.admitted})),
+    rows: world.ledgerRows(n1).map((row) => `${row.partition_id}:${row.operation_id}`)});
+  assert.equal(admittedOperations(world, n1, TARGET).length, 0,
+    `premise: nothing admitted before the resync; ${report()}`);
+  assert.equal(owner.placementResyncAdmissions, 0, `premise: no resync admission yet; ${report()}`);
+  // Substituted fault, armed for the resync pass only: the first durable
+  // delete of an attempt record fails (the item 2 (b) fault).
+  const db = n1.ledger.db;
+  const prepare = db.prepare;
+  let faultedKey = null;
+  db.prepare = function faultedDelete(sql, ...rest) {
+    const statement = prepare.call(this, sql, ...rest);
+    if (faultedKey !== null ||
+        !sql.startsWith('DELETE FROM _placement_owner_unresolved_attempts')) {
+      return statement;
+    }
+    return {run(attemptKey) {
+      faultedKey = attemptKey;
+      throw new Error('fixture: the attempt-record delete failed');
+    }};
+  };
+  targetBlocked = false;
+  const resync = world.timers.placementOwnerIntervals().filter((timer) => timer.alive);
+  assert.equal(resync.length, 1, `premise: the custody's resync is armed; ${report()}`);
+  const passesBeforeResync = n1.probe.passes.length;
+  resync[0].fn();
+  await waitUntil(() => admittedOperations(world, n1, TARGET).length === 1,
+    'the resync pass admits the unblocked deficit', PROGRESS_BOUND_MS);
+  await world.idle();
+  db.prepare = prepare;
+  t.diagnostic(report());
+  const resyncPass = n1.probe.passes[passesBeforeResync];
+  assert.deepEqual(resyncPass?.triggers, [PLACEMENT_TRIGGER.RESYNC],
+    `premise: the pass woken by the resync carries the resync alone; ${report()}`);
+  assert.equal(faultedKey?.slice('admit:'.length) ?? null, TARGET,
+    `premise: the resync pass's admitted candidate failed locally; ${report()}`);
+  const [admitted] = admittedOperations(world, n1, TARGET);
+  assert.ok(snapshots.some((snapshot) => snapshot.stoppedAt === 'ABORTED' &&
+    snapshot.admitted.includes(admitted.operationId)),
+  `premise: the resync pass aborted with the admission recorded; ${report()}`);
+  assert.equal(owner.placementResyncAdmissions, 1,
+    `the resync-only pass's admission is counted although its local step failed; ${report()}`);
+}));
+
+// Verifier F10 (characterization, ruling pending: no source change): since
+// item 2 every throw of the submitter after the handover aborts the pass as
+// UNCERTAIN, and the same candidate is first again on the next wake. A
+// submission that throws deterministically for the first-ordered candidate is
+// therefore head of line for the tenure: every later pass aborts at the same
+// attempt and the other deficit is not admitted. This pins what the owner does
+// today; a ruling that isolates the submission turns its last two assertions.
+test('F10 characterization: a submission that throws deterministically for the first ' +
+  'candidate aborts every later pass at the same attempt; the other deficit waits',
+(t) => withPlacementWorld(TWO_DEFICITS, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [n1] = nodes;
+  const owner = ownerOf(n1);
+  const snapshots = keepPassSnapshots(owner);
+  const admit = owner.admitPlacement;
+  const thrown = [];
+  owner.admitPlacement = async function throwsFor(payload) {
+    if (payload.body.partitionId !== TARGET) return admit(payload);
+    thrown.push(payload.entryId);
+    throw new Error('fixture: the submission throws');
+  };
+  await world.electLedger(n1);
+  await world.idle();
+  for (let wake = 0; wake < 3; wake += 1) {
+    owner.notify(PLACEMENT_TRIGGER.SERVICES_CHANGED);
+    await world.idle();
+  }
+  const ran = snapshots.filter((snapshot) => snapshot.uncertainCandidates?.[TARGET] !== undefined);
+  const report = () => JSON.stringify({thrown, passes: snapshots.map((snapshot) => ({
+    stoppedAt: snapshot.stoppedAt, uncertain: Object.keys(snapshot.uncertainCandidates ?? {}),
+    admitted: snapshot.admitted})),
+  rows: world.ledgerRows(n1).map((row) => `${row.partition_id}:${row.operation_id}`)});
+  t.diagnostic(report());
+  assert.ok(thrown.length >= 4, `premise: the submission was attempted on every wake; ${report()}`);
+  assert.equal(new Set(thrown).size, 1,
+    `the same retained attempt (one entryId) is re-submitted each time; ${report()}`);
+  assert.ok(ran.length >= 4 && ran.every((snapshot) => snapshot.stoppedAt === 'ABORTED'),
+    `every pass that reached the candidate aborted at it; ${report()}`);
+  assert.equal(admittedOperations(world, n1, SECOND).length, 0,
+    `the other deficit is not admitted while the head-of-line attempt throws; ${report()}`);
+}));

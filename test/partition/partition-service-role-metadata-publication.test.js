@@ -53,7 +53,6 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
-import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 
 beforeEach(() => {
@@ -682,131 +681,6 @@ test(
   },
 );
 
-test(
-  'PartitionService - defers rebalancer initialization until traffic ready',
-  async (t) => {
-    const readinessState = createTrafficReadinessState();
-    const partition = new PartitionService(withFoundingStamp({
-      partitionId: 'test-partition-rebalancer-ready-gate',
-      tableId: 'services',
-      tableName: 'services',
-      replicaId: 'replica-ready-gate',
-      replicaIds: ['replica-ready-gate'],
-      nodeId: 'node-2',
-      dbPath: ':memory:',
-      bootstrapReadinessState: readinessState,
-    }));
-
-    await partition.initialize();
-    partition.isLeader = true;
-    partition.systemTableCache = {
-      get: () => null,
-      filter: () => [],
-      onCacheChange: () => {},
-      offCacheChange: () => {},
-    };
-    partition.cdcIntegrationService = {
-      insertSystemTableRow: async () => ({success: true}),
-      updateSystemTableRow: async () => ({success: true}),
-      deleteSystemTableRow: async () => ({success: true}),
-    };
-    partition.tablePolicyService = {
-      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
-    };
-    partition.messageRouter = {
-      getConnectionState: () => 'connected',
-      send: async () => {},
-    };
-    partition.sqlQueryEngine = {
-      executeQuery: async () => ({success: true, rows: []}),
-    };
-    partition.rebalanceCoordinator = {
-      controlPlaneReadinessService: createReadinessServiceForTest(),
-      initialize: () => {},
-    };
-
-    readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
-      ready: false,
-      reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
-    });
-    partition.maybeInitializeRebalancer();
-    t.notOk(
-      partition.rebalancer,
-      'should not initialize rebalancer before traffic-ready lifecycle',
-    );
-
-    readinessState.transitionTo(LIFECYCLE_PHASE.TRAFFIC_READY, {
-      ready: true,
-      reasons: [],
-    });
-    partition.maybeInitializeRebalancer();
-    t.ok(
-      partition.rebalancer,
-      'should initialize rebalancer after traffic-ready lifecycle',
-    );
-
-    await partition.shutdown();
-  },
-);
-
-test(
-  'PartitionService - priority control-plane rebalancer starts once lifecycle owner opens metadata publication',
-  async (t) => {
-    const readinessState = createTrafficReadinessState();
-    const partition = new PartitionService(withFoundingStamp({
-      partitionId:
-        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
-      tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      replicaId: 'replica-control-plane-ready-gate',
-      replicaIds: ['replica-control-plane-ready-gate'],
-      nodeId: 'node-2',
-      dbPath: ':memory:',
-      bootstrapReadinessState: readinessState,
-    }));
-
-    await partition.initialize();
-    partition.isLeader = true;
-    partition.systemTableCache = {
-      get: () => null,
-      filter: () => [],
-      onCacheChange: () => {},
-      offCacheChange: () => {},
-    };
-    partition.cdcIntegrationService = {
-      insertSystemTableRow: async () => ({success: true}),
-      updateSystemTableRow: async () => ({success: true}),
-      deleteSystemTableRow: async () => ({success: true}),
-    };
-    partition.tablePolicyService = {
-      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
-    };
-    partition.messageRouter = {
-      getConnectionState: () => 'connected',
-      send: async () => {},
-    };
-    partition.sqlQueryEngine = {
-      executeQuery: async () => ({success: true, rows: []}),
-    };
-    partition.rebalanceCoordinator = {
-      controlPlaneReadinessService: createReadinessServiceForTest(),
-      initialize: () => {},
-    };
-
-    readinessState.transitionTo(LIFECYCLE_PHASE.JOIN_READY, {
-      ready: false,
-      reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
-    });
-    partition.maybeInitializeRebalancer();
-    t.ok(
-      partition.rebalancer,
-      'priority control-plane partitions should initialize the rebalancer once metadata publication is allowed',
-    );
-
-    await partition.shutdown();
-  },
-);
-
 test('PartitionService - persists leader node updates to partitions table', async (t) => {
   const updates = [];
   const mockCdcIntegrationService = {
@@ -1210,7 +1084,7 @@ test('PartitionService - retries leader node persistence after cache visibility 
     await partition.shutdown();
   });
 
-test('PartitionService - setCdcIntegrationService sets service on partition and rebalancer',
+test('PartitionService - setCdcIntegrationService sets service on partition and coordinator',
   async (t) => {
     const mockCdcIntegrationService = {
       deleteSystemTableRow: async () => ({success: true}),
@@ -1232,12 +1106,7 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
     // Initially no cdcIntegrationService
     t.equal(partition.cdcIntegrationService, null, 'Initially null');
 
-    // Provide stubbed rebalancer/coordinator to verify propagation.
-    partition.rebalancer = {
-      cdcIntegrationService: null,
-      setRebalanceCoordinator: () => {},
-      shutdown: () => {},
-    };
+    // Provide a stubbed coordinator to verify propagation.
     partition.rebalanceCoordinator = {cdcIntegrationService: null};
 
     // Set the CDC integration service
@@ -1250,13 +1119,6 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
       'Should be set on partition',
     );
 
-    // Verify it was set on the rebalancer
-    t.equal(
-      partition.rebalancer.cdcIntegrationService,
-      mockCdcIntegrationService,
-      'Should be set on rebalancer',
-    );
-
     // Verify it was set on the coordinator
     t.equal(
       partition.rebalanceCoordinator.cdcIntegrationService,
@@ -1266,170 +1128,3 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
 
     await partition.shutdown();
   });
-
-test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
-  async (t) => {
-    // Bug reproduction: initializeRebalancer() creates UnifiedRebalancer
-    // without passing sqlQueryEngine, so the gateway is created with null.
-    // Later, maybeInitializeRebalancer() sets rebalancer.sqlQueryEngine
-    // but does NOT propagate to the gateway. The gateway retains null
-    // forever, causing "requires sqlQueryEngine" errors when the
-    // rebalancer tries to call getConfiguredRebalanceBudget() or
-    // getGlobalInFlightOperationCount().
-    const mockSqlQueryEngine = {
-      executeQuery: async () => ({success: true, rows: []}),
-    };
-    const mockSystemTableCache = {
-      get: () => null,
-      filter: () => [],
-      onCacheChange: () => {},
-      offCacheChange: () => {},
-    };
-    const mockCdcIntegrationService = {
-      insertSystemTableRow: async () => ({success: true}),
-      updateSystemTableRow: async () => ({success: true}),
-      deleteSystemTableRow: async () => ({success: true}),
-    };
-    const mockTablePolicyService = {
-      getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
-    };
-    const mockMessageRouter = {
-      getConnectionState: () => 'connected',
-      send: async () => {},
-    };
-    const mockRebalanceCoordinator = {
-      systemTableCache: null,
-      cdcIntegrationService: null,
-      tablePolicyService: null,
-      sqlQueryEngine: null,
-      controlPlaneReadinessService: createReadinessServiceForTest(),
-      initialize: () => {},
-    };
-
-    const partition = new PartitionService(withFoundingStamp({
-      partitionId: 'test-partition-gw-1',
-      tableId: 'services',
-      tableName: 'services',
-      replicaId: 'replica-1',
-      replicaIds: ['replica-1'],
-      nodeId: 'test-node',
-      dbPath: ':memory:',
-    }));
-
-    await partition.initialize();
-
-    // Wire all dependencies so initializeRebalancer() fires
-    partition.rebalanceCoordinator = mockRebalanceCoordinator;
-    partition.systemTableCache = mockSystemTableCache;
-    partition.cdcIntegrationService = mockCdcIntegrationService;
-    partition.tablePolicyService = mockTablePolicyService;
-    partition.messageRouter = mockMessageRouter;
-    partition.isLeader = true;
-    partition.setSqlQueryEngine(mockSqlQueryEngine);
-
-    // Rebalancer should now exist
-    t.ok(partition.rebalancer, 'rebalancer should be initialized');
-
-    // The gateway must have the sqlQueryEngine — this is the bug
-    const gateway = partition.rebalancer.controlPlaneSystemTableGateway;
-    t.ok(gateway, 'gateway should exist on rebalancer');
-    t.equal(
-      gateway.sqlQueryEngine,
-      mockSqlQueryEngine,
-      'gateway.sqlQueryEngine must be set after initializeRebalancer ' +
-      '(uses injected owner path via constructor)',
-    );
-
-    // Verify the gateway can actually execute a query without throwing
-    const result = await gateway.executeQuery(
-      'SELECT 1',
-      [],
-      {},
-    );
-    t.ok(result, 'gateway.executeQuery should succeed');
-
-    await partition.shutdown();
-  });
-
-test('PartitionService - maybeInitializeRebalancer propagates sqlQueryEngine ' +
-  'to gateway on refresh',
-async (t) => {
-  // Bug reproduction: when maybeInitializeRebalancer() refreshes an
-  // existing rebalancer, it sets rebalancer.sqlQueryEngine but does NOT
-  // propagate to the gateway. The gateway retains the stale engine.
-  const firstEngine = {
-    executeQuery: async () => ({success: true, rows: [], tag: 'first'}),
-  };
-  const secondEngine = {
-    executeQuery: async () => ({success: true, rows: [], tag: 'second'}),
-  };
-  const mockSystemTableCache = {
-    get: () => null,
-    filter: () => [],
-    onCacheChange: () => {},
-    offCacheChange: () => {},
-  };
-  const mockCdcIntegrationService = {
-    insertSystemTableRow: async () => ({success: true}),
-    updateSystemTableRow: async () => ({success: true}),
-    deleteSystemTableRow: async () => ({success: true}),
-  };
-  const mockTablePolicyService = {
-    getPolicyForPartition: () => ({minReplicaCount: 3, targetReplicaCount: 3}),
-  };
-  const mockMessageRouter = {
-    getConnectionState: () => 'connected',
-    send: async () => {},
-  };
-  const mockRebalanceCoordinator = {
-    systemTableCache: null,
-    cdcIntegrationService: null,
-    tablePolicyService: null,
-    sqlQueryEngine: null,
-    controlPlaneReadinessService: createReadinessServiceForTest(),
-    initialize: () => {},
-  };
-
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition-gw-2',
-    tableId: 'services',
-    tableName: 'services',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    nodeId: 'test-node',
-    dbPath: ':memory:',
-  }));
-
-  await partition.initialize();
-
-  // Initialize with first engine
-  partition.rebalanceCoordinator = mockRebalanceCoordinator;
-  partition.systemTableCache = mockSystemTableCache;
-  partition.cdcIntegrationService = mockCdcIntegrationService;
-  partition.tablePolicyService = mockTablePolicyService;
-  partition.messageRouter = mockMessageRouter;
-  partition.isLeader = true;
-  partition.setSqlQueryEngine(firstEngine);
-
-  t.ok(partition.rebalancer, 'rebalancer should be initialized');
-
-  const gateway = partition.rebalancer.controlPlaneSystemTableGateway;
-  t.equal(
-    gateway.sqlQueryEngine,
-    firstEngine,
-    'gateway should have first engine after init',
-  );
-
-  // Now update to second engine — this triggers maybeInitializeRebalancer
-  partition.setSqlQueryEngine(secondEngine);
-
-  // The gateway must have the updated engine — this is the bug
-  t.equal(
-    gateway.sqlQueryEngine,
-    secondEngine,
-    'gateway.sqlQueryEngine must be updated when ' +
-    'maybeInitializeRebalancer refreshes (uses injected owner path)',
-  );
-
-  await partition.shutdown();
-});

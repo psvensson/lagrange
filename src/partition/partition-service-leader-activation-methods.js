@@ -78,14 +78,7 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
     }
   },
   updateRebalancerLeadership() {
-    if (!this.rebalancer) {
-      this.maybeInitializeRebalancer();
-      this.driveRebalancerLeadershipSink();
-      return;
-    }
-    if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
-      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
-    }
+    this.maybeInitializeRebalancer();
     this.driveRebalancerLeadershipSink();
   },
   cancelLeaderOwnedActivation() {
