@@ -75,7 +75,9 @@ const INVOCATION_STATES = Object.freeze([
 
 // Each control breaks one protected distinction; the reference must report at
 // least one deficit for every one of them.
-const NEGATIVE_CONTROLS = Object.freeze([
+const NEGATIVE_CONTROLS = Object.freeze(
+  // eslint-disable-next-line literal-guideline
+  [
   ['drop the last accepted vector', (copy) => copy.accepted.pop()],
   ['duplicate the first accepted vector',
     (copy) => copy.accepted.push({...copy.accepted[0]})],
