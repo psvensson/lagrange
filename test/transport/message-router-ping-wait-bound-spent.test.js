@@ -124,6 +124,9 @@ test('a ping whose timer expires but whose peer sent recent inbound ' +
   const info = capture.lines.filter((line) => line.level === 'info' &&
     line.message === ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND);
   t.equal(info.length, 1, 'the alive-by-inbound INFO line is logged');
+  // Red while the member is undefined: the filter above then matched a line
+  // logged with no message at all.
+  t.equal(typeof info[0].message, 'string', 'the INFO line carries its message');
   t.equal(info[0].context.nodeId, 'node-busy');
   t.equal(info[0].context.livenessWindowMs, 30000);
 });
@@ -150,6 +153,7 @@ test('a keepalive whose peer sent recent inbound traffic keeps the ' +
   const info = capture.lines.filter((line) => line.level === 'info' &&
     line.message === ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE);
   t.equal(info.length, 1, 'the skipped-alive INFO line is logged');
+  t.equal(typeof info[0].message, 'string', 'the INFO line carries its message');
   t.match(info[0].context, {
     nodeId: 'node-busy',
     connectionId: 'node-busy-conn-1',

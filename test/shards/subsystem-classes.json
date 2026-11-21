@@ -22,11 +22,11 @@
     "storage-raft": 164,
     "test-infrastructure": 167,
     "transactions": 17,
-    "transport-messaging": 121,
+    "transport-messaging": 122,
     "wasm-toolchain": 74
   },
-  "censusSize": 2734,
-  "digest": "fnv1a32-34d3d000",
+  "censusSize": 2735,
+  "digest": "fnv1a32-cbd94e78",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-087770e3",
   "classes": {
@@ -2657,6 +2657,7 @@
     "test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js": "transport-messaging",
+    "test/transport/router-in-process-address-in-use.test.js": "transport-messaging",
     "test/transport/router-server-manager.test.js": "transport-messaging",
     "test/transport/routing-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-client.test.js": "transport-messaging",

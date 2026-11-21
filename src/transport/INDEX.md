@@ -40,7 +40,7 @@ documentClass: generated
 - [message-router.js](message-router.js) - Owner contract: Owner: MessageRouter owns transport connection, queue, ACK, and reconnect behavior. (importers: hub)
 - [node-address-resolution.js](node-address-resolution.js) - No leading comment; first export: NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY. (importers: many)
 - [owner-retry-budget.js](owner-retry-budget.js) - Per-target delivery-triggered reconnect rate budget (token bucket). (importers: few)
-- [router-server-manager.js](router-server-manager.js) - RouterServerManager - WebSocket server management for MessageRouter. (importers: one)
+- [router-server-manager.js](router-server-manager.js) - RouterServerManager - WebSocket server management for MessageRouter. (importers: few)
 - [rpc-client.js](rpc-client.js) - RPCClient - Request-response pattern over message groups. (importers: many)
 - [transport-error-codes.js](transport-error-codes.js) - Canonical router failure vocabulary shared by the router and every delivery-outcome consumer. (importers: hub)
 - [transport-query-semantic-outcome.js](transport-query-semantic-outcome.js) - The query data plane's transport readiness: whether a message-group transport is selected (READY), or why a query... (importers: few)
