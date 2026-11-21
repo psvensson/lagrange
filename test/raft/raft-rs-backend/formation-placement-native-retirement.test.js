@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
+import {REBALANCE_COORDINATOR_EVENT} from '../../../src/rebalancer/rebalancer-constants.js';
+import {LEARNER_LIFECYCLE_CUSTODY, observeLearnerRetirementCustody} from
+  '../../../src/node/replica-learner-retirement-lifecycle.js';
 import {DISPATCH_EVENT} from '../../../src/control-plane/replica-dispatch-service-constants.js';
 import {createService as createReplicaDispatchService} from
   '../../control-plane/replica-dispatch-node-state-update-test-support.js';
@@ -227,6 +230,7 @@ async function dispatchHistoricalRowThroughReplicaDispatch(coordinator, operatio
   const service = createReplicaDispatchService({
     nodeId: SEED,
     rebalanceCoordinator: coordinator,
+    cdcIntegrationService: coordinator.cdcIntegrationService,
     controlPlaneReadinessService: {getNodeReadinessSync: ready, getNodeReadiness: ready},
     controlPlaneSystemTableGateway: {
       async readAuthoritativeRows(table) {
@@ -317,6 +321,24 @@ test('late native promotion preserves an incumbent named by an admitted learner 
     }
   }, {createCluster: addressedCluster}));
 
+async function assertSupersessionReplay(coordinator, operationId, firstOutcome) {
+  await coordinator.shutdown();
+  coordinator.initialize();
+  // Shutdown serialized and closed the fixture's SQLite connection. The
+  // strict repository read opens that same database image again.
+  const repository = coordinator.repository;
+  const before = await repository.queryAuthoritativeOperationById(operationId);
+  assert.equal(before.workflowStep, WORKFLOW_STEP.SUPERSEDED);
+  const wakes = [];
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED, (event) => wakes.push(event));
+  const counters = {...coordinator.stats};
+  const replay = await coordinator.dispatchOperation(operationId);
+  assert.deepEqual(replay, firstOutcome);
+  assert.deepEqual(await repository.queryAuthoritativeOperationById(operationId), before);
+  assert.deepEqual(coordinator.stats, counters);
+  assert.deepEqual(wakes, []);
+}
+
 for (const schedule of ['undispatched', 'dispatched', 'concurrent dispatch claim']) {
   const priorStep = schedule === 'dispatched' ? WORKFLOW_STEP.SENDING : WORKFLOW_STEP.PENDING;
   const concurrentClaim = schedule === 'concurrent dispatch claim';
@@ -356,10 +378,20 @@ for (const schedule of ['undispatched', 'dispatched', 'concurrent dispatch claim
           return persist(operation, options);
         };
       }
-      const dispatch = schedule === 'undispatched' ?
-        dispatchHistoricalRowThroughReplicaDispatch(coordinator, historical) :
-        coordinator.dispatchOperation(historical);
+      let dispatch;
       try {
+        if (schedule === 'undispatched') {
+          const purported = await coordinator.dispatchOperation({
+            ...historical, workflow_step: WORKFLOW_STEP.SUPERSEDED, status: 'superseded',
+            completed_at: historical.updated_at,
+          });
+          assert.notEqual(purported.terminal, true);
+          assert.equal((await coordinator.getOperation(historical.operation_id)).workflowStep,
+            WORKFLOW_STEP.PENDING);
+        }
+        dispatch = schedule === 'undispatched' ?
+          dispatchHistoricalRowThroughReplicaDispatch(coordinator, historical) :
+          coordinator.dispatchOperation(historical);
         if (concurrentClaim) {
           const options = await waitForHeldRequest(supersessionReached);
           assert.equal(options.expectedWorkflowStep, WORKFLOW_STEP.PENDING);
@@ -387,6 +419,7 @@ for (const schedule of ['undispatched', 'dispatched', 'concurrent dispatch claim
           assert.equal(pending.workflowStep, 'SUPERSEDED');
           assert.equal(pending.status, 'superseded');
           assert.ok(Number.isFinite(pending.completedAt));
+          await assertSupersessionReplay(coordinator, historical.operation_id, result);
         } else {
           assert.equal(result.error, LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED);
           assert.equal(pending.completedAt, null);
@@ -830,9 +863,23 @@ for (const change of ['boot', 'service birth', 'missing service', 'older service
           if (change === 'ordinary lifecycle version') next.state_entered_at += 1;
           leader.lifecycleStore.durable.services.set(target.replica_id, next);
         }
+        const scope = {...captured.learnerRetirement, operationId: captured.operationId,
+          partitionId: captured.partitionId, replicaId: captured.replicaId};
+        const observed = await observeLearnerRetirementCustody(
+          leader.handler.replicaStateMachine, scope);
+        const authorityRow = leader.lifecycleStore.durable.services.get(target.replica_id);
+        t.diagnostic(JSON.stringify({change, observed: observed.state, scope,
+          birth: authorityRow?.created_at, reason: authorityRow?.trigger_reason,
+          version: authorityRow?.state_entered_at, serviceType: authorityRow?.service_type}));
+        if (change === 'boot' || change === 'service birth') {
+          assert.equal(observed.state, LEARNER_LIFECYCLE_CUSTODY.CHANGED);
+        }
         resume.resolve();
         const result = await run;
         const current = await coordinator.getOperation(removal.operation_id);
+        t.diagnostic(JSON.stringify({change, result, deliveries, step: current.workflowStep,
+          birth: authorityRow?.created_at, reason: authorityRow?.trigger_reason,
+          version: authorityRow?.state_entered_at, serviceType: authorityRow?.service_type}));
         if (change === 'boot' || change === 'service birth') {
           assert.equal(result.terminal, true);
           assert.equal(current.workflowStep, WORKFLOW_STEP.SUPERSEDED);

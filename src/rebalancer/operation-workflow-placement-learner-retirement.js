@@ -3,6 +3,8 @@
 // The target runtime can be cleaned only for the captured service generation.
 import {COLUMN, SERVICE_STATUS, STATE, TABLES, WORKFLOW_STEP} from '../constants/index.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
@@ -24,6 +26,9 @@ import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js'
 import {observesCommittedNodeLoss} from './replica-placement-owner-deficits.js';
 import {ReplicaStatus} from './replica-status.js';
 import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from './replica-operation-update-disposition.js';
+import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 
 function verdict(state, fields = {}) {
   return Object.freeze({state, ...fields});
@@ -55,14 +60,34 @@ async function settleSupersededRemoval(owner, operation, reason) {
     owner.buildTerminalOperationDispatchResult(outcome, {operationId: operation.operationId});
 }
 
+async function readSupersededDispatchReplay(owner, operation) {
+  const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId, {
+    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+  });
+  if (durable?.workflowStep !== WORKFLOW_STEP.SUPERSEDED) return null;
+  try {
+    assertOperationUpdateSubject(operation, durable);
+    const outcome = buildOperationTransitionOutcome({
+      persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      operation: durable,
+    });
+    return owner.buildTerminalOperationDispatchResult(outcome);
+  } catch {
+    return null;
+  }
+}
+
 async function reconcileUnscopedPlacementRemoval(owner, operation) {
-  if (!isUnscopedPlacementRemoval(operation)) return null;
+  const unscoped = isUnscopedPlacementRemoval(operation);
+  if (!unscoped && operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) return null;
   const reason = LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED;
   if (operation.workflowStep === WORKFLOW_STEP.PENDING) {
     return settleSupersededRemoval(owner, operation, reason);
   }
-  return owner.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
-    operation.operationId, {error: reason});
+  return await readSupersededDispatchReplay(owner, operation) ??
+    owner.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+      operation.operationId, {error: reason});
 }
 
 async function currentNode(owner, targetNodeId) {
