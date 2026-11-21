@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 246,
-    "storage-raft": 160,
+    "storage-raft": 161,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 120,
     "wasm-toolchain": 74
   },
-  "censusSize": 2729,
-  "digest": "fnv1a32-174807e0",
+  "censusSize": 2730,
+  "digest": "fnv1a32-73e80cb9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c0dd35ff",
+  "observationDigest": "fnv1a32-35de991c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1888,6 +1888,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
+    "test/raft/raft-rs-current-term-applied.test.js": "storage-raft",
     "test/raft/raft-rs-lifecycle-turn-admission.test.js": "storage-raft",
     "test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "storage-raft",
@@ -18291,6 +18292,16 @@
         "src/raft",
         "test/distributed/config",
         "test/distributed/harness"
+      ]
+    },
+    "test/raft/raft-rs-current-term-applied.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js": {
