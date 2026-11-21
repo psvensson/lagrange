@@ -146,6 +146,31 @@ arrives after the last consensus wake. The three-host measurement determines
 how the two demonstrated ADD repairs affect formation. A focused pass alone
 cannot establish fleet progress.
 
+The physical traces expose a second boundary in the operation ledger.
+For the same GROWTH_PROMOTE, SQLite persists the second replica in
+`source_replica_id` and the promotion cohort in the founding operation
+history. The dispatcher's CDC row conversion reconstructs source identity
+from a different history field, and its reverse projection omits the source
+column. Both `e5deee2a` and `f540550c` recorded the workflow's strict
+placement check rejecting the resulting operation. Some affected promotions
+later reached ACTIVE; count the first rejected transition and its eventual
+settlement separately. The dispatch and repository owners share one change:
+preserve the same fixed subject through a native write, CDC notification,
+replay and terminal adoption. A different promotion cohort must still be
+refused. The current administration route may change without rewriting the
+admitted subject.
+
+The original November 2 permanent-read-outage witness required FAILED and
+claimed removal at expiry. In the original managed `f22dd7f35` run the
+finite outage recovered. The indefinite read refusal never supplied a
+terminal decision. Its test timed out at 60 seconds and its referenced
+interval kept the process alive until the 600-second runner cutoff. The
+formation proof owner preserves that original and verifies both native
+outcomes: restoration of authority after expiry resumes the exact materialized
+worker, and a readable conflicting founding operation still requires the
+guarded FAILED and claimed REMOVE path. This prospective proof correction
+remains open through its managed run and independent review.
+
 The prior three-host runs shared a failure to reach global quiet. Within
 the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with
 zero REMOVE admissions. `57e4db30` completed 39 of 43 and admitted one
