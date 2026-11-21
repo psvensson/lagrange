@@ -73,7 +73,7 @@ documentClass: generated
 - [control-plane-system-table-gateway-query-execution.js](control-plane-system-table-gateway-query-execution.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayQueryExecution. (importers: one)
 - [control-plane-system-table-gateway-read-contracts.js](control-plane-system-table-gateway-read-contracts.js) - The single frozen read-authority contract. (importers: hub)
 - [control-plane-system-table-gateway-read-dispatch.js](control-plane-system-table-gateway-read-dispatch.js) - Canonical control-plane metadata read ingress. (importers: one)
-- [control-plane-system-table-gateway-read-strategies.js](control-plane-system-table-gateway-read-strategies.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayReadStrategies. (importers: one)
+- [control-plane-system-table-gateway-read-strategies.js](control-plane-system-table-gateway-read-strategies.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayReadStrategies. (importers: few)
 - [control-plane-system-table-gateway-request-coalescing.js](control-plane-system-table-gateway-request-coalescing.js) - Every accepted execution gets one owner-private lifecycle record. (importers: one)
 - [control-plane-system-table-gateway-retention-metrics.js](control-plane-system-table-gateway-retention-metrics.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayRetentionMetrics. (importers: one)
 - [control-plane-system-table-gateway-shared.js](control-plane-system-table-gateway-shared.js) - No leading comment; first export: CANONICAL_LEADER_ROUTING_GAP_STATE. (importers: many)
