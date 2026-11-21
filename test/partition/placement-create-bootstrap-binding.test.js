@@ -3,6 +3,7 @@ import {OPERATION_RECONCILE_OUTCOME} from
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME, OPERATION_RESERVATION_RECOVERY_OUTCOME,
 } from '../../src/rebalancer/operation-reservation-attempt-outcome.js';
+import {createOperationAt} from '../../src/rebalancer/replica-status.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -367,32 +368,38 @@ test('an authority response at the original deadline cannot stamp or claim a pla
   });
 });
 
-test('stale placement dispatch cannot put a progressed ADD back in SENDING', async () => {
-  await withNativeCreate(async (leader, row) => {
-    const requests = [];
-    const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]),
-      (_address, request) => requests.push(request));
-    try {
-      await bind(coordinator, coordinator.repository.rowToOperation(row));
-      const [bound] = ledgerRows(leader);
-      const step = WORKFLOW_STEP.CREATING;
-      const at = bound.updated_at + 1;
-      assert.equal(commitLedgerStatement(leader, 'bootstrap:target-progress',
-        `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?,
-         steps_history = json_insert(steps_history, '$[#]', json(?)) WHERE operation_id = ?`,
-        [step, WORKFLOW_STEP_TO_STATUS[step], at, JSON.stringify({step, timestamp: at}),
-          row.operation_id]), null);
-      const [progressed] = ledgerRows(leader);
-      await coordinator.workflowOwner.executeOperationInternal(
-        {...coordinator.repository.rowToOperation(bound), workflowStep: WORKFLOW_STEP.SENDING}, {},
-      );
-      assert.deepEqual(ledgerRows(leader), [progressed]);
-      assert.deepEqual(requests, []);
-    } finally {
-      await coordinator.shutdown();
-    }
+for (const type of [OperationType.ADD, OperationType.REPLACE]) {
+  test(`stale placement dispatch cannot put a progressed ${type} back in SENDING`, async () => {
+    await withNativeCreate(async (leader, row) => {
+      const requests = [];
+      const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]),
+        (_address, request) => requests.push(request));
+      try {
+        await bindReplaceCreateTargetReplicaId(
+          coordinator.workflowOwner, coordinator.repository.rowToOperation(row),
+          false, type === OperationType.REPLACE ? VOTER_ID : null);
+        assert.notEqual(row.replica_id, VOTER_ID, 'the created target is distinct from the source');
+        const [bound] = ledgerRows(leader);
+        const step = WORKFLOW_STEP.CREATING;
+        const at = bound.updated_at + 1;
+        assert.equal(commitLedgerStatement(leader, 'bootstrap:target-progress',
+          `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?,
+           steps_history = json_insert(steps_history, '$[#]', json(?)) WHERE operation_id = ?`,
+          [step, WORKFLOW_STEP_TO_STATUS[step], at, JSON.stringify({step, timestamp: at}),
+            row.operation_id]), null);
+        const [progressed] = ledgerRows(leader);
+        const stale = coordinator.repository.rowToOperation(bound);
+        await coordinator.workflowOwner.executeOperationInternal(
+          {...stale, workflowStep: WORKFLOW_STEP.SENDING}, {},
+        );
+        assert.deepEqual(ledgerRows(leader), [progressed]);
+        assert.deepEqual(requests, []);
+      } finally {
+        await coordinator.shutdown();
+      }
+    }, type);
   });
-});
+}
 
 for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
   test(`bootstrap restart at ${step} requires an existing authoritative reservation`, async () => {
@@ -446,6 +453,65 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(requests[0].operationId, row.operation_id);
         assert.deepEqual(reservationOptions,
           [{allowCreate: false}, {allowCreate: false}, {allowCreate: false}]);
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+  });
+}
+
+for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
+  test(`ledger self-move dispatch waits for unstamped native ADD in ${step}`, async () => {
+    await withNativeCreate(async (leader, row) => {
+      if (step === WORKFLOW_STEP.SENDING) {
+        assert.equal(commitLedgerStatement(leader, 'bootstrap:interrupted-incumbent',
+          `UPDATE replica_operations SET workflow_step = ?, status = ?,
+           steps_history = json_insert(steps_history, '$[#]', json(?)) WHERE operation_id = ?`,
+          [step, WORKFLOW_STEP_TO_STATUS[step], JSON.stringify({step, timestamp: row.created_at}),
+            row.operation_id]), null);
+      }
+      const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]));
+      const owner = coordinator.workflowOwner;
+      try {
+        const incumbent = coordinator.repository.rowToOperation(ledgerRows(leader)[0]);
+        const now = row.created_at + owner.getTimeoutForStep(step, incumbent) + 1;
+        owner.timeSource = {now: () => now};
+        coordinator.timeSource = owner.timeSource;
+        const waiter = createOperationAt({
+          operationId: 'bootstrap-ledger-waiter',
+          type: OperationType.REPLACE,
+          partitionId: 'replica_operations-p1',
+          sourceNodeId: NODE.B,
+          sourceReplicaId: 'replica_operations-p1-r1',
+          targetNodeId: NODE.A,
+          replicaId: 'replica_operations-p1-r2',
+        }, now);
+        const gate = () => owner.ensureOperationLedgerSelfMoveDispatchIdleOrSkip(waiter);
+        const blocked = await gate();
+        assert.equal(blocked?.reason, REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING);
+        assert.match(blocked.error, new RegExp(row.operation_id));
+        assert.equal(owner.dispatchRetryTimerByOperationId.has(waiter.operationId), true,
+          'the parked self-move has an existing dispatch wake');
+        assert.equal(owner.hasFreshOperationLedgerSelfMoveParkEvidence(waiter), true);
+        const admission = (registerDurableSelfMoveIntent) =>
+          coordinator.ensureOperationLedgerSelfMoveSerialized({
+            normalizedMoveType: waiter.type, partitionId: waiter.partitionId,
+            move: waiter, registerDurableSelfMoveIntent,
+          });
+        await assert.rejects(() => admission(false), /only into an idle operation ledger/);
+        await admission(true);
+
+        const completed = now + 1;
+        assert.equal(commitLedgerStatement(leader, 'bootstrap:incumbent-terminal',
+          `UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ?,
+           updated_at = ?, steps_history = json_insert(steps_history, '$[#]', json(?))
+           WHERE operation_id = ?`,
+          [WORKFLOW_STEP.FAILED, 'failed', completed, completed,
+            JSON.stringify({step: WORKFLOW_STEP.FAILED, timestamp: completed}), row.operation_id]),
+        null);
+        assert.equal(await gate(), null,
+          'the next dispatch wake sees the committed terminal and may claim the self-move');
+        await admission(false);
       } finally {
         await coordinator.shutdown();
       }
