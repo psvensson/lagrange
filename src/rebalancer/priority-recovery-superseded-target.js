@@ -24,6 +24,7 @@ import {
 import {
   evaluatePriorityRecoveryCompletionRemoveSafety,
   evaluatePriorityPublishedMembershipRemoveSafety,
+  evaluateProspectiveRemoveSafety,
   evaluateRemoveSafety,
 } from './operation-workflow-remove-safety-evaluator.js';
 import {
@@ -622,7 +623,8 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       targetNodeId: move.nodeId,
       workflowStep: WORKFLOW_STEP.PENDING,
     };
-    return this.getRemoveSafetyError(operation);
+    const evaluation = await evaluateProspectiveRemoveSafety(this, operation);
+    return evaluation?.error || null;
   }
 }
 

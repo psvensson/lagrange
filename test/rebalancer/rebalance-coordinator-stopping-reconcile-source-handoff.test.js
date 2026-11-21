@@ -718,7 +718,7 @@ test('RebalanceCoordinator counts only the partition\'s voter-ready replicas ' +
       cacheData: {services, replicaOperations: []},
     });
     try {
-      return await coordinator.workflowOwner.evaluateRemoveSafety({
+      const operation = {
         operationId: 'priority-replace-voter-floor',
         type: OperationType.REPLACE,
         partitionId: TEST_PARTITION_ID,
@@ -738,7 +738,11 @@ test('RebalanceCoordinator counts only the partition\'s voter-ready replicas ' +
           timestamp: TEST_NOW_MS,
           sourceReplicaId: TEST_SOURCE_REPLICA_ID,
         }],
-      });
+      };
+      if (!await coordinator.repository.persistNewOperation(operation)) {
+        throw new Error('the exact REPLACE subject did not enter the SQLite ledger');
+      }
+      return await coordinator.workflowOwner.evaluateRemoveSafety(operation);
     } finally {
       await coordinator.shutdown();
     }

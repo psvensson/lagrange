@@ -416,7 +416,7 @@ async function resolveRemoveSafetySimpleFloor(context, operation,
  * @param {Object} operation
  * @returns {Promise<Object>}
  */
-async function evaluateRemoveSafety(context, operation) {
+async function evaluateRemoveSafetyWithCompetitors(context, operation, readCompetitors) {
   if (!operation) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
@@ -450,7 +450,7 @@ async function evaluateRemoveSafety(context, operation) {
   // retirement while unrelated partition rows appear idle.
   let allOps;
   try {
-    allOps = await context.repository.getRequiredRemoveArbitrationCompetitors(operation);
+    allOps = await readCompetitors(entityType, entityId);
   } catch (cause) {
     const detail = cause?.cause ?? cause;
     return context.buildDeferredRemoveSafetyEvaluation(
@@ -707,12 +707,25 @@ async function evaluateRemoveSafety(context, operation) {
     context.buildSafeRemoveSafetyEvaluation();
 }
 
+function evaluateRemoveSafety(context, operation) {
+  return evaluateRemoveSafetyWithCompetitors(context, operation, () =>
+    context.repository.getRequiredRemoveArbitrationCompetitors(operation));
+}
+
+// Prospective policy checks have no durable subject yet. The effect owner
+// always uses evaluateRemoveSafety and proves its own row before sending.
+function evaluateProspectiveRemoveSafety(context, operation) {
+  return evaluateRemoveSafetyWithCompetitors(context, operation, (entityType, entityId) =>
+    context.repository.getRequiredOperationsByEntity(entityType, entityId));
+}
+
 export {
   REMOVE_SAFETY_PROJECTION_STATE,
   buildRemoveSafetyProjectionInput,
   resolveRemoveSafetySimpleFloor,
   evaluatePriorityRecoveryCompletionRemoveSafety,
   evaluatePriorityPublishedMembershipRemoveSafety,
+  evaluateProspectiveRemoveSafety,
   evaluateRemoveSafety,
   evaluateUniversalPartitionRemoveSafety,
   projectQuorumAfterRemoval,

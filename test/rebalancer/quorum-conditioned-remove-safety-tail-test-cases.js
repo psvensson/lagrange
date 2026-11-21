@@ -1,3 +1,4 @@
+import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
@@ -139,9 +140,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           replicaId: 'replica_operations-p1-r1',
         });
 
-        operation.replicaId = 'replica_operations-p1-r4';
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          'replica_operations-p1-r4');
 
         const result = await coordinator.executeOperation(operation);
 
@@ -292,9 +292,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           replicaId: TEST_SOURCE_REPLICA_ID,
         });
 
-        operation.replicaId = TEST_REPLACEMENT_REPLICA_ID;
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          TEST_REPLACEMENT_REPLICA_ID);
 
         const blockedResult = await coordinator.executeOperation(operation);
 
@@ -473,9 +472,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           replicaId: 'control_plane_publications-p1-r1',
         });
 
-        operation.replicaId = 'control_plane_publications-p1-r4';
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          'control_plane_publications-p1-r4');
 
         const blockedResult = await coordinator.executeOperation(operation);
 
@@ -683,9 +681,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           replicaId: 'sql_transaction_participants-p1-r1',
         });
 
-        operation.replicaId = 'sql_transaction_participants-p1-r4';
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          'sql_transaction_participants-p1-r4');
 
         const blockedResult = await coordinator.executeOperation(operation);
 
@@ -871,9 +868,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           replicaId: TEST_SOURCE_REPLICA_ID,
         });
 
-        operation.replicaId = TEST_REPLACEMENT_REPLICA_ID;
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          TEST_REPLACEMENT_REPLICA_ID);
 
         const handoffResult = await coordinator.executeOperation(operation);
 
@@ -1018,9 +1014,8 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
           replicaId: TEST_SOURCE_REPLICA_ID,
         });
 
-        operation.replicaId = TEST_REPLACEMENT_REPLICA_ID;
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          TEST_REPLACEMENT_REPLICA_ID);
         const handoffResult = await coordinator.executeOperation(operation);
 
         t.equal(

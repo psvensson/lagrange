@@ -115,7 +115,7 @@ documentClass: generated
 - [operation-workflow-replace-witness.js](operation-workflow-replace-witness.js) - Owner contract: Owner: the REPLACE owner's transport to its witness replica (quest replace-source-removal-owner,... (importers: few)
 - [operation-workflow-reservation-recovery.js](operation-workflow-reservation-recovery.js) - No leading comment; first export: reconcileReservationBackedPendingOperation. (importers: one)
 - [operation-workflow-stopping-starvation.js](operation-workflow-stopping-starvation.js) - Bounded STOPPING-observation starvation escalation (quest formation-barrier-spread-release-oscillation): an... (importers: one)
-- [operation-workflow-stranded-remove-repair.js](operation-workflow-stranded-remove-repair.js) - Recover the recorded REMOVE/ACTIVE contradiction from the July run-1 failure. (importers: one)
+- [operation-workflow-stranded-remove-repair.js](operation-workflow-stranded-remove-repair.js) - Recover the recorded REMOVE/ACTIVE contradiction from the July run-1 failure. (importers: few)
 - [operation-workflow-terminal-reservation-release.js](operation-workflow-terminal-reservation-release.js) - Only a validated terminal result permits discharge of retained obligations. (importers: many)
 - [operation-workflow-terminal-transition-repair.js](operation-workflow-terminal-transition-repair.js) - Arm (or re-arm) the repair for one unconfirmed terminal transition. (importers: many)
 - [operation-workflow-transition-orchestration.js](operation-workflow-transition-orchestration.js) - Execute one guarded durable step mutation under the operation owner lane. (importers: few)

@@ -1,3 +1,4 @@
+import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 
@@ -187,9 +188,8 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           replicaId: testSourceReplicaId,
         });
 
-        operation.replicaId = testReplacementReplicaId;
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          testReplacementReplicaId);
 
         const blockedResult = await coordinator.executeOperation(operation);
 
@@ -377,24 +377,17 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           replicaId: testSourceReplicaId,
         });
 
-        operation.replicaId = testReplacementReplicaId;
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          testReplacementReplicaId);
 
-        // Add a concurrent operation for the same partition in the registry/active operations cache
+        // Hold the actual entity ledger with a concurrent CREATE.
         const concurrentOp = await coordinator.createOperation({
           type: OperationType.ADD,
           partitionId: testPartitionId,
           nodeId: 'node-b',
         });
-        coordinator.systemTableCache.merge(
-          'replica_operations',
-          concurrentOp.operationId,
-          {
-            status: 'creating',
-            workflow_step: WORKFLOW_STEP.CREATING,
-          },
-        );
+        await commitRemoveSafetyStep(coordinator, concurrentOp, WORKFLOW_STEP.CREATING,
+          concurrentOp.replicaId);
 
         const blockedResult = await coordinator.executeOperation(operation);
 
@@ -595,9 +588,8 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           replicaId: testSourceReplicaId,
         });
 
-        operation.replicaId = testReplacementReplicaId;
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          testReplacementReplicaId);
 
         const blockedResult = await coordinator.executeOperation(operation);
 
@@ -779,9 +771,6 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           nodeId: testNodeId,
           replicaId: testReplicaId,
         });
-
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
 
         const result = await coordinator.executeOperation(operation);
 

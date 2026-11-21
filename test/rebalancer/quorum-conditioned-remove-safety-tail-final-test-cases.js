@@ -1,3 +1,4 @@
+import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerQuorumConditionedRemoveSafetyTailFinalTests({
@@ -119,9 +120,8 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
           replicaId: 'replica_operations-p1-r1',
         });
 
-        operation.replicaId = 'replica_operations-p1-r4';
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          'replica_operations-p1-r4');
 
         const progressed =
         await coordinator.workflowOwner.reconcileOperationLifecycle(

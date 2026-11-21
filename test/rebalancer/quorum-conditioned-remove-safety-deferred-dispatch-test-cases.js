@@ -1,3 +1,4 @@
+import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {createMockPolicyService} from './test-helpers.js';
@@ -113,12 +114,8 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           replicaId: 'nodes-p1-r1',
         });
 
-        operation.replicaId = 'nodes-p1-r4';
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
-        await coordinator.repository.persistOperationUpdate(
-          operation,
-        );
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          'nodes-p1-r4');
 
         const result = await coordinator.executeOperation(operation);
 
@@ -250,8 +247,8 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
         replicaId: 'nodes-p1-r4',
       });
 
-      operation.workflowStep = WORKFLOW_STEP.SENDING;
-      operation.status = 'pending';
+      await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.SENDING,
+        operation.replicaId);
 
       const progressed =
         await coordinator.workflowOwner
@@ -399,9 +396,8 @@ export function registerQuorumConditionedRemoveSafetyDeferredDispatchTests({
           replicaId: 'replica_operations-p1-r1',
         });
 
-        operation.replicaId = 'replica_operations-p1-r4';
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = 'active';
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          'replica_operations-p1-r4');
 
         const result = await coordinator.executeOperation(operation);
 
