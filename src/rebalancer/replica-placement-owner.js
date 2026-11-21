@@ -289,6 +289,8 @@ class ReplicaPlacementOwner {
       return;
     }
     this.attachListeners();
+    this.workflowOwner?.repository?.wakeRetainedPlacementRepairs?.((attempt) =>
+      attempt.clearingTrigger === PLACEMENT_TRIGGER.LEADERSHIP_START);
     this.notify(PLACEMENT_TRIGGER.LEADERSHIP_START);
   }
 

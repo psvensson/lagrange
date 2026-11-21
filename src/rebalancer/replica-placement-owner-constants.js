@@ -1,3 +1,4 @@
+import {PLACEMENT_ADMISSION_ERROR} from '../partition/partition-placement-admission-constants.js';
 // The vocabulary of the one replica placement owner (quest
 // replica-placement-admission-owner, design sections 2.5-2.7 and 2.12 item 2):
 // the typed outcomes of PLACEMENT_ADMIT and PLACEMENT_RELEASE_HOLD (their
@@ -179,6 +180,8 @@ const TRIGGER = PLACEMENT_TRIGGER;
 // release of a row that holds nothing has nothing to wait for). A code reachable on the admission path without a row here
 // is a defect.
 const PLACEMENT_CLEARING_TRIGGER = Object.freeze({
+  [PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE]: TRIGGER.LEADERSHIP_START,
+  [PLACEMENT_ADMISSION_ERROR.REPAIR_PENDING]: TRIGGER.LEDGER_COMMIT,
   [PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED]: null,
   [PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED]: null,
   [PLACEMENT_REFUSAL.RETAINED_ADMISSION_REQUIRED]: null,

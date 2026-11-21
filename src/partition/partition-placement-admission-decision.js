@@ -180,6 +180,13 @@ function entityAdmissionRefusal(statement, census) {
     const founded = foundingRefusal(statement, census);
     if (founded !== null) return founded;
   }
+  if (statement.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
+      statement.entityId === LEDGER_PARTITION_ID) {
+    const active = census.filter((row) => row.incomplete);
+    if (active.length > 0) {
+      return refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED, {operationIds: idsOf(active)});
+    }
+  }
   if (entityRows.length > 0) {
     return refused(REFUSAL.PARTITION_BUSY, {operationIds: idsOf(entityRows)});
   }

@@ -1,5 +1,5 @@
 import {prepareRetainedPlacementRepairBody} from
-  './replica-placement-owner-retained-repair-statement.js';
+  './replica-placement-owner-retained-repair-routing.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {resolveTimeSource} from '../time/time-source.js';

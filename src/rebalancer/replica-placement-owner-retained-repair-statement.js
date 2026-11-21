@@ -1,3 +1,4 @@
+import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
 // The ordinary placement owner classifies a currently eligible same-ID copy
 // repair. This observes its real node/formation/deficit inputs; it never labels
 // a historical copy a repair merely to obtain a larger quota.
@@ -39,14 +40,18 @@ function buildCurrentRetainedCopyStatement(owner, operation) {
   const candidate = ordered.find((entry) => entry.partitionId === operation.partitionId &&
     entry.move.type === operation.type && entry.move.targetNodeId === operation.targetNodeId &&
     entry.move.copySourceNodeId === operation.copySourceNodeId &&
-    (entry.move.sourceReplicaId ?? null) === (operation.sourceReplicaId ?? null) &&
-    (entry.move.targetNodeBootIncarnation ?? null) ===
-      (operation.targetNodeBootIncarnation ?? null) &&
-    (entry.move.targetNodeStorageIncarnation ?? null) ===
-      (operation.targetNodeStorageIncarnation ?? null));
-  if (!candidate) return null;
+    (entry.move.sourceReplicaId ?? null) === (operation.sourceReplicaId ?? null));
+  const identity = resolveTargetNodeIncarnationSnapshot(owner.systemTableCache, operation.targetNodeId);
+  if (!candidate || !Number.isSafeInteger(operation.targetNodeBootIncarnation) ||
+      !Number.isSafeInteger(operation.targetNodeStorageIncarnation) ||
+      nodeInput.eligibility.nodeBoots.get(operation.targetNodeId) !==
+        operation.targetNodeBootIncarnation || identity.bootIncarnation !==
+        operation.targetNodeBootIncarnation || identity.storageIncarnation !==
+        operation.targetNodeStorageIncarnation) return null;
   return buildPlacementAdmissionStatement({...candidate,
-    move: {...candidate.move, replicaId: operation.replicaId}}, {
+    move: {...candidate.move, replicaId: operation.replicaId,
+      targetNodeBootIncarnation: operation.targetNodeBootIncarnation,
+      targetNodeStorageIncarnation: operation.targetNodeStorageIncarnation ?? null}}, {
     sourceNodeId: owner.resolveStatementSourceNodeId(candidate, inputsByPartition),
     repairWaitingSourceNodeIds,
     formationLatchEpoch: nodeInput.formation.latchEpoch,
@@ -55,17 +60,4 @@ function buildCurrentRetainedCopyStatement(owner, operation) {
   });
 }
 
-function prepareRetainedPlacementRepairBody(coordinator, operation) {
-  let admissionStatement = null;
-  if (operation.completedAt === null &&
-      (operation.type === OperationType.ADD || operation.type === OperationType.REPLACE)) {
-    for (const service of coordinator.ledgerPartitionServices) {
-      admissionStatement = buildCurrentRetainedCopyStatement(service.rebalancerLeadershipSink, operation);
-      if (admissionStatement !== null) break;
-    }
-  }
-  return Object.freeze({operation, admissionStatement});
-}
-
-export {buildCurrentRetainedCopyStatement, prepareRetainedPlacementRepairBody,
-  promotedVoterReplicaIdsByPartition};
+export {buildCurrentRetainedCopyStatement, promotedVoterReplicaIdsByPartition};

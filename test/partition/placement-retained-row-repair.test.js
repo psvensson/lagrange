@@ -26,12 +26,16 @@ import {installCommittedOperationMutationFixture} from '../rebalancer/operation-
 import {createMockControlPlaneSystemTableGateway, createTestCoordinator} from
   '../rebalancer/test-helpers.js';
 import {applyCommitted, clearFixtureSingletons, resetFixtureSingletons,
-  settleTicks, temporaryDbPath} from '../test-helpers/participant-transaction-fixture.js';
+  resumeFixtureParticipantAdmission, send, settleTicks, temporaryDbPath} from '../test-helpers/participant-transaction-fixture.js';
 import {NODE, commitLedgerStatement, ledgerRows, onLedgerLeader, placementStatement,
   stepLedgerRow} from './placement-admission-fixture.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
+import {raiseParticipantCutoverPause} from
+  '../../src/partition/partition-participant-transaction-pause.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+
 const PARTITION_ID = 'retained-repair-p1';
 const planner = new ControlPlaneSystemTableGateway();
 
@@ -64,6 +68,7 @@ async function withRepairLedger(measure) {
         queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
       });
       const world = {leader, coordinator, gateway, commands};
+      attachCurrentCopyOwner(world);
       try {
         await measure(world);
       } finally {
@@ -77,17 +82,17 @@ async function withRepairLedger(measure) {
   }
 }
 
-async function retainMissing(world, type = OperationType.REMOVE) {
+async function retainMissing(world, type = OperationType.REMOVE, partitionId = PARTITION_ID) {
   const operation = createOperationAt({operationId: `historical-${type}`,
-    type, partitionId: PARTITION_ID, sourceNodeId: NODE.A, targetNodeId: NODE.B,
-    replicaId: `${PARTITION_ID}-retained`, membershipPublicationEpoch: 7,
+    type, partitionId, sourceNodeId: NODE.A, targetNodeId: NODE.B,
+    replicaId: `${partitionId}-retained`, membershipPublicationEpoch: 7,
     ...(type === OperationType.ADD || type === OperationType.REPLACE ?
-      {targetNodeBootIncarnation: 1} : {})}, Date.now());
+      {targetNodeBootIncarnation: 1, targetNodeStorageIncarnation: 1} : {})}, Date.now());
   if (type === OperationType.ADD || type === OperationType.REPLACE) {
     operation.copySourceNodeId = NODE.A;
   }
   operation.entityType = 'partition';
-  operation.entityId = PARTITION_ID;
+  operation.entityId = partitionId;
   await world.coordinator.repository.persistNewOperation(operation);
   const retained = await world.coordinator.getOperation(operation.operationId);
   assert.ok(retained, 'a real producer created the historical row');
@@ -187,8 +192,10 @@ test('lost committed answer reuses pinned bytes and preserves the retained lease
     assert.equal(repository.retainedPlacementRepairs.size, 1);
     const row = ledgerRows(world.leader)[0];
     assert.equal(row.lease_expires_at, retained.ownerLeaseExpiresAt ?? null);
+    const held = repository.retainedPlacementRepairs.get(retained.operationId);
+    assert.equal(held.entryId, attempts[0].entryId);
+    assert.deepEqual(held.body, attempts[0].body, 'unknown answer retains identical native command');
     assert.equal(await repository.repairRetainedOperation(retained), true);
-    assert.deepEqual(attempts[1], attempts[0], 'unknown answer replays identical native command');
     assert.equal(world.commands.length, 1, 'settled replay proposes no second write');
     assert.equal(repository.retainedPlacementRepairs.size, 0);
   }));
@@ -213,8 +220,12 @@ test('exact existing row succeeds; changed birth and history refuse without repl
   }));
 
 function attachCurrentCopyOwner(world) {
+  world.placementOwner?.shutdown();
   const now = Date.now();
   const cache = {
+    get(table, nodeId) {
+      return table === 'nodes' ? {node_id: nodeId, boot_incarnation: 1, storage_incarnation: 1} : null;
+    },
     getAll(table) {
       if (table === 'partitions') return [{partition_id: PARTITION_ID, status: 'active',
         replica_count: 3, leader_node_id: NODE.A}];
@@ -226,6 +237,7 @@ function attachCurrentCopyOwner(world) {
   };
   const owner = createReplicaPlacementOwner({nodeId: NODE.A,
     ledgerPartitionService: world.leader, systemTableCache: cache,
+    workflowOwner: world.coordinator.workflowOwner,
     nodeAuthority: {
       answerCommittedNodes: () => ({state: 'ready', epoch: {publicationEpoch: 7},
         formation: {state: 'FORMED', latchEpoch: 7},
@@ -309,4 +321,169 @@ test('current actual deficit policy preserves same-ID copies and native capacity
     await settleRepair(world);
     assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId),
       'native clearing re-admits the original identity instead of minting another operation');
+  }));
+
+
+test('foreign and malformed native answers retain one exact unknown attempt', async () => {
+  const corruptions = [
+    (actual) => ({...actual, entryId: 'foreign-entry'}),
+    (actual) => ({...actual, placementResult: {outcome: 'ADMITTED',
+      operationIds: ['foreign-operation']}}),
+    (actual) => ({...actual, placementResult: {outcome: 'REFUSED',
+      reason: PLACEMENT_REFUSAL.PARTITION_BUSY, operationIds: ['not-a-typed-blocker']}}),
+  ];
+  for (const corrupt of corruptions) {
+    await withRepairLedger(async (world) => {
+      const retained = await retainMissing(world);
+      const repository = world.coordinator.repository;
+      const submit = repository.repairRetainedPlacement;
+      let original;
+      repository.repairRetainedPlacement = async (payload) => {
+        original = payload;
+        return corrupt(await submit(payload));
+      };
+      assert.equal(await repository.repairRetainedOperation(retained), false);
+      assert.equal(repository.retainedPlacementRepairs.size, 1);
+      const held = repository.retainedPlacementRepairs.get(retained.operationId);
+      assert.equal(held.entryId, original.entryId);
+      assert.deepEqual(held.body, original.body);
+      assert.equal(await repository.repairRetainedOperation(retained), true);
+      assert.equal(repository.retainedPlacementRepairs.size, 0);
+      assert.equal(world.commands.length, 1);
+    });
+  }
+});
+
+test('shutdown retires volatile custody and late committed replies cannot rearm it', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const repository = world.coordinator.repository;
+    const submit = repository.repairRetainedPlacement;
+    let release;
+    let arrived;
+    const committed = new Promise((resolve) => { arrived = resolve; });
+    repository.repairRetainedPlacement = async (payload) => {
+      const answer = await submit(payload);
+      arrived();
+      await new Promise((resolve) => { release = resolve; });
+      return answer;
+    };
+    const pending = repository.repairRetainedOperation(retained);
+    await committed;
+    assert.equal(await repository.repairRetainedOperation(
+      {...retained, createdAt: retained.createdAt + 1}), false,
+    'a same-ID/different-birth caller cannot replace the held envelope');
+    await world.coordinator.shutdown();
+    release();
+    assert.equal(await pending, false);
+    assert.equal(repository.retainedPlacementRepairs.size, 0);
+    assert.equal(repository.retainedPlacementRepairWakes.size, 0);
+    assert.equal(ledgerRows(world.leader).length, 1,
+      'shutdown does not undo a real committed restoration');
+  }));
+
+
+test('an intact ordinary ACTIVE reservation dispatch adds no repair proposal', () =>
+  withRepairLedger(async (world) => {
+    const answer = await placementAdmission.requestPlacementAdmission(world.leader, {
+      entryId: 'intact-native-add', body: placementStatement({partitionId: PARTITION_ID,
+        target: NODE.B})});
+    const operation = await world.coordinator.getOperation(answer.placementResult.operationIds[0]);
+    const owner = world.coordinator.workflowOwner;
+    owner.hasStorageReservationSupport = () => true;
+    owner.ensureReservationForOperation = async () => ({outcome: RESERVATION.ALREADY_ACTIVE});
+    const before = world.commands.length;
+    assert.equal(await ensureDispatchReservationOrSkip(owner, operation), null);
+    assert.equal(world.commands.length, before,
+      'the exact authoritative committed-row read satisfies the healthy gate');
+  }));
+
+for (const first of ['normal', 'ledger']) {
+  test(`retained ledger self-move global exclusion: ${first} first`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world, OperationType.REMOVE, 'replica_operations-p1');
+      if (first === 'normal') {
+        const normal = await compete(world);
+        const restored = await world.coordinator.repository.persistOperationUpdate(retained,
+          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+        assert.equal(restored.disposition, DISPOSITION.REFUSED);
+        assert.equal(ledgerRows(world.leader).length, 1);
+        const debt = world.coordinator.repository.retainedPlacementRepairs.get(retained.operationId);
+        assert.equal(debt.blockers[0].operationId, normal.operationIds[0]);
+        stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+        await settleRepair(world);
+        assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId));
+      } else {
+        const restored = await world.coordinator.repository.persistOperationUpdate(retained,
+          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+        assert.equal(restored.disposition, DISPOSITION.REINSERTED);
+        assert.equal((await compete(world)).reason, PLACEMENT_REFUSAL.LEDGER_TRANSITION_UNRESOLVED);
+      }
+    }));
+}
+
+function remoteCaller(world) {
+  const messages = [];
+  const coordinator = createTestCoordinator({nodeId: NODE.A,
+    replaceWitness: false, committedMembershipFixture: false,
+    controlPlaneSystemTableGateway: world.gateway,
+    cacheData: {services: [{replica_id: world.leader.replicaId, node_id: world.leader.nodeId,
+      partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'}]},
+    messageRouter: {async deliver(address, payload) {
+      messages.push({address, payload});
+      return buildDeliveryEnvelope({acknowledged: true}, await send(world.leader, payload));
+    }},
+  });
+  assert.equal(coordinator.ledgerPartitionServices.size, 0, 'the caller has no local ledger');
+  return {coordinator, messages};
+}
+
+test('remote-only current copy preparation succeeds and changed target boot stays debt', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world, OperationType.ADD);
+    const remote = remoteCaller(world);
+    try {
+      assert.equal(await remote.coordinator.repository.repairRetainedOperation(retained), true);
+      assert.deepEqual(remote.messages.map(({payload}) => payload.type),
+        ['PLACEMENT_REPAIR_PREPARE', 'PLACEMENT_REPAIR']);
+      const wire = remote.messages[1].payload;
+      assert.equal(wire.body.admissionStatement.moves[0].replicaId, retained.replicaId);
+      assert.equal(wire.body.admissionStatement.moves[0].targetNodeBootIncarnation, 1);
+      await world.gateway.submitMutation({tableName: 'replica_operations', operation: 'delete',
+        whereClause: {operation_id: retained.operationId}});
+      const before = world.commands.length;
+      assert.equal(await remote.coordinator.repository.repairRetainedOperation(
+        {...retained, targetNodeBootIncarnation: 2}), false);
+      assert.equal(world.commands.length, before, 'unknown original target birth grants no command');
+      assert.equal(remote.coordinator.repository.retainedPlacementRepairs.size, 1);
+    } finally {
+      await remote.coordinator.shutdown();
+    }
+  }));
+
+test('remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const remote = remoteCaller(world);
+    try {
+      raiseParticipantCutoverPause(world.leader);
+      assert.equal(await remote.coordinator.repository.repairRetainedOperation(retained), false);
+      assert.equal(world.commands.length, 0, 'cutover refusal proposed no native repair');
+      assert.equal(world.coordinator.repository.retainedPlacementRepairs.size, 1,
+        'the actual remote ledger owner holds the exact pinned request');
+      const before = remote.messages.length;
+      remote.coordinator.repository.observeRetainedPlacementRepairCommit('replica_operations',
+        {operation_id: 'unrelated', created_at: Date.now(), workflow_step: WORKFLOW_STEP.ACTIVE});
+      await settleTicks();
+      assert.equal(remote.messages.length, before, 'unrelated CDC cannot re-propose the request');
+      await resumeFixtureParticipantAdmission(world.leader);
+      await settleRepair(world);
+      assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId),
+        'the actual release event, with zero caller traffic, restores the original row');
+      assert.equal(remote.messages.length, before);
+      assert.equal(world.coordinator.repository.retainedPlacementRepairs.size, 0);
+      assert.equal(await remote.coordinator.repository.ensureRetainedOperationRow(retained), true);
+    } finally {
+      await remote.coordinator.shutdown();
+    }
   }));

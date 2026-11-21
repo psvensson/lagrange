@@ -49,7 +49,7 @@ import {classifyPlacementClass, formationWaitingReasonOf} from
 import {attachReplicaPlacementOwner} from './replica-placement-owner.js';
 import {isBootstrapTopologyDispatchDeferred} from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
-import {buildDeliveryEnvelope} from '../transport/transport-semantic-outcome.js';
+import {wrapPlacementTransport} from './replica-placement-owner-transport.js';
 
 // ends-on: PLACEMENT_ADMIT response from replica_operations-p1 leader
 const DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS = 5000;
@@ -60,8 +60,6 @@ const PLACEMENT_LEDGER_LEADER_UNAVAILABLE_CODE =
 const PLACEMENT_ADMISSION_REFUSED_CODE = 'PLACEMENT_ADMISSION_REFUSED';
 const HOLD_RELEASE_NOT_FOUND_REASON = 'operation_not_found';
 const HOLD_RELEASE_COHORT_MISMATCH_REASON = 'topology_cohort_mismatch';
-const TRANSPORT_TIMEOUT_CODE = 'TRANSPORT_TIMEOUT';
-const TRANSPORT_TIMEOUT_MESSAGE = 'Transport delivery failed';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER =
   'Failed to prime coordinator-created operation progress';
@@ -192,25 +190,6 @@ function formatLedgerReplicaAddress(row) {
   return AddressManager.getInstance().format(nodeId, SERVICE_TYPE.PARTITION, replicaId);
 }
 
-function wrapPlacementTransport(messageRouter) {
-  if (!messageRouter) return null;
-  if (messageRouter.deliver) return messageRouter;
-  if (!messageRouter.sendToAddress) return null;
-  return {
-    deliver: async (address, message, options) => {
-      const response = await messageRouter.sendToAddress(address, message, options);
-      if (response?.transport) return response;
-      if (response?.delivered === false) {
-        return buildDeliveryEnvelope({
-          acknowledged: false,
-          errorCode: response.errorCode || TRANSPORT_TIMEOUT_CODE,
-          errorMessage: response.error || TRANSPORT_TIMEOUT_MESSAGE,
-        }, null);
-      }
-      return buildDeliveryEnvelope({acknowledged: true}, response);
-    },
-  };
-}
 
 async function readPartitionVoterRemovalScope(coordinator, partitionId, move) {
   const readiness = coordinator.controlPlaneReadinessService;

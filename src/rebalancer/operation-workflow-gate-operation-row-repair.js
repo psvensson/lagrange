@@ -13,11 +13,11 @@ const GATE_REPAIR_ROW_FAILED_LOG =
  * @private
  */
 async function repairOperationRowForGateRepairedReservation(owner, operation) {
-  if (typeof owner.repository?.repairRetainedOperation !== 'function') {
+  if (typeof owner.repository?.ensureRetainedOperationRow !== 'function') {
     return false;
   }
   try {
-    return await owner.repository.repairRetainedOperation(operation);
+    return await owner.repository.ensureRetainedOperationRow(operation);
   } catch (error) {
     owner.logger?.warn?.(
       GATE_REPAIR_ROW_FAILED_LOG,

@@ -287,7 +287,18 @@ async function requestPlacementCommand(service, type, payload) {
  * @return {Promise<Object>|Object} The typed answer.
  */
 function requestPlacementRepair(service, payload) {
-  return requestPlacementCommand(service, PLACEMENT_REPAIR_TYPE, payload);
+  const leadership = partitionWriteLeadershipRefusalOf(service);
+  if (leadership !== null) return leadership;
+  const command = buildPlacementCommand(service, {type: PLACEMENT_REPAIR_TYPE,
+    entryId: payload.entryId, body: payload.body});
+  if (command === null) return refusal(service, ERROR.BYTES);
+  const repository = service.rebalancerLeadershipSink?.workflowOwner?.repository;
+  if (!repository?.acceptRetainedPlacementRepairRequest) {
+    return refusal(service, ERROR.OWNER_UNAVAILABLE);
+  }
+  return repository.acceptRetainedPlacementRepairRequest(service,
+    {entryId: command.entryId, body: command.body},
+    (request) => requestPlacementCommand(service, PLACEMENT_REPAIR_TYPE, request));
 }
 
 function requestPlacementAdmission(service, payload) {
