@@ -28,6 +28,10 @@ import {ControlPlanePublicationsOwner} from
   '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {normalizeControlPlanePublicationRow} from
   '../../src/control-plane/system-row-normalizers.js';
+import {PARTITION_WRITE_RELEASE_CAUSE, buildReleasedPendingWriteAnswer} from
+  '../../src/partition/partition-write-kernel.js';
+import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
+  '../../src/partition/proposal-queue-constants.js';
 import {WORKFLOW_TRANSITION_FIELD} from '../../src/workflow/workflow-constants.js';
 import {deriveParticipantEntryId} from
   '../../src/query/distributed/distributed-write-coordinator.js';
@@ -456,8 +460,8 @@ function installLifecycleRefresh(writer, row, placementNodeIds = [NODES[1]]) {
     ...previous, changed: false, membershipLifecycleSummaryChanged: true,
     membershipLifecycleSummary: projection,
   });
-  return () => writer.coordinator.reconcileClusterMembership({
-    latestPublicationRow: row, latestPublishedPublicationRow: row,
+  return (options = {}) => writer.coordinator.reconcileClusterMembership({
+    latestPublicationRow: row, latestPublishedPublicationRow: row, ...options,
   });
 }
 
@@ -582,3 +586,107 @@ test('refresh closes a durable open row that already contains the entire ACK set
     assert.equal(ledger.applied.length, writes,
       'the confirmed closure and metadata need no repeated proposal');
   }));
+
+for (const settleBeforeRead of [false, true]) {
+  test(settleBeforeRead ?
+    'read-only replay retires the earlier refresh once its exact effect is durable' :
+    'a read-only birth replay cannot release an earlier unresolved refresh entry',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const {leader} = ledger;
+    const row = publicationRow(3, NODES, WRITER_TIME - 10);
+    const publicationId = row.publication_id;
+    await writer.coordinator.persistPublicationBirth(row);
+    const original = leader.db.prepare(SELECT_ROW).get(publicationId);
+    writer.cdc.retryMaxAttempts = 1;
+    writer.owner.controlPlaneWriteRetryTimeoutMs = 0;
+
+    const executeQuery = leader.executeQuery.bind(leader);
+    const proposed = Promise.withResolvers();
+    const arrivals = [];
+    let heldCommand;
+    let pending;
+    let resolving = false;
+    leader.controllablePort.setProposeHandler(async (command) => {
+      if (!resolving && !heldCommand) {
+        heldCommand = command;
+        proposed.resolve(command);
+      } else {
+        assert.equal(applyCommitted(leader, command), null);
+        ledger.applied.push(command);
+      }
+    });
+    leader.executeQuery = async (sql, params, options) => {
+      if (!options?.idempotencyKey) return executeQuery(sql, params, options);
+      arrivals.push(options.entryId);
+      if (!resolving) {
+        if (!pending) pending = track(executeQuery(sql, params, options));
+        const command = await Promise.race([
+          proposed.promise, settleTicks().then(() => null),
+        ]);
+        assert.equal(command?.entryId, options.entryId,
+          'the transport refusal refers to the actual held consensus proposal');
+        return buildReleasedPendingWriteAnswer({
+          entryId: command.entryId, proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
+        }, PARTITION_ID, {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST});
+      }
+      if (options.entryId === heldCommand?.entryId) {
+        assert.equal(applyCommitted(leader, heldCommand), null);
+        ledger.applied.push(heldCommand);
+        heldCommand = null;
+      }
+      return executeQuery(sql, params, options);
+    };
+
+    const options = {latestPublicationRow: original, latestPublishedPublicationRow: original,
+      publicationWriteMaxAttempts: 1};
+    try {
+      const refresh = installLifecycleRefresh(writer, original, [NODES[0]]);
+      await assert.rejects(refresh(options), {code: 'PUBLICATION_WRITE_UNCONFIRMED'});
+      assert.ok(heldCommand, 'the original refresh reached native consensus but has not applied');
+      const unknownEntryId = heldCommand.entryId;
+      assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), original);
+      const beforeReplay = arrivals.length;
+      if (settleBeforeRead) {
+        assert.equal(applyCommitted(leader, heldCommand), null);
+        ledger.applied.push(heldCommand);
+        heldCommand = null;
+      }
+      const expectedRow = leader.db.prepare(SELECT_ROW).get(publicationId);
+
+      const candidate = normalizeControlPlanePublicationRow(original);
+      writer.coordinator.deriveClusterMembershipCandidate =
+          async () => ({...candidate, changed: true});
+      const replay = await writer.coordinator.reconcileClusterMembership(options);
+      assert.equal(replay.publicationRow.publicationId, publicationId);
+      assert.equal(arrivals.length, beforeReplay, 'replaying birth proposes no write');
+      assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), expectedRow);
+
+      resolving = true;
+      const nextRefresh = installLifecycleRefresh(writer, expectedRow, [NODES[1]]);
+      if (settleBeforeRead) {
+        await nextRefresh();
+        assert.equal(arrivals.length, beforeReplay + 1,
+          'the exactly observed effect does not need to be reissued');
+        assert.notEqual(arrivals[beforeReplay], unknownEntryId,
+          'fresh content is delivered only with a fresh identity');
+      } else {
+        const later = track(nextRefresh({publicationWriteMaxAttempts: 1}));
+        await Promise.allSettled([later.promise]);
+        assert.equal(arrivals[beforeReplay], unknownEntryId,
+          'resolve the earlier refresh before delivering different same-name content');
+        await assert.rejects(later.promise, {code: 'PUBLICATION_WRITE_UNCONFIRMED'});
+        assert.deepEqual(readDurablePublication(leader, publicationId)
+          .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[0]]);
+        const current = leader.db.prepare(SELECT_ROW).get(publicationId);
+        await installLifecycleRefresh(writer, current, [NODES[1]])();
+      }
+      assert.equal(ledger.applied.filter(({entryId}) => entryId === unknownEntryId).length, 1);
+      assert.deepEqual(readDurablePublication(leader, publicationId)
+        .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[1]]);
+    } finally {
+      leader.executeQuery = executeQuery;
+      if (heldCommand) applyCommitted(leader, heldCommand);
+      await Promise.allSettled(pending ? [pending.promise] : []);
+    }
+  }));
+}

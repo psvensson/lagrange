@@ -143,6 +143,19 @@ function releaseControlPlaneWriteIdentity(writeIdentity) {
   heldInstances.delete(writeIdentity);
 }
 
+// Capture before an authoritative read. Readback must prove the original
+// effect and may retire only the exact retained instance the read observed.
+function captureControlPlaneWriteConfirmation(writeIdentity) {
+  const record = heldInstances.get(writeIdentity);
+  return (observation) => {
+    if (!record?.confirmWriteEffect || heldInstances.get(writeIdentity) !== record ||
+        !record.confirmWriteEffect(observation)) {
+      return false;
+    }
+    return heldInstances.delete(writeIdentity);
+  };
+}
+
 /**
  * The digest of the exact content a write carries.
  * @param {*} content - Its statement and parameters, or its mutation.
@@ -244,7 +257,7 @@ async function attemptInstance(record, attempt) {
   return answer;
 }
 
-function holdNewInstance(name, digest, attempt) {
+function holdNewInstance(name, digest, attempt, confirmWriteEffect) {
   const instance = randomUUID();
   const key = `${CONTROL_PLANE_WRITE_KEY_PREFIX}${createHash(DIGEST_ALGORITHM)
     .update(JSON.stringify([name, instance, digest]))
@@ -253,7 +266,7 @@ function holdNewInstance(name, digest, attempt) {
   // The instance's own content, for its re-delivery when a different write
   // of the name must first resolve it.
   const record = {name, instance, digest, key, unresolved: false,
-    entryId: null, redeliver: attempt};
+    entryId: null, redeliver: attempt, confirmWriteEffect};
   heldInstances.set(name, record);
   return record;
 }
@@ -366,7 +379,7 @@ async function runNamedControlPlaneWrite(options, content, attempt) {
     if (heldInstances.size >= MAX_HELD_WRITE_INSTANCES) {
       return capacityRefusal(name);
     }
-    record = holdNewInstance(name, digest, attempt);
+    record = holdNewInstance(name, digest, attempt, options.confirmWriteEffect);
   }
   try {
     return withPendingInstance(await attemptInstance(record, attempt),
@@ -432,6 +445,7 @@ function isControlPlaneWriteDefinitivelyUnappliedError(error) {
 
 export {
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
+  captureControlPlaneWriteConfirmation,
   controlPlaneWriteIdentity,
   isControlPlaneWriteDefinitivelyUnappliedError,
   isControlPlaneWriteOutcomeUnknown,
