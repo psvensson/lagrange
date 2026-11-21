@@ -125,6 +125,39 @@ complete original dirty checkout is preserved at `b914991bd`.
 Development and measurement of the core system take precedence over new
 product features.
 
+On `616197e10`, all 65 files in the complement to the strict selection
+passed on tv-dator (3,108 assertions). The three-process public journey
+passed in 39.049 seconds on `e88fb401f`. The guarded ledger witnesses
+passed on `602f2db60` and `9225805bb`, including one durable FAILED write
+in either timeout/executor order. Fast static passed against accepted main
+on `a2a3b83d3` in 89.632 seconds. The 85-file strict selection and the
+three-host service gate still need a passing composition.
+[65-file original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-core-complement-6161-nov21.tar.gz),
+[public SQL and writer-order originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--guarded-ledger-fixtures-and-public-sql-nov21.tar.gz),
+[static original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-static-a2a3-5522-nov21.tar.gz).
+
+Two decisions currently block the next composition.
+
+* The concrete operation workflow owner receives both a timer and a SERVICES
+  publication. In `e4376a09a` the first turn returned WAITING and its cleanup
+  cleared the next wake. The next publication reached the right operation,
+  but the workflow interpreted it as a second accepted dispatch and skipped
+  the lifecycle call. The workflow owner must let repeated observations
+  reread authority without counting a dispatch or clearing another turn.
+  [Exact owner trace](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--concrete-progress-owner-and-cdc-nov21.tar.gz).
+* Removal planning evaluates an unsaved move. Dispatch evaluates a committed
+  operation. Requiring the committed subject for planning blocked legitimate
+  removals on `538bd3330`. The placement owner must preserve one quorum
+  policy while requiring the evidence appropriate to each caller. A separate
+  fault-injection case removed a ledger row, then let its real recovery owner
+  reinsert it after the safety check while CDC was held. The removal effect
+  still left. The admission and recovery owners must serialize that decision
+  and preserve the legitimate clearing event. The physical trial has no
+  established instance of the injected deletion.
+  [Placement and original refusal](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--removal-census-538b-and-replay-sql-nov21.tar.gz),
+  [retained reinsertion original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--placement-plan-and-injected-reinsert-c366-nov21.tar.gz).
+
+
 | Decision | Current evidence | Next owner action |
 | --- | --- | --- |
 | Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
