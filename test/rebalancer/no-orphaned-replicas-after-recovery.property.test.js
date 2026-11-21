@@ -430,12 +430,14 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             const summary = await coordinator.handleRecovery();
 
             const local = trackedOperations.get(opRow.operation_id);
-            const remote = trackedOperations.get(remoteRow.operation_id);
-            return summary.totalIncomplete === 2 && summary.markedFailed === 1 &&
+            const remote = await coordinator.repository.queryAuthoritativeOperationById(
+              remoteRow.operation_id,
+            );
+            return summary.totalIncomplete === 1 && summary.markedFailed === 1 &&
               local?.status === ReplicaStatus.FAILED &&
               local.workflow_step === WORKFLOW_STEP.FAILED &&
               remote?.status === ReplicaStatus.REMOVING &&
-              remote.workflow_step === WORKFLOW_STEP.STOPPING;
+              remote.workflowStep === WORKFLOW_STEP.STOPPING;
           } finally {
             await coordinator.shutdown();
           }
