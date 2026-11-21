@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2369,
+    "unit": 2370,
     "integration": 131,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-c9eee9e8",
+  "censusSize": 2734,
+  "digest": "fnv1a32-83aed206",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2629,6 +2629,7 @@
     "test/transport/raft-frame-reconnect-owner.integration.test.js": "integration",
     "test/transport/raft-frame-turn-not-held.integration.test.js": "integration",
     "test/transport/raft-frame-unacknowledged-delivery.test.js": "unit",
+    "test/transport/router-adopted-connection-reconnect-schedule.test.js": "unit",
     "test/transport/router-envelope-pre-send-failure.test.js": "unit",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "unit",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "unit",

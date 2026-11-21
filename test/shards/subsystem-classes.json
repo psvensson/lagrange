@@ -22,13 +22,13 @@
     "storage-raft": 164,
     "test-infrastructure": 167,
     "transactions": 17,
-    "transport-messaging": 120,
+    "transport-messaging": 121,
     "wasm-toolchain": 74
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-97e0d2f8",
+  "censusSize": 2734,
+  "digest": "fnv1a32-34d3d000",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-eef390df",
+  "observationDigest": "fnv1a32-087770e3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2648,6 +2648,7 @@
     "test/transport/raft-frame-reconnect-owner.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-turn-not-held.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-unacknowledged-delivery.test.js": "transport-messaging",
+    "test/transport/router-adopted-connection-reconnect-schedule.test.js": "transport-messaging",
     "test/transport/router-envelope-pre-send-failure.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
@@ -25129,6 +25130,19 @@
       ]
     },
     "test/transport/raft-frame-unacknowledged-delivery.test.js": {
+      "files": [
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/distributed/harness/virtual-connection-environment.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/transport/router-adopted-connection-reconnect-schedule.test.js": {
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
