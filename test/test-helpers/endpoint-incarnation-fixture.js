@@ -8,6 +8,7 @@
  */
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {cdcCommittedWriteAnswer} from './committed-write-answer.js';
 
 const FIXTURE_ENDPOINT_INCARNATION = 1;
 
@@ -65,8 +66,10 @@ function publishRegisteredEndpoint(cache, endpoint,
 
 /**
  * A mock whose only write recorder is its upsert records an endpoint's INSERT
- * birth through that same recorder. The applied row count is 1 unless the
- * recorder reports an explicit outcome.
+ * birth through that same recorder. Unless the recorder reports an explicit
+ * outcome, the INSERT answers what the CDC integration service answers for a
+ * committed one-row insert (with the producer's durable commit receipt for
+ * the write's own entry).
  * @param {Object} mock - The mock owning upsertSystemTableRow.
  * @param {Array} args - The insert arguments.
  * @return {Promise<Object>}
@@ -75,7 +78,7 @@ async function insertViaUpsert(mock, args) {
   const result = await mock.upsertSystemTableRow(...args);
   return result?.success === false || result?.partitionResult ?
     result :
-    {...result, partitionResult: {affectedRows: 1}};
+    cdcCommittedWriteAnswer('insertSystemTableRow', args, {changes: 1});
 }
 
 // Durable rows per table behind a gateway with exact-predicate semantics

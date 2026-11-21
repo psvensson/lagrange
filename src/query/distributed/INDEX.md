@@ -42,7 +42,7 @@ documentClass: generated
 - [distributed-transaction-statement.js](distributed-transaction-statement.js) - Statement execution and serialization on the existing transaction owner. (importers: one)
 - [distributed-transaction-telemetry.js](distributed-transaction-telemetry.js) - No leading comment; first export: createTransactionTelemetry. (importers: few)
 - [distributed-write-constraint-helpers.js](distributed-write-constraint-helpers.js) - Coordinator write-key evaluation and cross-partition UNIQUE constraint helpers backed by in-memory SQLite and the... (importers: few)
-- [distributed-write-coordinator.js](distributed-write-coordinator.js) - The entryId one logical write is proposed under on one partition: derived from the write's idempotency key and the... (importers: many)
+- [distributed-write-coordinator.js](distributed-write-coordinator.js) - The entryId one logical write is proposed under on one partition: derived from the write's idempotency key and the... (importers: hub)
 - [exchange-manager.js](exchange-manager.js) - ExchangeManager - manages exchange routing for keyed intermediate values emitted via `ctx.emit`. (importers: many)
 - [join-pushdown-plan.js](join-pushdown-plan.js) - Cross-partition JOIN pushdown and COORDINATOR_EVALUATED table-reference planner (design coordinator-sqlite-merge... (importers: few)
 - [parallel-query-coordinator-hedging-methods.js](parallel-query-coordinator-hedging-methods.js) - Straggler-hedging execution methods for ParallelQueryCoordinator. (importers: one)

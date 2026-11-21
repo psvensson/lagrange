@@ -14,6 +14,7 @@ import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from '../../../src/cache/system-cache-key-descriptor.js';
 import {CDC_OPERATION} from '../../../src/constants/index.js';
+import {engineCommittedWriteAnswer} from '../../test-helpers/committed-write-answer.js';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -277,6 +278,12 @@ function deleteRow(cache, sql, params) {
   return {success: true, rows: [], affectedRows: matched.length};
 }
 
+function applyWrite(cache, kind, sql, args) {
+  if (kind === 'insert') return insertRow(cache, sql, args);
+  if (kind === 'update') return updateRow(cache, sql, args);
+  return deleteRow(cache, sql, args);
+}
+
 /**
  * The seam: an engine over one node's cache.
  * @param {object} cache a real SystemTableCache
@@ -288,15 +295,18 @@ export function createSqlEngineSeam(cache, options = {}) {
   return Object.freeze({
     seamId: SEAM_ID,
     ...(options?.queryExecutor ? {queryExecutor: options.queryExecutor} : {}),
-    async executeQuery(sql, params = []) {
+    async executeQuery(sql, params = [], options = {}) {
       const verb = STATEMENT.exec(String(sql || ''));
       if (!verb) return failure(MALFORMED_ERROR);
       const kind = stringToLowerCase(verb[1]);
       const args = Array.isArray(params) ? params : [];
       if (kind === 'select') return selectRows(cache, sql, args);
-      if (kind === 'insert') return insertRow(cache, sql, args);
-      if (kind === 'update') return updateRow(cache, sql, args);
-      return deleteRow(cache, sql, args);
+      const applied = applyWrite(cache, kind, sql, args);
+      // A committed write answers what the engine answers: the producer's
+      // durable commit receipt for the write's own entry.
+      return applied.success ?
+        engineCommittedWriteAnswer(sql, args, options, {changes: applied.affectedRows}) :
+        applied;
     },
   });
 }

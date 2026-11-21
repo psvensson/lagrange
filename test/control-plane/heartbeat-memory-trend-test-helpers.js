@@ -11,6 +11,7 @@ import {
 } from '../test-helpers/node-lifecycle-publication-fixture.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const HEARTBEAT_REPORTER_PUBLICATION_PATH = Object.freeze({
   NODE_STATE_REPORTER: 'node_state_reporter',
@@ -57,11 +58,15 @@ function createMockCdc() {
   return {
     // A node endpoint is born by INSERT at the node's incarnation and
     // refreshed by an incarnation-fenced UPDATE (endpoint incarnation
-    // authority); the applied row count is the durable outcome.
-    insertSystemTableRow: async () => ({success: true,
-      partitionResult: {affectedRows: 1}}),
-    updateSystemTableRow: async () => ({success: true}),
-    upsertSystemTableRow: async () => ({success: true}),
+    // authority); the applied row count is the durable outcome. Each write
+    // answers what the CDC integration service answers for a committed
+    // one-row write, with the producer's durable commit receipt.
+    insertSystemTableRow: async (...args) =>
+      cdcCommittedWriteAnswer('insertSystemTableRow', args),
+    updateSystemTableRow: async (...args) =>
+      cdcCommittedWriteAnswer('updateSystemTableRow', args),
+    upsertSystemTableRow: async (...args) =>
+      cdcCommittedWriteAnswer('upsertSystemTableRow', args),
   };
 }
 

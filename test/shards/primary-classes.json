@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2368,
+    "unit": 2369,
     "integration": 126,
     "bootstrap": 227,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2728,
-  "digest": "fnv1a32-6534340f",
+  "censusSize": 2729,
+  "digest": "fnv1a32-cb6e75e1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2555,6 +2555,7 @@
     "test/storage/sqlite-connection-state.test.js": "unit",
     "test/storage/sqlite-store.property.test.js": "unit",
     "test/storage/sqlite-store.test.js": "unit",
+    "test/test-helpers/committed-write-answer.test.js": "unit",
     "test/test-helpers/managed-timers.test.js": "unit",
     "test/test-helpers/port-allocator.test.js": "unit",
     "test/test-helpers/topology-leak-check.test.js": "unit",

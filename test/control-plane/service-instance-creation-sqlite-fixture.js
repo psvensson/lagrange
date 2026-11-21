@@ -1,6 +1,8 @@
 // Component SQL boundary, not QueryEngine/Raft certification. Mutation intent,
 // SQL construction and CAS are production owner/gateway/CDC plus real SQLite.
-// Authoritative reads are explicitly adapted to this single component database.
+// Write answers are the engine's, built by the producers' own code
+// (committed-write-answer.js). Authoritative reads are explicitly adapted to
+// this single component database.
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
@@ -15,6 +17,7 @@ import {
   SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   ServiceLifecycleCommandOwner,
 } from '../../src/service/service-lifecycle-command-owner.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const TABLES = ['service_instances', 'service_packages', 'service_revisions',
   'service_installations', 'service_install_failures'];
@@ -73,7 +76,7 @@ async function createCreationSqliteFixture(t, options = {}) {
   }
   function owner(writer) {
     const engine = {
-      async executeQuery(sql, params = []) {
+      async executeQuery(sql, params = [], options = {}) {
         if (/^SELECT\b/iu.test(sql.trim())) {
           return {success: true, rows: db.prepare(sql).all(...params)};
         }
@@ -101,7 +104,9 @@ async function createCreationSqliteFixture(t, options = {}) {
           onLost?.();
           throw new Error('COMPONENT_SQL_APPLIED_REPLY_LOST');
         }
-        return {success: true, rows: [], affectedRows: result.changes};
+        // The engine's answer for the committed statement, with the
+        // producer's durable commit receipt for this write's own entry.
+        return engineCommittedWriteAnswer(sql, params, options, {changes: result.changes});
       },
     };
     const cdc = new CDCIntegrationService({nodeId: writer, sqlQueryEngine: engine});

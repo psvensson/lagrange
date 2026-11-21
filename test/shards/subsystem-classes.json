@@ -4,31 +4,31 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 350,
+    "bootstrap-membership": 351,
     "cdc-metadata": 72,
     "cli-tooling": 99,
-    "control-plane": 235,
+    "control-plane": 236,
     "convergence-topology": 87,
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 291,
-    "query-sql": 209,
+    "placement-rebalance": 292,
+    "query-sql": 211,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 246,
     "storage-raft": 159,
-    "test-infrastructure": 167,
+    "test-infrastructure": 168,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-3a7bd656",
+  "censusSize": 2729,
+  "digest": "fnv1a32-eadd2148",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-add1f9ff",
+  "observationDigest": "fnv1a32-9293c434",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -272,6 +272,7 @@
     "test/bootstrap/readiness-service-sync-reads.test.js": "bootstrap-membership",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
     "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
+    "test/bootstrap/register-service-retryable-refusal.test.js": "bootstrap-membership",
     "test/bootstrap/registered-service-row-raft-role.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
     "test/bootstrap/release-version-fence.test.js": "bootstrap-membership",
@@ -636,6 +637,7 @@
     "test/control-plane/membership-swim-runtime.test.js": "control-plane",
     "test/control-plane/membership-swim-transport-adapter.test.js": "control-plane",
     "test/control-plane/movielens-phantom-predicate-repro.test.js": "control-plane",
+    "test/control-plane/named-write-outcome-total.test.js": "control-plane",
     "test/control-plane/no-inline-live-transport-copy.guard.test.js": "control-plane",
     "test/control-plane/node-incarnation-fence.test.js": "control-plane",
     "test/control-plane/node-lifecycle-publication.test.js": "control-plane",
@@ -1645,6 +1647,7 @@
     "test/query/locking-read-canonical-ast.test.js": "query-sql",
     "test/query/locking-read-execution-lifecycle.test.js": "query-sql",
     "test/query/lookup-primitive.test.js": "query-sql",
+    "test/query/named-write-real-producer-applied.test.js": "query-sql",
     "test/query/nested-call-classifier.test.js": "query-sql",
     "test/query/nested-call-rejection-messages.test.js": "query-sql",
     "test/query/nested-call-rejection.test.js": "query-sql",
@@ -1668,6 +1671,7 @@
     "test/query/primary-key-requirement.property.test.js": "query-sql",
     "test/query/primitive-telemetry.test.js": "query-sql",
     "test/query/provision-target-live-transport-rescue.test.js": "query-sql",
+    "test/query/provisioning-deadline-error-message.test.js": "query-sql",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "query-sql",
     "test/query/q10-postgres-compatibility-certification-matrix.test.js": "query-sql",
     "test/query/query-constants-vocabulary.test.js": "query-sql",
@@ -2041,6 +2045,7 @@
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": "placement-rebalance",
     "test/rebalancer/pending-move-tracking.property.test.js": "placement-rebalance",
     "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "placement-rebalance",
+    "test/rebalancer/placement-explicit-replica-refusal-code.test.js": "placement-rebalance",
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
@@ -2569,6 +2574,7 @@
     "test/storage/sqlite-connection-state.test.js": "storage-partition",
     "test/storage/sqlite-store.property.test.js": "storage-partition",
     "test/storage/sqlite-store.test.js": "storage-partition",
+    "test/test-helpers/committed-write-answer.test.js": "test-infrastructure",
     "test/test-helpers/managed-timers.test.js": "test-infrastructure",
     "test/test-helpers/port-allocator.test.js": "test-infrastructure",
     "test/test-helpers/topology-leak-check.test.js": "test-infrastructure",
@@ -2800,7 +2806,12 @@
       "files": [
         "src/admin/admin-control-snapshot.js",
         "src/admin/admin-service-discovery.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -2920,21 +2931,36 @@
     "test/admin/admin-websocket-api-control-snapshot-query.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/admin-websocket-api-diagnostics-and-control-snapshot.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/admin-websocket-api-http-and-debug-routes.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/distributed/config/local.json",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -2942,14 +2968,24 @@
     "test/admin/admin-websocket-api-live-query-and-observation.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/admin-websocket-api-messaging-and-errors.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/admin/admin-websocket-api-load-benchmark-test-cases.js",
         "test/admin/admin-websocket-api-load-readiness-test-cases.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
@@ -2958,29 +2994,49 @@
     "test/admin/admin-websocket-api-service-discovery-query.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/admin-websocket-api-table-discovery-readiness.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/admin-websocket-api.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/admin/admin-websocket-load-lane-priority-recovery-emission.test.js": {
       "files": [
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -3023,7 +3079,12 @@
       "files": [
         "src/admin/admin-websocket-api-shared.js",
         "src/admin/admin-websocket-api.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -3145,6 +3206,11 @@
     "test/bootstrap/bootstrap-api-ready-nodes.test.js": {
       "files": [
         "src/bootstrap/owners/support-envelope-owner.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -3224,6 +3290,11 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/shared/control-plane-setup.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -3325,6 +3396,15 @@
         "src/node/replica-state-machine.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/connect-websocket-phase.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
     "test/bootstrap/contract-first-authoring-fidelity.test.js": {
@@ -3455,6 +3535,15 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/bootstrap/join-readiness-startup-authority.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
+      ]
+    },
     "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-contract.js",
@@ -3502,7 +3591,12 @@
     },
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": {
       "files": [
-        "src/bootstrap/phases/connect-websocket-phase.js"
+        "src/bootstrap/phases/connect-websocket-phase.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
     "test/bootstrap/message-group-activation-handler-boundary.test.js": {
@@ -3540,6 +3634,15 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/owners/service-endpoints-owner.js",
         "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
+    "test/bootstrap/move-replica-assignment-token.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
     "test/bootstrap/no-eslint-disable.test.js": {
@@ -3593,6 +3696,11 @@
     },
     "test/bootstrap/node-joining-lease-registration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -3611,7 +3719,12 @@
     },
     "test/bootstrap/node-joining-service-canonical-readiness.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -3626,7 +3739,12 @@
     },
     "test/bootstrap/node-joining-service-join-lifecycle-resume.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -3642,15 +3760,25 @@
     },
     "test/bootstrap/node-joining-service-mesh-reconciliation.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-joining-service-message-group-activation.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -3673,13 +3801,23 @@
     "test/bootstrap/node-joining-service.test.js": {
       "files": [
         "src/bootstrap/owners/support-envelope-owner.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-registration-idempotency.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -3793,6 +3931,7 @@
         "src/bootstrap/phases/seed-cache-hydration-phase.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -3800,6 +3939,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -3807,8 +3950,27 @@
       "files": [
         "src/bootstrap/boot-incarnation-contract.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/bootstrap/register-service-move-handoff-refused.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
+      ]
+    },
+    "test/bootstrap/register-service-retryable-refusal.test.js": {
+      "files": [
+        "src/bootstrap/owners/service-registration-handoff-owner.js"
       ]
     },
     "test/bootstrap/registered-service-row-raft-role.test.js": {
@@ -4145,6 +4307,15 @@
         "test/helpers/readiness-service-fixture.js"
       ]
     },
+    "test/bootstrap/shared/message-router-setup.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
+      ]
+    },
     "test/bootstrap/shared/startup-sql-runtime-handoff.test.js": {
       "files": [
         "src/bootstrap/owners/startup-runtime-handoff-owner.js",
@@ -4160,8 +4331,13 @@
     "test/bootstrap/storage-budget-bootstrap.test.js": {
       "files": [
         "src/bootstrap/node-joining-service.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/heartbeat-service.js",
         "src/control-plane/owners/node-registration-incarnation-write.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -4751,6 +4927,11 @@
     },
     "test/control-plane/active-node-projection.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -4918,6 +5099,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -4925,6 +5107,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
@@ -4965,15 +5151,25 @@
     "test/control-plane/endpoint-incarnation-authority.test.js": {
       "files": [
         "src/bootstrap/shared/node-registration-owner.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-write-identity.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/transport/node-address-resolution.js"
       ]
     },
     "test/control-plane/endpoint-reader-currentness.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/active-node-projection.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
         "src/runtime/endpoint-sync-source-client.js"
       ],
@@ -5014,6 +5210,10 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -5024,6 +5224,10 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -5034,6 +5238,10 @@
         "src/control-plane/heartbeat-service-constants.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -5045,6 +5253,10 @@
         "src/control-plane/heartbeat-service-constants.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -5056,6 +5268,10 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/pressure-governor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/control-plane/heartbeat-memory-trend-test-helpers.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -5076,6 +5292,10 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/logging/wait-bound-spent.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -5090,6 +5310,10 @@
         "src/control-plane/owners/endpoint-incarnation-authority.js",
         "src/control-plane/owners/service-endpoints-owner.js",
         "src/node/replica-state-machine.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -5269,6 +5493,10 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -5285,6 +5513,16 @@
     "test/control-plane/movielens-phantom-predicate-repro.test.js": {
       "files": [
         "src/control-plane/current-priority-placement-observation.js"
+      ]
+    },
+    "test/control-plane/named-write-outcome-total.test.js": {
+      "files": [
+        "src/control-plane/control-plane-named-write-outcome.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
     "test/control-plane/no-inline-live-transport-copy.guard.test.js": {
@@ -5334,6 +5572,10 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/message-group/message-group-target-resolver.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -5354,6 +5596,10 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/node-terminal-transition-fence.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/control-plane/heartbeat-memory-trend-test-helpers.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -5391,6 +5637,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -5398,6 +5645,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
       ]
@@ -5625,8 +5876,13 @@
     },
     "test/control-plane/readiness-planning-semantic-generation.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/system-cache-key-descriptor.js",
         "src/control-plane/readiness-planning-table-impact-classification.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ],
       "directories": [
@@ -5911,6 +6167,10 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/service-instance-state.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/service/service-lifecycle-command-contract.js"
       ]
     },
@@ -5918,6 +6178,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/service/service-lifecycle-command-contract.js",
         "src/service/service-lifecycle-command-owner.js"
       ]
@@ -5962,8 +6226,13 @@
     },
     "test/convergence/dt-admin-event-loop-isolation-discriminator.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/read-only-system-table-cache.js",
         "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -5987,9 +6256,12 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -6025,6 +6297,10 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-retry-scheduling.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
@@ -6077,8 +6353,13 @@
     },
     "test/convergence/dt-movielens-ready-lease-chronology-discriminator.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -6096,6 +6377,10 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-retry-scheduling.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -9351,6 +9636,15 @@
         "LAGRANGE_EVIDENCE_REVISION"
       ]
     },
+    "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
+      ]
+    },
     "test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js": {
       "files": [
         "Dockerfile",
@@ -10370,6 +10664,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -10379,6 +10674,10 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -11026,6 +11325,11 @@
     },
     "test/integration/user-table-local-cdc-readiness.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -12377,6 +12681,10 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/node/runtime-service-handler-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/executor-outcome-emitter.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -12418,6 +12726,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/service/service-consensus-creation-intent.js",
@@ -12430,6 +12742,10 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/node/runtime-service-handler-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/service/service-lifecycle-command-contract.js",
         "src/wasm-service/wasm-creation-opening.js",
         "test/control-plane/service-instance-creation-sqlite-fixture.js"
@@ -15432,6 +15748,38 @@
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
+    "test/query/named-write-real-producer-applied.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/query/nested-call-rejection-messages.test.js": {
       "files": [
         "src/query/budget-enforcer.js",
@@ -15568,6 +15916,18 @@
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
+    "test/query/provisioning-deadline-error-message.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "test/test-helpers/participant-protocol-double.js"
+      ],
+      "directories": [
+        "src/query"
       ]
     },
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": {
@@ -18538,6 +18898,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -18741,7 +19105,12 @@
     },
     "test/rebalancer/critical-topology-committed-lease.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -18851,6 +19220,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -18882,6 +19255,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -19051,7 +19428,12 @@
     },
     "test/rebalancer/node-storage-budget-service.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/owners/node-registration-incarnation-write.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -19218,8 +19600,17 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
+      ]
+    },
+    "test/rebalancer/placement-explicit-replica-refusal-code.test.js": {
+      "files": [
+        "src/partition/partition-placement-admission-constants.js"
       ]
     },
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": {
@@ -19331,6 +19722,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -19496,6 +19891,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-status.js",
         "src/storage/data-directory-process-owner.js"
@@ -20162,6 +20561,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-repository-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
@@ -20223,6 +20626,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -20245,6 +20652,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20368,6 +20779,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20473,6 +20888,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20496,6 +20915,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20504,6 +20927,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20512,6 +20939,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20520,6 +20951,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20528,6 +20963,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20536,6 +20975,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20551,6 +20994,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20559,6 +21006,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20567,6 +21018,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20575,6 +21030,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20583,6 +21042,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20591,6 +21054,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20599,6 +21066,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20607,6 +21078,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20615,6 +21090,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -20623,6 +21102,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
@@ -21079,6 +21562,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/query/runtime-replica-state-projection.js",
         "src/rebalancer/runtime-service-replica-identity.js",
         "src/runtime/runtime-endpoint-publication-wiring.js",
@@ -24314,6 +24801,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/service/service-lifecycle-command-contract.js",
         "test/control-plane/service-instance-creation-sqlite-fixture.js"
       ]
@@ -24361,6 +24852,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -24368,6 +24860,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/priority-publication-safety-rows.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
@@ -24490,6 +24986,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -24497,6 +24994,10 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/calibration/formation-seed-2026-09-13.json",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
@@ -24695,6 +25196,17 @@
       ],
       "directories": [
         "data/storage-load"
+      ]
+    },
+    "test/test-helpers/committed-write-answer.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-named-write-outcome.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
     "test/test-helpers/port-allocator.test.js": {
@@ -24994,8 +25506,22 @@
         "src/transport/node-address-resolution.js"
       ]
     },
+    "test/transport/node-address-resolution.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
+      ]
+    },
     "test/transport/node-identity-separation.property.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -25006,6 +25532,11 @@
     },
     "test/transport/node-registration-creates-endpoint.property.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
@@ -25055,7 +25586,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -25081,7 +25616,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -25109,7 +25648,11 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/service-instance-state.js",
         "src/entrypoint-startup-acquisition-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/query/runtime-replica-state-projection-owner.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
@@ -25139,7 +25682,11 @@
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/node/runtime-service-handler-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -25241,7 +25788,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -25263,7 +25814,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -25283,6 +25838,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/rebalancer/runtime-service-replica-identity.js",
         "src/service/service-consensus-creation-intent.js",
         "src/service/service-lifecycle-command-contract.js",
@@ -25296,7 +25855,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -25320,7 +25883,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -25348,7 +25915,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",

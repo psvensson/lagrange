@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2702,
+    "ordinary": 2703,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2728,
-  "digest": "fnv1a32-ab72f18a",
+  "censusSize": 2729,
+  "digest": "fnv1a32-b92adc7c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2554,6 +2554,7 @@
     "test/storage/sqlite-connection-state.test.js": "ordinary",
     "test/storage/sqlite-store.property.test.js": "ordinary",
     "test/storage/sqlite-store.test.js": "ordinary",
+    "test/test-helpers/committed-write-answer.test.js": "ordinary",
     "test/test-helpers/managed-timers.test.js": "ordinary",
     "test/test-helpers/port-allocator.test.js": "ordinary",
     "test/test-helpers/topology-leak-check.test.js": "ordinary",
