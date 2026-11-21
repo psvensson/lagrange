@@ -723,6 +723,7 @@ test('RebalanceCoordinator counts only the partition\'s voter-ready replicas ' +
         type: OperationType.REPLACE,
         partitionId: TEST_PARTITION_ID,
         replicaId: TEST_TARGET_REPLICA_ID,
+        sourceReplicaId: TEST_SOURCE_REPLICA_ID,
         sourceNodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
         targetNodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
         status: ReplicaStatus.ACTIVE,

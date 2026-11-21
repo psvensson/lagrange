@@ -1,3 +1,4 @@
+import {createOperation as buildOperation} from '../../src/rebalancer/replica-status.js';
 import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {createMockPolicyService} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -380,12 +381,18 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
         await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
           testReplacementReplicaId);
 
-        // Hold the actual entity ledger with a concurrent CREATE.
-        const concurrentOp = await coordinator.createOperation({
-          type: OperationType.ADD,
-          partitionId: testPartitionId,
-          nodeId: 'node-b',
-        });
+        const conflictingMove = {type: OperationType.ADD, partitionId: testPartitionId,
+          nodeId: 'node-b'};
+        await t.rejects(coordinator.createOperation(conflictingMove),
+          /Conflicting in-flight operation/u, 'normal admission refuses a new overlapping ADD');
+
+        // The safety owner still protects a historical holder already in the ledger.
+        const concurrentOp = buildOperation({operationId: 'historical-overlap',
+          type: conflictingMove.type, partitionId: testPartitionId,
+          entityType: 'partition', entityId: testPartitionId, replicaId: `${testPartitionId}-r9`,
+          sourceNodeId: 'node-b', targetNodeId: 'node-b'});
+        t.equal(await coordinator.repository.persistNewOperation(concurrentOp), true,
+          'the historical companion is committed in the fixture ledger');
         await commitRemoveSafetyStep(coordinator, concurrentOp, WORKFLOW_STEP.CREATING,
           concurrentOp.replicaId);
 
