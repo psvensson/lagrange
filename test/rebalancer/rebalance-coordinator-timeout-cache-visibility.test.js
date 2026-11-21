@@ -22,6 +22,7 @@ import {
   buildTransactionCoordinator,
   createCommittedTimeoutLedger,
   createCoordinator,
+  createTimeoutSweepCoordinator,
   createTimeoutVisibilityCache,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
 import {
@@ -36,31 +37,35 @@ const PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS = 1000;
 const STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME =
   'checkTimeouts reconciles stale priority PENDING from cached active target without unsafe trim';
 
+function buildStoppingRemoval(operationId, staleUpdatedAtMs) {
+  return {
+    operation_id: operationId,
+    type: 'REMOVE',
+    partition_id: 'partition-1',
+    entity_type: 'partition',
+    entity_id: 'partition-1',
+    replica_id: 'partition-1-r1',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: ReplicaStatus.REMOVING,
+    workflow_step: 'STOPPING',
+    created_at: staleUpdatedAtMs - 5000,
+    updated_at: staleUpdatedAtMs,
+    completed_at: null,
+    error_message: null,
+    steps_history: JSON.stringify([
+      {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
+      {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
+      {step: 'STOPPING', timestamp: staleUpdatedAtMs - 800},
+    ]),
+  };
+}
+
 test('checkTimeouts settles STOPPING from confirmed source absence without cache waits',
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
-    const timedOutOperationRow = {
-      operation_id: 'op-stopping-timeout',
-      type: 'REMOVE',
-      partition_id: 'partition-1',
-      entity_type: 'partition',
-      entity_id: 'partition-1',
-      replica_id: 'partition-1-r1',
-      source_node_id: 'node-1',
-      target_node_id: 'node-2',
-      status: ReplicaStatus.REMOVING,
-      workflow_step: 'STOPPING',
-      created_at: staleUpdatedAtMs - 5000,
-      updated_at: staleUpdatedAtMs,
-      completed_at: null,
-      error_message: null,
-      steps_history: JSON.stringify([
-        {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
-        {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
-        {step: 'STOPPING', timestamp: staleUpdatedAtMs - 800},
-      ]),
-    };
+    const timedOutOperationRow = buildStoppingRemoval('op-stopping-timeout', staleUpdatedAtMs);
 
     const store = createCoordinatorSqlStore({
       getAll: (table) => table === 'replica_operations' ? [timedOutOperationRow] : [],
@@ -68,9 +73,8 @@ test('checkTimeouts settles STOPPING from confirmed source absence without cache
     });
     const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
 
-    const coordinator = createCoordinator({
+    const coordinator = createTimeoutSweepCoordinator({
       nodeId: 'node-1',
-      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -79,18 +83,7 @@ test('checkTimeouts settles STOPPING from confirmed source absence without cache
       cdcIntegrationService: {
         refreshAuthoritativeCacheRow: async () => true,
       },
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
       sqlQueryEngine,
-      enableTimeouts: false,
     });
 
     coordinator.initialize();
@@ -110,27 +103,8 @@ test('checkTimeouts retries a stale STOPPING operation after strict owner reads 
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
     const authoritativeReadCalls = [];
-    const timedOutOperationRow = {
-      operation_id: 'op-owner-rpc-fallback-timeout',
-      type: 'REMOVE',
-      partition_id: 'partition-1',
-      entity_type: 'partition',
-      entity_id: 'partition-1',
-      replica_id: 'partition-1-r1',
-      source_node_id: 'node-1',
-      target_node_id: 'node-2',
-      status: ReplicaStatus.REMOVING,
-      workflow_step: 'STOPPING',
-      created_at: staleUpdatedAtMs - 5000,
-      updated_at: staleUpdatedAtMs,
-      completed_at: null,
-      error_message: null,
-      steps_history: JSON.stringify([
-        {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
-        {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
-        {step: 'STOPPING', timestamp: staleUpdatedAtMs - 800},
-      ]),
-    };
+    const timedOutOperationRow =
+      buildStoppingRemoval('op-owner-rpc-fallback-timeout', staleUpdatedAtMs);
 
     const store = createCoordinatorSqlStore({
       getAll: (table) => table === 'replica_operations' ? [timedOutOperationRow] : [],
@@ -190,9 +164,8 @@ test('checkTimeouts retries a stale STOPPING operation after strict owner reads 
       },
     };
 
-    const coordinator = createCoordinator({
+    const coordinator = createTimeoutSweepCoordinator({
       nodeId: 'node-1',
-      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get(tableName, key) {
           if (tableName !== 'replica_operations') {
@@ -211,17 +184,6 @@ test('checkTimeouts retries a stale STOPPING operation after strict owner reads 
       },
       cdcIntegrationService,
       controlPlaneSystemTableGateway,
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      enableTimeouts: false,
     });
 
     coordinator.initialize();
@@ -333,9 +295,8 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     },
   };
 
-  const coordinator = createCoordinator({
+  const coordinator = createTimeoutSweepCoordinator({
     nodeId: 'node-1',
-    transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: {
       get(tableName, key) {
         if (tableName !== 'replica_operations') {
@@ -361,18 +322,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     cdcIntegrationService: {
       refreshAuthoritativeCacheRow: async () => true,
     },
-    messageRouter: {
-      async deliver() {
-        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-      },
-    },
-    tablePolicyService: {
-      async getPolicyForPartition() {
-        return {targetReplicaCount: 3, minReplicaCount: 1};
-      },
-    },
     sqlQueryEngine,
-    enableTimeouts: false,
   });
 
   coordinator.initialize();
@@ -426,26 +376,14 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
     };
 
     const ledger = createCommittedTimeoutLedger(prioritySyncingOperationRow);
-    const coordinator = createCoordinator({
+    const coordinator = createTimeoutSweepCoordinator({
       nodeId: 'node-2',
-      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
         },
       },
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
       ...ledger.options,
-      enableTimeouts: false,
     });
 
     coordinator.initialize();
