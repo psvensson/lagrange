@@ -84,8 +84,14 @@ async function withExpiredStep(measure, {
     } : null;
     const cache = createMockCache({services: source ? [source] : []});
     const otherTables = createCoordinatorSqlStore(cache);
+    let exactPointReadUnavailable = false;
     const sql = {async executeQuery(statement, params = []) {
       if (/\breplica_operations\b/u.test(statement)) {
+        if (exactPointReadUnavailable && statement.includes('WHERE operation_id = ?') &&
+            params[0] === OPERATION_ID) {
+          return {success: false, error: 'control_plane_pressure_degraded',
+            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED', retryAfterMs: 1};
+        }
         const prepared = leader.db.prepare(statement);
         assert.equal(prepared.reader, true, 'the operation ledger writes through committed apply');
         return {success: true, rowSetComplete: true, rows: prepared.all(...params)};
@@ -177,7 +183,46 @@ async function withExpiredStep(measure, {
             DRAIN.PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE);
           return owner.reconcilePriorityRecoveryOperationDrain(current, snapshot);
         },
-        expire: () => owner.reconcileTimeoutOperation(operation(), now),
+        expire: (candidate = operation()) => owner.reconcileTimeoutOperation(candidate, now),
+        sweepWithDeferredVisibility(interleave) {
+          const probe = owner.repository.getOperationByIdVisibilityObservation
+            .bind(owner.repository);
+          let armed = true;
+          owner.repository.getOperationByIdVisibilityObservation = async (id, options) => {
+            if (id !== OPERATION_ID || options?.allowPriorityRecoveryDeferredVisibility !== true ||
+                !armed) return probe(id, options);
+            armed = false;
+            await interleave();
+            exactPointReadUnavailable = true;
+            try {
+              const observed = await probe(id, options);
+              assert.equal(observed.operation, null,
+                'the exact operation point read cannot supersede the earlier census row');
+              assert.equal(observed.deferredOutcome?.deferRetry, true);
+              return observed;
+            } finally {
+              exactPointReadUnavailable = false;
+            }
+          };
+          return coordinator.checkTimeouts();
+        },
+        advancePending() {
+          const before = row();
+          const updatedAt = Date.now();
+          const steps = JSON.parse(before.steps_history);
+          steps.push({step: WORKFLOW_STEP.SENDING, timestamp: updatedAt,
+            previousStep: WORKFLOW_STEP.PENDING});
+          const result = commitMutation({operation: 'update',
+            tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+            whereClause: {operation_id: OPERATION_ID, workflow_step: WORKFLOW_STEP.PENDING,
+              updated_at: before.updated_at, completed_at: null},
+            data: {workflow_step: WORKFLOW_STEP.SENDING, updated_at: updatedAt,
+              steps_history: JSON.stringify(steps)},
+          });
+          assert.equal(result.partitionResult.affectedRows, 1, 'the independent committed step wins');
+          assert.equal(owner.isOperationStepTimedOut(operation(), Date.now()), false,
+            'the newer durable SENDING step is still within its own budget');
+        },
         interceptFailureWrite: (intercept) => {
           nextFailureWrite = intercept;
         },
@@ -305,6 +350,81 @@ test('an observed claimed target failure still settles through ordinary failure 
         history.at(-1)[OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION];
       assert.equal(claim?.create_attempt_token, failed.attemptToken);
       assert.equal(claim?.created_at, failed.replicaCreatedAt);
+    });
+  });
+
+test('an elapsed PENDING timer cannot re-anchor itself to a fresh SENDING preimage', async () => {
+  await withExpiredStep(async (run) => {
+    const expired = run.operation();
+    run.advancePending();
+    const winner = run.row();
+    const before = run.owner.stats.operationsTimedOut;
+
+    await run.expire(expired);
+    assert.deepEqual(run.row(), winner, 'the original PENDING expiry is no longer current');
+    assert.equal(run.reservation().released_at, null);
+    assert.deepEqual(run.failures, []);
+    assert.equal(run.failWrites.length, 0);
+    assert.equal(run.owner.stats.operationsTimedOut, before);
+  }, {step: WORKFLOW_STEP.PENDING});
+});
+
+test('an expired PENDING decision cannot fail a fresher SENDING row after deferred visibility',
+  async () => {
+    await withExpiredStep(async (run) => {
+      const before = run.owner.stats.operationsTimedOut;
+      let newer;
+      await run.sweepWithDeferredVisibility(() => {
+        run.advancePending();
+        newer = run.row();
+      });
+      assert.ok(newer, 'the actual timeout sweep reaches the authority boundary');
+      assert.deepEqual(run.row(), newer, 'fresh authority does not transfer the old expiry decision');
+      assert.equal(run.reservation().released_at, null);
+      assert.deepEqual(run.failures, []);
+      assert.equal(run.failWrites.length, 0, 'the changed preimage is refused before terminal SQL');
+      assert.equal(run.owner.stats.operationsTimedOut, before);
+    }, {step: WORKFLOW_STEP.PENDING});
+  });
+
+test('the expired PENDING compare-and-set cannot cross a later durable SENDING step',
+  async () => {
+    await withExpiredStep(async (run) => {
+      const before = run.owner.stats.operationsTimedOut;
+      let winner;
+      run.interceptFailureWrite(async (commit) => {
+        run.advancePending();
+        winner = run.row();
+        return commit();
+      });
+      await run.expire();
+      assert.ok(winner, 'the mutation boundary saw the actual competing write');
+      assert.deepEqual(run.row(), winner);
+      assert.equal(run.reservation().released_at, null);
+      assert.deepEqual(run.failures, []);
+      assert.equal(run.owner.stats.operationsTimedOut, before,
+        'the guarded zero-row result earns no timeout credit');
+      await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
+      assert.deepEqual(run.row(), winner, 'repair retains the exact original timeout condition');
+      assert.equal(run.failWrites.length, 1, 'a stale repair does not issue a new terminal write');
+    }, {step: WORKFLOW_STEP.PENDING});
+  });
+
+test('a terminal winner settles before a previously captured timeout without timeout credit',
+  async () => {
+    await withExpiredStep(async (run) => {
+      const expired = run.operation();
+      const before = run.owner.stats.operationsTimedOut;
+      const admitted = await run.target.claim(run.request);
+      const failed = await run.target.markProgress(admitted, CREATE_ADMISSION_STATE.FAILED);
+      run.reportTarget(failed, ReplicaStatus.FAILED);
+      await run.owner.failOperation(run.operation(), 'received confirmed target failure');
+      const terminal = run.row();
+      assert.equal(terminal.workflow_step, WORKFLOW_STEP.FAILED);
+      await run.expire(expired);
+      assert.deepEqual(run.row(), terminal, 'the prior exact terminal winner remains authoritative');
+      assert.equal(run.failWrites.length, 1, 'only confirmed target failure writes terminal state');
+      assert.equal(run.owner.stats.operationsTimedOut, before);
     });
   });
 
