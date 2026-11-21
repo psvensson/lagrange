@@ -67,7 +67,7 @@ documentClass: generated
 - [control-plane-system-table-gateway-diagnostics.js](control-plane-system-table-gateway-diagnostics.js) - No leading comment; first export: buildGatewayFallbackSystemTableRoutingDiagnostics. (importers: few)
 - [control-plane-system-table-gateway-mutation-contracts.js](control-plane-system-table-gateway-mutation-contracts.js) - The attempt correlation keys a normalized mutation result names. (importers: few)
 - [control-plane-system-table-gateway-mutation-submission.js](control-plane-system-table-gateway-mutation-submission.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayMutationSubmission. (importers: one)
-- [control-plane-system-table-gateway-normalizers.js](control-plane-system-table-gateway-normalizers.js) - No leading comment; first export: areCanonicalSystemTableRowsEqual. (importers: few)
+- [control-plane-system-table-gateway-normalizers.js](control-plane-system-table-gateway-normalizers.js) - No leading comment; first export: areCanonicalSystemTableRowsEqual. (importers: many)
 - [control-plane-system-table-gateway-options.js](control-plane-system-table-gateway-options.js) - No leading comment; first export: buildGatewayQueryOptions. (importers: one)
 - [control-plane-system-table-gateway-query-execution.js](control-plane-system-table-gateway-query-execution.js) - No leading comment; first export: assignControlPlaneSystemTableGatewayQueryExecution. (importers: one)
 - [control-plane-system-table-gateway-read-contracts.js](control-plane-system-table-gateway-read-contracts.js) - The single frozen read-authority contract. (importers: hub)
