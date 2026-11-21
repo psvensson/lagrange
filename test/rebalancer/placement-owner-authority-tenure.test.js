@@ -49,7 +49,7 @@ import {
 } from './placement-owner-authority-fixture.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {
-  clearFixtureSingletons, resetFixtureSingletons,
+  clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipantAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(resetFixtureSingletons);
@@ -362,6 +362,11 @@ test('P5 new term without a role edge: a pass decided under the previous tenure 
   assert.notEqual(a.ledger.leadershipTenure, firstTenure,
     'the ledger service minted a new tenure for the new term (production behaviour)');
   assert.equal(ownerOf(a).isLeader, true, 'no role edge reached the owner');
+  // The new term raises the participant cutover pause (lab run 1 at 79391996:
+  // the held attempt was answered partition_write_cutover_paused). The
+  // release recovery resumes it, as the replica handler's recovery queue does,
+  // before the held continuation reaches the boundary: the adversarial order.
+  await resumeFixtureParticipantAdmission(a.ledger);
   held.release.resolve();
   await world.idle();
   const report = reportOf(t, world);
@@ -405,13 +410,17 @@ test('P4 bound over repeated transfers: N transfers with every leadership-start 
   await world.idle();
   const report = reportOf(t, world);
   t.diagnostic(JSON.stringify(samples));
-  const second = samples[1];
-  const last = samples[samples.length - 1];
-  for (const field of ['inFlightPasses', 'pendingTriggers', 'pendingWrites',
-    'unresolvedAttempts', 'heldDrives', 'timers']) {
-    assert.ok(last[field] <= second[field],
-      `property 3: ${field} does not grow with N (after 2: ${second[field]}, after 6: ` +
-      `${last[field]}); samples ${JSON.stringify(samples)}; ${report}`);
+  // Steady state from transfer 3 on (each owner then holds one suspended pass
+  // and, while it leads, one queued LEADERSHIP_START): compare equal parity,
+  // transfer k with k + 2.
+  for (const [earlier, later] of [[samples[2], samples[4]], [samples[3], samples[5]]]) {
+    for (const field of ['inFlightPasses', 'pendingTriggers', 'pendingWrites',
+      'unresolvedAttempts', 'heldDrives', 'timers']) {
+      assert.ok(later[field] <= earlier[field],
+        `property 3: ${field} does not grow with N (after ${earlier.transfer}: ` +
+        `${earlier[field]}, after ${later.transfer}: ${later[field]}); samples ` +
+        `${JSON.stringify(samples)}; ${report}`);
+    }
   }
   assertOneAdmitted(world, nodes, report);
 }));

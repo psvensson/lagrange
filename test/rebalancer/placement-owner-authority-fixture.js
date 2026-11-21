@@ -39,6 +39,7 @@
 // counts (see the report: the pass observation of design section 3.2).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {after} from 'node:test';
 import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {
   REPLICA_OPERATIONS_SCHEMA,
@@ -69,6 +70,51 @@ const TEST_TABLE_SCHEMA = Object.freeze({columns: [
 ]});
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+const LEAKED_TIMERS = [];
+
+// Timers created while a world runs (global setTimeout/setInterval, looked up
+// at call time by the production owners), so that teardown can name every
+// ref'd timer still alive after every owner was shut down.
+function trackWorldTimers() {
+  const originals = {setTimeout: globalThis.setTimeout, setInterval: globalThis.setInterval};
+  const created = [];
+  const track = (kind) => function trackedTimer(...args) {
+    const timer = originals[kind].apply(this, args);
+    created.push({timer, kind, stack: new Error().stack});
+    return timer;
+  };
+  globalThis.setTimeout = track('setTimeout');
+  globalThis.setInterval = track('setInterval');
+  return {
+    restore() {
+      globalThis.setTimeout = originals.setTimeout;
+      globalThis.setInterval = originals.setInterval;
+    },
+    // Ref'd timers still alive: reported as a teardown finding, then cleared
+    // so the test process can exit.
+    reclaim(label) {
+      const alive = created.filter(({timer}) => timer && timer._destroyed !== true &&
+        typeof timer.hasRef === 'function' && timer.hasRef());
+      for (const {timer, kind, stack} of alive) {
+        LEAKED_TIMERS.push({world: label, kind, ms: timer._idleTimeout ?? null,
+          creator: stack.split('\n').filter((line) => line.includes('/src/'))
+            .slice(0, 3).map((line) => line.trim().replace(/^at /u, '')
+              .replace(/\(.*\/src\//u, '(src/'))});
+        clearTimeout(timer);
+      }
+      return alive.length;
+    },
+  };
+}
+
+after(() => {
+  if (LEAKED_TIMERS.length > 0) {
+    process.stderr.write(`placement-owner-authority-fixture: ${LEAKED_TIMERS.length} ref'd ` +
+      `timer(s) alive after world shutdown: ${JSON.stringify(LEAKED_TIMERS)}\n`);
+  }
+  process.stderr.write('placement-owner-authority-fixture: active resources after the ' +
+    `last world: ${JSON.stringify(process.getActiveResourcesInfo())}\n`);
+});
 
 async function waitUntil(predicate, label, timeoutMs = WAIT_MS) {
   const started = Date.now();
@@ -220,7 +266,7 @@ class LedgerLog {
   }
 
   attach(node) {
-    this.applied.set(node, 0);
+    if (!this.applied.has(node)) this.applied.set(node, 0);
     node.ledger.controllablePort.setProposeHandler(async (entry) => {
       this.propose(node, entry);
     });
@@ -229,7 +275,8 @@ class LedgerLog {
   propose(node, entry) {
     const port = node.ledger.controllablePort;
     const record = {nodeId: node.nodeId, entryId: entry.entryId, type: entry.type,
-      partitionId: entry.body?.partitionId ?? null, portTerm: port.term,
+      partitionId: entry.body?.partitionId ?? null, bodyText: entry.bodyText ?? null,
+      portTerm: port.term,
       groupTerm: this.term, role: port.role, appended: false, stale: port.term < this.term};
     this.proposals.push(record);
     if (record.stale) return;
@@ -272,6 +319,13 @@ class LedgerLog {
 
   hold(node) {
     this.held.add(node);
+  }
+
+  // A committed ordinary ledger statement (a workflow transition written by
+  // its owner) appended to the log and applied by every replica in order.
+  appendCommitted(command) {
+    this.entries.push({term: this.term, command, proposer: 'fixture'});
+    this.deliverAll();
   }
 
   release(node) {
@@ -330,10 +384,15 @@ function instrumentOwner(node) {
   const originalAdmit = owner.admitPlacement;
   probe.admitGate = null;
   owner.admitPlacement = async (payload) => {
+    if (probe.admitGate?.skip > 0) {
+      probe.admitGate.skip -= 1;
+    } else if (probe.admitGate) {
+      probe.admitGate.armed = true;
+    }
     const attempt = {...context(), entryId: payload.entryId,
-      partitionId: payload.body?.partitionId ?? null, held: probe.admitGate !== null};
+      partitionId: payload.body?.partitionId ?? null, held: probe.admitGate?.armed === true};
     probe.admissionAttempts.push(attempt);
-    if (probe.admitGate) {
+    if (probe.admitGate?.armed === true) {
       const gate = probe.admitGate;
       probe.admitGate = null;
       gate.reached.resolve(attempt);
@@ -350,8 +409,9 @@ function instrumentOwner(node) {
 
 // Hold the next admission call of a node's owner between its last planning
 // check and the admission boundary (requestPlacementAdmission).
-function holdNextAdmission(node) {
-  const gate = {reached: deferred(), release: deferred()};
+function holdNextAdmission(node, {skip = 0} = {}) {
+  const gate = {reached: deferred(), release: deferred(), skip, armed: false};
+  (node.gates ??= []).push(() => gate.release.resolve());
   node.probe.admitGate = gate;
   return gate;
 }
@@ -362,6 +422,7 @@ function holdNextLeadershipStartDrive(node) {
   const delivery = node.ledger.cdcDelivery;
   const original = delivery.driveCdcObligations;
   const gate = {reached: deferred(), release: deferred(), calls: 0};
+  (node.gates ??= []).push(() => gate.release.resolve());
   delivery.driveCdcObligations = function heldDrive(reason) {
     if (reason !== 'LEADERSHIP_START') return original.call(this, reason);
     delivery.driveCdcObligations = original;
@@ -389,6 +450,7 @@ function holdLeadershipStartDrives(node) {
     delivery.driveCdcObligations = original;
     release.resolve();
   };
+  (node.gates ??= []).push(gate.releaseAll);
   return gate;
 }
 
@@ -404,6 +466,14 @@ class PlacementWorld {
     this.serviceRows = partitions.flatMap((partition) => partition.replicaNodeIds.map((nodeId) =>
       serviceRowOf(partition.partitionId, nodeId, nowMs)));
     this.publications = formationPublications(this.nodeIds, this.hostIds, nowMs);
+    // The committed PARTITIONS/SERVICES rows behind the substituted
+    // publication owner: what an authoritative point read answers.
+    this.durable = new Map([
+      [TABLES.PARTITIONS, new Map(this.partitionRows.map((row) =>
+        [row[COLUMN.PARTITION_ID], {...row}]))],
+      [TABLES.SERVICES, new Map(this.serviceRows.map((row) =>
+        [row[COLUMN.SERVICE_ID], {...row}]))],
+    ]);
     this.nodes = new Map();
     this.log = new LedgerLog(this);
     this.routes = [];
@@ -415,6 +485,9 @@ class PlacementWorld {
   }
 
   committedRows(tableName) {
+    if (this.authorityUnavailable) {
+      return {success: false, error: 'fixture: committed read unavailable', rows: []};
+    }
     if (tableName === TABLES.NODES) return {success: true, rows: this.nodeRows};
     if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
       return {success: true, rows: this.publications};
@@ -487,35 +560,90 @@ class PlacementWorld {
       cdcIntegrationService: node.cdc, sqlQueryEngine: inertSqlEngine(),
       tablePolicyService: node.tablePolicy, messageRouter: node.router,
       rebalanceCoordinator: node.coordinator}, port);
-    service.leaderNodeMutationHelper.setControlPlaneSystemTableGateway(this.publicationGateway());
-    service.roleMutationHelper.setControlPlaneSystemTableGateway(this.publicationGateway());
+    const gateway = this.publicationGateway();
+    service.controlPlaneSystemTableGateway = gateway;
+    service.leaderNodeMutationHelper.setControlPlaneSystemTableGateway(gateway);
+    service.roleMutationHelper.setControlPlaneSystemTableGateway(gateway);
     await service.initialize();
     this.targets.push(service);
     return service;
   }
 
+  durableKeyOf(tableName, fields) {
+    if (tableName === TABLES.PARTITIONS) return fields?.[COLUMN.PARTITION_ID] ?? null;
+    return fields?.[COLUMN.SERVICE_ID] ?? fields?.[COLUMN.REPLICA_ID] ?? null;
+  }
+
+  // The gateway of the substituted publication boundary: an authoritative
+  // point read of the committed row, a compare-and-set mutation applied to the
+  // committed row, and its CDC delivered to every node's cache (held while
+  // publication is stalled).
   publicationGateway() {
     return {
+      readAuthoritativeRows: async (tableName, _sql, params) => {
+        const row = this.durable.get(tableName)?.get(params?.[0]) ?? null;
+        return {success: true, rows: row ? [{...row}] : [], rowSetComplete: true};
+      },
       submitMutation: async (mutation) => {
         const record = {tableName: mutation.tableName, whereClause: {...mutation.whereClause},
-          data: {...mutation.data}};
+          data: {...mutation.data}, affectedRows: 0};
         this.publishedMutations.push(record);
-        if (this.publicationHeld) {
-          this.heldPublications.push(record);
-        } else {
-          this.deliverPublication(record);
+        const rows = this.durable.get(record.tableName);
+        const key = this.durableKeyOf(record.tableName, record.whereClause);
+        const current = rows?.get(key) ?? null;
+        const guarded = current !== null && Object.entries(record.whereClause).every(
+          ([field, value]) => current[field] === value || field === COLUMN.REPLICA_ID ||
+            field === COLUMN.SERVICE_ID);
+        if (guarded) {
+          rows.set(key, {...current, ...record.data});
+          record.affectedRows = 1;
+          record.row = {...rows.get(key)};
+          if (this.publicationHeld) {
+            this.heldPublications.push(record);
+          } else {
+            this.deliverPublication(record);
+          }
         }
-        return {success: true, partitionResult: {affectedRows: 1}};
+        return {success: true, partitionResult: {affectedRows: record.affectedRows}};
       },
     };
   }
 
   deliverPublication(record) {
-    if (record.tableName !== TABLES.PARTITIONS) return;
-    const row = {[COLUMN.PARTITION_ID]: record.whereClause[COLUMN.PARTITION_ID], ...record.data};
+    if (record.tableName !== TABLES.PARTITIONS && record.tableName !== TABLES.SERVICES) return;
     for (const node of this.nodes.values()) {
-      node.cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPDATE, row);
+      node.cache.applySystemTableChange(record.tableName, CDC_OPERATION.UPSERT, {...record.row});
     }
+  }
+
+  // Every node's NODES row republished (a lease extension), delivered to
+  // every cache: the source change a node authority refreshes on.
+  publishNodeRows() {
+    const nowMs = Date.now();
+    this.nodeRows = this.nodeRows.map((row) => ({...row, [COLUMN.UPDATED_AT]: nowMs,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: nowMs + LEASE_MS}));
+    for (const node of this.nodes.values()) {
+      for (const row of this.nodeRows) {
+        node.cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {...row});
+      }
+    }
+  }
+
+  // A committed row change published to every node's cache through the CDC
+  // apply entry (the substituted publication owner's own write).
+  publishRow(tableName, fields) {
+    const rows = this.durable.get(tableName);
+    const key = this.durableKeyOf(tableName, fields);
+    const row = {...(rows.get(key) ?? {}), ...fields, [COLUMN.UPDATED_AT]: Date.now()};
+    rows.set(key, row);
+    const record = {tableName, whereClause: {}, data: fields, affectedRows: 1, row: {...row}};
+    this.publishedMutations.push(record);
+    if (this.publicationHeld) {
+      this.heldPublications.push(record);
+    } else {
+      this.deliverPublication(record);
+    }
+    return record;
   }
 
   releasePublications() {
@@ -565,6 +693,28 @@ class PlacementWorld {
     node.ledger.controllablePort.emitEvent('term change', this.log.term);
   }
 
+  // A target partition replica wins its own election: the port's role event
+  // drives applyReplicaLeadership and the replica's own publication.
+  electTarget(service, peers = []) {
+    for (const peer of peers) {
+      if (peer !== service && peer.controllablePort.role !== RAFT_ROLE.FOLLOWER) {
+        peer.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+      }
+    }
+    service.controllablePort.setRole(RAFT_ROLE.LEADER);
+  }
+
+  // Restart a node's ledger replica over its own database file: the service
+  // and its owner are discarded, a new PartitionService opens the file, and
+  // the coordinator attaches a new owner (stays a follower until elected).
+  async restartLedgerReplica(node) {
+    ownerOf(node)?.setLeader(false);
+    await shutdownAll(node.ledger);
+    node.restartedFrom = node.ledger;
+    await this.startLedgerReplica(node, {dbPath: node.dbPath, authority: false});
+    return instrumentOwner(node);
+  }
+
   // The deposed leader learns of the new term late.
   notifyDeposed(node) {
     const port = node.ledger.controllablePort;
@@ -597,6 +747,10 @@ class PlacementWorld {
 
   async shutdown() {
     const failures = [];
+    for (const node of this.nodes.values()) {
+      for (const release of node.gates ?? []) release();
+    }
+    await settleTicks();
     for (const node of this.nodes.values()) {
       try {
         ownerOf(node)?.setLeader(false);
@@ -636,6 +790,7 @@ async function withPlacementWorld(spec, measure) {
   // The participant release recovery measures the runtime build once per
   // process; measured here so it never overlaps a leadership activation.
   await runtimeBuildProvenance();
+  const timers = trackWorldTimers();
   const world = new PlacementWorld(spec);
   let failure = null;
   let result;
@@ -648,6 +803,9 @@ async function withPlacementWorld(spec, measure) {
     await world.shutdown();
   } catch (error) {
     if (failure === null) failure = error;
+  } finally {
+    timers.restore();
+    world.leakedTimerCount = timers.reclaim(spec.label ?? 'world');
   }
   if (failure !== null) throw failure;
   return result;
@@ -742,6 +900,23 @@ function transferReport(world, partitionId) {
   return report;
 }
 
+// Every node of the world with its control plane; a ledger replica (and an
+// owner) only on `ledgerNodeIds`.
+async function startLedgerOn(world, ledgerNodeIds) {
+  const nodes = [];
+  for (const nodeId of world.nodeIds) nodes.push(await world.addNode(nodeId));
+  const replicaIds = ledgerNodeIds.map((nodeId) => `${LEDGER}-${nodeId}`);
+  for (const node of nodes) {
+    if (ledgerNodeIds.includes(node.nodeId)) {
+      await world.startLedgerReplica(node, {replicaIds});
+    }
+  }
+  for (const node of nodes) {
+    if (node.ledger) instrumentOwner(node);
+  }
+  return nodes;
+}
+
 function summarizeProbe(probe) {
   return {nodeId: probe.nodeId, passes: probe.passes.length,
     constructionPasses: probe.constructions.length, capacityChecks: probe.capacityChecks.length,
@@ -767,6 +942,7 @@ export {
   instrumentOwner,
   ownerOf,
   settle,
+  startLedgerOn,
   startThreeNodeLedger,
   summarizeProbe,
   TEST_TABLE_SCHEMA,
