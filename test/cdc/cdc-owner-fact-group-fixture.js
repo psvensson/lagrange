@@ -16,8 +16,12 @@
 // group's loopback transport.
 // Ceiling: one process; rows are seeded straight into a replica's database
 // (`workflow_step` names the replica, so an answer shows whose data it
-// carries) unless a case writes through raft; no node, bootstrap or CDC
-// propagation runs; the ReplicaHandler is constructed, never initialized.
+// carries) unless a case writes through raft; a raft write first opens the
+// group's write path the way the participant release owner does (origin
+// committed, one release resumed over every member's census), with each
+// member's release facts read through a one-service handler; no node,
+// bootstrap or CDC propagation runs; the ReplicaHandler is constructed,
+// never initialized.
 import assert from 'node:assert/strict';
 
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
@@ -34,6 +38,17 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
 import {OWNER_FACT_UNAVAILABLE_REASON} from
   '../../src/control-plane/control-plane-owner-fact-read-contract.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {releaseIdentityOf} from
+  '../../src/partition/partition-participant-release-contract.js';
+import {PARTICIPANT_CUTOVER_OUTCOME} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {
+  participantCutoverPauseOf,
+  readParticipantReleaseFacts,
+  resumeParticipantCutoverAdmission,
+} from '../../src/partition/partition-participant-transaction-pause.js';
+import {enableParticipantTransactionAdmission} from
+  '../../src/partition/partition-participant-transaction-request.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {QUERY_RESPONSE_TYPE} from '../../src/query/query-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -86,6 +101,13 @@ const COMMIT_CARRYING = new Set([RAFT_RS_MESSAGE_TYPE.APPEND, RAFT_RS_MESSAGE_TY
 const REFUSES_CREATION = () => {
   throw new Error('the read fixture creates no replica');
 };
+
+// The handler a member's release facts are read through (the hosted-service
+// identity the release owner checks).
+function releaseHandlerOf(service) {
+  return {nodeId: service.nodeId, ownerIncarnation: 1,
+    localServices: new Map([[service.replicaId, service]])};
+}
 
 function hasAppliedItsCommit(service) {
   const status = service.raft.readStatus();
@@ -317,8 +339,36 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     'setup: actual Raft leadership transferred and the new leader applied its commit');
   }
 
+  // The group's write path, opened as the participant release owner opens
+  // it: the generation origin committed, then one release resumed on the
+  // leader over the census of every member.
+  async function openWriteAdmission(leader) {
+    if (participantCutoverPauseOf(leader) === null) return;
+    const enabled = await enableParticipantTransactionAdmission(leader);
+    assert.equal(enabled?.success, true,
+      `setup: the leader committed the participant origin (${JSON.stringify(enabled)})`);
+    let census = [];
+    assert.equal(await group.waitFor(async () => {
+      census = await Promise.all(services.map((service) =>
+        readParticipantReleaseFacts(releaseHandlerOf(service), service)));
+      return census.every((facts) =>
+        facts.outcome === PARTICIPANT_CUTOVER_OUTCOME.OBSERVED &&
+        facts.origin !== null && facts.leaderReplicaId === leader.replicaId);
+    }), true, 'setup: every member observes the origin and the leader');
+    const local = census[services.indexOf(leader)];
+    const release = releaseIdentityOf({partitionId: PARTITION,
+      targetBuildDigest: local.buildDigest,
+      configurationKey: local.membership.configurationKey,
+      membershipGenerationIndex: local.membership.membershipGenerationIndex});
+    const outcome = await resumeParticipantCutoverAdmission(releaseHandlerOf(leader), leader,
+      {release, census});
+    assert.equal(outcome, PARTICIPANT_CUTOVER_OUTCOME.RESUMED,
+      `setup: the leader's write path opened (${JSON.stringify(outcome)})`);
+  }
+
   // A raft write through the leader; answers the applied index it reached.
   async function writeRow(leader, operationId) {
+    await openWriteAdmission(leader);
     const written = await leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
       {entryId: `owner-fact-write-${operationId}`});
     assert.equal(written?.success, true,
@@ -376,6 +426,7 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     async freshLeaderBehindCommit(from, to, operationId) {
       const fromPeer = peerOf(from);
       const toPeer = peerOf(to);
+      await openWriteAdmission(from);
       const committedIndex = from.raft.readStatus().lastIndex + 1;
       raft.hold((_address, packet) => String(packet?.from) === fromPeer &&
         String(packet?.to) === toPeer && COMMIT_CARRYING.has(packet?.message?.msgType) &&
