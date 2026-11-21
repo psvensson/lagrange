@@ -14,7 +14,8 @@ import {CONTROL_PLANE_MUTATION_OPERATION, ControlPlaneSystemTableGateway} from
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {buildCanonicalReplicaOperationRow} from
   '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
-import {getWorkflowSteps} from '../../src/rebalancer/replica-operation-progress.js';
+import {evaluateProspectiveRemoveSafety} from
+  '../../src/rebalancer/operation-workflow-remove-safety-evaluator.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {bindReplaceCreateTargetReplicaId} from
@@ -35,7 +36,7 @@ import {
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import {
-  advanceOperationFixture, buildCreatedOperationFixture, installCommittedOperationMutationFixture,
+  buildCommittedOperationFixture, installCommittedOperationMutationFixture,
 } from '../rebalancer/operation-outcome-fixture.js';
 import {
   createMockControlPlaneSystemTableGateway, createTestCoordinator,
@@ -119,14 +120,6 @@ function commitSubjectRow(leader, operation) {
   });
   assert.equal(commitLedgerStatement(leader, `bootstrap:subject:${operation.operationId}`,
     sql, params), null);
-}
-
-// A coordinator-created record its owner has committed up to `workflowStep`.
-function committedAtStep(params, workflowStep, now) {
-  const steps = getWorkflowSteps(params.type);
-  return steps.slice(1, steps.indexOf(workflowStep) + 1).reduce(
-    (operation, step) => advanceOperationFixture(operation, step, now),
-    buildCreatedOperationFixture({...params, createdAt: now}));
 }
 
 function bind(coordinator, operation) {
@@ -533,18 +526,24 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         await assert.rejects(() => admission(false), /only into an idle operation ledger/);
         await admission(true);
         owner.messageRouter.pingNode = async () => false;
-        const peerRemoval = committedAtStep({
-          operationId: 'bootstrap-peer-remove',
-          type: OperationType.REMOVE,
-          partitionId: incumbent.partitionId,
-          sourceNodeId: NODE.A,
-          targetNodeId: NODE.B,
-          replicaId: VOTER_ID,
+        // A removal of the source voter on the ADD's own partition exists
+        // only as a prospective intent while the ADD is in flight: placement
+        // admission refuses any operation on an entity holding an incomplete
+        // row (PARTITION_BUSY), so no durable REMOVE can sit beside it. The
+        // planner's preflight evaluates that intent (getMoveSafetyError).
+        const peerRemoval = {
+          ...createOperationAt({
+            operationId: 'bootstrap-peer-remove',
+            type: OperationType.REMOVE,
+            partitionId: incumbent.partitionId,
+            sourceNodeId: NODE.A,
+            targetNodeId: NODE.B,
+            replicaId: VOTER_ID,
+          }, now),
           entityType: incumbent.entityType,
           entityId: incumbent.entityId,
-        }, WORKFLOW_STEP.PENDING, now);
-        commitSubjectRow(leader, peerRemoval);
-        const removeSafety = await owner.evaluateRemoveSafety(peerRemoval);
+        };
+        const removeSafety = await evaluateProspectiveRemoveSafety(owner, peerRemoval);
         assert.match(String(removeSafety?.error), new RegExp(row.operation_id),
           'an unreachable destination cannot discharge source-side bootstrap custody');
         const deadline = row.created_at + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
@@ -562,7 +561,7 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(await gate(), null,
           'the next dispatch wake sees the committed terminal and may claim the self-move');
         await admission(false);
-        const afterTerminal = await owner.evaluateRemoveSafety(peerRemoval);
+        const afterTerminal = await evaluateProspectiveRemoveSafety(owner, peerRemoval);
         assert.doesNotMatch(String(afterTerminal?.error), new RegExp(row.operation_id),
           'committed terminal clears arbitration even though the cache remains empty');
       } finally {
@@ -589,7 +588,7 @@ test('all removal phases distinguish complete entity reads from unavailable owne
       .map((workflowStep) => {
         const type = workflowStep === WORKFLOW_STEP.PENDING ?
           OperationType.REMOVE : OperationType.REPLACE;
-        return committedAtStep({
+        return buildCommittedOperationFixture({
           operationId: `removal:${workflowStep}`, type, partitionId: PARTITION_ID,
           sourceNodeId: NODE.A, targetNodeId: NODE.B, replicaId: VOTER_ID,
           sourceReplicaId: VOTER_ID, entityType: 'partition', entityId: PARTITION_ID,
