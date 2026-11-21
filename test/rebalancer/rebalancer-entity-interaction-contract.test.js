@@ -387,12 +387,16 @@ test('message-group and runtime-service floors remain entity-owned',
     } finally {
       await group.coordinator.shutdown();
     }
-    // Diagnostic only, no assertion: the owner's answer and its reason.
-    t.comment(`message-group removal answer: ${groupResult.classification}: ` +
-      `${groupResult.error}`);
+    // The owner fails, never defers, a REMOVE that would cross a
+    // non-system floor: its deferral builder defers only a REPLACE removal
+    // phase or an over-replicated system-table REMOVE, and the dispatch gate
+    // then fails the operation instead of retrying it.
     t.equal(groupResult.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
       'message-group removal cannot cross its replicated-group floor');
+    t.equal(groupResult.error,
+      'message_group group-safety would drop active replicas below minimum (2/3)',
+      'the refusal names the group floor and the projected count');
 
     const runtimeId = 'runtime-floor';
     const runtimeRemove = buildCommittedOperationFixture({
