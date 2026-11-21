@@ -129,6 +129,19 @@ product features.
 | When may placement retire an existing learner? | At `46f3ac3f5` four managed files passed the restart and receipt controls. On `1a6d97c57` late promotion preserved the replica but labeled the removal FAILED. An unscoped, undispatched removal also remained open. The control for an uncertain dispatched removal retained its obligation. | Verify the durable SUPERSEDED disposition across status, replay, recensus and cleanup. A genuine successful REMOVE still requires its own effect. |
 | Does the whole cluster meet the service goal? | The unchanged 53-file selection passed 52 on `268d439b2`. The outstanding REPLACE test found an additional completion caller. On `9e7184a3b`, five placement files passed. Full-range static job #5504 found seven dependency violations, four lint errors and one oversized source file. | The integration owner pins the repaired composition and checks the complete selection and full-range static. Run the three physical formations within 420 seconds, then the comparative smoke. |
 
+Three-host run `e5deee2a` on clean `9e7184a3b` exhausted the 420-second
+formation bound and the 120-second public routability bound. The harness
+recorded 32 read failures and removed all three containers. The last
+observable ledger snapshot already had four failed ADDs. In the complete
+target logs, two materialized CREATEs expired in the first bounded
+learner-admission request. Two other CREATEs re-entered after transient
+authority refusal and reached the runtime constructor without a membership
+stamp. The admission owner tests retained work after the original caller
+expires and cleanup after genuine failure. The workflow owner traces the
+stamp obtained for dispatch into the durable operation that a recovering
+target reads. Continue with those controls on the managed fleet before
+repeating the physical trial.
+
 The prior three-host runs shared a failure to reach global quiet. Within
 the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with
 zero REMOVE admissions. `57e4db30` completed 39 of 43 and admitted one
