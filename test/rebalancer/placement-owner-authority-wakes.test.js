@@ -236,3 +236,42 @@ test('P8 start path: with the ledger\'s CDC drive stalled (a subscriber that nev
   assert.ok(admitted, `admitted within ${PROGRESS_BOUND_MS} ms while the leadership-start CDC ` +
     `drive stayed unanswered; ${report}`);
 }));
+
+// Stage 2 with stage 1: every wake goes through the custody and tenure checks.
+// The sealed contract (quest replica-placement-admission-owner, constraint
+// no-timer-no-bound-no-retry): "The placement owner arms exactly one timer,
+// the resync (PLACEMENT_RESYNC_INTERVAL_MS, declared once)". Armed by the
+// production factory per custody, it is cleared when the custody ends; a fire
+// that still arrives afterwards (a callback already dequeued) starts nothing.
+const LEDGER_ONLY = Object.freeze({nodes: THREE_NODES, partitions: [
+  {partitionId: LEDGER, replicaNodeIds: ['n1', 'n2', 'n3']},
+]});
+
+test('resync and custody: the leading owner arms exactly one resync at the declared cadence; ' +
+  'it is cleared when the custody ends, and a late resync fire starts no pass',
+(t) => withPlacementWorld(LEDGER_ONLY, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a, b] = nodes;
+  await world.electLedger(a);
+  await world.idle();
+  const armed = world.timers.placementOwnerIntervals().filter((timer) => timer.alive);
+  const report = () => JSON.stringify({intervals: world.timers.placementOwnerIntervals()
+    .map(({ms, alive}) => ({ms, alive})), passes: a.probe.passes.map((pass) =>
+    `${pass.triggers.join('+')}@${pass.startTenure?.term ?? 'none'}`)});
+  assert.equal(armed.length, 1, `the leading owner armed exactly one timer; ${report()}`);
+  assert.equal(armed[0].ms, ownerOf(a).resyncIntervalMs,
+    `at the declared resync cadence; ${report()}`);
+  await world.electLedger(b);
+  await world.idle();
+  const afterTransfer = world.timers.placementOwnerIntervals();
+  assert.equal(afterTransfer.find((timer) => timer.fn === armed[0].fn)?.alive, false,
+    `the ended custody's resync is cleared; ${report()}`);
+  assert.equal(afterTransfer.filter((timer) => timer.alive).length, 1,
+    `only the new leader's resync is armed; ${report()}`);
+  const passesBefore = a.probe.passes.length;
+  armed[0].fn();
+  await world.idle();
+  t.diagnostic(report());
+  assert.equal(a.probe.passes.length, passesBefore,
+    `a resync fired after the custody ended starts no pass; ${report()}`);
+}));

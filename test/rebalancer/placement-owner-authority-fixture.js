@@ -97,7 +97,7 @@ function trackWorldTimers() {
     Error.stackTraceLimit = TIMER_STACK_FRAMES;
     const stack = new Error().stack;
     Error.stackTraceLimit = limit;
-    created.push({timer, kind, stack});
+    created.push({timer, kind, stack, fn: args[0]});
     return timer;
   };
   globalThis.setTimeout = track('setTimeout');
@@ -117,6 +117,13 @@ function trackWorldTimers() {
         placementOwner: PLACEMENT_OWNER_FRAME.test(stack),
         creator: stack.split('\n').filter((line) => line.includes('/src/')).slice(0, 2)
           .map((line) => line.trim().replace(/^at /u, '').replace(/\(.*\/src\//u, '(src/'))}));
+    },
+    // The intervals a placement-owner module armed (its resync), each with its
+    // callback and whether it is still armed now.
+    placementOwnerIntervals() {
+      return created.filter(({kind, stack}) => kind === 'setInterval' &&
+        PLACEMENT_OWNER_FRAME.test(stack)).map(({timer, fn}) => ({fn,
+        ms: timer._idleTimeout ?? null, alive: timer._destroyed !== true}));
     },
     // Ref'd timers still alive: reported as a teardown finding, then cleared
     // so the test process can exit.
