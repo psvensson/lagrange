@@ -29,6 +29,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {
@@ -40,6 +42,7 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {
+  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
@@ -588,6 +591,8 @@ async (t) => {
 test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
   'the re-send of the removal effect as it defers the first send', async (t) => {
   const world = await openReplaceWorld();
+  const reply = Promise.withResolvers();
+  const entries = [];
   try {
     // The source node acknowledges but its row lags: the intent is durable
     // and the effect must be re-sent later (T5').
@@ -602,11 +607,51 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     await settleTurns();
     t.equal(world.removeEffects.length, 1,
       'no re-send while a concurrent partition operation is active');
+    const owner = world.coordinator.workflowOwner;
+    const deliver = owner.deliverReplicaOperationRequest.bind(owner);
+    const resendAnswers = [];
+    let firstResendAcknowledged = false;
+    let secondEntrySettled = false;
+    owner.deliverReplicaOperationRequest = async (operation, target, request, ...rest) => {
+      const answer = await deliver(operation, target, request, ...rest);
+      if (request.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+        resendAnswers.push({
+          operationId: request.operationId,
+          replicaId: request.replicaId,
+          acknowledged: isDeliveredTransportDeliveryOutcome(deliveryTransportOf(answer)),
+          status: deliveryAnswerOf(answer)?.status,
+        });
+        if (!firstResendAcknowledged) {
+          firstResendAcknowledged = true;
+          // Only delivery of the reply to the owner lags. The real source
+          // route has already supplied its accepted answer.
+          await reply.promise;
+        }
+      }
+      return answer;
+    };
     await failConcurrentRemove(t, world);
-    await entry(world);
+    entries.push(entry(world));
+    t.ok(await waitUntil(() => firstResendAcknowledged),
+      'the first renewed owner turn reached a source acknowledgment');
+    entries.push(entry(world).finally(() => {
+      secondEntrySettled = true;
+    }));
+    t.ok(await waitUntil(() => secondEntrySettled || world.removeEffects.length > 2),
+      'the second real lifecycle entry decides while the first reply is held');
+    t.equal(world.removeEffects.length, 2,
+      'the second entry sends nothing while the first resend still owns the effect');
+    reply.resolve();
+    await Promise.all(entries);
+    t.same(resendAnswers, [{
+      operationId: world.operation.operationId, replicaId: world.sourceReplicaId,
+      acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED,
+    }], 'one exact acknowledged resend crosses the original source route');
     t.equal(world.removeEffects.length, 2,
       'the pending removal is re-sent once after the holder settles');
   } finally {
+    reply.resolve();
+    await Promise.allSettled(entries);
     await disposeWorld(world);
   }
 });
