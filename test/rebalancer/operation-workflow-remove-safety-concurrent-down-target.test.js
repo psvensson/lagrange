@@ -1,241 +1,45 @@
-// CL-044 falsifier — a concurrent op stuck SYNCING/moving to a DOWN target must
-// not head-of-line-block peer recovery that targets LIVE nodes, and the
-// staleness clock that retires such an op must measure time-in-step (not the
-// dispatch-retry-churned updatedAt).
-//
-// Observed in the rolling-restart gate: recovery op A was SYNCING a replica to a
-// node that was down/restarting; its remote handoff never acked, so it churned a
-// ~1s dispatch-retry loop. The concurrent-partition-operation safety gate in
-// evaluateRemoveSafety then deferred the peer ops that would actually restore the
-// partition on live nodes ("Quorum check failed: concurrent partition operation
-// ... is active") → restart_recovery_timeout. CL-043's stale-step exclusion did
-// NOT rescue it because the retry loop kept updatedAt fresh and the staleness
-// clock was anchored on updatedAt.
-//
-// SAFETY CONTRACT this test pins:
-//   - A concurrent op whose move target is UNCONTACTABLE must NOT count as active
-//     (down-target serialization relief, isolated from the stale-step clock by
-//     keeping the op's timestamps fresh).
-//   - A concurrent op whose target is CONTACTABLE must STILL block (the relief
-//     must not relax genuine concurrency safety).
-//   - The staleness clock reads the current step's step-history timestamp, so an
-//     op wedged in-step past its timeout is retired even when updatedAt is fresh.
-
-import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+// CL-044 reproduced head-of-line blocking when a replacement's unreachable
+// target kept its retry loop active and its updatedAt fresh. The same live
+// competitor still serializes removal when its target answers.
 import {test} from '../../src/test-helpers/tap.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {WORKFLOW_STEP, NODE_STATE} from '../../src/constants/index.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
-import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
-import {createMockPolicyService, createTestCoordinator} from './test-helpers.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  BELOW_VOTER_FLOOR_ERROR, CONCURRENT_OPERATION_ERROR, evaluateConcurrentRemoveSafety,
+} from './operation-workflow-remove-safety-concurrency-fixture.js';
 
-const CRITICAL_PARTITION_ID = 'replica_operations-p1';
-const CONCURRENT_OP_ERROR = /concurrent partition operation/i;
-const PAST_ANY_STEP_TIMEOUT_MS = 10 * 60 * 1000; // 10m — exceeds any step timeout.
+const PAST_SYNCING_TIMEOUT_MS = 10 * 60_000;
+const FRESH_STEP_AGE_MS = 10_000;
 
-function createReadyNode(nodeId) {
-  return {
-    node_id: nodeId,
-    status: NODE_STATE.ACTIVE,
-    connection_state: NODE_STATE.READY,
-    ready_lease_expires_at: Date.now() + 60000,
-  };
-}
-
-function createCriticalPartitionServiceRow({partitionId, replicaId, nodeId, raftRole}) {
-  return {
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: partitionId,
-    node_id: nodeId,
-    service_type: 'partition',
-    status: 'active',
-    raft_role: raftRole,
-    address: `${nodeId}/partition/${replicaId}`,
-  };
-}
-
-// A co-resident SYNCING move toward `targetNodeId`. Timestamps are FRESH (so the
-// stale-step clock does NOT exclude it — isolating the down-target relief), with
-// an optional in-step step-history timestamp to exercise the staleness clock.
-function buildSyncingConcurrentOp({targetNodeId, stepEnteredAgoMs = null}) {
-  const now = Date.now();
-  const op = {
-    operationId: 'syncing-toward-target',
-    type: OperationType.REPLACE,
-    partitionId: CRITICAL_PARTITION_ID,
-    entityType: 'partition',
-    entityId: CRITICAL_PARTITION_ID,
-    replicaId: `${CRITICAL_PARTITION_ID}-r9`,
-    targetNodeId,
-    status: 'syncing',
-    workflowStep: WORKFLOW_STEP.SYNCING,
-    createdAt: now,
-    updatedAt: now,
-  };
-  if (stepEnteredAgoMs !== null) {
-    op.stepsHistory = [
-      {step: WORKFLOW_STEP.SYNCING, timestamp: now - stepEnteredAgoMs},
-    ];
-  }
-  return op;
-}
-
-function buildCoordinatorWithConcurrentOp(concurrentOp, {pingNode}) {
-  const coordinator = createTestCoordinator({
-    nodeId: 'seed-node',
-    enableTimeouts: false,
-    messageRouter: {
-      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
-      getConnectionState: (nodeId) =>
-        nodeId === 'down-node' ? 'reconnecting' : 'connected',
-      pingNode,
-      isOutboundQueueAvailable: () => true,
-    },
-    tablePolicyService: createMockPolicyService({
-      getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
-    }),
-    cacheData: {
-      nodes: [
-        createReadyNode('node-a'),
-        createReadyNode('node-b'),
-        createReadyNode('node-c'),
-      ],
-      services: [
-        createCriticalPartitionServiceRow({
-          partitionId: CRITICAL_PARTITION_ID,
-          replicaId: `${CRITICAL_PARTITION_ID}-r1`,
-          nodeId: 'node-a',
-          raftRole: 'leader',
-        }),
-        createCriticalPartitionServiceRow({
-          partitionId: CRITICAL_PARTITION_ID,
-          replicaId: `${CRITICAL_PARTITION_ID}-r2`,
-          nodeId: 'node-b',
-          raftRole: 'follower',
-        }),
-        createCriticalPartitionServiceRow({
-          partitionId: CRITICAL_PARTITION_ID,
-          replicaId: `${CRITICAL_PARTITION_ID}-r3`,
-          nodeId: 'node-c',
-          raftRole: 'follower',
-        }),
-      ],
-    },
+test('CL-044: a fresh SYNCING competitor with a down target reaches the voter floor', async (t) => {
+  const result = await evaluateConcurrentRemoveSafety(t, {
+    step: WORKFLOW_STEP.SYNCING, targetContactable: false,
   });
+  t.equal(result.targetPinged, true, 'arbitration checks the fresh competitor’s target');
+  t.match(result.error, BELOW_VOTER_FLOOR_ERROR,
+    'the independent voter floor is enforced after the down competitor is excluded');
+});
 
-  coordinator.initialize();
-  coordinator.repository.getRequiredOperationsByEntity = async () => [concurrentOp];
-  return coordinator;
-}
+test('CL-044: a fresh SYNCING competitor with a contactable target blocks removal', async (t) => {
+  const result = await evaluateConcurrentRemoveSafety(t, {step: WORKFLOW_STEP.SYNCING});
+  t.equal(result.targetPinged, true, 'arbitration checks the fresh competitor’s target');
+  t.match(result.error, CONCURRENT_OPERATION_ERROR,
+    'the contactable competitor holds the removal lane');
+});
 
-async function evaluatePeerRemove(coordinator) {
-  const operation = await coordinator.createOperation({
-    type: OperationType.REMOVE,
-    partitionId: CRITICAL_PARTITION_ID,
-    nodeId: 'node-c',
-    replicaId: `${CRITICAL_PARTITION_ID}-r3`,
-    // The recovery remove CL-044 protects is the failed-replica cure class
-    // (replica-placement-cure-policy FAILED_REPLICA -> REMOVE with this
-    // reason, threaded via unified-rebalancer-move-execution). The
-    // priority-surplus placement fence exempts exactly that class by sealed
-    // design; a bare REMOVE would model a surplus drain instead and be
-    // fenced at creation, never reaching the gate under test.
-    moveReason: MOVE_REASON.REPLICA_FAILED,
+test('CL-044: durable time in step retires a wedged competitor despite a fresh update', async (t) => {
+  const result = await evaluateConcurrentRemoveSafety(t, {
+    step: WORKFLOW_STEP.SYNCING, stepAgeMs: PAST_SYNCING_TIMEOUT_MS, updateAgeMs: 0,
   });
-  return coordinator.workflowOwner.evaluateRemoveSafety(operation);
-}
+  t.equal(result.targetPinged, false, 'an expired competitor is excluded before target probing');
+  t.match(result.error, BELOW_VOTER_FLOOR_ERROR,
+    'arbitration allows the remove to reach its independent voter-floor check');
+});
 
-function withConfig(fn) {
-  return async (t) => {
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-    ConfigurationManager.getInstance().initialize({});
-    LoggingService.getInstance().initialize({level: 'error'});
-    try {
-      await fn(t);
-    } finally {
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
-    }
-  };
-}
-
-test('CL-044 — a fresh concurrent op SYNCING to a DOWN target must not block a peer remove',
-  withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({targetNodeId: 'down-node'}),
-      {pingNode: async (nodeId) => nodeId !== 'down-node'},
-    );
-    try {
-      const evaluation = await evaluatePeerRemove(coordinator);
-      t.notMatch(
-        String(evaluation?.error ?? ''),
-        CONCURRENT_OP_ERROR,
-        'a concurrent op whose move target is uncontactable must not be active',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  }));
-
-test('CL-044 — a fresh concurrent op SYNCING to a CONTACTABLE target must still block (safety preserved)',
-  withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({targetNodeId: 'node-b'}),
-      {pingNode: async () => true},
-    );
-    try {
-      const evaluation = await evaluatePeerRemove(coordinator);
-      t.match(
-        String(evaluation?.error ?? ''),
-        CONCURRENT_OP_ERROR,
-        'a concurrent op to a reachable target must still serialize-block',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  }));
-
-test('CL-044 — staleness clock reads time-in-step: a wedged op past its step timeout is retired even with a fresh updatedAt',
-  withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({
-        targetNodeId: 'node-b',
-        stepEnteredAgoMs: PAST_ANY_STEP_TIMEOUT_MS,
-      }),
-      {pingNode: async () => true},
-    );
-    try {
-      const evaluation = await evaluatePeerRemove(coordinator);
-      t.notMatch(
-        String(evaluation?.error ?? ''),
-        CONCURRENT_OP_ERROR,
-        'an op in-step past its timeout must be stale despite a churned updatedAt',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  }));
-
-test('CL-044 — staleness clock: an op recently in-step (fresh) still blocks',
-  withConfig(async (t) => {
-    const coordinator = buildCoordinatorWithConcurrentOp(
-      buildSyncingConcurrentOp({
-        targetNodeId: 'node-b',
-        stepEnteredAgoMs: 10 * 1000,
-      }),
-      {pingNode: async () => true},
-    );
-    try {
-      const evaluation = await evaluatePeerRemove(coordinator);
-      t.match(
-        String(evaluation?.error ?? ''),
-        CONCURRENT_OP_ERROR,
-        'an op recently entered its step is genuinely in-flight and still blocks',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  }));
+test('CL-044: a recent durable step still serializes removal', async (t) => {
+  const result = await evaluateConcurrentRemoveSafety(t, {
+    step: WORKFLOW_STEP.SYNCING, stepAgeMs: FRESH_STEP_AGE_MS, updateAgeMs: 0,
+  });
+  t.equal(result.targetPinged, true, 'a fresh step reaches the target probe');
+  t.match(result.error, CONCURRENT_OPERATION_ERROR,
+    'a competitor still within its step timeout holds the removal lane');
+});
