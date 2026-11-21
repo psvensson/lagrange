@@ -24,6 +24,8 @@ import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-con
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PLACEMENT_ADMISSION_ERROR} from
+  '../../src/partition/partition-placement-admission-constants.js';
 import {requestPlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
 import {StorageCapacityAccountingService} from
@@ -69,27 +71,44 @@ const TRIGGER_SOURCES = Object.freeze({
     typeof PartitionService.prototype.setRebalancerLeadershipSink === 'function',
 });
 
-test('F11: every refusal and waiting reason maps to a trigger whose subscription exists, ' +
-  'and none clears on RESYNC or a retry delay', () => {
-  const reasons = [...Object.values(PLACEMENT_REFUSAL),
-    ...Object.values(PLACEMENT_WAITING_REASON),
-    ...Object.values(PARTITION_WRITE_LEADERSHIP_REFUSAL)];
-  const unmapped = reasons.filter((reason) =>
-    !Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, reason));
-  assert.deepEqual(unmapped, []);
+// Every code the admission path can answer, enumerated from its owners'
+// vocabularies (never hand-listed): the admission owner's own refusals, the
+// applier's committed refusals, the owner pass's waiting reasons and the write
+// kernel's answers the owner returns unchanged.
+const ADMISSION_PATH_VOCABULARIES = Object.freeze({
+  PLACEMENT_ADMISSION_ERROR,
+  PLACEMENT_REFUSAL,
+  PLACEMENT_WAITING_REASON,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+});
+const PROBE_VOCABULARY = 'PROBE';
+const PROBE_CODE = 'placement_probe_code_without_trigger_row';
+
+function unmappedCodesOf(vocabularies) {
+  return Object.entries(vocabularies).flatMap(([vocabulary, codes]) =>
+    Object.entries(codes)
+      .filter(([, code]) => !Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, code))
+      .map(([name, code]) => `${vocabulary}.${name}=${code}`));
+}
+
+test('F11: every code on the admission path maps to a definite answer (null) or a ' +
+  'trigger whose subscription exists, and none clears on RESYNC or a retry delay', () => {
+  assert.deepEqual(unmappedCodesOf(ADMISSION_PATH_VOCABULARIES), []);
+  // The check names a code added to a vocabulary without a row.
+  assert.ok(unmappedCodesOf({...ADMISSION_PATH_VOCABULARIES,
+    [PROBE_VOCABULARY]: {PROBE_CODE}})
+    .includes(`${PROBE_VOCABULARY}.PROBE_CODE=${PROBE_CODE}`));
+  // No row survives its code: every row names a code of a vocabulary.
+  const codes = new Set(Object.values(ADMISSION_PATH_VOCABULARIES)
+    .flatMap((vocabulary) => Object.values(vocabulary)));
+  assert.deepEqual(Object.keys(PLACEMENT_CLEARING_TRIGGER)
+    .filter((code) => !codes.has(code)), []);
   const triggers = Object.values(PLACEMENT_CLEARING_TRIGGER);
   assert.ok(triggers.every((trigger) => trigger === null ||
     Object.values(PLACEMENT_TRIGGER).includes(trigger)));
   assert.equal(triggers.includes(PLACEMENT_TRIGGER.RESYNC), false);
   assert.equal(Object.keys(PLACEMENT_CLEARING_TRIGGER).some((reason) =>
     /retry/iu.test(reason)), false);
-  // A definite answer needs no trigger; every other reason has one.
-  assert.deepEqual(Object.entries(PLACEMENT_CLEARING_TRIGGER)
-    .filter(([, trigger]) => trigger === null).map(([reason]) => reason).sort(), [
-    PLACEMENT_REFUSAL.ALREADY_FOUNDED, PLACEMENT_REFUSAL.HOLD_NOT_HELD,
-    PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED,
-    PLACEMENT_REFUSAL.SYSTEM_PARTITION_SEED_FOUNDED, PLACEMENT_REFUSAL.TARGET_CLAIM_TAKEN,
-  ].sort());
   const used = new Set(triggers.filter((trigger) => trigger !== null));
   assert.deepEqual([...used].filter((trigger) => !TRIGGER_SOURCES[trigger]?.()), []);
 });

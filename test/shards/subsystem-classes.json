@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 249,
+    "storage-partition": 248,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2721,
-  "digest": "fnv1a32-40a9a3b2",
+  "censusSize": 2720,
+  "digest": "fnv1a32-e37e09da",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f75a93be",
+  "observationDigest": "fnv1a32-1a512f4b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1529,7 +1529,6 @@
     "test/partition/placement-admission-copy-occupancy.test.js": "storage-partition",
     "test/partition/placement-admission-found.test.js": "storage-partition",
     "test/partition/placement-admission-routed-cdc.test.js": "storage-partition",
-    "test/partition/placement-admission-trigger-coverage.test.js": "storage-partition",
     "test/partition/placement-create-bootstrap-binding.test.js": "storage-partition",
     "test/partition/placement-create-dispatch-execution-mirror.test.js": "storage-partition",
     "test/partition/placement-creation-terminal-replay.test.js": "storage-partition",
@@ -14486,13 +14485,6 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
-    "test/partition/placement-admission-trigger-coverage.test.js": {
-      "files": [
-        "src/partition/partition-placement-admission-constants.js",
-        "src/partition/partition-write-kernel.js",
-        "src/rebalancer/replica-placement-owner-constants.js"
-      ]
-    },
     "test/partition/placement-create-bootstrap-binding.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -19883,6 +19875,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-constants.js",
         "src/partition/partition-placement-admission.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",
