@@ -54,7 +54,7 @@ import {
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createCoordinatorSqlStore, createMockCache, createTestCoordinator} from './test-helpers.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './replica-operation-repository-deferred-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryIncompleteVisibilityTests} from './replica-operation-repository-incomplete-visibility-test-cases.js';
@@ -769,21 +769,28 @@ test('persistOperationUpdate requests bounded local replica fallback for authori
 test('zero-change operation insert collision confirms through the ledger leader',
   async (t) => {
     const authoritativeReadCalls = [];
+    const insertChanges = [];
     const row = makeRow({
       created_at: 100,
       updated_at: 100,
     });
+    const store = createCoordinatorSqlStore(createMockCache({replicaOperations: [row]}));
+    t.teardown(() => store.suspend());
     const repo = createTestRepository({
       authoritativeVisibilityTimeoutMs: 0,
       controlPlaneSystemTableGateway: {
-        executeQuery: async () => ({success: true, changes: 0}),
-        readRows: async (_tableName, _sql, _params, options = {}) => {
+        executeQuery: async (sql, params, options) => {
+          // The CDC insert ingress honors ignoreExisting. Run the same conflict
+          // policy on the real ledger row in this reduced gateway fixture.
+          const statement = options.ignoreExisting === true ?
+            sql.replace(/^INSERT INTO /u, 'INSERT OR IGNORE INTO ') : sql;
+          const result = store.execute(statement, params);
+          insertChanges.push(result.changes);
+          return result;
+        },
+        readAuthoritativeRows: async (_tableName, sql, params, options = {}) => {
           authoritativeReadCalls.push(options);
-          return {
-            success: true,
-            rows: options.leaderMode ===
-              CONTROL_PLANE_READ_LEADER_MODE.PREFERRED ? [row] : [],
-          };
+          return store.execute(sql, params);
         },
       },
     });
@@ -796,6 +803,7 @@ test('zero-change operation insert collision confirms through the ledger leader'
       true,
       'a matching row on the canonical ledger leader proves the collision',
     );
+    t.same(insertChanges, [0], 'SQLite ignored precisely one duplicate INSERT');
     t.equal(
       authoritativeReadCalls.length,
       1,
@@ -826,7 +834,7 @@ test('zero-change operation insert collision fails when the ledger leader has no
         executeQuery: async () => ({success: true, changes: 0}),
         readRows: async (_tableName, _sql, _params, options = {}) => {
           authoritativeReadCalls.push(options);
-          return {success: true, rows: []};
+          return {success: true, rows: [], rowSetComplete: true};
         },
       },
     });
@@ -859,7 +867,9 @@ test('zero-change operation insert collision rejects mismatched leader content',
       authoritativeVisibilityTimeoutMs: 0,
       controlPlaneSystemTableGateway: {
         executeQuery: async () => ({success: true, changes: 0}),
-        readRows: async () => ({success: true, rows: [mismatchedRow]}),
+        readRows: async () => ({
+          success: true, rows: [mismatchedRow], rowSetComplete: true,
+        }),
       },
     });
 

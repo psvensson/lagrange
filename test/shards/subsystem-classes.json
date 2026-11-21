@@ -28,7 +28,7 @@
   "censusSize": 2713,
   "digest": "fnv1a32-1220ab5d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ea45e696",
+  "observationDigest": "fnv1a32-8872cd2b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18755,6 +18755,9 @@
     },
     "test/rebalancer/operation-workflow-owner-adapter.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js"
       ]
     },
@@ -24974,7 +24977,9 @@
     },
     "test/workflow/monotonic-workflow-regression.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/workflow/durable-workflow-coordinator.js",
         "src/workflow/workflow-constants.js"

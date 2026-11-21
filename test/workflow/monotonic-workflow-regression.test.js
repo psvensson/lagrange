@@ -9,6 +9,7 @@ import {
   ADD_WORKFLOW_STEPS,
   REMOVE_WORKFLOW_STEPS,
   REPLACE_WORKFLOW_STEPS,
+  WORKFLOW_STEP_TO_STATUS,
   getWorkflowSteps,
 } from '../../src/rebalancer/replica-status.js';
 import {RebalanceCoordinator} from
@@ -16,6 +17,7 @@ import {RebalanceCoordinator} from
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {createTestCoordinator} from '../rebalancer/test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // ---------------------------------------------------------------------------
@@ -179,6 +181,23 @@ function createTestOperation(overrides = {}) {
     stepsHistory: [],
     ...overrides,
   };
+}
+
+async function seedCommittedOperation(t, coordinator, operationId, workflowStep) {
+  const createdAt = Date.now();
+  const throughStep = ADD_WORKFLOW_STEPS.indexOf(workflowStep);
+  const stepsHistory = ADD_WORKFLOW_STEPS.slice(0, throughStep + 1).map((step, index) => ({
+    step,
+    ...(index > 0 ? {previousStep: ADD_WORKFLOW_STEPS[index - 1]} : {}),
+    timestamp: createdAt,
+  }));
+  const operation = createTestOperation({
+    operationId, workflowStep, status: WORKFLOW_STEP_TO_STATUS[workflowStep],
+    createdAt, updatedAt: createdAt, stepsHistory,
+  });
+  t.equal(await coordinator.repository.persistNewOperation(operation), true,
+    'fixture begins with a committed SQLite row');
+  return coordinator.repository.queryAuthoritativeOperationById(operationId);
 }
 
 // ===================================================================
@@ -421,15 +440,12 @@ test('RebalanceCoordinator - failOperation transitions to FAILED from ' +
   ];
 
   for (const fromStep of inProgressSteps) {
-    const coordinator = createMinimalCoordinator();
-    coordinator.initialize();
+    const coordinator = createTestCoordinator({nodeId: MOCK_NODE_ID});
 
     try {
-      const operation = createTestOperation({
-        operationId: `op-fail-from-${fromStep}`,
-        workflowStep: fromStep,
-        status: fromStep.toLowerCase(),
-      });
+      const operationId = `op-fail-from-${fromStep}`;
+      const operation = await seedCommittedOperation(t, coordinator, operationId, fromStep);
+      t.equal(operation?.workflowStep, fromStep);
 
       await coordinator.failOperation(operation, 'regression test');
 
@@ -439,8 +455,9 @@ test('RebalanceCoordinator - failOperation transitions to FAILED from ' +
         `FAILED must be reachable from ${fromStep} via failOperation`,
       );
 
-      const lastEntry =
-        operation.stepsHistory[operation.stepsHistory.length - 1];
+      const durable = await coordinator.repository.queryAuthoritativeOperationById(operationId);
+      t.equal(durable?.workflowStep, WORKFLOW_STEP.FAILED);
+      const lastEntry = durable.stepsHistory.at(-1);
       t.equal(
         lastEntry.previousStep,
         fromStep,
@@ -618,36 +635,31 @@ test('RebalanceCoordinator - completeOperation persists one terminal ' +
 
 test('RebalanceCoordinator - failOperation persists one FAILED transition',
   async (t) => {
-    let persistCalls = 0;
-    const coordinator = createMinimalCoordinator({
-      sqlQueryEngine: {
-        async executeQuery(sql) {
-          if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT)) {
-            persistCalls += 1;
-          }
-          return {success: true, rows: [], changes: 1};
-        },
-      },
-    });
-    coordinator.initialize();
-
+    const coordinator = createTestCoordinator({nodeId: MOCK_NODE_ID});
     try {
-      const operation = createTestOperation({
-        operationId: 'op-fail-atomic',
-        workflowStep: WORKFLOW_STEP.CREATING,
-        status: 'creating',
-      });
+      const operationId = 'op-fail-atomic';
+      const operation = await seedCommittedOperation(
+        t, coordinator, operationId, WORKFLOW_STEP.CREATING,
+      );
+      const execute = coordinator.sqlQueryEngine.executeQuery.bind(coordinator.sqlQueryEngine);
+      const failureWrites = [];
+      coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
+        const result = await execute(sql, params, options);
+        if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT) && sql.includes('workflow_step')) {
+          failureWrites.push(result.changes);
+        }
+        return result;
+      };
 
       await coordinator.failOperation(operation, 'atomic failure test');
 
       t.equal(operation.workflowStep, WORKFLOW_STEP.FAILED);
-      t.equal(persistCalls, 1, 'FAILED transition must persist exactly once');
+      t.same(failureWrites, [1], 'FAILED transition makes one committed SQLite update');
 
-      // Verify transition reason is persisted in stepsHistory
-      const lastEntry =
-      operation.stepsHistory[operation.stepsHistory.length - 1];
+      const durable = await coordinator.repository.queryAuthoritativeOperationById(operationId);
+      t.equal(durable?.workflowStep, WORKFLOW_STEP.FAILED);
       t.equal(
-        lastEntry.reason,
+        durable?.stepsHistory.at(-1).reason,
         OPERATION_TRANSITION_REASON.OPERATION_FAILED,
         'FAILED transition must record canonical reason',
       );
