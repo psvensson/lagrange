@@ -57,9 +57,55 @@ const UNUSABLE_OPERATION_STATES = Object.freeze([
   REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
 ]);
 
+// Diagnostic capture of a rejection: frames enough for the whole call path
+// from createOperation (the V8 default keeps ten), and every cause.
+const DIAGNOSTIC_STACK_FRAMES = 200;
+const MAX_CAUSE_DEPTH = 8;
+const STACK_LINE_SEPARATOR = '\n';
+
 function printObservation(t, name, value) {
   t.comment(`OBSERVATION ${name} ${JSON.stringify(value, (_key, field) =>
     (typeof field === 'bigint' ? String(field) : field))}`);
+}
+
+function describeChainLink(link) {
+  if (link instanceof Error) {
+    return {name: link.name, message: link.message, code: link.code, stack: link.stack};
+  }
+  let text;
+  try {
+    text = JSON.stringify(link);
+  } catch (error) {
+    text = `unserializable cause: ${error.message}`;
+  }
+  return {name: typeof link, message: text, code: link?.code, stack: text};
+}
+
+// The rejection and its cause chain, each with its full stack, as one
+// observation line and line by line (the coordinator's log keeps only text).
+function printErrorChain(t, name, error) {
+  const chain = [];
+  for (let link = error; link !== null && link !== undefined &&
+    chain.length < MAX_CAUSE_DEPTH; link = link?.cause) {
+    chain.push(describeChainLink(link));
+  }
+  printObservation(t, name, chain);
+  chain.forEach((link, index) => {
+    for (const line of String(link.stack).split(STACK_LINE_SEPARATOR)) {
+      t.comment(`STACK ${name}[${index}] ${line}`);
+    }
+  });
+  return chain;
+}
+
+async function withDiagnosticStacks(run) {
+  const frameLimit = Error.stackTraceLimit;
+  Error.stackTraceLimit = DIAGNOSTIC_STACK_FRAMES;
+  try {
+    return await run();
+  } finally {
+    Error.stackTraceLimit = frameLimit;
+  }
 }
 
 function guardReadOf(attempt) {
@@ -362,13 +408,16 @@ test('anchor (a, green today): the planner node leading services-p1 admits the s
   {timeout: CASE_TIMEOUT_MS}, async (t) => {
     const world = await openWorld(t, NODE.PLANNER, PLANNER_LED_PORT);
     const host = openPlannerHost(t, world);
-    const first = await host.createAdd();
+    const first = await withDiagnosticStacks(() => host.createAdd());
     const ledger = host.ledgerRows();
     const firstRead = guardReadOf(first);
     printObservation(t, 'planner-led', {read: summarizeServicesRead(firstRead),
       refusal: refusalOf(first.error), operationId: first.operation?.operationId,
       guardOwnerRpcCalls: first.ownerRpc.filter(isGuardOwnerRpc).length,
       ledger: ledgerShape(ledger)});
+    const rejection = printErrorChain(t, 'planner-led-rejection', first.error);
+    t.same(rejection, [], 'createOperation settles without a rejection; its full stack ' +
+      'and cause chain are printed above');
     t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
     t.type(first.operation?.operationId, 'string', 'an operation is returned');
     t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
