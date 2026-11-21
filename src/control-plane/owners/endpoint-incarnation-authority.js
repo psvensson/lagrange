@@ -1,4 +1,5 @@
-import {COLUMN} from '../../constants/index.js';
+import {CDC_OPERATION, COLUMN} from '../../constants/index.js';
+import {buildSystemTableMutationSqlParts} from '../../cdc/cdc-system-table-mutation-sql-helpers.js';
 import {endpointIncarnationOf} from './endpoint-incarnation-currentness.js';
 import {normalizeKnownNodeBootIncarnation} from
   '../control-plane-error-classification.js';
@@ -7,6 +8,7 @@ import {requireIssuedBootIncarnation} from
 import {classifyControlPlaneMutationResult} from
   '../control-plane-mutation-outcome-classifier.js';
 import {
+  captureControlPlaneWriteConfirmation,
   controlPlaneWriteIdentity,
   releaseControlPlaneWriteIdentities,
 } from '../control-plane-write-identity.js';
@@ -227,48 +229,44 @@ function withoutEndpointId(row) {
   return data;
 }
 
-// The logical write an endpoint mutation is: this incarnation's birth of
-// the row, or its CAS from the exact incarnation observed. Every attempt of
-// one of them (a re-drive after an unknown outcome among them) is delivered
-// under this identity - the same committed entry, never a second birth. Its
-// instance is released once the write is classified, and every name of the
-// endpoint when its row is mutated at an incarnation (deleted, withdrawn).
-function endpointWriteIdentity(row, ...verb) {
-  return {writeIdentity: controlPlaneWriteIdentity(
+// The name retains birth or the CAS from an exact observed incarnation.
+// A read can settle its held instance only if the full written effect agrees.
+async function attemptNamedEndpointWrite(row, verb, write) {
+  const writeIdentity = controlPlaneWriteIdentity(
     ENDPOINT_WRITE_IDENTITY_SCOPE, row[COLUMN.ENDPOINT_ID],
-    row[COLUMN.BOOT_INCARNATION], ...verb)};
+    row[COLUMN.BOOT_INCARNATION], ...verb);
+  const columns = Object.keys(row);
+  const {values} = buildSystemTableMutationSqlParts(CDC_OPERATION.UPDATE, row);
+  const confirmWriteEffect = (observed) => columns.every((column, index) =>
+    Object.hasOwn(observed, column) && observed[column] === values[index]);
+  const attempt = await attemptWrite(() => write({writeIdentity, confirmWriteEffect}));
+  return {...attempt, confirmReadback: captureControlPlaneWriteConfirmation(writeIdentity)};
 }
 
-// Only an established destination can end this incarnation's write names.
-// Seeing an unchanged source row does not settle a write that may still apply.
-function settleEndpointWrite(row, outcome) {
-  if (outcome.outcome === ENDPOINT_INCARNATION_OUTCOME.APPLIED ||
-      outcome.outcome === ENDPOINT_INCARNATION_OUTCOME.RESOLVED_BY_READBACK) {
-    releaseControlPlaneWriteIdentities(ENDPOINT_WRITE_IDENTITY_SCOPE,
-      row[COLUMN.ENDPOINT_ID], row[COLUMN.BOOT_INCARNATION]);
+function resolveEndpointWriteReadback(attempt, read, bootIncarnation, destination) {
+  const outcome = classifyEndpointReadback(read, bootIncarnation, destination,
+    ENDPOINT_INCARNATION_OUTCOME.NOT_APPLIED);
+  if (outcome === ENDPOINT_INCARNATION_OUTCOME.RESOLVED_BY_READBACK) {
+    attempt.confirmReadback(read.row);
   }
-  return outcome;
+  return freezeOutcome(outcome, attempt);
 }
 
 function casFromObserved(options, row, observedRow) {
   const observedIncarnation = endpointIncarnationOf(observedRow);
-  return attemptWrite(() => options.update(
-    {
+  return attemptNamedEndpointWrite(row, [ENDPOINT_WRITE_VERB.CAS_FROM, observedIncarnation],
+    (identity) => options.update({
       [COLUMN.ENDPOINT_ID]: row[COLUMN.ENDPOINT_ID],
       [COLUMN.BOOT_INCARNATION]: observedIncarnation,
-    },
-    withoutEndpointId(row),
-    endpointWriteIdentity(row, ENDPOINT_WRITE_VERB.CAS_FROM,
-      observedIncarnation),
-  ));
+    }, withoutEndpointId(row), identity));
 }
 
 // The next mutation for an observation: birth when absent, one CAS on the
 // observed same-or-older incarnation, none for a newer owner.
 function planEndpointWrite(options, row, observed, bootIncarnation) {
   if (!observed.row) {
-    return () => attemptWrite(() => options.insert(row,
-      endpointWriteIdentity(row, ENDPOINT_WRITE_VERB.BIRTH)));
+    return () => attemptNamedEndpointWrite(row, [ENDPOINT_WRITE_VERB.BIRTH],
+      (identity) => options.insert(row, identity));
   }
   if (endpointIncarnationOf(observed.row) > bootIncarnation) return null;
   return () => casFromObserved(options, row, observed.row);
@@ -316,22 +314,20 @@ async function writeEndpointAtIncarnation(options) {
   }
   const attempt = await first();
   if (attemptApplied(attempt)) {
-    return settleEndpointWrite(row,
-      freezeOutcome(ENDPOINT_INCARNATION_OUTCOME.APPLIED, attempt));
+    return freezeOutcome(ENDPOINT_INCARNATION_OUTCOME.APPLIED, attempt);
   }
   const reread = await readAuthority();
   const olderOwner = reread.available === true && reread.row &&
     endpointIncarnationOf(reread.row) < bootIncarnation;
   if (!olderOwner) {
-    return settleEndpointWrite(row, freezeOutcome(classifyEndpointReadback(
-      reread, bootIncarnation, destination,
-      ENDPOINT_INCARNATION_OUTCOME.NOT_APPLIED), attempt));
+    return resolveEndpointWriteReadback(attempt, reread, bootIncarnation, destination);
   }
-  return settleEndpointWrite(row, await resolveAttempt(
-    await casFromObserved(options, row, reread.row),
-    async () => classifyEndpointReadback(await readAuthority(),
-      bootIncarnation, destination,
-      ENDPOINT_INCARNATION_OUTCOME.NOT_APPLIED)));
+  const advance = await casFromObserved(options, row, reread.row);
+  if (attemptApplied(advance)) {
+    return freezeOutcome(ENDPOINT_INCARNATION_OUTCOME.APPLIED, advance);
+  }
+  return resolveEndpointWriteReadback(advance, await readAuthority(),
+    bootIncarnation, destination);
 }
 
 export {
