@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2697,
+    "ordinary": 2698,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-bf527212",
+  "censusSize": 2724,
+  "digest": "fnv1a32-7eea6bfe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1869,6 +1869,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "ordinary",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "ordinary",
+    "test/raft/raft-rs-current-term-applied.test.js": "ordinary",
     "test/raft/raft-rs-lifecycle-turn-admission.test.js": "ordinary",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "ordinary",
     "test/raft/raft-rs-original-allocation-custody.test.js": "ordinary",
