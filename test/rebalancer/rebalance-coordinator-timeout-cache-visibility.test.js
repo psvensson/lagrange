@@ -1,6 +1,9 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {createCoordinatorSqlStore} from './test-helpers.js';
+import {
+  createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway,
+} from './test-helpers.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
@@ -33,6 +36,34 @@ const EMERGENCY_PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
 const PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS = 1000;
 const STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME =
   'checkTimeouts reconciles stale priority PENDING from cached active target without unsafe trim';
+
+function createCommittedTimeoutLedger(initial) {
+  const store = createCoordinatorSqlStore({
+    getAll: (table) => table === 'replica_operations' ? [initial] : [],
+  });
+  const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
+  const gateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+  const terminalChanges = [];
+  gateway.submitMutation = async (mutation) => {
+    const result = store.submitMutation(mutation);
+    if (mutation.tableName === 'replica_operations' && mutation.data?.workflow_step === 'FAILED') {
+      terminalChanges.push(result.partitionResult?.affectedRows);
+    }
+    return result;
+  };
+  installCommittedOperationMutationFixture(gateway);
+  return {
+    options: {
+      sqlQueryEngine,
+      controlPlaneSystemTableGateway: gateway,
+      cdcIntegrationService: gateway.cdcIntegrationService,
+    },
+    terminalChanges,
+    read: () => store.execute('SELECT * FROM replica_operations WHERE operation_id = ?',
+      [initial.operation_id]).rows[0],
+    close: store.suspend,
+  };
+}
 
 test('checkTimeouts settles STOPPING from confirmed source absence without cache waits',
   async (t) => {
@@ -405,6 +436,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       partition_id: 'sql_write_operations-p1',
       entity_type: 'partition',
       entity_id: 'sql_write_operations-p1',
+      source_replica_id: 'sql_write_operations-p1-r1',
       replica_id: 'sql_write_operations-p1-r4',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
@@ -422,35 +454,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       ]),
     };
 
-    const sqlQueryEngine = {
-      async executeQuery(sql, params) {
-        if (sql.includes('FROM replica_operations')) {
-          return {
-            success: true,
-            rows: [{...prioritySyncingOperationRow}],
-          };
-        }
-        if (sql.startsWith('UPDATE replica_operations SET')) {
-          prioritySyncingOperationRow.status = params[0];
-          prioritySyncingOperationRow.workflow_step = params[1];
-          prioritySyncingOperationRow.updated_at = params[2];
-          prioritySyncingOperationRow.completed_at = params[3];
-          prioritySyncingOperationRow.error_message = params[4];
-          prioritySyncingOperationRow.steps_history = params[5];
-          prioritySyncingOperationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: 0,
-        };
-      },
-    };
-
+    const ledger = createCommittedTimeoutLedger(prioritySyncingOperationRow);
     const coordinator = createCoordinator({
       nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
@@ -458,9 +462,6 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
         get() {
           return null;
         },
-      },
-      cdcIntegrationService: {
-        refreshAuthoritativeCacheRow: async () => true,
       },
       messageRouter: {
         async deliver() {
@@ -472,24 +473,32 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
           return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
-      sqlQueryEngine,
+      ...ledger.options,
       enableTimeouts: false,
     });
 
     coordinator.initialize();
+    let committed;
     try {
       await coordinator.checkTimeouts();
+      committed = ledger.read();
     } finally {
-      await coordinator.shutdown();
+      try {
+        await coordinator.shutdown();
+      } finally {
+        ledger.close();
+      }
     }
 
+    t.same(ledger.terminalChanges, [1], 'exactly one guarded SQLite timeout commits');
+
     t.equal(
-      prioritySyncingOperationRow.workflow_step,
+      committed.workflow_step,
       'FAILED',
       'priority control-plane SYNCING operations should time out within the bounded timeout window',
     );
     t.match(
-      prioritySyncingOperationRow.error_message || '',
+      committed.error_message || '',
       /Timeout in SYNCING step/,
       'bounded SYNCING timeout failure should report the timed out step',
     );
@@ -624,6 +633,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       partition_id: 'control_plane_publications-p1',
       entity_type: 'partition',
       entity_id: 'control_plane_publications-p1',
+      source_replica_id: 'control_plane_publications-p1-r1',
       replica_id: 'control_plane_publications-p1-r4',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
@@ -639,35 +649,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
     };
     let dispatchDeliveries = 0;
 
-    const sqlQueryEngine = {
-      async executeQuery(sql, params) {
-        if (sql.includes('FROM replica_operations')) {
-          return {
-            success: true,
-            rows: [{...operationRow}],
-          };
-        }
-        if (sql.includes('UPDATE replica_operations SET')) {
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: 0,
-        };
-      },
-    };
-
+    const ledger = createCommittedTimeoutLedger(operationRow);
     const coordinator = createCoordinator({
       nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
@@ -707,9 +689,6 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
           return this.getPriorityRecoveryPlanningAnswerSync(nodeId);
         },
       },
-      cdcIntegrationService: {
-        refreshAuthoritativeCacheRow: async () => true,
-      },
       tablePolicyService: {
         async getPolicyForPartition() {
           return {targetReplicaCount: 3, minReplicaCount: 3};
@@ -720,16 +699,24 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
           return null;
         },
       },
-      sqlQueryEngine,
+      ...ledger.options,
       enableTimeouts: false,
     });
 
     coordinator.initialize();
+    let committed;
     try {
       await coordinator.checkTimeouts();
+      committed = ledger.read();
     } finally {
-      await coordinator.shutdown();
+      try {
+        await coordinator.shutdown();
+      } finally {
+        ledger.close();
+      }
     }
+
+    t.same(ledger.terminalChanges, [1], 'exactly one guarded SQLite timeout commits');
 
     t.equal(
       dispatchDeliveries,
@@ -737,12 +724,12 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       'stale timed-out priority recovery should not re-enter dispatch before being failed',
     );
     t.equal(
-      operationRow.workflow_step,
+      committed.workflow_step,
       'FAILED',
       'timed-out priority recovery should become an explicit failed next action',
     );
     t.match(
-      operationRow.error_message,
+      committed.error_message,
       /Timeout in PENDING step/i,
       'timeout failure should explain the exhausted dispatch budget',
     );
