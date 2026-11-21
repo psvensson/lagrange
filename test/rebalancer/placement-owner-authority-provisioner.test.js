@@ -48,8 +48,9 @@ test('P15 the provisioner\'s ADD for a partition with routable replicas, beside 
   const held = holdNextAdmission(n1);
   await world.electLedger(n1);
   await held.reached.promise;
+  // The engine's method table holds property descriptors.
   const provisioning = createSQLQueryEngineProvisioningAdmissionMethods();
-  const move = provisioning.buildProvisioningCreateOperationMove.call(null, {
+  const move = provisioning.buildProvisioningCreateOperationMove.value.call(null, {
     partitionId: TARGET, targetNodeId: 'n3',
     childIntent: {operationIntentId: 'schema-job-1:n3', replicaIntentId: 'schema-job-1:n3:r'},
     parentWorkflowFenceToken: null}, null);

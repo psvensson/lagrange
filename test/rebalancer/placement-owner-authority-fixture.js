@@ -766,8 +766,14 @@ class PlacementWorld {
     }
     for (const node of this.nodes.values()) {
       node.nodeAuthority?.shutdown();
-      node.controlPlane?.heartbeatService?.stop?.();
+      // The production teardown order of the setup's services
+      // (bootstrap-service-seed-delegates.js): membership driver, heartbeat,
+      // lease, endpoint, dispatch; then the coordinator.
       node.controlPlane?.membershipPublicationService?.stopOwnerMembershipDriver?.();
+      node.controlPlane?.heartbeatService?.stop?.();
+      node.controlPlane?.leaseService?.stop?.();
+      node.controlPlane?.endpointService?.stop?.();
+      node.controlPlane?.dispatchService?.stop?.();
       try {
         await node.coordinator?.shutdown?.();
       } catch (error) {

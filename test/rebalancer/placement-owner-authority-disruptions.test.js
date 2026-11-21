@@ -165,12 +165,30 @@ test('P11 useful progress after the disruption clears: three deficits of differe
       'class order under the per-target copy capacity (K_TGT = 2 copies into n3); ' +
       `${reportAfterClear}`);
     const [priority] = admittedOperations(world, n1, 'sql_transactions-p1');
+    const passesBeforeCompletion = n1.probe.passes.length;
     completeCopy(world, n1, priority, 'sql_transactions-p1');
-    await waitUntil(() => admittedOperations(world, n1, 'orders-p1').length === 1,
-      'the completion (terminal commit, new replica row) admits the user partition',
-      PROGRESS_BOUND_MS);
+    let progressed = true;
+    try {
+      await waitUntil(() => admittedOperations(world, n1, 'orders-p1').length === 1,
+        'the completion (terminal commit, new replica row) admits the user partition',
+        PROGRESS_BOUND_MS);
+    } catch {
+      progressed = false;
+    }
     await world.idle();
     const report = reportOf(t, world, 'orders-p1');
+    const afterCompletion = {
+      applyFailures: world.log.applyFailures,
+      priorityRow: world.ledgerRows(n1, 'sql_transactions-p1').map((row) =>
+        `${row.workflow_step}/${row.status}`),
+      passesAfterCompletion: n1.probe.passes.slice(passesBeforeCompletion).map((pass) =>
+        pass.triggers.join('+')),
+      newReplicaInCache: Boolean(n1.cache.get('services', 'sql_transactions-p1-n3')),
+      lastPassSnapshot: ownerOf(n1).lastPassSnapshot,
+    };
+    t.diagnostic(JSON.stringify(afterCompletion));
+    assert.ok(progressed, 'the completion of one copy admits the next deficit within ' +
+      `${PROGRESS_BOUND_MS} ms (${JSON.stringify(afterCompletion)}); ${report}`);
     for (const partitionId of ['sql_transactions-p1', 'tables-p1', 'orders-p1']) {
       assert.equal(admittedOperations(world, n1, partitionId).length, 1,
         `${partitionId}: one admitted operation; ${report}`);

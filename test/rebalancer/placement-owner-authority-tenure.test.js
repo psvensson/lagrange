@@ -380,6 +380,33 @@ test('P5 new term without a role edge: a pass decided under the previous tenure 
     `one leadership start (reconciliation, barrier) per tenure; ${report}`);
 }));
 
+// Found in lab run 1 at 79391996b (barrier and lost-response schedules): an
+// idle leader's demotion clears its own local leader projection in its cache
+// (clearReplicaLeaderUpdateState -> clearLocalCanonicalLeaderNodeIdIfOwned)
+// before the rebalancer sink lowers the owner's boolean; the apply event
+// starts a PARTITIONS_CHANGED pass on the deposed owner with no tenure.
+test('P4 graceful transfer of an idle leader: its demotion starts no placement pass on the ' +
+  'deposed owner', (t) => withPlacementWorld(SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a, b] = nodes;
+  await world.electLedger(a);
+  await world.idle();
+  const passesBefore = a.probe.passes.length;
+  await world.electLedger(b);
+  await world.idle();
+  const report = reportOf(t, world);
+  assertOneAdmitted(world, nodes, report, 'n1');
+  const afterDemotion = a.probe.passes.slice(passesBefore).map((pass) => ({
+    triggers: pass.triggers.join('+'), startTenure: pass.startTenure?.term ?? null,
+    ownerIsLeaderAtStart: pass.ownerIsLeader}));
+  const staleWork = {constructions: workAfterTenureEnded(a.probe.constructions) +
+    a.probe.constructions.filter((record) => record.pass?.startTenure === null).length,
+  capacityChecks: workAfterTenureEnded(a.probe.capacityChecks) +
+    a.probe.capacityChecks.filter((record) => record.pass?.startTenure === null).length};
+  assert.deepEqual(afterDemotion, [], 'properties 1 and 3: no pass starts on the deposed owner ' +
+    `after its tenure ended (stale work counted: ${JSON.stringify(staleWork)}); ${report}`);
+}));
+
 function outstandingWork(nodes) {
   return {
     inFlightPasses: nodes.reduce((sum, node) => sum + node.probe.inFlight, 0),
