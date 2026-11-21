@@ -17,12 +17,13 @@ unchanged.
 
 For current execution, the integration summary records the composed RELEASE
 budget, the managed CREATE replacement tests and the physical missing replies.
-The next activation decision is whether unresolved evidence after release can
-retire a materialized service or publish a terminal result. The exact
-operation, boot, replica and service must survive a temporary loss of the
-reply while the existing recovery owner reconciles the outcome. The census
-below describes the planning commit.
-[Current formation and placement evidence](../operation-integrity-and-reliable-formation.md#physical-formation-and-placement-stability).
+CREATE and RELEASE have managed caller-lifetime evidence on later sources.
+The remaining recovery work includes proving that temporary loss of operation
+or target visibility preserves the correct incarnation and that cleanup of an
+earlier callback cannot clear its successor. The integration owner records the
+originals, the failed controls and the current test selection in the
+[core integration handoff](../operation-integrity-and-reliable-formation.md#core-integration-handoff-21-november-2026).
+The census below describes the planning commit.
 
 Loaded instructions were AGENTS, rules, router, Quest workflow, authority and
 recovery, and investigation/navigation skills. Source navigation used direct
@@ -205,10 +206,10 @@ changing retirement policy. The November 20 startup refusal has direct
 operation-bound evidence. Its connection to the earlier lease dips remains
 unproved. [CockroachDB repair design](https://www.cockroachlabs.com/blog/automated-rebalance-and-repair/)
 
-## Next bounded witnesses and continuation
+## Witnesses proposed at the planning baseline
 
-The integration owner should freeze scope and proof under the existing Quest
-route, using the current native constructors, repository SQL and managed lab.
+The November 20 proposal identified these cases for the existing Quest
+route, using native constructors, repository SQL and the managed lab.
 Substitute delivery timing, clock and failure boundaries; do not replace the
 authority being proved. The existing release witness and CREATE replay fixtures
 are starting points, with their construction ceilings retained explicitly.
