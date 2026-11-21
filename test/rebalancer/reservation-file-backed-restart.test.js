@@ -164,12 +164,12 @@ test('file-backed restart adopts one durable operation/reservation and ' +
 
   const firstTimers = createDeterministicTimerQueue();
   let firstStore = openCanonicalStore(dbPath);
-  let first = createCoordinatorWithStorage({
+  let first = (await createCoordinatorWithStorage({
     sqlQueryEngine: firstStore,
     unavailableOperationAuthorityReadsAfterReservationInsert: 1,
     setTimeoutFn: firstTimers.setTimeoutFn,
     clearTimeoutFn: firstTimers.clearTimeoutFn,
-  }).coordinator;
+  })).coordinator;
   const firstOwner = first.workflowOwner;
   const firstAuthorityFaultCount = observeStrictAuthorityFault(first);
   await t.rejects(
@@ -208,12 +208,12 @@ test('file-backed restart adopts one durable operation/reservation and ' +
 
   const restartTimers = createDeterministicTimerQueue();
   const reopenedStore = openCanonicalStore(dbPath);
-  const restarted = createCoordinatorWithStorage({
+  const restarted = (await createCoordinatorWithStorage({
     sqlQueryEngine: reopenedStore,
     unavailableOperationAuthorityReadsAfterReservationInsert: 1,
     setTimeoutFn: restartTimers.setTimeoutFn,
     clearTimeoutFn: restartTimers.clearTimeoutFn,
-  }).coordinator;
+  })).coordinator;
   const dispatchCalls = [];
   const sequence = [];
   const reservationObservations = [];

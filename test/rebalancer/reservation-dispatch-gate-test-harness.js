@@ -1,8 +1,23 @@
-import {TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from
   '../../src/constants/index.js';
+import {REPLICA_OPERATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {seedPartitionRow} from '../../src/bootstrap/seed-foundation-rows.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {LEDGER_PARTITION_ID} from
+  '../../src/partition/partition-placement-admission-decision.js';
+import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
+  '../../src/partition/partition-service-remote-query-methods.js';
+import {PartitionServiceRowOwner} from
+  '../../src/partition/partition-service-row-owner.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   RESERVATION_STATUS,
@@ -178,9 +193,95 @@ function createMockAdmissionService() {
   };
 }
 
-function createCoordinatorWithStorage(options = {}) {
+// The operation ledger's leader replica. Its route is published as production
+// publishes it: the foundation PARTITIONS row, then the replica's registration
+// and activation through its SERVICES row owner, which also publishes
+// PARTITIONS leader_node_id. Every applied write reaches the coordinator's
+// SystemTableCache through the cache's CDC apply entry (its change feed).
+const LEDGER_NODE_ID = 'ledger-leader-node';
+const LEDGER_LEADER = Object.freeze({
+  partitionId: LEDGER_PARTITION_ID,
+  nodeId: LEDGER_NODE_ID,
+  replicaId: `${LEDGER_PARTITION_ID}-r1`,
+  role: RAFT_ROLE.LEADER,
+  timeSource: {now: () => Date.now()},
+  raft: {readStatus: () => ({term: 1, commitIndex: 1, appliedIndex: 1})},
+});
+const ROUTE_ROW_KEY = Object.freeze({
+  [TABLES.PARTITIONS]: 'partition_id',
+  [TABLES.SERVICES]: 'service_id',
+});
+
+function createLedgerRouteWriter(cache) {
+  const rows = new Map();
+  const commit = (tableName, row) => {
+    rows.set(`${tableName}:${row[ROUTE_ROW_KEY[tableName]]}`, row);
+    cache.applySystemTableChange(tableName, CACHE_CDC_OPERATIONS.UPSERT, row);
+  };
+  return {
+    async insertSystemTableRow(tableName, row) {
+      commit(tableName, {...row});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async updateSystemTableRow(tableName, whereClause, data) {
+      const current =
+        rows.get(`${tableName}:${whereClause[ROUTE_ROW_KEY[tableName]]}`);
+      const applied = current !== undefined && Object.entries(whereClause)
+        .every(([column, value]) => current[column] === value);
+      if (applied) commit(tableName, {...current, ...data});
+      return {
+        success: true,
+        outcome: applied ? 'applied' : 'observed_state_changed',
+        partitionResult: {affectedRows: applied ? 1 : 0},
+      };
+    },
+  };
+}
+
+async function publishLedgerRoute(cache) {
+  const now = Date.now();
+  const writer = createLedgerRouteWriter(cache);
+  await writer.insertSystemTableRow(TABLES.PARTITIONS,
+    seedPartitionRow(REPLICA_OPERATIONS_SCHEMA, LEDGER_NODE_ID, now));
+  const rowOwner = new PartitionServiceRowOwner({
+    systemTableWriter: writer,
+    replicaStateMachine: new ReplicaStateMachine({
+      nodeId: LEDGER_NODE_ID,
+      controlPlaneSystemTableGateway: {},
+      now: () => now,
+    }),
+  });
+  const replica = {
+    partitionId: LEDGER_PARTITION_ID,
+    replicaId: LEDGER_LEADER.replicaId,
+    nodeId: LEDGER_NODE_ID,
+    service: {isLeader: true},
+  };
+  const registrationEvidence = await rowOwner.registerReplica({
+    ...replica, timestamp: now, status: SERVICE_STATUS.STOPPED,
+  });
+  await rowOwner.activateReplica({
+    ...replica, registrationEvidence, isEffectHandlerCurrent: () => true,
+  });
+}
+
+// A replica_operations owner read is served by the ledger leader: it carries
+// the witness the production builder gives the replica that served it.
+function servedByLedgerLeader(tableName, result, query) {
+  if (tableName !== TABLES.REPLICA_OPERATIONS || result?.success !== true ||
+      query?.authoritativeReadMode !== READ_MODE.OWNER_RPC_REQUIRED) {
+    return result;
+  }
+  return {
+    ...result,
+    readAuthorityWitness: PARTITION_SERVICE_REMOTE_QUERY_METHODS
+      .buildRemoteReadAuthorityWitness.call(LEDGER_LEADER, false),
+  };
+}
+
+async function createCoordinatorWithStorage(options = {}) {
   const sqlEngine = options.sqlQueryEngine || createTrackingSqlEngine();
-  const cache = options.systemTableCache || createMockCache();
+  const cache = new SystemTableCache();
   const accounting = new StorageCapacityAccountingService({
     systemTableCache: cache,
   });
@@ -193,8 +294,9 @@ function createCoordinatorWithStorage(options = {}) {
       submitMutation: createFixtureSystemMutationPort(
         (...args) => sqlEngine.executeQuery(...args),
       ),
-      readAuthoritativeRows: async (_table, sql, params = [], query = {}) =>
-        sqlEngine.executeQuery(sql, params, query),
+      readAuthoritativeRows: async (table, sql, params = [], query = {}) =>
+        servedByLedgerLeader(table,
+          await sqlEngine.executeQuery(sql, params, query), query),
       readRows: async (_table, sql, params = [], query = {}) =>
         sqlEngine.executeQuery(sql, params, query),
       executeQuery: async (sql, params = [], query = {}) =>
@@ -216,6 +318,7 @@ function createCoordinatorWithStorage(options = {}) {
     storageAdmissionService: createMockAdmissionService(),
   });
   coordinator.initialize();
+  await publishLedgerRoute(cache);
   let unavailableReads =
     options.unavailableOperationAuthorityReadsAfterReservationInsert || 0;
   const queryAuthority =
@@ -243,10 +346,10 @@ function createCoordinatorWithStorage(options = {}) {
   return {coordinator, sqlEngine, accounting};
 }
 
-function createRuntimeServiceDeferralFixture(options = {}) {
+async function createRuntimeServiceDeferralFixture(options = {}) {
   const timers = createDeterministicTimerQueue();
   const sqlEngine = createTrackingSqlEngine(options.sqlEngineOptions);
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
     unavailableOperationAuthorityReadsAfterReservationInsert:
       options.unavailableOperationAuthorityReadsAfterReservationInsert || 1,

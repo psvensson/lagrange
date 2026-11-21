@@ -40,7 +40,7 @@ import {
 test('terminal authoritative operation in reservation gate reconciles local state and returns terminal result', async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine();
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
 

@@ -67,7 +67,7 @@ test('reservation-failure-blocks-dispatch: reservation insert failure ' +
 async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine({failReservationInsert: true});
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
 
@@ -168,7 +168,7 @@ test('post-insert authority deferral: zero-change INSERT adoption retains ' +
   'the exact hold and redrives through the same gate', async (t) => {
   initializeConfig();
   const {coordinator, dispatchCalls, move, sqlEngine, timers} =
-    createRuntimeServiceDeferralFixture({
+    await createRuntimeServiceDeferralFixture({
       sqlEngineOptions: {reservationInsertChangeCount: 0},
     });
 
@@ -199,7 +199,7 @@ test('post-insert authority deferral: terminal settlement wins before rearm ' +
   'and releases the exact hold', async (t) => {
   initializeConfig();
   const {coordinator, dispatchCalls, move, sqlEngine, timers} =
-    createRuntimeServiceDeferralFixture();
+    await createRuntimeServiceDeferralFixture();
 
   try {
     await t.rejects(
@@ -236,7 +236,7 @@ test('post-insert authority deferral: shutdown cancels the retained retry ' +
   'without dispatch', async (t) => {
   initializeConfig();
   const {coordinator, dispatchCalls, move, sqlEngine, timers} =
-    createRuntimeServiceDeferralFixture();
+    await createRuntimeServiceDeferralFixture();
 
   await t.rejects(
     coordinator.createOperation(move),
@@ -260,7 +260,7 @@ test('post-insert authority deferral: runtime-service create keeps its exact ' +
 async (t) => {
   initializeConfig();
   const {coordinator, dispatchCalls, move, sqlEngine, timers} =
-    createRuntimeServiceDeferralFixture({
+    await createRuntimeServiceDeferralFixture({
       unavailableOperationAuthorityReadsAfterReservationInsert: 4,
     });
   let operationCreatedCount = 0;
@@ -341,12 +341,12 @@ test('post-insert authority deferral: restart recovery discovers the durable ' +
   const sqlEngine = createTrackingSqlEngine();
   const runtimeServiceId = 'sys-postgres-wire';
   const runtimeReplicaId = `${runtimeServiceId}-r1`;
-  const first = createCoordinatorWithStorage({
+  const first = (await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
     unavailableOperationAuthorityReadsAfterReservationInsert: 1,
     setTimeoutFn: firstTimers.setTimeoutFn,
     clearTimeoutFn: firstTimers.clearTimeoutFn,
-  }).coordinator;
+  })).coordinator;
 
   await t.rejects(
     first.createOperation({
@@ -378,12 +378,12 @@ test('post-insert authority deferral: restart recovery discovers the durable ' +
   );
 
   const restartTimers = createDeterministicTimerQueue();
-  const restarted = createCoordinatorWithStorage({
+  const restarted = (await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
     unavailableOperationAuthorityReadsAfterReservationInsert: 1,
     setTimeoutFn: restartTimers.setTimeoutFn,
     clearTimeoutFn: restartTimers.clearTimeoutFn,
-  }).coordinator;
+  })).coordinator;
   const dispatchCalls = [];
   restarted.workflowOwner.repository.isOperationLocallyOwned = () => true;
   restarted.workflowOwner.executeOperationInternal = async (operation) => {
@@ -461,7 +461,7 @@ test('dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with ' +
 async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine();
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
 
@@ -503,7 +503,7 @@ test('dispatch-gate-repairs-via-ensure: a failing reservation repair ' +
 async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine({failReservationInsert: true});
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
 
@@ -556,7 +556,7 @@ test('divergence-arm-keeps-reservation: unresolved terminal divergence ' +
   'keeps the reservation ACTIVE', async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine();
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
 
@@ -601,7 +601,7 @@ test('divergence-arm-keeps-reservation: losing to a DIFFERENT durable ' +
   'terminal releases the reservation', async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine();
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     sqlQueryEngine: sqlEngine,
   });
 

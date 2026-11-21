@@ -63,7 +63,7 @@ test('dispatch projection preserves the exact reservation identity through ' +
   'the canonical dispatch gate', async (t) => {
   initializeConfig();
   const sqlEngine = createTrackingSqlEngine();
-  const {coordinator} = createCoordinatorWithStorage({
+  const {coordinator} = await createCoordinatorWithStorage({
     nodeId: OWNER_NODE_ID,
     sqlQueryEngine: sqlEngine,
   });
