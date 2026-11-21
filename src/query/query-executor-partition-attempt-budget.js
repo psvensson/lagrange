@@ -98,6 +98,14 @@ function executorNow(executor) {
   return typeof executor?.nowFn === 'function' ? executor.nowFn() : Date.now();
 }
 
+function usesRecoveryReadResponseLifetime(
+  forRead, executionOptions, executionDeadlineMs, routingReadinessDimension,
+) {
+  return forRead && !executionOptions.transactionIdentity && executionDeadlineMs !== null &&
+    routingReadinessDimension ===
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+}
+
 function createPartitionAttemptBudget({
   executor,
   partitionId,
@@ -123,10 +131,8 @@ function createPartitionAttemptBudget({
       localDeadlineMs === null ?
         parentDeadlineMs :
         Math.min(parentDeadlineMs, localDeadlineMs);
-  const retainsRecoveryReadResponse = forRead && !executionOptions.transactionIdentity &&
-    executionDeadlineMs !== null &&
-    routingReadinessDimension ===
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  const retainsRecoveryReadResponse = usesRecoveryReadResponseLifetime(
+    forRead, executionOptions, executionDeadlineMs, routingReadinessDimension);
   const spentReporter = createPartitionSpentReporter({
     executor,
     partitionId,
