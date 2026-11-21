@@ -172,6 +172,48 @@ async () => {
   }
 });
 
+// One format decider: the store-open decision is the owner's full table
+// definition (the cold census's rule), not its column names. A table with the
+// ten columns but without the identity CHECK is another format.
+test('a table with the owner columns but not the owner definition (no identity CHECK) ' +
+  'is refused typed at open', async () => {
+  const {directory, dbPath} = temporaryDbPath();
+  const ledger = {tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    schema: REPLICA_OPERATIONS_SCHEMA, dbPath};
+  try {
+    await onLedgerLeader(async (leader, proposed) => {
+      const admitted = await admitOnLeader(leader, proposed, 'unchecked-e0',
+        placementStatement({partitionId: 'tables-p1', target: NODE.B}));
+      assert.equal(resultOf(admitted.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+    }, {dbPath});
+    const unchecked = new Database(dbPath);
+    try {
+      unchecked.exec(`ALTER TABLE ${OUTCOMES} RENAME TO unchecked_outcomes_source`);
+      unchecked.exec(`${PRIOR_FORMAT_TABLE.slice(0, -1)}, command_digest TEXT)`);
+      unchecked.exec(`INSERT INTO ${OUTCOMES} SELECT * FROM unchecked_outcomes_source`);
+      unchecked.exec('DROP TABLE unchecked_outcomes_source');
+      assert.deepEqual(columnsOf(unchecked), [...PARTITION_COMMITTED_STATEMENT_COLUMNS],
+        'precondition: exactly the owner columns');
+    } finally {
+      unchecked.close();
+    }
+    let reopened = null;
+    let refusal = null;
+    try {
+      reopened = await startLeader(ledger, LEDGER_PARTITION_ID);
+    } catch (error) {
+      refusal = error instanceof AggregateError ? error.errors[0] : error;
+    }
+    if (reopened !== null) {
+      await shutdownAll(reopened.leader);
+      assert.fail('the store opened with an outcome table that lacks the identity CHECK');
+    }
+    assert.equal(refusal?.code, OUTCOME_ERROR.FORMAT_UNSUPPORTED, `refusal: ${refusal}`);
+  } finally {
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
+
 test('an owner result is recorded only with its command identity, by the recorder and by ' +
   'the table CHECK', () => {
   const db = new Database(':memory:');

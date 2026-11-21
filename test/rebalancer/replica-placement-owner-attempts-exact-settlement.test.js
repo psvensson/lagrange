@@ -80,3 +80,41 @@ test('an unresolved attempt is discharged only by the record of its exact comman
     db.close();
   }
 });
+
+// The ledger census carries no command identity: a replica_operations row
+// names only the entryId its admission ran under, and a hold's state says
+// nothing about which release command (if any) settled. A census row is
+// therefore never a settlement of an attempt; only the attempt's exact
+// outcome record is.
+test('the ledger census never discharges an attempt: a row under its entry id from ' +
+  'another command, or a released hold, is not its exact record', () => {
+  const db = new Database(':memory:');
+  try {
+    createCommittedStatementOutcomeTable(db);
+    const admitBody = placementStatement({partitionId: 'tables-p1', target: NODE.B});
+    const otherBody = placementStatement({partitionId: 'tables-p1', target: NODE.C});
+    const releaseBody = Object.freeze({operationId: 'pl-tables-p1-3-0'});
+    persistUnresolvedPlacementAttempt(db, attemptOf('admit:tables-p1', 'e-census-admit',
+      admitBody));
+    persistUnresolvedPlacementAttempt(db, attemptOf('release:pl-tables-p1-3-0',
+      'e-census-release', releaseBody));
+    // Another placement command committed under the admit attempt's entry and
+    // its ledger row names that entry id; the release attempt never settled.
+    ownerRecordAt(db, 'e-census-admit', 1,
+      placementBodyDigestOf(PLACEMENT_ADMIT_TYPE, otherBody));
+    const census = [
+      {operationId: 'pl-tables-p1-1-0', admission: {entryId: 'e-census-admit'},
+        dispatchHold: null},
+      {operationId: 'pl-tables-p1-3-0', admission: {entryId: 'e-other-admission'},
+        dispatchHold: null},
+    ];
+    const uncertain = new Map();
+    reconcilePlacementAttempts(db, uncertain, census);
+    assert.deepEqual([...uncertain.keys()].sort(),
+      ['admit:tables-p1', 'release:pl-tables-p1-3-0'],
+      'a census row is never the exact record of an attempt');
+    assert.equal(db.prepare(ATTEMPTS_SQL).all().length, 2);
+  } finally {
+    db.close();
+  }
+});
