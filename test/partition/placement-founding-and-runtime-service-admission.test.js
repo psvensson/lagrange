@@ -80,6 +80,7 @@ import {attachAutoCommitLoop, createCoordinatorWithLedger} from
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
 import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
 import {REPLICA_OPERATIONS_SCHEMA, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -94,7 +95,7 @@ const SCHEMA_JOB_ID = 'schema-job-found-1';
 const REMOTE_TIMEOUT_MS = 1_000;
 
 function unknownPlacementDelivery() {
-  return buildDeliveryEnvelope({acknowledged: true, errorCode: 'TRANSPORT_TIMEOUT',
+  return buildDeliveryEnvelope({acknowledged: true, errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
     error: 'Request timeout'});
 }
 
