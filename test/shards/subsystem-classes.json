@@ -28,7 +28,7 @@
   "censusSize": 2721,
   "digest": "fnv1a32-0ce7104a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-28e28a11",
+  "observationDigest": "fnv1a32-1c770b4c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14816,7 +14816,6 @@
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/rebalancer/replica-placement-owner-constants.js",
-        "test/partition/placement-admission-fixture.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -15586,10 +15585,22 @@
     },
     "test/query/query-executor-recovery-read-lifetime.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
         "test/transport/router-envelope-witness-fixture.js"
       ]
     },
