@@ -18,6 +18,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {HeartbeatService} from './heartbeat-memory-trend-test-helpers.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const NODE_ID = 'node-heartbeat-liveness';
 const PROMPT_MS = 300;
@@ -53,10 +54,11 @@ async function within(promise, ms) {
 function composePausedProjection() {
   const engine = {
     writes: [],
-    async executeQuery(sql, params) {
+    // Each write commits at COMMIT_HLC and answers what the engine answers,
+    // with the producer's durable commit receipt for its own entry.
+    async executeQuery(sql, params, options) {
       engine.writes.push({sql, params});
-      return {success: true, affectedRows: 1, originHlc: COMMIT_HLC,
-        partitionResult: {affectedRows: 1}};
+      return engineCommittedWriteAnswer(sql, params, options, {originHlc: COMMIT_HLC});
     },
   };
   // The projection holds the node's row as it was; no CDC event is ever

@@ -78,6 +78,7 @@ import {
 
 import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 function createLeaderDatabaseReadBoundary(sqlQueryEngine) {
   return {
@@ -293,8 +294,13 @@ export async function runGrowthPromoteProductionWitness({
           rowsAffected: info.changes,
         };
       },
-      executeQuery: async (sql, params = []) =>
-        sqlQueryEngine.execute(sql, params),
+      // The engine entry answers a committed write with the engine's answer,
+      // carrying the producer's durable commit receipt for the write's entry.
+      executeQuery: async (sql, params = [], options = {}) => {
+        const answer = await sqlQueryEngine.execute(sql, params);
+        return /^\s*SELECT/iu.test(sql) || answer.success !== true ? answer :
+          engineCommittedWriteAnswer(sql, params, options, {changes: answer.changes});
+      },
     };
     const createTestCoordinator = () => {
       const instance = new RebalanceCoordinator({

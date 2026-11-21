@@ -28,7 +28,7 @@
   "censusSize": 2729,
   "digest": "fnv1a32-eadd2148",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9293c434",
+  "observationDigest": "fnv1a32-fd46d79d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6153,8 +6153,11 @@
     },
     "test/control-plane/runtime-access-settled-replay-projection.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
-        "src/partition/partition-service-constants.js"
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
     "test/control-plane/serve-eligibility-committed-epoch-read.test.js": {
@@ -20517,9 +20520,11 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-placement-admission.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",

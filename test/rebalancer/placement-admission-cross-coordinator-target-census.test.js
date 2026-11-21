@@ -84,6 +84,7 @@ import {
 } from '../integration/membership-consistency-integration-test-helpers.js';
 import {createSimulatedNodeHosts} from '../simulation/formation-sim-node-hosts.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 import {withFixtureCommittedMembership} from './committed-membership-fixture.js';
 
 const NODE_A = 'node-a';
@@ -212,7 +213,7 @@ function createLedgerStore(hostsById) {
       for (const change of queued) apply(nodeId, change);
       return queued.length;
     },
-    execute(sql, params) {
+    execute(sql, params, options = {}) {
       try {
         const statement = database.prepare(sql);
         const values = (params || []).map(bind);
@@ -228,8 +229,9 @@ function createLedgerStore(hostsById) {
         }
         const info = statement.run(...values);
         publish();
-        return {success: true, rows: [], affectedRows: info.changes,
-          changes: info.changes};
+        // The engine's answer for the committed statement, with the
+        // producer's durable commit receipt for this write's own entry.
+        return engineCommittedWriteAnswer(sql, params, options, {changes: info.changes});
       } catch (error) {
         return {success: false, rows: [], rowSetComplete: false,
           error: error.message};
@@ -248,7 +250,7 @@ function bindNodeEngine(hosts, ledger, engines) {
     queryExecutor: hosts.sqlQueryEngine.queryExecutor,
     async executeQuery(sql, params = [], options = {}) {
       return STATEMENT_ON_LEDGER.test(String(sql)) ?
-        ledger.execute(sql, params) :
+        ledger.execute(sql, params, options) :
         seam.executeQuery(sql, params, options);
     },
   });
