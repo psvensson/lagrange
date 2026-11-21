@@ -2,8 +2,12 @@ import {captureReplaceOwnerLevel, resolveReplaceOwnerEntryLevel} from
   './operation-workflow-replace-owner-wake.js';
 import {
   REPLACE_EFFECT_ADMISSION, REPLACE_WAIT_REASON, admitReplaceSourceRemovalEffect,
-  isPartitionReplace, recordReplaceSourceRemovalEffect,
+  isPartitionReplace,
 } from './operation-workflow-replace-owner.js';
+import {claimReplaceRemovalEffect, finishReplaceRemovalEffect} from
+  './operation-workflow-replace-owner-state.js';
+import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
 
 // The removal-effect boundary after SAFE for a partition REPLACE or initial
@@ -41,11 +45,30 @@ async function holdReplaceSourceRemovalEffect(
     owner.waitReplaceSourceRemovalEffect(operation, effect, entryLevel);
 }
 
-function noteReplaceSourceRemovalEffect(
-  owner, operation, response, replaceRemoveDispatchPhase) {
-  if (replaceRemoveDispatchPhase && isPartitionReplace(operation)) {
-    recordReplaceSourceRemovalEffect(owner, operation, response);
+async function deliverAdmittedOperationEffect(
+  owner, operation, target, request, dispatchNodeId, replaceRemovePhase,
+  entryLevel, onSend) {
+  const isReplaceRemoval = replaceRemovePhase && isPartitionReplace(operation);
+  const claim = isReplaceRemoval ? claimReplaceRemovalEffect(owner, operation) : null;
+  if (isReplaceRemoval && !claim) {
+    return {wait: owner.waitReplaceSourceRemovalEffect(operation,
+      {reason: REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING}, entryLevel)};
+  }
+
+  const {operationId} = operation;
+  let delivered = false;
+  try {
+    onSend();
+    const delivery = await owner.deliverReplicaOperationRequest(
+      operation, target, request, dispatchNodeId);
+    const reply = deliveryAnswerOf(delivery);
+    delivered = isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+      !(reply?.success === false &&
+        reply?.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING);
+    return {delivery};
+  } finally {
+    if (claim) finishReplaceRemovalEffect(owner, operationId, claim, delivered);
   }
 }
 
-export {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect};
+export {deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect};

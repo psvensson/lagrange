@@ -41,7 +41,7 @@ import {
   reconcileUnscopedPlacementRemoval, settleSupersededRemoval,
 } from
   './operation-workflow-placement-learner-retirement.js';
-import {holdReplaceSourceRemovalEffect, noteReplaceSourceRemovalEffect} from
+import {deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect} from
   './operation-workflow-remove-effect-admission.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE, DISPATCH_RETRY_DELAY_MS,
@@ -736,25 +736,18 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE, operation.operationId,
       );
     }
-    logSendOperationAttempt(this, operation, {
-      operationId: operation.operationId,
-      target,
-      type: messageType,
-      entityType,
-      entityId,
-      replaceRemovePhase: replaceRemoveDispatchPhase,
-    });
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;
     const strandedRemovePreimage = captureStrandedRemovePreimage(operation);
     try {
-      const delivery = await this.deliverReplicaOperationRequest(
-        operation,
-        target,
-        request,
-        dispatchNodeId,
-      );
+      const {delivery, wait} = await deliverAdmittedOperationEffect(
+        this, operation, target, request, dispatchNodeId, replaceRemoveDispatchPhase,
+        readinessEntryLevel, () => logSendOperationAttempt(this, operation, {
+          operationId: operation.operationId, target, type: messageType, entityType,
+          entityId, replaceRemovePhase: replaceRemoveDispatchPhase,
+        }));
+      if (wait) return wait;
       transport = deliveryTransportOf(delivery);
       response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
@@ -841,8 +834,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
     }
     while (true) {
-      noteReplaceSourceRemovalEffect(
-        this, operation, response, replaceRemoveDispatchPhase);
       const retainedCreateDelivery = this.retainDeliveredCreateProgress(
         operation,
         response,

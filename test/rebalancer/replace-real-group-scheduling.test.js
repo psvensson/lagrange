@@ -29,7 +29,10 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
+import {
+  buildDeliveryEnvelope, deliveryAnswerOf, deliveryTransportOf,
+  isDeliveredTransportDeliveryOutcome,
+} from
   '../../src/transport/transport-semantic-outcome.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
@@ -612,6 +615,7 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     const resendAnswers = [];
     let firstResendAcknowledged = false;
     let secondEntrySettled = false;
+    let loseNextRemoveReply = false;
     owner.deliverReplicaOperationRequest = async (operation, target, request, ...rest) => {
       const answer = await deliver(operation, target, request, ...rest);
       if (request.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
@@ -626,6 +630,10 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
           // Only delivery of the reply to the owner lags. The real source
           // route has already supplied its accepted answer.
           await reply.promise;
+        }
+        if (loseNextRemoveReply) {
+          loseNextRemoveReply = false;
+          return buildDeliveryEnvelope({deferRetry: true});
         }
       }
       return answer;
@@ -649,6 +657,20 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     }], 'one exact acknowledged resend crosses the original source route');
     t.equal(world.removeEffects.length, 2,
       'the pending removal is re-sent once after the holder settles');
+
+    // After the backstop, an accepted effect whose reply is lost remains due.
+    // The source row still has not retired and no extra clock step is needed.
+    world.clockOffsetMs += 61_000;
+    loseNextRemoveReply = true;
+    await entry(world);
+    t.equal(world.removeEffects.length, 3, 'a later due retry reaches the source');
+    t.equal(resendAnswers.at(-1)?.acknowledged, true,
+      'the source accepted the retry before its reply was lost');
+    await entry(world);
+    t.equal(world.removeEffects.length, 4,
+      'a subsequent owner turn redrives the exact unconfirmed source effect');
+    t.same(resendAnswers.at(-1), resendAnswers[0],
+      'the redrive uses the same operation and retiring source identity');
   } finally {
     reply.resolve();
     await Promise.allSettled(entries);

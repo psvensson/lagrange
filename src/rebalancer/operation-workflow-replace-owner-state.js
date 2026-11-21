@@ -82,6 +82,55 @@ function replaceIntentEntryOf(operation) {
   return null;
 }
 
+// One process-local claim at the source effect, scoped to the durable
+// STOPPING generation. Only its own reply can publish delivery evidence.
+function replaceRemovalEffectIdentity(operation) {
+  return JSON.stringify([
+    operation.createdAt, operation.workflowStep, operation.partitionId,
+    operation.sourceNodeId, operation.sourceReplicaId,
+    operation.targetNodeId, operation.replicaId,
+  ]);
+}
+
+function removalEffectIsDue(owner, effect, identity) {
+  return effect?.identity !== identity || (!effect.inFlight &&
+    nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS);
+}
+
+function isRemovalEffectResendDue(owner, operation) {
+  const effect = readOwnerState(owner).removalEffectByOperationId
+    .get(operation.operationId);
+  return removalEffectIsDue(owner, effect, replaceRemovalEffectIdentity(operation));
+}
+
+function claimReplaceRemovalEffect(owner, operation) {
+  const effects = readOwnerState(owner).removalEffectByOperationId;
+  const previous = effects.get(operation.operationId);
+  const identity = replaceRemovalEffectIdentity(operation);
+  if (!removalEffectIsDue(owner, previous, identity)) return null;
+  const claim = {
+    identity, inFlight: true,
+    previous: previous?.identity === identity ? previous : null,
+  };
+  effects.set(operation.operationId, claim);
+  return claim;
+}
+
+function finishReplaceRemovalEffect(owner, operationId, claim, delivered) {
+  const effects = readOwnerState(owner).removalEffectByOperationId;
+  if (effects.get(operationId) !== claim) return;
+  if (delivered) {
+    effects.set(operationId, {
+      identity: claim.identity, inFlight: false,
+      sentAtMs: nowMsOf(owner),
+    });
+  } else if (claim.previous) {
+    effects.set(operationId, claim.previous);
+  } else {
+    effects.delete(operationId);
+  }
+}
+
 /**
  * Record the owner's current wait as its one bounded diagnostic (D2/S9):
  * step and owner phase, source and target, how long this wait has lasted,
@@ -252,6 +301,9 @@ function isDeferredVisibilitySnapshot(operation) {
 
 export {
   admitReplaceOwnerHandBack,
+  claimReplaceRemovalEffect,
+  finishReplaceRemovalEffect,
+  isRemovalEffectResendDue,
   isDeferredVisibilitySnapshot,
   REPLACE_INTENT_FIELD,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,
