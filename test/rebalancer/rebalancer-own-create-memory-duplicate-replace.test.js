@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {OperationType, createOperationAt} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus, createOperationAt} from
+  '../../src/rebalancer/replica-status.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -389,13 +391,15 @@ function createCommittedCreationFixture(t, {hideCensus = false} = {}) {
     setBeforeInsert(callback) {
       beforeInsert = callback;
     },
-    terminalize(operationId) {
+    terminalize(operationId, {
+      step = WORKFLOW_STEP.FAILED, status = ReplicaStatus.FAILED,
+    } = {}) {
       const now = Date.now();
       const result = ledger.execute(
         `UPDATE replica_operations SET status = ?, workflow_step = ?, completed_at = ?,
           updated_at = ?, steps_history = json_insert(steps_history, '$[#]', json(?))
           WHERE operation_id = ?`,
-        ['failed', FAILED, now, now, JSON.stringify({step: FAILED, timestamp: now}), operationId],
+        [status, step, now, now, JSON.stringify({step, timestamp: now}), operationId],
       );
       t.equal(result.changes, 1, 'the original operation commits a terminal step in SQLite');
     },
@@ -558,3 +562,31 @@ test('exact creation distinguishes a bound zero publication epoch from malformed
   }), {code: 'INVALID_MEMBERSHIP_PUBLICATION_EPOCH_BINDING'});
   t.equal(fixture.rows().length, 1);
 });
+
+for (const step of [WORKFLOW_STEP.FAILED, WORKFLOW_STEP.ACTIVE]) {
+  test(`deterministic SQLite collision preserves terminal ${step} without another effect`, async (t) => {
+    const fixture = createCommittedCreationFixture(t, {hideCensus: true});
+    const {coordinator} = fixture;
+    const move = buildMove('terminal-target', {
+      type: OperationType.ADD,
+      replicaId: `${PARTITION_ID}-r4`,
+      operationIntentId: 'sqlite-terminal-original-create',
+    });
+    const created = await coordinator.createOperation(move);
+    fixture.terminalize(created.operationId, {step, status: step.toLowerCase()});
+    coordinator.recentOperationIntents.clear();
+    const effects = coordinator.stats.operationsCreated;
+    if (step === WORKFLOW_STEP.FAILED) {
+      await t.rejects(coordinator.createOperation(move), {
+        code: 'REPLICA_CREATION_FAILED', operationId: created.operationId,
+      });
+    } else {
+      const replay = await coordinator.createOperation(move);
+      t.equal(replay.operationId, created.operationId);
+      t.equal(replay.workflowStep, step);
+    }
+    t.equal(coordinator.stats.operationsCreated, effects,
+      'replaying a terminal result never announces another creation');
+    t.equal(fixture.rows().length, 1);
+  });
+}
