@@ -28,7 +28,7 @@
   "censusSize": 2713,
   "digest": "fnv1a32-1220ab5d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c826cff7",
+  "observationDigest": "fnv1a32-ea45e696",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19028,6 +19028,7 @@
     "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
@@ -19153,7 +19154,10 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-owner-shared.js",
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/rebalancer-constants.js"
       ]
     },
     "test/rebalancer/remove-active-dispatch-redrive.test.js": {

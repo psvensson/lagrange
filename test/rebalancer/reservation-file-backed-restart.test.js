@@ -54,7 +54,7 @@ function executeSql(database, sql, params = []) {
     const statement = database.prepare(sql);
     if (statement.reader) {
       const rows = statement.all(...params);
-      return {success: true, rows, affectedRows: rows.length};
+      return {success: true, rows, rowSetComplete: true, affectedRows: rows.length};
     }
     const result = statement.run(...params);
     return {

@@ -255,8 +255,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   PERSIST_FAILED: 'Failed to persist operation',
   RECOVERY_START: 'Starting recovery process',
   RECOVERY_FOUND: 'Found incomplete operations during recovery',
-  RECOVERY_MARK_FAILED: 'Marked incomplete operation as failed during recovery',
-  RECOVERY_MARK_REMOVE_FAILED: 'Marked incomplete removal operation as failed during recovery',
+  RECOVERY_OBSERVED_FAILURE: 'Recovery observed a durable failed operation',
+  RECOVERY_OPERATION_ERROR: 'Recovery could not reconcile an incomplete operation',
   RECOVERY_PROCESS_ERROR: 'Error processing operation during recovery',
   RECOVERY_COMPLETED: 'Recovery process completed',
   MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE:

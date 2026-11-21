@@ -5,7 +5,6 @@ import {OPERATION_TRANSITION_REASON} from '../../src/rebalancer/rebalancer-const
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-  NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
   OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
   PRE_SYNC_WORKFLOW_STEPS,
   PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
@@ -91,9 +90,6 @@ test('incompleteness: ACTIVE counts only for remove-phase types', (t) => {
 test('budget and recovery coverage rows', (t) => {
   t.notOk(PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS.has(WORKFLOW_STEP.CREATING),
     'CREATING deliberately excluded: it uses the bounded mutation lane');
-  t.strictSame([...NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS].sort(),
-    [...PRE_SYNC_WORKFLOW_STEPS, WORKFLOW_STEP.STOPPING].sort(),
-    'recovery marks failed = pre-sync plus STOPPING');
   for (const step of PRE_SYNC_WORKFLOW_STEPS) {
     t.ok(PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS.has(step),
       `pre-sync ${step} participates in the drain`);
@@ -132,7 +128,6 @@ test('every exported row is frozen', (t) => {
   for (const row of [
     DISPATCH_PENDING_WORKFLOW_STEPS,
     DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
-    NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
     OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
     PRE_SYNC_WORKFLOW_STEPS,
     PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
