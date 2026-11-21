@@ -4,10 +4,56 @@ import {buildOperationUpdateOutcome} from
   '../../src/rebalancer/replica-operation-update-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
-import {TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {applyCommitted} from '../test-helpers/participant-transaction-fixture.js';
 import {NODE, commitLedgerStatement} from './placement-admission-fixture.js';
+
+/**
+ * The ledger leader as production publishes it: the PARTITIONS row owns the
+ * leader identity (leader_node_id) and the leader's SERVICES row is its
+ * identity-bound ACTIVE endpoint, built by the partition service row owner,
+ * which publishes an ordinary partition leader as raft_role follower.
+ * @param {Object} leader - The ledger leader service.
+ * @return {{partition: Object, service: Object}} The two published rows.
+ */
+function ledgerLeaderPublication(leader) {
+  return Object.freeze({
+    partition: {partition_id: leader.partitionId, leader_node_id: leader.nodeId},
+    service: PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
+      replicaId: leader.replicaId, nodeId: leader.nodeId, service: leader,
+      status: SERVICE_STATUS.ACTIVE}),
+  });
+}
+
+function admitLedgerLeaderPublication(cache, leader) {
+  const {partition, service} = ledgerLeaderPublication(leader);
+  cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT, partition);
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, service);
+}
+
+/**
+ * The canonical delivery port toward the published ledger endpoint. A
+ * delivery must name exactly that endpoint; the ledger's answer travels in
+ * the transport owner's acknowledged delivery envelope.
+ * @param {Object} leader - The ledger leader service.
+ * @param {Function} answer - (address, message, options) => the ledger answer.
+ * @return {{deliver: Function}} The router's delivery seam.
+ */
+function ledgerLeaderTransport(leader, answer) {
+  const {address} = ledgerLeaderPublication(leader).service;
+  return {
+    async deliver(target, message, options) {
+      if (target !== address) {
+        throw new Error(`ledger delivery addressed ${target}; the published endpoint is ${address}`);
+      }
+      return buildDeliveryEnvelope({acknowledged: true}, await answer(target, message, options));
+    },
+  };
+}
 
 function attachAutoCommitLoop(leader, proposed) {
   let seen = proposed.length;
@@ -102,16 +148,20 @@ function createAuthoritativeLedgerRepository(leader) {
   });
 }
 
+/**
+ * A coordinator facade over the real ledger leader. Its cache is the real
+ * SystemTableCache; `publishLedgerLeader` admits the leader's canonical
+ * PARTITIONS and SERVICES publication through it, so remote routing reads
+ * exactly what production publishes.
+ * @param {Object} leader - The ledger leader service.
+ * @param {Object} [options] - {registerLocalLeader, publishLedgerLeader, messageRouter}.
+ * @return {Object} The coordinator.
+ */
 function createCoordinatorWithLedger(leader, options = {}) {
-  const servicesRows = options.servicesRows || [];
-  const partitionsRows = options.partitionsRows || [];
-  const systemTableCache = {
-    getAll(tableName) {
-      if (tableName === TABLES.SERVICES) return servicesRows;
-      if (tableName === TABLES.PARTITIONS) return partitionsRows;
-      return [];
-    },
-  };
+  const systemTableCache = new SystemTableCache();
+  if (options.publishLedgerLeader === true) {
+    admitLedgerLeaderPublication(systemTableCache, leader);
+  }
   const coordinator = Object.create(RebalanceCoordinator.prototype);
   coordinator.nodeId = NODE.A;
   coordinator.initialized = true;
@@ -170,4 +220,4 @@ function createCoordinatorWithLedger(leader, options = {}) {
   return coordinator;
 }
 
-export {attachAutoCommitLoop, createCoordinatorWithLedger};
+export {attachAutoCommitLoop, createCoordinatorWithLedger, ledgerLeaderTransport};

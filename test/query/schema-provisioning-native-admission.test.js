@@ -6,31 +6,23 @@ import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
 import {buildRejectedProposedWriteAnswer} from '../../src/partition/partition-write-kernel.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {
   LEDGER_PARTITION_ID, NODE, admitOnLeader, commitLedgerStatement, ledgerRows,
   onLedgerLeader, placementStatement, stepLedgerRow,
 } from '../partition/placement-admission-fixture.js';
-import {attachAutoCommitLoop, createCoordinatorWithLedger} from
+import {attachAutoCommitLoop, createCoordinatorWithLedger, ledgerLeaderTransport} from
   '../partition/placement-create-with-ledger-fixture.js';
 import {
   createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
 } from './schema-provisioning-job-test-support.js';
 
-function remoteCoordinator(leader, sendToAddress) {
+// The coordinator is not the ledger leader: it routes PLACEMENT_ADMIT to the
+// leader's published endpoint through the canonical delivery port.
+function remoteCoordinator(leader, answer) {
   return createCoordinatorWithLedger(leader, {
     registerLocalLeader: false,
-    messageRouter: {sendToAddress},
-    servicesRows: [{
-      partition_id: LEDGER_PARTITION_ID,
-      entity_id: LEDGER_PARTITION_ID,
-      node_id: 'serve-b',
-      replica_id: `${LEDGER_PARTITION_ID}-r1`,
-      status: SERVICE_STATUS.ACTIVE,
-      raft_role: RAFT_ROLE.LEADER,
-      service_address: `serve-b.partition.${LEDGER_PARTITION_ID}-r1`,
-    }],
+    publishLedgerLeader: true,
+    messageRouter: ledgerLeaderTransport(leader, answer),
   });
 }
 

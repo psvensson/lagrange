@@ -100,18 +100,9 @@ function unknownPlacementDelivery() {
 }
 
 function remotePlacementCoordinator(leader, messageRouter) {
-  const coordinator = createCoordinatorWithLedger(leader, {
-    registerLocalLeader: false, messageRouter,
+  return createCoordinatorWithLedger(leader, {
+    registerLocalLeader: false, publishLedgerLeader: true, messageRouter,
   });
-  const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT,
-    {partition_id: leader.partitionId, leader_node_id: leader.nodeId});
-  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
-    PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
-      replicaId: leader.replicaId, nodeId: leader.nodeId, service: leader,
-      status: SERVICE_STATUS.ACTIVE}));
-  coordinator.systemTableCache = cache;
-  return coordinator;
 }
 
 async function withRemotePlacementWire(scenario) {
