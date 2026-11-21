@@ -7,11 +7,12 @@
  * (round-11: the registration-era services rows missing from the leader
  * db, the 43-row "No row found for CDC update" wave, serve-eligibility
  * wedged, phase-1 routable-partition timeouts). Registration waits for
- * partition leadership before writing, so when a leader replica is
- * present the write goes through its raft append (executeQuery →
- * proposeWrite) and replicates to every replica; the per-replica direct
- * loop remains only for the genuinely leaderless earliest-bootstrap
- * window. Reads keep the local lane.
+ * partition leadership before writing, so the write goes through the raft
+ * append (executeQuery -> proposeWrite) and replicates to every replica.
+ * The per-replica direct fan-out is deleted (line-regression-causes stage 3:
+ * 0 uses in two GCP seed bootstraps and four lab fresh seeds): a raft-lane
+ * failure is the write's answer, never re-executed outside raft. Reads keep
+ * the local lane.
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -108,17 +109,13 @@ test('a bootstrap-mode write with only followers still rides the raft ' +
   t.end();
 });
 
-test('a bootstrap-mode write falls back to the per-replica direct fan-out ' +
-  'only when the raft lane itself fails (leaderless window)', async (t) => {
+test('a bootstrap-mode write whose raft lane fails answers that failure; ' +
+  'nothing is executed outside raft (leaderless window)', async (t) => {
   const {host, calls} = buildHost({withLeader: false, raftLaneFails: true});
-  const result = await host.executeSQLDirectToLocalPartition(
-    INSERT_SQL,
-    ['mg-1-r1'],
-  );
-  t.equal(result.success, true);
-  t.equal(calls.raft.length, 1, 'the raft lane was attempted first');
-  t.equal(calls.local.length, 3,
-    'the leaderless window keeps the direct fan-out to every replica');
+  await t.rejects(host.executeSQLDirectToLocalPartition(INSERT_SQL, ['mg-1-r1']),
+    /no leader available for write/, 'the raft lane\'s own failure');
+  t.equal(calls.raft.length, 1, 'the raft lane carried the write');
+  t.equal(calls.local.length, 0, 'no statement executed outside raft');
   t.end();
 });
 

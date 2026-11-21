@@ -11,7 +11,7 @@ documentClass: generated
 
 ## Files
 
-- [cdc-bootstrap-direct-sql.js](cdc-bootstrap-direct-sql.js) - The bootstrap-mode direct write path of the CDC integration service (the seed's registration window): SQL executed... (importers: one)
+- [cdc-bootstrap-direct-sql.js](cdc-bootstrap-direct-sql.js) - The bootstrap-mode path of the CDC integration service (the seed's registration window): reads on the local... (importers: one)
 - [cdc-cache-deletion-visibility.js](cdc-cache-deletion-visibility.js) - The existing CDC visibility owner's absence repair. (importers: one)
 - [cdc-committed-write-answer.js](cdc-committed-write-answer.js) - The answer of a routed system-table write: it answers at its commit at the partition owner, with its position (quest... (importers: few)
 - [cdc-confirmation-tracker.js](cdc-confirmation-tracker.js) - CDC Confirmation Tracker - awaitable CDC delivery confirmation. (importers: many)
