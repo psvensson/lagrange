@@ -26,7 +26,7 @@ function ownRowObservation(attempt, tableName, row) {
 }
 
 function recordRepairObservation(attempt, kind) {
-  attempt.observations = (attempt.observations ?? REPAIR_OBSERVATION.NONE) | kind;
+  attempt.observations |= kind;
   if (kind !== REPAIR_OBSERVATION.OWN_ROW) attempt.delegated = null;
 }
 

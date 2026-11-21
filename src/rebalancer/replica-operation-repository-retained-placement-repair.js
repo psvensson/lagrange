@@ -95,7 +95,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       if (!attempt) {
         attempt = {operation: copyOperationOutcomeData(operation), entryId: payload.entryId,
-          body: payload.body, blockers: null, pending: null,
+          body: payload.body, blockers: null, pending: null, observations: OBSERVATION.NONE,
           clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};
         this.retainedPlacementRepairs.set(operation.operationId, attempt);
       }
@@ -177,7 +177,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       let attempt = this.retainedPlacementRepairs.get(operation.operationId);
       if (!attempt) {
         attempt = {operation: copyOperationOutcomeData(operation), entryId: null,
-          blockers: null, pending: null,
+          blockers: null, pending: null, observations: OBSERVATION.NONE,
           clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};
         this.retainedPlacementRepairs.set(operation.operationId, attempt);
       }
