@@ -1,4 +1,4 @@
-import {createCoordinatorSqlStore, createMockCdcService, createMockPolicyService} from './test-helpers.js';
+import {createCoordinatorSqlStore, createTestCoordinator} from './test-helpers.js';
 import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
@@ -150,12 +150,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         });
         t.ok(insert.success, `committed reservation fixture ${id}`);
       }
-      const coordinator = createCoordinator({
-        nodeId: 'node-1',
-        transactionCoordinator: buildTransactionCoordinator(),
-        systemTableCache: {get: () => null},
-        cdcIntegrationService: createMockCdcService(),
-        tablePolicyService: createMockPolicyService(),
+      const coordinator = createTestCoordinator({
         controlPlaneSystemTableGateway: {
           async readAuthoritativeRows(tableName, sql, params, options) {
             gatewayCalls.push({tableName, sql, options});
@@ -167,7 +162,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         enableTimeouts: false,
       });
-      coordinator.initialize();
       try {
         await coordinator.releaseReservationForOperation(operation);
         await coordinator.reconcileReservations();
