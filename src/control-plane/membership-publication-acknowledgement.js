@@ -1,7 +1,3 @@
-import {
-  buildMembershipLifecycleSummary,
-  MEMBERSHIP_LIFECYCLE_STATE,
-} from './membership-lifecycle-constants.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {PUBLICATION_RECOVERY_MACHINE_ACTION} from './publication-recovery-state-machine.js';
 import {
@@ -13,8 +9,7 @@ import {
 } from './membership-publication-row-helpers.js';
 import {
   buildMembershipPublicationAcknowledgementDecision,
-  buildServingMemberStatesByNodeId,
-  closeAcknowledgedMetadataRefreshRow,
+  materializeAcknowledgedPublication,
 } from './membership-publication-planning-evidence.js';
 
 function acknowledgeMembershipPublication(options = {}) {
@@ -66,61 +61,27 @@ function acknowledgeMembershipPublication(options = {}) {
       ],
     };
   }
-  const allAcknowledged = acknowledgementDecision.allAcknowledged;
-  const nextStatus = acknowledgementDecision.nextStatus;
-  const transitionHistory = [
-    ...(Array.isArray(publicationRow.transition_history) ?
-      publicationRow.transition_history :
-      normalizedPublication.transitionHistory),
-    buildTransitionHistoryEntry({
-      state: nextStatus,
-      reasonCode: acknowledgementDecision.reasonCode,
-      at: nowMs,
-      metadata: {
-        nodeId,
-      },
-    }),
-  ];
-  const nextLifecycleState = allAcknowledged ?
-    MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE :
-    MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING;
-  const publishedNodeIdsForState =
-    normalizedPublication.publishedActiveNodeIds.length > 0 ?
-      normalizedPublication.publishedActiveNodeIds :
-      normalizedPublication.requiredAckNodeIds;
-  return {
+  const closingOrProgress = buildTransitionHistoryEntry({
+    state: acknowledgementDecision.nextStatus,
+    reasonCode: acknowledgementDecision.reasonCode,
+    at: nowMs,
+    metadata: {nodeId},
+  });
+  const acknowledgedRow = {
     ...publicationRow,
     acknowledged_node_ids: acknowledgedNodeIds,
-    status: nextStatus,
+    status: acknowledgementDecision.nextStatus,
     updated_at: nowMs,
-    published_at: allAcknowledged ? nowMs : publicationRow.published_at || null,
-    closed_at: allAcknowledged ? nowMs : publicationRow.closed_at || null,
-    membership_lifecycle_summary: buildMembershipLifecycleSummary({
-      lifecycleState: nextLifecycleState,
-      publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
-      projectedServingNodeIds:
-        normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
-      locallyEligibleNodeIds:
-        normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
-      suspectedOrTransitioningNodeIds:
-        normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
-      memberStatesByNodeId: allAcknowledged ?
-        buildServingMemberStatesByNodeId(
-          normalizedPublication.membershipLifecycleSummary?.memberStatesByNodeId,
-          publishedNodeIdsForState,
-        ) :
-        normalizedPublication.membershipLifecycleSummary?.memberStatesByNodeId,
-      recoveryEpochByNodeId:
-        normalizedPublication.membershipLifecycleSummary?.recoveryEpochByNodeId,
-      membershipFreeze: normalizedPublication.membershipLifecycleSummary?.membershipFreeze,
-      projectionDiagnostics:
-        normalizedPublication.membershipLifecycleSummary?.projectionDiagnostics,
-    }),
-    transition_history: transitionHistory,
+  };
+  if (acknowledgementDecision.allAcknowledged) {
+    return materializeAcknowledgedPublication(acknowledgedRow, nowMs, closingOrProgress);
+  }
+  return {
+    ...acknowledgedRow,
+    transition_history: [...normalizedPublication.transitionHistory, closingOrProgress],
   };
 }
 
 export {
   acknowledgeMembershipPublication,
-  closeAcknowledgedMetadataRefreshRow,
 };

@@ -805,6 +805,15 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
         SECOND_NODE_ID,
       ]);
       const persistedRows = [];
+      let durablePublicationRow = {
+        publication_id: PUBLICATION_ID,
+        publication_kind: PUBLICATION_KIND,
+        publication_epoch: PUBLICATION_EPOCH,
+        status: OPEN_STATUS,
+        published_active_node_ids: [...REQUIRED_NODE_IDS],
+        required_ack_node_ids: [...REQUIRED_NODE_IDS],
+        acknowledged_node_ids: [...REQUIRED_NODE_IDS],
+      };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'seed-node',
         systemTableCache: {
@@ -826,8 +835,13 @@ export function registerMembershipPublicationCoordinatorTailAckForNodeTests({
           },
         },
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return durablePublicationRow.publication_id === publicationId ?
+              durablePublicationRow : null;
+          },
           async upsertPublication(row) {
             persistedRows.push(row);
+            durablePublicationRow = row;
           },
         },
       });

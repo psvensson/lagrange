@@ -7,7 +7,7 @@
     "bootstrap-membership": 350,
     "cdc-metadata": 72,
     "cli-tooling": 99,
-    "control-plane": 234,
+    "control-plane": 235,
     "convergence-topology": 87,
     "distributed-harness": 223,
     "examples-e2e": 8,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-5299f43b",
+  "censusSize": 2716,
+  "digest": "fnv1a32-74631bc6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-28b21870",
+  "observationDigest": "fnv1a32-6392a7d1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -624,6 +624,7 @@
     "test/control-plane/membership-publication-epoch-status-probe.test.js": "control-plane",
     "test/control-plane/membership-publication-first-epoch-members.test.js": "control-plane",
     "test/control-plane/membership-publication-leader-driven-gate.test.js": "control-plane",
+    "test/control-plane/membership-publication-native-ack-order.test.js": "control-plane",
     "test/control-plane/membership-publication-persist-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/membership-publication-reconcile-no-race-timeout.test.js": "control-plane",
     "test/control-plane/membership-swim-consume.test.js": "control-plane",
@@ -5210,6 +5211,39 @@
         "src"
       ]
     },
+    "test/control-plane/membership-publication-native-ack-order.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/membership-lifecycle-constants.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/membership-publication-formation-record.js",
+        "src/control-plane/membership-publication-planning-evidence.js",
+        "src/control-plane/membership-publication-row-contract.js",
+        "src/control-plane/owners/control-plane-publications-owner.js",
+        "src/control-plane/system-row-normalizers.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/control-plane/membership-publication-persist-wait-bound-spent.test.js": {
       "files": [
         "src/control-plane/membership-publication-coordinator-persist.js",
@@ -5898,6 +5932,8 @@
     },
     "test/control-plane/system-metadata-owner-modules.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/membership-publication-planning-evidence.js",
         "src/partition/partition-write-kernel.js"
       ]
     },

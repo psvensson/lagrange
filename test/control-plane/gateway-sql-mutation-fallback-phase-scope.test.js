@@ -64,3 +64,24 @@ test('a phase-scoped membership publication write stays fenced off the ' +
   t.equal(refusal?.message, GATEWAY_ERROR_MSG.CDC_REQUIRED);
   t.equal(sql.length, 0, 'no SQL was issued');
 });
+
+test('guarded mutations retain NULL and refuse unknown predicate fields before SQL', async (t) => {
+  const {gateway, sql} = gatewayWithoutCdc();
+  const options = {phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP};
+  const mutation = {
+    operation: 'update', tableName: 'nodes', data: {status: 'active'},
+    whereClause: {node_id: 'fallback-node', ready_lease_expires_at: null},
+  };
+  await gateway.submitMutation(mutation, options);
+  t.same(sql, [{
+    statement: 'UPDATE nodes SET status = ? WHERE node_id = ? AND ready_lease_expires_at IS NULL',
+    params: ['active', 'fallback-node'],
+  }], 'ordinary guarded SQL preserves all predicate values');
+
+  for (const extra of [{misspelled_lease: null}, {ready_lease_expires_at: undefined}]) {
+    await t.rejects(gateway.submitMutation({...mutation,
+      whereClause: {...mutation.whereClause, ...extra}}, options),
+    {message: GATEWAY_ERROR_MSG.MUTATION_WHERE_INVALID});
+  }
+  t.equal(sql.length, 1, 'invalid predicates cannot become a broader SQL update');
+});

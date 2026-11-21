@@ -11,6 +11,7 @@ import {resolveActiveNodeViews} from './active-node-projection.js';
 import {
   buildMembershipLifecycleSummary,
   MEMBERSHIP_MEMBER_STATE,
+  MEMBERSHIP_LIFECYCLE_EPOCH_BOUNDARY,
   MEMBERSHIP_LIFECYCLE_STATE,
 } from './membership-lifecycle-constants.js';
 import {
@@ -472,58 +473,57 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
   if (!publicationRow || typeof publicationRow !== 'object') {
     return publicationRow;
   }
-  const closureDecision = buildPublicationMetadataRefreshDecision({
-    publicationRow,
-  });
-  if (closureDecision.shouldClose !== true) {
-    return publicationRow;
-  }
-  const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
+  let closureDecision = buildPublicationMetadataRefreshDecision({publicationRow});
+  const normalized = normalizeControlPlanePublicationRow(publicationRow);
   const nowMs = resolveNowMs(options.nowMs);
-  const existingHistory = Array.isArray(publicationRow.transition_history) ?
-    publicationRow.transition_history :
-    normalizedPublication.transitionHistory;
-  const publishedNodeIdsForState =
-    normalizedPublication.publishedActiveNodeIds.length > 0 ?
-      normalizedPublication.publishedActiveNodeIds :
-      normalizedPublication.requiredAckNodeIds;
+  if (normalized.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+      closureDecision.allRequiredAcknowledged) {
+    const lastState = normalized.transitionHistory.at(-1)?.state;
+    if (lastState === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
+      return materializeAcknowledgedPublication(publicationRow, nowMs, null);
+    }
+    // Only actual retained pending history can establish a missing closure.
+    if (lastState !== MEMBERSHIP_PUBLICATION_STATUS.OPEN &&
+        lastState !== MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING) {
+      return publicationRow;
+    }
+    closureDecision = buildPublicationMetadataRefreshDecision({
+      publicationRow: {...publicationRow, status: lastState},
+    });
+  }
+  if (!closureDecision.shouldClose) return publicationRow;
+  return materializeAcknowledgedPublication(publicationRow, nowMs,
+    buildTransitionHistoryEntry({
+      state: closureDecision.nextStatus, reasonCode: closureDecision.reasonCode, at: nowMs,
+    }));
+}
+
+function materializeAcknowledgedPublication(publicationRow, nowMs, closingTransition) {
+  const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
+  const existingHistory = normalizedPublication.transitionHistory;
+  const publishedNodeIdsForState = normalizedPublication.publishedActiveNodeIds.length > 0 ?
+    normalizedPublication.publishedActiveNodeIds : normalizedPublication.requiredAckNodeIds;
+  const summary = normalizedPublication.membershipLifecycleSummary;
   const membershipLifecycleSummary = buildMembershipLifecycleSummary({
+    ...summary,
     lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+    epochBoundary: MEMBERSHIP_LIFECYCLE_EPOCH_BOUNDARY.PUBLISHED_MEMBERSHIP,
     publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
-    projectedServingNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
-    locallyEligibleNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
-    formationPlacementNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.formationPlacementNodeIds,
-    suspectedOrTransitioningNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
     memberStatesByNodeId: buildServingMemberStatesByNodeId(
-      normalizedPublication.membershipLifecycleSummary?.memberStatesByNodeId,
-      publishedNodeIdsForState,
-    ),
-    recoveryEpochByNodeId:
-      normalizedPublication.membershipLifecycleSummary?.recoveryEpochByNodeId,
-    membershipFreeze: normalizedPublication.membershipLifecycleSummary?.membershipFreeze,
-    projectionDiagnostics:
-      normalizedPublication.membershipLifecycleSummary?.projectionDiagnostics,
+      summary?.memberStatesByNodeId, publishedNodeIdsForState),
   });
+  const transitionHistory = closingTransition &&
+    existingHistory.at(-1)?.state !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
+    [...existingHistory, closingTransition] : existingHistory;
   return {
     ...publicationRow,
-    status: closureDecision.nextStatus,
+    status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
     updated_at: nowMs,
     published_at: publicationRow.published_at || nowMs,
     closed_at: publicationRow.closed_at || nowMs,
     membership_lifecycle_summary: membershipLifecycleSummary,
     membershipLifecycleSummary,
-    transition_history: [
-      ...existingHistory,
-      buildTransitionHistoryEntry({
-        state: closureDecision.nextStatus,
-        reasonCode: closureDecision.reasonCode,
-        at: nowMs,
-      }),
-    ],
+    transition_history: transitionHistory,
   };
 }
 
@@ -733,9 +733,9 @@ export {
   buildPublicationMetadataRefreshDecision,
   buildPublicationMetadataRefreshRow,
   buildPublicationReadOptions,
-  buildServingMemberStatesByNodeId,
   comparePlanningEvidenceRows,
   closeAcknowledgedMetadataRefreshRow,
+  materializeAcknowledgedPublication,
   countPlanningEvidenceRowFields,
   deriveMembershipPublicationCandidate,
   deriveMembershipPublicationId,

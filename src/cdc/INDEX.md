@@ -52,5 +52,5 @@ documentClass: generated
 - [cdc-source-scope-evidence.js](cdc-source-scope-evidence.js) - No leading comment; first export: CDC_SOURCE_SCOPE_AUTHORITY. (importers: many)
 - [cdc-sql-builder.js](cdc-sql-builder.js) - CDC SQL Builder - Builds SQL queries for CDC operations. (importers: few)
 - [cdc-system-table-mutation-sql-helpers.js](cdc-system-table-mutation-sql-helpers.js) - No leading comment; first export: buildSystemTableUpsert. (importers: many)
-- [cdc-terminal-gate.js](cdc-terminal-gate.js) - The choke points of the CDC integration service's operation classes. (importers: few)
+- [cdc-terminal-gate.js](cdc-terminal-gate.js) - The choke points of the CDC integration service's operation classes. (importers: many)
 - [index.js](index.js) - CDC module exports. (importers: one)

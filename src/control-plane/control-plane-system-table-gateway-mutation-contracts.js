@@ -27,6 +27,7 @@ import {
   CONTROL_PLANE_MUTATION_OUTCOME_POLICY,
   CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR,
   CONTROL_PLANE_MUTATION_WAKE_SOURCE,
+  GATEWAY_ERROR_MSG,
 } from './control-plane-system-table-gateway-constants.js';
 import {
   normalizeDistinctStringArray,
@@ -126,23 +127,16 @@ function canonicalizeControlPlaneMutation(
     }
   }
 
-  let whereClause = mutation?.whereClause;
-  if (
-    whereClause &&
-    typeof whereClause === 'object' &&
-    (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
-      operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE)
-  ) {
-    const canonicalized = canonicalizeSystemTableRow(tableName, whereClause);
-    if (allowedColumns) {
-      whereClause = {};
-      for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== 'undefined') {
-          whereClause[key] = value;
-        }
-      }
-    } else {
-      whereClause = canonicalized;
+  const whereClause = mutation?.whereClause;
+  if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
+      operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE) {
+    // Predicates name stored SQL values, not a partially populated data row.
+    if (!whereClause || typeof whereClause !== 'object' || Object.keys(whereClause).length === 0) {
+      throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
+    }
+    if (Object.entries(whereClause).some(([key, value]) =>
+      value === undefined || (allowedColumns && !allowedColumns.has(key)))) {
+      throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_INVALID);
     }
   }
 

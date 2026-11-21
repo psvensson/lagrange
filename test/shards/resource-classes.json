@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2689,
+    "ordinary": 2690,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-325edd9d",
+  "censusSize": 2716,
+  "digest": "fnv1a32-66f259c2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -604,6 +604,7 @@
     "test/control-plane/membership-publication-epoch-status-probe.test.js": "ordinary",
     "test/control-plane/membership-publication-first-epoch-members.test.js": "ordinary",
     "test/control-plane/membership-publication-leader-driven-gate.test.js": "ordinary",
+    "test/control-plane/membership-publication-native-ack-order.test.js": "ordinary",
     "test/control-plane/membership-publication-persist-wait-bound-spent.test.js": "ordinary",
     "test/control-plane/membership-publication-reconcile-no-race-timeout.test.js": "ordinary",
     "test/control-plane/membership-swim-consume.test.js": "ordinary",

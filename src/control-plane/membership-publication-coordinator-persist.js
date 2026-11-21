@@ -8,8 +8,7 @@ import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   isControlPlaneWriterShutDown,
 } from './control-plane-error-classification.js';
-import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
-import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
+import {assertPublicationWriteRevision} from './owners/control-plane-publications-owner.js';
 import {
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
@@ -31,15 +30,15 @@ import {shouldDeferMembershipReconcileToWriteLeader} from
 import {PARTITION_SERVICE_EVENT} from
   '../partition/partition-service-constants.js';
 import {
-  listEquals,
   normalizePositiveInteger,
 } from './membership-publication-row-helpers.js';
 import {
   buildPublicationReadOptions,
-  mergePublicationRows,
   serializeMembershipPublicationRow,
 } from './membership-publication-planning-evidence.js';
-import {acknowledgeMembershipPublication} from './membership-publication-acknowledgement.js';
+import {PUBLICATION_INTENT_DECISION, decidePublicationIntent, observePublicationIntent,
+  publicationAcknowledgementIntent, publicationBirthIntent} from
+  './membership-publication-write-intent.js';
 import {MembershipPublicationCoordinatorPlanning} from './membership-publication-coordinator-planning.js';
 import {
   readActiveGateMembershipPublicationVisibleRow,
@@ -52,18 +51,22 @@ import {
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  captureControlPlaneWriteConfirmation,
+  controlPlaneWriteIdentity,
+} from './control-plane-write-identity.js';
 
+const PUBLICATION_WRITE_UNCONFIRMED = 'PUBLICATION_WRITE_UNCONFIRMED';
+const PUBLICATION_WRITE_IDENTITY_SUBJECT = 'membership-publication';
 const PUBLICATION_WRITE_UNCONFIRMED_OUTCOME =
-  'unconfirmed_row_returned_as_persisted';
+  'durable_publication_unconfirmed';
 const PUBLICATION_WRITE_CONFIRMATION_WAIT = Object.freeze({
   wait: 'PUBLICATION_WRITE_MAX_ATTEMPTS',
   awaited: 'durable publication row satisfying the desired state after ' +
     'upsert + readback',
 });
 
-// Every publication write attempt is spent without a readback that
-// satisfies the desired row. The caller still gets the unconfirmed row
-// (unchanged behaviour; the owner finding is recorded in the quest log).
+// Keep the certification wait bound visible when no authoritative row confirms the write.
 function reportPublicationWriteUnconfirmed(coordinator, spent) {
   reportWaitBoundSpent(coordinator.logger, {
     ...PUBLICATION_WRITE_CONFIRMATION_WAIT,
@@ -84,15 +87,6 @@ function reportPublicationWriteUnconfirmed(coordinator, spent) {
   });
 }
 
-// What a failed publication write leaves to do. A failed answer does not
-// prove the row is absent (a committed write can answer failed), so while
-// attempts remain the durable row is read back and the write re-attempted.
-// The one exception is the CDC service's terminal shut-down answer: nothing
-// can be read back or re-attempted through a torn-down writer.
-const PUBLICATION_WRITE_FAILURE_NEXT_STEP = Object.freeze({
-  VERIFY_AND_REATTEMPT: 'verify_and_reattempt',
-  FAIL: 'fail',
-});
 const LATCH_REASON_LEADER_PARTITION_UNAVAILABLE =
   'LEADER_PARTITION_UNAVAILABLE';
 const LATCH_REASON_BODY_INVALID = 'LATCH_BODY_INVALID';
@@ -199,15 +193,25 @@ async function submitFormationLatchCommand(
   return {latched: response?.success === true, evaluation, response};
 }
 
-function resolvePublicationWriteFailureNextStep(
-  error,
-  canVerifyPersistedRow,
-  attemptsLeft,
-) {
-  return canVerifyPersistedRow && attemptsLeft > 0 &&
-    !isControlPlaneWriterShutDown(error) ?
-    PUBLICATION_WRITE_FAILURE_NEXT_STEP.VERIFY_AND_REATTEMPT :
-    PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL;
+function publicationWriteUnconfirmed(publicationId, cause) {
+  return Object.assign(new Error(`Publication write unconfirmed for ${publicationId}`, {cause}), {
+    code: PUBLICATION_WRITE_UNCONFIRMED, deferRetry: true,
+  });
+}
+
+async function readPublicationForWrite(owner, publicationId, readOptions, writeIdentity) {
+  const confirm = captureControlPlaneWriteConfirmation(writeIdentity);
+  const row = await owner.getPublication(publicationId, readOptions);
+  confirm(row);
+  return row;
+}
+
+function canUsePublicationCommit(result, publicationId) {
+  return result?.success === true && result.committed === true &&
+    result.partitionResult?.affectedRows === 1 &&
+    result.position?.tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
+    result.position.key === publicationId &&
+    typeof result.position.originHlc === 'string' && result.position.originHlc.length > 0;
 }
 
 class MembershipPublicationCoordinatorPersist extends
@@ -228,110 +232,72 @@ class MembershipPublicationCoordinatorPersist extends
     });
   }
 
-  async persistPublicationRow(row, options = {}) {
-    const ownerKey =
-      options[CONTROL_PLANE_CONVERGENCE_FIELD
-        .CONTROL_PLANE_CONVERGENCE_OWNER_KEY] || this.buildOwnerKey();
+  async persistPublicationBirth(row, options = {}) {
+    return this.persistPublicationIntent(publicationBirthIntent(row), options);
+  }
+
+  async persistPublicationIntent(intent, options) {
+    const {
+      [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_OWNER_KEY]:
+        ownerKey = this.buildOwnerKey(),
+      [CONTROL_PLANE_CONVERGENCE_FIELD.CONTROL_PLANE_CONVERGENCE_OPERATION]:
+        operation = CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION,
+    } = options;
     const publicationOptions = buildCriticalControlPlaneConvergenceOptions(
-      options,
-      {
-        ownerKey,
-        operation:
-          options[CONTROL_PLANE_CONVERGENCE_FIELD
-            .CONTROL_PLANE_CONVERGENCE_OPERATION] ||
-          CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION.MEMBERSHIP_PUBLICATION,
-      },
-    );
-    let persistedRow = serializeMembershipPublicationRow(row);
-    if (
-      this.controlPlanePublicationsOwner &&
-      typeof this.controlPlanePublicationsOwner.upsertPublication === 'function'
-    ) {
-      const publicationId = persistedRow.publication_id || null;
-      const canVerifyPersistedRow =
-        publicationId &&
-        options.skipPublicationWriteReadback !== true &&
-        typeof this.controlPlanePublicationsOwner.getPublication === 'function';
-      const maxAttempts = normalizePositiveInteger(
-        options.publicationWriteMaxAttempts,
-        PUBLICATION_WRITE_MAX_ATTEMPTS,
-      );
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        if (canVerifyPersistedRow) {
-          const currentRow = await this.controlPlanePublicationsOwner.getPublication(
-            publicationId,
-            buildPublicationReadOptions(publicationOptions),
-          );
-          persistedRow = serializeMembershipPublicationRow(
-            mergePublicationRows(persistedRow, currentRow),
-          );
+      options, {ownerKey, operation});
+    const publicationId = intent.revision.publication_id;
+    const owner = this.controlPlanePublicationsOwner;
+    if (!owner || !publicationId) {
+      throw publicationWriteUnconfirmed(publicationId);
+    }
+    const {idempotencyKey, ...writeOptions} = publicationOptions;
+    const writeIdentity = controlPlaneWriteIdentity(
+      PUBLICATION_WRITE_IDENTITY_SUBJECT, this.nodeId, publicationId, ownerKey,
+      idempotencyKey ?? null);
+    const readOptions = buildPublicationReadOptions(publicationOptions);
+    const maxAttempts = normalizePositiveInteger(
+      options.publicationWriteMaxAttempts, PUBLICATION_WRITE_MAX_ATTEMPTS);
+    let current = await readPublicationForWrite(owner, publicationId, readOptions, writeIdentity);
+    let observedIntent = observePublicationIntent(intent, current);
+    let decision = decidePublicationIntent(observedIntent, current);
+    let failure;
+    for (let attempt = 0; attempt < maxAttempts &&
+        decision.state === PUBLICATION_INTENT_DECISION.WRITE; attempt += 1) {
+      const candidate = decision.row;
+      try {
+        const result = await owner.upsertPublication(candidate, {
+          ...writeOptions, writeIdentity, expectedPublicationRow: current,
+        });
+        if (options.skipPublicationWriteReadback === true &&
+            canUsePublicationCommit(result, publicationId)) {
+          await this._maybeLatchFormationAfterPublicationWrite(candidate);
+          return candidate;
         }
-        try {
-          await this.controlPlanePublicationsOwner.upsertPublication(
-            persistedRow,
-            publicationOptions,
-          );
-        } catch (error) {
-          if (
-            resolvePublicationWriteFailureNextStep(
-              error,
-              canVerifyPersistedRow,
-              maxAttempts - attempt - 1,
-            ) === PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL
-          ) {
-            throw error;
-          }
-          const durableRow = await this.controlPlanePublicationsOwner.getPublication(
-            publicationId,
-            buildPublicationReadOptions(publicationOptions),
-          );
-          if (publicationRowSatisfiesDesiredState(durableRow, persistedRow)) {
-            return serializeMembershipPublicationRow(
-              mergePublicationRows(durableRow, persistedRow),
-            );
-          }
-          persistedRow = serializeMembershipPublicationRow(
-            mergePublicationRows(durableRow, persistedRow),
-          );
-          continue;
-        }
-        if (!canVerifyPersistedRow) {
-          return persistedRow;
-        }
-        if (options.skipPublicationWriteReadback === true) {
-          return persistedRow;
-        }
-        const durableRow = await this.controlPlanePublicationsOwner.getPublication(
-          publicationId,
-          buildPublicationReadOptions(publicationOptions),
-        );
-        if (publicationRowSatisfiesDesiredState(durableRow, persistedRow)) {
-          const finalRow = serializeMembershipPublicationRow(
-            mergePublicationRows(durableRow, persistedRow),
-          );
-          const latchPromise =
-            this._maybeLatchFormationAfterPublicationWrite(finalRow);
-          if (latchPromise) {
-            await latchPromise;
-          }
-          return finalRow;
-        }
-        persistedRow = serializeMembershipPublicationRow(
-          mergePublicationRows(durableRow, persistedRow),
-        );
+      } catch (error) {
+        if (isControlPlaneWriterShutDown(error)) throw error;
+        failure = error;
       }
-      reportPublicationWriteUnconfirmed(this, {
-        maxAttempts,
-        publicationId,
-        row: persistedRow,
-      });
+      try {
+        current = await readPublicationForWrite(owner, publicationId, readOptions, writeIdentity);
+      } catch (error) {
+        if (isControlPlaneWriterShutDown(error)) throw error;
+        reportPublicationWriteUnconfirmed(this, {
+          maxAttempts: attempt + 1, publicationId, row: candidate,
+        });
+        throw publicationWriteUnconfirmed(publicationId, error);
+      }
+      observedIntent = observePublicationIntent(observedIntent, current);
+      decision = decidePublicationIntent(observedIntent, current);
     }
-    const latchPromise =
-      this._maybeLatchFormationAfterPublicationWrite(persistedRow);
-    if (latchPromise) {
-      await latchPromise;
+    if (decision.state === PUBLICATION_INTENT_DECISION.CONFIRMED) {
+      const confirmed = serializeMembershipPublicationRow(decision.row);
+      await this._maybeLatchFormationAfterPublicationWrite(confirmed);
+      return confirmed;
     }
-    return persistedRow;
+    if (decision.state === PUBLICATION_INTENT_DECISION.WRITE) {
+      reportPublicationWriteUnconfirmed(this, {maxAttempts, publicationId, row: decision.row});
+    }
+    throw publicationWriteUnconfirmed(publicationId, failure);
   }
 
   _maybeLatchFormationAfterPublicationWrite(publicationRow) {
@@ -497,42 +463,22 @@ class MembershipPublicationCoordinatorPersist extends
           CONTROL_PLANE_CONVERGENCE_CLASS.CRITICAL,
       },
       async () => {
-        let existingRow = null;
-        if (
-          this.controlPlanePublicationsOwner &&
-          typeof this.controlPlanePublicationsOwner.getPublication === 'function'
-        ) {
-          existingRow = await this.controlPlanePublicationsOwner.getPublication(
-            publicationId,
-            buildPublicationReadOptions(acknowledgementOptions),
-          );
+        const owner = this.controlPlanePublicationsOwner;
+        if (!owner || typeof owner.getPublication !== 'function') {
+          throw publicationWriteUnconfirmed(publicationId);
         }
-        const baseRow = mergePublicationRows(
-          existingRow,
-          acknowledgementOptions.publicationRow || null,
-        );
-        if (!baseRow) {
-          return null;
+        const baseRow = await owner.getPublication(
+          publicationId, buildPublicationReadOptions(acknowledgementOptions));
+        if (!baseRow) return null;
+        if (acknowledgementOptions.publicationRow) {
+          assertPublicationWriteRevision(baseRow, acknowledgementOptions.publicationRow);
         }
-        const normalizedBaseRow = normalizeControlPlanePublicationRow(baseRow);
-        const acknowledgedRow = acknowledgeMembershipPublication({
-          publicationRow: baseRow,
+        return this.persistPublicationIntent(publicationAcknowledgementIntent(baseRow, {
           nodeId,
           nowMs: this.now(),
           timeoutMs: acknowledgementOptions.timeoutMs,
           timeoutReasonCode: acknowledgementOptions.timeoutReasonCode,
-        });
-        const normalizedAcknowledgedRow = normalizeControlPlanePublicationRow(acknowledgedRow);
-        const acknowledgementChanged =
-          normalizedAcknowledgedRow.status !== normalizedBaseRow.status ||
-          !listEquals(
-            normalizedAcknowledgedRow.acknowledgedNodeIds,
-            normalizedBaseRow.acknowledgedNodeIds,
-          );
-        if (!acknowledgementChanged) {
-          return acknowledgedRow;
-        }
-        return this.persistPublicationRow(acknowledgedRow, acknowledgementOptions);
+        }), acknowledgementOptions);
       },
     );
   }

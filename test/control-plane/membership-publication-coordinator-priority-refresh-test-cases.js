@@ -130,6 +130,9 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           async listPublications() {
             return {rows: [durableRow]};
           },
+          async getPublication(publicationId) {
+            return durableRow.publication_id === publicationId ? durableRow : null;
+          },
           async upsertPublication(row) {
             persistedRows.push(row);
             durableRow = row;
@@ -301,6 +304,9 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           async listPublications() {
             return {rows: [durableRow]};
           },
+          async getPublication(publicationId) {
+            return durableRow.publication_id === publicationId ? durableRow : null;
+          },
           async upsertPublication(row) {
             persistedRows.push(row);
             durableRow = row;
@@ -456,6 +462,9 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
           async listPublications() {
             return {rows: [durableRow]};
           },
+          async getPublication(publicationId) {
+            return durableRow.publication_id === publicationId ? durableRow : null;
+          },
           async upsertPublication(row) {
             durableRow = row;
           },
@@ -556,6 +565,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return [...persistedRows, latestPublicationRow]
+              .find((row) => row.publication_id === publicationId) ?? null;
+          },
           async upsertPublication(row) {
             persistedRows.push(row);
           },
@@ -650,6 +663,10 @@ export function registerMembershipPublicationCoordinatorPriorityRefreshTests({
         nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
         resolveIsControlPlanePublicationsWriteLeader: () => true,
         controlPlanePublicationsOwner: {
+          async getPublication(publicationId) {
+            return [...persistedRows, latestPublicationRow]
+              .find((row) => row.publication_id === publicationId) ?? null;
+          },
           async upsertPublication(row) {
             persistedRows.push(row);
           },

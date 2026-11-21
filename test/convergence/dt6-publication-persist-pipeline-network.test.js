@@ -18,7 +18,7 @@ import {MEMBERSHIP_PUBLICATION_STATUS} from
 // step 8's in-process ack-ledger stand-in. Step 8 stored acks in a bespoke Map and called the ack
 // state machine directly; this guard routes publish + ack through the real persist coordinator:
 //
-//  - persistPublicationRow (membership-publication-coordinator-persist.js) — the real persist
+//  - persistPublicationBirth (membership-publication-coordinator-persist.js) — the real persist
 //    orchestration: serialize -> owner.getPublication read-back -> mergePublicationRows ->
 //    owner.upsertPublication -> verify via publicationRowSatisfiesDesiredState.
 //  - acknowledgePublication (same file) — the real ack round-trip: getPublication ->
@@ -53,11 +53,9 @@ function hostPersistPipeline(net, nodeId) {
   net.registerNode(nodeId, () => {});
   const ts = net.networkTimeSource(nodeId);
   const store = new Map(); // publication_id -> persisted row (the durable boundary)
-  const coordinator = {
+  const coordinator = Object.assign(Object.create(reconcileProto), {
     now: () => ts.now(),
     buildOwnerKey: () => 'membership-owner',
-    persistPublicationRow: reconcileProto.persistPublicationRow,
-    acknowledgePublication: reconcileProto.acknowledgePublication,
     controlPlanePublicationsOwner: {
       upsertPublication: async (row) => {
         store.set(row.publication_id, {...row});
@@ -68,7 +66,7 @@ function hostPersistPipeline(net, nodeId) {
       },
     },
     publicationAcknowledgementLane: {run: async (_opts, fn) => fn()},
-  };
+  });
 
   const state = {pubId: null, inFlight: false, gateSamples: []};
 
@@ -93,7 +91,7 @@ function hostPersistPipeline(net, nodeId) {
           status: MEMBERSHIP_PUBLICATION_STATUS.OPEN,
           nowMs: ts.now(),
         });
-        const persisted = await coordinator.persistPublicationRow(row, {
+        const persisted = await coordinator.persistPublicationBirth(row, {
           skipPublicationWriteReadback: false,
         });
         state.pubId = persisted.publication_id;
@@ -147,7 +145,7 @@ async function runPersistPipeline() {
 t.test('publish + ack converge through the REAL persist coordinator to a fully-acked PUBLISHED row',
   async (t) => {
     const m = await runPersistPipeline();
-    t.ok(m.finalRow, 'a publication row was persisted through the real persistPublicationRow path');
+    t.ok(m.finalRow, 'a publication row was persisted through the real persistPublicationBirth path');
     t.same(m.finalRow.acknowledged_node_ids, EXPECTED,
       'every required node acknowledged through the real acknowledgePublication round-trip');
     t.equal(m.finalRow.status, MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,

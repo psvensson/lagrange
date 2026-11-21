@@ -47,6 +47,7 @@ function issueAuthoritativeReadStage(service, stage, issue) {
     errorCode: refusal.code,
     code: refusal.code,
     terminalStage: stage,
+    writeOutcome: refusal.writeOutcome,
     rows: [],
   };
 }

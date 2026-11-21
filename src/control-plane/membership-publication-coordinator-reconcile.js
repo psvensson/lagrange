@@ -7,6 +7,7 @@ import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
+import {isPublicationOwnerFailureStatus} from './publication-owner-decision.js';
 import {
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
@@ -16,10 +17,8 @@ import {
 import {
   normalizeNodeIdList,
 } from './membership-publication-row-helpers.js';
-import {
-  buildMembershipPublicationRow,
-  buildPublicationMetadataRefreshRow,
-} from './membership-publication-planning-evidence.js';
+import {buildMembershipPublicationRow} from './membership-publication-planning-evidence.js';
+import {publicationRefreshIntent} from './membership-publication-write-intent.js';
 import {MembershipPublicationCoordinatorPersist} from './membership-publication-coordinator-persist.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD,
@@ -292,24 +291,23 @@ class MembershipPublicationCoordinatorReconcile extends
               shouldRefreshAcknowledgements ||
               shouldRefreshStatus
             ) {
-              const refreshedRow = buildPublicationMetadataRefreshRow({
-                publicationRow: latestPublicationRow,
-                priorityPartitionSummary: candidate.priorityPartitionSummary,
-                membershipLifecycleSummary: candidate.membershipLifecycleSummary,
-                acknowledgedNodeIds: candidate.acknowledgedNodeIds,
+              const intent = publicationRefreshIntent(latestPublicationRow, {
+                priorityPartitionSummary: shouldRefreshPriorityMetadata ?
+                  candidate.priorityPartitionSummary : undefined,
+                membershipLifecycleSummary: shouldRefreshMembershipLifecycleMetadata ?
+                  candidate.membershipLifecycleSummary : undefined,
+                acknowledgedNodeIds: shouldRefreshAcknowledgements ?
+                  candidate.acknowledgedNodeIds : undefined,
+                requirePublished: shouldRefreshStatus &&
+                  candidate.publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
                 nowMs: this.now(),
               });
-              const persistedRow = await this.persistPublicationRow(
-                refreshedRow,
-                convergenceOptions,
-              );
+              const persistedRow = await this.persistPublicationIntent(intent, convergenceOptions);
               const publicationRow =
                 normalizeControlPlanePublicationRow(persistedRow);
               if (
-                hasPrioritySummaryRefreshClearedGap(
-                  latestPublicationRow,
-                  candidate,
-                ) &&
+                !isPublicationOwnerFailureStatus(publicationRow.status) &&
+                hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) &&
                 typeof this.enqueueClusterMembershipReconcile === 'function'
               ) {
                 this.enqueueClusterMembershipReconcile(
@@ -346,10 +344,14 @@ class MembershipPublicationCoordinatorReconcile extends
             candidate,
             nowMs: this.now(),
           });
-          const persistedRow = await this.persistPublicationRow(
+          const persistedRow = await this.persistPublicationBirth(
             row,
             convergenceOptions,
           );
+          const publicationRow = normalizeControlPlanePublicationRow(persistedRow);
+          if (isPublicationOwnerFailureStatus(publicationRow.status)) {
+            return {candidate, publicationRow, workflow};
+          }
           await this.workflowCoordinator.transitionStep(
             workflow.workflowId,
             {
@@ -367,8 +369,6 @@ class MembershipPublicationCoordinatorReconcile extends
               },
             },
           );
-          const normalizedPersistedRow =
-            normalizeControlPlanePublicationRow(persistedRow);
           const latchPromise =
             this._maybeLatchFormationAfterPublicationWrite?.(persistedRow);
           if (latchPromise) {
@@ -376,7 +376,7 @@ class MembershipPublicationCoordinatorReconcile extends
           }
           return {
             candidate,
-            publicationRow: normalizedPersistedRow,
+            publicationRow,
             workflow,
           };
         }),

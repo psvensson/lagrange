@@ -1,4 +1,15 @@
-import {TABLES} from '../../constants/index.js';
+import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
+  '../../bootstrap/system-table-schemas-constants.js';
+import {isControlPlaneWriterShutDown} from '../control-plane-error-classification.js';
+import {buildSystemTableMutationSqlParts} from
+  '../../cdc/cdc-system-table-mutation-sql-helpers.js';
+import {CDC_OPERATION, TABLES} from '../../constants/index.js';
+import {serializeControlPlanePublicationRow} from '../system-row-normalizers.js';
+import {publicationRowsHaveSameRevision} from '../control-plane-publication-merge.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane-system-table-gateway.js';
+import {FORMATION_PUBLICATION_ID, FORMATION_PUBLICATION_KIND} from
+  '../membership-publication-formation-record.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane-readiness-constants.js';
@@ -11,6 +22,61 @@ import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 const CONTROL_PLANE_PUBLICATION_DELIVERY_PRIORITY = 'critical';
 const CONTROL_PLANE_PUBLICATIONS_OWNER_NAME =
   'control-plane-publications-owner';
+
+const PUBLICATION_AUTHORITY_UNAVAILABLE = 'PUBLICATION_AUTHORITY_UNAVAILABLE';
+const PUBLICATION_REVISION_MISMATCH = 'PUBLICATION_REVISION_MISMATCH';
+const INVALID_PUBLICATION_MUTATION = 'INVALID_PUBLICATION_MUTATION';
+const INVALID_PUBLICATION_MUTATION_MESSAGE =
+  'Expected an ordinary publication and its exact preimage';
+const PUBLICATION_COLUMNS = CONTROL_PLANE_PUBLICATIONS_SCHEMA.columns.map(({name}) => name);
+const UPDATE = 'update';
+
+function publicationAuthorityUnavailable(publicationId) {
+  return Object.assign(new Error(`Publication authority unavailable for ${publicationId}`), {
+    code: PUBLICATION_AUTHORITY_UNAVAILABLE, deferRetry: true,
+  });
+}
+
+function assertPublicationMutationRow(row, preimage) {
+  if (typeof row?.publication_id !== 'string' || row.publication_id.length === 0 ||
+      row.publication_id === FORMATION_PUBLICATION_ID ||
+      row.publication_kind === FORMATION_PUBLICATION_KIND ||
+      (preimage !== null && preimage?.publication_id !== row.publication_id)) {
+    throw Object.assign(new Error(INVALID_PUBLICATION_MUTATION_MESSAGE), {
+      code: INVALID_PUBLICATION_MUTATION,
+    });
+  }
+}
+
+function assertPublicationWriteRevision(desired, current) {
+  if (current !== null && !publicationRowsHaveSameRevision(desired, current)) {
+    throw Object.assign(new Error(`Publication revision mismatch for ${desired.publication_id}`), {
+      code: PUBLICATION_REVISION_MISMATCH,
+    });
+  }
+}
+
+function isStoredPublicationValue(value) {
+  return value === null || typeof value === 'string' ||
+    typeof value === 'bigint' || Number.isSafeInteger(value);
+}
+
+function publicationWritePredicate(row) {
+  if (PUBLICATION_COLUMNS.some((column) =>
+    !Object.hasOwn(row, column) || !isStoredPublicationValue(row[column]))) {
+    throw publicationAuthorityUnavailable(row.publication_id);
+  }
+  return Object.fromEntries(PUBLICATION_COLUMNS.map((column) => [column, row[column]]));
+}
+
+function publicationWriteEffectConfirmation(row) {
+  const serialized = serializeControlPlanePublicationRow(row);
+  const columns = Object.fromEntries(PUBLICATION_COLUMNS.map((column) =>
+    [column, serialized[column] ?? null]));
+  const {values} = buildSystemTableMutationSqlParts(CDC_OPERATION.UPDATE, columns);
+  return (observed) => observed !== null && PUBLICATION_COLUMNS.every((column, index) =>
+    Object.hasOwn(observed, column) && observed[column] === values[index]);
+}
 
 class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = CONTROL_PLANE_PUBLICATIONS_OWNER_NAME;
@@ -39,10 +105,21 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   }
 
   async getPublication(publicationId, options = {}) {
-    return this.readByPrimaryKey(
-      publicationId,
-      this.buildPublicationReadOptions(options),
-    );
+    const observed = await this.readByPrimaryKeyObservation(publicationId,
+      this.buildPublicationReadOptions({
+        ...options, leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      }));
+    if (isControlPlaneWriterShutDown(observed)) {
+      throw Object.assign(new Error(observed.error), {
+        code: observed.code, writeOutcome: observed.writeOutcome, stage: observed.terminalStage,
+      });
+    }
+    if (observed?.success !== true || observed.rowSetComplete !== true ||
+        !Array.isArray(observed.rows) || observed.rows.length > 1 ||
+        (observed.rows.length === 1 && observed.rows[0]?.publication_id !== publicationId)) {
+      throw publicationAuthorityUnavailable(publicationId);
+    }
+    return observed.rows[0] ?? null;
   }
 
   async getPublicationFromCache(publicationId, options = {}) {
@@ -57,27 +134,21 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
     return this.listCachedRows(options);
   }
 
-  async insertPublication(row, options = {}) {
-    return this.insertRow(
-      row,
-      this.buildPublicationMutationOptions(options),
-    );
-  }
-
   async upsertPublication(row, options = {}) {
-    return this.upsertRow(
-      row,
-      this.buildPublicationMutationOptions(options),
-    );
-  }
-
-  async updatePublication(publicationId, data, options = {}) {
-    return this.updateByPrimaryKey(
-      publicationId,
-      data,
-      this.buildPublicationMutationOptions(options),
-    );
+    const {expectedPublicationRow, ...writeOptions} = options;
+    assertPublicationMutationRow(row, expectedPublicationRow);
+    assertPublicationWriteRevision(row, expectedPublicationRow);
+    const mutationOptions = this.buildPublicationMutationOptions({
+      ...writeOptions, confirmWriteEffect: publicationWriteEffectConfirmation(row),
+    });
+    if (expectedPublicationRow === null) {
+      return this.insertRow(row, mutationOptions);
+    }
+    const whereClause = publicationWritePredicate(expectedPublicationRow);
+    return this.executeMutation(UPDATE, {whereClause, data: row}, mutationOptions,
+      (attemptOptions) => this.requireGateway().updateSystemTableRow(
+        this.getTableName(), whereClause, row, attemptOptions));
   }
 }
 
-export {ControlPlanePublicationsOwner};
+export {ControlPlanePublicationsOwner, assertPublicationWriteRevision};

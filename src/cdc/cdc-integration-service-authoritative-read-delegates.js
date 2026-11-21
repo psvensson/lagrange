@@ -1,3 +1,5 @@
+import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 import {
   canWriteSystemTableLocally,
   isLocalPartitionServiceLeader,
@@ -261,13 +263,9 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
     params = [],
     options = {},
   ) {
-    return executeAuthoritativeSystemTableReadFromHelpers(
-      this,
-      tableName,
-      sql,
-      params,
-      options,
-    );
+    return issueAuthoritativeReadStage(this, CDC_TERMINAL_STAGE.READ_REQUEST,
+      () => executeAuthoritativeSystemTableReadFromHelpers(
+        this, tableName, sql, params, options));
   }
 
   /**

@@ -20,8 +20,9 @@
 // Composition: the real membership publication coordinator, the real
 // publications and nodes owners, the real gateway, the real CDC service on an
 // injected clock, and the real seed cleanup step
-// (SeedCleanupHandler.shutdownSqlQueryEngine). The one seam is the SQL engine,
-// modelled on the partition write lifecycle: a routed write is held in flight
+// (SeedCleanupHandler.shutdownSqlQueryEngine). The publication key is absent
+// on its live authoritative pre-read. The SQL engine models partition write
+// lifecycle: a routed write is held in flight
 // until it is accepted or released with the write kernel's own released
 // answer. Order is controlled by resolving that write or by the owner's retry
 // sleep, never by a sleep; timers are read from the owners' own state (the CDC
@@ -144,6 +145,7 @@ import {ERRORS} from '../../src/constants/errors.js';
 const NODE_ID = 'shutdown-node';
 const JOINER_NODE_ID = 'joiner-node';
 const PUBLICATION_ID = 'membership-publication:1';
+let nextFixturePublicationEpoch = 1;
 const RELEASED_ENTRY_ID = 'released-entry';
 const PUBLICATIONS_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
@@ -171,7 +173,9 @@ function releasedWriteAnswer() {
 // held in flight until it is accepted or released (proposed, so its outcome
 // is not known to this replica); the engine's shutdown releases what it holds.
 function createInFlightEngine(shutdownState) {
+  const firstSubmission = Promise.withResolvers();
   const engine = {
+    firstSubmission: firstSubmission.promise,
     writesAfterShutdown: 0,
     submissions: 0,
     pendingWrite: null,
@@ -182,6 +186,7 @@ function createInFlightEngine(shutdownState) {
       }
       return new Promise((resolve) => {
         engine.pendingWrite = resolve;
+        firstSubmission.resolve();
       });
     },
     settle(answer) {
@@ -207,12 +212,25 @@ function createInFlightEngine(shutdownState) {
 function composeSeedWriters({
   withEngine = true, onOwnerSleep = null, timeSource = new VirtualTimeSource(),
 } = {}) {
+  // Each composition owns a separate ledger revision. A lost write in one
+  // case must remain retained without becoming another case's predecessor.
+  const publicationEpoch = ++nextFixturePublicationEpoch;
+  const publicationId = `membership-publication:${publicationEpoch}`;
   const shutdownState = {begun: false};
   const cdcIntegrationService = new CDCIntegrationService({
     nodeId: NODE_ID, systemTableCache: new SystemTableCache(), timeSource,
   });
   cdcIntegrationService.bootstrapMode = false;
   cdcIntegrationService.logger = QUIET_LOGGER;
+  const read = cdcIntegrationService.executeAuthoritativeSystemTableRead
+    .bind(cdcIntegrationService);
+  cdcIntegrationService.executeAuthoritativeSystemTableRead =
+    async (tableName, sql, params, options) => {
+      if (shutdownState.begun) return read(tableName, sql, params, options);
+      assert.deepEqual(params, [publicationId]);
+      assert.match(sql, /FROM control_plane_publications WHERE publication_id = \?/iu);
+      return {success: true, rowSetComplete: true, rows: []};
+    };
   const engine = createInFlightEngine(shutdownState);
   if (withEngine) {
     cdcIntegrationService.sqlQueryEngine = engine;
@@ -255,7 +273,7 @@ function composeSeedWriters({
   };
   return {
     cdcIntegrationService, engine, timeSource, retrySleepsAfterShutdown,
-    coordinator, nodesOwner, shutDownSqlQueryEngine,
+    coordinator, nodesOwner, shutDownSqlQueryEngine, publicationId, publicationEpoch,
   };
 }
 
@@ -279,21 +297,23 @@ function track(operation) {
 }
 
 function startPublication(composed, persistOptions = undefined) {
-  return track(composed.coordinator.persistPublicationRow({
-    publication_id: PUBLICATION_ID,
+  return track(composed.coordinator.persistPublicationBirth({
+    publication_id: composed.publicationId,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
-    publication_epoch: 1,
+    publication_epoch: composed.publicationEpoch,
     status: MEMBERSHIP_PUBLICATION_STATUS.OPEN,
     published_active_node_ids: [NODE_ID],
   }, persistOptions));
 }
 
-async function untilWriteInFlight(composed) {
-  for (let turn = 0; turn < SETTLE_TURNS && !composed.engine.pendingWrite;
-    turn += 1) {
-    await yieldTurns(1);
-  }
-  assert.ok(composed.engine.pendingWrite, 'the write is in flight');
+async function untilWriteInFlight(composed, box) {
+  await Promise.race([
+    composed.engine.firstSubmission,
+    box.done,
+    yieldTurns(SETTLE_TURNS),
+  ]);
+  const settlement = box.outcome?.error?.message ?? box.outcome?.value ?? 'pending';
+  assert.ok(composed.engine.pendingWrite, `the write is in flight (caller: ${settlement})`);
 }
 
 function linkedFailures(error) {
@@ -354,7 +374,7 @@ test('(i) shutdown wins before the membership side continues: the released ' +
   'write ends terminal and stays OUTCOME_UNKNOWN', async () => {
   const composed = composeSeedWriters();
   const box = startPublication(composed);
-  await untilWriteInFlight(composed);
+  await untilWriteInFlight(composed, box);
 
   // Shutdown releases the in-flight write; the membership side has not yet
   // seen the released answer when teardown completes.
@@ -376,7 +396,7 @@ test('(ii-a) the write committed immediately before shutdown wins: the ' +
 async () => {
   const composed = composeSeedWriters();
   const box = startPublication(composed);
-  await untilWriteInFlight(composed);
+  await untilWriteInFlight(composed, box);
 
   composed.engine.accept();
   await composed.shutDownSqlQueryEngine();
@@ -408,7 +428,7 @@ test('(iii) shutdown lands while the owner\'s retry loop sleeps: no ' +
   // One CDC attempt, so the released write reaches the owner's retry loop.
   composed.cdcIntegrationService.retryMaxAttempts = 1;
   const box = startPublication(composed);
-  await untilWriteInFlight(composed);
+  await untilWriteInFlight(composed, box);
   composed.engine.release();
   await yieldTurns(SETTLE_TURNS);
 
@@ -425,7 +445,7 @@ test('(iv) shutdown lands while the CDC service holds its own retry delay: ' +
   'the delay ends at once, no further attempt', async () => {
   const composed = composeSeedWriters();
   const box = startPublication(composed);
-  await untilWriteInFlight(composed);
+  await untilWriteInFlight(composed, box);
   // Released while the service is live: the CDC loop arms its retry delay.
   composed.engine.release();
   for (let turn = 0; turn < SETTLE_TURNS &&
@@ -513,7 +533,7 @@ function persistThroughCommittingOwner(failure) {
     nodeId: NODE_ID, controlPlanePublicationsOwner: owner,
     logger: QUIET_LOGGER,
   });
-  const box = track(coordinator.persistPublicationRow({
+  const box = track(coordinator.persistPublicationBirth({
     publication_id: PUBLICATION_ID,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
     publication_epoch: 1,
@@ -659,7 +679,7 @@ test('catch-up: started after the mark, it reads nothing and settles at once',
 const REAL_CLOCK_LANES = [
   {name: 'the routed-mutation retry delay', async drive(composed) {
     const box = startPublication(composed);
-    await untilWriteInFlight(composed);
+    await untilWriteInFlight(composed, box);
     composed.engine.release();
     return box;
   }},

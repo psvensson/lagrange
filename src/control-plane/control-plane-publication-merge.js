@@ -1,3 +1,4 @@
+import {areMembershipLifecycleSummariesEqual} from './membership-publication-lifecycle-summary.js';
 import {
   normalizeControlPlanePublicationRow,
   serializeControlPlanePublicationRow,
@@ -456,29 +457,34 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   });
 }
 
+function samePublicationRevision(actual, desired) {
+  return actual.publicationId === desired.publicationId &&
+    actual.publicationKind === desired.publicationKind &&
+    actual.publicationEpoch === desired.publicationEpoch &&
+    actual.sourceTopologyEpoch === desired.sourceTopologyEpoch &&
+    actual.sourceSnapshotVersion === desired.sourceSnapshotVersion &&
+    arePublicationNodeListsEqual(actual.publishedActiveNodeIds, desired.publishedActiveNodeIds) &&
+    arePublicationNodeListsEqual(actual.requiredAckNodeIds, desired.requiredAckNodeIds);
+}
+
+function publicationRowsHaveSameRevision(left, right) {
+  return samePublicationRevision(
+    normalizeControlPlanePublicationRow(left), normalizeControlPlanePublicationRow(right));
+}
+
+function publishedClosureObserved(actual, desired) {
+  return actual.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+    (desired.transitionHistory.at(-1)?.state !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
+      actual.transitionHistory.at(-1)?.state === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED);
+}
+
 function publicationRowSatisfiesDesiredState(actualRow, desiredRow) {
   if (!actualRow || !desiredRow) {
     return false;
   }
   const actual = normalizeControlPlanePublicationRow(actualRow);
   const desired = normalizeControlPlanePublicationRow(desiredRow);
-  if (actual.publicationId !== desired.publicationId) {
-    return false;
-  }
-  if (
-    !arePublicationNodeListsEqual(
-      actual.publishedActiveNodeIds,
-      desired.publishedActiveNodeIds,
-    )
-  ) {
-    return false;
-  }
-  if (
-    !arePublicationNodeListsEqual(
-      actual.requiredAckNodeIds,
-      desired.requiredAckNodeIds,
-    )
-  ) {
+  if (!samePublicationRevision(actual, desired)) {
     return false;
   }
   if (
@@ -496,8 +502,13 @@ function publicationRowSatisfiesDesiredState(actualRow, desiredRow) {
   ) {
     return false;
   }
+  if (desired.membershipLifecycleSummary &&
+      !areMembershipLifecycleSummariesEqual(actual.membershipLifecycleSummary,
+        desired.membershipLifecycleSummary)) {
+    return false;
+  }
   if (desired.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
-    return actual.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    return publishedClosureObserved(actual, desired);
   }
   if (desired.status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED) {
     return actual.status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED;
@@ -512,4 +523,5 @@ export {
   CONTROL_PLANE_PUBLICATION_STATUS,
   mergeControlPlanePublicationRows,
   publicationRowSatisfiesDesiredState,
+  publicationRowsHaveSameRevision,
 };

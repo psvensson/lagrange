@@ -191,6 +191,8 @@ const GATEWAY_ERROR_MSG = Object.freeze({
     'ControlPlaneSystemTableGateway requires a valid system table name',
   MUTATION_ROW_REQUIRED:
     'ControlPlaneSystemTableGateway requires row data for insert/upsert',
+  MUTATION_WHERE_INVALID:
+    'ControlPlaneSystemTableGateway requires defined, schema-owned predicate columns',
   MUTATION_WHERE_REQUIRED:
     'ControlPlaneSystemTableGateway requires whereClause for update/delete',
   MUTATION_DATA_REQUIRED:

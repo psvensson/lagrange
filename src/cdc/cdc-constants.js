@@ -212,6 +212,7 @@ const CDC_SHUT_DOWN_WRITE_OUTCOME = Object.freeze({
 // operation class's choke point, where CDC-owned work is issued.
 const CDC_TERMINAL_STAGE = Object.freeze({
   // (a) issuing an authoritative read, at every stage of the read flow.
+  READ_REQUEST: 'authoritative_read_request',
   LOCAL_READ: 'authoritative_local_read',
   OWNER_RPC_READ: 'authoritative_owner_rpc_read',
   OVERLAY_RESEED: 'authoritative_read_overlay_reseed',
