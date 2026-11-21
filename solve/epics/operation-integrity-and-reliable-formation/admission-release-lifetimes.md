@@ -25,6 +25,21 @@ originals, the failed controls and the current test selection in the
 [core integration handoff](../operation-integrity-and-reliable-formation.md#core-integration-handoff-21-november-2026).
 The census below describes the planning commit.
 
+The 21 November transport investigation also reached the actual query MessageGroup
+handoff. At `a40592aa3` the query executor supplies the remaining budget to
+the outer router. The local MessageGroup copies that duration to the inner
+wire delivery, which creates a new grant when it starts. The parent's abort
+signal does not cross this handoff. A spent outer wait can therefore overlap
+a live inner ACK waiter. The query and transport owners will prove expiry and
+cancellation at that handoff using the original and replacement wire IDs.
+A submitted write retains its existing cleanup and outcome owner. In physical
+run `eca9c75a`, the two waiters for the sampled attempts retired within two
+milliseconds of each other. Several seconds then elapsed before the late
+frames arrived. Those intervals answer different questions.
+[Router handoff](../../../src/transport/message-router-delivery-pressure-routing.js) ·
+[Physical originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-eca9c75a-trace-nov21.tar.gz).
+
+
 Loaded instructions were AGENTS, rules, router, Quest workflow, authority and
 recovery, and investigation/navigation skills. Source navigation used direct
 reads and Git inspection; no successful Serena invocation is claimed. The
