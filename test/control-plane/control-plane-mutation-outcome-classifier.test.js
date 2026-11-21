@@ -43,6 +43,12 @@ const EXPECTED_EFFECT_BY_OUTCOME = Object.freeze({
     applied: false, accepted: true, deferred: false,
     retryable: true, terminal: false,
   }),
+  // Handed to its producer, its outcome not proven: not applied, not refused,
+  // its owned continuation the re-send under the same identity.
+  [CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN]: Object.freeze({
+    applied: false, accepted: true, deferred: true,
+    retryable: true, terminal: false,
+  }),
 });
 const CLASSIFIER_MODULE_URL = pathToFileURL(resolve(
   'src/control-plane/control-plane-mutation-outcome-classifier.js',
@@ -76,6 +82,33 @@ test('control-plane mutation classification exhaustively owns every gateway outc
     }
     t.end();
   });
+
+// Stage 3 (corrective), item 1: the unknown outcome is named; it carries no
+// count (an unproven count is not an observation), and an outcome that
+// contradicts the answer's own success fails closed.
+test('an unknown outcome carries no count; a contradictory outcome fails closed', (t) => {
+  const unknown = classifyControlPlaneMutationResult({
+    outcome: 'unknown', success: false, affectedRows: 0,
+    partitionResult: {affectedRows: 0},
+  });
+  t.same({known: unknown.known, outcome: unknown.outcome, applied: unknown.applied,
+    failed: unknown.failed, affectedRowsPresent: unknown.affectedRowsPresent,
+    zeroAffectedRows: unknown.zeroAffectedRows}, {known: true, outcome: 'unknown',
+    applied: false, failed: true, affectedRowsPresent: false, zeroAffectedRows: false},
+  'the unknown outcome is named and carries no count');
+  for (const [label, result] of [
+    ['applied outcome on a failed answer', {
+      outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED, success: false}],
+    ['unknown outcome on a successful answer', {outcome: 'unknown', success: true,
+      affectedRows: 1}],
+  ]) {
+    const view = classifyControlPlaneMutationResult(result);
+    t.same({valid: view.valid, known: view.known, accepted: view.accepted,
+      applied: view.applied}, {valid: false, known: false, accepted: false, applied: false},
+    `${label}: fails closed`);
+  }
+  t.end();
+});
 
 test('control-plane mutation apply classification rejects non-apply envelopes ' +
   'without relying on success:false', (t) => {

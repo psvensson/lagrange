@@ -4,7 +4,9 @@
 // which the error vocabulary does not define (the text lives only in
 // QUERY_LOG_MSG), so every exhausted CREATE TABLE / founding deadline answered
 // an empty error. Plus the vocabulary census: every QUERY_ERROR_MSG member
-// referenced under src/query is defined.
+// referenced under src is defined (stage 3, item 4: the census covered only
+// src/query and missed the managed split's child provisioning deadline, which
+// read the same undefined member).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,11 +18,13 @@ import {TABLES} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {createProvisioningReadyService} from './sql-query-engine-test-support.js';
+import {assertChildProvisioningAttempt} from
+  '../../src/partition/managed-split-workflow-state-methods.js';
 
 ConfigurationManager.getInstance().initialize();
 
 const TIMEOUT_CODE = 'TIMEOUT';
-const QUERY_SOURCE_ROOT = 'src/query';
+const QUERY_SOURCE_ROOT = 'src';
 const ERROR_MSG_REFERENCE = /\bQUERY_ERROR_MSG\.([A-Z][A-Z0-9_]*)\b/gu;
 
 // A deadline that ended long before any provisioning step can run.
@@ -84,6 +88,11 @@ test('CREATE TABLE provisioning past its deadline rejects with the typed, non-em
     assert.deepEqual(admissionChecks, [], 'no admission read was spent past the deadline');
   });
 
+test('a managed split child provisioning past its deadline answers the same typed error', () => {
+  assert.throws(() => assertChildProvisioningAttempt({timeoutBudget: exhaustedBudget()}, () => 5),
+    assertTypedNonEmptyTimeout);
+});
+
 function querySourceFiles(directory) {
   return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
@@ -92,7 +101,7 @@ function querySourceFiles(directory) {
   });
 }
 
-test('every QUERY_ERROR_MSG member referenced under src/query is defined', () => {
+test('every QUERY_ERROR_MSG member referenced under src is defined', () => {
   const missing = [];
   for (const file of querySourceFiles(QUERY_SOURCE_ROOT)) {
     const text = fs.readFileSync(file, 'utf8');

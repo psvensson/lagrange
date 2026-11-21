@@ -14,6 +14,10 @@ const EXPECTED_REASON_BY_OUTCOME = Object.freeze({
   [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY]: 'owner-not-ready',
   [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED]:
     'observed-state-changed',
+  // Stage 3 (corrective), item 1: the unknown outcome has its own Raft
+  // disposition, neither rejected nor not-ready (hand-over edit of
+  // src/raft/authoritative-row-mutation-vocabulary.js).
+  [CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN]: 'outcome-unknown',
 });
 
 function createMutationHarness(partitionResult) {

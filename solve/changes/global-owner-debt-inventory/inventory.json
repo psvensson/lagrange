@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3779213,
-        "sha256": "c4f43e1799b83499f6f8367c9fe29f1a78f146302356f8acd5a1356d06473c95"
+        "bytes": 3782496,
+        "sha256": "06a537d49b4391d9d842a4ba764d0b137d92c500c9f5e0575f258bb6cf1c6c65"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "93fe87946b14e50f74af20a8d8efdae220c20ff64703838a41dbce8d16900e57"
+        "sha256": "339216a6985b35beb01f57f0cb1a00be018423ca4379c3bb918c3533b625ed7b"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "5caf3fef95c61ae211814c29b23e8ffbdc31818c43e3e58205957f7eec15f321"
+    "inputDigest": "31953e12d1a3933045e8f7cc727c3d22874babe4f46422934138917f253ee7e4"
   },
   "reconciliation": {
     "complexity": {
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "93fe87946b14e50f74af20a8d8efdae220c20ff64703838a41dbce8d16900e57"
+          "sha256": "339216a6985b35beb01f57f0cb1a00be018423ca4379c3bb918c3533b625ed7b"
         },
         "cloneGroups": 605,
         "duplicatedLines": 21611,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3779213,
-        "sha256": "c4f43e1799b83499f6f8367c9fe29f1a78f146302356f8acd5a1356d06473c95"
+        "bytes": 3782496,
+        "sha256": "06a537d49b4391d9d842a4ba764d0b137d92c500c9f5e0575f258bb6cf1c6c65"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "d05dd42621d2268cacf80cf7e2bc0bb70edc5a9df9bdc878754dc796c773eaaa",
-      "moduleCount": 6380,
-      "edgeCount": 38062,
+      "sourceDigest": "c8835723d0372d63a0a2e133d1508091b8c987303dd8c26a1a42fd11fa709c84",
+      "moduleCount": 6384,
+      "edgeCount": 38104,
       "unresolvedCount": 39
     }
   },
@@ -281,7 +281,7 @@
       "cloneTouches": 4,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 747,
+      "importIn": 752,
       "importOut": 462,
       "score": 1105.6,
       "topPaths": [
@@ -477,7 +477,7 @@
       "cloneTouches": 62,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 10,
+      "importIn": 11,
       "importOut": 329,
       "score": 229.2,
       "topPaths": [
@@ -673,7 +673,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 120,
+      "importIn": 121,
       "importOut": 121,
       "score": 160,
       "topPaths": [
@@ -729,7 +729,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 153,
+      "importIn": 154,
       "importOut": 201,
       "score": 145,
       "topPaths": [
@@ -813,7 +813,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 241,
+      "importIn": 243,
       "importOut": 49,
       "score": 125.8,
       "topPaths": [
@@ -925,7 +925,7 @@
       "cloneTouches": 3,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 125,
+      "importIn": 127,
       "importOut": 85,
       "score": 103.9,
       "topPaths": [
@@ -1261,7 +1261,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 713,
+      "importIn": 714,
       "importOut": 44,
       "score": 56,
       "topPaths": [
@@ -1397,7 +1397,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 404,
+      "importIn": 405,
       "importOut": 82,
       "score": 52,
       "topPaths": [
@@ -3141,7 +3141,7 @@
           "test/control-plane/control-plane-mutation-outcome-classifier.test.js",
           "test/control-plane/control-plane-read-authority-token.test.js",
           "test/control-plane/membership-publication-deferred-catchup.test.js",
-          "test/control-plane/owner-outcome-contract.test.js"
+          "test/control-plane/named-write-unknown-outcome-shape.test.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-system-table-gateway-owner-control-plane-system-table-gateway-scenarios.js",

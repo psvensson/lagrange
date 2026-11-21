@@ -127,7 +127,64 @@ const CASES = [
   ['string answer', 'applied', ATTEMPT, UNKNOWN],
   ['numeric answer', 1, ATTEMPT, UNKNOWN],
   ['missing attempt', partitionAnswer(), undefined, UNKNOWN],
+  // Stage 3 (corrective), item 2: the shapes the verifier listed as missing.
+  // No partition evaluated the statement, so nothing is proven of the named
+  // entry on its declared partition: never APPLIED.
+  ['zero participants: no partition was asked',
+    distributed([], {affectedRows: 0, partitions: []}), ATTEMPT, UNKNOWN],
+  ['zero participants, CDC-wrapped',
+    cdcWrapped(distributed([], {affectedRows: 0, partitions: []})), ATTEMPT, UNKNOWN],
+  ['a failure that carries a commit witness', partitionAnswer({success: false}),
+    ATTEMPT, UNKNOWN],
+  ['a refusal that carries a commit witness (contradictory evidence)',
+    partitionAnswer({success: false, failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER}),
+    ATTEMPT, UNKNOWN],
+  ['a deferred answer that carries a commit witness', partitionAnswer({deferRetry: true}),
+    ATTEMPT, UNKNOWN],
+  ['witness for the right entry on the wrong partition',
+    partitionAnswer({durableCommitWitness: witness({partitionId: OTHER_PARTITION})}),
+    ATTEMPT, UNKNOWN],
+  ['answer and witness on the wrong partition, entry of the declared one',
+    partitionAnswer({partitionId: OTHER_PARTITION,
+      durableCommitWitness: witness({partitionId: OTHER_PARTITION})}), ATTEMPT, UNKNOWN],
+  ['the settled replay of an earlier attempt under the same key (same entry)',
+    partitionAnswer({affectedRows: undefined, changes: 1, replayOfLogIndex: 7}),
+    ATTEMPT, APPLIED],
+  ['the settled replay of an earlier instance of the name (another key)',
+    partitionAnswer({replayOfLogIndex: 7, durableCommitWitness: witness({
+      entryId: deriveParticipantEntryId('cpw-earlier-instance', PARTITION)})}), ATTEMPT, UNKNOWN],
+  ['participants partially witnessed: primary witnessed, mirror not',
+    distributed([partitionAnswer(), partitionAnswer({partitionId: OTHER_PARTITION,
+      durableCommitWitness: undefined})], {mirrorPartitions: [OTHER_PARTITION]}),
+    ATTEMPT, UNKNOWN],
+  ['participants partially witnessed: two primaries, one witnessed',
+    distributed([partitionAnswer(), partitionAnswer({partitionId: OTHER_PARTITION,
+      durableCommitWitness: undefined})], {partitions: [PARTITION, OTHER_PARTITION],
+      affectedRows: 2}), ATTEMPT, UNKNOWN],
+  ['witness term absent', partitionAnswer({durableCommitWitness: witness({term: undefined})}),
+    ATTEMPT, UNKNOWN],
+  ['witness term zero', partitionAnswer({durableCommitWitness: witness({term: 0})}),
+    ATTEMPT, UNKNOWN],
+  ['witness logIndex zero', partitionAnswer({durableCommitWitness: witness({logIndex: 0})}),
+    ATTEMPT, UNKNOWN],
+  ['witness logIndex negative', partitionAnswer({durableCommitWitness: witness({
+    logIndex: -1})}), ATTEMPT, UNKNOWN],
+  ['witness logIndex as text', partitionAnswer({durableCommitWitness: witness({
+    logIndex: '7'})}), ATTEMPT, UNKNOWN],
+  ['array answer', [partitionAnswer()], ATTEMPT, UNKNOWN],
+  ['array witness', partitionAnswer({durableCommitWitness: [witness()]}), ATTEMPT, UNKNOWN],
+  ['counts that disagree (affectedRows !== changes)', partitionAnswer({changes: 2}),
+    ATTEMPT, UNKNOWN],
+  ['a CDC wrapper that wraps itself', selfWrapped(), ATTEMPT, UNKNOWN],
 ];
+
+// A CDC wrapper whose partition result is itself: judged without recursing
+// forever (no serialized transport answer has it; the judge is total).
+function selfWrapped() {
+  const answer = cdcWrapped(null);
+  answer.partitionResult = answer;
+  return answer;
+}
 
 test('judgeNamedWriteOutcome is total over answer shapes and never throws', () => {
   const observed = CASES.map(([name, answer, attempt]) => {
