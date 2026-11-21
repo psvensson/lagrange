@@ -41,6 +41,8 @@ import {
   withFixtureReplaceWitness,
 } from './test-helpers.js';
 
+import {createDeterministicTimerQueue} from './reservation-dispatch-gate-test-harness.js';
+
 const TEST_NODE_ID = 'convergence-node';
 const TEST_PARTITION_ID = 'partition-conv-1';
 const TEST_REPLICA_ID = 'partition-conv-1-r1';
@@ -472,6 +474,9 @@ test('Owner-path convergence: all progression entry points ' +
           },
         });
       const owner = coordinator.workflowOwner;
+      const timers = createDeterministicTimerQueue();
+      owner.setTimeoutFn = timers.setTimeoutFn;
+      owner.clearTimeoutFn = timers.clearTimeoutFn;
       owner.evaluateRemoveSafety = async () => owner.buildSafeRemoveSafetyEvaluation();
       const visibilityObservationCalls = [];
       const originalVisibility =
@@ -505,13 +510,19 @@ test('Owner-path convergence: all progression entry points ' +
         t.ok(pointReadFaults > 0, 'the ACTIVE removal turn hits the exact operation read fault');
         t.same(removalDispatchSteps, [], 'the cache cannot authorize the source removal effect');
 
+        const retained = owner.dispatchRetryTimerByOperationId.get(operationId);
+        t.ok(retained && !retained.cleared, 'the exact operation retains its owned dispatch retry');
         blockOperationPointRead = false;
-        await driveObservedProgress();
+        await retained?.callback();
         const stopping = operationMap.get(operationId);
         t.equal(stopping?.workflow_step, WORKFLOW_STEP.STOPPING,
           'restored authority lets the owner persist its exact removal intent');
         t.equal(stopping?.status, ReplicaStatus.REMOVING,
           'the durable source-removal row carries its canonical status');
+        const intent = stopping && JSON.parse(stopping.steps_history)
+          .find((entry) => entry.replaceRemovalIntent);
+        t.ok(intent && Number.isFinite(intent.replaceWitnessCommitIndex),
+          'the durable intent retains the witnessed configuration index');
         t.same(removalDispatchSteps, [WORKFLOW_STEP.STOPPING],
           'the source receives its removal effect after durable STOPPING');
         t.ok(visibilityObservationCalls.some((call) => call.operationId === operationId &&
