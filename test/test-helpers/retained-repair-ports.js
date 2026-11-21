@@ -15,4 +15,14 @@ function unavailableRetainedRepairPorts() {
   };
 }
 
-export {unavailableRetainedRepairPorts};
+// The retained owner's leadership-edge interface of a workflow-owner double
+// whose node holds no retained record: both edges find nothing to rebind or
+// release. A real repository is used wherever a record exists.
+function retainedRepairOwnerWithoutRecords() {
+  return {
+    observeRetainedLedgerLeadershipStart() {},
+    retireEndedRetainedTenures() {},
+  };
+}
+
+export {retainedRepairOwnerWithoutRecords, unavailableRetainedRepairPorts};

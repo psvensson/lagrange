@@ -7,7 +7,6 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as READ_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
-import {mintServiceRowCreatedAt} from '../../src/node/service-row-incarnation.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
 import {createOperationAt, OperationType} from '../../src/rebalancer/replica-status.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -163,12 +162,8 @@ function remoteSender(world, nodeId = NODE.A) {
   const cache = new SystemTableCache();
   coordinator.syncOwnerDependencies({systemTableCache: cache});
   assert.equal(coordinator.ledgerPartitionServices.size, 0, 'the sender has no local ledger');
-  const birth = mintServiceRowCreatedAt(Date.now());
-  const endpoint = {service_id: world.leader.replicaId, replica_id: world.leader.replicaId,
-    node_id: world.leader.nodeId, partition_id: world.leader.partitionId,
-    service_type: 'partition', address: `${world.leader.nodeId}/partition/${world.leader.replicaId}`,
-    group_id: null, status: 'active', raft_role: 'follower', cleanup_token: null,
-    create_attempt_token: null, created_at: birth, updated_at: birth};
+  // The ledger replica's own registration row, as the ledger node holds it.
+  const endpoint = {...world.endpoint};
   const publish = (table, row) => {
     assert.notEqual(cache.applySystemTableChange(table, CACHE_CDC_OPERATIONS.UPSERT, row), false,
       `the sender cache admits the published ${table} row`);

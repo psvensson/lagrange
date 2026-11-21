@@ -15,6 +15,7 @@ import {createMockControlPlaneSystemTableGateway, createTestCoordinator} from
   '../rebalancer/test-helpers.js';
 import {applyCommitted, temporaryDbPath} from '../test-helpers/participant-transaction-fixture.js';
 import {NODE, commitLedgerStatement, onLedgerLeader} from './placement-admission-fixture.js';
+import {mintServiceRowCreatedAt} from '../../src/node/service-row-incarnation.js';
 const DEFAULT_PARTITION_ID = 'retained-repair-p1';
 const planner = new ControlPlaneSystemTableGateway();
 
@@ -39,9 +40,19 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
         return {success: true, partitionResult: {affectedRows: result.changes}};
       };
       installCommittedOperationMutationFixture(gateway);
+      // The ledger replica's own SERVICES registration, production-shaped
+      // (a partition row publishes follower; PARTITIONS owns the leader). The
+      // ledger node holds it like every node does; senders bind this row.
+      const birth = mintServiceRowCreatedAt(Date.now());
+      const endpoint = {service_id: leader.replicaId, replica_id: leader.replicaId,
+        node_id: leader.nodeId, partition_id: leader.partitionId, service_type: 'partition',
+        address: `${leader.nodeId}/partition/${leader.replicaId}`, group_id: null,
+        status: 'active', raft_role: 'follower', cleanup_token: null,
+        create_attempt_token: null, created_at: birth, updated_at: birth};
       const compose = () => {
         const coordinator = createTestCoordinator({nodeId,
-          sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway});
+          sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway,
+          cacheData: {services: [endpoint]}});
         coordinator.registerLedgerPartitionService(leader);
         return coordinator;
       };
@@ -51,7 +62,8 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
         commands.push(entry);
         queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
       });
-      const world = {leader, coordinator: compose(), gateway, commands, partitionId, partitionRows};
+      const world = {leader, gateway, commands, partitionId, partitionRows, endpoint};
+      world.coordinator = compose();
       attachCurrentCopyOwner(world);
       // A process restart of the ledger node: every volatile owner is rebuilt
       // over the same durable ledger, node, replica and address.

@@ -63,6 +63,7 @@ const COLLABORATOR = Object.freeze({
   ADMIT: 'admitPlacement',
   RELEASE: 'releasePlacementHold',
   RESYNC_TIMER: 'resyncTimer',
+  RETAINED_REPAIR: 'workflowOwner.repository',
 });
 const REQUIRED_METHOD_MAP = Object.freeze({
   [COLLABORATOR.LEDGER]: Object.freeze(['on', 'off']),
@@ -81,6 +82,9 @@ const REQUIRED_METHOD_MAP = Object.freeze({
     'getCapacitySemanticIdentity',
     'subscribeCapacitySemanticChanges',
   ]),
+  // The retained repair owner takes both edges of the ledger leadership.
+  [COLLABORATOR.RETAINED_REPAIR]: Object.freeze([
+    'observeRetainedLedgerLeadershipStart', 'retireEndedRetainedTenures']),
 });
 const isObject = (value) => value !== null && typeof value === 'object';
 const isFunction = (value) => typeof value === 'function';
@@ -121,6 +125,9 @@ function validateResyncTimerCollaborators(options, resyncIntervalMs) {
 
 function validateOptionalPlacementCollaborators(options, resyncIntervalMs) {
   requireOptionalMethods(options.workflowOwner, COLLABORATOR.WORKFLOW_OWNER);
+  if (options.workflowOwner !== undefined && options.workflowOwner !== null) {
+    requireMethods(options.workflowOwner.repository, COLLABORATOR.RETAINED_REPAIR);
+  }
   requireOptionalMethods(options.storageAccountingService, COLLABORATOR.STORAGE);
   requireOptionalFunction(options.admitPlacement, COLLABORATOR.ADMIT);
   requireOptionalFunction(options.releasePlacementHold, COLLABORATOR.RELEASE);
@@ -279,8 +286,14 @@ class ReplicaPlacementOwner {
     return attempt;
   }
 
+  // Driven on each ledger leadership edge and on shutdown. Retained custody
+  // ends with the replica's leadership, not this owner's planning state: every
+  // drive to false releases the ended tenures (the workflow owner is optional).
   setLeader(isLeader) {
     const next = Boolean(isLeader);
+    const retained = this.workflowOwner ? this.workflowOwner.repository : null;
+    const ledger = this.ledgerPartitionService;
+    if (!next && retained !== null) retained.retireEndedRetainedTenures(ledger);
     if (this.isLeader === next) return;
     this.isLeader = next;
     if (!next) {
@@ -289,7 +302,7 @@ class ReplicaPlacementOwner {
       return;
     }
     this.attachListeners();
-    this.workflowOwner.repository.observeRetainedLedgerLeadershipStart();
+    if (retained !== null) retained.observeRetainedLedgerLeadershipStart();
     this.notify(PLACEMENT_TRIGGER.LEADERSHIP_START);
   }
 

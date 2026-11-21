@@ -20,6 +20,22 @@ import {RETAINED_REPAIR_DECISION as DECISION, RETAINED_REPAIR_MODE as MODE, PROP
   SELF_CUSTODY, IDLE_DECISION, pinnedEntry, retainedRepairRecord} from
   './replica-operation-retained-repair-record.js';
 import {ledgerTerm} from './replica-operation-retained-repair-wake.js';
+import {COLUMN, TABLES} from '../constants/index.js';
+
+const REPLICA_BIRTH = Object.freeze({ATTESTED: 'attested', UNATTESTED: 'unattested'});
+const UNATTESTED_BIRTH = Object.freeze({state: REPLICA_BIRTH.UNATTESTED});
+
+// The receiver attests its own replica birth: the created_at of its own
+// SERVICES registration row (the endpoint a sender binds), as this node holds
+// it, never the sender's copy. Without its own row it attests no custody.
+function ownReplicaBirth(cache, service) {
+  const row = cache.get(TABLES.SERVICES, service.replicaId);
+  const createdAt = row?.[COLUMN.CREATED_AT];
+  return row?.[COLUMN.NODE_ID] === service.nodeId &&
+    row[COLUMN.PARTITION_ID] === service.partitionId &&
+    Number.isSafeInteger(createdAt) && createdAt > 0 ?
+    {state: REPLICA_BIRTH.ATTESTED, createdAt} : UNATTESTED_BIRTH;
+}
 
 function ownsIngress(service, term) {
   return service.isLeader && ledgerTerm(service) === term;
@@ -96,7 +112,9 @@ function assignRetainedRepairIngressMethods(Repository) {
       const promise = Promise.resolve().then(async () => {
         answer = await this.decideIncomingRetainedRepair(service, payload, attempt, term);
       }).finally(() => {
-        if (attempt.decision.promise === promise) attempt.decision = IDLE_DECISION;
+        if (attempt.decision.promise !== promise) return;
+        attempt.decision = IDLE_DECISION;
+        this.releaseEndedRetainedTenure(attempt);
       });
       attempt.decision = {state: RUN.RUNNING, mode: MODE.RECEIVER, promise};
       await promise;
@@ -140,18 +158,22 @@ function assignRetainedRepairIngressMethods(Repository) {
     },
 
     // Custody: this receiver tenure holds the exact incoming entry. It attests
-    // the replica, its ledger term at ingress and its process incarnation.
+    // the replica, its ledger term at ingress and the tenure pair existing
+    // owners attest a running replica by: this process's boot incarnation and
+    // the replica's own SERVICES birth.
     retainedRepairCustodyOf(service, payload, attempt) {
+      const birth = ownReplicaBirth(this.systemTableCache, service);
       const holds = this.retainedPlacementRepairs.get(attempt.operation.operationId) === attempt &&
         service.isLeader && attempt.tenure.state === TENURE.LEDGER &&
         attempt.tenure.service === service && attempt.entry.state === ENTRY.PINNED &&
         attempt.entry.entryId === payload.entryId &&
-        isDeepStrictEqual(attempt.entry.body, payload.body);
+        isDeepStrictEqual(attempt.entry.body, payload.body) && birth !== UNATTESTED_BIRTH;
       return holds ? {nodeId: service.nodeId, replicaId: service.replicaId,
         operationId: attempt.operation.operationId, createdAt: attempt.operation.createdAt,
         entryId: payload.entryId, bodyText: JSON.stringify(payload.body),
         ledgerTerm: attempt.tenure.term,
-        nodeBootIncarnation: this.membershipOwnerBootIncarnation} : null;
+        nodeBootIncarnation: this.membershipOwnerBootIncarnation,
+        replicaCreatedAt: birth.createdAt} : null;
     },
   });
 }

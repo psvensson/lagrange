@@ -18,6 +18,14 @@ import {openReplaceWorld, disposeWorld, NODE, settleTurns} from './replace-real-
 const PARTITION_ID = 'sql_transactions-p1';
 const HISTORICAL_ID = 'native-s11-historical-remove';
 
+// The canonical ledger route as production publishes it: PARTITIONS names the
+// leader node and the leader's own registration row (raft_role follower, like
+// every partition SERVICES row) is its endpoint.
+function ledgerRouteRows(ledger) {
+  return {partitions: [{partition_id: ledger.leader.partitionId,
+    leader_node_id: ledger.leader.nodeId}], services: [{...ledger.endpoint}]};
+}
+
 function routeLedgerMessages(coordinator, ledger) {
   const original = coordinator.messageRouter;
   const routed = Object.create(original);
@@ -28,9 +36,10 @@ function routeLedgerMessages(coordinator, ledger) {
     return original.deliver(address, payload, options);
   };
   coordinator.syncOwnerDependencies({messageRouter: routed});
-  coordinator.systemTableCache.upsert('services', {service_id: ledger.leader.replicaId,
-    replica_id: ledger.leader.replicaId, node_id: ledger.leader.nodeId,
-    partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'});
+  const route = ledgerRouteRows(ledger);
+  for (const table of ['partitions', 'services']) {
+    for (const row of route[table]) coordinator.systemTableCache.upsert(table, row);
+  }
 }
 
 function ledgerGatewayForWorld(world, ledger, original, incumbentId) {
@@ -58,8 +67,7 @@ function ledgerGatewayForWorld(world, ledger, original, incumbentId) {
 async function seedMissingHistoricalOwner(ledger) {
   const holder = createTestCoordinator({nodeId: NODE.PEER_C,
     controlPlaneSystemTableGateway: ledger.gateway,
-    cacheData: {services: [{replica_id: ledger.leader.replicaId, node_id: ledger.leader.nodeId,
-      partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'}]},
+    cacheData: ledgerRouteRows(ledger),
     replaceWitness: false, committedMembershipFixture: false,
     messageRouter: {async deliver(_address, payload) {
       return buildDeliveryEnvelope({acknowledged: true}, await send(ledger.leader, payload));

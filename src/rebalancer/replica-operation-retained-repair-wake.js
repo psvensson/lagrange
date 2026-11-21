@@ -33,6 +33,13 @@ function holdsTenure(attempt, service) {
   return attempt.tenure.state === TENURE.LEDGER && attempt.tenure.service === service;
 }
 
+// A receiver tenure is one ledger term of one live local service.
+function tenureEnded(attempt) {
+  const service = attempt.tenure.service;
+  return service.isShutdown === true || !service.isLeader ||
+    attempt.tenure.term !== ledgerTerm(service);
+}
+
 function pinnedEntryCommitted(attempt, event) {
   return attempt.entry.state === ENTRY.PINNED &&
     event?.command?.entryId === attempt.entry.entryId;
@@ -149,18 +156,26 @@ function assignRetainedRepairWakeMethods(Repository) {
     },
 
     // Receiver custody lives within one ledger tenure of one local service.
-    // When that tenure ended (not leader, or a later term), an ingress-only
-    // record is released; a caller's record keeps its obligation and rebinds.
+    // When that tenure ended (not leader, a later term, or shut down), an
+    // ingress-only record is released with its continuation; a caller's record
+    // keeps its obligation and rebinds at the next route publication. The
+    // ledger replica's leadership-loss drive is the trigger (the placement
+    // owner's setLeader(false)); a decision in flight is released when it
+    // settles (releaseEndedRetainedTenure).
     retireEndedRetainedTenures(service) {
       for (const attempt of [...this.retainedPlacementRepairs.values()]) {
-        if (!holdsTenure(attempt, service) || attempt.decision.state === RUN.RUNNING) continue;
-        if (service.isLeader && attempt.tenure.term === ledgerTerm(service)) continue;
-        if (attempt.origin === ORIGIN.INGRESS) {
-          this.retireRetainedRepair(attempt);
-        } else {
-          attempt.tenure = NO_TENURE;
-          recordRepairObservation(attempt, OBSERVATION.ROUTE);
-        }
+        if (holdsTenure(attempt, service)) this.releaseEndedRetainedTenure(attempt);
+      }
+    },
+
+    releaseEndedRetainedTenure(attempt) {
+      if (attempt.tenure.state !== TENURE.LEDGER || attempt.decision.state === RUN.RUNNING ||
+          !this.retainedRepairAttemptIsCurrent(attempt) || !tenureEnded(attempt)) return;
+      if (attempt.origin === ORIGIN.INGRESS) {
+        this.retireRetainedRepair(attempt);
+      } else {
+        attempt.tenure = NO_TENURE;
+        recordRepairObservation(attempt, OBSERVATION.ROUTE);
       }
     },
 

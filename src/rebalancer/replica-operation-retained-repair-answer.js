@@ -61,15 +61,18 @@ function isCommittedRepairAnswer(answer, attempt) {
 }
 
 // Custody is the receiver's attestation for the exact entry the sender pinned,
-// under the receiver tenure the sender's decision bound: the bound replica and
-// its ledger term at ingress. Its lifetime ends with that tenure.
+// under the receiver tenure the sender's decision bound: the bound replica, its
+// ledger term at ingress, and the incarnation pair the receiver attests of
+// itself (process boot incarnation, replica SERVICES birth), which must equal
+// the pair the sender's binding observed. Its lifetime ends with that tenure.
 function custodyMatches(custody, attempt, binding) {
   if (!custody || attempt.entry.state !== ENTRY.PINNED || binding.state !== BINDING.REMOTE) {
     return false;
   }
   const expected = {entryId: attempt.entry.entryId, operationId: attempt.operation.operationId,
     createdAt: attempt.operation.createdAt, bodyText: JSON.stringify(attempt.entry.body),
-    nodeId: binding.nodeId, replicaId: binding.replicaId};
+    nodeId: binding.nodeId, replicaId: binding.replicaId,
+    nodeBootIncarnation: binding.nodeBootIncarnation, replicaCreatedAt: binding.replicaCreatedAt};
   return Object.keys(expected).every((key) => custody[key] === expected[key]) &&
     positivePosition(custody.ledgerTerm);
 }

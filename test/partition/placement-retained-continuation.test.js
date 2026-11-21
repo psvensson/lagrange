@@ -122,9 +122,12 @@ test('W5 a receiver restart on the same node, replica and address returns the ob
       assert.equal(world.commands.length, 0, 'nobody proposes before the sender reconsiders');
       assert.deepEqual(identityOf(sender, retained.operationId), identity);
       // The restarted service re-registers: a new row incarnation under the
-      // same service id, node and address. The route tuple is unchanged.
+      // same service id, node and address. The route tuple is unchanged. The
+      // registration reaches the restarted ledger node and the sender alike.
       const birth = mintServiceRowCreatedAt(Date.now());
-      remote.publish('services', {...remote.endpoint, created_at: birth, updated_at: birth});
+      const registration = {...remote.endpoint, created_at: birth, updated_at: birth};
+      world.coordinator.systemTableCache.upsert('services', registration);
+      remote.publish('services', registration);
       assert.equal(remote.cache.get('services', remote.endpoint.service_id).created_at, birth,
         'the sender cache holds the re-registered incarnation');
       assert.equal(remote.coordinator.resolveRemoteLedgerLeader().address, remote.endpoint.address);
@@ -225,7 +228,11 @@ test('W7 an unavailable read on the ingress path leaves the committed blocker tr
     const reads = controlOwnerReads(repository);
     reads.fault = failEvery;
     // The same replica leads a later term: its earlier decision is not current.
+    // A new term closes mutation admission until the participant cutover owner
+    // releases it (partition-participant-transaction-pause.js, a term mismatch
+    // invalidates the admission proof); that release is modelled as in W5.
     world.leader.controllablePort.term += 1;
+    await resumeFixtureParticipantAdmission(world.leader);
     const remote = remoteSender(world);
     installVirtualClock(remote.repository);
     try {
@@ -289,30 +296,42 @@ test('W7 an unavailable observation consumed by the sender leaves its blocker tr
     }
   }));
 
+// Re-staged under Q8 (transition record 16.3): the ledger leader observes its
+// own entry commit and resolves the pinned entry itself, so the resolution is
+// that decision's; the clock and the read control are installed before the
+// lost answer, so the read that follows the resolution is the failing one.
 test('W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged', () =>
   withRepairLedger(async (world) => {
     const retained = await retainMissing(world);
     const competitorId = await admitCompetitor(world, PARTITION_ID);
     const repository = world.coordinator.repository;
+    const clock = installVirtualClock(repository);
+    const reads = controlOwnerReads(repository);
+    // Read 1: the caller's decision. Read 2: the resolution's read before it
+    // re-presents the pinned entry. Read 3, after the resolution, fails.
+    reads.fault = (ordinal) => ordinal <= 2 ? null : READ_FAULT.THROW;
     const native = repository.repairRetainedPlacement;
+    const presented = [];
     let answers = 0;
     repository.repairRetainedPlacement = async (payload) => {
+      presented.push(payload);
       const answer = await native(payload);
       answers += 1;
       if (answers === 1) throw new Error('lost actual BUSY answer');
       return answer;
     };
     assert.equal(await bounded(repository.repairRetainedOperation(retained), 'lost BUSY'), false);
+    await idleRepairs(repository);
     const attempt = repository.retainedPlacementRepairs.get(retained.operationId);
-    assert.ok(attempt.entry.entryId, 'the unknown outcome keeps its entry pinned');
+    assert.ok(attempt, 'the obligation survives the lost answer');
+    assert.equal(presented.length, 2, 'the entry was presented and then resolved once');
+    assert.equal(presented[1].entryId, presented[0].entryId,
+      'the unknown outcome keeps its entry pinned: the exact entry is re-presented');
+    assert.deepEqual(presented[1].body, presented[0].body);
     const proposals = repairCommands(world).length;
     assert.equal(proposals, 1, 'the BUSY refusal actually committed');
-    const clock = installVirtualClock(repository);
-    const reads = controlOwnerReads(repository);
-    // The decision's first read is qualified; the read after resolution fails.
-    reads.fault = (ordinal) => ordinal === 1 ? null : READ_FAULT.THROW;
-    assert.equal(await bounded(repository.repairRetainedOperation(retained), 'resolution'), false);
-    assert.equal(reads.attempted, 2, 'one read before and one after resolving the pinned entry');
+    assert.equal(reads.attempted, 3,
+      'the caller read once; the resolution read once before and once after the pinned entry');
     assert.equal(repairCommands(world).length, proposals, 'the durable refusal replays: no proposal');
     assert.equal(repository.retainedPlacementRepairs.get(retained.operationId), attempt);
     assert.deepEqual(attempt.blocker.operations.map((blocker) => blocker.operationId),
@@ -540,6 +559,12 @@ test('B5 a custodian record released at its tenure end, without a read, cancels 
       const attempted = reads.attempted;
       world.leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
       await settleTicks();
+      // Ruling C(ii): the leadership loss itself is the release trigger; no
+      // commit, release or ingress has reached the receiver since.
+      assert.equal(receiver.retainedPlacementRepairs.size, 0,
+        'the leadership loss released the ingress-only record of the ended tenure');
+      assert.equal(clock.pendingTimerCount(), 0, 'the released record left no continuation armed');
+      assert.equal(reads.attempted, attempted, 'the release read nothing');
       assert.equal(await bounded(remote.repository.ensureRetainedOperationRow(retained),
         'later caller'), false);
       assert.equal(receiver.retainedPlacementRepairs.size, 0,

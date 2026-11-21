@@ -1180,7 +1180,8 @@ test('real committed BUSY E0 lost reply replays across repositories without a fr
     const e0 = world.commands.at(-1);
     const recorded = readCommittedStatementOutcome(world.leader, `entry:${e0.entryId}`);
     assert.equal(JSON.parse(recorded.ownerResultText).reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
-    assert.equal(receiver.retainedPlacementRepairs.get(retained.operationId).entryId, e0.entryId);
+    assert.equal(receiver.retainedPlacementRepairs.get(retained.operationId).entry.entryId,
+      e0.entryId);
     const remote = remoteCaller(world);
     try {
       const before = world.commands.length;

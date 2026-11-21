@@ -90,7 +90,9 @@ function assignRetainedPlacementRepairMethods(Repository) {
       const mode = this.retainedRepairObservationMode(attempt, kinds);
       const promise = Promise.resolve().then(() => this.decideRetainedRepair(attempt, kinds, mode))
         .finally(() => {
-          if (attempt.decision.promise === promise) attempt.decision = IDLE_DECISION;
+          if (attempt.decision.promise !== promise) return;
+          attempt.decision = IDLE_DECISION;
+          this.releaseEndedRetainedTenure(attempt);
         });
       attempt.decision = {state: RUN.RUNNING, mode, promise};
       return promise;
@@ -345,8 +347,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     // under its tenure (ledger term, process incarnation), or disclaims it.
     recordRetainedRepairCustody(attempt, answer, binding) {
       const custody = answer.repairCustody;
-      attempt.custody = custodyMatches(custody, attempt, binding) &&
-        custody.nodeBootIncarnation === binding.nodeBootIncarnation ?
+      attempt.custody = custodyMatches(custody, attempt, binding) ?
         {state: CUSTODY.DELEGATED, binding, ledgerTerm: custody.ledgerTerm,
           entryId: custody.entryId} : SELF_CUSTODY;
     },
