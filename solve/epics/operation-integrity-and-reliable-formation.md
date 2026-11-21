@@ -281,6 +281,41 @@ spent 27,151 ms across 38 deliveries with 12 lost answers. Its final
 participant refused a proposal during cutover. Earlier proposal and
 commit outcomes remain unresolved.
 
+Across the three node logs in each complete recording, the query executor
+reported the following unresolved write deliveries. Each line with the exact
+message `Partition write outcome still unknown when its delivery budget was spent`
+is one exhausted executor invocation. `deliveries` counts submissions to
+the router, including redirects. Several invocations may carry the same entry.
+
+| Physical run | Exhausted write invocations | Distinct entry IDs | Router submissions in these invocations | Lost answers | Publication queue deferrals for unavailable authoritative reads |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `4ef9154c` | 104 | 55 | 529 | 278 | 352 |
+| `bd3bfd82` | 111 | 55 | 901 | 413 | 99 |
+
+Each run touched six partitions in this count. The earlier run logged
+58 of its exhausted write invocations on `replica_operations-p1` and 37
+on `nodes-p1`. The newer run logged 65 and 31 respectively. In both
+runs the first exhausted SERVICES read preceded the first publication
+queue deferral. This puts retry traffic on the investigation path while
+leaving the cause of the first missing reply open. A router submission
+alone provides no evidence of a wire send, durable proposal or commit.
+The counts apply to exhausted invocations throughout the recording,
+including work after the formation bound.
+[Executor counter owner](../../src/query/query-executor-unknown-outcome.js) ·
+[Earlier original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-4ef9154c-nov21.tar.gz) ·
+[Later original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-bd3bfd82-nov21.tar.gz).
+
+For each sampled logical entry, count the initiating owner turns, executor
+submissions, received frames and applied commands separately. One way to
+test whether retries sustain load after the initial delay is to hold and
+then release one reply. The original logical work must reconcile, an older
+turn must leave the new owner alone, and the next legitimate write must
+still progress. Cross-layer retry multiplication has been observed in
+other services. The two Lagrange recordings measure attempts and uncertain
+answers, and a causal overload claim still needs the paired observation.
+[Amazon Builders’ Library](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) ·
+[Google SRE, Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/).
+
 The transport and query owners should trace one failing `services-p1` read
 from sender to receiver, ACK, partition dispatch and response with the same
 query, envelope and connection identities. The membership-publication and
