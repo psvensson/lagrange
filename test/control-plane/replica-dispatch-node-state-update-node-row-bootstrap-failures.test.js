@@ -26,9 +26,11 @@ import {
   COLUMN,
   SERVICE_STATUS,
   STATE,
-  WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {buildCreatedOperationFixture} from '../rebalancer/operation-outcome-fixture.js';
 
 test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
   async (t) => {
@@ -48,31 +50,22 @@ test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
       },
     };
 
+    // The committed row of a PENDING ADD owned by node-2, as the repository
+    // writes it (the one row builder over the coordinator-created record).
+    const nonOwnerRow = buildCanonicalReplicaOperationRow(buildCreatedOperationFixture({
+      operationId: 'add-op-2',
+      type: OperationType.ADD,
+      partitionId: 'replica_operations-p1',
+      replicaId: 'replica_operations-p1-r4',
+      sourceNodeId: 'node-2',
+      targetNodeId: 'node-1',
+      createdAt: Date.now(),
+    }), null);
     service.handleCdcApplied(null, {
       tableName: 'replica_operations',
-      data: {
-        operation_id: 'add-op-2',
-        partition_id: 'replica_operations-p1',
-        entity_type: 'partition',
-        entity_id: 'replica_operations-p1',
-        replica_id: 'replica_operations-p1-r4',
-        source_node_id: 'node-2',
-        target_node_id: 'node-1',
-        workflow_step: WORKFLOW_STEP.PENDING,
-        type: OperationType.ADD,
-      },
+      data: nonOwnerRow,
     });
-    service.handleCacheNodeChange('replica_operations', 'INSERT', {
-      operation_id: 'add-op-2',
-      partition_id: 'replica_operations-p1',
-      entity_type: 'partition',
-      entity_id: 'replica_operations-p1',
-      replica_id: 'replica_operations-p1-r4',
-      source_node_id: 'node-2',
-      target_node_id: 'node-1',
-      workflow_step: WORKFLOW_STEP.PENDING,
-      type: OperationType.ADD,
-    });
+    service.handleCacheNodeChange('replica_operations', 'INSERT', nonOwnerRow);
 
     t.equal(
       enqueueCalls.length,

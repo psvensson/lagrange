@@ -14,7 +14,8 @@
  */
 
 import {
-  createFixtureSystemMutationPort, createOperationRowInsertPort, createOperationRowUpdatePort,
+  createFixtureSystemMutationPort, createMockControlPlaneSystemTableGateway,
+  createOperationRowInsertPort, createOperationRowUpdatePort,
 } from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -171,25 +172,23 @@ function createCoordinatorWithRealSize(options = {}) {
   const admissionService = options.storageAdmissionService ||
     createRecordingAdmissionService();
 
+  // The engine holds this fixture's one partition's whole operation ledger,
+  // so its reads answer as complete owner reads (the shared fixture
+  // gateway's authoritative-read completeness and witness).
+  const controlPlaneSystemTableGateway =
+    createMockControlPlaneSystemTableGateway(sqlEngine);
+  // Operation rows land in the engine's rows by their named columns.
+  controlPlaneSystemTableGateway.submitMutation = createOperationRowUpdatePort(
+    (operationId) => sqlEngine.operations.get(operationId),
+    createOperationRowInsertPort(
+      (row) => !sqlEngine.operations.has(row.operation_id) &&
+        Boolean(sqlEngine.operations.set(row.operation_id, row)),
+      createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args))));
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_LOCAL_NODE_ID,
     systemTableCache,
     cdcIntegrationService: createMockCdcService(),
-    controlPlaneSystemTableGateway: {
-      // Operation rows land in the engine's rows by their named columns.
-      submitMutation: createOperationRowUpdatePort(
-        (operationId) => sqlEngine.operations.get(operationId),
-        createOperationRowInsertPort(
-          (row) => !sqlEngine.operations.has(row.operation_id) &&
-            Boolean(sqlEngine.operations.set(row.operation_id, row)),
-          createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)))),
-      readAuthoritativeRows: async (_table, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-      readRows: async (_table, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-      executeQuery: async (sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-    },
+    controlPlaneSystemTableGateway,
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,

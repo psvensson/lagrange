@@ -28,7 +28,7 @@
   "censusSize": 2733,
   "digest": "fnv1a32-9592f56f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4138778f",
+  "observationDigest": "fnv1a32-b1e908ac",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3241,6 +3241,7 @@
       "files": [
         "src/bootstrap/owners/bootstrap-topology-snapshot-owner.js",
         "src/constants/index.js",
+        "src/partition/partition-service-row-owner.js",
         "src/query/canonical-leader-routing.js"
       ]
     },
@@ -4958,6 +4959,7 @@
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/unified-rebalancer-rebalance-loop.js",
         "src/rebalancer/unified-rebalancer.js",
         "test/control-plane/control-plane-readiness-service-test-support.js"
@@ -5719,6 +5721,7 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/transport/transport-semantic-outcome.js"
       ]
     },
@@ -5757,6 +5760,7 @@
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/partition/partition-write-kernel.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/control-plane/replica-dispatch-node-state-operation-dispatch-retry-test-cases.js"
       ]
     },
@@ -5775,7 +5779,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js": {
@@ -5784,7 +5789,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/control-plane/replica-dispatch-node-state-update-ready-sync-recovery.test.js": {
@@ -5804,7 +5810,8 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/replica-dispatch-service.js",
-        "src/partition/partition-participant-transaction-cutover-constants.js"
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/control-plane/replica-dispatch-node-state-update.test.js": {
@@ -5847,14 +5854,16 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/rebalance-coordinator.js"
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/control-plane/replica-dispatch-routing.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js": {
@@ -6051,6 +6060,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6059,6 +6069,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6188,6 +6199,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6196,6 +6208,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6270,6 +6283,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6278,6 +6292,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/rebalancer/test-helpers.js"
@@ -6288,6 +6303,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/storage-reservation-authority.js",
         "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
@@ -6299,6 +6315,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6307,6 +6324,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6315,6 +6333,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/rebalancer/test-helpers.js"
@@ -6410,6 +6429,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6425,6 +6445,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -6457,6 +6478,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -11863,7 +11885,9 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/logging/wait-bound-spent.js",
+        "src/message-group/message-group-service-row-owner.js",
         "src/node/replica-handler-constants.js",
+        "src/partition/group-retirement-redrive.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
@@ -11872,6 +11896,7 @@
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/partition-service-row-owner.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -14597,6 +14622,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-constants.js",
         "src/partition/partition-placement-admission-identity.js",
         "src/partition/partition-placement-admission.js",
         "src/partition/partition-service-constants.js",
@@ -14611,10 +14637,13 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
         "src/rebalancer/operation-workflow-replace-target-binding.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "src/rebalancer/replica-placement-owner-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -14646,6 +14675,7 @@
         "src/rebalancer/operation-workflow-replace-target-binding.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -14786,6 +14816,7 @@
         "src/rebalancer/operation-workflow-dispatch-ledger-self-move-gate.js",
         "src/rebalancer/operation-workflow-growth-promote.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-outcome.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -14842,6 +14873,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -14873,6 +14905,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -14906,6 +14939,7 @@
         "src/rebalancer/operation-reservation-attempt-outcome.js",
         "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/rebalancer/replica-placement-owner-constants.js",
@@ -17390,12 +17424,15 @@
     },
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": {
@@ -18475,7 +18512,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cdc/cdc-integration-service-cache-visibility-wait.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/add-workflow-step-progression.property.test.js": {
@@ -18516,6 +18554,7 @@
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/unified-rebalancer.js"
       ]
     },
@@ -18625,6 +18664,7 @@
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
         "src/rebalancer/operation-workflow-transition-outcome.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-operation-update-outcome.js"
       ]
@@ -18642,6 +18682,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },
@@ -18753,6 +18794,7 @@
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/operation-workflow-terminal-transition-repair.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/transport/transport-semantic-outcome.js",
@@ -18782,7 +18824,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
-        "src/rebalancer/replica-operation-constants.js"
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js": {
@@ -18804,7 +18847,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/executor-bypasses-workflow-owner.test.js": {
@@ -18827,6 +18870,7 @@
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/operation-workflow-transition-persistence.js",
         "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-operation-update-disposition.js"
       ]
@@ -18846,6 +18890,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
@@ -18971,7 +19016,8 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/interlock-skip-label-fidelity.test.js": {
@@ -19054,7 +19100,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/message-group-rebalancer-wiring.test.js": {
@@ -19101,7 +19148,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/operation-workflow-reconcile-outcome.js"
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/operation-progress-store-persistence.test.js": {
@@ -19139,7 +19187,8 @@
         "src/constants/unified-service-lifecycle.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/membership-publication-priority-partition-summary.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js": {
@@ -19172,6 +19221,7 @@
         "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/operation-workflow-transition-outcome.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-operation-update-outcome.js"
       ]
@@ -19202,7 +19252,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js": {
@@ -19502,6 +19553,7 @@
         "src/control-plane/priority-recovery-snapshot.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry-suite.js"
       ]
     },
@@ -19612,6 +19664,7 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/workflow/durable-workflow-coordinator.js",
         "test/rebalancer/committed-membership-fixture.js"
@@ -19634,6 +19687,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/workflow/durable-workflow-coordinator.js"
       ]
     },
@@ -19671,7 +19725,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/operation-workflow-reconcile-outcome.js"
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js": {
@@ -19685,7 +19740,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cdc/cdc-integration-service-cache-visibility-wait.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/rebalance-coordinator-topology-guard.test.js": {
@@ -19703,7 +19759,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/priority-publication-safety-rows.js",
-        "src/rebalancer/priority-recovery-superseded-target.js"
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/rebalancer-gating.property.test.js": {
@@ -19807,7 +19863,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
-        "src/rebalancer/replica-operation-constants.js"
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/replace-drain-hand-back.test.js": {
@@ -19829,6 +19886,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
@@ -20023,6 +20081,7 @@
         "src/rebalancer/operation-reservation-attempt-outcome.js",
         "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/rebalancer/replica-placement-owner-constants.js",
@@ -20133,7 +20192,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": {
@@ -20158,7 +20218,11 @@
     },
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": {
       "files": [
-        "src/control-plane/control-plane-system-table-gateway.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": {
@@ -20253,6 +20317,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-step-policy.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
@@ -20352,6 +20417,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -20397,6 +20463,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-status.js"
       ]
     },
@@ -20408,6 +20475,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-outcome.js",
         "src/rebalancer/replica-status.js",
         "src/rebalancer/storage-capacity-constants.js"
@@ -20420,6 +20488,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/storage-capacity-constants.js"
       ]
     },
@@ -20429,6 +20498,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalancer-entity-identity.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-status.js"
       ]
@@ -20512,7 +20582,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": {
@@ -20643,6 +20714,7 @@
         "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/rebalance-coordinator-stopping-reconcile-fixtures.js"
       ]
     },
@@ -20650,6 +20722,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/partition/partition-service-row-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -20686,6 +20760,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
     },

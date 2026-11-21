@@ -16,7 +16,6 @@ const {
   OperationType,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
-  RAFT_ROLE,
   REBALANCER_SKIP_REASON,
   ReplicaOperationResponseStatus,
   ReplicaStatus,
@@ -220,38 +219,6 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     return replicaId.length > 0 ? replicaId : null;
   }
 
-  normalizeReplicaRowRaftRole(replicaRow) {
-    return typeof replicaRow?.raft_role === 'string' ?
-      replicaRow.raft_role.trim().toLowerCase() :
-      null;
-  }
-
-  isLeaderReplicaRow(replicaRow) {
-    return this.normalizeReplicaRowRaftRole(replicaRow) === RAFT_ROLE.LEADER;
-  }
-
-  getPriorityPublicationSourceRoleState(replicaRow) {
-    const normalizedRaftRole = this.normalizeReplicaRowRaftRole(replicaRow);
-    if (normalizedRaftRole === RAFT_ROLE.FOLLOWER) {
-      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
-    }
-    if (normalizedRaftRole === RAFT_ROLE.LEADER) {
-      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER;
-    }
-    return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.UNKNOWN;
-  }
-
-  getPriorityPublicationReplacementRoleState(replicaRow) {
-    const normalizedRaftRole = this.normalizeReplicaRowRaftRole(replicaRow);
-    if (normalizedRaftRole === RAFT_ROLE.LEADER) {
-      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER;
-    }
-    if (normalizedRaftRole === RAFT_ROLE.FOLLOWER) {
-      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
-    }
-    return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.UNKNOWN;
-  }
-
   getCriticalPartitionLeaderNodeIdForSafety(partitionRow) {
     const leaderNodeId =
       typeof partitionRow?.leader_node_id === 'string' ?
@@ -260,15 +227,11 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     return leaderNodeId && leaderNodeId.length > 0 ? leaderNodeId : null;
   }
 
-  resolvePriorityPublicationSourceRoleState(
-    operation,
-    sourceRoleState,
-    partitionRow,
-  ) {
-    if (sourceRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER) {
-      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
-    }
-
+  // The source's leadership as the partition's canonical leader publication
+  // (partitions.leader_node_id) states it. Partition SERVICES rows never
+  // publish leader (decision table leadership-authority-projection), so a
+  // replica row's role is not leadership evidence here.
+  resolvePriorityPublicationSourceRoleState(operation, partitionRow) {
     const rawSourceNodeId =
       typeof operation?.sourceNodeId === 'string' ?
         operation.sourceNodeId.trim() :
@@ -284,7 +247,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
         PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER :
         PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
     }
-    return sourceRoleState;
+    return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.UNKNOWN;
   }
 
   getCachedCriticalReplicaRows(partitionId) {

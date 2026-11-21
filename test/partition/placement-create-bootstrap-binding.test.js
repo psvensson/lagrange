@@ -9,14 +9,23 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
-import {ControlPlaneSystemTableGateway} from
+import {CONTROL_PLANE_MUTATION_OPERATION, ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {evaluateProspectiveRemoveSafety} from
+  '../../src/rebalancer/operation-workflow-remove-safety-evaluator.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {bindReplaceCreateTargetReplicaId} from
   '../../src/rebalancer/operation-workflow-replace-target-binding.js';
 import {placementReplicaIdOf} from
   '../../src/partition/partition-placement-admission-identity.js';
+import {PLACEMENT_RESULT_FIELD} from
+  '../../src/partition/partition-placement-admission-constants.js';
+import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
+  '../../src/rebalancer/replica-placement-owner-constants.js';
 import {replicaIdsOfStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {
   OPERATION_METADATA_KEY, OperationType, WORKFLOW_STEP_TO_STATUS,
@@ -30,7 +39,10 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
-import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
+import {
+  advanceOperationFixture, buildCommittedOperationFixture,
+  installCommittedOperationMutationFixture,
+} from '../rebalancer/operation-outcome-fixture.js';
 import {
   createMockControlPlaneSystemTableGateway, createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
@@ -100,6 +112,39 @@ async function withNativeCreate(measure, type = OperationType.ADD,
       'the native admission starts with no dispatch topology');
     await measure(leader, initial[0], history);
   });
+}
+
+// The effect owner's evaluateRemoveSafety proves its subject's own durable
+// row before it arbitrates competitors. The subject is committed to the ledger
+// as the repository's one row builder writes it.
+function commitSubjectRow(leader, operation) {
+  const {sql, params} = planner.buildSqlMutationPlan({
+    operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+    tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    row: buildCanonicalReplicaOperationRow(operation, null),
+  });
+  assert.equal(commitLedgerStatement(leader, `bootstrap:subject:${operation.operationId}`,
+    sql, params), null);
+}
+
+// The operation's owner commits its terminal (FAILED: its effect was never
+// sent) as a CAS on its current step, writing the transition columns of the
+// advanced record's canonical row.
+function commitOperationTerminal(leader, operation) {
+  const row = buildCanonicalReplicaOperationRow(advanceOperationFixture(
+    operation, WORKFLOW_STEP.FAILED, operation.updatedAt + 1), null);
+  const {sql, params} = planner.buildSqlMutationPlan({
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+    tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    whereClause: {operation_id: row.operation_id, workflow_step: operation.workflowStep,
+      completed_at: null},
+    data: {workflow_step: row.workflow_step, status: row.status, updated_at: row.updated_at,
+      completed_at: row.completed_at, steps_history: row.steps_history},
+  });
+  const entryId = `bootstrap:terminal:${row.operation_id}`;
+  assert.equal(commitLedgerStatement(leader, entryId, sql, params), null);
+  assert.equal(readCommittedStatementOutcome(leader, `entry:${entryId}`).changes, 1,
+    'the owner committed the terminal');
 }
 
 function bind(coordinator, operation) {
@@ -506,6 +551,11 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         await assert.rejects(() => admission(false), /only into an idle operation ledger/);
         await admission(true);
         owner.messageRouter.pingNode = async () => false;
+        // A removal of the source voter on the ADD's own partition exists
+        // only as a prospective intent while the ADD is in flight: placement
+        // admission refuses any operation on an entity holding an incomplete
+        // row (PARTITION_BUSY), so no durable REMOVE can sit beside it. The
+        // planner's preflight evaluates that intent (getMoveSafetyError).
         const peerRemoval = {
           ...createOperationAt({
             operationId: 'bootstrap-peer-remove',
@@ -518,7 +568,7 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
           entityType: incumbent.entityType,
           entityId: incumbent.entityId,
         };
-        const removeSafety = await owner.evaluateRemoveSafety(peerRemoval);
+        const removeSafety = await evaluateProspectiveRemoveSafety(owner, peerRemoval);
         assert.match(String(removeSafety?.error), new RegExp(row.operation_id),
           'an unreachable destination cannot discharge source-side bootstrap custody');
         const deadline = row.created_at + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
@@ -536,7 +586,7 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(await gate(), null,
           'the next dispatch wake sees the committed terminal and may claim the self-move');
         await admission(false);
-        const afterTerminal = await owner.evaluateRemoveSafety(peerRemoval);
+        const afterTerminal = await evaluateProspectiveRemoveSafety(owner, peerRemoval);
         assert.doesNotMatch(String(afterTerminal?.error), new RegExp(row.operation_id),
           'committed terminal clears arbitration even though the cache remains empty');
       } finally {
@@ -558,44 +608,94 @@ test('all removal phases distinguish complete entity reads from unavailable owne
       return [];
     };
     const now = owner.resolveTimeoutCheckNowMs();
-    const requests = [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]
-      .map((workflowStep) => {
-        const type = workflowStep === WORKFLOW_STEP.PENDING ?
-          OperationType.REMOVE : OperationType.REPLACE;
-        return {
-          ...createOperationAt({
-            operationId: `removal:${workflowStep}`, type, partitionId: PARTITION_ID,
-            sourceNodeId: NODE.A, targetNodeId: NODE.B, replicaId: VOTER_ID,
-            sourceReplicaId: VOTER_ID,
-          }, now),
-          workflowStep, entityType: 'partition', entityId: PARTITION_ID,
-        };
-      });
+    const phases = [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING];
+    // A removal at one phase: its owner's record committed up to that step.
+    const removal = (workflowStep, round) => buildCommittedOperationFixture({
+      operationId: `removal:${workflowStep}:${round}`,
+      type: workflowStep === WORKFLOW_STEP.PENDING ? OperationType.REMOVE : OperationType.REPLACE,
+      partitionId: PARTITION_ID, sourceNodeId: NODE.A, targetNodeId: NODE.B, replicaId: VOTER_ID,
+      sourceReplicaId: VOTER_ID, entityType: 'partition', entityId: PARTITION_ID,
+    }, workflowStep, now);
+    // The partition never holds two in-flight operations (placement
+    // admission refuses PARTITION_BUSY), so the effect owner evaluates each
+    // committed removal alone, and it ends before the next one enters.
+    const evaluateAlone = async (subject) => {
+      commitSubjectRow(leader, subject);
+      try {
+        return await owner.evaluateRemoveSafety(subject);
+      } finally {
+        commitOperationTerminal(leader, subject);
+      }
+    };
+    // A placement request through the real admission applier: its typed result.
+    const admit = async (entryId, statement) => {
+      const {command, answer: admission} =
+        await admitOnLeader(leader, proposed, entryId, statement);
+      return {command, result: admission[PLACEMENT_RESULT_FIELD]};
+    };
+    const busyWith = (holderId) => ({outcome: PLACEMENT_OUTCOME.REFUSED,
+      reason: PLACEMENT_REFUSAL.PARTITION_BUSY, operationIds: [holderId]});
+    const ledgerIds = () => ledgerRows(leader).map((row) => row.operation_id);
 
     try {
-      for (const request of requests) await owner.evaluateRemoveSafety(request);
-      assert.equal(voterFloorReads, requests.length,
+      // Round 1: a complete owner read holding only the subject reaches the
+      // separate voter floor, once per removal phase.
+      for (const phase of phases) await evaluateAlone(removal(phase, 'complete'));
+      assert.equal(voterFloorReads, phases.length,
         'a complete empty owner read reaches the separate voter floor');
-      const {command} = await admitOnLeader(leader, proposed, 'bootstrap:removal-contender',
-        placementStatement({partitionId: PARTITION_ID, target: NODE.B}));
-      assert.ok(command, 'native placement committed after the removal intents already existed');
-      const [incumbent] = ledgerRows(leader);
 
-      for (const request of requests) {
-        const evaluation = await owner.evaluateRemoveSafety(request);
-        assert.match(String(evaluation?.error), new RegExp(incumbent.operation_id));
+      // Round 2: "a removal is judged against the in-flight placement". For
+      // an existing removal (REPLACE at ACTIVE or STOPPING) that property moved
+      // from the removal-safety evaluation to the admission boundary: the
+      // applier refuses the pair in both orders, so no evaluation ever sees
+      // it. A prospective REMOVE (PENDING) is still judged against the
+      // placement, by the planner's preflight.
+      for (const phase of [WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]) {
+        const holder = removal(phase, 'holder');
+        commitSubjectRow(leader, holder);
+        const idsBeforePlacement = ledgerIds();
+        const behindRemoval = await admit(`bootstrap:placement-behind-${phase}`,
+          placementStatement({partitionId: PARTITION_ID, target: NODE.B}));
+        assert.deepEqual(behindRemoval.result, busyWith(holder.operationId),
+          `an in-flight removal at ${phase} refuses the native placement`);
+        assert.deepEqual(ledgerIds(), idsBeforePlacement, 'the refused placement wrote no row');
+        commitOperationTerminal(leader, holder);
       }
-      assert.equal(voterFloorReads, requests.length);
+      const contender = await admit('bootstrap:removal-contender',
+        placementStatement({partitionId: PARTITION_ID, target: NODE.B}));
+      assert.ok(contender.command,
+        'native placement committed after the removal intents already existed');
+      assert.equal(contender.result.outcome, PLACEMENT_OUTCOME.ADMITTED);
+      const [incumbentId] = contender.result.operationIds;
 
-      for (const [unavailable, detail] of [
+      const preflight = await evaluateProspectiveRemoveSafety(owner,
+        removal(WORKFLOW_STEP.PENDING, 'preflight'));
+      assert.match(String(preflight?.error), new RegExp(incumbentId));
+      const idsBeforeRemoval = ledgerIds();
+      const behindPlacement = await admit('bootstrap:replace-behind-placement',
+        placementStatement({partitionId: PARTITION_ID, type: OperationType.REPLACE,
+          target: NODE.C, sourceReplicaId: VOTER_ID}));
+      assert.deepEqual(behindPlacement.result, busyWith(incumbentId),
+        'an in-flight native placement refuses the removal');
+      assert.deepEqual(ledgerIds(), idsBeforeRemoval, 'the refused removal wrote no row');
+      assert.equal(voterFloorReads, phases.length);
+
+      // The placement ends before round 3 commits its subjects, each alone.
+      commitOperationTerminal(leader, coordinator.repository.rowToOperation(
+        ledgerRows(leader).find((row) => row.operation_id === incumbentId)));
+
+      // Round 3: an unavailable, incomplete or malformed owner read defers
+      // every removal phase with its cause, never reaching the voter floor.
+      for (const [index, [unavailable, detail]] of [
         [() => ({success: false, error: 'owner unavailable'}), /owner unavailable/u],
         [(result) => ({...result, rows: [], rowSetComplete: false}), /observation is incomplete/u],
         [(result) => ({...result, rows: [{...result.rows[0], entity_id: 'different-entity'}]}),
           /observation is malformed/u],
-      ]) {
+      ].entries()) {
         answer = unavailable;
-        for (const request of requests) {
-          const evaluation = await owner.evaluateRemoveSafety(request);
+        for (const phase of phases) {
+          const request = removal(phase, `unavailable-${index}`);
+          const evaluation = await evaluateAlone(request);
           assert.match(String(evaluation?.error), /operation ledger is unavailable/u);
           assert.match(String(evaluation?.error), detail, 'the deferral preserves its cause');
           assert.equal(evaluation.deferReason, request.type === OperationType.REMOVE ?
@@ -603,7 +703,7 @@ test('all removal phases distinguish complete entity reads from unavailable owne
             REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED);
         }
       }
-      assert.equal(voterFloorReads, requests.length,
+      assert.equal(voterFloorReads, phases.length,
         'owner unavailability never falls through to the voter floor');
     } finally {
       await coordinator.shutdown();

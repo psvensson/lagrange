@@ -7,11 +7,11 @@
 // owner's own refusal answer over a delivered transport defers through the
 // dispatch owner (design Q5), never as a woken owner.
 import {test} from '../../src/test-helpers/tap.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {buildDeliveryEnvelope, buildTransportDeliveryOutcome} from
   '../../src/transport/transport-semantic-outcome.js';
 import {createService, initEnv} from './replica-dispatch-node-state-update-test-support.js';
+import {buildCreatedOperationFixture} from '../rebalancer/operation-outcome-fixture.js';
 
 const RETRY_AFTER_MS = 23;
 const OUTCOMES = Object.freeze({
@@ -50,13 +50,12 @@ async function wake(outcome, operationId) {
     return true;
   };
   try {
-    await service.handleCoordinatorOperationCreated({
+    // The PENDING record the coordinator's createOperation hands over.
+    await service.handleCoordinatorOperationCreated(buildCreatedOperationFixture({
       operationId, partitionId: 'control_plane_publications-p1',
       replicaId: 'control_plane_publications-p1-r4', type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING, sourceNodeId: 'node-1',
-      targetNodeId: 'node-2', createdAt: 1700000000000, updatedAt: 1700000000100,
-      stepsHistory: [],
-    });
+      sourceNodeId: 'node-1', targetNodeId: 'node-2', createdAt: 1700000000000,
+    }));
   } finally {
     service.stop();
   }

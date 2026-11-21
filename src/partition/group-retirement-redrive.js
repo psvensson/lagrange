@@ -1,4 +1,3 @@
-import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
  * Owner: the workflow owner's completion of a whole-group retirement step
@@ -24,10 +23,10 @@ import {readStateField} from '../utils/state-field-read.js';
  *                   and listed;
  *   GROUP_LEADER    for a step whose membership could not be read (no
  *                   leader answered, or a configuration change was
- *                   pending), the group gaining a leader - its leader's
- *                   services row written with the leader role, or its
- *                   partitions row's leader_node_id written (the canonical
- *                   leader publication) - re-runs it;
+ *                   pending), the group gaining a leader - its partitions
+ *                   row's leader_node_id written (the canonical leader
+ *                   publication; a partition services row never publishes
+ *                   the leader role) - re-runs it;
  *   GROUP_ROW_CHANGED for such a step, any other services or partitions
  *                   row of its group (a hydrating view, a member's row
  *                   after a configuration change applied) re-runs it;
@@ -73,7 +72,6 @@ import {readStateField} from '../utils/state-field-read.js';
  */
 
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {claimWorkflowOwnershipCore} from './managed-workflow-ownership-core.js';
 import {
   readWaitClock,
@@ -450,12 +448,9 @@ class GroupRetirementRedrive {
   }
 }
 
-// Whether a row announces its group's leader: the leader's own services row,
-// or the partitions row's canonical leader publication.
+// Whether a row announces its group's leader: the partitions row's canonical
+// leader publication (leader_node_id).
 function announcesLeader(tableName, row) {
-  if (tableName === SERVICES_TABLE) {
-    return readStateField(row?.raft_role) === RAFT_ROLE.LEADER;
-  }
   return tableName === PARTITIONS_TABLE &&
     String(row?.leader_node_id || '').length > 0;
 }

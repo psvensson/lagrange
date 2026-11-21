@@ -327,6 +327,10 @@ test('the summary refresh that clears the durable gap enqueues the trimming reco
         async listPublications() {
           return {rows: [durableRow]};
         },
+        // The persist path reads the same durable row back by id (ff1a075bd).
+        async getPublication(publicationId) {
+          return durableRow.publication_id === publicationId ? durableRow : null;
+        },
         async upsertPublication(row) {
           upserts.push(row);
           durableRow = {...durableRow, ...row};

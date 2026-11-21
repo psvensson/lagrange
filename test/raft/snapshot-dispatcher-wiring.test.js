@@ -47,10 +47,12 @@ import {waitForCondition} from './bulk-transfer-socket-fixture.js';
 import {genesisStamp} from
   '../../src/raft/raft-committed-membership-stamp.js';
 import {
-  createLifecycleCdcService,
+  createLifecycleCdcServiceForCache,
   createLifecycleServiceRow,
-  createLifecycleStateStore,
 } from '../test-helpers/lifecycle-state-store.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CDC_OPERATION} from '../../src/constants/cdc.js';
+import {TABLES} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
 
@@ -126,21 +128,24 @@ function createStubRouter(bulkChannelRegistry) {
 
 function createHandlerSetup(options = {}) {
   const created = [];
-  const lifecycleStore = createLifecycleStateStore({
-    services: [createLifecycleServiceRow({
+  // The node's SystemTableCache (the cache-change reader ReplicaHandlerSetup
+  // requires) holds the replica's services row; the lifecycle CDC store is
+  // built from it and projects every applied mutation back into it.
+  const systemTableCache = new SystemTableCache();
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT,
+    createLifecycleServiceRow({
       serviceId: REPLICA_ID,
       replicaId: REPLICA_ID,
       partitionId: PARTITION_ID,
       nodeId: NODE_ID,
       status: 'active',
-    })],
-  });
+    }));
   const messageRouter = createStubRouter(options.bulkChannelRegistry);
   const setup = ReplicaHandlerSetup.create({
     nodeId: NODE_ID,
     messageRouter,
-    cdcIntegrationService: createLifecycleCdcService({store: lifecycleStore}),
-    systemTableCache: lifecycleStore.cache,
+    cdcIntegrationService: createLifecycleCdcServiceForCache(systemTableCache),
+    systemTableCache,
     createPartitionService: async (serviceOptions) => {
       const service = {
         ...serviceOptions,
@@ -151,8 +156,7 @@ function createHandlerSetup(options = {}) {
       };
       created.push(service);
       completePartitionConstructionFixture(service, serviceOptions);
-      attachSnapshotCatchupDispatcher({service, systemTableCache: lifecycleStore.cache,
-        messageRouter});
+      attachSnapshotCatchupDispatcher({service, systemTableCache, messageRouter});
       await options.holdConstruction?.(service);
       return service;
     },

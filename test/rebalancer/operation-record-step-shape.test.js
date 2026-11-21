@@ -20,8 +20,18 @@ import {isOperationLedgerSelfMoveDispatchClaimed} from
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {STATE_ABSENT} from '../../src/utils/state-field-read.js';
+import {
+  AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE,
+  AUTHORITATIVE_REPLICA_OBSERVATION_STATE,
+} from '../../src/rebalancer/replica-operation-repository-observation-methods.js';
 
 const {OperationType, readOperationRecordWorkflowStep} = progress;
+// The repository's authoritative observation of a target replica with no
+// services row (getActualReplicaObservation's absent answer).
+const ABSENT_TARGET_OBSERVATION = Object.freeze({
+  state: AUTHORITATIVE_REPLICA_OBSERVATION_STATE.ABSENT,
+  source: AUTHORITATIVE_REPLICA_OBSERVATION_SOURCE,
+});
 const {
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
@@ -134,14 +144,14 @@ test('the pre-sync REPLACE target state reads the step of either shape', () => {
     assert.equal(
       resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
         operation,
-        targetLifecycleStatus: null,
+        targetObservation: ABSENT_TARGET_OBSERVATION,
       }),
       PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED);
   }
   assert.equal(
     resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
       operation: {type: OperationType.REPLACE, workflow_step: WORKFLOW_STEP.SYNCING},
-      targetLifecycleStatus: null,
+      targetObservation: ABSENT_TARGET_OBSERVATION,
     }),
     PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.NOT_APPLICABLE);
 });

@@ -38,6 +38,16 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {
+  buildCreatedOperationFixture,
+  expectedOperationWakeRow,
+  readBackOperationFixture,
+} from '../rebalancer/operation-outcome-fixture.js';
+
+// The producer history of a record created at `createdAt`: its one PENDING step.
+function createdHistoryJson(createdAt) {
+  return JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: createdAt}]);
+}
 
 const {
   OPERATION_WORKFLOW_OWNER_REASON,
@@ -865,7 +875,8 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
       last_heartbeat: now,
       ready_lease_expires_at: now + 60000,
     };
-    const priorityOperation = {
+    // The repository answers the durable PENDING record it decoded from its row.
+    const priorityOperation = readBackOperationFixture(buildCreatedOperationFixture({
       operationId: 'op-priority-retry-1',
       partitionId: 'replica_operations-p1',
       entityType: 'partition',
@@ -873,10 +884,8 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
       type: OperationType.REPLACE,
       sourceNodeId: 'node-1',
       targetNodeId: 'node-2',
-      status: 'pending',
-      workflowStep: WORKFLOW_STEP.PENDING,
-      stepsHistory: [],
-    };
+      createdAt: now,
+    }));
     const enqueueCalls = [];
     const authoritativeQueryOptions = [];
     const service = createService({
@@ -958,25 +967,25 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
         operationId: 'op-priority-retry-1',
         reason: RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
         context: {
-          row: {
+          row: expectedOperationWakeRow(priorityOperation, {
             operation_id: 'op-priority-retry-1',
             type: OperationType.REPLACE,
             partition_id: 'replica_operations-p1',
-            replica_id: undefined,
+            replica_id: null,
             source_node_id: 'node-1',
             target_node_id: 'node-2',
             status: 'pending',
             workflow_step: WORKFLOW_STEP.PENDING,
-            created_at: undefined,
-            updated_at: undefined,
-            completed_at: undefined,
-            error_message: undefined,
-            steps_history: '[]',
+            created_at: now,
+            updated_at: now,
+            completed_at: null,
+            error_message: null,
+            steps_history: createdHistoryJson(now),
             entity_type: 'partition',
             entity_id: READY_RETRY_PARTITION_ID,
             target_claim_key: null,
             membership_publication_epoch: null,
-          },
+          }),
           readyNodeId: 'node-2',
           readyNodeRow: readyNode,
         },
@@ -1000,7 +1009,10 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
       last_heartbeat: now,
       ready_lease_expires_at: now + TIME_MS.MINUTE,
     };
-    const priorityOperation = {
+    // The repository answers the durable PENDING record, created a minute ago,
+    // it decoded from its row.
+    const createdAt = now - TIME_MS.MINUTE;
+    const priorityOperation = readBackOperationFixture(buildCreatedOperationFixture({
       operationId: READY_RETRY_OWNER_STARTING_OPERATION_ID,
       partitionId: READY_RETRY_PARTITION_ID,
       entityType: 'partition',
@@ -1008,11 +1020,8 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
       type: OperationType.REPLACE,
       sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
       targetNodeId: READY_RETRY_TARGET_NODE_ID,
-      status: READY_RETRY_PENDING_STATUS,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      updatedAt: now - TIME_MS.MINUTE,
-      stepsHistory: [],
-    };
+      createdAt,
+    }));
     const deferredTimers = [];
     const dispatchResults = [
       {
@@ -1157,25 +1166,25 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
         operationId: priorityOperation.operationId,
         reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
         context: {
-          row: {
-            operation_id: priorityOperation.operationId,
+          row: expectedOperationWakeRow(priorityOperation, {
+            operation_id: READY_RETRY_OWNER_STARTING_OPERATION_ID,
             type: OperationType.REPLACE,
             partition_id: READY_RETRY_PARTITION_ID,
-            replica_id: undefined,
+            replica_id: null,
             source_node_id: READY_RETRY_SOURCE_NODE_ID,
             target_node_id: READY_RETRY_TARGET_NODE_ID,
             status: READY_RETRY_PENDING_STATUS,
             workflow_step: WORKFLOW_STEP.PENDING,
-            created_at: undefined,
-            updated_at: priorityOperation.updatedAt,
-            completed_at: undefined,
-            error_message: undefined,
-            steps_history: READY_RETRY_EMPTY_STEPS_HISTORY,
+            created_at: createdAt,
+            updated_at: createdAt,
+            completed_at: null,
+            error_message: null,
+            steps_history: createdHistoryJson(createdAt),
             entity_type: 'partition',
             entity_id: READY_RETRY_PARTITION_ID,
             target_claim_key: null,
             membership_publication_epoch: null,
-          },
+          }),
           deferredRetryProvenance: true,
         },
       }],
