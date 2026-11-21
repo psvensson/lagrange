@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3786403,
-        "sha256": "3b626c926f82a7a5f6777b2e457b16a62cbfbdab14502507dceb48bdc3b24229"
+        "bytes": 3786588,
+        "sha256": "cddb01326f6121af9cf71eb8229e623d24e8437ecf2267fe5f2f1b6ce14cf1d9"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "05ad7879fa9587149105b624facb393d787d95255fb6032a834fcd10b10e7689"
+        "sha256": "e53d667731717edcfd52e99cc0865deecce3042bdb78e0aeae9604bc4aaff4d1"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "ef5b9410a0abce85cae612fd4b7116732114b34385550893aab4f3f08358aba6"
+    "inputDigest": "357e19f5fa858615efcbfc57f44c1fd40ba1a036de2280351509294ddb1fb0ad"
   },
   "reconciliation": {
     "complexity": {
@@ -135,12 +135,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "05ad7879fa9587149105b624facb393d787d95255fb6032a834fcd10b10e7689"
+          "sha256": "e53d667731717edcfd52e99cc0865deecce3042bdb78e0aeae9604bc4aaff4d1"
         },
         "cloneGroups": 603,
-        "duplicatedLines": 21564,
+        "duplicatedLines": 21554,
         "sourceCloneTouches": 1206,
-        "sourceDuplicatedLineTouches": 43128,
+        "sourceDuplicatedLineTouches": 43108,
         "nonzeroSourceCount": 396,
         "touchMultiplicity": 2
       }
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3786403,
-        "sha256": "3b626c926f82a7a5f6777b2e457b16a62cbfbdab14502507dceb48bdc3b24229"
+        "bytes": 3786588,
+        "sha256": "cddb01326f6121af9cf71eb8229e623d24e8437ecf2267fe5f2f1b6ce14cf1d9"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "93043fe6b6e70fd8b98bb6089c779d35bc61ed4b528c4d67601f610726187ba5",
+      "sourceDigest": "04564c5052051fdb648be568f4963a53c09dfae674bb982607f4710129a839be",
       "moduleCount": 6386,
-      "edgeCount": 38166,
+      "edgeCount": 38170,
       "unresolvedCount": 39
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2410,
     "assignedSignalCount": 2410,
     "uniqueAssignmentCount": 2410,
-    "digest": "106fd1402a69aed961f38cd5c8ab57d1c4d4725306755312c255ceeb49ad92c8"
+    "digest": "810a25f65d9d8fae555543d82568f5dc911292b7ceb04d07c5b58ff3bc3d422a"
   },
   "signalCounts": {
     "cognitive": 150,
@@ -417,13 +417,13 @@
       "complexity": 8,
       "cognitive": 0,
       "oversizedFiles": 1,
-      "duplicatedLines": 3717,
+      "duplicatedLines": 3697,
       "cloneTouches": 121,
       "cycleGroups": 0,
       "lintExclusions": 1,
       "importIn": 5,
       "importOut": 422,
-      "score": 418.7,
+      "score": 416.7,
       "topPaths": [
         "test/bootstrap/connect-websocket-phase-mesh-test-cases.js",
         "test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js",
@@ -757,7 +757,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 26,
+      "importIn": 27,
       "importOut": 65,
       "score": 136,
       "topPaths": [
@@ -3749,10 +3749,10 @@
           },
           {
             "path": "test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js",
-            "duplicatedLines": 236,
+            "duplicatedLines": 216,
             "oversizedLines": 0,
             "lintExclusions": 0,
-            "structuralScore": 23.6
+            "structuralScore": 21.6
           },
           {
             "path": "test/bootstrap/node-ready-rebalance-trigger.test.js",
@@ -3777,11 +3777,11 @@
           }
         ],
         "baseline": {
-          "score": 418.7,
+          "score": 416.7,
           "complexity": 8,
           "cognitive": 0,
           "oversizedFiles": 1,
-          "duplicatedLines": 3717,
+          "duplicatedLines": 3697,
           "lintExclusions": 1
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"

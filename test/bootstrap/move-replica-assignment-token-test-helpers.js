@@ -159,13 +159,17 @@ function createCdcIntegrationServiceFixture(rows, options = {}) {
 // subsystem's deletion (an open epic obligation); until then their
 // witnesses drive them directly and read the answer the handoff returned
 // (a typed error's status, code and details, or success).
-async function driveMoveHandoffRegistrationVisibility(api, serviceData) {
+// `beforeVisibilityWait` runs once the services-row write was accepted and
+// before the visibility wait starts (e.g. a witness's clock that lets the
+// wait's deadline pass).
+async function driveMoveHandoffRegistrationVisibility(api, serviceData, options = {}) {
   const registeredServiceRow =
     api.buildRegisteredServiceMutationRow(serviceData);
   try {
     await api.serviceRegistrationHandoffOwner
       .writeRegisteredServiceRowWithRetry(
         serviceData, registeredServiceRow, null);
+    options.beforeVisibilityWait?.();
     await api.waitForRegisteredServiceCacheVisibility(
       api.buildExpectedRegisteredServiceData(registeredServiceRow));
     return {statusCode: 200, body: {success: true}};

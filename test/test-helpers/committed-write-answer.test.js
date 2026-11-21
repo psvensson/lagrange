@@ -2,10 +2,13 @@
 // every answer the helper builds (engine INSERT / UPDATE / DELETE, a settled
 // replay, the real CDC service's insert / upsert / update / delete) is
 // APPLIED by judgeNamedWriteOutcome for its own key and partition, and only
-// for them; the receipt-less shapes the old doubles answered are UNKNOWN; and
-// a named gateway write over the real CDC service and the helper's engine
-// settles. If a producer changes what it answers, this file and the helper
-// move together.
+// for them; the receipt-less shapes the old doubles answered are UNKNOWN; the
+// definite failures it builds (a committed statement failure, a refusal
+// before proposal) are FAILED / NOT_PROPOSED at the engine and as the real
+// CDC service throws them, never UNKNOWN; and a named gateway write over the
+// real CDC service and the helper's engine settles, or - definitely failed -
+// is thrown as not applied and holds nothing. If a producer changes what it
+// answers, this file and the helper move together.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {INITIAL_PARTITION_IDS} from
@@ -19,6 +22,8 @@ import {NAMED_WRITE_ATTEMPT, judgeNamedWriteOutcome} from
   '../../src/control-plane/control-plane-named-write-outcome.js';
 import {
   controlPlaneWriteIdentity,
+  isControlPlaneWriteDefinitivelyUnappliedError,
+  isControlPlaneWriteOutcomeUnknown,
   releaseControlPlaneWriteIdentity,
 } from '../../src/control-plane/control-plane-write-identity.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -31,6 +36,16 @@ const KEY = 'committed-write-answer-pin-key';
 const OTHER_KEY = 'committed-write-answer-pin-other-key';
 const NODES_PARTITION = INITIAL_PARTITION_IDS[TABLES.NODES];
 const ENDPOINTS_PARTITION = INITIAL_PARTITION_IDS[TABLES.NODE_ENDPOINTS];
+const ENDPOINT_ROW_EXISTS = Object.freeze({failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+  failureMessage: 'UNIQUE constraint failed: node_endpoints.endpoint_id'});
+const RECONNECT_INTERVAL_MS = 1;
+// [label, effect, the real judge's verdict, the retry-after the CDC error carries]
+const DEFINITE_FAILURES = [
+  ['committed statement failure', {statementFailure: ENDPOINT_ROW_EXISTS},
+    NAMED_WRITE_ATTEMPT.FAILED, undefined],
+  ['refusal before proposal', {notLeader: true, leaderReconnectIntervalMs: RECONNECT_INTERVAL_MS},
+    NAMED_WRITE_ATTEMPT.NOT_PROPOSED, RECONNECT_INTERVAL_MS],
+];
 
 function attempt(partitionId, key = KEY) {
   return {key, partitionId, unresolved: false};
@@ -104,6 +119,34 @@ test('the receipt-less shapes the old doubles answered are UNKNOWN', () => {
   }
 });
 
+test('definite failures built by the producers are FAILED or NOT_PROPOSED, never UNKNOWN',
+  async () => {
+    const statements = [
+      ['INSERT', 'INSERT INTO node_endpoints (endpoint_id, node_id) VALUES (?, ?)',
+        ['ep-1', 'pin-node']],
+      ['UPDATE', 'UPDATE node_endpoints SET address = ? WHERE endpoint_id = ?',
+        ['ws://pin:9', 'ep-1']],
+    ];
+    for (const [label, effect, verdict, retryAfterMs] of DEFINITE_FAILURES) {
+      for (const [statement, sql, params] of statements) {
+        const answer = await engineCommittedWriteAnswer(sql, params, {idempotencyKey: KEY}, effect);
+        assert.equal(answer.success, false, `${label}, engine ${statement}: not applied`);
+        assert.equal(judgeNamedWriteOutcome(answer, attempt(ENDPOINTS_PARTITION)), verdict,
+          `${label}, engine ${statement}: ${verdict} for its own key and partition`);
+        assert.equal(judgeNamedWriteOutcome(answer, attempt('another-p1')),
+          NAMED_WRITE_ATTEMPT.UNKNOWN, `${label}, engine ${statement}: not for another partition`);
+      }
+      const thrown = await cdcCommittedWriteAnswer('upsertSystemTableRow',
+        [TABLES.NODE_ENDPOINTS, endpointRow(), {idempotencyKey: KEY}], effect)
+        .then(() => null, (error) => error);
+      assert.ok(thrown instanceof Error, `${label}: the real CDC service throws it`);
+      assert.equal(judgeNamedWriteOutcome(thrown, attempt(ENDPOINTS_PARTITION)), verdict,
+        `${label}: the CDC service's thrown failure is ${verdict}`);
+      assert.equal(thrown.retryAfterMs, retryAfterMs,
+        `${label}: the retry-after the delivery derived travels to the caller`);
+    }
+  });
+
 test('a named gateway write over the real CDC service and the helper engine settles',
   async () => {
     ConfigurationManager.resetInstance();
@@ -135,6 +178,51 @@ test('a named gateway write over the real CDC service and the helper engine sett
     } finally {
       releaseControlPlaneWriteIdentity(name);
       cdc.markShuttingDown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('a definitely failed named gateway write is thrown as not applied and holds nothing',
+  async () => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'fatal'});
+    try {
+      for (const [label, effect] of DEFINITE_FAILURES) {
+        const deliveries = [];
+        const engine = {
+          async executeQuery(sql, params, options) {
+            deliveries.push(params);
+            return engineCommittedWriteAnswer(sql, params, options, effect);
+          },
+        };
+        const cdc = new CDCIntegrationService({nodeId: 'pin-node', sqlQueryEngine: engine});
+        cdc.initialize();
+        const gateway = new ControlPlaneSystemTableGateway({nodeId: 'pin-node',
+          cdcIntegrationService: cdc});
+        const name = controlPlaneWriteIdentity('committed-write-answer-pin', 'failure', label);
+        try {
+          for (const address of ['ws://pin:1', 'ws://pin:2']) {
+            const from = deliveries.length;
+            const thrown = await gateway.insertSystemTableRow(TABLES.NODE_ENDPOINTS,
+              endpointRow(address), {writeIdentity: name, queryTimeoutMs: 2000})
+              .then(() => null, (error) => error);
+            assert.equal(isControlPlaneWriteDefinitivelyUnappliedError(thrown), true,
+              `${label}, ${address}: thrown as definitely not applied`);
+            assert.equal(isControlPlaneWriteOutcomeUnknown(thrown), false,
+              `${label}, ${address}: never the named unknown`);
+            const own = deliveries.slice(from);
+            assert.ok(own.length > 0 && own.every((params) => params.includes(address)),
+              `${label}, ${address}: only its own content was delivered (nothing held)`);
+          }
+        } finally {
+          releaseControlPlaneWriteIdentity(name);
+          cdc.markShuttingDown();
+        }
+      }
+    } finally {
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
     }

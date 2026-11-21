@@ -57,12 +57,14 @@ function buildNodeRow(overrides = {}) {
   };
 }
 
-// Without an explicit result, an upsert answers what the CDC integration
-// service answers for a committed one-row write (the producer's receipt).
-function createMockCdc(result = null) {
+// An upsert answers what the CDC integration service answers for the write:
+// by default a committed one-row write (the producer's receipt); with a
+// definite failure effect, the error the CDC service throws for it
+// (committed-write-answer.js).
+function createMockCdc(effect = {}) {
   return {
-    upsertSystemTableRow: async (...args) => result ??
-      cdcCommittedWriteAnswer('upsertSystemTableRow', args),
+    upsertSystemTableRow: async (...args) =>
+      cdcCommittedWriteAnswer('upsertSystemTableRow', args, effect),
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
@@ -384,7 +386,12 @@ test('registerNodeBudget - forwards write options to the registration ' +
 
 test('registerNodeBudget - throws on upsert failure', async (t) => {
   setup({node: {storageBudgetBytes: 50 * NUM.BYTES_PER_GIB}});
-  const mockCdc = createMockCdc({success: false, error: 'write failed'});
+  // A definite write failure: the registration's committed statement failed
+  // on its partition, and the CDC service throws that failure.
+  const mockCdc = createMockCdc({statementFailure: {
+    failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+    failureMessage: 'UNIQUE constraint failed: nodes.node_id',
+  }});
   const service = new NodeStorageBudgetService({
     nodeId: TEST_NODE_ID,
     cdcIntegrationService: mockCdc,
@@ -396,7 +403,7 @@ test('registerNodeBudget - throws on upsert failure', async (t) => {
 
   await assert.rejects(
     () => service.registerNodeBudget(lifecycleRegistration()),
-    {message: 'write failed'},
+    {message: 'Distributed operation failed due to participant failures'},
   );
   teardown();
   t.end();

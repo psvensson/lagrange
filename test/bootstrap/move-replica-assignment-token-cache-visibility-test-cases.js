@@ -14,6 +14,25 @@ import {
   initializeTestEnvironment,
 } from './move-replica-assignment-token-test-helpers.js';
 
+const CLOCK_STEP_MS = 10000;
+
+// The visibility wait's deadline passes: every clock reading from here on is
+// 10 s after the previous one. Installed once the services-row write was
+// accepted (driveMoveHandoffRegistrationVisibility's beforeVisibilityWait):
+// since 160bf0e6c that write has its own bounded wait on the same clock,
+// which a clock that jumps on every reading would spend before delivery.
+function letVisibilityWaitDeadlinePass(t) {
+  const originalDateNow = Date.now;
+  let fakeNow = 0;
+  Date.now = () => {
+    fakeNow += CLOCK_STEP_MS;
+    return fakeNow;
+  };
+  t.teardown(() => {
+    Date.now = originalDateNow;
+  });
+}
+
 
 test('MOVE handoff registration (refused at register-service; driven directly) emits retryable cache visibility timeout response',
   async (t) => {
@@ -67,16 +86,6 @@ test('MOVE handoff registration (refused at register-service; driven directly) e
       await api.shutdown();
     });
 
-    const originalDateNow = Date.now;
-    let fakeNow = 0;
-    Date.now = () => {
-      fakeNow += 10000;
-      return fakeNow;
-    };
-    t.teardown(() => {
-      Date.now = originalDateNow;
-    });
-
     const response = await driveMoveHandoffRegistrationVisibility(api, {
       service_id: 'mg-2-r1',
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
@@ -86,7 +95,7 @@ test('MOVE handoff registration (refused at register-service; driven directly) e
       raft_role: RAFT_ROLE.FOLLOWER,
       status: SERVICE_STATUS.ACTIVE,
       address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
-    });
+    }, {beforeVisibilityWait: () => letVisibilityWaitDeadlinePass(t)});
 
     t.equal(
       response.statusCode,
@@ -420,16 +429,6 @@ test('MOVE handoff registration (refused at register-service; driven directly) t
     await api.shutdown();
   });
 
-  const originalDateNow = Date.now;
-  let fakeNow = 0;
-  Date.now = () => {
-    fakeNow += 10000;
-    return fakeNow;
-  };
-  t.teardown(() => {
-    Date.now = originalDateNow;
-  });
-
   const response = await driveMoveHandoffRegistrationVisibility(api, {
     service_id: 'mg-2-r1',
     service_type: SERVICE_TYPE.MESSAGE_GROUP,
@@ -439,7 +438,7 @@ test('MOVE handoff registration (refused at register-service; driven directly) t
     raft_role: RAFT_ROLE.FOLLOWER,
     status: SERVICE_STATUS.ACTIVE,
     address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
-  });
+  }, {beforeVisibilityWait: () => letVisibilityWaitDeadlinePass(t)});
 
   t.equal(response.statusCode, 503, 'cache mismatch timeout should remain retryable');
   const responseBody = response.body;

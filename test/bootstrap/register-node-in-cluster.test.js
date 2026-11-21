@@ -37,6 +37,17 @@ const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
   durableMembershipState: 'present',
   peerProofState: 'not_required',
 });
+const MAX_CAUSE_CHAIN = 8;
+
+// An error and the errors it carries as its cause, outermost first.
+function causeChainOf(error) {
+  const chain = [];
+  for (let link = error; link instanceof Error && chain.length < MAX_CAUSE_CHAIN;
+    link = link.cause) {
+    chain.push(link);
+  }
+  return chain;
+}
 
 test('registerNodeInCluster() - should create the canonical nodes row and upsert endpoints',
   async (t) => {
@@ -420,6 +431,17 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
           engineCommittedWriteAnswer(sql, params, options);
       },
     };
+    // Since 7d261f681 the join phase scope is decided at the join-admission
+    // gateway (its startup SQL phase gate) and is not forwarded to the
+    // engine: observe the writes that gateway receives.
+    const joinGateway = service.querySystemStatePhase.nodeRegistrationOwner
+      .getJoinAdmissionControlPlaneSystemTableGateway();
+    const gatewayWrites = [];
+    const submitMutation = joinGateway.submitMutation.bind(joinGateway);
+    joinGateway.submitMutation = (mutation, options = {}) => {
+      gatewayWrites.push({tableName: mutation?.tableName, phaseScope: options.phaseScope ?? null});
+      return submitMutation(mutation, options);
+    };
     service.seedJoinTimeCacheRow = () => {};
     service.sendControlPlaneNodeStateUpdate = async () => {
       throw new Error('legacy node-state owner path should not be used');
@@ -445,14 +467,15 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
 
     t.ok(queryCalls.length > 0,
       'join admission should route through the startup SQL fallback when CDC mutation helpers are unavailable');
+    const engineWrites = queryCalls.filter((call) => !/^\s*SELECT\b/iu.test(call.sql));
     t.ok(
-      queryCalls.every((call) =>
-        call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
-      ),
-      'join-phase SQL fallback should carry explicit join phase scope ' +
-        `(calls without it: ${JSON.stringify(queryCalls
-          .filter((call) => call.options?.phaseScope !== CONTROL_PLANE_PHASE_SCOPE.JOIN)
-          .map((call) => [String(call.sql).slice(0, 60), call.options?.phaseScope ?? null]))})`,
+      gatewayWrites.length === engineWrites.length &&
+        gatewayWrites.every((write) => write.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN) &&
+        joinGateway.startupSqlMutationPhase === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+      'join-phase SQL writes carry explicit join phase scope to the join-admission ' +
+        'gateway, whose join phase gate admits exactly them to the engine ' +
+        `(gateway writes: ${JSON.stringify(gatewayWrites)}; ` +
+        `engine writes: ${engineWrites.length})`,
     );
     t.ok(
       queryCalls.every((call) => !('skipCacheWait' in (call.options ?? {}))),
@@ -658,11 +681,16 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
 test('registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication',
   async (t) => {
     const upsertCalls = [];
-    const participantFailure = new Error(
-      'Distributed operation failed due to participant failures',
-    );
-    participantFailure.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
-    participantFailure.retryAfterMs = 250;
+    // The seed restarting under the joiner's NODES birth: its partition
+    // replica refuses the write before proposal (not the leader) while the
+    // joiner's router reconnects to it every 250 ms; the real CDC service
+    // throws that definite participant failure (committed-write-answer.js).
+    const seedRestart = {notLeader: true, leaderReconnectIntervalMs: 250};
+    let producerFailure = null;
+    // The original owner-path failure: what the registration's NODES write
+    // through its control-plane gateway threw (since 160bf0e6c that write's
+    // own error, carrying the producer's failure as its cause).
+    let participantFailure = null;
 
     const service = new NodeJoiningService({
       hostId: LOCAL_MACHINE_HOST_ID,
@@ -679,12 +707,29 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
         return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async (tableName, rowData, options) => {
+        const args = [tableName, rowData, options];
         if (tableName === TABLES.NODES) {
-          throw participantFailure;
+          try {
+            return await cdcCommittedWriteAnswer('upsertSystemTableRow', args, seedRestart);
+          } catch (error) {
+            producerFailure = error;
+            throw error;
+          }
         }
         upsertCalls.push({tableName, rowData});
-        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', args);
       },
+    };
+    const registrationGateway = service.querySystemStatePhase.nodeRegistrationOwner
+      .getMembershipPublicationRuntimeOwner().getControlPlaneSystemTableGateway();
+    const insertSystemTableRow = registrationGateway.insertSystemTableRow.bind(registrationGateway);
+    registrationGateway.insertSystemTableRow = async (tableName, ...rest) => {
+      try {
+        return await insertSystemTableRow(tableName, ...rest);
+      } catch (error) {
+        if (tableName === TABLES.NODES) participantFailure = error;
+        throw error;
+      }
     };
     service.getNodeStorageBudgetService = () => ({
       resolveBudgetRow: (nodeRow) => ({
@@ -721,6 +766,10 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       error?.cause,
       participantFailure,
       'join registration should retain the original owner-path failure as cause',
+    );
+    t.ok(
+      producerFailure !== null && causeChainOf(participantFailure).includes(producerFailure),
+      'the owner-path failure retains the producer\'s own participant failure',
     );
     t.equal(
       service.getRegisteredJoinNodeId(),
