@@ -28,7 +28,7 @@
   "censusSize": 2721,
   "digest": "fnv1a32-d082e541",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-14c1fe33",
+  "observationDigest": "fnv1a32-8a70d31d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14766,6 +14766,7 @@
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -14826,9 +14827,11 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "test/partition/placement-retained-leadership-fixture.js",
         "test/partition/placement-retained-witness-support.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -14858,6 +14861,7 @@
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "test/partition/placement-retained-leadership-fixture.js",
         "test/partition/placement-retained-witness-support.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",

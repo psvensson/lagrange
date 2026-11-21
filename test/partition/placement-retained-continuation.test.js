@@ -21,9 +21,9 @@ import {clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipant
   settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 import {NODE, placementStatement} from './placement-admission-fixture.js';
 import {stepRetainedLedgerRow, withRepairLedger} from './placement-retained-row-repair-fixture.js';
-import {READ_FAULT, admitCompetitor, advanceContinuation, bounded, controlOwnerReads, idleRepairs,
-  installVirtualClock, ledgerRow, remoteSender, repairCommands, repairMessages,
-  retainMissingOperation} from './placement-retained-witness-support.js';
+import {READ_FAULT, admitCompetitor, advanceContinuation, bounded, captureRepairLogs,
+  controlOwnerReads, idleRepairs, installVirtualClock, ledgerRow, remoteSender, repairCommands,
+  repairMessages, retainMissingOperation} from './placement-retained-witness-support.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -715,5 +715,146 @@ test('a definite native refusal of the pinned entry retires the record, visibly,
         'a fresh record presents a fresh entry, never the definitely refused one');
     } finally {
       repository.logger.error = logError;
+    }
+  }));
+
+// ---- Corrective round (transition record section 18): one window model.
+
+function backpressureAnswer(world) {
+  return {success: false, partitionId: world.leader.partitionId,
+    failureCode: WRITE_REFUSAL.BACKPRESSURE};
+}
+
+test('F2 a presentation that keeps failing after qualified reads is bounded: one window, one report, zero proposals, obligation kept', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const repository = world.coordinator.repository;
+    const clock = installVirtualClock(repository);
+    const logs = captureRepairLogs(repository, retained.operationId);
+    const reads = controlOwnerReads(repository);
+    const native = repository.repairRetainedPlacement;
+    const presented = [];
+    let refusing = true;
+    repository.repairRetainedPlacement = async (payload) => {
+      presented.push(payload);
+      return refusing ? backpressureAnswer(world) : native(payload);
+    };
+    try {
+      assert.equal(await bounded(repository.repairRetainedOperation(retained), 'backpressure'),
+        false);
+      const identity = identityOf(repository, retained.operationId);
+      const turns = await advanceContinuation(clock, [repository],
+        () => clock.pendingTimerCount() === 0, PERMANENT_FAILURE_TURNS);
+      assert.equal(repairCommands(world).length, 0, 'a refused presentation proposes nothing');
+      assert.deepEqual(identityOf(repository, retained.operationId), identity,
+        'the obligation and its exact entry are kept');
+      assert.equal(clock.pendingTimerCount(), 0,
+        'a presentation that keeps failing after qualified reads reaches the bounded stop ' +
+        `(still armed after ${turns} continuation turns, ${reads.attempted} qualified reads ` +
+        `and ${presented.length} presentations)`);
+      const attempt = repository.retainedPlacementRepairs.get(retained.operationId);
+      assert.equal(attempt.continuation.state, 'spent', 'the named bounded outcome');
+      assert.equal(attempt.waiting?.state, 'bound_spent', 'visible on the record');
+      assert.equal(logs.spentReports().length, 1, 'exactly one bound-spent report');
+      for (const payload of presented) {
+        assert.equal(payload.entryId, identity.entryId, 'only the exact entry is presented');
+      }
+      // A spent bound never disables the obligation.
+      refusing = false;
+      assert.equal(await bounded(repository.ensureRetainedOperationRow(retained), 'later caller'),
+        true);
+      assertRestoredOnce(world, retained, 'after the bounded stop');
+      assert.equal(repairCommands(world).length, 1, 'exactly one committed effect');
+      assert.equal(clock.pendingTimerCount(), 0);
+    } finally {
+      repository.repairRetainedPlacement = native;
+      reads.restore();
+      logs.restore();
+    }
+  }));
+
+test('F4 a window left by an earlier episode does not spend a later independent failure: it gets its own bounded retries', () =>
+  withRepairLedger(async (world) => {
+    const {retained, competitorId, repository, proposals} = await retainBusy(world);
+    const clock = installVirtualClock(repository);
+    const logs = captureRepairLogs(repository, retained.operationId);
+    const reads = controlOwnerReads(repository);
+    // Read 1 fails transiently; read 2 is an incomplete answer (a typed
+    // refusal, woken by a row or binding change, not by the timer); read 3,
+    // long after that episode, fails transiently again; later reads serve.
+    const plan = [READ_FAULT.THROW, (answer) => ({...answer, partial: true}), READ_FAULT.THROW];
+    reads.fault = (ordinal) => plan[ordinal - 1] ?? null;
+    try {
+      assert.equal(await bounded(repository.ensureRetainedOperationRow(retained), 'caller'), false);
+      assert.equal(clock.pendingTimerCount(), 1, 'the transient failure armed the continuation');
+      await advanceContinuation(clock, [repository], () => reads.attempted >= 2);
+      assert.equal(reads.attempted, 2, 'the continuation read once more');
+      assert.equal(clock.pendingTimerCount(), 0, 'a typed refusal arms no timer');
+      // Long after that episode's window, with no event in between.
+      clock.advance(PERMANENT_FAILURE_TURNS * 1000);
+      await idleRepairs(repository);
+      assert.equal(reads.attempted, 2, 'nothing ran in between');
+      // An independent later episode: the real release of the blocker, whose
+      // read fails transiently.
+      await bounded(stepRetainedLedgerRow(world, competitorId, WORKFLOW_STEP.FAILED), 'the release');
+      await idleRepairs(repository);
+      assert.equal(reads.attempted, 3, 'the release hint attempted one qualified read');
+      assert.equal(logs.spentReports().length, 0,
+        'a later independent transient failure is not spent at once by an earlier window');
+      assert.equal(clock.pendingTimerCount(), 1, 'it opens its own bounded window: it is retried');
+      await advanceContinuation(clock, [repository],
+        () => repository.retainedPlacementRepairs.size === 0);
+      assertRestoredOnce(world, retained, 'after the provider recovered');
+      assert.equal(repairCommands(world).length, proposals + 1,
+        'the release completes the original repair exactly once');
+      assert.equal(clock.pendingTimerCount(), 0);
+    } finally {
+      reads.restore();
+      logs.restore();
+    }
+  }));
+
+test('T1 one obligation has one continuation owner: an uncommitted answer carrying custody arms only the custodian', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const receiver = world.coordinator.repository;
+    const receiverClock = installVirtualClock(receiver);
+    const native = receiver.repairRetainedPlacement;
+    const presented = [];
+    receiver.repairRetainedPlacement = async (payload) => {
+      presented.push(payload);
+      return presented.length === 1 ? backpressureAnswer(world) : native(payload);
+    };
+    const remote = remoteSender(world);
+    const sender = remote.repository;
+    const senderClock = installVirtualClock(sender);
+    const owners = () => `receiver ${receiverClock.pendingTimerCount()}, ` +
+      `sender ${senderClock.pendingTimerCount()}`;
+    try {
+      assert.equal(await bounded(sender.repairRetainedOperation(retained),
+        'backpressure at the receiver'), false);
+      const attempt = sender.retainedPlacementRepairs.get(retained.operationId);
+      assert.equal(attempt.custody.state, 'delegated',
+        'the receiver attested custody of the exact uncommitted entry');
+      assert.equal(repairCommands(world).length, 0, 'an uncommitted answer proposes nothing');
+      assert.equal(receiverClock.pendingTimerCount() + senderClock.pendingTimerCount(), 1,
+        `exactly one continuation owns the obligation (${owners()})`);
+      assert.equal(receiverClock.pendingTimerCount(), 1, 'the custodian owns it');
+      await advanceContinuation(receiverClock, [receiver, sender],
+        () => ledgerRow(world, retained.operationId) !== undefined);
+      assertRestoredOnce(world, retained, 'the custodian re-presented the exact entry');
+      assert.equal(repairCommands(world).length, 1, 'exactly one committed effect');
+      assert.equal(presented[1].entryId, presented[0].entryId, 'the exact entry');
+      assert.equal(senderClock.pendingTimerCount(), 0,
+        `the delegated sender never owned a second continuation (${owners()})`);
+      // The committed own row reaches the sender through its cache.
+      remote.publish('replica_operations', ledgerRow(world, retained.operationId));
+      await idleRepairs(sender, receiver);
+      assert.equal(sender.retainedPlacementRepairs.size, 0, 'the committed own row settles the sender');
+      assert.equal(receiver.retainedPlacementRepairs.size, 0);
+      assert.equal(receiverClock.pendingTimerCount() + senderClock.pendingTimerCount(), 0);
+    } finally {
+      receiver.repairRetainedPlacement = native;
+      await remote.coordinator.shutdown();
     }
   }));

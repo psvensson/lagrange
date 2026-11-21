@@ -11,6 +11,64 @@ import {withRepairLedger} from './placement-retained-row-repair-fixture.js';
 import {resumeFixtureParticipantAdmission, send, settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {CDCEvent, CDCHandler} from '../../src/message-group/cdc-handler.js';
+import {createLifecycleCdcService, createLifecycleStateStore} from
+  '../test-helpers/lifecycle-state-store.js';
+
+const LEDGER_PARTITION = 'replica_operations-p1';
+const PUBLICATION_TURNS = 200;
+
+// The REAL partition leadership publishers (applyReplicaLeadership ->
+// queueRoleUpdate / queueLeaderNodeUpdate) write one durable control-plane
+// store shared by both ledger replicas. An applied write reaches every
+// coordinator cache only as a CDC event, never written into a cache directly.
+// `hold()` models the deferred CDC channel: applied writes stay undelivered
+// until `release()` delivers them in order.
+function attachRealPublication(nodes) {
+  const handlers = nodes.map((node) => new CDCHandler(node.coordinator.systemTableCache));
+  const emitted = [];
+  const held = [];
+  let holding = false;
+  let hlc = Date.now();
+  const deliver = (change) => {
+    hlc += 1;
+    for (const handler of handlers) {
+      handler.applyImmediate(new CDCEvent(change.tableName, change.operation, {...change.data},
+        `${hlc}-0-cdc`), {skipSubscriptionCheck: true});
+    }
+  };
+  const delivery = {applySystemTableChange(tableName, operation, data) {
+    const change = {tableName, operation, data: {...data}};
+    emitted.push(change);
+    if (holding) held.push(change);
+    else deliver(change);
+  }};
+  const seed = nodes[0].coordinator.systemTableCache;
+  const store = createLifecycleStateStore({services: seed.getAll('services'),
+    partitions: seed.getAll('partitions')});
+  for (const node of nodes) {
+    const cdc = createLifecycleCdcService({store, projectionCache: delivery});
+    cdc.canWriteSystemTableLocally = () => true;
+    node.leader.cdcIntegrationService = cdc;
+  }
+  return {emitted,
+    hold() {
+      holding = true;
+    },
+    release() {
+      holding = false;
+      for (const change of held.splice(0)) deliver(change);
+    }};
+}
+
+async function publishedLeader(nodes, next) {
+  for (let turn = 0; turn < PUBLICATION_TURNS; turn += 1) {
+    if (nodes.every((node) => node.coordinator.systemTableCache.get('partitions',
+      LEDGER_PARTITION)?.leader_node_id === next.leader.nodeId)) return;
+    await settleTicks();
+  }
+  assert.fail(`the real publisher's leader ${next.leader.nodeId} reaches every cache through CDC`);
+}
 
 async function withRetainedLeadershipPair(measure, {initialEndpoints} = {}) {
   await withRepairLedger(async (a) => withRepairLedger(async (b) => {
@@ -133,4 +191,4 @@ async function withRetainedLeadershipPair(measure, {initialEndpoints} = {}) {
   {nodeId: 'node-a', serviceNodeId: 'node-a', replicaId: 'replica_operations-p1-a', partitionRows: [], releaseAdmission: false});
 }
 
-export {withRetainedLeadershipPair};
+export {attachRealPublication, publishedLeader, withRetainedLeadershipPair};
