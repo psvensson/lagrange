@@ -7,20 +7,27 @@
 // The connection owner is the router's close handling: every closed non-self
 // peer connection with a remembered address schedules reconnect attempts
 // (message-router-connection-close-reconnect.js handleConnectionClose ->
-// scheduleReconnect). Measured on d6cfa14ab and f0892b478 (lab
-// raftframes-s2e-before-r1/-r2): the dialing end was still scheduling after
-// 20 virtual minutes (attempt 9, 118 refused dials), and the adopted end's
-// record carries no reconnectAttempts, so its schedule is NaN and it re-dials
-// on every turn (240001 refused dials in 20 minutes at a 5 ms step) - a
-// transport defect recorded for its owner, not repaired here. Two cases, raft
-// traffic flowing both ways all the time:
+// scheduleReconnect), from both ends; the existing simultaneous-dial
+// resolution keeps one connection. The declared schedule waits
+// reconnectIntervalMs x reconnectBackoffMultiplier^(n-1) before attempt n for
+// the first reconnectMaxAttempts attempts (1 s x 1.5, 10 attempts, about
+// 113 s). Before (e) a raft envelope to a disconnected node also dialed; after
+// (e) nothing else does, so for a pair that exchanges only raft the schedule
+// is the whole reconnect owner. Two cases, raft traffic both ways all the
+// time:
 //   1. a short outage: both ends schedule their reconnect and it restores the
 //      link - no raft frame is needed (green before and after (e));
-//   2. a 20-minute outage: the link comes back after the heal only if some
-//      owner still dials. Before (e) a raft frame on the fallback path could;
-//      the contract asks that the link come back after (e) too, and that both
-//      ends were still dialing during the outage. If it does not, (e) changed
-//      this outcome and the line stops on it.
+//   2. an outage that outlasts the bounded part of the schedule (the original
+//      clause of this witness, restored: 5e5f5ffa8 had weakened it to "more
+//      than zero dials each", which the first ten attempts satisfy): both ends
+//      keep dialing for the whole outage at the schedule's capped cadence
+//      (never faster), and once the network heals the link returns within one
+//      capped delay and raft traffic alone resumes both ways - no other
+//      traffic, no restart. Measured before the reconnect owner (lab
+//      raftframes-s2e-before-r2, f0892b478): the dialing end stopped after its
+//      schedule and the link returned only through defect F-2 (the adopted
+//      end re-dialing every turn, 240001 refused dials in 20 minutes); with
+//      F-2 merely bounded neither end ever dials again (record section 19).
 //
 // Real: two MessageRouters on their nodes' network clocks (keepalive,
 // reconnect schedule and delivery lifetimes on virtual time). Substituted:
@@ -43,6 +50,9 @@ const STEP_MS = 5;
 const SHORT_OUTAGE_MS = 3000;
 const LONG_OUTAGE_MS = 1200000;
 const RESTORE_BOUND_MS = 60000;
+// Scheduling slack per measured instant: the drive step, the link and the
+// refused dial's own turn.
+const SLACK_MS = 1000;
 // Up to three minutes of virtual time on a shared, slow lab host.
 const WITNESS_TIMEOUT_MS = 300000;
 
@@ -88,6 +98,32 @@ function reconnectState(world) {
   }));
 }
 
+// The declared schedule, from the router's own parameters: the delays of its
+// bounded attempts, their span, and the last of them (the capped cadence).
+function declaredSchedule(router) {
+  const delays = Array.from({length: router.reconnectMaxAttempts}, (_, index) =>
+    router.reconnectIntervalMs * router.reconnectBackoffMultiplier ** index);
+  return {intervalMs: router.reconnectIntervalMs, attempts: delays.length,
+    boundedSpanMs: delays.reduce((sum, delay) => sum + delay, 0),
+    capMs: delays[delays.length - 1]};
+}
+
+// The most dials the capped schedule permits within `spanMs`.
+function dialsPermittedWithin(schedule, spanMs) {
+  return schedule.attempts + Math.max(0,
+    Math.floor((spanMs - schedule.boundedSpanMs) / schedule.capMs)) + 1;
+}
+
+// Each end's refused dials, as instants after the sever (an end's dials are
+// the refused dials to the other node).
+function dialInstantsByEnd(world, severedAt) {
+  return Object.fromEntries(NODES.map((nodeId) => {
+    const peer = NODES.find((other) => other !== nodeId);
+    return [nodeId, world.refusedDials.filter((dial) => dial.to === peer)
+      .map((dial) => dial.atMs - severedAt)];
+  }));
+}
+
 async function outageThenHeal({world, received}, outageMs) {
   world.blackout(NODES);
   world.severLink(NODE_A, NODE_B);
@@ -99,6 +135,13 @@ async function outageThenHeal({world, received}, outageMs) {
   const outageLastedMs = world.network.now() - severedAt;
   const refusedDialsByTarget = world.refusedDials.reduce((counts, dial) =>
     ({...counts, [dial.to]: (counts[dial.to] ?? 0) + 1}), {});
+  const dialInstants = dialInstantsByEnd(world, severedAt);
+  const dialsByEnd = Object.fromEntries(NODES.map((nodeId) => {
+    const instants = dialInstants[nodeId];
+    return [nodeId, {count: instants.length, first: instants.slice(0, 12),
+      lastBeforeHealAgoMs: instants.length === 0 ? null :
+        outageLastedMs - instants[instants.length - 1]}];
+  }));
   const dialsBeforeHeal = world.dials.length;
   world.heal();
   const healedAt = world.network.now();
@@ -112,7 +155,8 @@ async function outageThenHeal({world, received}, outageMs) {
     await world.driveFor(STEP_MS, STEP_MS);
   }
   await world.driveFor(RAFT_SEND_EVERY_MS * 4, STEP_MS);
-  return {afterSever, atHeal, outageLastedMs, refusedDialsByTarget, restoredAfterMs,
+  return {afterSever, atHeal, outageLastedMs, refusedDialsByTarget, dialsByEnd,
+    restoredAfterMs,
     dialsAfterHeal: world.dials.slice(dialsBeforeHeal),
     raftReceivedAfterHeal: Object.fromEntries(NODES.map((nodeId) =>
       [nodeId, received[nodeId] - receivedAtHeal[nodeId]]))};
@@ -137,21 +181,36 @@ test('C13: a short outage is repaired by the routers\' own reconnect ' +
   }
 });
 
-test('C13: after a 20-minute outage the link comes back once the network ' +
-  'heals, and both ends were still dialing', {timeout: WITNESS_TIMEOUT_MS},
-async () => {
+test('C13: after an outage that outlasts the bounded reconnect schedule, both ' +
+  'ends keep dialing at the capped cadence and raft alone resumes after the heal',
+{timeout: WITNESS_TIMEOUT_MS}, async (t) => {
   const traffic = await trafficWorld();
   try {
+    const schedule = declaredSchedule(traffic.world.router(NODE_A));
     const measured = await outageThenHeal(traffic, LONG_OUTAGE_MS);
-    const report = `measured ${JSON.stringify(measured)} sendErrors ${
-      JSON.stringify(traffic.sendErrors)}`;
-    // Who dialed during the outage: both ends' connection owners.
-    assert.ok(NODES.every((nodeId) => (measured.refusedDialsByTarget[nodeId] ?? 0) > 0),
-      `both ends kept dialing through the outage: ${report}`);
-    assert.ok(measured.restoredAfterMs !== null,
-      `the link came back within ${RESTORE_BOUND_MS} ms of the heal: ${report}`);
+    const permitted = dialsPermittedWithin(schedule, measured.outageLastedMs);
+    const report = `schedule ${JSON.stringify({...schedule, permitted})} measured ${
+      JSON.stringify(measured)} sendErrors ${JSON.stringify(traffic.sendErrors.length)}`;
+    t.diagnostic(report);
+    // Anti-vacuity: the heal arrives later than the bounded part of the
+    // schedule, by more than one capped delay.
+    assert.ok(measured.outageLastedMs > schedule.boundedSpanMs + schedule.capMs,
+      `the outage outlasted the bounded schedule: ${report}`);
+    // Both ends keep trying for the whole outage: each dialed within one
+    // capped delay of the heal.
+    assert.ok(NODES.every((nodeId) => {
+      const ago = measured.dialsByEnd[nodeId].lastBeforeHealAgoMs;
+      return ago !== null && ago <= schedule.capMs + SLACK_MS;
+    }), `both ends kept dialing until the heal: ${report}`);
+    // At the schedule's cadence, never faster: no dial storm.
+    assert.ok(NODES.every((nodeId) =>
+      measured.dialsByEnd[nodeId].count <= permitted),
+    `neither end dialed more often than the capped schedule permits: ${report}`);
+    assert.ok(measured.restoredAfterMs !== null &&
+      measured.restoredAfterMs <= schedule.capMs + SLACK_MS,
+    `the link came back within one capped delay of the heal: ${report}`);
     assert.ok(Object.values(measured.raftReceivedAfterHeal).every((count) => count > 0),
-      `raft flows both ways again: ${report}`);
+      `raft traffic alone flows both ways again: ${report}`);
   } finally {
     traffic.stop();
     await traffic.world.end();
