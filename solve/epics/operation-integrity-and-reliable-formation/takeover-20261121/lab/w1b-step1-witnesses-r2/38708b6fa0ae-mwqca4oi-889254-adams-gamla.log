@@ -1,0 +1,60 @@
+placement-shell=1538156
+placement-head=38708b6fa0ae54f04c1c5f8c516154bd2c482844
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=1538614
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=3
+thermal: ok cpu 45C (coretemp/Package id 0) nvme unmeasured
+not ok test/partition/placement-outcome-format.test.js (3 assertions, 6600ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+{"level":50,"time":"2026-11-21T11:43:48.199Z","nodeId":"test-node","pid":1538635,"subsystem":"partition","partitionId":"replica_operations-p1","error":"NOT NULL constraint failed: replica_operations.type","sql":"UPDATE replica_operations SET type = NULL WHERE operation_id = ?","params":["pl-tables-p1-3-0"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+# Subtest: a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format
+ok 1 - a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format
+  ---
+  duration_ms: 4622.227995
+  type: 'test'
+  ...
+# Subtest: a current-format statement-failure record (no result) under the same entry key is the collision, never an old placement format
+ok 2 - a current-format statement-failure record (no result) under the same entry key is the collision, never an old placement format
+  ---
+  duration_ms: 85.320109
+  type: 'test'
+  ...
+# Subtest: an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request
+not ok 3 - an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request
+  ---
+  duration_ms: 83.859992
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqca4oi-889254/test/partition/placement-outcome-format.test.js:105:1'
+  failureType: 'testCodeFailure'
+  error: 'the store opened with a placement outcome row that carries no command identity; the hot path then answers placement_admission_bytes_invalid (clearing-trigger row: true)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqca4oi-889254/test/partition/placement-outcome-format.test.js:130:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4801.733166
+# time=6600ms
+ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 6656ms)
+ok test/partition/placement-admission-apply.test.js (9 assertions, 10147ms)
+ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 5408ms)
+# test-files total=4 pass=3 fail=1 assertions=18
+placement-results={"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":6600,"retriedOnce":false,"firstFailureLine":"not ok 3 - an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request"}
+placement-results={"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6656,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":10147,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":5408,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,190 @@
+placement-shell=3132269
+placement-head=5edfe59e2e42b0b6e04566a941e22d217c5ac35b
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3132720
+# test-files planned=16
+classified lane ordinary: 16 file(s), jobs=4
+thermal: hold cpu 83C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 83C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 43C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+ok test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js (30 assertions, 2488ms)
+not ok test/partition/placement-retained-leadership.test.js (4 assertions, 7173ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+  ---
+  duration_ms: 4520.08325
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:36:1'
+  failureType: 'testCodeFailure'
+  error: 'A used current B route instead of saved A closure'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:47:12
+    async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:94:7)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: paused pinned A request survives B custody and genuine A recovery unchanged
+not ok 2 - paused pinned A request survives B custody and genuine A recovery unchanged
+  ---
+  duration_ms: 113.812069
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:58:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'entryId')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:69:27
+    async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:94:7)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: a lost committed reply retires from the visible winner without another native proposal
+ok 3 - a lost committed reply retires from the visible winner without another native proposal
+  ---
+  duration_ms: 97.901893
+  type: 'test'
+  ...
+# Subtest: genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+not ok 4 - genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+  ---
+  duration_ms: 93.476798
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:122:1'
+  failureType: 'testCodeFailure'
+  error: 'false == true'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:133:12
+    async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:94:7)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 1
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4835.301908
+# time=7173ms
+ok test/rebalancer/assignment-epoch-fencing.test.js (26 assertions, 7742ms)
+ok test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (97 assertions, 3156ms)
+ok test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js (7 assertions, 3271ms)
+ok test/rebalancer/orphaned-operation-reconcile-redrive.test.js (14 assertions, 3260ms)
+ok test/rebalancer/rebalance-coordinator-atomic-transitions.test.js (49 assertions, 3285ms)
+ok test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js (315 assertions, 3754ms)
+not ok test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (5 assertions, 19130ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, or 4096 owed events executes a constant O(1) number of SQLite read queries (<= 4 per wave) and cuts on the byte bound
+ok 1 - R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, or 4096 owed events executes a constant O(1) number of SQLite read queries (<= 4 per wave) and cuts on the byte bound
+  ---
+  duration_ms: 4757.71775
+  type: 'test'
+  ...
+# Subtest: R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit range, and bounds full-drain latency and synchronous spans
+not ok 2 - R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit range, and bounds full-drain latency and synchronous spans
+  ---
+  duration_ms: 5675.268891
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js:370:1'
+  failureType: 'testCodeFailure'
+  error: 'M=1024: bounded spans and full-drain latency: {"eventCount":1024,"waves":899,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":129.856,"maxDriveSpanMs":909.905,"fullDrainMs":3746.66}'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js:394:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# R4 full drain metrics: {"eventCount":512,"waves":387,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":14.738,"maxDriveSpanMs":657.758,"fullDrainMs":1129.107}
+# R4 full drain metrics: {"eventCount":1024,"waves":899,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":129.856,"maxDriveSpanMs":909.905,"fullDrainMs":3746.66}
+# Subtest: R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an oversized entry's remaining owed bytes within SHIP_MAX_BYTES, the remaining ordinals ship together as one whole-entry unit
+ok 3 - R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an oversized entry's remaining owed bytes within SHIP_MAX_BYTES, the remaining ordinals ship together as one whole-entry unit
+  ---
+  duration_ms: 242.215238
+  type: 'test'
+  ...
+# Subtest: R3 pending/hydrated prefix paging and position-only drainPendingHydratedObligations: skipping 300 pending or hydrated rows uses paged position queries (<= 4) and drainPendingHydratedObligations never reads event_json payloads
+ok 4 - R3 pending/hydrated prefix paging and position-only drainPendingHydratedObligations: skipping 300 pending or hydrated rows uses paged position queries (<= 4) and drainPendingHydratedObligations never reads event_json payloads
+  ---
+  duration_ms: 1306.631494
+  type: 'test'
+  ...
+# Subtest: R5 byte-tally commit eviction and rollback restoration: completing multiple oversized entries evicts every tally on commit with zero retained unverified keys, and rolling back a failed CDC_DELIVERED apply after MARK_DELIVERED invalidates the uncommitted tally via afterRollback
+ok 5 - R5 byte-tally commit eviction and rollback restoration: completing multiple oversized entries evicts every tally on commit with zero retained unverified keys, and rolling back a failed CDC_DELIVERED apply after MARK_DELIVERED invalidates the uncommitted tally via afterRollback
+  ---
+  duration_ms: 4880.703825
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 4
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16872.373791
+# time=19130ms
+ok test/rebalancer/replica-operations-single-writer.test.js (49 assertions, 3813ms)
+ok test/rebalancer/required-entity-operation-observation.test.js (177 assertions, 3765ms)
+ok test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js (293 assertions, 6259ms)
+ok test/rebalancer/spread-cure-transition-authorization-production-path.test.js (2 assertions, 2968ms)
+ok test/scripts/fallback-branch-census.test.js (38 assertions, 11504ms)
+ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 53406ms)
+ok test/scripts/check-fast-static.test.js (6 assertions, 37237ms)
+# test-files total=16 pass=14 fail=2 assertions=1113
+placement-results={"file":"test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js","attempt":1,"ok":true,"assertions":30,"durationMs":2488,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":7173,"retriedOnce":false,"firstFailureLine":"not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B"}
+placement-results={"file":"test/rebalancer/assignment-epoch-fencing.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":7742,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js","attempt":1,"ok":true,"assertions":97,"durationMs":3156,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3271,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/orphaned-operation-reconcile-redrive.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":3260,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-atomic-transitions.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":3285,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js","attempt":1,"ok":true,"assertions":315,"durationMs":3754,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":19130,"retriedOnce":false,"firstFailureLine":"not ok 2 - R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event wh"}
+placement-results={"file":"test/rebalancer/replica-operations-single-writer.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":3813,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":3765,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js","attempt":1,"ok":true,"assertions":293,"durationMs":6259,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/spread-cure-transition-authorization-production-path.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2968,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/fallback-branch-census.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":11504,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-owed-admission-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":53406,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-fast-static.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":37237,"retriedOnce":false,"firstFailureLine":null}

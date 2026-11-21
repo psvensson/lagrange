@@ -1,0 +1,16 @@
+test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js
+test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js
+test/partition/partition-cdc-owed-admission-native.test.js
+test/partition/placement-retained-leadership.test.js
+test/rebalancer/assignment-epoch-fencing.test.js
+test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js
+test/rebalancer/orphaned-operation-reconcile-redrive.test.js
+test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js
+test/rebalancer/replica-operations-single-writer.test.js
+test/rebalancer/required-entity-operation-observation.test.js
+test/rebalancer/spread-cure-transition-authorization-production-path.test.js
+test/scripts/check-fast-static.test.js
+test/scripts/fallback-branch-census.test.js

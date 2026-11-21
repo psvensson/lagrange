@@ -1,0 +1,610 @@
+placement-shell=1535694
+placement-head=b638284d110d2a6b7cd55ebf902a63cb262fa25a
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1536145
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 47C (coretemp/Package id 0) nvme unmeasured
+not ok test/cdc/cdc-owner-required-authoritative-routing.test.js (83 assertions, 2370ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: strict CDC reads route to the registered owner while a local query is held
+    ok 1 - the remote owner has a live node connection
+    ok 2 - native owner is leader
+    ok 3 - the exact native owner transport handler is registered
+{"level":50,"time":"2026-11-21T11:34:40.988Z","nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","pid":1536160,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":115,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","msg":"Wait bound spent"}
+    # Subtest: remote success
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        not ok 3 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 204
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:204:13)
+          source: |2
+                        'only a permitted local mode enters the held local query');
+                      t.equal(calls.localCount, strict ? 0 : 1, 'count local probes');
+                      t.equal(answer.success, scenario.success === true);
+            ------------^
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 4 - should be equivalent
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,1 @@
+            -Array [
+            -  Object {
+            -    "operation_id": "strict-read-operation",
+            -    "workflow_step": "OWNER",
+            -  },
+            -]
+            +Array []
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 206
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:206:13)
+          source: >2
+                      t.equal(answer.success, scenario.success === true);
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+            ------------^
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+          ...
+        
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        not ok 10 - owner routing reaches the real query transport
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 216
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+          source: >2
+                        t.equal(calls.owner.length, 0);
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+            --------------^
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+          ...
+        
+        ok 11 - should be equal
+        not ok 12 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 223
+            columnNumber: 17
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+          source: >2
+                          t.ok(calls.owner.every(({answer}) => !answer?.success));
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+            ----------------^
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+                        }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +undefined
+          ...
+        
+        not ok 13 - one owner delivery
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 224
+            columnNumber: 39
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:224:39)
+          source: >2
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+            --------------------------------------^
+                        }
+                      }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -1
+            +0
+          ...
+        
+        1..13
+    not ok 4 - remote success # time=170.422ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 181
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+{"level":50,"time":"2026-11-21T11:34:41.146Z","nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","pid":1536160,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":106,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","msg":"Wait bound spent"}
+    # Subtest: remote refusal
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        not ok 10 - owner routing reaches the real query transport
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 216
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+          source: >2
+                        t.equal(calls.owner.length, 0);
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+            --------------^
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+          ...
+        
+        ok 11 - should be equal
+        not ok 12 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 223
+            columnNumber: 17
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+          source: >2
+                          t.ok(calls.owner.every(({answer}) => !answer?.success));
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+            ----------------^
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+                        }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +undefined
+          ...
+        
+        1..12
+    not ok 5 - remote refusal # time=122.128ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 181
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+    # Subtest: remote unavailable
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - owner routing reaches the real query transport
+        not ok 11 - should be equal
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 217
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:217:15)
+          source: >2
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+            --------------^
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+                          budget.deliveryPriority === 'critical'));
+          ...
+        
+        ok 12 - should be equal
+        1..12
+    not ok 6 - remote unavailable # time=130.877ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 181
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+    # Subtest: same-host owner
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - owner routing reaches the real query transport
+        not ok 11 - should be equal
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 217
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:217:15)
+          source: >2
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+            --------------^
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+                          budget.deliveryPriority === 'critical'));
+          ...
+        
+        ok 12 - should be equal
+        ok 13 - one owner delivery
+        1..13
+    not ok 7 - same-host owner # time=33.537ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 181
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+{"level":50,"time":"2026-11-21T11:34:41.457Z","nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","pid":1536160,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":108,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","msg":"Wait bound spent"}
+    # Subtest: preferred owner
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        not ok 4 - should be equivalent
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,6 @@
+             Array [
+               Object {
+                 "operation_id": "strict-read-operation",
+            -    "workflow_step": "OWNER",
+            +    "workflow_step": "LOCAL",
+               },
+             ]
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 206
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:206:13)
+          source: >2
+                      t.equal(answer.success, scenario.success === true);
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+            ------------^
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+          ...
+        
+        not ok 5 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 207
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:207:13)
+          source: >2
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+            ------------^
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -owner_rpc_lane
+            +local_partition_replica
+          ...
+        
+        not ok 6 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 208
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:208:13)
+          source: >2
+                      t.same(answer.rows, scenario.success ? rows : []);
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+            ------------^
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.routedToNode,
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +true
+          ...
+        
+        not ok 7 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 209
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:209:13)
+          source: >2
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+            ------------^
+                      t.equal(answer.systemTableDiagnostics?.routedToNode,
+                        scenario.localResult ? null : OWNER);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +true
+          ...
+        
+        not ok 8 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 210
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:210:13)
+          source: >2
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.routedToNode,
+            ------------^
+                        scenario.localResult ? null : OWNER);
+                      t.equal(answer.systemTableDiagnostics?.queryTimeoutMs, TIMEOUT_MS);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -strict-read-owner
+            +null
+          ...
+        
+        ok 9 - should be equal
+        not ok 10 - owner routing reaches the real query transport
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 216
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+          source: >2
+                        t.equal(calls.owner.length, 0);
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+            --------------^
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+          ...
+        
+        ok 11 - should be equal
+        not ok 12 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 223
+            columnNumber: 17
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+          source: >2
+                          t.ok(calls.owner.every(({answer}) => !answer?.success));
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+            ----------------^
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+                        }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +undefined
+          ...
+        
+        not ok 13 - one owner delivery
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 224
+            columnNumber: 39
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:224:39)
+          source: >2
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+            --------------------------------------^
+                        }
+                      }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -1
+            +0
+          ...
+        
+        1..13
+    not ok 8 - preferred owner # time=174.833ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 181
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+    # Subtest: preferred local
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - should be equal
+        1..10
+    ok 9 - preferred local # time=4.373ms
+    
+    1..9
+not ok 1 - strict CDC reads route to the registered owner while a local query is held # time=794.222ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+    lineNumber: 130
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('strict CDC reads route to the registered owner while a local query is
+    held',
+  
+    ^
+      async (t) => {
+        ConfigurationManager.getInstance().initialize({});
+  ...
+
+1..1
+# { total: 76, pass: 59, fail: 17 }
+# time=806.705ms
+# test-files total=1 pass=0 fail=1 assertions=83
+placement-results={"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":false,"assertions":83,"durationMs":2370,"retriedOnce":false,"firstFailureLine":"not ok 3 - should be equal"}

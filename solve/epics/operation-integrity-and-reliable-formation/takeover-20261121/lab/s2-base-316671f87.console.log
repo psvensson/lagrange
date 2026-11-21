@@ -1,0 +1,540 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.42
+[tv-dator] placement-shell=2750942
+[tv-dator] placement-head=316671f87352e16e7cbd8dfaa74ed0af234ded36
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2751388
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] ok test/partition/partition-service-row-owner.test.js (179 assertions, 664ms)
+[tv-dator] not ok test/rebalancer/replace-named-handoff-attempt.test.js (32 assertions, 1368ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead
+[tv-dator]     not ok 1 - one handoff was issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 211
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:211:7)
+[tv-dator]       source: |2
+[tv-dator]           try {
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]         ------^
+[tv-dator]             const request = harness.stepDowns()[0];
+[tv-dator]             t.ok(request.target.startsWith(TARGET_NODE_ID),
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - Cannot read properties of undefined (reading 'target')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:213:18)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 213
+[tv-dator]         columnNumber: 18
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]             const request = harness.stepDowns()[0];
+[tv-dator]             t.ok(request.target.startsWith(TARGET_NODE_ID),
+[tv-dator]         -----------------^
+[tv-dator]               'the handoff goes to the target node');
+[tv-dator]             t.equal(request.payload[ReplicaOperationField.REPLICA_ID],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 1 - named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead # time=91.808ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 205
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('named-target only: while the source leads, the only handoff names the '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'REPLACE\'s own target, and removal waits for the witness to see it lead',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target
+[tv-dator]     not ok 1 - an accepted, unresolved attempt is not re-issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 246
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:246:7)
+[tv-dator]       source: |2
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.stepDowns().length, 1,
+[tv-dator]         ------^
+[tv-dator]               'an accepted, unresolved attempt is not re-issued');
+[tv-dator]             t.equal(readReplaceHandoffAttempt(harness.owner,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - Cannot read properties of null (reading 'answerClass')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:249:37)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 249
+[tv-dator]         columnNumber: 37
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]               'an accepted, unresolved attempt is not re-issued');
+[tv-dator]             t.equal(readReplaceHandoffAttempt(harness.owner,
+[tv-dator]               harness.operation.operationId).answerClass,
+[tv-dator]         ------------------------------------^
+[tv-dator]             REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED, 'the attempt is accepted');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 2 - one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target # time=38.024ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 238
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('one attempt: an unresolved attempt blocks a second handoff; a refused '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'attempt resolves and the next one names the same target', async (t) => {
+[tv-dator]       let answer = {status: ReplicaOperationResponseStatus.COMPLETED,
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: attemptSeq echo: a late answer of an earlier attempt is dropped
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'attemptSeq')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:288:56)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 288
+[tv-dator]         columnNumber: 56
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]                 harness.operation.operationId,
+[tv-dator]                 {status: ReplicaOperationResponseStatus.COMPLETED,
+[tv-dator]                   [ReplicaOperationField.ATTEMPT_SEQ]: current.attemptSeq - 1},
+[tv-dator]         -------------------------------------------------------^
+[tv-dator]                 current.attemptSeq);
+[tv-dator]               t.equal(applied, false, 'the late answer is not applied');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 3 - attemptSeq echo: a late answer of an earlier attempt is dropped # time=30.719ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 277
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('attemptSeq echo: a late answer of an earlier attempt is dropped',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         const harness = await createHarness({stepDownResponse: () => null});
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding
+[tv-dator]     not ok 1 - one handoff was issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 311
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:311:7)
+[tv-dator]       source: |2
+[tv-dator]             const attempt = readReplaceHandoffAttempt(harness.owner,
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]         ------^
+[tv-dator]             t.equal(attempt?.answerClass, null,
+[tv-dator]               'the mismatched answer resolved nothing');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - the mismatched answer resolved nothing
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 312
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:312:7)
+[tv-dator]       source: |2
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]             t.equal(attempt?.answerClass, null,
+[tv-dator]         ------^
+[tv-dator]               'the mismatched answer resolved nothing');
+[tv-dator]             t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -null
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - it was counted late
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 314
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:314:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(attempt?.answerClass, null,
+[tv-dator]               'the mismatched answer resolved nothing');
+[tv-dator]             t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+[tv-dator]         ------^
+[tv-dator]               lateBefore + 1, 'it was counted late');
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 4 - the outstanding attempt blocks a second handoff
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 317
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:317:7)
+[tv-dator]       source: |2
+[tv-dator]               lateBefore + 1, 'it was counted late');
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.stepDowns().length, 1,
+[tv-dator]         ------^
+[tv-dator]               'the outstanding attempt blocks a second handoff');
+[tv-dator]             t.equal(harness.removals().length, 0, 'and no removal');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 5 - and no removal
+[tv-dator]     1..5
+[tv-dator] not ok 4 - attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding # time=37.023ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 298
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('attemptSeq echo, routed: an answer echoing another attempt through the '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'real dispatch leaves the current attempt outstanding', async (t) => {
+[tv-dator]       const harness = await createHarness({stepDownResponse: (payload) => ({
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: F-b: no handoff leaves for an operation that became terminal
+[tv-dator]     ok 1 - the decision was to issue a handoff
+[tv-dator]     ok 2 - nothing was sent
+[tv-dator]     ok 3 - no STEP_DOWN left
+[tv-dator]     1..3
+[tv-dator] ok 5 - F-b: no handoff leaves for an operation that became terminal # time=27.581ms
+[tv-dator] 
+[tv-dator] # Subtest: no retarget: a target that reports its replica missing fails the REPLACE before its removal intent
+[tv-dator]     not ok 1 - the REPLACE failed before any removal intent
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 354
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:354:7)
+[tv-dator]       source: |2
+[tv-dator]             const persisted = await harness.coordinator.queryOperationById(
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
+[tv-dator]         ------^
+[tv-dator]               'the REPLACE failed before any removal intent');
+[tv-dator]             t.equal(harness.removals().length, 0, 'no source removal was sent');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -FAILED
+[tv-dator]         +PENDING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 2 - no source removal was sent
+[tv-dator]     not ok 3 - no other replica was asked to lead
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "sql_transactions-p1-r4",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 357
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:357:7)
+[tv-dator]       source: |2
+[tv-dator]               'the REPLACE failed before any removal intent');
+[tv-dator]             t.equal(harness.removals().length, 0, 'no source removal was sent');
+[tv-dator]             t.same([...new Set(harness.stepDowns().map((delivery) =>
+[tv-dator]         ------^
+[tv-dator]               delivery.payload[ReplicaOperationField.REPLICA_ID]))],
+[tv-dator]             [TARGET_REPLICA_ID], 'no other replica was asked to lead');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..3
+[tv-dator] not ok 6 - no retarget: a target that reports its replica missing fails the REPLACE before its removal intent # time=32.1ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 345
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('no retarget: a target that reports its replica missing fails the ' +
+[tv-dator]     ^
+[tv-dator]       'REPLACE before its removal intent', async (t) => {
+[tv-dator]       const harness = await createHarness({stepDownResponse: () => ({
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: BR12: no handoff leaves on a deferred-visibility snapshot
+[tv-dator]     ok 1 - the deferred snapshot issues no handoff
+[tv-dator]     ok 2 - control: the fresh copy issues the named-target handoff
+[tv-dator]     1..2
+[tv-dator] ok 7 - BR12: no handoff leaves on a deferred-visibility snapshot # time=35.435ms
+[tv-dator] 
+[tv-dator] # Subtest: BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff
+[tv-dator]     ok 1 - a non-source, non-target leader does not authorize the removal
+[tv-dator]     not ok 2 - one handoff was issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 392
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:392:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(harness.removals().length, 0,
+[tv-dator]               'a non-source, non-target leader does not authorize the removal');
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]         ------^
+[tv-dator]             t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+[tv-dator]               TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - it names the REPLACE's own target
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 393
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:393:7)
+[tv-dator]       source: |2
+[tv-dator]               'a non-source, non-target leader does not authorize the removal');
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]             t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+[tv-dator]         ------^
+[tv-dator]               TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+[tv-dator]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -sql_transactions-p1-r4
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 4 - the target leading (fresh read) lets removal proceed
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 397
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:397:7)
+[tv-dator]       source: |2
+[tv-dator]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.removals().length, 1,
+[tv-dator]         ------^
+[tv-dator]               'the target leading (fresh read) lets removal proceed');
+[tv-dator]           } finally {
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..4
+[tv-dator] not ok 8 - BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff # time=34.973ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 384
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('BR11: only a fresh read of the target leading authorizes removal; a ' +
+[tv-dator]     ^
+[tv-dator]       'third replica leading gets the named-target handoff', async (t) => {
+[tv-dator]       const harness = await createHarness();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'answerClass')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:417:21)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 417
+[tv-dator]         columnNumber: 21
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]             const attempt = readReplaceHandoffAttempt(harness.owner,
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(attempt.answerClass, REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED,
+[tv-dator]         --------------------^
+[tv-dator]               'setup: attempt accepted');
+[tv-dator]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 9 - S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt # time=34.736ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 410
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // target leading (LEADERSHIP_SAFE); a later ACTIVE wait (another check
+[tv-dator]     // deferring) must not read "attempt unresolved" with no attempt.
+[tv-dator]     test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
+[tv-dator]     ^
+[tv-dator]       'handoff attempt, not an unresolved phase with no attempt', async (t) => {
+[tv-dator]       const harness = await createHarness();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..9
+[tv-dator] # { total: 23, pass: 8, fail: 15 }
+[tv-dator] # time=379.99ms
+[tv-dator] # test-files total=2 pass=1 fail=1 assertions=211
+lab test: tv-dator: # test-files total=2 pass=1 fail=1 assertions=211
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=1 fail=1 assertions=211
+exit=1

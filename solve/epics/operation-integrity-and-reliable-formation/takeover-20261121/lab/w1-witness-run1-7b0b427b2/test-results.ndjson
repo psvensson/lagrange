@@ -1,0 +1,4 @@
+{"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":4429,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":4599,"retriedOnce":false,"firstFailureLine":"not ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing"}
+{"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":17,"durationMs":5176,"retriedOnce":false,"firstFailureLine":"not ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender"}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":false,"assertions":45,"durationMs":6695,"retriedOnce":false,"firstFailureLine":"not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED"}

@@ -1,0 +1,23 @@
+heavy.sh: start 11:22:44 load=2.09 availGB=14: git commit
+heavy.sh: end   11:27:20 rc=0: git commit
+heavy.sh: start 11:27:20 load=2.49 availGB=14: git commit
+heavy.sh: end   11:27:23 rc=1: git commit
+heavy.sh: start 11:27:23 load=2.49 availGB=14: git commit
+heavy.sh: end   11:29:44 rc=0: git commit
+heavy.sh: start 11:29:44 load=2.19 availGB=14: git commit
+heavy.sh: end   11:32:42 rc=0: git commit
+heavy.sh: start 11:32:52 load=1.68 availGB=14: git worktree
+heavy.sh: end   11:32:54 rc=0: git worktree
+heavy.sh: start 11:35:33 load=2.00 availGB=14: git commit
+heavy.sh: end   11:37:53 rc=0: git commit
+heavy.sh: start 11:38:10 load=2.27 availGB=14: bash -c
+heavy.sh: end   11:41:15 rc=0: bash -c
+heavy.sh: start 11:41:15 load=1.94 availGB=14: git commit
+heavy.sh: end   11:43:33 rc=0: git commit
+heavy.sh: start 11:43:33 load=2.09 availGB=14: npx eslint
+heavy.sh: end   11:43:34 rc=0: npx eslint
+heavy.sh: start 11:43:34 load=2.09 availGB=14: npx eslint
+heavy.sh: end   11:43:35 rc=1: npx eslint
+heavy.sh: start 11:43:35 load=2.09 availGB=14: git commit
+heavy.sh: end   11:46:56 rc=0: git commit
+heavy.sh: start 11:46:56 load=2.41 availGB=14: git commit

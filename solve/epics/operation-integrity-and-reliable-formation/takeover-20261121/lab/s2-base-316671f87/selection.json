@@ -1,0 +1,19 @@
+{
+  "sha": "316671f87352e16e7cbd8dfaa74ed0af234ded36",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/replace-named-handoff-attempt.test.js",
+    "test/partition/partition-service-row-owner.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/partition/partition-service-row-owner.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}
