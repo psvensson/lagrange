@@ -14,7 +14,7 @@ import {bindCdcPropagationProgress, createCdcPropagationProgress} from
 import {CDC_DELIVERY_REMAINING_MS, prepareCdcDeliveryMessage} from '../cdc/cdc-delivery-budget.js';
 import {resolveCdcPropagationDeliveryProfile} from '../cache/cdc-propagation-delivery-profile.js';
 import {PRESSURE_GOVERNOR_ACTION} from '../control-plane/pressure-governor.js';
-import {captureDurablePropagationPlan} from './cdc-group-propagation-durable-plan.js';
+import {propagationPlanAtStamp} from './cdc-group-propagation-durable-plan.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from
   './latency-topology-constants.js';
 import {CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_EVENT,
@@ -278,14 +278,14 @@ async function propagateDurableCdcEvent(owner, options) {
   try {
     context.assertCurrent();
     const events = captureCdcEvents(options.events);
-    const plan = captureDurablePropagationPlan(owner, wave.source);
+    const plan = propagationPlanAtStamp(owner, wave.source);
     if (plan.sourceMismatch) return durablePropagationRefusal();
     owner.setPublicationMode(publicationModeOf(plan), plan.fallbackReason);
     const prepared = prepareDurableForegroundWave(owner, wave, events, plan);
     const result = await owner.deliverToTargetsWithRetry(prepared);
     context.assertCurrent();
     if (!plan.useGrouped && result?.success === true) {
-      const postPlan = captureDurablePropagationPlan(owner, wave.source);
+      const postPlan = propagationPlanAtStamp(owner, wave.source);
       if (postPlan.useGrouped) {
         owner.setPublicationMode(publicationModeOf(postPlan), postPlan.fallbackReason);
       }

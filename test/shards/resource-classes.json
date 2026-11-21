@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2699,
+    "ordinary": 2701,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2725,
-  "digest": "fnv1a32-e38520c0",
+  "censusSize": 2727,
+  "digest": "fnv1a32-50d95af8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -499,6 +499,7 @@
     "test/config/architecture-ownership-guardrails.test.js": "ordinary",
     "test/config/code-path-uniqueness.property.test.js": "ordinary",
     "test/config/configuration-centralization.property.test.js": "ordinary",
+    "test/config/configuration-manager-revision.test.js": "ordinary",
     "test/config/configuration-manager.test.js": "ordinary",
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "ordinary",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "ordinary",
@@ -2571,6 +2572,7 @@
     "test/topology/latency-group-manager.test.js": "ordinary",
     "test/topology/latency-measurement-service.test.js": "ordinary",
     "test/topology/latency-topology-constants.test.js": "ordinary",
+    "test/topology/latency-tree-routing-generation.test.js": "ordinary",
     "test/topology/latency-tree-service.test.js": "ordinary",
     "test/topology/node-host-identity-start-site-census.test.js": "ordinary",
     "test/topology/node-host-identity.test.js": "ordinary",

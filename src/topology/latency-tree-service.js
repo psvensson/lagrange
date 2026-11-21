@@ -39,6 +39,9 @@ class LatencyTreeService extends EventEmitter {
     this.state = LATENCY_TREE_STATE.CREATED;
     this.localGroupId = null;
     this.sourceViews = new Map();
+    // Advanced each time recompute replaces the routing views, the only
+    // writer of what getRoutingOrder answers.
+    this.routingGeneration = 0;
     this.cacheListener = null;
 
     this.stats = {
@@ -165,6 +168,7 @@ class LatencyTreeService extends EventEmitter {
 
     this.localGroupId = localGroupId;
     this.sourceViews = sourceViews;
+    this.routingGeneration += 1;
     this.stats.recomputeCount += 1;
     this.stats.groupCount = orderedGroupIds.length;
     this.stats.edgeCount = this.countUndirectedEdges(adjacency);
@@ -201,6 +205,16 @@ class LatencyTreeService extends EventEmitter {
       return [sourceGroupId];
     }
     return [...view.routingOrder];
+  }
+
+  /**
+   * The generation of the routing views getRoutingOrder answers from:
+   * monotonic, advanced by every recompute. Equal generations prove equal
+   * routing orders.
+   * @return {number}
+   */
+  getRoutingGeneration() {
+    return this.routingGeneration;
   }
 
   /**

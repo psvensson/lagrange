@@ -3,7 +3,7 @@
 // store it only until that wave closes. There is no payload or timer here.
 import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCoverageState, completeCdcPropagation,
   emptyCdcCoverage, observeCdcCoverage, observeCdcDeliveryCoverage} from './cdc-delivery-outcome.js';
-import {captureDurablePropagationPlan} from '../topology/cdc-group-propagation-durable-plan.js';
+import {propagationPlanAtStamp} from '../topology/cdc-group-propagation-durable-plan.js';
 import {
   collectKnownMessageGroupDomain,
   isPreActivationLatencyGroup,
@@ -28,6 +28,13 @@ function sameObservedRoute(previous, target) {
       target[field] === null || target[field] === undefined || previous[field] === target[field]);
 }
 
+// Every change of the progress's leaves, routes or coverage advances its
+// revision. The plan re-observation is skipped only while neither the owner's
+// plan nor this revision moved, when the re-observation would be a no-op.
+function markProgressChanged(progress) {
+  progress.revision += 1;
+}
+
 function discardProvisionalCoverage(progress) {
   if (progress.sourceCoverage.state === CDC_COVERAGE_STATE.PROVISIONAL) {
     progress.sourceCoverage = emptyCdcCoverage();
@@ -37,6 +44,7 @@ function discardProvisionalCoverage(progress) {
       leaf.coverage = emptyCdcCoverage();
     }
   }
+  markProgressChanged(progress);
 }
 
 function hasRouteAddress(routeOrTarget) {
@@ -108,6 +116,7 @@ function transferInvalidLatencyBindings(progress, targets) {
 
 function refreshCdcPropagationRoutes(progress, targets) {
   let requirementsChanged = transferInvalidLatencyBindings(progress, targets);
+  let routeReplaced = false;
   for (const target of targets) {
     const leaf = progress.targets.find((entry) => entry.groupId === target.groupId);
     if (!leaf) {
@@ -124,19 +133,33 @@ function refreshCdcPropagationRoutes(progress, targets) {
       leaf.coverage = emptyCdcCoverage();
     }
     leaf.route = observedRoute(target);
+    routeReplaced = true;
   }
   // The existing topology owner has exposed a larger obligation set. Native
   // receipts remain facts, while weak coverage must be observed for this set.
   if (requirementsChanged) discardProvisionalCoverage(progress);
+  else if (routeReplaced) markProgressChanged(progress);
 }
 
 function createCdcPropagationProgress(owner, source, targets) {
   const progress = {owner, source, lifetime: owner.durablePropagationLifetime,
     cache: owner.systemTableCache, tree: owner.latencyTreeService, router: owner.messageRouter,
     port: source.raft, sourceLifetime: source.cdcCommitLifetime,
-    sourceGroupId: source.groupId, sourceCoverage: emptyCdcCoverage(), targets: [], nextLeaf: 0};
+    sourceGroupId: source.groupId, sourceCoverage: emptyCdcCoverage(), targets: [], nextLeaf: 0,
+    revision: 0, observedPlan: null, observedRevision: null};
   refreshCdcPropagationRoutes(progress, targets);
   return progress;
+}
+
+// The topology owner answers the same plan object while that plan's stamp is
+// unchanged (cdc-group-propagation-durable-plan.js). Against the plan this
+// progress last observed, with the progress itself unchanged since, the route
+// refresh is a no-op; it runs whenever either moved.
+function observePlan(progress, plan) {
+  if (progress.observedPlan === plan && progress.observedRevision === progress.revision) return;
+  refreshCdcPropagationRoutes(progress, plan.targets);
+  progress.observedPlan = plan;
+  progress.observedRevision = progress.revision;
 }
 
 function cdcPropagationProgressCurrent(progress) {
@@ -148,9 +171,9 @@ function cdcPropagationProgressCurrent(progress) {
     source.cdcCommitLifetime === sourceLifetime &&
     source.groupId === sourceGroupId;
   if (!current) return false;
-  const plan = captureDurablePropagationPlan(owner, source);
+  const plan = propagationPlanAtStamp(owner, source);
   if (plan.sourceMismatch) return false;
-  refreshCdcPropagationRoutes(progress, plan.targets);
+  observePlan(progress, plan);
   return true;
 }
 
@@ -199,6 +222,7 @@ function bindCdcPropagationProgress(context, progress, events) {
       const leaf = dispatch.target;
       if (leaf === progress) {
         progress.sourceCoverage = observeCdcCoverage(observed, events, progress.sourceGroupId);
+        markProgressChanged(progress);
       } else if (progress.targets.includes(leaf)) {
         const coverage = observed === null ? emptyCdcCoverage() :
           observeCdcDeliveryCoverage(observed, events, leaf.groupId);
@@ -206,6 +230,7 @@ function bindCdcPropagationProgress(context, progress, events) {
         // from a replaced route cannot cover the newly selected route.
         if (coverage.state === CDC_COVERAGE_STATE.COMMITTED || leaf.route === dispatch.route) {
           leaf.coverage = coverage;
+          markProgressChanged(progress);
         }
       } else {
         throw Object.assign(new Error(CDC_COMPLETION.INVALID), {deferRetry: true});

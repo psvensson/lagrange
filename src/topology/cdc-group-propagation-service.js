@@ -62,6 +62,9 @@ class CDCGroupPropagationService extends EventEmitter {
     // only so stop, initialize and a lifetime change can retire each one.
     this.inFlightDurableWaves = new Set();
     this.durablePropagationLifetime = Object.freeze({});
+    // Per source message group: the plan last observed and the stamp of the
+    // inputs it read (cdc-group-propagation-durable-plan.js); one plan per stamp.
+    this.propagationPlansAtStamp = new WeakMap();
     this.stats = {
       groupedCount: 0,
       safeCount: 0,

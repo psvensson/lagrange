@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2366,
+    "unit": 2368,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2725,
-  "digest": "fnv1a32-39e059a9",
+  "censusSize": 2727,
+  "digest": "fnv1a32-51948ee7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -500,6 +500,7 @@
     "test/config/architecture-ownership-guardrails.test.js": "unit",
     "test/config/code-path-uniqueness.property.test.js": "unit",
     "test/config/configuration-centralization.property.test.js": "unit",
+    "test/config/configuration-manager-revision.test.js": "unit",
     "test/config/configuration-manager.test.js": "unit",
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "unit",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "unit",
@@ -2572,6 +2573,7 @@
     "test/topology/latency-group-manager.test.js": "unit",
     "test/topology/latency-measurement-service.test.js": "unit",
     "test/topology/latency-topology-constants.test.js": "unit",
+    "test/topology/latency-tree-routing-generation.test.js": "unit",
     "test/topology/latency-tree-service.test.js": "unit",
     "test/topology/node-host-identity-start-site-census.test.js": "unit",
     "test/topology/node-host-identity.test.js": "unit",
