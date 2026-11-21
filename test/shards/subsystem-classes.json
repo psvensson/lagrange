@@ -28,7 +28,7 @@
   "censusSize": 2706,
   "digest": "fnv1a32-4488d5ef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-17991543",
+  "observationDigest": "fnv1a32-812f41cb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14506,6 +14506,8 @@
     "test/partition/replica-admission-delivery-lifetime.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -14522,9 +14524,13 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-create-admission-recovery-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
