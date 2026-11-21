@@ -20,7 +20,13 @@
 // - Consensus: one ControllableConsensusPort per replica. The ledger log, its
 //   order, which replica applies an entry and when, and which entries a deposed
 //   leader got into the log are the fixture's (LedgerLog), not rs-raft
-//   election, quorum or truncation.
+//   election, quorum or truncation. As raft-rs does, a leader appends an empty
+//   TERM-START entry when it is elected or leads a new term; a replica applies
+//   entries in log order, and a held replica applies no COMMAND (an empty
+//   entry only when nothing earlier is unapplied on it). Each ledger replica's
+//   port status carries currentTermApplied, the rs-raft status field
+//   (raft-rs-status-observation.js) the double omits, answered from that log;
+//   APPLIED_PROGRESS is announced when a replica's applied position advances.
 // - The committed NODES / control_plane_publications read of each
 //   ServeEligibilityOwner is answered by the fixture (FORMED, ready nodes).
 // - The publication transport: the mutation the real producer submits is
@@ -33,11 +39,13 @@
 //
 // Counts: the owner object is instrumented by transparent instance wrappers
 // (runPass, readPartitionPlacementRows, readStorageExcludedTargets,
-// isCandidateAdmissibleNow, admitPlacement). Each record carries the owner's
-// boolean, the ledger service's leadershipTenure object and the core's
-// role/term at the time of the call. No production observation exposes these
-// counts (see the report: the pass observation of design section 3.2).
+// isCandidateAdmissibleNow, admitPlacement, releasePlacementHold). Each record
+// carries the owner's boolean, the ledger service's leadershipTenure object,
+// the core's role/term at the time of the call and the pass it belongs to: the
+// pass in whose asynchronous context the call runs (AsyncLocalStorage), exact
+// also while an obsolete pass and a current one are both outstanding.
 import assert from 'node:assert/strict';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import fs from 'node:fs';
 import {after} from 'node:test';
 import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
@@ -49,7 +57,8 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {CDC_OPERATION, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {ServeEligibilityOwner} from '../../src/control-plane/serve-eligibility-owner.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_EVENT, RAFT_ROLE} from '../../src/raft/constants.js';
+import {createRaftOperationPort, deepFreeze} from '../../src/raft/raft-operation-port.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {createControllablePartitionService} from '../partition/partition-service-test-support.js';
@@ -262,7 +271,26 @@ class LedgerLog {
     this.applyFailures = [];
     this.applied = new Map();
     this.held = new Set();
+    this.termStarts = new Map();
     this.dropNext = null;
+  }
+
+  // The empty entry a leader appends at the start of its term (raft-rs
+  // become_leader); a replica's own term is applied once it applied this one.
+  appendTermStart(node) {
+    const term = node.ledger.controllablePort.term;
+    this.termStarts.set(`${node.nodeId}@${term}`, this.entries.length);
+    this.entries.push({term, command: null, proposer: node.nodeId, termStart: true});
+    this.deliverAll();
+  }
+
+  // rs-raft's currentTermApplied: this replica leads and has applied an entry
+  // of its current term (its term start).
+  currentTermApplied(node) {
+    const port = node.ledger.controllablePort;
+    if (port.role !== RAFT_ROLE.LEADER) return false;
+    const index = this.termStarts.get(`${node.nodeId}@${port.term}`);
+    return index !== undefined && this.applied.get(node) > index;
   }
 
   attach(node) {
@@ -292,29 +320,37 @@ class LedgerLog {
   }
 
   deliverAll() {
-    for (const node of this.applied.keys()) {
-      if (!this.held.has(node)) this.deliver(node);
-    }
+    for (const node of this.applied.keys()) this.deliver(node);
   }
 
+  // Apply in log order; a held replica stops at its first command.
   deliver(node, through = this.entries.length) {
     const port = node.ledger.controllablePort;
-    let applied = this.applied.get(node);
+    const before = this.applied.get(node);
+    let applied = before;
     while (applied < through) {
-      const {term, command} = this.entries[applied];
-      const current = port.term;
-      port.term = term;
-      try {
-        port.commit(command);
-      } catch (error) {
-        this.applyFailures.push({nodeId: node.nodeId, entryId: command.entryId,
-          error: error?.code ?? error?.message ?? String(error)});
-      } finally {
-        port.term = current;
+      const {term, command, termStart} = this.entries[applied];
+      if (termStart !== true) {
+        if (this.held.has(node)) break;
+        this.commitOn(node, port, term, command);
       }
       applied += 1;
     }
     this.applied.set(node, applied);
+    if (applied > before) port.emitEvent(RAFT_EVENT.APPLIED_PROGRESS);
+  }
+
+  commitOn(node, port, term, command) {
+    const current = port.term;
+    port.term = term;
+    try {
+      port.commit(command);
+    } catch (error) {
+      this.applyFailures.push({nodeId: node.nodeId, entryId: command.entryId,
+        error: error?.code ?? error?.message ?? String(error)});
+    } finally {
+      port.term = current;
+    }
   }
 
   hold(node) {
@@ -338,19 +374,75 @@ function ownerOf(node) {
   return node.ledger?.replicaPlacementOwnerAttachment?.owner ?? null;
 }
 
+// A ledger replica's port as the double builds it, with the rs-raft status
+// field currentTermApplied answered by the fixture's ledger log. Installed
+// right after the replica started, before any subscriber or delivery holds
+// the port; every other operation is the double's own.
+function withTermStartStatus(port, currentTermApplied) {
+  return createRaftOperationPort({...port, readStatus: () => deepFreeze({
+    ...port.readStatus(), currentTermApplied: currentTermApplied()})});
+}
+
 // Transparent instance wrappers on the production owner object: every call
 // goes to the original method with the original arguments and result.
+// The armed gate of one kind, honouring its skip count.
+function takeGate(gates, kind) {
+  const gate = gates[kind];
+  if (!gate) return null;
+  if (gate.skip > 0) {
+    gate.skip -= 1;
+    return null;
+  }
+  gates[kind] = null;
+  gate.armed = true;
+  return gate;
+}
+
+// A transparent wrapper of one of the owner's two submitters (admitPlacement,
+// releasePlacementHold): every call is recorded; a BEFORE gate holds it between
+// the owner's last check and the submitter, an ANSWER gate holds the answer
+// after it returned.
+function instrumentSubmitter(owner, name, {attempts, gates, context}) {
+  const original = owner[name];
+  owner[name] = async (payload) => {
+    const before = takeGate(gates, 'before');
+    const attempt = {...context(), entryId: payload.entryId,
+      partitionId: payload.body?.partitionId ?? null,
+      operationId: payload.body?.operationId ?? null, held: before !== null};
+    attempts.push(attempt);
+    if (before) {
+      before.reached.resolve(attempt);
+      await before.release.promise;
+      attempt.afterHold = context();
+    }
+    const answer = await original(payload);
+    attempt.answer = answer;
+    const after = takeGate(gates, 'answer');
+    if (after) {
+      after.reached.resolve(attempt);
+      await after.release.promise;
+      attempt.afterAnswerHold = context();
+    }
+    return answer;
+  };
+}
+
 function instrumentOwner(node) {
   const owner = ownerOf(node);
   assert.ok(owner, `${node.nodeId}: a placement owner is attached before it is instrumented`);
   const ledger = node.ledger;
+  const passScope = new AsyncLocalStorage();
   const probe = {nodeId: node.nodeId, passes: [], constructions: [], capacityChecks: [],
-    candidateChecks: [], admissionAttempts: [], current: null, inFlight: 0};
+    candidateChecks: [], admissionAttempts: [], releaseAttempts: [], inFlight: 0,
+    gates: {admitPlacement: {before: null, answer: null},
+      releasePlacementHold: {before: null, answer: null}}};
   const context = () => {
     const status = ledger.raft?.readStatus?.() ?? {};
     return {ownerIsLeader: owner.isLeader, tenure: ledger.leadershipTenure ?? null,
-      coreRole: status.role ?? null, coreTerm: status.term ?? null, pass: probe.current};
+      coreRole: status.role ?? null, coreTerm: status.term ?? null,
+      pass: passScope.getStore() ?? null};
   };
+  probe.context = context;
   const wrap = (name, record) => {
     const original = owner[name];
     owner[name] = function wrapped(...args) {
@@ -364,55 +456,88 @@ function instrumentOwner(node) {
       done: false};
     pass.startTenure = pass.tenure;
     probe.passes.push(pass);
-    probe.current = pass;
     probe.inFlight += 1;
     try {
-      return await originalRunPass.call(this, triggers);
+      return await passScope.run(pass, () => originalRunPass.call(this, triggers));
     } catch (error) {
       pass.threw = error?.message ?? String(error);
       throw error;
     } finally {
       probe.inFlight -= 1;
       pass.done = true;
-      if (probe.current === pass) probe.current = null;
     }
   };
   wrap('readPartitionPlacementRows', () => probe.constructions.push(context()));
   wrap('readStorageExcludedTargets', () => probe.capacityChecks.push(context()));
   wrap('isCandidateAdmissibleNow', (candidate) => probe.candidateChecks.push({...context(),
     partitionId: candidate.partitionId}));
-  const originalAdmit = owner.admitPlacement;
-  probe.admitGate = null;
-  owner.admitPlacement = async (payload) => {
-    if (probe.admitGate?.skip > 0) {
-      probe.admitGate.skip -= 1;
-    } else if (probe.admitGate) {
-      probe.admitGate.armed = true;
-    }
-    const attempt = {...context(), entryId: payload.entryId,
-      partitionId: payload.body?.partitionId ?? null, held: probe.admitGate?.armed === true};
-    probe.admissionAttempts.push(attempt);
-    if (probe.admitGate?.armed === true) {
-      const gate = probe.admitGate;
-      probe.admitGate = null;
-      gate.reached.resolve(attempt);
-      await gate.release.promise;
-      Object.assign(attempt, {afterHold: context()});
-    }
-    const answer = await originalAdmit(payload);
-    attempt.answer = answer;
-    return answer;
-  };
+  instrumentSubmitter(owner, 'admitPlacement', {attempts: probe.admissionAttempts,
+    gates: probe.gates.admitPlacement, context});
+  instrumentSubmitter(owner, 'releasePlacementHold', {attempts: probe.releaseAttempts,
+    gates: probe.gates.releasePlacementHold, context});
   node.probe = probe;
   return probe;
+}
+
+function armSubmitterGate(node, name, kind, skip = 0) {
+  const gate = {reached: deferred(), release: deferred(), skip, armed: false};
+  (node.gates ??= []).push(() => gate.release.resolve());
+  node.probe.gates[name][kind] = gate;
+  return gate;
 }
 
 // Hold the next admission call of a node's owner between its last planning
 // check and the admission boundary (requestPlacementAdmission).
 function holdNextAdmission(node, {skip = 0} = {}) {
-  const gate = {reached: deferred(), release: deferred(), skip, armed: false};
+  return armSubmitterGate(node, 'admitPlacement', 'before', skip);
+}
+
+// Hold the answer of the next admission (await A4): the entry is proposed and
+// answered; the owner's continuation receives the answer only when released.
+function holdNextAdmissionAnswer(node) {
+  return armSubmitterGate(node, 'admitPlacement', 'answer');
+}
+
+// Hold the next hold-release call of a node's owner (await A2 or A5) between
+// the owner's last check and the release boundary (requestPlacementHoldRelease).
+function holdNextHoldRelease(node) {
+  return armSubmitterGate(node, 'releasePlacementHold', 'before');
+}
+
+// The workflow owner's reads the REMOVE admissibility of a pass makes after
+// its first await (A3: canAdmitRemove), recorded with the probe's context:
+// the committed node floor read, the voter-ready count, the policy minimum.
+function recordRemoveSafetyReads(node) {
+  const workflowOwner = node.coordinator.workflowOwner;
+  const reads = [];
+  const record = (target, name) => {
+    const original = target[name];
+    target[name] = function recorded(...args) {
+      reads.push({...node.probe.context(), read: name});
+      return original.apply(this, args);
+    };
+  };
+  record(workflowOwner.controlPlaneReadinessService, 'readServeEligibility');
+  record(workflowOwner, 'isVoterReadyFloorCountableReplica');
+  record(workflowOwner, 'getCriticalMinReplicaCount');
+  return reads;
+}
+
+// Hold the next getCriticalReplicaRowsForSafety (the first await of a REMOVE's
+// admissibility, A3) and answer it with `rows` (the substituted authoritative
+// SERVICES read: the fixture's control-plane read is inert).
+function holdNextRemoveSafetyRows(node, rows) {
+  const workflowOwner = node.coordinator.workflowOwner;
+  const original = workflowOwner.getCriticalReplicaRowsForSafety;
+  const gate = {reached: deferred(), release: deferred(), calls: 0};
   (node.gates ??= []).push(() => gate.release.resolve());
-  node.probe.admitGate = gate;
+  workflowOwner.getCriticalReplicaRowsForSafety = async function heldRows(partitionId) {
+    workflowOwner.getCriticalReplicaRowsForSafety = original;
+    gate.calls += 1;
+    gate.reached.resolve({...node.probe.context(), partitionId});
+    await gate.release.promise;
+    return rows.map((row) => ({...row}));
+  };
   return gate;
 }
 
@@ -538,6 +663,8 @@ class PlacementWorld {
       tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, schema: REPLICA_OPERATIONS_SCHEMA,
       nodeId: node.nodeId, replicaIds, systemTableCache: node.cache, dbPath: node.dbPath,
     }, LEDGER);
+    node.ledger.raft = withTermStartStatus(node.ledger.raft,
+      () => this.log.currentTermApplied(node));
     this.log.attach(node);
     if (authority) await installNodeAuthority(this, node);
     if (bind) node.ledger.setRebalanceCoordinator(node.coordinator);
@@ -674,6 +801,7 @@ class PlacementWorld {
   }
 
   async deliverLeaderEvent(next, {awaitOwner = true} = {}) {
+    this.log.appendTermStart(next);
     next.ledger.controllablePort.setRole(RAFT_ROLE.LEADER);
     await settleTicks();
     await resumeFixtureParticipantAdmission(next.ledger);
@@ -690,6 +818,7 @@ class PlacementWorld {
     for (const peer of this.nodes.values()) {
       if (peer.ledger) peer.ledger.controllablePort.term = this.log.term;
     }
+    this.log.appendTermStart(node);
     node.ledger.controllablePort.emitEvent('term change', this.log.term);
   }
 
@@ -941,7 +1070,11 @@ export {
   THREE_NODES,
   holdLeadershipStartDrives,
   holdNextAdmission,
+  holdNextAdmissionAnswer,
+  holdNextHoldRelease,
   holdNextLeadershipStartDrive,
+  holdNextRemoveSafetyRows,
+  recordRemoveSafetyReads,
   inertCdcIntegration,
   inertSqlEngine,
   installNodeAuthority,
