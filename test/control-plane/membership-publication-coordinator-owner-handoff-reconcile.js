@@ -1,11 +1,17 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {buildSystemTableMutationSqlParts} from
+  '../../src/cdc/cdc-system-table-mutation-sql-helpers.js';
+import {ControlPlanePublicationsOwner} from
+  '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
 } from '../../src/control-plane/membership-publication-coordinator-queue.js';
-import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION, COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -1218,8 +1224,34 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
       ],
     };
-    // The owner retains the OPEN birth; active-gate visibility still requires PUBLISHED.
-    let durablePublicationRow = latestPublicationRow;
+    const durableRows = new Map();
+    const columns = CONTROL_PLANE_PUBLICATIONS_SCHEMA.columns.map(({name}) => name);
+    const commit = (row) => {
+      const data = Object.fromEntries(columns.map((column) => [column, row[column] ?? null]));
+      const {values} = buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT, data);
+      durableRows.set(row.publication_id, Object.fromEntries(
+        columns.map((column, index) => [column, values[index]])));
+    };
+    commit(latestPublicationRow);
+    let visibilityRead = false;
+    let withholdVisibility = true;
+    const publicationsOwner = new ControlPlanePublicationsOwner({
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(_table, _sql, params = []) {
+          if (visibilityRead && withholdVisibility) {
+            return {success: false, deferRetry: true, rows: []};
+          }
+          const rows = params.length ? [durableRows.get(params[0])].filter(Boolean) :
+            [...durableRows.values()];
+          return {success: true, rowSetComplete: true, rows};
+        },
+        async insertSystemTableRow(_table, row) {
+          t.equal(durableRows.has(row.publication_id), false, 'birth follows exact durable absence');
+          commit(row);
+          return {success: true, committed: true};
+        },
+      },
+    });
     const pending = new Map();
     const enqueued = [];
     const coordinator = new MembershipPublicationCoordinator({
@@ -1247,19 +1279,7 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
           return true;
         },
       },
-      controlPlanePublicationsOwner: {
-        async listPublications() {
-          return {rows: [latestPublicationRow]};
-        },
-        async getPublication(publicationId) {
-          return durablePublicationRow.publication_id === publicationId ?
-            durablePublicationRow : null;
-        },
-        async upsertPublication(row) {
-          durablePublicationRow = row;
-          return row;
-        },
-      },
+      controlPlanePublicationsOwner: publicationsOwner,
       systemTableCache: {
         getAll(tableName) {
           if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
@@ -1270,6 +1290,15 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
       },
       now: () => PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS,
     });
+    const readVisible = coordinator.readActiveGateMembershipPublicationVisibleRow.bind(coordinator);
+    coordinator.readActiveGateMembershipPublicationVisibleRow = async (...args) => {
+      visibilityRead = true;
+      try {
+        return await readVisible(...args);
+      } finally {
+        visibilityRead = false;
+      }
+    };
     const ownerKey = coordinator.buildOwnerKey();
     pending.set(ownerKey, {
       context: {
@@ -1286,23 +1315,23 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
       },
     });
 
-    const outcome =
-      await coordinator.reconcileActiveGateMembershipPublication({
-        publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
-        expectedNodeIds: [
-          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
-        ],
-        publishedActiveNodeIds: [
-          ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
-        ],
-        pendingReconcileNodeIds:
+    const handoff = {
+      publicationEpoch: PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH,
+      expectedNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
+      ],
+      publishedActiveNodeIds: [
+        ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLISHED_NODE_IDS,
+      ],
+      pendingReconcileNodeIds:
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS.slice(
             PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PENDING_START_INDEX,
           ),
-        nextAction:
+      nextAction:
           PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
             .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION,
-      });
+    };
+    const outcome = await coordinator.reconcileActiveGateMembershipPublication(handoff);
 
     const mergedContext = pending.get(ownerKey)?.context;
     t.match(
@@ -1352,4 +1381,15 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
       [...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SORTED_NODE_IDS],
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ROW_MESSAGE,
     );
+    const committed = [...durableRows.values()].find(
+      (row) => row.publication_id !== latestPublicationRow.publication_id,
+    );
+    t.equal(committed?.status, CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      'the missing readback does not erase the actual target publication');
+    withholdVisibility = false;
+    const visible = await coordinator.reconcileActiveGateMembershipPublication(handoff);
+    t.equal(visible.state, ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME.PUBLISHED_VISIBLE);
+    t.equal(visible.publicationRow?.publicationId, committed?.publication_id);
+    t.equal(enqueued.length, PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_ENQUEUE_COUNT,
+      'visible target publishes no second recovery wake');
   });
