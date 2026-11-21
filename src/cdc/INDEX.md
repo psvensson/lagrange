@@ -49,6 +49,7 @@ documentClass: generated
 - [cdc-replica-operation-mutation-coalescing-key.js](cdc-replica-operation-mutation-coalescing-key.js) - No leading comment; first export: resolveReplicaOperationMutationCoalescingKey. (importers: one)
 - [cdc-routed-mutation-readiness.js](cdc-routed-mutation-readiness.js) - The spent-wait latch of one routed write. (importers: few)
 - [cdc-routed-system-write-selection.js](cdc-routed-system-write-selection.js) - No leading comment; first export: resolveRoutedSystemTableMutationCoalescingKey. (importers: one)
+- [cdc-routed-write-uncertainty.js](cdc-routed-write-uncertainty.js) - The most uncertain answer of one routed system-table write across its hops and attempts (the CDC routed-mutation... (importers: one)
 - [cdc-source-scope-evidence.js](cdc-source-scope-evidence.js) - No leading comment; first export: CDC_SOURCE_SCOPE_AUTHORITY. (importers: many)
 - [cdc-sql-builder.js](cdc-sql-builder.js) - CDC SQL Builder - Builds SQL queries for CDC operations. (importers: few)
 - [cdc-system-table-mutation-sql-helpers.js](cdc-system-table-mutation-sql-helpers.js) - No leading comment; first export: buildSystemTableUpsert. (importers: many)
