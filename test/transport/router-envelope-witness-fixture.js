@@ -55,9 +55,9 @@ function serviceAddress(nodeId, entity) {
 function createRouterEnvelopeFixture(testFileUrl, sender) {
   const ports = createPortAllocator(testFileUrl);
   const routers = [];
-  async function start(nodeId, startServer = true) {
+  async function start(nodeId, startServer = true, options = {}) {
     const port = startServer ? ports.getPort() : undefined;
-    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId,
+    const router = new MessageRouter({...options, bootIncarnation: TEST_BOOT_INCARNATION, nodeId,
       ...(startServer ? {wsPort: port, wsHost: HOST} : {})});
     routers.push(router);
     await router.initialize({startServer});
