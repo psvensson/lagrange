@@ -372,6 +372,8 @@ class ManagedSplitWorkflowPersistenceMethods {
    * @private
    */
   async ensureChildPartitionMetadata(options = {}) {
+    const {assertEffectAllowed} = options;
+    assertEffectAllowed?.();
     const leftPartitionMetadata = options.leftPartitionMetadata;
     const rightPartitionMetadata = options.rightPartitionMetadata;
     const leftPartitionId = String(leftPartitionMetadata?.partition_id || '');
@@ -389,6 +391,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       await this.insertPartitionMetadataAtomically(
         leftPartitionMetadata,
         rightPartitionMetadata,
+        assertEffectAllowed,
       );
       return;
     }
@@ -405,6 +408,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       await this.insertPartitionMetadataAtomically(
         leftPartitionMetadata,
         rightPartitionMetadata,
+        assertEffectAllowed,
       );
       return;
     }
@@ -563,7 +567,9 @@ class ManagedSplitWorkflowPersistenceMethods {
    * @return {Promise<void>}
    * @private
    */
-  async insertPartitionMetadataAtomically(leftMetadata, rightMetadata) {
+  async insertPartitionMetadataAtomically(
+    leftMetadata, rightMetadata, assertEffectAllowed,
+  ) {
     const txCoordinator = this.transactionCoordinator;
     if (!txCoordinator ||
         typeof txCoordinator.begin !== LOCAL_STR_FUNCTION ||
@@ -582,6 +588,7 @@ class ManagedSplitWorkflowPersistenceMethods {
       throw new Error(beginResult.error);
     }
     try {
+      assertEffectAllowed?.();
       await Promise.all([
         this.insertPartitionMetadata(leftMetadata),
         this.insertPartitionMetadata(rightMetadata),

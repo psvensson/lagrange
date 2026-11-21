@@ -46,7 +46,7 @@ documentClass: generated
 - [plan-diagnostics.js](plan-diagnostics.js) - Plan diagnostics - EXPLAIN output for strategy decisions, primitive telemetry, and query execution metadata. (importers: few)
 - [primitive-telemetry.js](primitive-telemetry.js) - Per-primitive telemetry counters and trace hooks. (importers: few)
 - [provisioning-completion-summary.js](provisioning-completion-summary.js) - Pure provisioning-completion summary shared by the initial-partition provisioning flow: normalizes the... (importers: one)
-- [query-cancellation.js](query-cancellation.js) - Enforce cooperative query cancellation without duplicating token-shape branches inside hot owner methods. (importers: few)
+- [query-cancellation.js](query-cancellation.js) - Enforce cooperative query cancellation without duplicating token-shape branches inside hot owner methods. (importers: many)
 - [query-constants.js](query-constants.js) - Cross-partition JOIN pushdown limits. (importers: hub)
 - [query-execution-budget.js](query-execution-budget.js) - The one participant failure entry of a write or read fan-out, for every statement kind: what the participant was... (importers: many)
 - [query-executor-base.js](query-executor-base.js) - The one table-name read for a SELECT that executeSelect fans out. (importers: one)

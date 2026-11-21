@@ -279,7 +279,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         continue;
       }
 
-      if (admittedTargetNodeIds.length >= requiredNewReplicaCount) {
+      if (admittedTargetNodeIds.length >= requiredNewReplicaCount ||
+          (discoverTargets && admissionConvergence)) {
         break;
       }
       const admissionDecision = await this.readProvisioningTargetAdmission({
@@ -290,7 +291,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           targetNodeId,
         ),
         timeoutBudget,
+        cancellationToken,
       });
+      precheckedTargetNodeIds.add(targetNodeId);
       if (admissionDecision.allowed) {
         admittedTargetNodeIds.push(targetNodeId);
         if (admissionDecision.operationCreationAdmission) {
@@ -362,18 +365,55 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       plannedOperations.push(...founded.plannedOperations);
       createdPlanningOperations.push(...founded.createdOperations);
     } else {
-      for (const targetNodeId of admittedTargetNodeIds) {
+      const unexaminedNodeIds = supportsAdmissionPrecheck ?
+        candidateTargetNodeIds.filter((nodeId) => !precheckedTargetNodeIds.has(nodeId)) :
+        [];
+      const admittedNodeIdSet = new Set(admittedTargetNodeIds);
+      let alternateAllowed = false;
+      for (const targetNodeId of [...admittedTargetNodeIds, ...unexaminedNodeIds]) {
         throwIfCancellationRequested(cancellationToken);
         if (plannedOperations.length >= requiredNewReplicaCount) {
           break;
         }
 
+        const childIntent = buildSchemaProvisioningChildIntent(
+          context?.schemaJobId,
+          targetNodeId,
+        );
+        const needsAdmission = !admittedNodeIdSet.has(targetNodeId);
+        if (needsAdmission) {
+          // Only a definite pre-write refusal leaves a slot available for an
+          // unexamined alternate. A possible committed CREATE owns its slot.
+          if (!alternateAllowed) {
+            break;
+          }
+          if (discoverTargets &&
+              !this.resolveProvisionTargetNodeDiagnostics(requestedReplicaCount)
+                .selectedNodeIds.includes(targetNodeId)) {
+            continue;
+          }
+          const admissionDecision = await this.readProvisioningTargetAdmission({
+            partitionId, targetNodeId, childIntent, timeoutBudget, cancellationToken,
+          });
+          if (!admissionDecision.allowed) {
+            rejectedTargetNodePlans.push(admissionDecision.rejection);
+            this.logProvisioningTargetRejection(
+              partitionId, targetNodeId, admissionDecision.rejection,
+            );
+            continue;
+          }
+          operationCreationAdmissionByTargetNodeId.set(
+            targetNodeId, admissionDecision.operationCreationAdmission,
+          );
+        }
+
         try {
           await context?.assertProvisioningOwnership?.();
-          const childIntent = buildSchemaProvisioningChildIntent(
-            context?.schemaJobId,
-            targetNodeId,
-          );
+          if (needsAdmission && discoverTargets &&
+              !this.resolveProvisionTargetNodeDiagnostics(requestedReplicaCount)
+                .selectedNodeIds.includes(targetNodeId)) {
+            continue;
+          }
           const operation =
             await this.createProvisioningOperationWithAdmissionReentry({
               partitionId,
@@ -381,6 +421,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
               childIntent,
               supportsAdmissionPrecheck,
               timeoutBudget,
+              cancellationToken,
               operationCreationAdmission:
                 operationCreationAdmissionByTargetNodeId.get(targetNodeId) ||
                 null,
@@ -399,6 +440,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           if (!this.isProvisioningAdmissionDeniedError(error)) {
             throw error;
           }
+          alternateAllowed = true;
           const rejection = this.createProvisioningTargetRejection(
             targetNodeId,
             error,

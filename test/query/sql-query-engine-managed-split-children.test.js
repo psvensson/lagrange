@@ -197,10 +197,12 @@ async function exerciseSplitChildAdmission(t, mode) {
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(tableName, row) {
-        childInsertCalls.push({
-          tableName,
-          partitionId: row.partition_id,
-        });
+        if (tableName === TABLES.PARTITIONS) {
+          childInsertCalls.push({
+            tableName,
+            partitionId: row.partition_id,
+          });
+        }
         return {success: true};
       },
       async upsertSystemTableRow(tableName, row) {
@@ -270,6 +272,7 @@ async function exerciseSplitChildAdmission(t, mode) {
     } else {
       t.notOk(result?.success);
       if (mode === 'cancelled') t.match(error?.message, /split test cancelled/);
+      if (mode === 'expired') t.equal(error?.errorCode, 'TIMEOUT');
       t.equal(checkedMoves.length, 1, 'the stopped attempt reads no further target or child');
       t.equal(checkedMoves[0]?.partitionId, 'users-p-left');
       t.same(childInsertCalls, []);
@@ -339,6 +342,7 @@ async function exerciseExplicitChildCreation(t, replyLost) {
   const partitionId = 'tbl-split-child-fallback-p1';
   const localNodeId = 'node-a';
   const checkedTargetNodeIds = [];
+  const attemptOrder = [];
   const createdTargetNodeIds = [];
   const executedTargetNodeIds = [];
   const services = [];
@@ -373,6 +377,7 @@ async function exerciseExplicitChildCreation(t, replyLost) {
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
+      attemptOrder.push(`check:${move.nodeId}`);
       return {
         allowed: true,
         decisionType: 'admitted',
@@ -384,6 +389,7 @@ async function exerciseExplicitChildCreation(t, replyLost) {
     },
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
+      attemptOrder.push(`create:${move.nodeId}`);
       if (replyLost && move.nodeId === 'node-b') {
         throw new Error('native CREATE response lost');
       }
@@ -446,9 +452,14 @@ async function exerciseExplicitChildCreation(t, replyLost) {
     t.same(checkedTargetNodeIds, [localNodeId, 'node-b', 'node-c']);
     t.same(createdTargetNodeIds, [localNodeId, 'node-b']);
     t.same(executedTargetNodeIds, []);
+    t.same(attemptOrder, ['check:node-a', 'check:node-b', 'check:node-c',
+      'create:node-a', 'create:node-b']);
     return;
   }
   await provisioning;
+  t.same(attemptOrder, ['check:node-a', 'check:node-b', 'check:node-c',
+    'create:node-a', 'create:node-b', 'create:node-c',
+    'check:node-d', 'create:node-d']);
 
   t.same(
     checkedTargetNodeIds,

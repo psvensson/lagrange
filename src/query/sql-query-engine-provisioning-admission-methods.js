@@ -1,3 +1,4 @@
+import {throwIfCancellationRequested} from './query-cancellation.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   createTimeoutBudgetError, getRemainingBudgetMs, TIMEOUT_BUDGET_CLASSIFICATION,
@@ -297,8 +298,9 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   }
 
   async readProvisioningTargetAdmission({
-    partitionId, targetNodeId, childIntent, timeoutBudget,
+    partitionId, targetNodeId, childIntent, timeoutBudget, cancellationToken,
   }) {
+    throwIfCancellationRequested(cancellationToken);
     this.assertProvisioningAttemptBudget(timeoutBudget);
     let decision;
     try {
@@ -318,6 +320,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       }
       decision = {allowed: false, admissionResult: error.admissionResult, error};
     }
+    throwIfCancellationRequested(cancellationToken);
     this.assertProvisioningAttemptBudget(timeoutBudget);
 
     if (decision?.allowed === true) {
@@ -387,6 +390,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
         targetNodeId,
         childIntent: buildSchemaProvisioningChildIntent(options.schemaJobId, targetNodeId),
         timeoutBudget: options.timeoutBudget,
+        cancellationToken: options.cancellationToken,
       });
       checkedTargetNodeIds.push(targetNodeId);
       if (admissionDecision.allowed) {
@@ -491,6 +495,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    */
   async createProvisioningOperationWithAdmissionReentry(options) {
     const createWithAdmission = (admission) => {
+      throwIfCancellationRequested(options.cancellationToken);
       this.assertProvisioningAttemptBudget(options.timeoutBudget);
       return this.rebalanceCoordinator.createOperation(
         this.buildProvisioningCreateOperationMove(options, admission),

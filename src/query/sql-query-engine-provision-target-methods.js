@@ -169,6 +169,7 @@ class SQLQueryEngineProvisionTargetMethods {
         majorityCount;
 
     let admissionProbe = null;
+    let usableTargetNodeIds = candidateTargetNodeIds;
     if (candidateTargetNodeIds.length >= quorumReplicaCount &&
         partitionId && this.supportsProvisioningAdmissionPrecheck()) {
       admissionProbe = await this.probeProvisioningTargetAdmission({
@@ -178,6 +179,7 @@ class SQLQueryEngineProvisionTargetMethods {
         schemaJobId: options.schemaJobId,
         routingReadinessDimension: options.routingReadinessDimension,
         timeoutBudget: options.timeoutBudget,
+        cancellationToken,
       });
       throwIfCancellationRequested(cancellationToken);
       this.assertProvisioningAttemptBudget(options.timeoutBudget);
@@ -191,12 +193,14 @@ class SQLQueryEngineProvisionTargetMethods {
           ...admissionProbe.candidateTargetNodeIds,
         ]);
         candidateTargetNodeIds = candidateTargetNodeIds.filter((nodeId) =>
-          eligibleNodeIds.has(nodeId) && checkedNodeIds.has(nodeId));
+          eligibleNodeIds.has(nodeId));
+        usableTargetNodeIds = candidateTargetNodeIds.filter((nodeId) =>
+          checkedNodeIds.has(nodeId));
       }
     }
 
     const nodeIds = hasExplicitTargets ?
-      candidateTargetNodeIds : candidateTargetNodeIds.slice(0, requiredReplicaCount);
+      usableTargetNodeIds : usableTargetNodeIds.slice(0, requiredReplicaCount);
     if (nodeIds.length < quorumReplicaCount) {
       const detail = buildProvisionTargetRefusal({
         partitionId,

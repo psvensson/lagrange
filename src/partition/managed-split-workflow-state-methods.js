@@ -8,6 +8,11 @@ import {
   isRetryablePartitionTransitionState,
   SPLIT_MERGE_LOG_MSG,
 } from './partition-constants.js';
+import {
+  createTimeoutBudgetError, getRemainingBudgetMs, TIMEOUT_BUDGET_CLASSIFICATION,
+} from '../control-plane/timeout-budget.js';
+import {throwIfCancellationRequested} from '../query/query-cancellation.js';
+import {QUERY_ERROR_MSG} from '../query/query-constants.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {
   PARTICIPANT_STATUS_NOT_YET_ACKNOWLEDGED,
@@ -19,6 +24,7 @@ import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 import {storedTransitionOf} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_SPLIT_CHILD_PROVISIONING = 'split_child_provisioning';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_MANAGED_SPLIT_CHILD_PROVISIONING_PRECHEC = 'Managed split child provisioning precheck could not satisfy ';
 const LOCAL_STR_MINIMUM_ROUTABLE_COHORTS = 'minimum routable cohorts: ';
@@ -405,6 +411,19 @@ class ManagedSplitWorkflowStateMethods {
     });
   }
 
+  assertChildProvisioningAttempt({timeoutBudget, cancellationToken}) {
+    throwIfCancellationRequested(cancellationToken);
+    if (timeoutBudget && getRemainingBudgetMs(timeoutBudget, {now: this.now}) === 0) {
+      throw createTimeoutBudgetError({
+        message: QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+        budget: timeoutBudget,
+        classification: TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
+        nestedOperation: LOCAL_STR_SPLIT_CHILD_PROVISIONING,
+        now: this.now,
+      });
+    }
+  }
+
   /**
    * Probe each planned child cohort before any child partition metadata is
    * inserted so the workflow can defer instead of leaving metadata-only
@@ -429,6 +448,7 @@ class ManagedSplitWorkflowStateMethods {
     for (const [childPartitionId, targetNodeIdsRaw] of Object.entries(
       childProvisioningTargetNodeIdsByPartitionId,
     )) {
+      this.assertChildProvisioningAttempt(options);
       const targetNodeIds = this.normalizeNodeIdList(targetNodeIdsRaw);
       const precheck = typeof this.probeInitialTablePartitionProvisioning ===
         'function' ?
@@ -436,8 +456,11 @@ class ManagedSplitWorkflowStateMethods {
           partitionId: childPartitionId,
           targetNodeIds,
           minimumRoutableReplicaCount,
+          timeoutBudget: options.timeoutBudget,
+          cancellationToken: options.cancellationToken,
         }) :
         null;
+      this.assertChildProvisioningAttempt(options);
       const existingRoutableNodeIds = this.normalizeNodeIdList(
         precheck?.existingRoutableNodeIds,
       );
