@@ -196,19 +196,34 @@ Real PENDING and SENDING acknowledgements plus the competing SQLite
 terminal case passed. The three-process public SQL journey on `1500c51bf`
 passed on tv-dator in 39.509 seconds. This uses one host.
 
-The SENDING timeout has a separate race with target admission. At
-`dc4a03ab4`, three native controls reproduced a failure when the target
-won admission before the timeout write or while terminal repair was
-pending. Two controls preserve the opposite orders: a timeout that wins
-the conditional write fences later admission, and an explicitly confirmed
-target failure can settle. The workflow owner is carrying the
-admission-absent condition through the original write and its retry. Verify
-that the admitted target continues through its existing progress owner.
+The sender and target can both act while a partition CREATE is SENDING.
+At `dc4a03ab4` three managed ADD controls reproduced a timeout writing
+FAILED after receiver admission, including on terminal retry. At `f820cf708`
+both receiver-first REPLACE cases reproduced the same error while the
+source still voted. On `38d65557d` nine native cases passed on the same
+host. The terminal write compares receiver admission and the workflow step
+atomically. When the receiver wins, its original progress owner continues.
+When the timeout wins, the target refuses the late CREATE. A confirmed
+target failure still settles. A separate priority drain can propose
+failure based on elapsed time before it reaches the ordinary timeout.
+The workflow owner is checking both ADD and pre-removal REPLACE at that
+decision, retaining the existing authority for positive target death.
 
-The integration owner composes these changes, runs the frozen classified
-set and affected native cases on that source, and runs full-range static
-checks. The physical streak is zero of three. Follow the formation Quest
-for the exact pins, original outputs and subsequent physical trials.
+The initial CREATE history entry also determines whether a copy counts
+against placement capacity. The native placement census and the
+coordinator previously searched later steps. On `e3de5590f` that allowed
+a later GENESIS stamp to waive both copy limits and suppress a new FOUND.
+On `1a79f4318` all three negatives and the true founder control passed.
+The two corrected readers are composed on `d6f624497`. Review traced the
+other readers and writers of this same field. The managed run included
+five files and 64 assertions. Full-range static on the earlier composition
+`0737f1343` passed in 56.611 seconds on tv-dator (request 5509).
+
+The integration owner pins the priority repair with this composition,
+runs the frozen classified selection and the affected native cases on the
+lab, and verifies full-range static. The physical streak is zero of three.
+The separate recovery-reporting candidate remains on its own WIP branch.
+The formation Quest records original runs and the next three-host trials.
 
 The prior three-host runs shared a failure to reach global quiet. Within
 the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with

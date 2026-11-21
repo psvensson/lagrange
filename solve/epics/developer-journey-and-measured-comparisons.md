@@ -161,6 +161,25 @@ campaign directories also contain credentials and are not evidence bundles.
 A development reuse decision cannot waive the existing final contemporaneous
 paired-comparison contract.
 
+For the lab smoke, use the registered comparison runner. The identifier
+`comparative-smoke-setup` is a placement receipt key. The command below
+previews the existing smoke profile and host roles.
+
+```sh
+node docs/benchmarks/cloud/run-comparative-benchmarks.mjs \
+  --execution-target lab --targets lagrange --profile smoke --dry-run
+```
+
+On 21 November the live preview from `d6f624497` returned
+`refused_insufficient_host_topology`. The three formation hosts were
+reachable. Of the other two registered harness hosts, `carinas-windows`
+timed out on SSH and `lenovo-laptop` had no route. The runner reports
+zero when it cannot assemble the complete four-role assignment. The lab
+owner rechecks live inventory for an eligible fourth load generator
+before smoke. This preview acquired no campaign resources or measurements.
+The [comparison runbook](../../docs/benchmarks/cloud-reproduction-guide.md)
+owns image preparation and the live command.
+
 The existing runner accepts `--targets lagrange --profile smoke`:
 `comparative-smoke-v2`, one run at 5 requests/second, a 60-minute campaign budget,
 and `comparable: false`. It requires the verified candidate, pinned image and
