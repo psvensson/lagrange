@@ -1,3 +1,5 @@
+import {ReplicaDispatchService} from '../../src/control-plane/replica-dispatch-service.js';
+import {DISPATCH_EVENT} from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {
@@ -9,6 +11,9 @@ import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
+  createCoordinatorSqlStore,
+  createMockCache,
+  createMockControlPlaneSystemTableGateway,
   createTestCoordinator,
   installActualReplicaObservationResolver,
 } from './test-helpers.js';
@@ -17,6 +22,7 @@ function createCriticalReplaceCreateReplay({
   answerCreateReplay = async () => ReplicaOperationResponseStatus.COMPLETED,
   answerRemove = {status: ReplicaOperationResponseStatus.INITIATED},
   witness,
+  makeCoordinator = createTestCoordinator,
 } = {}) {
   const PARTITION_ID = 'nodes-p1';
   const SOURCE_NODE_ID = 'node-a';
@@ -45,7 +51,7 @@ function createCriticalReplaceCreateReplay({
     isOutboundQueueAvailable: () => true,
   };
 
-  const coordinator = createTestCoordinator({
+  const coordinator = makeCoordinator({
     nodeId: TARGET_NODE_ID,
     enableTimeouts: false,
     replaceWitness: !witness,
@@ -586,36 +592,120 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
       }
     });
 
-  await t.test('a guarded terminal winner during CREATE replay remains FAILED',
+  await t.test('ReplicaDispatch reports a guarded terminal winner during CREATE replay',
     async (t) => {
-      let failed;
-      let operation;
+      const createArrived = Promise.withResolvers();
+      const createReply = Promise.withResolvers();
+      let writer;
+      let store;
       const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay({
-        async answerCreateReplay() {
-          failed = await coordinator.failOperation(structuredClone(operation),
-            'target failed before removal intent');
-          return ReplicaOperationResponseStatus.COMPLETED;
+        answerCreateReplay() {
+          createArrived.resolve();
+          return createReply.promise;
+        },
+        makeCoordinator(options) {
+          const cache = createMockCache(options.cacheData);
+          store = createCoordinatorSqlStore(cache);
+          const sqlQueryEngine = {executeQuery: store.execute};
+          const controlPlaneSystemTableGateway = {
+            ...createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+            submitMutation: store.submitMutation,
+          };
+          const authority = {sqlQueryEngine, controlPlaneSystemTableGateway};
+          writer = createTestCoordinator({
+            nodeId: options.nodeId,
+            cacheData: options.cacheData,
+            ...authority,
+          });
+          return createTestCoordinator({...options, systemTableCache: cache, ...authority});
         },
       });
+      const service = new ReplicaDispatchService({
+        nodeId: coordinator.nodeId,
+        messageRouter: coordinator.messageRouter,
+        rebalanceCoordinator: coordinator,
+        systemTableCache: coordinator.systemTableCache,
+        cdcIntegrationService: coordinator.cdcIntegrationService,
+        controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+      });
+      const dispatched = [];
+      const failures = [];
+      service.on(DISPATCH_EVENT.OPERATION_DISPATCHED, (event) => dispatched.push(event));
+      service.on(DISPATCH_EVENT.OPERATION_FAILED, (event) => failures.push(event));
+
+      let consumerResult;
+      const dispatch = coordinator.dispatchOperation.bind(coordinator);
+      coordinator.dispatchOperation = async (...args) => {
+        consumerResult = await dispatch(...args);
+        return consumerResult;
+      };
+      let pendingDispatch;
+      let gateTimer;
+      const failureReason = 'target failed before removal intent';
       try {
-        operation = await create();
+        const operation = await create();
         await coordinator.executeOperation(operation);
-        const writes = observeCommittedSteps(coordinator, operation.operationId);
-        const result = await coordinator.reconcileOperationLifecycle(operation);
-        const durable = await coordinator.repository
+        const senderWrites = observeCommittedSteps(coordinator, operation.operationId);
+        const writerWrites = observeCommittedSteps(writer, operation.operationId);
+        const readRow = () => store.execute(
+          'SELECT * FROM replica_operations WHERE operation_id = ?', [operation.operationId],
+        ).rows[0];
+        const creating = readRow();
+        t.equal(creating.workflow_step, WORKFLOW_STEP.CREATING);
+        t.not(coordinator.operationWorkflowCoordinator, writer.operationWorkflowCoordinator,
+          'the writer has an independent operation owner lane');
+
+        pendingDispatch = service.dispatchOperationRow(creating);
+        await Promise.race([
+          createArrived.promise,
+          pendingDispatch.then(() => {
+            throw new Error('ReplicaDispatch returned before sending the CREATE replay');
+          }),
+          new Promise((_, reject) => {
+            gateTimer = setTimeout(() => reject(new Error('CREATE replay was not sent')), 2000);
+          }),
+        ]);
+        clearTimeout(gateTimer);
+        const exact = await writer.repository
           .queryReplicaOperationPersistenceAuthorityOperation(operation);
-        t.equal(failed.committed, true, 'the other owner action actually commits FAILED');
-        t.same(writes.map(({committedStep}) => committedStep), [WORKFLOW_STEP.FAILED],
-          'the late CREATE answer never commits promotion or advances retirement');
-        t.equal(result, OPERATION_RECONCILE_OUTCOME.FAILED);
-        t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED);
-        t.ok(Number.isFinite(durable.completedAt));
+        t.equal(exact.workflowStep, WORKFLOW_STEP.CREATING);
+        const failed = await writer.failOperation(exact, failureReason);
+        t.equal(failed.committed, true, 'the competing owner commits the guarded FAILED write');
+        t.equal(failed.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+        t.same(writerWrites, [
+          {expectedStep: WORKFLOW_STEP.CREATING, committedStep: WORKFLOW_STEP.FAILED},
+        ], 'the writer proves the durable pre-removal step before failing it');
+        const winningRow = readRow();
+        t.equal(winningRow.workflow_step, WORKFLOW_STEP.FAILED,
+          'the exact SQLite row is terminal before the late CREATE answer');
+
+        createReply.resolve(ReplicaOperationResponseStatus.COMPLETED);
+        await pendingDispatch;
+
+        t.same(senderWrites, [], 'the late answer commits neither promotion nor retirement');
+        t.same(readRow(), winningRow, 'the complete durable terminal row stays unchanged');
+        t.match(consumerResult, {
+          success: false,
+          terminal: true,
+          operationId: operation.operationId,
+          error: failureReason,
+          reconcileOutcome: OPERATION_RECONCILE_OUTCOME.FAILED,
+        }, 'the sender publishes the canonical terminal execution result');
+        t.same(dispatched, [], 'ReplicaDispatch emits no successful dispatch event');
+        t.equal(failures.length, 1, 'ReplicaDispatch emits one failure event');
+        t.match(failures[0], {operationId: operation.operationId, error: failureReason},
+          'the failure event names the exact terminal winner');
         t.same(deliveries.map(({payload}) => payload.type), [
           ReplicaOperationMessageType.CREATE_REPLICA,
           ReplicaOperationMessageType.CREATE_REPLICA,
-        ]);
+        ], 'the late answer authorizes no source removal');
       } finally {
-        await coordinator.shutdown();
+        clearTimeout(gateTimer);
+        createReply.resolve(ReplicaOperationResponseStatus.COMPLETED);
+        await Promise.allSettled([pendingDispatch]);
+        service.stop();
+        await Promise.all([writer.shutdown(), coordinator.shutdown()]);
+        store.suspend();
       }
     });
 
@@ -629,6 +719,14 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
         const operation = await create();
         await coordinator.executeOperation(operation);
         const writes = observeCommittedSteps(coordinator, operation.operationId);
+        const failureOutcomes = [];
+        const owner = coordinator.workflowOwner;
+        const fail = owner.failOperation.bind(owner);
+        owner.failOperation = async (current, reason, options) => {
+          const outcome = await fail(current, reason, options);
+          if (current.operationId === operation.operationId) failureOutcomes.push(outcome);
+          return outcome;
+        };
         const result = await coordinator.reconcileOperationLifecycle(operation);
         const durable = await coordinator.repository
           .queryReplicaOperationPersistenceAuthorityOperation(operation);
@@ -636,6 +734,13 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
           {expectedStep: WORKFLOW_STEP.CREATING, committedStep: WORKFLOW_STEP.ACTIVE},
           {expectedStep: WORKFLOW_STEP.ACTIVE, committedStep: WORKFLOW_STEP.STOPPING},
         ], 'the same turn commits pre-removal promotion and removal intent');
+        t.equal(failureOutcomes.length, 1, 'the rejected removal reaches terminal admission');
+        t.match(failureOutcomes[0], {
+          committed: false,
+          disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+          reconcileOutcome: OPERATION_RECONCILE_OUTCOME.REFUSED,
+          refusal: 'replace_post_intent_failure_refused',
+        }, 'the guarded post-intent failure returns a distinct refusal');
         t.equal(result, OPERATION_RECONCILE_OUTCOME.ADVANCED);
         t.equal(durable.workflowStep, WORKFLOW_STEP.STOPPING);
         t.equal(durable.completedAt, null, 'a failed effect cannot settle a post-intent REPLACE');

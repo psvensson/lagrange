@@ -1,11 +1,31 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {isOperationReconcileTerminal} from './operation-workflow-reconcile-outcome.js';
+import {isOperationReconcileTerminal, OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {isPartitionReplace} from './operation-workflow-replace-owner.js';
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL, REBALANCER_SKIP_REASON, ReplicaStatus,
   SYSTEM_TABLE_NAME,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+
+async function dispatchObservedTerminal(owner, operation, responseStatus, progress) {
+  const observation = await owner.repository.observeOperationTransition(
+    operation, operation.workflowStep, {terminalTransition: true},
+  );
+  if (!observation.outcome) {
+    if (observation.deferredOutcome) {
+      owner.deferObservedProgressRetry(operation.operationId, SYSTEM_TABLE_NAME.SERVICES,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT, observation.deferredOutcome);
+    }
+    return owner.buildSkippedOperationResult(
+      OPERATION_RECONCILE_OUTCOME.WAITING, operation.operationId, progress,
+    );
+  }
+  return owner.buildTerminalOperationDispatchResult(
+    buildOperationTransitionOutcome(observation.outcome),
+    {operationId: operation.operationId, status: responseStatus},
+  );
+}
 
 // The dispatch owner may work on a detached operation. Capture its confirmed
 // promotion before starting source removal, whose effect can be deferred.
@@ -22,6 +42,9 @@ async function reconcileSatisfiedCreateResponse(owner, operation, responseStatus
         },
       },
     );
+    if (replace && isOperationReconcileTerminal(reconciled)) {
+      return await dispatchObservedTerminal(owner, operation, responseStatus, progress);
+    }
     const replaceResumeDecision =
       owner.buildCreateSatisfiedReplaceResumeDecision(operation);
     let replaceResumeResult = null;
@@ -29,14 +52,15 @@ async function reconcileSatisfiedCreateResponse(owner, operation, responseStatus
       replaceResumeResult =
         await owner.executeOperationFromReconcilePath(operation);
     }
+    if (replace && isOperationReconcileTerminal(replaceResumeResult?.reconcileOutcome)) {
+      return replaceResumeResult;
+    }
     if (replaceResumeResult?.skipped === true) {
       owner.ensurePriorityActiveReplaceRetryArmed(operation);
     }
-    const terminalOutcome = [replaceResumeResult?.reconcileOutcome, reconciled]
-      .find(isOperationReconcileTerminal);
     return owner.buildSuccessfulOperationResult(operation.operationId, {
       status: responseStatus,
-      ...(replace && terminalOutcome ? {reconcileOutcome: terminalOutcome} : progress),
+      ...progress,
     });
   } catch (error) {
     if (
