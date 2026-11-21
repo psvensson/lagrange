@@ -23,6 +23,9 @@ import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
+import {ReplicaOperationMessageType} from '../../src/rebalancer/replica-operation-constants.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -32,6 +35,7 @@ import {DurableWorkflowCoordinator} from
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  createCoordinatorSqlStore,
   createMockControlPlaneReadinessService,
   createMockControlPlaneSystemTableGateway,
   withFixtureReplaceWitness,
@@ -46,9 +50,6 @@ const TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID =
 const TEST_OBSERVED_PROGRESS_TARGET_NODE_ID = 'node-target';
 const TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID = 'partition-conv-1-r1';
 const TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID = 'partition-conv-1-r2';
-const TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE =
-  'test-observed-progress-visibility-fallback';
-const TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS = 25;
 const TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID =
   'op-deferred-dispatch-retry-fallback';
 const TEST_DEFERRED_DISPATCH_RETRY_PARTITION_ID = 'sql_write_operations-p1';
@@ -101,7 +102,11 @@ function buildOperationRow(overrides = {}) {
     completed_at: overrides.completedAt || null,
     error_message: overrides.errorMessage || null,
     steps_history: overrides.stepsHistory ||
-      JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: now}]),
+      JSON.stringify([{
+        step: overrides.workflowStep || WORKFLOW_STEP.PENDING,
+        timestamp: overrides.updatedAt || now,
+        ...(overrides.sourceReplicaId ? {sourceReplicaId: overrides.sourceReplicaId} : {}),
+      }]),
   };
 }
 
@@ -116,6 +121,8 @@ function createConvergenceCoordinator(options = {}) {
   const {
     operationRows = [],
     serviceRows = [],
+    beforeSql,
+    onDelivery,
   } = options;
 
   const emitter = new ExecutorOutcomeEmitter({logger: console});
@@ -153,65 +160,20 @@ function createConvergenceCoordinator(options = {}) {
     }
   }
 
+  const store = createCoordinatorSqlStore({
+    getAll(table) {
+      if (table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) return [...operationMap.values()];
+      if (table === SYSTEM_TABLE_NAME.SERVICES) return serviceRows;
+      return [];
+    },
+    upsert(_table, row) {
+      operationMap.set(row.operation_id, row);
+    },
+  });
   const sqlEngine = {
-    executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        return {success: true};
-      }
-      if (sql.includes('UPDATE replica_operations')) {
-        const operationId = params?.[7];
-        const existing = operationMap.get(operationId);
-        if (existing) {
-          existing.status = params[0];
-          existing.workflow_step = params[1];
-          existing.updated_at = params[2];
-          existing.completed_at = params[3];
-          existing.error_message = params[4];
-          existing.steps_history = params[5];
-          existing.replica_id = params[6];
-        }
-        return {success: true};
-      }
-      if (sql.includes('services') &&
-          sql.includes('service_id')) {
-        const replicaId = params?.[0];
-        const matching = serviceRows.filter((s) => {
-          return (s.service_id || s.replica_id) === replicaId;
-        });
-        return {
-          success: true,
-          rows: matching.length > 0 ?
-            [{...matching[0]}] : [],
-        };
-      }
-      if (sql.includes('services') &&
-          sql.includes('partition_id')) {
-        const partitionId = params?.[0];
-        const nodeId = params?.[1];
-        const matching = serviceRows.filter(
-          (s) => s.partition_id === partitionId &&
-            s.node_id === nodeId,
-        );
-        return {
-          success: true,
-          rows: matching.length > 0 ?
-            [{status: matching[0].status}] : [],
-        };
-      }
-      if (sql.includes('WHERE operation_id')) {
-        const opId = params?.[0];
-        const row = operationMap.get(opId);
-        return {success: true, rows: row ? [row] : []};
-      }
-      if (sql.includes('replica_operations')) {
-        const allOps = Array.from(operationMap.values());
-        const incomplete = allOps.filter(
-          (op) => !['active', 'removed', 'failed']
-            .includes(op.status),
-        );
-        return {success: true, rows: incomplete};
-      }
-      return {success: true, rows: []};
+    async executeQuery(sql, params) {
+      const fault = beforeSql?.(sql, params, operationMap);
+      return fault || store.execute(sql, params);
     },
   };
 
@@ -259,7 +221,8 @@ function createConvergenceCoordinator(options = {}) {
       },
     },
     messageRouter: {
-      async deliver() {
+      async deliver(_target, payload) {
+        onDelivery?.(payload, operationMap);
         return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
@@ -281,6 +244,14 @@ function createConvergenceCoordinator(options = {}) {
   coordinator.workflowOwner.recoverReplicaCleanupReleaseDebt =
     async () => 0;
   coordinator.initialize();
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    try {
+      await shutdown();
+    } finally {
+      store.suspend();
+    }
+  };
   // The witness replica's answers (quest replace-source-removal-owner): the
   // fixture world models the committed configuration from its rows.
   withFixtureReplaceWitness(coordinator.workflowOwner.messageRouter,
@@ -457,119 +428,97 @@ test('Owner-path convergence: all progression entry points ' +
   );
 
   await t.test(
-    'services cache progression keeps REPLACE source removal moving when ' +
-    'authoritative operation visibility is missing',
+    'services cache progression retains REPLACE until exact removal authority recovers',
     async (t) => {
+      const operationId = TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID;
       const replaceRow = buildOperationRow({
-        operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        operationId,
         type: OperationType.REPLACE,
-        workflowStep: WORKFLOW_STEP.CREATING,
-        status: ReplicaStatus.CREATING,
+        workflowStep: WORKFLOW_STEP.ACTIVE,
+        status: ReplicaStatus.ACTIVE,
         replicaId: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
         sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
         sourceNodeId: TEST_NODE_ID,
         targetNodeId: TEST_OBSERVED_PROGRESS_TARGET_NODE_ID,
       });
-      const {
-        coordinator,
-        recordedOwnerKeys,
-        operationMap,
-        applyCacheChange,
-      } = createConvergenceCoordinator({
-        operationRows: [replaceRow],
-      });
-      const visibilityObservationCalls = [];
-      const originalEvaluateRemoveSafety =
-        coordinator.workflowOwner.evaluateRemoveSafety.bind(
-          coordinator.workflowOwner,
-        );
-      coordinator.workflowOwner.evaluateRemoveSafety =
-        async (operation) => {
-          if (operation?.operationId ===
-            TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID &&
-            operation?.type === OperationType.REPLACE &&
-            operation?.workflowStep === WORKFLOW_STEP.ACTIVE) {
-            return coordinator.workflowOwner
-              .buildSafeRemoveSafetyEvaluation();
-          }
-          return originalEvaluateRemoveSafety(operation);
-        };
-      coordinator.repository.queryAuthoritativeOperationById = async () => null;
-      coordinator.repository.getOperationByIdVisibilityObservation =
-        async (operationId, options = {}) => {
-          visibilityObservationCalls.push({
-            operationId,
-            options: {...options},
-          });
-          if (operationId !== TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID) {
-            return {
-              operation: null,
-              deferredOutcome: null,
-            };
-          }
-          return {
-            operation: {
-              ...coordinator.repository.rowToOperation(
-                operationMap.get(TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID),
-              ),
-              sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
-            },
-            deferredOutcome: {
-              completionState: 'deferred',
-              retryAfterMs:
-                TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS,
-              source: TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE,
-            },
-          };
-        };
-
-      try {
-        applyCacheChange(SYSTEM_TABLE_NAME.SERVICES, 'UPDATE', {
-          service_id: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
-          replica_id: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
-          partition_id: TEST_PARTITION_ID,
-          node_id: TEST_OBSERVED_PROGRESS_TARGET_NODE_ID,
-          status: ReplicaStatus.ACTIVE,
-          raft_role: 'follower',
+      const sourceRow = {
+        service_id: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
+        replica_id: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_NODE_ID,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+      };
+      let blockOperationPointRead = true;
+      let pointReadFaults = 0;
+      const removalDispatchSteps = [];
+      const {coordinator, recordedOwnerKeys, operationMap, applyCacheChange} =
+        createConvergenceCoordinator({
+          operationRows: [replaceRow],
+          serviceRows: [sourceRow],
+          beforeSql(sql, params) {
+            if (blockOperationPointRead && sql.includes('FROM replica_operations') &&
+                sql.includes('operation_id = ?') && params[0] === operationId) {
+              pointReadFaults += 1;
+              return {success: false, error: 'owner-rpc-read-failed'};
+            }
+            return null;
+          },
+          onDelivery(payload, rows) {
+            if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+              removalDispatchSteps.push(rows.get(payload.operationId)?.workflow_step);
+            }
+          },
         });
+      const owner = coordinator.workflowOwner;
+      owner.evaluateRemoveSafety = async () => owner.buildSafeRemoveSafetyEvaluation();
+      const visibilityObservationCalls = [];
+      const originalVisibility =
+        coordinator.repository.getOperationByIdVisibilityObservation.bind(coordinator.repository);
+      coordinator.repository.getOperationByIdVisibilityObservation =
+        async (observedId, options) => {
+          visibilityObservationCalls.push({operationId: observedId, options});
+          return originalVisibility(observedId, options);
+        };
 
-        // The owner reads the witness and persists the removal intent before
-        // the effect (quest replace-source-removal-owner): settle its turns.
+      const targetRow = {
+        service_id: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
+        replica_id: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_OBSERVED_PROGRESS_TARGET_NODE_ID,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+      };
+
+      const driveObservedProgress = async () => {
+        applyCacheChange(SYSTEM_TABLE_NAME.SERVICES, 'UPDATE', targetRow);
         for (let turn = 0; turn < 20; turn += 1) {
           await new Promise((resolve) => setImmediate(resolve));
         }
+      };
+      try {
+        await driveObservedProgress();
+        t.equal(operationMap.get(operationId)?.workflow_step, WORKFLOW_STEP.ACTIVE,
+          'the active target cannot advance removal without an exact authority read');
+        t.ok(pointReadFaults > 0, 'the ACTIVE removal turn hits the exact operation read fault');
+        t.same(removalDispatchSteps, [], 'the cache cannot authorize the source removal effect');
 
-        const updated = operationMap.get(
-          TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
-        );
-        t.equal(
-          updated?.workflow_step,
-          WORKFLOW_STEP.STOPPING,
-          'service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss',
-        );
-        t.equal(
-          updated?.status,
-          ReplicaStatus.REMOVING,
-          'the durable row should reflect source removal in progress after the visibility fallback',
-        );
-        t.same(
-          visibilityObservationCalls,
-          [{
-            operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
-            options: {
-              allowPriorityRecoveryDeferredVisibility: true,
-            },
-          }],
-          'observed progress should use the repository visibility observation contract instead of abandoning on authoritative reread misses',
-        );
-        t.ok(
-          recordedOwnerKeys.includes(
-            buildOperationOwnerKey(
-              TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
-            ),
-          ),
-          'services cache progression must still route through the shared owner key during visibility fallback',
-        );
+        blockOperationPointRead = false;
+        await driveObservedProgress();
+        const stopping = operationMap.get(operationId);
+        t.equal(stopping?.workflow_step, WORKFLOW_STEP.STOPPING,
+          'restored authority lets the owner persist its exact removal intent');
+        t.equal(stopping?.status, ReplicaStatus.REMOVING,
+          'the durable source-removal row carries its canonical status');
+        t.same(removalDispatchSteps, [WORKFLOW_STEP.STOPPING],
+          'the source receives its removal effect after durable STOPPING');
+        t.ok(visibilityObservationCalls.some((call) => call.operationId === operationId &&
+          call.options?.allowPriorityRecoveryDeferredVisibility === true),
+        'observed progress uses the repository visibility observation contract');
+        t.ok(recordedOwnerKeys.includes(buildOperationOwnerKey(operationId)),
+          'services cache progression uses the same owner key through fault and resumption');
       } finally {
         await coordinator.shutdown();
       }
@@ -819,6 +768,7 @@ test('Owner-path convergence: all progression entry points ' +
         replica_id: TEST_REPLICA_ID,
         partition_id: TEST_PARTITION_ID,
         node_id: TEST_NODE_ID,
+        service_type: SERVICE_TYPE.PARTITION,
         status: ReplicaStatus.REMOVING,
       }];
       let failedPersistStartedResolve;
@@ -832,6 +782,31 @@ test('Owner-path convergence: all progression entry points ' +
       let blockedFailedPersist = false;
       let failedPersistCalls = 0;
       let transactionCoordinatorCalls = 0;
+
+      const store = createCoordinatorSqlStore({
+        getAll(table) {
+          if (table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) return [...operationMap.values()];
+          if (table === SYSTEM_TABLE_NAME.SERVICES) return serviceRows;
+          return [];
+        },
+        upsert(_table, row) {
+          operationMap.set(row.operation_id, row);
+        },
+      });
+      const sqlEngine = {
+        async executeQuery(sql, params) {
+          if (sql.includes('UPDATE replica_operations') && sql.includes('completed_at IS NULL') &&
+              params[1] === WORKFLOW_STEP.FAILED && params[7] === operationId) {
+            failedPersistCalls += 1;
+            if (!blockedFailedPersist) {
+              blockedFailedPersist = true;
+              failedPersistStartedResolve();
+              await releaseFailedPersist;
+            }
+          }
+          return store.execute(sql, params);
+        },
+      };
 
       const coordinator = new RebalanceCoordinator({
         nodeId: TEST_NODE_ID,
@@ -877,71 +852,14 @@ test('Owner-path convergence: all progression entry points ' +
         },
         messageRouter: {
           async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              success: false,
+              reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+            });
           },
         },
-        sqlQueryEngine: {
-          async executeQuery(sql, params) {
-            if (sql.includes('UPDATE replica_operations')) {
-              const opId = params?.[7];
-              const existing = operationMap.get(opId);
-              if (existing) {
-                if (params?.[1] === WORKFLOW_STEP.FAILED &&
-                    !blockedFailedPersist) {
-                  failedPersistCalls += 1;
-                  blockedFailedPersist = true;
-                  failedPersistStartedResolve();
-                  await releaseFailedPersist;
-                } else if (params?.[1] === WORKFLOW_STEP.FAILED) {
-                  failedPersistCalls += 1;
-                }
-                existing.status = params[0];
-                existing.workflow_step = params[1];
-                existing.updated_at = params[2];
-                existing.completed_at = params[3];
-                existing.error_message = params[4];
-                existing.steps_history = params[5];
-                existing.replica_id = params[6];
-              }
-              return {success: true, changes: 1};
-            }
-            if (sql.includes('WHERE operation_id')) {
-              const opId = params?.[0];
-              const row = operationMap.get(opId);
-              return {success: true, rows: row ? [row] : []};
-            }
-            if (sql.includes('FROM services') &&
-                sql.includes('service_id = ?')) {
-              const replicaId = params?.[0];
-              const row = serviceRows.find((service) => {
-                return service.service_id === replicaId ||
-                  service.replica_id === replicaId;
-              });
-              return {
-                success: true,
-                rows: row ? [{status: row.status}] : [],
-              };
-            }
-            if (sql.includes('FROM services') &&
-                sql.includes('partition_id = ?') &&
-                sql.includes('node_id = ?')) {
-              const partitionId = params?.[0];
-              const nodeId = params?.[1];
-              const row = serviceRows.find((service) => {
-                return service.partition_id === partitionId &&
-                  service.node_id === nodeId;
-              });
-              return {
-                success: true,
-                rows: row ? [{status: row.status}] : [],
-              };
-            }
-            if (sql.includes('replica_operations')) {
-              return {success: true, rows: Array.from(operationMap.values())};
-            }
-            return {success: true, rows: []};
-          },
-        },
+        sqlQueryEngine: sqlEngine,
+        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -1011,6 +929,7 @@ test('Owner-path convergence: all progression entry points ' +
         );
       } finally {
         await coordinator.shutdown();
+        store.suspend();
       }
     },
   );
