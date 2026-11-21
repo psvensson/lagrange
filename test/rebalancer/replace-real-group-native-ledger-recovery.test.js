@@ -304,15 +304,13 @@ async function confirmRetainedFirst(context, ordinary, gate) {
   assert.deepEqual(refused.operationIds, [retained.operationId]);
 }
 
-async function confirmRetainedRecovery(context, order, diagnostic) {
+async function confirmRetainedRecovery(context, initialBlocker, order, diagnostic) {
   const {world, ledger, observation, holder, retained} = context;
   const incumbent = observation.readCommitted(world.operation.operationId);
   assert.equal(incumbent.completed_at, null, 'the incumbent still owns its committed lane');
-  await settleRetainedOwner(ledger, holder);
-  confirmFreshObservation(context, incumbent);
   const before = committedRepairCount(ledger);
-  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
-  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
+  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', initialBlocker);
+  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', initialBlocker);
   await settleRetainedOwner(ledger, holder);
   assert.equal(committedRepairCount(ledger), before, 'unchanged BUSY does not propose again');
   assert.equal(observation.readCommitted(retained.operationId), undefined);
@@ -363,11 +361,12 @@ for (const {producer, order} of scenarios) {
   const label = order ? `${producer}, ${order}` : producer;
   test(`S11 real ledger after SAFE: ${label}`, (t) => withNativeLedgerReplace(
     async (context) => {
-      const {world, ledger, historicalRow, observation} = context;
+      const {world, ledger, holder, historicalRow, observation} = context;
       await reachTargetLeadership(world);
       const owner = world.coordinator.workflowOwner;
       const evaluate = owner.evaluateRemoveSafety.bind(owner);
       let safeEdges = 0;
+      let initialBlocker;
       owner.evaluateRemoveSafety = async (operation) => {
         const evaluation = await evaluate(operation);
         if (evaluation.error || safeEdges > 0) return evaluation;
@@ -377,7 +376,13 @@ for (const {producer, order} of scenarios) {
           // after-SAFE mutation whose original integrity assertion failed.
           await restoreHistoricalFixtureRow(ledger, historicalRow);
         } else if (producer !== 'no contender') {
+          initialBlocker = observation.readCommitted(world.operation.operationId);
+          assert.equal(initialBlocker.workflow_step, WORKFLOW_STEP.ACTIVE);
           await trySupportedProducer(producer, context);
+          if (order) {
+            await settleRetainedOwner(ledger, holder);
+            confirmFreshObservation(context, initialBlocker);
+          }
         }
         const visible = observation.readCommitted(HISTORICAL_ID);
         assert.equal(Boolean(visible), producer === 'private raw bypass',
@@ -402,7 +407,8 @@ for (const {producer, order} of scenarios) {
         assert.equal(ledger.coordinator.repository.retainedPlacementRepairs.size, 1,
           'the actual ledger owner retains the original contender identity: ' +
             JSON.stringify(context.requests));
-        await confirmRetainedRecovery(context, order, (message) => t.diagnostic(message));
+        await confirmRetainedRecovery(context, initialBlocker, order,
+          (message) => t.diagnostic(message));
         assert.deepEqual(effectViolations(observation), []);
       }
       assert.equal(observation.effects.length, world.removeEffects.length);
