@@ -329,7 +329,7 @@ function moveOf(value) {
     return null;
   }
   if (move.type === PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE &&
-      Object.hasOwn(move, 'promoteReplicaIds') &&
+      Object.hasOwn(move, ReplicaOperationField.PROMOTE_REPLICA_IDS) &&
       matchGrowthPromotionCohort({replicaId: move.replicaId,
         sourceReplicaId: move.sourceReplicaId ?? null}, move.promoteReplicaIds) === null) {
     return null;

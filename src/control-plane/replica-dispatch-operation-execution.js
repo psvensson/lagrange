@@ -41,6 +41,8 @@ const {
   isCoordinatorOwnedOperationType,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
+const GROWTH_WAKE_KEY_MISMATCH = 'growth wake operation key differs';
+
 class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
   /**
    * Resolve the canonical system-table gateway for dispatch writes.
@@ -75,7 +77,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
     }
     if (operationRow?.type === OperationType.GROWTH_PROMOTE) {
       if (operationRow.operation_id !== operationId) {
-        throw invalidOperationPersistenceOutcome('growth wake operation key differs');
+        throw invalidOperationPersistenceOutcome(GROWTH_WAKE_KEY_MISMATCH);
       }
       // Refresh is still the disposition authority. A malformed carried
       // subject cannot qualify as a complete handoff.

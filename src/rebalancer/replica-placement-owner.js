@@ -548,10 +548,7 @@ class ReplicaPlacementOwner {
     return excluded;
   }
 
-  evaluateAllPartitions(
-    nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets,
-    promotedByPartition,
-  ) {
+  readPartitionPlacementRows() {
     const servicesByPartition = new Map();
     for (const row of this.systemTableCache.getAll(TABLES.SERVICES)) {
       const partitionId = row[COLUMN.PARTITION_ID];
@@ -560,9 +557,20 @@ class ReplicaPlacementOwner {
       list.push(row);
       servicesByPartition.set(partitionId, list);
     }
+    return {
+      partitionRows: this.systemTableCache.getAll(TABLES.PARTITIONS),
+      servicesByPartition,
+    };
+  }
+
+  evaluateAllPartitions(
+    nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets,
+    promotedByPartition,
+  ) {
+    const {partitionRows, servicesByPartition} = this.readPartitionPlacementRows();
     const evaluations = [];
     const inputsByPartition = new Map();
-    for (const partitionRow of this.systemTableCache.getAll(TABLES.PARTITIONS)) {
+    for (const partitionRow of partitionRows) {
       const partitionId = partitionRow[COLUMN.PARTITION_ID];
       const status = readLowerStateField(partitionRow[COLUMN.STATUS]);
       if (!partitionId || SKIPPED_PARTITION_STATUSES.has(status)) continue;
