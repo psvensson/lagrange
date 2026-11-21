@@ -281,6 +281,35 @@ spent 27,151 ms across 38 deliveries with 12 lost answers. Its final
 participant refused a proposal during cutover. Earlier proposal and
 commit outcomes remain unresolved.
 
+The public CREATE had three distinct provisioning observations. At
+05:02:51.551 UTC the first reported zero provisionable targets. The next
+attempt obtained three reservations for the same partition, from ledger
+admission `445` with operation ordinals `0`, `1` and `2`. The seed
+handled CREATE for ordinal 0 and `25527364` handled ordinal 1. The
+second node observed the seed's founder as leader in term 1. At
+05:03:28.889 the provisioner timed out waiting for service metadata for
+ordinal 2, replica `replace-replica-4464bb718124c00e96d65162d81c453a`
+on `8dbffb60`. The eventual stale publication observation therefore
+cannot explain the entire CREATE. The formation owner must preserve these
+three admissions across a retry and trace the third founder from dispatch
+to service metadata. The public COUNT saw zero active addressed services.
+
+The SQL writer log also distinguishes the writer call from the participant
+entry. Its first two operation IDs differed but shared idempotency key
+`cpw-41e99b998c88bcbdeed5c6681680ab16`. The third used
+`cpw-4619653b64068a2df373c1e9d2c89b42`. Applying the production
+participant-entry derivation to each key and `control_plane_publications-p1`
+gives exactly the two entry IDs above. These records do not include the
+mutation contents or durable application order. Test a lost answer
+followed by the same publication contents, then a changed acknowledgement
+set for the same epoch. An older delayed write must preserve the later
+acknowledgement after reopening the database. The existing concurrent
+acknowledgement test substitutes the durable store; the field question
+needs the actual apply and readback paths.
+[Entry identity](../../src/query/distributed/distributed-write-coordinator.js) ·
+[Existing acknowledgement test](../../test/control-plane/membership-publication-coordinator-tail-final-test-cases.js) ·
+[Three-host original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-bd3bfd82-nov21.tar.gz).
+
 Across the three node logs in each complete recording, the query executor
 reported the following unresolved write deliveries. Each line with the exact
 message `Partition write outcome still unknown when its delivery budget was spent`
