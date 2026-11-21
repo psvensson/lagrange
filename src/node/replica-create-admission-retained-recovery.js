@@ -5,7 +5,79 @@ import {
 } from './replica-create-admission-owner.js';
 import {buildFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {validateBootstrapMembershipStamp} from '../raft/raft-committed-membership-stamp.js';
+import {
+  ReplicaOperationField, ReplicaOperationMessageType,
+} from '../rebalancer/replica-operation-constants.js';
+import {
+  OPERATION_METADATA_KEY, ReplicaStatus,
+  getOperationMetadataObject, getOperationMetadataStringArray,
+} from '../rebalancer/replica-status.js';
+
+const RETAINED_CREATE_BOOTSTRAP_UNRESOLVED = 'RETAINED_CREATE_BOOTSTRAP_UNRESOLVED';
+const EMPTY_ADMISSION_STEPS_HISTORY = Object.freeze([]);
+
+function parseAdmissionStepsHistory(row) {
+  if (Array.isArray(row?.steps_history)) return row.steps_history;
+  if (typeof row?.steps_history !== 'string') {
+    return EMPTY_ADMISSION_STEPS_HISTORY;
+  }
+  try {
+    const parsed = JSON.parse(row.steps_history);
+    return Array.isArray(parsed) ? parsed : EMPTY_ADMISSION_STEPS_HISTORY;
+  } catch (_error) {
+    return EMPTY_ADMISSION_STEPS_HISTORY;
+  }
+}
+
+function buildRetainedCreateRequest(row, evidence) {
+  const stepsHistory = parseAdmissionStepsHistory(row);
+  const bootstrap = getOperationMetadataObject(
+    stepsHistory, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
+  );
+  if (!validateBootstrapMembershipStamp(bootstrap).valid) {
+    // The exact durable attempt remains the debt. A missing original is
+    // not a transient read error and cannot authorize a replacement stamp.
+    const error = new Error(`Original CREATE bootstrap is unresolved for ${row.operation_id}`);
+    error.code = RETAINED_CREATE_BOOTSTRAP_UNRESOLVED;
+    throw error;
+  }
+  const request = {
+    [ReplicaOperationField.TYPE]: ReplicaOperationMessageType.CREATE_REPLICA,
+    [ReplicaOperationField.OPERATION_ID]: row.operation_id,
+    [ReplicaOperationField.OPERATION_TYPE]: row.type,
+    [ReplicaOperationField.ENTITY_TYPE]: row.entity_type,
+    [ReplicaOperationField.ENTITY_ID]: row.entity_id,
+    [ReplicaOperationField.PARTITION_ID]: row.partition_id,
+    [ReplicaOperationField.REPLICA_ID]: row.replica_id,
+    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: bootstrap,
+    [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: evidence.admissionToken,
+    [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]:
+      evidence.workflowUpdatedAt,
+    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
+      evidence.attemptToken,
+    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: evidence.attemptSeq,
+    createAdmissionEvidence: evidence,
+  };
+  const replicaIds = getOperationMetadataStringArray(
+    stepsHistory,
+    OPERATION_METADATA_KEY.REPLICA_IDS,
+  );
+  const metadata = [
+    [ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
+      OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA],
+    [ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA,
+      OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA],
+  ];
+  if (replicaIds.length > 0) {
+    request[ReplicaOperationField.REPLICA_IDS] = replicaIds;
+  }
+  for (const [field, key] of metadata) {
+    const value = getOperationMetadataObject(stepsHistory, key);
+    if (value) request[field] = value;
+  }
+  return request;
+}
 
 function deferredProgressError(operationId) {
   const error = new Error(`CREATE admission progress deferred ${operationId}`);
@@ -222,7 +294,7 @@ async function recoverRetainedCreateAdmissionRow(
   handler,
   owner,
   row,
-  {buildRequest, reconcileLifecycle},
+  {reconcileLifecycle},
 ) {
   await owner.runExclusive(row.operation_id, async () => {
     handler.throwIfShuttingDown();
@@ -258,7 +330,7 @@ async function recoverRetainedCreateAdmissionRow(
       return;
     }
     if (!await handler.resumeRetainedReplicaCreateActivation(reconciled.evidence)) {
-      await handler.handleCreateReplica(buildRequest(row, reconciled.evidence));
+      await handler.handleCreateReplica(buildRetainedCreateRequest(row, reconciled.evidence));
     }
   });
 }
@@ -267,7 +339,7 @@ async function recoverRetainedCreateAdmissionRows(
   handler,
   owner,
   rows,
-  {buildRequest, reconcileLifecycle, onFailure},
+  {reconcileLifecycle, onFailure},
 ) {
   const deferredOperationIds = [];
   for (const row of rows) {
@@ -284,7 +356,6 @@ async function recoverRetainedCreateAdmissionRows(
     }
     try {
       await recoverRetainedCreateAdmissionRow(handler, owner, row, {
-        buildRequest,
         reconcileLifecycle,
       });
     } catch (error) {
