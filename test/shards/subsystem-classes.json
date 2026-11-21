@@ -28,7 +28,7 @@
   "censusSize": 2721,
   "digest": "fnv1a32-0ce7104a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8fb2baf7",
+  "observationDigest": "fnv1a32-0e70c143",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -15593,7 +15593,14 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -15604,6 +15611,7 @@
         "test/control-plane/serve-eligibility-test-support.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/transport/router-envelope-witness-fixture.js"
       ]
