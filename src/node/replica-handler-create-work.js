@@ -7,6 +7,7 @@ import {
   LEARNER_ADMISSION_WAIT_OUTCOME,
 } from './replica-handler-voter-readiness-methods.js';
 import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recovery.js';
 import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
 import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
@@ -124,22 +125,28 @@ function stopCreateReadinessWake(work) {
 
 function hasDecidedCreateWorkReadiness(handler, work) {
   return hasDecidedCreateReadiness(handler, work.service, work.replicaId,
-    work.voterReadinessRequired);
+    work.voterReadinessRequired, work.tracker.retainedActivation.evidence);
 }
 
 function retainCreateReadinessWake(handler, work) {
-  const {operationId, replicaId, service} = work;
+  const {operationId, replicaId, service, voterReadinessRequired} = work;
+  const cache = handler.systemTableCache;
   const wake = () => {
-    if (work.retained && ownsReplicaCreateWork(handler, work) &&
+    if (!handler.shuttingDown && !service.isShutdown &&
+        work.retained && ownsReplicaCreateWork(handler, work) &&
         hasDecidedCreateWorkReadiness(handler, work)) {
       armCreateAdmissionRecoveryRearm(handler);
     }
   };
-  // Only real consensus evidence or a settled request can wake a parked
-  // readiness observer. The service's existing learner cadence owns delivery.
+  // These are changes to inputs of the same readiness decision. Re-read
+  // current custody and readiness; a notification grants no authority.
   const stopConsensus = handler.consensusEvents.subscribe((event) => {
     if (event.replicaId === replicaId) wake();
   });
+  const servicesChanged = (tableName, _operation, row) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES && row?.service_id === replicaId) wake();
+  };
+  if (voterReadinessRequired) cache.onCacheChange(servicesChanged);
   const admissionSettled = (event) => {
     if (event.operationId === operationId) wake();
   };
@@ -156,6 +163,7 @@ function retainCreateReadinessWake(handler, work) {
   work.stopReadinessWake = () => {
     stopConsensus();
     stopService();
+    if (voterReadinessRequired) cache.offCacheChange(servicesChanged);
     service.off?.(PARTITION_SERVICE_EVENT.REPLICA_ADMISSION_SETTLED, admissionSettled);
     service.off?.(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, serviceWithdrawn);
   };
@@ -188,6 +196,7 @@ async function waitForMaterializedCreateReadiness(
     await handler.waitForVoterReadyActivation(replicaId, partitionId, {
       deadlineAtMs,
       expectedService: service,
+      retainedAdmission: work.tracker?.retainedActivation?.evidence,
       isCreateCurrent: () => ownsReplicaCreateWork(handler, work) && !handler.shuttingDown,
     });
   } else if (joining) {

@@ -14,6 +14,7 @@ import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {REPLICA_HANDLER_EVENT} from '../../src/node/replica-handler-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
@@ -313,6 +314,9 @@ async function observeCriticalServicePublication(rig, shutdown) {
   const current = readAdmittedLifecycle(authority, replicaId);
   assert.equal(current.status, ReplicaStatus.SYNCING);
   const notifications = [];
+  const consensus = [];
+  const collectConsensus = (event) => consensus.push(event);
+  learner.on(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, collectConsensus);
   const collect = (table, _action, row) => {
     if (table === TABLES.SERVICES) notifications.push(row);
   };
@@ -337,9 +341,14 @@ async function observeCriticalServicePublication(rig, shutdown) {
     assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null);
     assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
       'the same generation without a route is still waiting');
+    const foreignAddress = `${learner.unifiedAddress}-retired`;
+    await publish({...current, address: foreignAddress, updated_at: current.updated_at + 2});
+    assert.equal(cache.get(TABLES.SERVICES, replicaId).address, foreignAddress);
+    assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
+      'a nonempty address from another route cannot wake the parked voter');
     assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
     const matching = {...current, address: learner.unifiedAddress,
-      updated_at: current.updated_at + 2};
+      updated_at: current.updated_at + 3};
     if (shutdown) {
       cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', matching);
       await handler.shutdown();
@@ -356,8 +365,10 @@ async function observeCriticalServicePublication(rig, shutdown) {
       handler.replicaCreateAdmissionRecoveryRearmOwner.current() ||
       handler.replicaCreateAdmissionRecoveryTask !== previousRecovery,
     OBSERVATION_BOUND_MS), true, 'the exact CDC publication wakes the stationary voter');
+    assert.deepEqual(consensus, [], 'the group emits no new consensus evidence during publication');
   } finally {
     cache.offCacheChange(collect);
+    learner.off(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, collectConsensus);
   }
 }
 

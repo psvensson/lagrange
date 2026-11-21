@@ -11,6 +11,7 @@ import {
  *
  * Requirements: 10.2, 3.1
  */
+import {SERVICE_TYPE} from '../constants/service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   isBootstrapCriticalSystemPartitionId,
@@ -21,6 +22,7 @@ import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operati
 import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
+import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
 import {
   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
@@ -56,9 +58,22 @@ function isReplicaAdmissionRefused(service) {
     LEARNER_ADMISSION_WAIT_TOKEN.STATE_REFUSED;
 }
 
-function hasDecidedCreateReadiness(handler, service, replicaId, voterRequired) {
-  return isReplicaAdmissionRefused(service) || handler.isReplicaVoterReady(replicaId) ||
+function hasDecidedCreateReadiness(handler, service, replicaId, voterRequired, evidence) {
+  const voterBinding = voterRequired ? {expectedService: service, retainedAdmission: evidence} : {};
+  return isReplicaAdmissionRefused(service) ||
+    handler.isReplicaVoterReady(replicaId, voterBinding) ||
     (!voterRequired && isLearnerAdmittedToGroup(service, replicaId));
+}
+
+function isExactRetainedVoterRow(row, service, evidence) {
+  return service && !service.isShutdown &&
+    row.service_type === SERVICE_TYPE.PARTITION && row.service_id === evidence.replicaId &&
+    row.replica_id === evidence.replicaId && row.node_id === evidence.targetNodeId &&
+    row.partition_id === evidence.partitionId && row.created_at === evidence.replicaCreatedAt &&
+    row.create_attempt_token === evidence.attemptToken && row.cleanup_token === null &&
+    row.address === service.unifiedAddress &&
+    isExactReplicaHandlerRegistered(service.transport, service.unifiedAddress,
+      service.transportHandler);
 }
 
 const ADMITTED_RAFT_MEMBER_ROLES = Object.freeze(
@@ -351,7 +366,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           throw learnerAdmissionWaitError(
             replicaId, LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED);
         }
-        if (this.isReplicaVoterReady(replicaId)) {
+        if (this.isReplicaVoterReady(replicaId, options)) {
           // CL-035: seed the locally-decided voting role into the local
           // SERVICES row so the REPLACE remove-safety gate observes the
           // promotion (the durable raft_role write defers through the
@@ -564,10 +579,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
     /**
      * Check if a local replica is voter-ready and routable.
      * @param {string} replicaId - Replica ID.
+     * @param {Object} [options] - Exact observed service and retained admission.
      * @return {boolean} True when replica is non-learner with routable address.
      * @private
      */
-    isReplicaVoterReady(replicaId) {
+    isReplicaVoterReady(replicaId, {expectedService, retainedAdmission} = {}) {
       const normalizedRole = this.getTrackedReplicaRole(replicaId);
       if (!isVoterRaftRole(normalizedRole)) {
         return false;
@@ -576,7 +592,9 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         SYSTEM_TABLE_NAME.SERVICES,
         replicaId,
       );
-      if (!serviceRow || !serviceRow.address) {
+      if (!serviceRow || !serviceRow.address ||
+          (retainedAdmission && (this.getTrackedService(replicaId) !== expectedService ||
+            !isExactRetainedVoterRow(serviceRow, expectedService, retainedAdmission)))) {
         return false;
       }
       if (
