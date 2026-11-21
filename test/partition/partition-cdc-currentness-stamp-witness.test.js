@@ -1073,6 +1073,84 @@ test('stamp component: the router identity (a router wired late makes grouped ta
     'the new progress takes the plan observed with the wired router');
 });
 
+// --- witness 8: a wired router delivers; versions are answered; no unwired start ---
+
+const NOT_INITIALIZED = 'cdc_group_propagation_not_initialized';
+
+// A real cache and a real (never started) tree over it.
+function lightOwners() {
+  const cache = new SystemTableCache();
+  const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: cache});
+  tree.initialize();
+  return {cache, tree};
+}
+
+test('CDCGroupPropagationService refuses wiring a message router that cannot deliver', () => {
+  const {cache, tree} = lightOwners();
+  const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE, systemTableCache: cache,
+    latencyTreeService: tree, messageRouter: {send: () => undefined}});
+  assert.throws(() => service.initialize(), refusesWiring('messageRouter', 'deliver'));
+});
+
+// Each version source in turn answers no version (the method exists).
+const UNANSWERED_VERSIONS = [
+  {collaborator: 'systemTableCache', capability: 'getTableMutationVersion', unanswer: (owners) => {
+    owners.cache.getTableMutationVersion = () => undefined;
+  }},
+  {collaborator: 'latencyTreeService', capability: 'getRoutingGeneration', unanswer: (owners) => {
+    owners.tree.getRoutingGeneration = () => undefined;
+  }},
+  {collaborator: 'config', capability: 'getRevision', unanswer: (owners, service) => {
+    const config = ConfigurationManager.getInstance();
+    service.config = {get: config.get.bind(config), getRevision: () => undefined};
+  }},
+];
+
+for (const {collaborator, capability, unanswer} of UNANSWERED_VERSIONS) {
+  test(`CDCGroupPropagationService refuses wiring a ${collaborator} whose ${capability}() ` +
+    'answers no version', () => {
+    const owners = lightOwners();
+    const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+      systemTableCache: owners.cache, latencyTreeService: owners.tree});
+    unanswer(owners, service);
+    assert.throws(() => service.initialize(), refusesWiring(collaborator, capability));
+  });
+}
+
+test('a version source answering no version at read time holds no plan: each read observes ' +
+  'anew', () => {
+  const owners = lightOwners();
+  const counts = {builds: 0};
+  const read = owners.tree.getRoutingOrder.bind(owners.tree);
+  owners.tree.getRoutingOrder = (...args) => {
+    counts.builds += 1;
+    return read(...args);
+  };
+  const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
+    systemTableCache: owners.cache, latencyTreeService: owners.tree});
+  service.initialize();
+  const source = createDurableSourceMessageGroupService(SOURCE_GROUP);
+  const held = propagationPlanAtStamp(service, source);
+  assert.equal(propagationPlanAtStamp(service, source), held,
+    'setup: with every version answered, the next read reuses the plan');
+  assert.equal(counts.builds, 1, 'setup: one observation');
+  owners.tree.getRoutingGeneration = () => undefined;
+  const first = propagationPlanAtStamp(service, source);
+  const second = propagationPlanAtStamp(service, source);
+  assert.equal(counts.builds, 3,
+    'an unanswered version is never equal to itself: every read observes anew');
+  assert.notEqual(second, first, 'no plan was held under an unanswered version');
+});
+
+test('a never-initialized CDCGroupPropagationService cannot start or propagate, also after a ' +
+  'stop: a typed refusal', async () => {
+  const service = new CDCGroupPropagationService({nodeId: SOURCE_NODE});
+  service.stop();
+  assert.throws(() => service.start(), (error) => error?.code === NOT_INITIALIZED);
+  await assert.rejects(service.propagateCDCEvent({}),
+    (error) => error?.code === NOT_INITIALIZED);
+});
+
 // --- witness 7: the plan reads system tables only through the stamped list ---
 
 const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
