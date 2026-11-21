@@ -13,6 +13,7 @@
  * `sizeBytes: 0` while the rest of the change remains.
  */
 
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM} from '../../src/constants/index.js';
@@ -190,6 +191,7 @@ function createCoordinatorWithRealSize(options = {}) {
     systemTableCache,
     cdcIntegrationService: createMockCdcService(),
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)),
       readAuthoritativeRows: async (_table, sql, params = []) =>
         sqlEngine.executeQuery(sql, params),
       readRows: async (_table, sql, params = []) =>

@@ -172,45 +172,6 @@ function isReplicaOperationUniqueConstraintFailure(result) {
       message.includes(ownedConstraint));
 }
 
-function buildReplicaOperationInsertParams(operation) {
-  return [
-    operation.operationId,
-    operation.type,
-    operation.partitionId,
-    operation.replicaId,
-    nullableOperationValue(operation.targetClaimKey),
-    operation.sourceNodeId,
-    operation.targetNodeId,
-    operation.status,
-    operation.workflowStep,
-    operation.createdAt,
-    operation.updatedAt,
-    operation.completedAt,
-    operation.errorMessage,
-    JSON.stringify(operation.stepsHistory),
-    operation.entityType,
-    operation.entityId,
-    nullableOperationValue(operation.membershipPublicationEpoch),
-    nullableOperationValue(operation.sourceReplicaId),
-    nullableOperationValue(operation.messageGroupMembershipLaneKey),
-    nullableOperationValue(operation.messageGroupMembershipPhase),
-    nullableOperationValue(operation.messageGroupMembershipObligationState),
-    nullableOperationValue(operation.messageGroupMembershipIdentity),
-    nullableOperationValue(operation.messageGroupLearnerStamp),
-    nullableOperationValue(operation.messageGroupVoterStamp),
-    nullableOperationValue(operation.messageGroupRemovalStamp),
-    nullableOperationValue(operation.messageGroupSourceLifecycleClaim),
-    nullableOperationValue(operation.createAdmissionState),
-    nullableOperationValue(operation.createAdmissionToken),
-    nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
-    nullableOperationValue(operation.createAdmissionAttemptToken),
-    nullableOperationValue(operation.createAdmissionPreviousAttemptToken),
-    nullableOperationValue(operation.createAdmissionAttemptSeq),
-    nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
-    nullableOperationValue(operation.createAdmissionOwnerIncarnation),
-  ];
-}
-
 function assignReplicaOperationRepositoryMutationPersistenceMethods(
   ReplicaOperationRepository,
   options = {},
@@ -225,7 +186,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     REPLICA_OPERATION_OWNER_NAME,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
-    SQL,
     SQL_RECONCILIATION_REASON,
     SYSTEM_TABLE_NAME,
     buildControlPlaneFailurePayload,
@@ -375,7 +335,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
      * result alone. Callers that own deterministic operation identities may
      * request the insert disposition to reuse a non-terminal row or advance
      * after a terminal row. The default boolean contract still requires a
-     * content match. The raw-SQL fallback remains for reduced test harnesses.
+     * content match.
      * @param {Object} operation
      * @param {Object} [options={}] - Optional typed-disposition request.
      * @return {Promise<boolean|Object>}
@@ -401,10 +361,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                     operation,
                     errorResult,
                   ),
-              },
-              {
-                sql: SQL.INSERT_OPERATION,
-                params: buildReplicaOperationInsertParams(operation),
               },
             );
       if (!result.success) {

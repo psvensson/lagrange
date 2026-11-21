@@ -29,6 +29,7 @@
  * Design: §2, §7, Phase 2
  */
 
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
@@ -199,6 +200,7 @@ function createTestCoordinator(options = {}) {
       executeQuery,
     },
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(executeQuery),
       async readRows(_tableName, sql, params) {
         return executeQuery(sql, params);
       },

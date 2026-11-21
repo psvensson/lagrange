@@ -1,3 +1,4 @@
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {createTestCoordinator} from './test-helpers.js';
 import {ERRORS, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -63,6 +64,7 @@ function makeRow(overrides = {}) {
 function createRepository(readAuthoritativeRows,
   executeQuery = async () => ({success: true, changes: 1})) {
   const gateway = {
+    submitMutation: createFixtureSystemMutationPort(executeQuery),
     readAuthoritativeRows,
     executeQuery,
   };

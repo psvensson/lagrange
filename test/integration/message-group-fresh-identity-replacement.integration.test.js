@@ -1,3 +1,4 @@
+import {createFixtureSystemMutationPort} from '../rebalancer/test-helpers.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -133,6 +134,7 @@ function createControlPlaneStore(dbPath) {
   };
 
   const gateway = {
+    submitMutation: createFixtureSystemMutationPort(execute),
     executeQuery: async (sql, params) => execute(sql, params),
     readAuthoritativeRows: async (_table, sql, params) => execute(sql, params),
     readRows: async (_table, sql, params) => execute(sql, params),

@@ -9,6 +9,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
@@ -182,6 +183,7 @@ function createMockCoordinatorDeps(sqlEngine) {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     }, null),
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)),
       readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
         sqlEngine.executeQuery(sql, params, queryOptions),
       readRows: async (_tableName, sql, params = [], queryOptions = {}) =>

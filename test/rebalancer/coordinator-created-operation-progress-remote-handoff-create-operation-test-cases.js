@@ -1,3 +1,7 @@
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
@@ -42,6 +46,20 @@ import {
   REMOTE_HANDOFF_TEST_INITIAL_NOW_MS,
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
+
+function bindOperationRowInsert(operationRows) {
+  return async ({operation, tableName, row}) => {
+    if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+        tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      throw new Error('Unexpected remote handoff mutation');
+    }
+    if (operationRows.has(row.operation_id)) {
+      return {success: true, affectedRows: 0};
+    }
+    operationRows.set(row.operation_id, {...row});
+    return {success: true, affectedRows: 1};
+  };
+}
 
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
@@ -88,29 +106,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           normalizedSql.includes('entity_id = ?')) {
         return {success: true, rows: [], affectedRows: 0};
       }
-      if (normalizedSql.includes('replica_operations') &&
-          normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
-        operationRows.set(row.operation_id, row);
-        return {success: true, affectedRows: 1};
-      }
       return {success: true, rows: [], affectedRows: 0};
     };
 
@@ -133,6 +128,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       deferredTimers,
       deliver,
       executeQuery: reservationAwareExecuteQuery,
+      submitMutation: bindOperationRowInsert(operationRows),
     });
 
     try {
@@ -228,6 +224,9 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          throw new Error('The topology refusal must precede operation mutation');
+        },
         async readRows(tableName, sql, params = []) {
           return authoritativeRead(tableName, sql, params);
         },
@@ -368,29 +367,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           normalizedSql.includes('entity_id = ?')) {
         return {success: true, rows: [], affectedRows: 0};
       }
-      if (normalizedSql.includes('replica_operations') &&
-          normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
-        operationRows.set(row.operation_id, row);
-        return {success: true, affectedRows: 1};
-      }
       return {success: true, rows: [], affectedRows: 0};
     };
 
@@ -419,6 +395,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       controlPlaneSystemTableGateway: {
+        submitMutation: bindOperationRowInsert(operationRows),
         async readRows(tableName, sql, params = []) {
           return authoritativeRead(tableName, sql, params);
         },
@@ -558,29 +535,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           normalizedSql.includes('entity_id = ?')) {
         return {success: true, rows: [], affectedRows: 0};
       }
-      if (normalizedSql.includes('replica_operations') &&
-          normalizedSql.includes('VALUES')) {
-        const row = {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-        };
-        operationRows.set(row.operation_id, row);
-        return {success: true, affectedRows: 1};
-      }
       return {success: true, rows: [], affectedRows: 0};
     };
 
@@ -609,6 +563,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         },
       },
       controlPlaneSystemTableGateway: {
+        submitMutation: bindOperationRowInsert(operationRows),
         async readRows(tableName, sql, params = []) {
           return authoritativeRead(tableName, sql, params);
         },

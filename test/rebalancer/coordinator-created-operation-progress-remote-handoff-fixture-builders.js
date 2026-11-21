@@ -540,6 +540,7 @@ export function createRemoteHandoffCoordinator({
   deferredTimers,
   deliver,
   executeQuery,
+  submitMutation,
 }) {
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-source',
@@ -564,6 +565,7 @@ export function createRemoteHandoffCoordinator({
       },
     },
     controlPlaneSystemTableGateway: {
+      submitMutation,
       async readRows(tableName, sql, params = []) {
         return authoritativeRead(tableName, sql, params);
       },

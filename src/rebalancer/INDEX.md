@@ -200,7 +200,7 @@ documentClass: generated
 - [replica-operation-observed-completion.js](replica-operation-observed-completion.js) - No leading comment; first export: findObservedTargetReplicaServiceRows. (importers: few)
 - [replica-operation-owner-lease.js](replica-operation-owner-lease.js) - Durable replica-operation owner lease policy (verified-audit findings 5+14, quest operation-ownership-lease-fencing). (importers: many)
 - [replica-operation-progress.js](replica-operation-progress.js) - Workflow steps for ADD operations. (importers: hub)
-- [replica-operation-repository-constants.js](replica-operation-repository-constants.js) - No leading comment; first export: REPLICA_OPERATION_INSERT_SQL. (importers: few)
+- [replica-operation-repository-constants.js](replica-operation-repository-constants.js) - No leading comment; first export: REPLICA_OPERATION_REPOSITORY_ERROR_CODE. (importers: few)
 - [replica-operation-repository-control-plane-failure.js](replica-operation-repository-control-plane-failure.js) - Control-plane failure payload shaping for ReplicaOperationRepository. (importers: one)
 - [replica-operation-repository-entity-read-methods.js](replica-operation-repository-entity-read-methods.js) - Get in-flight replica IDs for an entity. (importers: one)
 - [replica-operation-repository-incomplete-read-methods.js](replica-operation-repository-incomplete-read-methods.js) - Normalize incomplete-operation rows into the canonical owner view. (importers: one)

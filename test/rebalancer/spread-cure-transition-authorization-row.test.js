@@ -50,9 +50,8 @@ import {
 import {
   OPERATION_METADATA_KEY,
 } from '../../src/rebalancer/replica-operation-progress.js';
-import {
-  REPLICA_OPERATION_INSERT_SQL,
-} from '../../src/rebalancer/replica-operation-repository-constants.js';
+import {REPLICA_OPERATIONS_SCHEMA, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   createMockCache,
@@ -75,25 +74,10 @@ const PUBLISHED_EPOCH = 4;
 const AUTHORIZATION_KEY = OPERATION_METADATA_KEY.CURE_TRANSITION_AUTHORIZATION;
 const STAMP_KEY = OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP;
 const MOVE_FIELD = SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD;
-const INSERT_STATEMENT_FRAGMENT = 'INSERT INTO replica_operations';
-const STEPS_HISTORY_COLUMN = 'steps_history';
-const COLUMN_LIST_OPEN = '(';
-const COLUMN_LIST_CLOSE = ')';
-const COLUMN_SEPARATOR = ',';
-
-// The owner's INSERT column list, in parameter order, read from the statement
-// the repository writes with; the appended CREATE-admission columns are named
-// by their own schema owner, and everything before them is pre-admission.
-const INSERT_COLUMNS = Object.freeze(REPLICA_OPERATION_INSERT_SQL
-  .slice(REPLICA_OPERATION_INSERT_SQL.indexOf(COLUMN_LIST_OPEN) + 1,
-    REPLICA_OPERATION_INSERT_SQL.indexOf(COLUMN_LIST_CLOSE))
-  .split(COLUMN_SEPARATOR)
-  .map((column) => column.trim()));
 const ADMISSION_COLUMNS = Object.freeze(
   REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS.map(({name}) => name));
-const PRE_ADMISSION_COLUMNS = Object.freeze(
-  INSERT_COLUMNS.filter((column) => !ADMISSION_COLUMNS.includes(column)));
-const STEPS_HISTORY_PARAM_INDEX = INSERT_COLUMNS.indexOf(STEPS_HISTORY_COLUMN);
+const PRE_ADMISSION_COLUMNS = Object.freeze(REPLICA_OPERATIONS_SCHEMA.columns
+  .map(({name}) => name).filter((column) => !ADMISSION_COLUMNS.includes(column)));
 const STAMP_FIELDS = Object.freeze(
   Object.values(COMMITTED_MEMBERSHIP_ANSWER_FIELD).slice().sort());
 
@@ -145,13 +129,9 @@ function isJoin(move) {
   return move.type !== OperationType.REMOVE;
 }
 
-function stampOf(params) {
-  const first = JSON.parse(params[STEPS_HISTORY_PARAM_INDEX])[0];
+function stampOf(row) {
+  const first = JSON.parse(row.steps_history)[0];
   return first && typeof first === 'object' ? first[STAMP_KEY] : undefined;
-}
-
-function nullable(value) {
-  return value === undefined ? null : value;
 }
 
 async function createOperationCapturingInserts(move) {
@@ -182,18 +162,18 @@ async function createOperationCapturingInserts(move) {
     canonicalRows.push(row);
     return row;
   };
-  const engine = coordinator.sqlQueryEngine;
-  const executeQuery = engine.executeQuery.bind(engine);
-  engine.executeQuery = async (sql, params) => {
-    if (String(sql).includes(INSERT_STATEMENT_FRAGMENT)) {
+  const gateway = coordinator.controlPlaneSystemTableGateway;
+  const submitMutation = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (mutation, options) => {
+    if (mutation.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+        mutation.operation === 'insert') {
       inserts.push({
-        sql: String(sql),
-        params,
-        payload: JSON.stringify(params),
+        row: {...mutation.row},
+        payload: JSON.stringify(mutation.row),
         canonicalRow: canonicalRows.at(-1),
       });
     }
-    return executeQuery(sql, params);
+    return submitMutation(mutation, options);
   };
   try {
     const operation = await coordinator.createOperation(move);
@@ -211,18 +191,14 @@ test('the authorization rides the operation row and rows without it preserve ' +
   for (const [name, move] of UNAUTHORIZED_MOVES) {
     const {inserts} = await createOperationCapturingInserts(move);
     assert.equal(inserts.length, 1, `${name} wrote exactly one row`);
-    const {sql, params, payload, canonicalRow} = inserts[0];
-    assert.equal(sql, REPLICA_OPERATION_INSERT_SQL,
-      `${name}: the write is the row owner's INSERT statement`);
-    assert.equal(params.length, INSERT_COLUMNS.length,
-      `${name}: one parameter per owner column`);
+    const {row, payload, canonicalRow} = inserts[0];
     assert.ok(canonicalRow, `${name}: the row owner built the canonical row`);
-    assert.deepEqual(
-      PRE_ADMISSION_COLUMNS.map((column) =>
-        params[INSERT_COLUMNS.indexOf(column)]),
-      PRE_ADMISSION_COLUMNS.map((column) => nullable(canonicalRow[column])),
-      `${name}: every pre-admission parameter is the row owner's value`);
-    const stamp = stampOf(params);
+    for (const column of PRE_ADMISSION_COLUMNS) {
+      assert.ok(Object.hasOwn(row, column), `${name}: the write carries ${column}`);
+      assert.equal(row[column], canonicalRow[column],
+        `${name}: the pre-admission field ${column} is the row owner's value`);
+    }
+    const stamp = stampOf(row);
     assert.equal(stamp !== undefined, isJoin(move),
       `${name}: a join row carries the committed-membership stamp, a REMOVE ` +
       'row none');
@@ -231,7 +207,7 @@ test('the authorization rides the operation row and rows without it preserve ' +
         `${name}: the stamp carries exactly the answer owner's fields`);
     }
     for (const column of ADMISSION_COLUMNS) {
-      assert.equal(params[INSERT_COLUMNS.indexOf(column)], null,
+      assert.equal(row[column], null,
         `${name}: additive CREATE admission column ${column} begins unclaimed`);
     }
     assert.equal(payload.includes(AUTHORIZATION_KEY), false,
@@ -250,7 +226,7 @@ test('the authorization rides the operation row and rows without it preserve ' +
   const {operation, inserts} =
     await createOperationCapturingInserts(authorizedMove);
   assert.equal(inserts.length, 1, 'the authorized ADD wrote one row');
-  const stepsHistory = JSON.parse(inserts[0].params[STEPS_HISTORY_PARAM_INDEX]);
+  const stepsHistory = JSON.parse(inserts[0].row.steps_history);
   const stamped = stepsHistory[0][AUTHORIZATION_KEY];
   assert.ok(stamped, 'the first steps-history record carries the key');
   assert.equal(stepsHistory.length, 1,
@@ -278,7 +254,7 @@ test('the authorization rides the operation row and rows without it preserve ' +
     target_node_id: 'node-2',
     status: 'pending',
     workflow_step: 'PENDING',
-    steps_history: inserts[0].params[STEPS_HISTORY_PARAM_INDEX],
+    steps_history: inserts[0].row.steps_history,
     membership_publication_epoch: PUBLISHED_EPOCH,
   };
   const binding =

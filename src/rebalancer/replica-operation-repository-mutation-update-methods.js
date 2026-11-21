@@ -21,29 +21,9 @@ import {operationCarriesReplicaCreateAdmission} from
 import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
 
-// A terminal write that is also a step CAS (a REPLACE FAILED admitted
-// against its durable step, quest replace-source-removal-owner): both guards,
-// first-terminal-wins and the admitted step.
 const UPDATE_CONFIRMATION_UNRESOLVED = 'Committed operation update confirmation is unresolved';
 const UPDATE_CONFIRMATION_UNRESOLVED_CODE = 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED';
 const UPDATE_NOT_CONFIRMED = 'confirmation does not prove the requested write';
-
-const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL = `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL`;
-const UPDATE_OPERATION_TERMINAL_WITHOUT_CREATE_ADMISSION_SQL =
-  `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND completed_at IS NULL
-      AND create_admission_state IS NULL`;
-const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL =
-  `UPDATE replica_operations SET
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-    error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL
-      AND create_admission_state IS NULL`;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const EXPECTED_STEPS_HISTORY_REQUIRES_STEP_CAS =
@@ -328,16 +308,6 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           // at the caller that projected the row. Retry attempts repeat it.
           beforeAttempt: options.terminalAdmission,
         },
-        options.requireExactCreateTarget === true || options.elapsedWorkflowPreimage ? null : {
-          sql: this.resolveOperationUpdateSql(
-            expectedWorkflowStep,
-            terminalTransition,
-            options.requireCreateAdmissionAbsent === true,
-            expectedStepsHistory,
-          ) + Object.keys(removeReplyCasFields).map((field) => ` AND ${field} IS ?`).join(''),
-          params: [...this.buildReplicaOperationUpdateParams(operation, expectedWorkflowStep,
-            expectedStepsHistory), ...Object.values(removeReplyCasFields)],
-        },
       );
       if (result.admissionRefused === true) {
         return buildOperationUpdateOutcome({
@@ -392,31 +362,6 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       // may prove replay or another winner; uncertainty retains the obligation.
       return observation.outcome || buildOperationUpdateOutcome({persisted: false,
         disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null});
-    }
-
-    // An expected-step CAS write pins the step in the WHERE clause (and the
-    // observed steps history, when the writer read it); a terminal write
-    // guards on completed_at IS NULL; a terminal write that is also a step
-    // CAS carries both; the plain update carries neither.
-    resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition,
-      requireCreateAdmissionAbsent = false, expectedStepsHistory = null) {
-      if (typeof expectedStepsHistory === 'string') {
-        return SQL.UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY;
-      }
-      if (expectedWorkflowStep) {
-        if (terminalTransition && requireCreateAdmissionAbsent) {
-          return UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL;
-        }
-        return terminalTransition ?
-          UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL :
-          SQL.UPDATE_OPERATION_EXPECTING_STEP;
-      }
-      if (terminalTransition && requireCreateAdmissionAbsent) {
-        return UPDATE_OPERATION_TERMINAL_WITHOUT_CREATE_ADMISSION_SQL;
-      }
-      return terminalTransition ?
-        SQL.UPDATE_OPERATION_TERMINAL :
-        SQL.UPDATE_OPERATION;
     }
 
     async confirmPersistedOperationUpdate(operation, options) {

@@ -211,27 +211,20 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       return step;
     }
 
-    async executeReplicaOperationGatewayMutationWithRetry(
-      mutation,
-      callerOptions = {},
-      fallback = {},
-    ) {
+    async executeReplicaOperationGatewayMutationWithRetry(mutation, callerOptions = {}) {
       return withMutationWriteIdentity(callerOptions, (options) =>
-        this.retryReplicaOperationGatewayMutation(mutation, options,
-          fallback));
+        this.retryReplicaOperationGatewayMutation(mutation, options));
     }
 
-    async retryReplicaOperationGatewayMutation(mutation, options, fallback) {
+    async retryReplicaOperationGatewayMutation(mutation, options) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       let priorMutationDeliveryMayHaveBeenAttempted = false;
-      const shouldRetryDeferredCanonicalMutation =
-        this.canUseReplicaOperationMutationIngress(mutation?.operation);
       const operationCreationInsert =
         mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT;
       while (true) {
         const result = await this.executeReplicaOperationGatewayMutationAttempt(
-          mutation, options, fallback, retryAttempt);
+          mutation, options, retryAttempt);
         if (result.success === true) {
           return result;
         }
@@ -246,12 +239,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           return step.terminal;
         }
         const scanResult = step.result;
-        if (
-          this.shouldShortCircuitDeferredMutationRetry(scanResult) &&
-          !shouldRetryDeferredCanonicalMutation
-        ) {
-          return scanResult;
-        }
         const elapsedMs = this.timeSource.now() - startedAt;
         const remainingMs = this.resolveOperationMutationRemainingRetryMs(
           elapsedMs,
@@ -283,7 +270,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     async executeReplicaOperationGatewayMutationAttempt(
       mutation,
       options,
-      fallback,
       retryAttempt,
     ) {
       return this.runAdmittedOperationMutationAttempt(options, async () => {
@@ -292,83 +278,11 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           retryAttempt,
         );
         try {
-          return await this.executeReplicaOperationGatewayMutation(
-            mutation,
-            queryOptions,
-            fallback,
-          );
+          return await this.submitOperationMutation(mutation, queryOptions);
         } catch (error) {
           return error;
         }
       });
-    }
-
-    async executeReplicaOperationGatewayMutation(
-      mutation,
-      queryOptions,
-      fallback = {},
-    ) {
-      const gateway = this.controlPlaneSystemTableGateway;
-      const canUseCanonicalMutationIngress =
-        this.canUseReplicaOperationMutationIngress(mutation?.operation);
-      if (canUseCanonicalMutationIngress) {
-        if (typeof gateway?.submitMutation === 'function') {
-          return gateway.submitMutation(mutation, queryOptions);
-        }
-        if (
-          mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT &&
-          typeof gateway?.insertSystemTableRow === 'function'
-        ) {
-          return gateway.insertSystemTableRow(
-            mutation.tableName,
-            mutation.row,
-            queryOptions,
-          );
-        }
-        if (
-          mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE &&
-          typeof gateway?.updateSystemTableRow === 'function'
-        ) {
-          return gateway.updateSystemTableRow(
-            mutation.tableName,
-            mutation.whereClause,
-            mutation.data,
-            queryOptions,
-          );
-        }
-      }
-      if (
-        typeof gateway?.executeQuery === 'function' &&
-        typeof fallback?.sql === 'string'
-      ) {
-        return gateway.executeQuery(
-          fallback.sql,
-          Array.isArray(fallback?.params) ? fallback.params : [],
-          queryOptions,
-        );
-      }
-      throw new Error(
-        REPLICA_OPERATION_REPOSITORY_LITERAL.REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS,
-      );
-    }
-
-    canUseReplicaOperationMutationIngress(operationType) {
-      const gateway = this.controlPlaneSystemTableGateway;
-      const cdcIntegrationService =
-        typeof gateway?.resolveCdcIntegrationService === 'function' ?
-          gateway.resolveCdcIntegrationService() :
-          gateway?.cdcIntegrationService || null;
-      if (operationType === CONTROL_PLANE_MUTATION_OPERATION.INSERT) {
-        return (
-          typeof cdcIntegrationService?.insertSystemTableRow === 'function'
-        );
-      }
-      if (operationType === CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
-        return (
-          typeof cdcIntegrationService?.updateSystemTableRow === 'function'
-        );
-      }
-      return false;
     }
 
     shouldShortCircuitDeferredMutationRetry(errorResult) {

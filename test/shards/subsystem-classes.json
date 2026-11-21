@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 291,
-    "query-sql": 208,
+    "query-sql": 209,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2722,
-  "digest": "fnv1a32-4a5c3fc8",
+  "censusSize": 2723,
+  "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5cbdb0f8",
+  "observationDigest": "fnv1a32-c1e61eb0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1689,6 +1689,7 @@
     "test/query/readiness-routing-denial-observability.test.js": "query-sql",
     "test/query/reduce-by-key.test.js": "query-sql",
     "test/query/reduce-continuation.test.js": "query-sql",
+    "test/query/replica-operation-structured-mutation-native.test.js": "query-sql",
     "test/query/result-stream.test.js": "query-sql",
     "test/query/retry-continuation-flow.test.js": "query-sql",
     "test/query/retry-idempotency.test.js": "query-sql",
@@ -5659,6 +5660,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/replica-dispatch-service-constants.js",
         "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/storage-capacity-accounting-service.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -10375,14 +10377,24 @@
         "src/storage/data-directory-process-owner.js"
       ]
     },
+    "test/integration/message-group-fresh-identity-replacement.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
     "test/integration/message-group-learner-discovery.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/operation-workflow-message-group-native-read.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -10395,6 +10407,8 @@
     "test/integration/message-group-learner-join.integration.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-service-handler-setup.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
@@ -10410,6 +10424,7 @@
         "src/raft/snapshot-checkpoint-constants.js",
         "src/raft/snapshot-install-constants.js",
         "src/raft/snapshot-transfer.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-message-group-membership-permit.js",
@@ -10426,6 +10441,8 @@
     },
     "test/integration/message-group-learner-promotion-recording-guards.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
@@ -10439,6 +10456,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-transfer.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -10451,6 +10469,8 @@
     },
     "test/integration/message-group-learner-promotion-selection-guards.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
@@ -10464,6 +10484,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-transfer.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -10475,6 +10496,8 @@
     },
     "test/integration/message-group-learner-promotion.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
@@ -10488,6 +10511,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-transfer.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -10500,12 +10524,15 @@
     },
     "test/integration/message-group-learner-recipient.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-message-group-membership-permit.js",
         "src/transport/transport-semantic-outcome.js",
@@ -10515,6 +10542,8 @@
     },
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -10528,6 +10557,7 @@
         "src/raft/snapshot-checkpoint-constants.js",
         "src/raft/snapshot-checkpoint-store.js",
         "src/raft/snapshot-install-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/transport/transport-semantic-outcome.js",
         "test/test-helpers/learner-operation-fixture.js"
@@ -10535,6 +10565,8 @@
     },
     "test/integration/message-group-learner-successor-ordering.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10543,6 +10575,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-message-group-membership-permit.js",
@@ -11322,6 +11355,7 @@
       "files": [
         "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/message-group/message-group-service-row-owner.js",
@@ -11338,6 +11372,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-transfer.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -11882,6 +11917,8 @@
     },
     "test/node/message-group-create-admission-recovery.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -11890,6 +11927,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
@@ -11918,6 +11956,8 @@
       "files": [
         "src/bootstrap/shared/message-group-service-handler-setup.js",
         "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -11927,6 +11967,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/transport/transport-semantic-outcome.js",
@@ -15662,6 +15703,39 @@
         "src/control-plane/readiness-planning-snapshot-owner.js"
       ]
     },
+    "test/query/replica-operation-structured-mutation-native.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-constants.js",
+        "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/query/retry-continuation-flow.test.js": {
       "files": [
         "src/query/budget-enforcer.js",
@@ -18510,9 +18584,11 @@
     },
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/priority-recovery-completion.js",
         "src/control-plane/timeout-budget.js",
         "src/rebalancer/executor-outcome-constants.js",
@@ -18870,6 +18946,8 @@
     },
     "test/rebalancer/message-group-fresh-identity-two-replace.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
@@ -18883,6 +18961,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-transfer.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
         "src/rebalancer/replica-create-admission-token.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -18893,6 +18972,9 @@
     },
     "test/rebalancer/message-group-membership-branch-authorization.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js"
       ]
     },
@@ -19276,8 +19358,10 @@
     },
     "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
         "src/rebalancer/replica-operation-repository.js",
@@ -19360,6 +19444,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -19823,12 +19908,18 @@
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js"
+      ]
+    },
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": {
       "files": [
         "src/bootstrap/system-table-runtime-schema-definitions.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/partition/partition-placement-admission-decision.js",
         "src/partition/partition-placement-admission.js",
         "src/partition/partition-service-constants.js",
@@ -25343,6 +25434,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/workflow/durable-workflow-coordinator.js",

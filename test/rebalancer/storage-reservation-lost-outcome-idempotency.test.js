@@ -5,6 +5,7 @@
  * hold instead of colliding with it or allocating another hold.
  */
 
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {ERRORS, NUM, TIME_MS, WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -323,6 +324,7 @@ function createCoordinator(sqlEngine) {
   });
   accounting.initialize({systemTableCache: cache});
   const gateway = {
+    submitMutation: createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)),
     readAuthoritativeRows: async (_table, sql, params = [], options = {}) =>
       sqlEngine.executeQuery(sql, params, options),
     readRows: async (_table, sql, params = [], options = {}) =>

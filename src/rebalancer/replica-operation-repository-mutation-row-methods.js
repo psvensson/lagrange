@@ -182,33 +182,6 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       }
       return whereClause;
     }
-
-    buildReplicaOperationUpdateParams(
-      operation,
-      expectedWorkflowStep = null,
-      expectedStepsHistory = null,
-    ) {
-      const params = [
-        operation.status,
-        operation.workflowStep,
-        operation.updatedAt,
-        operation.completedAt,
-        operation.errorMessage,
-        JSON.stringify(operation.stepsHistory),
-        operation.replicaId,
-        operation.operationId,
-      ];
-      if (
-        typeof expectedWorkflowStep === 'string' &&
-        expectedWorkflowStep.length > 0
-      ) {
-        params.push(expectedWorkflowStep);
-      }
-      if (typeof expectedStepsHistory === 'string') {
-        params.push(expectedStepsHistory, operation.createdAt);
-      }
-      return params;
-    }
   }
 
   for (

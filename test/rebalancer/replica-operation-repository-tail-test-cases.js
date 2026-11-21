@@ -244,16 +244,11 @@ export function registerReplicaOperationRepositoryTailTests({
       const authoritativeReads = [];
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          cdcIntegrationService: {
-            async insertSystemTableRow() {
-              return {success: true};
-            },
-          },
           readRows: async (tableName, sql, params) => {
             authoritativeReads.push({tableName, sql, params});
             return {success: true, rows: [makeRow()]};
           },
-          insertSystemTableRow: async (tableName, row, options = {}) => {
+          submitMutation: async ({tableName, row}, options = {}) => {
             insertedRows.push({tableName, row, options});
             return {success: true, affectedRows: 1};
           },
@@ -343,12 +338,7 @@ export function registerReplicaOperationRepositoryTailTests({
     };
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
-        cdcIntegrationService: {
-          async insertSystemTableRow() {
-            return {success: true};
-          },
-        },
-        insertSystemTableRow: async () => ({
+        submitMutation: async () => ({
           success: false,
           error: 'query_admission_deferred',
           errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
@@ -733,13 +723,8 @@ export function registerReplicaOperationRepositoryTailTests({
       const gatewayMutations = [];
       const repo = createTestRepository({
         controlPlaneSystemTableGateway: {
-          cdcIntegrationService: {
-            async updateSystemTableRow() {
-              return {success: true};
-            },
-          },
           readRows: async () => ({success: true, rows: [makeRow()]}),
-          updateSystemTableRow: async (tableName, whereClause, data, options = {}) => {
+          submitMutation: async ({tableName, whereClause, data}, options = {}) => {
             gatewayMutations.push({tableName, whereClause, data, options});
             return {success: true, affectedRows: 1};
           },

@@ -17,7 +17,13 @@ import {RebalanceCoordinator} from
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {createTestCoordinator} from '../rebalancer/test-helpers.js';
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
+import {
+  createFixtureSystemMutationPort,
+  createTestCoordinator,
+} from '../rebalancer/test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 // ---------------------------------------------------------------------------
@@ -35,30 +41,6 @@ const DEFAULT_SQL_MUTATION_RESULT = Object.freeze({
   rows: [],
   changes: 1,
 });
-
-function buildPersistedReplicaOperationRowFromUpdate(
-  params = [],
-  existingRow = {},
-) {
-  return {
-    ...existingRow,
-    operation_id: params[7] || existingRow.operation_id || null,
-    type: existingRow.type || 'ADD',
-    partition_id: existingRow.partition_id || 'partition-1',
-    replica_id: params[6] ?? existingRow.replica_id ?? null,
-    source_node_id: existingRow.source_node_id || MOCK_NODE_ID,
-    target_node_id: existingRow.target_node_id || 'node-remote',
-    status: params[0] ?? existingRow.status ?? null,
-    workflow_step: params[1] ?? existingRow.workflow_step ?? null,
-    created_at: existingRow.created_at ?? FIXED_NOW,
-    updated_at: params[2] ?? existingRow.updated_at ?? FIXED_NOW,
-    completed_at: params[3] ?? existingRow.completed_at ?? null,
-    error_message: params[4] ?? existingRow.error_message ?? null,
-    steps_history: params[5] ?? existingRow.steps_history ?? JSON.stringify([]),
-    entity_type: existingRow.entity_type || 'partition',
-    entity_id: existingRow.entity_id || 'partition-1',
-  };
-}
 
 /**
  * Build a minimal RebalanceCoordinator for regression tests.
@@ -97,28 +79,31 @@ function createMinimalCoordinator(overrides = {}) {
         };
       }
 
-      const result = await baseSqlQueryEngine.executeQuery(
-        sql,
-        params,
-        queryOptions,
-      );
-      if (result?.success === false) {
-        return result;
-      }
-
-      if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT)) {
-        const operationId = params[7] || null;
-        const existingRow = authoritativeReplicaOperations.get(operationId) || {};
-        authoritativeReplicaOperations.set(
-          operationId,
-          buildPersistedReplicaOperationRowFromUpdate(params, existingRow),
-        );
-      }
-
-      return result;
+      return baseSqlQueryEngine.executeQuery(sql, params, queryOptions);
     },
   };
+  const submitFixtureMutation = createFixtureSystemMutationPort(
+    (...args) => sqlQueryEngine.executeQuery(...args),
+  );
   const controlPlaneSystemTableGateway = overrideControlPlaneSystemTableGateway || {
+    async submitMutation(mutation, options) {
+      const {operation, tableName, whereClause, data} = mutation;
+      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
+          tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        throw new Error('Unexpected monotonic workflow mutation');
+      }
+      const current = authoritativeReplicaOperations.get(whereClause.operation_id);
+      if (!current || !Object.entries(whereClause).every(
+        ([column, value]) => (current[column] ?? null) === value,
+      )) {
+        return {success: true, affectedRows: 0};
+      }
+      const result = await submitFixtureMutation(mutation, options);
+      if (result?.success === true && (result.affectedRows ?? result.changes) === 1) {
+        Object.assign(current, data);
+      }
+      return result;
+    },
     async executeQuery(sql, params = [], queryOptions = {}) {
       return sqlQueryEngine.executeQuery(sql, params, queryOptions);
     },
@@ -154,7 +139,15 @@ function createMinimalCoordinator(overrides = {}) {
   }));
   coordinator.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
   coordinator.repository.replicaOperationAuthoritativeVisibilityRetryDelayMs = 0;
-  return coordinator;
+  return {
+    coordinator,
+    seedOperation(operation) {
+      authoritativeReplicaOperations.set(
+        operation.operationId,
+        coordinator.repository.buildReplicaOperationRow(operation),
+      );
+    },
+  };
 }
 
 /**
@@ -380,11 +373,12 @@ test('DurableWorkflowCoordinator - FAILED transition is allowed from ' +
 
 test('RebalanceCoordinator - updateStep records only forward ' +
   'transitions in stepsHistory', async (t) => {
-  const coordinator = createMinimalCoordinator();
+  const {coordinator, seedOperation} = createMinimalCoordinator();
   coordinator.initialize();
 
   try {
     const operation = createTestOperation();
+    seedOperation(operation);
 
     // Walk the canonical ADD path forward
     const forwardSteps = [
@@ -545,7 +539,7 @@ test('DurableWorkflowCoordinator - getWorkflowSteps returns ordered ' +
 test('RebalanceCoordinator - updateStep persists once through the guarded ' +
   'autocommit lane', async (t) => {
   const persistCalls = [];
-  const coordinator = createMinimalCoordinator({
+  const {coordinator, seedOperation} = createMinimalCoordinator({
     sqlQueryEngine: {
       async executeQuery(sql, params, queryOptions) {
         persistCalls.push({sql, params, queryOptions});
@@ -557,6 +551,7 @@ test('RebalanceCoordinator - updateStep persists once through the guarded ' +
 
   try {
     const operation = createTestOperation();
+    seedOperation(operation);
     await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
 
     t.equal(persistCalls.length, 1, 'transition must persist exactly once');
@@ -575,7 +570,7 @@ test('RebalanceCoordinator - updateStep persists once through the guarded ' +
 test('RebalanceCoordinator - guarded transition propagates a durable ' +
   'persist failure', async (t) => {
   let persistAttempts = 0;
-  const coordinator = createMinimalCoordinator({
+  const {coordinator, seedOperation} = createMinimalCoordinator({
     sqlQueryEngine: {
       async executeQuery() {
         persistAttempts += 1;
@@ -587,6 +582,7 @@ test('RebalanceCoordinator - guarded transition propagates a durable ' +
 
   try {
     const operation = createTestOperation();
+    seedOperation(operation);
 
     let threw = false;
     try {
@@ -606,7 +602,7 @@ test('RebalanceCoordinator - guarded transition propagates a durable ' +
 test('RebalanceCoordinator - completeOperation persists one terminal ' +
   'transition', async (t) => {
   let persistCalls = 0;
-  const coordinator = createMinimalCoordinator({
+  const {coordinator, seedOperation} = createMinimalCoordinator({
     sqlQueryEngine: {
       async executeQuery(sql) {
         if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT)) {
@@ -623,6 +619,7 @@ test('RebalanceCoordinator - completeOperation persists one terminal ' +
       workflowStep: WORKFLOW_STEP.SYNCING,
       status: 'syncing',
     });
+    seedOperation(operation);
 
     await coordinator.completeOperation(operation);
 
@@ -641,12 +638,15 @@ test('RebalanceCoordinator - failOperation persists one FAILED transition',
       const operation = await seedCommittedOperation(
         t, coordinator, operationId, WORKFLOW_STEP.CREATING,
       );
-      const execute = coordinator.sqlQueryEngine.executeQuery.bind(coordinator.sqlQueryEngine);
+      const gateway = coordinator.repository.controlPlaneSystemTableGateway;
+      const submit = gateway.submitMutation.bind(gateway);
       const failureWrites = [];
-      coordinator.sqlQueryEngine.executeQuery = async (sql, params, options) => {
-        const result = await execute(sql, params, options);
-        if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT) && sql.includes('workflow_step')) {
-          failureWrites.push(result.changes);
+      gateway.submitMutation = async (mutation, options) => {
+        const result = await submit(mutation, options);
+        if (mutation.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            mutation.operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE &&
+            mutation.data.workflow_step === WORKFLOW_STEP.FAILED) {
+          failureWrites.push(coordinator.repository.extractMutationChangeCount(result));
         }
         return result;
       };

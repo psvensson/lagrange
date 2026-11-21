@@ -20,6 +20,7 @@
  * Epic: solve/epics/rebalancer-operation-safety-audit-remediation.md
  */
 
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -137,6 +138,7 @@ function createCoordinatorWithStore(store) {
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(store.executeQuery),
       readAuthoritativeRows: (tableName, sql, params) =>
         store.executeQuery(sql, params),
       readRows: (tableName, sql, params) => store.executeQuery(sql, params),

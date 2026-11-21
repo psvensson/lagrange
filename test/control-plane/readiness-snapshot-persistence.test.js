@@ -3,6 +3,7 @@
  * Task 4.2 — Requirements 4, 7, 9.
  */
 
+import {createFixtureSystemMutationPort} from '../rebalancer/test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
@@ -215,6 +216,7 @@ function createCanonicalOperationStore(t) {
     }
   };
   const gateway = {
+    submitMutation: createFixtureSystemMutationPort(executeQuery),
     executeQuery,
     async readAuthoritativeRows(_tableName, sql, params) {
       return executeQuery(sql, params);

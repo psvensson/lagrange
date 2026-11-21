@@ -256,16 +256,6 @@ test(
         LIVE_LEASE_EXPIRES_AT_MS,
         'the update payload re-stamps lease_expires_at on every write',
       );
-
-      const updateParams =
-        coordinator.repository.buildReplicaOperationUpdateParams(operation);
-      t.equal(
-        updateParams.length,
-        8,
-        'the raw-SQL fallback update keeps the canonical 8-param shape ' +
-          '(the lease rides the dedicated touch statement, never the ' +
-          'transition shape)',
-      );
     } finally {
       await coordinator.shutdown();
     }

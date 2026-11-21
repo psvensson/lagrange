@@ -3,6 +3,7 @@
  * learner state is a supplied durable fixture, NOT proof of runtime admission.
  * No test here claims a physical CREATE or distributed SQL/Raft execution.
  */
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -142,6 +143,7 @@ async function setup(t, {initial = false} = {}) {
     return answer;
   }
   const gateway = {
+    submitMutation: createFixtureSystemMutationPort((...args) => gateway.executeQuery(...args)),
     async executeQuery(sql, params = []) {
       if (sql.includes('SET message_group_membership_phase') ||
         sql.includes('SET message_group_membership_owner_claim') ||

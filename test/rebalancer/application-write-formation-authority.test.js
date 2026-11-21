@@ -186,15 +186,13 @@ function createGatewayRetryRepository(results) {
   const repository = Object.create(ReplicaOperationRepository.prototype);
   let invocationCount = 0;
   repository.timeSource = {now: () => 0};
-  repository.canUseReplicaOperationMutationIngress = () => true;
   repository.buildOperationMutationQueryOptions = () => ({});
-  repository.executeReplicaOperationGatewayMutation = async () => {
+  repository.submitOperationMutation = async () => {
     const result = results[Math.min(invocationCount, results.length - 1)];
     invocationCount += 1;
     return result;
   };
   repository.isRetryableOperationPersistError = () => true;
-  repository.shouldShortCircuitDeferredMutationRetry = () => false;
   repository.resolveOperationMutationRemainingRetryMs = () => 100;
   repository.shouldRotateOperationMutationSessionOnRetry = () => false;
   repository.resolveOperationMutationRetryDelayMs = () => 0;
