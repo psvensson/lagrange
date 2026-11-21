@@ -2,7 +2,7 @@
 // replace repository authority in persistence or reconstruction witnesses.
 import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
-  getWorkflowSteps, ReplicaStatus, WORKFLOW_STEP_TO_STATUS,
+  getWorkflowSteps, isTerminalStep, ReplicaStatus, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {createOperationAt} from '../../src/rebalancer/replica-status.js';
 import {normalizeRebalancerEntityIdentity} from '../../src/rebalancer/rebalancer-entity-identity.js';
@@ -28,13 +28,16 @@ function buildCreatedOperationFixture({createdAt, entityType, entityId, ...param
 }
 
 // That record after its owner committed `workflowStep` at `updatedAt`: the
-// status the step maps to, and the step appended to the producer history.
+// status the step maps to, the step appended to the producer history, and,
+// for a terminal step, the completion time the owner's terminal commit sets.
 function advanceOperationFixture(operation, workflowStep, updatedAt = operation.updatedAt) {
+  const failed = workflowStep === WORKFLOW_STEP.FAILED;
   return {
     ...operation,
     workflowStep,
-    status: WORKFLOW_STEP_TO_STATUS[workflowStep],
+    status: failed ? ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[workflowStep],
     updatedAt,
+    completedAt: isTerminalStep(operation.type, workflowStep) ? updatedAt : null,
     stepsHistory: [...operation.stepsHistory, ...workflowFixtureHistory(workflowStep, updatedAt)],
   };
 }
