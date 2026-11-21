@@ -428,10 +428,11 @@ class SystemMetadataOwnerBase {
     };
     try {
       const result = await runRetryableControlPlaneWrite(
-        // The caller's own write identity, when it names one, wins.
-        (attemptIdentity) => executor({...attemptIdentity, ...mutationOptions}),
+        (attemptIdentity) => executor({...mutationOptions, ...attemptIdentity}),
         {
           ...retryOptions,
+          writeIdentity: mutationOptions.writeIdentity,
+          idempotencyKey: mutationOptions.idempotencyKey,
           spentWait: SYSTEM_METADATA_WRITE_WAIT,
           // Names the owner and its table: a logs-table write's spent budget
           // is then routed off the logs table by the reporter.

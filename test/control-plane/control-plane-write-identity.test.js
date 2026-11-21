@@ -4,6 +4,8 @@
 // re-drive is still its own entry (never a blind second write).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {runRetryableControlPlaneWrite} from
+  '../../src/bootstrap/shared/retryable-control-plane-write.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {completeNamedWriteDelivery, createNamedWriteCaller, createNamedWriteDelivery,
@@ -389,4 +391,22 @@ test('cancelled and expired observers detach before the transport answers', asyn
   assert.equal(await live, answer);
   assert.equal(delivery.waiters.size, 0);
   assert.equal(clock.pendingTimerCount(), 0);
+});
+
+test('bounded retry leaves an ambiguous delivery under its caller’s explicit write key', async () => {
+  const used = [];
+  const body = {value: 'unchanged across waits'};
+  const invoke = (key, answer) => runRetryableControlPlaneWrite(
+    (identity) => runControlPlaneWrite(identity, body, ROUTE, async (received, physicalKey) => {
+      assert.deepEqual(received, body);
+      used.push(physicalKey);
+      return answer(physicalKey);
+    }),
+    {timeoutMs: 0, idempotencyKey: key},
+  );
+  const first = await invoke(undefined, () => UNKNOWN_ANSWER);
+  assert.equal(first.success, false);
+  const last = await invoke(used[0], replyFor);
+  assert.equal(last.success, true);
+  assert.deepEqual(used, [used[0], used[0]], 'a later bounded call carries the original physical key');
 });
