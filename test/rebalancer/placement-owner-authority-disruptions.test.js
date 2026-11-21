@@ -20,6 +20,10 @@ import {PLACEMENT_ADMIT_TYPE} from '../../src/partition/partition-placement-admi
 import {ReplicaStatus, WORKFLOW_STEP_TO_STATUS} from
   '../../src/rebalancer/replica-operation-progress.js';
 import {PLACEMENT_TRIGGER} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import {
   LEDGER, THREE_NODES, admittedOperations, ownerOf, startThreeNodeLedger, transferReport,
   waitUntil, withPlacementWorld,
@@ -117,21 +121,32 @@ const THREE_CLASSES = Object.freeze({nodes: THREE_NODES, partitions: [
 ]});
 
 // Complete an admitted copy as its executor would: the terminal workflow
-// transition committed on the ledger, and the new replica's SERVICES row
-// published.
-function completeCopy(world, leader, operation, partitionId) {
-  world.log.appendCommitted({type: PARTITION_SERVICE_OPERATION.QUERY,
-    entryId: `fixture-complete:${operation.operationId}`,
-    sql: 'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = ? ' +
-      'WHERE operation_id = ?',
-    params: [WORKFLOW_STEP.COMPLETED, WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.COMPLETED] ??
-      ReplicaStatus.ACTIVE, Date.now(), operation.operationId],
+// transition (the complete tuple, compare-and-set on the current step and an
+// open completion) planned by the production gateway's SQL planner and
+// committed on the ledger, and the new replica's SERVICES row published.
+const planner = new ControlPlaneSystemTableGateway();
+function completeCopy(world, leader, operationId, partitionId) {
+  const row = world.ledgerRows(leader, partitionId).find((candidate) =>
+    candidate.operation_id === operationId);
+  const nowMs = Math.max(Date.now(), Number(row.updated_at) + 1);
+  const {sql, params} = planner.buildSqlMutationPlan({operation: 'update',
+    tableName: 'replica_operations',
+    whereClause: {operation_id: operationId, workflow_step: row.workflow_step,
+      completed_at: null},
+    data: {workflow_step: WORKFLOW_STEP.COMPLETED,
+      status: WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.COMPLETED] ?? ReplicaStatus.ACTIVE,
+      updated_at: nowMs, completed_at: nowMs,
+      steps_history: JSON.stringify([...JSON.parse(row.steps_history),
+        {step: WORKFLOW_STEP.COMPLETED, timestamp: nowMs}])}});
+  const entryId = `fixture-complete:${operationId}`;
+  world.log.appendCommitted({type: PARTITION_SERVICE_OPERATION.QUERY, entryId, sql, params,
     timestamp: leader.ledger.hlcClock.now().toString(), proposedBy: 'fixture-executor',
     proposedAt: 0});
   world.publishRow('services', {service_id: `${partitionId}-n3`, replica_id: `${partitionId}-n3`,
     partition_id: partitionId, node_id: 'n3', service_type: 'partition', status: 'active',
     raft_role: 'follower', address: `n3/partition/${partitionId}-n3`,
-    created_at: Date.now(), updated_at: Date.now()});
+    created_at: nowMs, updated_at: nowMs});
+  return entryId;
 }
 
 test('P11 useful progress after the disruption clears: three deficits of different classes ' +
@@ -166,7 +181,8 @@ test('P11 useful progress after the disruption clears: three deficits of differe
       `${reportAfterClear}`);
     const [priority] = admittedOperations(world, n1, 'sql_transactions-p1');
     const passesBeforeCompletion = n1.probe.passes.length;
-    completeCopy(world, n1, priority, 'sql_transactions-p1');
+    const completionEntryId = completeCopy(world, n1, priority.operationId,
+      'sql_transactions-p1');
     let progressed = true;
     try {
       await waitUntil(() => admittedOperations(world, n1, 'orders-p1').length === 1,
@@ -178,6 +194,7 @@ test('P11 useful progress after the disruption clears: three deficits of differe
     await world.idle();
     const report = reportOf(t, world, 'orders-p1');
     const afterCompletion = {
+      completionOutcome: readCommittedStatementOutcome(n1.ledger, `entry:${completionEntryId}`),
       applyFailures: world.log.applyFailures,
       priorityRow: world.ledgerRows(n1, 'sql_transactions-p1').map((row) =>
         `${row.workflow_step}/${row.status}`),
