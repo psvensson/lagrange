@@ -235,7 +235,6 @@ function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
       return deletedGenerationBound;
     },
     confirmCleanupComplete: completionReceipt.confirm,
-    requireAbsent,
     requireComplete: () => deletedGenerationBound ?
       requireAbsent() : completionReceipt.requireCurrent(),
   });
@@ -787,6 +786,7 @@ function recoveryTimeoutStartedAt(stateMachine, state, stateEnteredAt) {
 }
 
 export {
+  REMOVAL_AUTHORITY_KIND,
   bindAuthoritativeRemovalAuthority,
   completeDurableRemovalWithAuthority,
   durableRowVersion,

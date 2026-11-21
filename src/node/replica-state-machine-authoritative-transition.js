@@ -200,11 +200,23 @@ async function resolveAuthoritativeLifecycleOutcome(
     return true;
   }
   if (rowMatchesLifecycleEvidence(observation.row, evidence)) {
-    throw transitionError || durableTransitionNotAppliedError(
-      replicaId,
-      newState,
-      {success: true, deferRetry: true},
-    );
+    if (transitionError?.deferRetry === false) {
+      throw transitionError;
+    }
+    if (transitionError?.deferRetry === true) {
+      throw transitionError;
+    }
+    throw transitionError ?
+      authoritativeLifecycleTransitionError(
+        AUTHORITATIVE_LIFECYCLE_TRANSITION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
+        replicaId,
+        transitionError,
+      ) :
+      durableTransitionNotAppliedError(
+        replicaId,
+        newState,
+        {success: true, deferRetry: true},
+      );
   }
   await installObservedLifecycle(stateMachine, observation);
   return false;

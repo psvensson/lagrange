@@ -22,6 +22,8 @@ import {isReplicaServiceHandlerBound} from
   './replica-transport-handler-identity.js';
 import {isCreateSyncingDeferral} from
   './replica-state-machine-create-syncing-edge.js';
+import {matchesRequiredClosedCreateGeneration} from
+  './replica-state-machine-create-admission-transition.js';
 import {
   IDENTITY_WAIT,
   IDENTITY_WAIT_AWAITED,
@@ -150,6 +152,9 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           cleanupToken: additionalData.cleanupToken,
           createAttemptToken: additionalData.createAttemptToken,
           createAdmissionEvidence: additionalData.createAdmissionEvidence,
+          // A REMOVING intent: the create generation whose CREATE admission
+          // the removal closed first; the lifecycle owner refuses any other.
+          closedCreateGeneration: additionalData.closedCreateGeneration,
           serviceId: existing?.service_id || replicaId,
           serviceType:
             existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
@@ -191,9 +196,17 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           const latest = this.replicaStateMachine?.getState?.(replicaId);
           const latestState = typeof latest === REPLICA_HANDLER_TYPEOF.STRING ?
             latest : latest?.state;
-          if (latestState === ReplicaStatus.REMOVING) {
+          if (latestState === ReplicaStatus.REMOVING &&
+              matchesRequiredClosedCreateGeneration(
+                latest,
+                additionalData.closedCreateGeneration,
+              )) {
             transitionResult = true;
-          } else if (latestState === ReplicaStatus.FAILED) {
+          } else if (latestState === ReplicaStatus.FAILED &&
+              matchesRequiredClosedCreateGeneration(
+                latest,
+                additionalData.closedCreateGeneration,
+              )) {
             transitionResult = await Promise.resolve(
               this.replicaStateMachine.transition(replicaId, newStatus, {
                 partitionId,
@@ -204,6 +217,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
                 createAttemptToken: additionalData.createAttemptToken,
                 createAdmissionEvidence:
                   additionalData.createAdmissionEvidence,
+                closedCreateGeneration: additionalData.closedCreateGeneration,
                 serviceId: existing?.service_id || replicaId,
                 serviceType:
                   existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,

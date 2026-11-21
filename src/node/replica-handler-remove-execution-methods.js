@@ -28,6 +28,10 @@ import {
   removalRowDeleteDeferred,
   retryableRemovalDebtError,
 } from './replica-removal-debt-errors.js';
+import {closeRetiringGenerationCreateAdmission} from
+  './replica-removal-create-admission-close.js';
+import {isRecordedReplicaRemovalCompletion, recordReplicaRemovalCompletion} from
+  './replica-removal-completion-record.js';
 import {GROUP_RETIREMENT_REASON} from
   '../partition/group-retirement-evidence.js';
 
@@ -149,12 +153,8 @@ async function takeoverRemovingRowForCleanupOrThrow(
   guard,
   reason,
 ) {
-  if (!await guard.requireRemoving() || !guard.isCurrent()) {
-    throw removalRowDeleteDeferred(replicaId);
-  }
-  const admissionClosed = await handler.getReplicaCreateAdmissionOwner()
-    .closeForLifecycle(authority.replicaState);
-  if (admissionClosed !== true || !guard.isCurrent() ||
+  // CREATE admission closed before the REMOVING intent: no census here.
+  if (!await guard.requireRemoving() || !guard.isCurrent() ||
       guard.beginExactDelete() !== true) {
     throw removalRowDeleteDeferred(replicaId);
   }
@@ -336,16 +336,14 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         );
         throw error;
       }
-      return execution.serviceRowRemoved && guard.requireAbsent();
+      // One completion predicate, the guard's requireComplete: the row is
+      // absent, or a failed-create cleanup's operation-bound receipt current.
+      return true;
     },
     () => {
       if (!execution.cleanupError) handler.localServices.delete(replicaId);
-      handler.setLocalReplica(replicaId, {
-        replicaId,
-        partitionId,
-        status: ReplicaStatus.REMOVED,
-        service: execution.cleanupError ? service : null,
-      });
+      recordReplicaRemovalCompletion(handler, {replicaId, partitionId,
+        operationId, service: execution.cleanupError ? service : null});
     },
     {
       partitionId,
@@ -539,7 +537,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
     /**
      * Publish the replica's retiring row (REMOVING): the signal on which the
      * group's leader proposes its RemoveNode. A replica whose row already
-     * reads REMOVING has already published it.
+     * reads REMOVING has already published it. Only on the generation
+     * whose CREATE admission was closed first.
      * @param {Object} context - {operationId, replicaId, partitionId,
      *   service, removalLifecycleSnapshot}.
      * @return {Promise<Object>} {skipRemovingStatusWrite, deferred}; deferred
@@ -554,11 +553,16 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           deferred: false,
         };
       }
+      const {closed, generation: closedCreateGeneration} =
+        await closeRetiringGenerationCreateAdmission(this,
+          {operationId, replicaId, partitionId});
+      if (!closed) return {skipRemovingStatusWrite: false, deferred: true};
       try {
         await this.persistReplicaStatusWithRetry(
           replicaId,
           ReplicaStatus.REMOVING,
-          triggerReason === null ? {partitionId} : {partitionId, triggerReason},
+          triggerReason === null ? {partitionId, closedCreateGeneration} :
+            {partitionId, closedCreateGeneration, triggerReason},
         );
         return {skipRemovingStatusWrite: false,
           deferred: false};
@@ -663,12 +667,15 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * only that exact cleanup token may remove artifacts and release the row.
      * Genuinely rowless startup candidates are owned separately by the
      * cleanup-tombstone sweep and never enter through a synthetic generation.
+     * A redelivery of the removal this node completed (same operation, row
+     * absent, nothing tracked) is that completion: no cleanup work runs.
      * @param {string} replicaId
      * @param {string} partitionId
+     * @param {string} operationId - The delivering REMOVE operation.
      * @return {Promise<boolean>} True when stale cleanup work ran.
      * @private
      */
-    async reconcileRemovedReplicaCleanup(replicaId, partitionId) {
+    async reconcileRemovedReplicaCleanup(replicaId, partitionId, operationId) {
       const trackedService = this.getTrackedService(replicaId);
       const lifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);
@@ -678,6 +685,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           partitionId,
           nodeId: this.nodeId,
         });
+      if (isRecordedReplicaRemovalCompletion(this,
+        {replicaId, operationId, authority})) return false;
       if (authority?.kind !== ReplicaStatus.REMOVING ||
           trackedStatus && ![
             ReplicaStatus.REMOVING,
@@ -717,12 +726,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         },
         () => {
           this.localServices.delete(replicaId);
-          this.setLocalReplica(replicaId, {
-            replicaId,
-            partitionId,
-            status: ReplicaStatus.REMOVED,
-            service: null,
-          });
+          recordReplicaRemovalCompletion(this,
+            {replicaId, partitionId, operationId, service: null});
         },
         {
           partitionId,

@@ -12,6 +12,8 @@ import {removeReplicaStorageArtifacts} from
   './replica-storage-artifacts.js';
 import {isCleanupTombstoneRow} from
   './replica-cleanup-tombstone-owner.js';
+import {normalizeReplicaRemovalCompletionRecord} from
+  './replica-removal-completion-record.js';
 import {inspectSnapshotInstallArtifactsForGeneration,
   removeSnapshotInstallArtifactsForGeneration,
   resolveReplicaCheckpointsRoot} from '../raft/snapshot-install.js';
@@ -707,11 +709,11 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      */
     setLocalReplica(replicaId, updates) {
       const existing = this.localReplicas.get(replicaId) || {};
-      const merged = {
+      const merged = normalizeReplicaRemovalCompletionRecord({
         ...existing,
         ...updates,
         replicaId: updates.replicaId || existing.replicaId || replicaId,
-      };
+      }, updates);
       this.localReplicas.set(replicaId, merged);
       return merged;
     }
