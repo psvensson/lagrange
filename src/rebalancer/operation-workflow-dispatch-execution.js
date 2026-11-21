@@ -15,7 +15,7 @@ import {ensureDispatchReservationOrSkip} from './operation-workflow-dispatch-res
 import {OPERATION_OWNER_TURN_POLICY} from './operation-owner-turn-policy.js';
 import * as LEDGER_SELF_MOVE_GATE from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {
-  isUnscopedPlacementRemoval, reconcileUnscopedPlacementRemoval,
+  isUnscopedPlacementRemoval, readSupersededDispatchReplay, reconcileUnscopedPlacementRemoval,
 } from './operation-workflow-placement-learner-retirement.js';
 import {runRebalancerActivity} from '../diagnostics/formation-owner-attribution.js';
 
@@ -401,15 +401,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
-  /**
-   * Advance the dispatch candidate's step machine after the reservation
-   * gate cleared it.
-   * @param {string|Object} operationInput
-   * @param {Object} operation
-   * @param {Object} [options]
-   * @return {Promise<Object>}
-   * @private
-   */
+  // Clear the dispatch gates before routing the candidate by its durable phase.
   async advanceDispatchCandidateStep(operationInput, operation, options = {}) {
     if (isBootstrapTopologyDispatchDeferred(operation)) {
       return this.buildSkippedOperationResult(
@@ -541,7 +533,10 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       );
     }
 
-    return this.advanceDispatchCandidateStep(operationInput, operation, options);
+    const result = await this.advanceDispatchCandidateStep(operationInput, operation, options);
+    // A competing owner may have superseded the row while this claim lost.
+    return result.reason === OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE ?
+      await readSupersededDispatchReplay(this, operation) ?? result : result;
   }
 
   /**
