@@ -22,13 +22,13 @@
     "storage-raft": 161,
     "test-infrastructure": 167,
     "transactions": 17,
-    "transport-messaging": 117,
+    "transport-messaging": 120,
     "wasm-toolchain": 74
   },
-  "censusSize": 2727,
-  "digest": "fnv1a32-8646819c",
+  "censusSize": 2730,
+  "digest": "fnv1a32-349e6447",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-40fb1be0",
+  "observationDigest": "fnv1a32-c0dd35ff",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2640,7 +2640,10 @@
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
     "test/transport/q7-node-transport-authenticated-encryption.test.js": "transport-messaging",
+    "test/transport/raft-frame-liveness-residual.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-pair-coalescing.integration.test.js": "transport-messaging",
+    "test/transport/raft-frame-reconnect-owner.integration.test.js": "transport-messaging",
+    "test/transport/raft-frame-turn-not-held.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-unacknowledged-delivery.test.js": "transport-messaging",
     "test/transport/router-envelope-pre-send-failure.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
@@ -25028,7 +25031,48 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
+    "test/transport/raft-frame-liveness-residual.integration.test.js": {
+      "files": [
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/distributed/harness/virtual-connection-environment.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
     "test/transport/raft-frame-pair-coalescing.integration.test.js": {
+      "files": [
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/distributed/harness/virtual-connection-environment.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/transport/raft-frame-reconnect-owner.integration.test.js": {
+      "files": [
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/distributed/harness/virtual-connection-environment.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/transport/raft-frame-turn-not-held.integration.test.js": {
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",

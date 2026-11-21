@@ -18,7 +18,10 @@
 // envelope, answer null - no PartitionService, no serving assertion); and,
 // where a world names nodes in `inProcessFrom`, the raft return leg from
 // those nodes (an in-process hand-off on the network clock, so the router
-// link carries one direction only).
+// link carries one direction only). A world may also put the routers on
+// their node's network clock, slow a link, refuse dials to a node for a
+// while (a dial blackout) and sever a link's sockets: physics, never a
+// router decision.
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -41,6 +44,10 @@ const PARTITION_ENTITY = 'partition';
 const ADDRESS_ENTITY_ID_INDEX = 2;
 const SOCKET_OPEN = 1;
 const QUIET_STEP_LIMIT = 20000;
+const ROUTER_CLOCK = Object.freeze({HOST: 'host', NETWORK: 'network'});
+const CONNECTED_STATE = 'connected';
+const CONNECT_BOUND_MS = 60000;
+const END_DRAIN_MS = 20;
 
 function initializeProcessOwners(nodeId) {
   ConfigurationManager.resetInstance();
@@ -56,23 +63,27 @@ function resetProcessOwners() {
   LoggingService.resetInstance();
 }
 
-// The host clock, with every one-shot timer a router arms counted: a
-// delivery lifetime's deadline, an ACK wait, a response grant, a ping pong.
-function countingHostClock() {
-  const host = new RealTimeSource();
+// A router's clock (the host's or its node's network clock), with every
+// one-shot timer the router arms counted: a delivery lifetime's deadline, an
+// ACK wait, a response grant, a ping pong, a reconnect.
+function countingClock(base) {
   const tally = {setTimeoutCalls: 0};
   const clock = Object.freeze({
-    now: () => host.now(),
+    now: () => base.now(),
     setTimeout: (fn, ms, ...args) => {
       tally.setTimeoutCalls += 1;
-      return host.setTimeout(fn, ms, ...args);
+      return base.setTimeout(fn, ms, ...args);
     },
-    clearTimeout: (handle) => host.clearTimeout(handle),
-    setInterval: (fn, ms, ...args) => host.setInterval(fn, ms, ...args),
-    clearInterval: (handle) => host.clearInterval(handle),
+    clearTimeout: (handle) => base.clearTimeout(handle),
+    setInterval: (fn, ms, ...args) => base.setInterval(fn, ms, ...args),
+    clearInterval: (handle) => base.clearInterval(handle),
     charge: () => undefined,
   });
   return {clock, tally};
+}
+
+function pairKey(left, right) {
+  return [left, right].sort().join('|');
 }
 
 // What one wire frame is, read from its JSON text; an unreadable frame is
@@ -96,12 +107,24 @@ function settleHost() {
 
 class RaftRouterWorld {
   /**
-   * @param {Object} options - {nodeIds, groups, inProcessFrom}: groups are
-   *   [{partitionId, replicas: [[replicaId, nodeId], ...]}].
+   * @param {Object} options - {nodeIds, groups, inProcessFrom, linkDelayMs,
+   *   routerClock, dialPairs, slowLinks}: groups are [{partitionId,
+   *   replicas: [[replicaId, nodeId], ...]}]; dialPairs [[dialer, target]]
+   *   (every pair when absent); slowLinks [[nodeA, nodeB, extraMs]].
    */
-  constructor({nodeIds, groups, inProcessFrom = []}) {
+  constructor({nodeIds, groups = [], inProcessFrom = [],
+    linkDelayMs = LINK_DELAY_MS, routerClock = ROUTER_CLOCK.HOST,
+    dialPairs = null, slowLinks = []}) {
     this.nodeIds = [...nodeIds];
     this.inProcessFrom = new Set(inProcessFrom);
+    this.linkDelayMs = linkDelayMs;
+    this.routerClock = routerClock;
+    this.dialPairs = dialPairs ?? this.nodeIds.flatMap((left, index) =>
+      this.nodeIds.slice(index + 1).map((right) => [left, right]));
+    this.slowLinks = new Map(slowLinks.map(([left, right, extraMs]) =>
+      [pairKey(left, right), extraMs]));
+    this.blackedOut = new Set();
+    this.dials = [];
     this.network = createVirtualNetwork({startMs: 0});
     this.frames = [];
     this.raftSends = [];
@@ -140,27 +163,43 @@ class RaftRouterWorld {
   }
 
   // Every data frame a socket of a link between two distinct nodes writes,
-  // with its direction and its virtual send instant.
+  // with its direction and its virtual send instant; a slow link holds the
+  // frame for its extra delay before it enters the link.
   tapSocket(socket, from, to) {
     const send = socket.send.bind(socket);
+    const extraMs = this.slowLinks.get(pairKey(from, to)) ?? 0;
     socket.send = (data, options, callback) => {
       if (socket.readyState === SOCKET_OPEN) {
         this.frames.push({atMs: this.network.now(), from, to,
           ...describeFrame(data)});
       }
+      if (extraMs > 0) {
+        this.network.setTimer(from, () => send(data, options, callback), extraMs);
+        return undefined;
+      }
       return send(data, options, callback);
     };
   }
 
-  async start() {
-    initializeProcessOwners(this.nodeIds[0]);
-    const harness = createVirtualConnectionEnvironment({
-      network: this.network, linkDelayMs: LINK_DELAY_MS});
-    const environment = {
-      ...harness.environment,
+  portNode(portKey) {
+    return this.nodeIds.find((nodeId) => this.portOf(nodeId) === portKey);
+  }
+
+  // The physical environment: the harness's link, with frames tapped, slow
+  // links held, dials recorded and a blacked-out node's endpoint not found.
+  environmentOf(harness) {
+    const base = harness.environment;
+    return {
+      ...base,
+      hasEndpoint: (portKey) => !this.blackedOut.has(this.portNode(portKey)) &&
+        base.hasEndpoint(portKey),
+      lookupEndpoint: (portKey) => this.blackedOut.has(this.portNode(portKey)) ?
+        undefined : base.lookupEndpoint(portKey),
       createConnectionPair: (context) => {
-        const pair = harness.environment.createConnectionPair(context);
+        const pair = base.createConnectionPair(context);
         if (context.localNodeId !== context.remoteNodeId) {
+          this.dials.push({atMs: this.network.now(),
+            from: context.localNodeId, to: context.remoteNodeId});
           this.tapSocket(pair.clientSocket, context.localNodeId,
             context.remoteNodeId);
           this.tapSocket(pair.serverSocket, context.remoteNodeId,
@@ -169,12 +208,24 @@ class RaftRouterWorld {
         return pair;
       },
     };
+  }
+
+  routerClockOf(nodeId) {
+    return this.routerClock === ROUTER_CLOCK.NETWORK ?
+      this.network.networkTimeSource(nodeId) : new RealTimeSource();
+  }
+
+  async start() {
+    initializeProcessOwners(this.nodeIds[0]);
+    const harness = createVirtualConnectionEnvironment({
+      network: this.network, linkDelayMs: this.linkDelayMs});
+    const environment = this.environmentOf(harness);
     for (const nodeId of this.nodeIds) {
       this.network.registerNode(nodeId, (message) =>
         harness.handleMessage(nodeId, message));
     }
     for (const nodeId of this.nodeIds) {
-      const {clock, tally} = countingHostClock();
+      const {clock, tally} = countingClock(this.routerClockOf(nodeId));
       this.clocks.set(nodeId, tally);
       this.routers.set(nodeId, new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
@@ -188,14 +239,60 @@ class RaftRouterWorld {
     for (const router of this.routers.values()) {
       await router.initialize({startServer: true});
     }
-    for (let left = 0; left < this.nodeIds.length; left += 1) {
-      for (let right = left + 1; right < this.nodeIds.length; right += 1) {
-        await this.routers.get(this.nodeIds[left]).connectToNode(
-          this.nodeIds[right], this.wsAddressOf(this.nodeIds[right]));
-      }
+    for (const [dialer, target] of this.dialPairs) {
+      await this.routers.get(dialer).connectToNode(target,
+        this.wsAddressOf(target));
     }
-    await this.driveUntilQuiet();
+    await this.driveUntil(() => this.dialPairs.every(([dialer, target]) =>
+      this.connected(dialer, target)), CONNECT_BOUND_MS);
+    await this.settle();
     this.buildGroups();
+  }
+
+  // Both routers hold an open, identified connection to each other.
+  connected(left, right) {
+    return [[left, right], [right, left]].every(([from, to]) => {
+      const connection = this.routers.get(from).nodeConnections.get(to);
+      return connection?.state === CONNECTED_STATE &&
+        connection.ws?.readyState === SOCKET_OPEN;
+    });
+  }
+
+  // Dials to these nodes find no endpoint until heal().
+  blackout(nodeIds) {
+    for (const nodeId of nodeIds) this.blackedOut.add(nodeId);
+  }
+
+  heal() {
+    this.blackedOut.clear();
+  }
+
+  // Close the sockets of the link between two nodes, as a dead TCP
+  // connection closes: each end learns over the link.
+  severLink(left, right) {
+    for (const [from, to] of [[left, right], [right, left]]) {
+      this.routers.get(from).nodeConnections.get(to)?.ws?.terminate();
+    }
+  }
+
+  // A raft-rs envelope through the router's send entry, as the SEND_TO_PEER
+  // closure sends one (without the closure's priority options).
+  sendRaftEnvelope(fromNode, targetAddress, envelope) {
+    return this.routers.get(fromNode).deliver(targetAddress, envelope);
+  }
+
+  // A scenario timer on a node's network clock, every `ms`, until stopped.
+  every(nodeId, ms, action) {
+    const timer = {stopped: false};
+    const arm = () => this.network.setTimer(nodeId, () => {
+      if (timer.stopped) return;
+      action();
+      arm();
+    }, ms);
+    arm();
+    return () => {
+      timer.stopped = true;
+    };
   }
 
   buildGroups() {
@@ -284,13 +381,13 @@ class RaftRouterWorld {
     return this.node(replicaId).readStatus().role === RAFT_ROLE.LEADER;
   }
 
-  // Advance the network one virtual millisecond at a time, letting the
+  // Advance the network `stepMs` virtual milliseconds at a time, letting the
   // host's continuations (router deliveries, awaited peer deliveries,
   // handlers) finish between steps.
-  async driveFor(ms) {
+  async driveFor(ms, stepMs = 1) {
     const end = this.network.now() + ms;
     while (this.network.now() < end) {
-      this.network.run({untilMs: this.network.now() + 1});
+      this.network.run({untilMs: Math.min(end, this.network.now() + stepMs)});
       await settleHost();
     }
   }
@@ -327,11 +424,21 @@ class RaftRouterWorld {
       frame.from === from && frame.to === to);
   }
 
+  // Host-clocked routers arm nothing on the network, so it goes quiet;
+  // network-clocked routers keep their keepalive, so they settle by time.
+  async settle() {
+    if (this.routerClock === ROUTER_CLOCK.NETWORK) {
+      await this.driveFor(END_DRAIN_MS);
+      return;
+    }
+    await this.driveUntilQuiet();
+  }
+
   async end() {
     this.stopScheduling();
     // Let the envelopes and frames already in flight land before the ports
     // and their databases close.
-    await this.driveUntilQuiet();
+    await this.settle();
     for (const cluster of this.clusters) {
       cluster.dispose();
     }
@@ -342,4 +449,4 @@ class RaftRouterWorld {
   }
 }
 
-export {LINK_DELAY_MS, RaftRouterWorld};
+export {LINK_DELAY_MS, ROUTER_CLOCK, RaftRouterWorld};

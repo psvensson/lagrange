@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2366,
-    "integration": 128,
+    "integration": 131,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2727,
-  "digest": "fnv1a32-73c6ae7d",
+  "censusSize": 2730,
+  "digest": "fnv1a32-6b74c65c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2621,7 +2621,10 @@
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "unit",
     "test/transport/owner-retry-budget.test.js": "unit",
     "test/transport/q7-node-transport-authenticated-encryption.test.js": "unit",
+    "test/transport/raft-frame-liveness-residual.integration.test.js": "integration",
     "test/transport/raft-frame-pair-coalescing.integration.test.js": "integration",
+    "test/transport/raft-frame-reconnect-owner.integration.test.js": "integration",
+    "test/transport/raft-frame-turn-not-held.integration.test.js": "integration",
     "test/transport/raft-frame-unacknowledged-delivery.test.js": "unit",
     "test/transport/router-envelope-pre-send-failure.test.js": "unit",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "unit",
