@@ -7,6 +7,7 @@ import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
+import {isPublicationOwnerFailureStatus} from './publication-owner-decision.js';
 import {
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_READ_SOURCE,
@@ -306,10 +307,8 @@ class MembershipPublicationCoordinatorReconcile extends
               const publicationRow =
                 normalizeControlPlanePublicationRow(persistedRow);
               if (
-                hasPrioritySummaryRefreshClearedGap(
-                  latestPublicationRow,
-                  candidate,
-                ) &&
+                !isPublicationOwnerFailureStatus(publicationRow.status) &&
+                hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) &&
                 typeof this.enqueueClusterMembershipReconcile === 'function'
               ) {
                 this.enqueueClusterMembershipReconcile(
@@ -350,6 +349,10 @@ class MembershipPublicationCoordinatorReconcile extends
             row,
             convergenceOptions,
           );
+          const publicationRow = normalizeControlPlanePublicationRow(persistedRow);
+          if (isPublicationOwnerFailureStatus(publicationRow.status)) {
+            return {candidate, publicationRow, workflow};
+          }
           await this.workflowCoordinator.transitionStep(
             workflow.workflowId,
             {
@@ -367,8 +370,6 @@ class MembershipPublicationCoordinatorReconcile extends
               },
             },
           );
-          const normalizedPersistedRow =
-            normalizeControlPlanePublicationRow(persistedRow);
           const latchPromise =
             this._maybeLatchFormationAfterPublicationWrite?.(persistedRow);
           if (latchPromise) {
@@ -376,7 +377,7 @@ class MembershipPublicationCoordinatorReconcile extends
           }
           return {
             candidate,
-            publicationRow: normalizedPersistedRow,
+            publicationRow,
             workflow,
           };
         }),

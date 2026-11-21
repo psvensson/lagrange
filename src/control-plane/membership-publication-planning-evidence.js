@@ -11,6 +11,7 @@ import {resolveActiveNodeViews} from './active-node-projection.js';
 import {
   buildMembershipLifecycleSummary,
   MEMBERSHIP_MEMBER_STATE,
+  MEMBERSHIP_LIFECYCLE_EPOCH_BOUNDARY,
   MEMBERSHIP_LIFECYCLE_STATE,
 } from './membership-lifecycle-constants.js';
 import {
@@ -478,53 +479,72 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
   if (closureDecision.shouldClose !== true) {
     return publicationRow;
   }
-  const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
   const nowMs = resolveNowMs(options.nowMs);
-  const existingHistory = Array.isArray(publicationRow.transition_history) ?
-    publicationRow.transition_history :
-    normalizedPublication.transitionHistory;
-  const publishedNodeIdsForState =
-    normalizedPublication.publishedActiveNodeIds.length > 0 ?
-      normalizedPublication.publishedActiveNodeIds :
-      normalizedPublication.requiredAckNodeIds;
+  return materializeAcknowledgedPublication(publicationRow, nowMs,
+    buildTransitionHistoryEntry({
+      state: closureDecision.nextStatus, reasonCode: closureDecision.reasonCode, at: nowMs,
+    }));
+}
+
+function materializeAcknowledgedPublication(publicationRow, nowMs, closingTransition) {
+  const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
+  const existingHistory = normalizedPublication.transitionHistory;
+  const publishedNodeIdsForState = normalizedPublication.publishedActiveNodeIds.length > 0 ?
+    normalizedPublication.publishedActiveNodeIds : normalizedPublication.requiredAckNodeIds;
+  const summary = normalizedPublication.membershipLifecycleSummary;
   const membershipLifecycleSummary = buildMembershipLifecycleSummary({
+    ...summary,
     lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+    epochBoundary: MEMBERSHIP_LIFECYCLE_EPOCH_BOUNDARY.PUBLISHED_MEMBERSHIP,
     publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
-    projectedServingNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
-    locallyEligibleNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
-    formationPlacementNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.formationPlacementNodeIds,
-    suspectedOrTransitioningNodeIds:
-      normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
     memberStatesByNodeId: buildServingMemberStatesByNodeId(
-      normalizedPublication.membershipLifecycleSummary?.memberStatesByNodeId,
-      publishedNodeIdsForState,
-    ),
-    recoveryEpochByNodeId:
-      normalizedPublication.membershipLifecycleSummary?.recoveryEpochByNodeId,
-    membershipFreeze: normalizedPublication.membershipLifecycleSummary?.membershipFreeze,
-    projectionDiagnostics:
-      normalizedPublication.membershipLifecycleSummary?.projectionDiagnostics,
+      summary?.memberStatesByNodeId, publishedNodeIdsForState),
   });
+  const transitionHistory = closingTransition &&
+    existingHistory.at(-1)?.state !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
+    [...existingHistory, closingTransition] : existingHistory;
   return {
     ...publicationRow,
-    status: closureDecision.nextStatus,
+    status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
     updated_at: nowMs,
     published_at: publicationRow.published_at || nowMs,
     closed_at: publicationRow.closed_at || nowMs,
     membership_lifecycle_summary: membershipLifecycleSummary,
     membershipLifecycleSummary,
-    transition_history: [
-      ...existingHistory,
-      buildTransitionHistoryEntry({
-        state: closureDecision.nextStatus,
-        reasonCode: closureDecision.reasonCode,
-        at: nowMs,
-      }),
-    ],
+    transition_history: transitionHistory,
   };
+}
+
+// The merge can find a complete ACK set in two individually open rows.
+// Materialize its closure from the existing publication state machine.
+function finalizeMergedAcknowledgedPublication(merged, requested, current) {
+  const candidate = normalizeControlPlanePublicationRow(merged);
+  if (candidate.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
+      !buildPublicationMetadataRefreshDecision({
+        publicationRow: merged,
+      }).allRequiredAcknowledged) return merged;
+  const durable = normalizeControlPlanePublicationRow(current);
+  if (durable.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+      requested.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
+    return closeAcknowledgedMetadataRefreshRow({
+      publicationRow: {...merged, status: durable.status},
+      nowMs: merged.updated_at,
+    });
+  }
+  const finalized = durable.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
+    current : requested;
+  // An established closure keeps its actual timestamp and history. A later
+  // metadata refresh can still supply other projected membership details.
+  const transitionHistory = normalizeControlPlanePublicationRow(finalized).transitionHistory;
+  const carriesClosure =
+    transitionHistory.at(-1)?.state === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+  const publication = carriesClosure ? {
+    ...merged,
+    published_at: finalized.published_at,
+    closed_at: finalized.closed_at,
+    transition_history: transitionHistory,
+  } : merged;
+  return materializeAcknowledgedPublication(publication, merged.updated_at, null);
 }
 
 function buildPublicationMetadataRefreshRow(options = {}) {
@@ -736,6 +756,7 @@ export {
   buildServingMemberStatesByNodeId,
   comparePlanningEvidenceRows,
   closeAcknowledgedMetadataRefreshRow,
+  finalizeMergedAcknowledgedPublication,
   countPlanningEvidenceRowFields,
   deriveMembershipPublicationCandidate,
   deriveMembershipPublicationId,

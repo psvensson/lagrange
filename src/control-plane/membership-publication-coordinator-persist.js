@@ -10,6 +10,8 @@ import {
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
+import {isPublicationOwnerFailureStatus} from './publication-owner-decision.js';
+import {assertPublicationWriteRevision} from './owners/control-plane-publications-owner.js';
 import {
   MEMBERSHIP_PUBLICATION_STATUS,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
@@ -36,6 +38,7 @@ import {
 } from './membership-publication-row-helpers.js';
 import {
   buildPublicationReadOptions,
+  finalizeMergedAcknowledgedPublication,
   mergePublicationRows,
   serializeMembershipPublicationRow,
 } from './membership-publication-planning-evidence.js';
@@ -198,12 +201,6 @@ function publicationWriteUnconfirmed(publicationId, cause) {
   });
 }
 
-function isClosedWithoutPublication(row) {
-  const status = readUpperStateField(row?.status);
-  return status === MEMBERSHIP_PUBLICATION_STATUS.SUPERSEDED ||
-    status === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED;
-}
-
 function canUsePublicationCommit(result, publicationId) {
   return result?.success === true && result.committed === true &&
     result.partitionResult?.affectedRows === 1 &&
@@ -261,11 +258,14 @@ class MembershipPublicationCoordinatorPersist extends
     let current = await owner.getPublication(publicationId, readOptions);
     let failure;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      if (isClosedWithoutPublication(current)) {
+      assertPublicationWriteRevision(desired, current);
+      if (isPublicationOwnerFailureStatus(readUpperStateField(current?.status))) {
         releaseControlPlaneWriteIdentity(writeIdentity);
         return serializeMembershipPublicationRow(current);
       }
-      const candidate = serializeMembershipPublicationRow(mergePublicationRows(desired, current));
+      const merged = mergePublicationRows(desired, current);
+      const candidate = serializeMembershipPublicationRow(
+        finalizeMergedAcknowledgedPublication(merged, desired, current));
       try {
         const result = await owner.upsertPublication(candidate, {
           ...writeOptions, writeIdentity, expectedPublicationRow: current,
@@ -288,7 +288,8 @@ class MembershipPublicationCoordinatorPersist extends
         });
         throw publicationWriteUnconfirmed(publicationId, error);
       }
-      if (isClosedWithoutPublication(current) ||
+      assertPublicationWriteRevision(desired, current);
+      if (isPublicationOwnerFailureStatus(readUpperStateField(current?.status)) ||
           publicationRowSatisfiesDesiredState(current, candidate)) {
         releaseControlPlaneWriteIdentity(writeIdentity);
         const confirmed = serializeMembershipPublicationRow(current);
@@ -470,7 +471,9 @@ class MembershipPublicationCoordinatorPersist extends
         const baseRow = await owner.getPublication(
           publicationId, buildPublicationReadOptions(acknowledgementOptions));
         if (!baseRow) return null;
-        if (isClosedWithoutPublication(baseRow)) return serializeMembershipPublicationRow(baseRow);
+        if (isPublicationOwnerFailureStatus(readUpperStateField(baseRow.status))) {
+          return serializeMembershipPublicationRow(baseRow);
+        }
         const normalizedBaseRow = normalizeControlPlanePublicationRow(baseRow);
         const acknowledgedRow = acknowledgeMembershipPublication({
           publicationRow: baseRow,

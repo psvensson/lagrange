@@ -663,6 +663,10 @@ test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
       async listPublications() {
         return {rows: [latestPublicationRow]};
       },
+      async getPublication(publicationId) {
+        return [...persistedRows, latestPublicationRow]
+          .find((row) => row.publication_id === publicationId) ?? null;
+      },
       async upsertPublication(row) {
         persistedRows.push(row);
       },

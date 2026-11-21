@@ -1,6 +1,7 @@
 import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
   '../../bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../constants/index.js';
+import {publicationRowsHaveSameRevision} from '../control-plane-publication-merge.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane-system-table-gateway.js';
 import {FORMATION_PUBLICATION_ID, FORMATION_PUBLICATION_KIND} from
@@ -19,6 +20,7 @@ const CONTROL_PLANE_PUBLICATIONS_OWNER_NAME =
   'control-plane-publications-owner';
 
 const PUBLICATION_AUTHORITY_UNAVAILABLE = 'PUBLICATION_AUTHORITY_UNAVAILABLE';
+const PUBLICATION_REVISION_MISMATCH = 'PUBLICATION_REVISION_MISMATCH';
 const INVALID_PUBLICATION_MUTATION = 'INVALID_PUBLICATION_MUTATION';
 const INVALID_PUBLICATION_MUTATION_MESSAGE =
   'Expected an ordinary publication and its exact preimage';
@@ -38,6 +40,14 @@ function assertPublicationMutationRow(row, preimage) {
       (preimage !== null && preimage?.publication_id !== row.publication_id)) {
     throw Object.assign(new Error(INVALID_PUBLICATION_MUTATION_MESSAGE), {
       code: INVALID_PUBLICATION_MUTATION,
+    });
+  }
+}
+
+function assertPublicationWriteRevision(desired, current) {
+  if (current !== null && !publicationRowsHaveSameRevision(desired, current)) {
+    throw Object.assign(new Error(`Publication revision mismatch for ${desired.publication_id}`), {
+      code: PUBLICATION_REVISION_MISMATCH,
     });
   }
 }
@@ -117,6 +127,7 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   async upsertPublication(row, options = {}) {
     const {expectedPublicationRow, ...writeOptions} = options;
     assertPublicationMutationRow(row, expectedPublicationRow);
+    assertPublicationWriteRevision(row, expectedPublicationRow);
     const mutationOptions = this.buildPublicationMutationOptions(writeOptions);
     if (expectedPublicationRow === null) {
       return this.insertRow(row, mutationOptions);
@@ -137,4 +148,4 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   }
 }
 
-export {ControlPlanePublicationsOwner};
+export {ControlPlanePublicationsOwner, assertPublicationWriteRevision};

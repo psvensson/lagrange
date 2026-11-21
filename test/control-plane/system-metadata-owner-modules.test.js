@@ -1,10 +1,15 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ERRORS, TABLES} from '../../src/constants/index.js';
+import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {buildMembershipPublicationRow} from
+  '../../src/control-plane/membership-publication-planning-evidence.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
+  CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -84,7 +89,7 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   'critical deferrable writes', async (t) => {
   const gatewayCalls = [];
   const gateway = {
-    async upsertSystemTableRow(tableName, row, options) {
+    async insertSystemTableRow(tableName, row, options) {
       gatewayCalls.push({
         tableName,
         row,
@@ -101,12 +106,12 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   await owner.upsertPublication({
     publication_id: TEST_PUBLICATION_ID,
     status: TEST_PUBLICATION_STATUS_OPEN,
-  });
+  }, {expectedPublicationRow: null});
 
   t.equal(
     gatewayCalls.length,
     1,
-    'publication owner should route the upsert through the gateway',
+    'publication owner should route a proven-absent insertion through the gateway',
   );
   t.equal(
     gatewayCalls[0]?.tableName,
@@ -139,9 +144,10 @@ test('ControlPlanePublicationsOwner honors explicit non-deferred ' +
   'publication mutations', async (t) => {
   const gatewayCalls = [];
   const gateway = {
-    async upsertSystemTableRow(tableName, row, options) {
+    async updateSystemTableRow(tableName, whereClause, row, options) {
       gatewayCalls.push({
         tableName,
+        whereClause,
         row,
         options,
       });
@@ -153,16 +159,25 @@ test('ControlPlanePublicationsOwner honors explicit non-deferred ' +
     controlPlaneSystemTableGateway: gateway,
   });
 
-  await owner.upsertPublication(
-    {
-      publication_id: TEST_PUBLICATION_ID,
-      status: TEST_PUBLICATION_STATUS_OPEN,
+  const publication = buildMembershipPublicationRow({
+    publicationId: TEST_PUBLICATION_ID,
+    nowMs: 10,
+    candidate: {
+      publicationEpoch: 1, publisherNodeId: 'node-1',
+      publishedActiveNodeIds: ['node-1'], requiredAckNodeIds: ['node-1'],
     },
-    {
-      allowPressureDefer: TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER,
-    },
-  );
+  });
+  const stored = Object.fromEntries(CONTROL_PLANE_PUBLICATIONS_SCHEMA.columns.map(({name}) => {
+    const value = publication[name] ?? null;
+    return [name, value !== null && typeof value === 'object' ? JSON.stringify(value) : value];
+  }));
+  await owner.upsertPublication({...publication, acknowledged_node_ids: ['node-1']}, {
+    expectedPublicationRow: stored,
+    allowPressureDefer: TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER,
+  });
 
+  t.same(gatewayCalls[0]?.whereClause, stored,
+    'the conditional update matches the exact stored publication values');
   t.equal(
     gatewayCalls[0]?.options?.workloadClass,
     CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
@@ -181,7 +196,7 @@ test('ControlPlanePublicationsOwner routes authoritative publication reads ' +
         params,
         options,
       });
-      return {success: true, rows: []};
+      return {success: true, rows: [], rowSetComplete: true};
     },
   };
 
@@ -209,6 +224,8 @@ test('ControlPlanePublicationsOwner routes authoritative publication reads ' +
     true,
     'publication reads should use recovery-eligible routing semantics',
   );
+  t.equal(gatewayCalls[1].options.leaderMode, CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+    'an exact publication read requires current leader authority');
   t.same(
     gatewayCalls.map((call) => call?.options?.readProfile),
     [
