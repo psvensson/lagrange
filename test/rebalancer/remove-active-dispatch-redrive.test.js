@@ -566,3 +566,84 @@ for (const [answer, generation] of [
     }
   });
 }
+
+for (const [boundary, change] of [
+  ['completion entry', 'replacement terminal'],
+  ['completion entry', 'same-generation terminal'],
+  ['terminal CAS', 'generation'],
+  ['terminal CAS', 'history'],
+  ['terminal CAS', 'absence'],
+]) {
+  test(`an acknowledged stranded REMOVE keeps its STOPPING subject at ${boundary}: ${change}`,
+    async (t) => {
+      const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+        workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+      const {coordinator, deliveries} = createRemoveCoordinator({
+        operationRow, removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND,
+      });
+      const {repository, controlPlaneSystemTableGateway: gateway,
+        workflowOwner: owner} = coordinator;
+      const released = [];
+      const release = owner.releaseDurableTerminalOperation.bind(owner);
+      owner.releaseDurableTerminalOperation = (operation, outcome) => {
+        released.push(outcome.operation);
+        return release(operation, outcome);
+      };
+      let changed;
+      let mutationRan = false;
+      async function changeStoppingSubject() {
+        mutationRan = true;
+        const before = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+        t.equal(before.workflowStep, WORKFLOW_STEP.STOPPING,
+          'the acknowledged reply committed real STOPPING before the change');
+        const time = Date.now();
+        const data = {
+          generation: {created_at: before.createdAt + 1},
+          history: {steps_history: JSON.stringify([...before.stepsHistory,
+            {step: WORKFLOW_STEP.STOPPING, timestamp: time, reason: 'next STOPPING owner'}])},
+        };
+        const after = data[change] || {
+          created_at: before.createdAt + Number(change === 'replacement terminal'),
+          status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
+          updated_at: time, completed_at: time, error_message: 'independent terminal writer',
+          steps_history: JSON.stringify([...before.stepsHistory,
+            {step: WORKFLOW_STEP.FAILED, timestamp: time}]),
+        };
+        const mutation = change === 'absence' ? {operation: 'delete'} :
+          {operation: 'update', data: after};
+        const result = await gateway.submitMutation({...mutation, tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID, workflow_step: WORKFLOW_STEP.STOPPING,
+            completed_at: null}});
+        t.match(result, {success: true, partitionResult: {affectedRows: 1}});
+        changed = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+      }
+
+      if (boundary === 'completion entry') {
+        const complete = owner.completeOperation.bind(owner);
+        owner.completeOperation = async (...args) => {
+          if (!mutationRan) await changeStoppingSubject();
+          return complete(...args);
+        };
+      } else {
+        const execute = gateway.executeQuery.bind(gateway);
+        gateway.executeQuery = async (sql, params, options) => {
+          if (!mutationRan && sql.includes('UPDATE replica_operations') &&
+              sql.includes('completed_at IS NULL') && params[1] === WORKFLOW_STEP.REMOVED) {
+            await changeStoppingSubject();
+          }
+          return execute(sql, params, options);
+        };
+      }
+      try {
+        await coordinator.reconcileOrphanedOperations();
+        t.equal(removeDeliveries(deliveries).length, 1, 'one actual REMOVE was sent');
+        t.equal(mutationRan, true, 'the forced change reached the intended terminal boundary');
+        t.same(await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID), changed,
+          'the completion reply leaves the changed STOPPING subject or exact terminal intact');
+        t.same(released, change === 'same-generation terminal' ? [changed] : [],
+          'only the correct durable terminal subject can release');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+}
