@@ -16,8 +16,8 @@ import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from
   '../rebalancer/replica-operation-progress.js';
 import {
-  createOperationAt, getOperationMetadataObject, getOperationMetadataValue,
-  readOriginalCreateBootstrapMembership,
+  createOperationAt, getOperationMetadataValue,
+  readOriginalCreateBootstrapMembership, readOriginalCreatePlacementAdmission,
 } from '../rebalancer/replica-status.js';
 import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse-memo.js';
 import {isGenesisFoundingCreateOperation, ReplicaOperationField} from
@@ -71,8 +71,7 @@ function censusRowOf(row) {
     step: row.workflow_step, founder,
     incomplete: unresolvedActiveGrowth || isIncompleteOperationRowStep(row.type, row.workflow_step),
     dispatchHold: getOperationMetadataValue(history, OPERATION_METADATA_KEY.DISPATCH_HOLD),
-    admission: getOperationMetadataObject(history,
-      OPERATION_METADATA_KEY.PLACEMENT_ADMISSION),
+    admission: readOriginalCreatePlacementAdmission(history),
     promoteReplicaIds: growth ?
       Object.freeze(readGrowthPromotionCohortFromRow(row, history)) : null});
 }
