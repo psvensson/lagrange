@@ -10,6 +10,7 @@ import {
 } from './query-executor-partition-attempt-budget.js';
 import {
   createPartitionCandidateDeliveryState,
+  createPartitionCandidateEligibility,
   notifyHedgeDeliveryObserver,
 } from './query-executor-partition-candidate-state.js';
 import {
@@ -201,7 +202,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         attemptBudget.reportReadAttemptsSpent(currentMaxAttempts);
         return buildLastFailureResult();
       };
-      const resolveAttemptCandidates = () =>
+      const candidateEligibility = createPartitionCandidateEligibility(
+        this, partitionId, executionOptions);
+      const resolveAttemptCandidates = () => candidateEligibility.resolve(
         this.resolvePartitionServiceCandidates(
           partitionId,
           forRead,
@@ -216,7 +219,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               executionOptions.recoveryCandidateSelectionKey,
             transactionIdentity: executionOptions?.transactionIdentity || null,
           },
-        );
+        ), Boolean(readDelivery));
       let shouldRecheckRoutes = false;
       for (let attempt = 1;
         attempt <= currentMaxAttempts || shouldRecheckRoutes || readDelivery?.hasPending();
@@ -230,11 +233,11 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           attemptBudget.reportDeadlineSpentBeforeAttempt();
           return buildDeadlineSpentFailureResult();
         }
-        let {candidates: serviceCandidates, routingSnapshot} =
+        let {candidates: serviceCandidates, routingSnapshot, ownerHadCandidates} =
           resolveAttemptCandidates();
         readDelivery?.reconcile(serviceCandidates);
         if (
-          serviceCandidates.length === 0 &&
+          serviceCandidates.length === 0 && !ownerHadCandidates &&
           (!awaitedRoutingRepair || hasPlanningRefreshPendingDenial(routingSnapshot)) &&
           (await this.maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot, {
             allowReadinessAuthoritativeRefresh,
@@ -311,6 +314,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         const candidateState = createPartitionCandidateDeliveryState({
           allowReadinessAuthoritativeRefresh,
           candidateQueue: [...serviceCandidates],
+          candidateEligibility,
+          inspectEligibleCandidates: Boolean(readDelivery),
           executionOptions,
           executor: this,
           forRead,
@@ -345,9 +350,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         for (let candidateIndex = 0; candidateIndex < candidateQueue.length; candidateIndex++) {
           let serviceInfo = candidateQueue[candidateIndex];
           let address = serviceInfo?.address;
-          // Follow a routed write's retry decision: true when the candidate
-          // loop stops for this attempt (retry here, or defer the partition),
-          // false when it widens to the next recovery candidate.
           const widenWriteCandidate = (candidateAddress = address) => {
             clearPinnedCandidateAddress(
               this,
@@ -424,8 +426,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             unknownOutcome.observeTransport(deliveryTransportOf(delivery));
             deliverySubmitted = false;
             this.throwIfCancelled(cancellationToken);
-            // Every later read takes exactly one namespace: the partition's
-            // answer when delivered, else the transport outcome.
             const response = deliveryReadingOf(delivery);
             if (isSuccessfulResponse(delivery)) {
               applySuccessfulCandidateAffinity(
@@ -468,6 +468,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 leaderAddress: response.leaderAddress, sql, params, executionOptions,
               });
               const redirectAddress = response.leaderAddress;
+              if (readDelivery && !candidateEligibility.allowsAddress(redirectAddress)) continue;
               const redirectCompletion = readDelivery ? await readDelivery.redirect(
                 redirectAddress, redirectRequest, redirectRouterDeliveryOptions,
                 markRecoverySubmission) : null;
@@ -781,8 +782,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             throw error;
           }
         }
-        // Awaiting an already issued delivery spends its existing routing
-        // pass. Only a new delivery starts another submission pass.
+        // A pending-only pass may repeat only after awaiting a reply or probe.
+        if (!inspectedRecoveryRead) readDelivery?.reconcile([]);
         if (inspectedRecoveryRead && !submittedRecoveryRead) attempt -= 1;
         if (shouldRecheckRoutes || readDelivery?.hasPending()) continue;
         if (attempt < currentMaxAttempts && !(await waitForLeaderRetryBudget())) {
