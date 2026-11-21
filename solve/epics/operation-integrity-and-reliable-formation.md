@@ -127,7 +127,7 @@ product features.
 | Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
 | Which operation may a caller replay? | The native CREATE owner now refuses a durably FAILED creation and replays a matching ACTIVE creation. The composed terminal-replay file at `e7e978450` checks that the exact failed attempt releases its lane for its successor. | Preserve the distinction between a confirmed terminal row and an unreadable or mismatched result through reconstruction. |
 | When may placement retire an existing learner? | The 24 native retirement assertions passed on `e89e3dccf` and on `e7e978450`. The cases cover a newer boot or replica birth, late promotion, a neutral durable SUPERSEDED result and continued custody of an uncertain dispatched REMOVE. | Check neutral retirement and release through the normal dispatch and recensus path when composing further changes. |
-| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. Physical run `4ef9154c` on this commit failed the same bound. | The placement/workflow owners reproduce the pre-send failure below. The provisioning owner traces the failed user partition. Three consecutive passing runs on the named hosts precede comparative smoke. |
+| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. Physical run `4ef9154c` on this commit failed the same bound. | The placement/workflow and SQL owners have reproduced independent failures below. Integrate their reviewed repairs before another physical attempt. Three consecutive passing runs on the named hosts precede comparative smoke. |
 
 On `4ef9154c`, all three serving lanes opened after 3.930 seconds. The
 last formation poll ended at 420.001 seconds. Two control snapshots were
@@ -142,14 +142,44 @@ The final ledger row for `pl-nodes-p1-333-0` contains PENDING, SENDING
 and FAILED. Its founding entry has no CREATE membership stamp, and every
 receiver admission field is null. While the stamp was unavailable, the
 sender deferred dispatch. The ledger later recorded a SENDING timeout
-with 256,812 ms of the operation budget remaining. Both PENDING and SENDING
-currently have a 30-second step limit. The next workflow proof must
-distinguish bootstrap preparation from a runnable dispatch, preserve
-the original operation deadline and exercise both ordinary and priority
-claims. A different operation, `pl-sql_write_operations-p1-195-0`, crossed
+with 256,812 ms of the operation budget remaining. At the measured candidate both PENDING and SENDING
+had a 30-second step limit. A different operation, `pl-sql_write_operations-p1-195-0`, crossed
 a local PENDING timeout, then the same CREATE reached ACTIVE and completed.
-Its duplicate timeout callbacks produced no second durable change. The
-provisioning failure still needs its own causal trace.
+Its duplicate timeout callbacks produced no second durable change. Three other ADDs from the same run persisted CREATING, SENDING, SYNCING
+and ACTIVE in that order on one receiver attempt. All three eventually
+completed. A repeated or late dispatch must preserve the phase that
+already committed.
+
+The integrating decision is when a prepared native ADD or REPLACE may send
+CREATE, hold off a competing ledger move, or release its reservation. While
+the founding membership is unreadable, the operation can still resume.
+The same durable fact must govern the dispatch claim, timeout recovery and
+exclusion of competing writers. Red native tests at `e0b1308a6` reached
+SENDING before binding membership on normal and priority paths. At
+`59f0bdad0` three managed files passed on the original host, including
+restart and stale ADD dispatch. Source review found a remaining conflict at
+this pin. The timeout owner retains an unstamped placement until its original
+operation deadline, while the concurrent-operation check can discard the same
+row after the shorter step timeout. The workflow owner must exercise both
+arrival orders against a real competing ledger move and preserve the existing
+clearing event before composing this repair.
+
+For user-partition CREATE, the physical refusal preceded native founding. Its
+empty reason list does not identify which scheduling condition was missing.
+Managed SQL and PG tests at `642ac7e42` reproduced inconsistent observations
+across admission. At `6130b04a2` the owning SQL path selects nodes and explains
+its decision from the same observation and checks freshness after prechecks.
+Four affected files passed on adams-gamla. A further managed test at
+`af391f8b6` showed healthy RF3/5 and RF1/3 cases checking and founding more
+nodes than requested, and an expired attempt still reaching native FOUND.
+The explicit target-order control passed. The SQL owner must bound the actual
+effect by the requested width and original attempt budget. The three-host
+run does not establish over-selection as its cause.
+
+The next composed trial still requires the original 420-second gate and
+public SQL journey on three distinct hosts. Historical PostgreSQL and TiDB
+smoke observations do not supply a Lagrange measurement. The registered
+comparative profile also needs a separate load generator.
 
 Three-host run `e5deee2a` on clean `9e7184a3b` exhausted the 420-second
 formation bound and the 120-second public routability bound. The harness
