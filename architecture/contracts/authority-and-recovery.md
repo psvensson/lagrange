@@ -155,6 +155,49 @@ obligation. Permanent refusal is explicit and cannot disguise an endlessly
 retrying operation. Recovery may preserve an unresolved obligation after the
 ordinary request has settled; it must not invent success to release it.
 
+### Owner fact and hint
+
+A control-plane read that an owner schedules or proposes on is one of two
+canonical reads (`src/control-plane/control-plane-owner-fact-read.js`). A
+**hint** (`readHint`) is the node's projection: it may schedule a turn, it
+carries no identity and it cannot be passed where an owner fact is required.
+An **owner fact** (`readOwnerFact`) is READY with rows and the serving
+replica's witness, or UNAVAILABLE with a named reason; an empty READY is the
+only absence. Neither read authorises an effect: an effect is granted by a
+conditional committed write that revalidates its own predicate.
+
+The safe read point of an owner fact is decided by the replica that answers,
+at its receiver (`PartitionService.handleRemoteQuery`), on one observation of
+its own raft-rs core: it leads; its applied index equals its commit index; it
+has applied an entry of its own term (so, by Raft's rule that a leader commits
+entries of earlier terms only through an entry of its own, its commit index
+covers every entry committed before its term); and it meets the caller's index
+and term floors. The rows are read at that applied position on the replica's
+one SQLite connection, where committed entries and the applied index are
+written in one synchronous transaction, and after the read the replica must
+still lead in the same term and runtime with an unmoved applied index;
+otherwise it refuses typed and ships no rows. The node that hosts the replica
+reaches the same receiver in process; every other node reaches it over the
+query transport, redirect-first, inside the original request's deadline.
+
+This is a leader-local read point, not a linearizable read: no quorum round
+confirms leadership when the rows are read. With `check_quorum`, a leader cut
+off from its quorum steps down within one election timeout, so an owner fact
+is the leader's applied state, stale by at most that bound when it was
+answered plus the answer's transit, which the caller's deadline bounds.
+
+Precondition for consumers: an absence-dependent consumer (one that concludes
+from an empty result that a row does not exist) may rely only on `readOwnerFact`,
+whose receiver refuses an insufficient read point
+(`test/cdc/cdc-owner-fact-receiver-read-point.test.js`). Every other
+leader-REQUIRED read is qualified only by the serving replica's leader role and
+can answer a row its leader's predecessor committed as absent
+(`test/cdc/cdc-leader-required-fresh-leader-absence.test.js`, open); its
+consumers keep that gap until they migrate. For a consumer left temporarily on
+the older path, an effect-time condition is protective only if it revalidates
+the relevant predicate; an unrelated conditional write does not make a stale
+absence decision safe.
+
 ### Participant release observes a held runtime through one continuation
 
 The replica handler's participant-release recovery queue is the volatile

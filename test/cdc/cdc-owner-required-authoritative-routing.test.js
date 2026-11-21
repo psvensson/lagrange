@@ -187,15 +187,21 @@ test('strict CDC reads route to the registered owner while a local query is held
           const calls = makeReadCalls(scenario.localOwner ? partition : null);
           // Only channel transit is controlled. SQL, authority witness and
           // delivery acknowledgment come from the registered native responder.
+          // As on the wire, only the remaining duration and the caller's abort
+          // cross to the owner router; that router's delivery lifetime is its
+          // own (message-router-delivery-lifetime.js).
           router.setQueryMessageGroupServiceResolver(() => ({
             async sendMessage(address, message, options) {
-              const budget = options.transportDeliveryOptions;
+              const {deliveryLifetime, signal, deliveryPriority} =
+                options.transportDeliveryOptions;
+              const remainingMs = deliveryLifetime.remainingMs();
               const delivery = scenario.unavailable ?
                 buildDeliveryEnvelope({acknowledged: false, noHandler: true}) :
                 await ownerRouter.deliverLocal(address, 'held-read-delivery',
-                  message, null, budget).then(({result, answer}) =>
+                  message, null, {timeoutMs: remainingMs, signal}).then(({result, answer}) =>
                   buildDeliveryEnvelope(result, answer));
-              calls.owner.push({address, budget, answer: deliveryAnswerOf(delivery)});
+              calls.owner.push({address, remainingMs, deliveryPriority,
+                answer: deliveryAnswerOf(delivery)});
               return {delivery};
             },
           }));
@@ -218,9 +224,9 @@ test('strict CDC reads route to the registered owner while a local query is held
             t.equal(calls.owner.length, 0);
           } else {
             t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
-            t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
-              budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
-              budget.deliveryPriority === 'critical'));
+            t.ok(calls.owner.every(({address, remainingMs, deliveryPriority}) =>
+              address === ADDRESS && remainingMs > 0 && remainingMs <= TIMEOUT_MS &&
+              deliveryPriority === 'critical'));
             if (scenario.unavailable) {
               t.ok(calls.owner.every(({answer}) => !answer?.success));
             } else {
