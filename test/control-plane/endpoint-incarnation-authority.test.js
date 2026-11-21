@@ -310,3 +310,65 @@ test('failed exact endpoint deletion retains its incarnation’s pending named w
     releaseControlPlaneWriteIdentities('endpoint', ENDPOINT_ID, G1);
   }
 });
+
+test('a delayed same-incarnation endpoint read cannot retire its pending successor', async (t) => {
+  const source = nodeEndpoint(G1, 'ws://g1-host:8082');
+  const earlier = {...source, address: 'ws://g1-host:8083'};
+  const successor = {...earlier, priority: 2};
+  const gateway = createDurableTables({[TABLES.NODE_ENDPOINTS]: [source]});
+  const route = {id: 'endpoint-sql', partitionId: 'node_endpoints-p1'};
+  const keys = [];
+  let appliedKey;
+  let commitNext = true;
+  const read = async () => ({available: true,
+    row: gateway.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID)});
+  const write = (row, readback = read) => writeEndpointAtIncarnation({
+    bootIncarnation: G1, row, observe: read, readback,
+    insert: () => {
+      throw new Error('the populated endpoint takes the incarnation update path');
+    },
+    update: (whereClause, data, opts) => runControlPlaneWrite(opts, {whereClause, data}, route,
+      async (command, key) => {
+        keys.push(key);
+        const entryId = deriveParticipantEntryId(key, route.partitionId);
+        if (key === appliedKey) {
+          return {success: true, partitionId: route.partitionId, affectedRows: 1,
+            durableCommitWitness: {partitionId: route.partitionId, entryId,
+              term: 1, logIndex: gateway.writes.length}};
+        }
+        if (commitNext) {
+          commitNext = false;
+          await gateway.updateSystemTableRow(TABLES.NODE_ENDPOINTS,
+            command.whereClause, command.data);
+          appliedKey = key;
+        }
+        return {success: false, partitionId: route.partitionId, entryId,
+          failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN};
+      }),
+  });
+  try {
+    const finishedEarlier = await write(earlier, async () => {
+      const snapshot = await read();
+      t.same(snapshot.row, earlier, 'the held read observed the earlier committed destination');
+      await write(successor, async () => ({available: false, row: null}));
+      t.same(keys.slice(0, 2), [appliedKey, appliedKey],
+        'the later owner first recovers the exact earlier entry');
+      t.not(keys[2], appliedKey, 'the successor gets its own instance');
+      return snapshot;
+    });
+    t.equal(finishedEarlier.outcome, OUTCOME.RESOLVED_BY_READBACK);
+    t.same((await read()).row, earlier, 'the successor has no committed effect yet');
+    await write(successor, async () => ({available: false, row: null}));
+    t.equal(keys[3], keys[2], 'the older read leaves the pending successor key held');
+
+    commitNext = true;
+    t.equal((await write(successor)).outcome, OUTCOME.RESOLVED_BY_READBACK);
+    t.equal(keys[4], keys[2], 'the successor remained bound through a lost reply');
+    t.same((await read()).row, successor, 'the full successor row now proves its effect');
+    await write(successor, async () => ({available: false, row: null}));
+    t.not(keys[5], keys[2], 'the exact successor read frees a fresh instance');
+    t.equal(gateway.writes.length, 2, 'observations did not reapply either committed update');
+  } finally {
+    releaseControlPlaneWriteIdentities('endpoint', ENDPOINT_ID, G1);
+  }
+});
