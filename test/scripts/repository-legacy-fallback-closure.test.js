@@ -1,57 +1,120 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from 'node:test';
+import {execFile, spawnSync} from 'node:child_process';
+import {promisify} from 'node:util';
 import {
-  auditCandidateInventory,
-  auditClassificationClosure,
-  auditZeroUnresolvedViolations,
-  auditCanonicalCallerAndExportClosure,
+  KEY_AFFECTED_WITNESS_FILES,
+  auditClassificationDispositions,
+  auditCurrentClosure,
   verifyAffectedOwnerProofs,
-  auditReintroductionGuardAndCoverageLimits,
 } from '../../scripts/checks/check-repository-legacy-fallback-closure.js';
+import {
+  buildExecutionReport, describeCheckout, EXECUTION_PROBLEM, fileResultRecord,
+} from '../../scripts/test-execution-report.js';
 
-test('repository-wide candidate inventory is complete and reconciled with census', () => {
-  const inventory = auditCandidateInventory();
-  assert.equal(inventory.isInventoryComplete, true,
-    'candidate inventory must account for 2,674 census sites across all classes');
-  assert.equal(inventory.totalCensusSites, 2674, 'census must contain 2,674 candidate sites');
-  assert.equal(inventory.activeDetectedSites, 2637, 'detected fallback sites in src must be 2,637');
-  assert.equal(inventory.retiredSites, 47, 'retired sites from census must be 47');
+const ROOT = path.resolve(import.meta.dirname, '../..');
+const EVIDENCE_CLI = 'scripts/quest-evidence/repository-legacy-fallback-closure.js';
+const CHECKER_CLI = 'scripts/checks/check-repository-legacy-fallback-closure.js';
+const HISTORICAL = path.join(ROOT,
+  'solve/quests/repository-legacy-fallback-closure/evidence/receipt.json');
+const runCli = promisify(execFile);
+
+test('missing execution cannot establish affected-owner results', () => {
+  assert.equal(KEY_AFFECTED_WITNESS_FILES.every((file) =>
+    fs.existsSync(path.join(ROOT, file))), true);
+  const proof = verifyAffectedOwnerProofs(ROOT);
+  assert.equal(proof.reportApplicable, false);
+  assert.deepEqual(proof.problems.map(({code}) => code), [EXECUTION_PROBLEM.REPORT_ABSENT]);
 });
 
-test('zero unclassified candidates remain across the repository-wide inventory', () => {
-  const audit = auditClassificationClosure();
-  assert.equal(audit.isClassificationComplete, true,
-    'all candidate sites must be classified in code-navigability-fallback-classification.json');
-  assert.equal(audit.unclassifiedCount, 0, 'zero unclassified candidates must remain');
-  assert.equal(audit.budgetUnclassifiedRowValue, 0,
-    'fallback_sites_unclassified budget row must evaluate to 0');
+function incompleteReport({source, exitStatus = 0, result} = {}) {
+  const checkout = describeCheckout(ROOT);
+  const planned = KEY_AFFECTED_WITNESS_FILES;
+  const results = result ? [fileResultRecord({file: planned[0], ...result})] : [];
+  return buildExecutionReport({
+    candidate: {sha: source ?? checkout.head, tree: checkout.tree, clean: checkout.clean},
+    producer: {kind: 'negative-fixture', id: 'incomplete-owner-selection'},
+    commands: [{label: 'classified owner witnesses', exitStatus}],
+    planned,
+    runs: [{runId: 'incomplete', checkout, complete: true, exitStatus, planned, results}],
+  });
+}
+
+test('affected owner proof rejects missing, failed, empty and foreign execution', () => {
+  for (const [report, required] of [
+    [incompleteReport(), EXECUTION_PROBLEM.PLANNED_FILE_NOT_EXECUTED],
+    [incompleteReport({exitStatus: 1, result: {ok: false, assertions: 1}}),
+      EXECUTION_PROBLEM.PLANNED_FILE_FAILED],
+    [incompleteReport({result: {ok: true, assertions: 0}}), EXECUTION_PROBLEM.ZERO_ASSERTION_PASS],
+    [incompleteReport({source: '0'.repeat(40)}), EXECUTION_PROBLEM.CANDIDATE_SHA_MISMATCH],
+  ]) {
+    const proof = verifyAffectedOwnerProofs(ROOT, report);
+    assert.equal(proof.reportApplicable, false);
+    assert.ok(proof.problems.some(({code}) => code === required), required);
+  }
 });
 
-test('zero unresolved legacy or fallback violations survive in maintained code', () => {
-  const audit = auditZeroUnresolvedViolations();
-  assert.equal(audit.zeroUnresolvedViolations, true,
-    'all classified entries must possess authorized semantic dispositions and reasons');
-  assert.equal(audit.unauthorizedCount, 0, 'zero unauthorized dispositions');
-  assert.equal(audit.omittedExplanationCount, 0, 'zero omitted semantic explanations');
-});
+test('valid classification labels and no searched runtime markers leave semantics unverified',
+  (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'q11-closure-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const classifications = path.join(root, 'scripts/checks');
+    fs.mkdirSync(classifications, {recursive: true});
+    fs.writeFileSync(path.join(classifications, 'code-navigability-fallback-classification.json'),
+      JSON.stringify({entries: [{classification: 'documented-default', reason: 'declared'}]}));
+    const classification = auditClassificationDispositions(root);
+    assert.equal(classification.dispositionsWellFormed, true);
+    const audit = auditCurrentClosure(root);
+    assert.equal(audit.runtimeMarkers.matches.length, 0);
+    assert.equal(audit.semanticClosure, 'unverified');
+  });
 
-test('canonical caller and export closure verifies absent shims and canonical paths', () => {
-  const closure = auditCanonicalCallerAndExportClosure();
-  assert.equal(closure.isClosureComplete, true,
-    'prohibited legacy terms and retired shims must be absent from maintained runtime directories');
-  assert.equal(closure.violationsCount, 0, 'zero prohibited legacy terms in callers');
-});
+test('both Q11 entrypoints replace a stale scratch pass and print the incomplete result',
+  async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'q11-scratch-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    const before = fs.readFileSync(HISTORICAL);
+    const source = describeCheckout(ROOT).head;
+    await Promise.all([EVIDENCE_CLI, CHECKER_CLI].map(async (script, index) => {
+      const output = path.join(directory, `receipt-${index}.json`);
+      fs.writeFileSync(output, '{"status":"pass"}\n');
+      const options = index === 0 ? ['--output', output] : [`--output=${output}`];
+      await assert.rejects(runCli(process.execPath, [script, ...options], {cwd: ROOT}),
+        (result) => {
+          assert.equal(result.code, 1, result.stderr);
+          const audit = JSON.parse(result.stdout);
+          assert.equal(audit.scope, 'current-closure-diagnostic');
+          assert.equal(audit.sourceCommit, source);
+          assert.equal(audit.ownerExecution.reportApplicable, false);
+          assert.ok(['unresolved', 'unverified'].includes(audit.semanticClosure));
+          assert.equal(fs.readFileSync(output, 'utf8'), result.stdout);
+          return true;
+        });
+    }));
+    assert.deepEqual(fs.readFileSync(HISTORICAL), before);
+  });
 
-test('affected owner test proofs pass across classified subsystems', () => {
-  const proofs = verifyAffectedOwnerProofs();
-  assert.equal(proofs.allWitnessesPresent, true,
-    'core affected owner witnesses across partition, bootstrap, rebalancer must be present');
-});
-
-test('reintroduction guard fails closed on unclassified sites and records coverage limits', () => {
-  const audit = auditReintroductionGuardAndCoverageLimits();
-  assert.equal(audit.guardPasses, true,
-    'reintroduction guard must pass when all detected sites are classified');
-  assert.equal(audit.coverageLimitsRecorded, true,
-    'coverage limits must be explicitly recorded without equating unobserved execution to dead code');
+test('Q11 refuses historical output aliases and keeps verification read-only', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'q11-protected-'));
+  t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+  const before = fs.readFileSync(HISTORICAL);
+  const fileAlias = path.join(directory, 'file-link.json');
+  const directoryAlias = path.join(directory, 'evidence-link');
+  fs.symlinkSync(HISTORICAL, fileAlias);
+  fs.symlinkSync(path.dirname(HISTORICAL), directoryAlias, 'dir');
+  for (const output of [HISTORICAL, fileAlias, path.join(directoryAlias, 'receipt.json')]) {
+    const run = spawnSync(process.execPath, [EVIDENCE_CLI, '--output', output],
+      {cwd: ROOT, encoding: 'utf8'});
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /Cannot write diagnostics to the sealed historical receipt/u);
+  }
+  const verification = spawnSync(process.execPath, [EVIDENCE_CLI, '--check-verification'],
+    {cwd: ROOT, encoding: 'utf8'});
+  const historicalVerification = JSON.parse(verification.stdout);
+  assert.equal(typeof historicalVerification.approved, 'boolean');
+  assert.equal(verification.status, historicalVerification.approved ? 0 : 1);
+  assert.deepEqual(fs.readFileSync(HISTORICAL), before);
 });

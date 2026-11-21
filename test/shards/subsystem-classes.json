@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c1e61eb0",
+  "observationDigest": "fnv1a32-3e9d843e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -23453,10 +23453,17 @@
     "test/scripts/repository-legacy-fallback-closure.test.js": {
       "files": [
         "data/fallback-census/census.json",
+        "scripts/checks/check-repository-legacy-fallback-closure.js",
         "scripts/checks/code-navigability-fallback-classification.json",
         "scripts/generate-source-owner-index.js",
+        "scripts/quest-evidence/repository-legacy-fallback-closure.js",
+        "solve/quests/repository-legacy-fallback-closure/evidence/receipt.json",
         "src/bootstrap/owners/rolling-upgrade-owner.js",
+        "src/partition/partition-placement-admission.js",
         "src/raft/raft-rs-turn-answer.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "src/rebalancer/replica-placement-owner-transport.js",
         "test/bootstrap/bootstrap-topology-snapshot.test.js",
         "test/bootstrap/node-joining-service.test.js",
         "test/control-plane/active-node-projection.test.js",
@@ -23466,6 +23473,7 @@
         "test/rebalancer/unified-rebalancer.test.js"
       ],
       "directories": [
+        "scripts/checks",
         "src",
         "src/control-plane",
         "src/diagnostics",
