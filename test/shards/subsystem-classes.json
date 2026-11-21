@@ -28,7 +28,7 @@
   "censusSize": 2714,
   "digest": "fnv1a32-2108589c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-78a87beb",
+  "observationDigest": "fnv1a32-5db0b1d2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19335,7 +19335,10 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ],
       "directories": [
-        "src/rebalancer"
+        "scripts",
+        "src",
+        "src/rebalancer",
+        "test"
       ]
     },
     "test/rebalancer/replace-real-group-d2.test.js": {

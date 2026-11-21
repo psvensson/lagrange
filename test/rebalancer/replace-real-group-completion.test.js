@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {parseSourceFile, walkAst} from '../../scripts/guideline-check-shared.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -73,18 +74,25 @@ const REBALANCER_DIRECTORY = path.join(REPOSITORY_ROOT, 'src', 'rebalancer');
 const LONG_AFTER_MS = 3_600_000;
 const POST_INTENT_TARGET_DEATH = 'replace_target_dead_source_retained';
 
-// Includes the new authoritative preflight observations; these counts are source census,
-// not evidence that a write occurred. Runtime cells exercise the terminal effects.
-// The edges as the code has them at the frozen production SHA: a changed
-// count or a new file fails here until the new edge has a cell below.
-const TERMINAL_INTENT_SITES = Object.freeze({
-  // The scoped PENDING/SENDING REMOVE supersession read and its exact-step CAS
-  // are covered by formation-placement-native-retirement.test.js.
-  'operation-workflow-transition-persistence.js': 6,
-  'operation-workflow-terminal-transition-repair.js': 2,
-  // GROWTH_PROMOTE completion (never REPLACE: guarded by type === GROWTH_PROMOTE).
-  'operation-workflow-growth-promote.js': 2,
+// A terminal options object only counts once it is used at a known call
+// boundary. The runtime cells below remain the proof of committed effects.
+const TERMINAL_OBSERVATION_SITES = Object.freeze({
+  // The late CREATE replay's exact terminal winner is exercised through
+  // ReplicaDispatch in replace-replica-workflow.test.js.
+  'operation-workflow-create-satisfied-response.js': 1,
+  'operation-workflow-growth-promote.js': 1,
+  'operation-workflow-terminal-transition-repair.js': 1,
+  'operation-workflow-transition-persistence.js': 3,
 });
+const TERMINAL_WRITE_SITES = Object.freeze({
+  'operation-workflow-growth-promote.js': 1,
+  'operation-workflow-terminal-transition-repair.js': 1,
+  'operation-workflow-transition-persistence.js': 3,
+});
+const TERMINAL_READ_METHODS = new Set([
+  'observeOperationTransition', 'resolveOperationTransitionBeforeWrite',
+]);
+const TERMINAL_WRITE_METHODS = new Set(['persistTerminalOperation', 'persistOperationUpdate']);
 const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-recovery-drain.js': 1,
   'operation-workflow-executor-outcome-reconcile-methods.js': 1,
@@ -148,6 +156,49 @@ function censusOf(pattern) {
   return census;
 }
 
+function terminalOptionsCallRole(call) {
+  const name = call?.callee?.property?.name;
+  if (TERMINAL_READ_METHODS.has(name)) return 'observation';
+  if (TERMINAL_WRITE_METHODS.has(name)) return 'write';
+  return 'unclassified';
+}
+
+function locallyBoundTerminalOptionsRole(binding, ancestors) {
+  const scope = ancestors.findLast((node) => node.type === 'BlockStatement');
+  const calls = [];
+  if (scope && binding.id.type === 'Identifier') {
+    walkAst(scope, (node) => {
+      if (node.type === 'CallExpression' &&
+          node.arguments.some((arg) =>
+            arg.type === 'Identifier' && arg.name === binding.id.name)) calls.push(node);
+    });
+  }
+  return calls.length === 1 ? terminalOptionsCallRole(calls[0]) : 'unclassified';
+}
+
+function terminalSiteCensus() {
+  const census = {observation: {}, write: {}, unclassified: {}};
+  for (const fileName of fs.readdirSync(REBALANCER_DIRECTORY)) {
+    if (!fileName.endsWith('.js')) continue;
+    const source = fs.readFileSync(path.join(REBALANCER_DIRECTORY, fileName), 'utf8');
+    if (!source.includes('terminalTransition')) continue;
+    walkAst(parseSourceFile(source), (node, options, ancestors) => {
+      if (node.type !== 'Property' || node.computed ||
+          (node.key.name ?? node.key.value) !== 'terminalTransition' ||
+          node.value.value !== true) return;
+      const use = ancestors.at(-2);
+      let role = 'unclassified';
+      if (use?.type === 'CallExpression' && use.arguments.includes(options)) {
+        role = terminalOptionsCallRole(use);
+      } else if (use?.type === 'VariableDeclarator' && use.init === options) {
+        role = locallyBoundTerminalOptionsRole(use, ancestors);
+      }
+      census[role][fileName] = (census[role][fileName] ?? 0) + 1;
+    });
+  }
+  return census;
+}
+
 function failureOwnerViolations(sourceByFile) {
   const definitions = [];
   for (const [fileName, source] of sourceByFile) {
@@ -184,8 +235,12 @@ function failureOwnerSources() {
 
 test('P1 census: the terminal edges of the code are the ones with cells',
   async (t) => {
-    t.same(censusOf(/terminalTransition: true/gu), TERMINAL_INTENT_SITES,
-      'terminal intent sites: fresh authority observation and subsequent guarded write');
+    const terminalSites = terminalSiteCensus();
+    t.same(terminalSites.observation, TERMINAL_OBSERVATION_SITES,
+      'terminal observations consult authority without creating a write edge');
+    t.same(terminalSites.write, TERMINAL_WRITE_SITES,
+      'terminal writes enter the existing persistence and repair owners');
+    t.same(terminalSites.unclassified, {}, 'every terminal options object reaches a known call');
     t.same(censusOf(/\.completeOperation\(/gu), COMPLETE_OPERATION_CALLERS,
       'the completeOperation callers');
     t.same(Object.keys(censusOf(/\.failOperation\(/gu)).sort(),
