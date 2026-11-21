@@ -133,11 +133,12 @@ function completeCopy(world, leader, operationId, partitionId) {
     tableName: 'replica_operations',
     whereClause: {operation_id: operationId, workflow_step: row.workflow_step,
       completed_at: null},
-    data: {workflow_step: WORKFLOW_STEP.COMPLETED,
-      status: WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.COMPLETED] ?? ReplicaStatus.ACTIVE,
+    // An ADD settles at ACTIVE (ADD_WORKFLOW_STEPS ends there).
+    data: {workflow_step: WORKFLOW_STEP.ACTIVE,
+      status: WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.ACTIVE] ?? ReplicaStatus.ACTIVE,
       updated_at: nowMs, completed_at: nowMs,
       steps_history: JSON.stringify([...JSON.parse(row.steps_history),
-        {step: WORKFLOW_STEP.COMPLETED, timestamp: nowMs}])}});
+        {step: WORKFLOW_STEP.ACTIVE, timestamp: nowMs}])}});
   const entryId = `fixture-complete:${operationId}`;
   world.log.appendCommitted({type: PARTITION_SERVICE_OPERATION.QUERY, entryId, sql, params,
     timestamp: leader.ledger.hlcClock.now().toString(), proposedBy: 'fixture-executor',
