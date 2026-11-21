@@ -1,0 +1,27 @@
+TAP version 13
+# Subtest: Reproduction: failed INSERT followed by reread adopts old row
+not ok 1 - Reproduction: failed INSERT followed by reread adopts old row
+  ---
+  duration_ms: 291660.916063
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/k2-repair/test/query/incarnation-repair-defect.test.js:22:1'
+  failureType: 'testCodeFailure'
+  error: 'ControlPlaneSystemTableGateway requires cdcIntegrationService'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    executeIntent (file:///mnt/data/peter/projects/.worktrees/k2-repair/src/control-plane/control-plane-system-table-gateway-mutation-submission.js:257:15)
+    file:///mnt/data/peter/projects/.worktrees/k2-repair/src/control-plane/control-plane-system-table-gateway-mutation-submission.js:334:9
+    runControlPlaneWrite (file:///mnt/data/peter/projects/.worktrees/k2-repair/src/control-plane/control-plane-write-identity.js:394:12)
+    executionFactory (file:///mnt/data/peter/projects/.worktrees/k2-repair/src/control-plane/control-plane-system-table-gateway-mutation-submission.js:332:36)
+    file:///mnt/data/peter/projects/.worktrees/k2-repair/src/control-plane/control-plane-system-table-gateway-request-coalescing.js:146:19
+    async ControlPlaneSystemTableGateway.executeMutationWithDiagnostics (file:///mnt/data/peter/projects/.worktrees/k2-repair/src/control-plane/control-plane-system-table-gateway-mutation-submission.js:395:22)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 300378.391932
