@@ -118,6 +118,20 @@ const ReplicaOperationResponseStatus = Object.freeze({
   ERROR: 'error',
 });
 
+const REMOVE_DISPATCH_RECEIPT_STATUSES = new Set([
+  ReplicaOperationResponseStatus.INITIATED,
+  ReplicaOperationResponseStatus.IN_PROGRESS,
+  ReplicaOperationResponseStatus.ALREADY_EXISTS,
+  ReplicaOperationResponseStatus.COMPLETED,
+  ReplicaOperationResponseStatus.NOT_FOUND,
+]);
+
+// The source accepted removal, has work in progress, or already satisfied
+// the stop request. The workflow still needs its own completion authority.
+function isRemoveDispatchReceipt(answer) {
+  return REMOVE_DISPATCH_RECEIPT_STATUSES.has(answer?.status);
+}
+
 // A replica-operation answer that completed: COMPLETED without an error text.
 // A completed status carrying an error is not a completion; this is the
 // answer's own rule, never a transport decision (design finding F-C).
@@ -153,6 +167,7 @@ export {
   LEARNER_RETIREMENT_OUTCOME,
   isCompletedReplicaOperationAnswer,
   isGenesisFoundingCreateOperation,
+  isRemoveDispatchReceipt,
   ReplicaOperationMessageType,
   ReplicaOperationReason,
   ReplaceWitnessDeliveryOutcome,

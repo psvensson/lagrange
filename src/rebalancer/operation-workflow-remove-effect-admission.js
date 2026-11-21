@@ -9,6 +9,7 @@ import {claimReplaceRemovalEffect, finishReplaceRemovalEffect} from
 import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+import {isRemoveDispatchReceipt} from './replica-operation-constants.js';
 
 // The removal-effect boundary after SAFE for a partition REPLACE or initial
 // REMOVE: null when the effect is sent now; otherwise the owner's result.
@@ -56,18 +57,19 @@ async function deliverAdmittedOperationEffect(
   }
 
   const {operationId} = operation;
-  let delivered = false;
+  let receipt = false;
   try {
     onSend();
     const delivery = await owner.deliverReplicaOperationRequest(
       operation, target, request, dispatchNodeId);
-    const reply = deliveryAnswerOf(delivery);
-    delivered = isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
-      !(reply?.success === false &&
-        reply?.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING);
+    if (claim && isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery))) {
+      const reply = deliveryAnswerOf(delivery);
+      receipt = isRemoveDispatchReceipt(reply) && !(reply.success === false &&
+        reply.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING);
+    }
     return {delivery};
   } finally {
-    if (claim) finishReplaceRemovalEffect(owner, operationId, claim, delivered);
+    if (claim) finishReplaceRemovalEffect(owner, operationId, claim, receipt);
   }
 }
 

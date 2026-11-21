@@ -116,10 +116,10 @@ function claimReplaceRemovalEffect(owner, operation) {
   return claim;
 }
 
-function finishReplaceRemovalEffect(owner, operationId, claim, delivered) {
+function finishReplaceRemovalEffect(owner, operationId, claim, receipt) {
   const effects = readOwnerState(owner).removalEffectByOperationId;
   if (effects.get(operationId) !== claim) return;
-  if (delivered) {
+  if (receipt) {
     effects.set(operationId, {
       identity: claim.identity, inFlight: false,
       sentAtMs: nowMsOf(owner),

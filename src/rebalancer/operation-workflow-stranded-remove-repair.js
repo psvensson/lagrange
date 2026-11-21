@@ -1,7 +1,7 @@
 import {isDeepStrictEqual} from 'node:util';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
-import {ReplicaOperationResponseStatus} from './replica-operation-constants.js';
+import {isRemoveDispatchReceipt} from './replica-operation-constants.js';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
   copyOperationOutcomeData, INVALID_OPERATION_PERSISTENCE_OUTCOME,
@@ -16,12 +16,6 @@ const REMOVE_REPLY_SUBJECT_MOVED = Object.freeze({state: 'subject_moved', operat
 const REMOVE_REPLY_SUBJECT_BOUND = 'subject_bound';
 const INVALID_REPLY_PREIMAGE = 'the sent REMOVE preimage does not bind the requested correction';
 const CORRECTION_REASON = 'safety-gated stranded REMOVE correction';
-const ACCEPTED_REMOVE_RESPONSES = new Set([
-  ReplicaOperationResponseStatus.INITIATED, ReplicaOperationResponseStatus.IN_PROGRESS,
-  ReplicaOperationResponseStatus.ALREADY_EXISTS, ReplicaOperationResponseStatus.COMPLETED,
-  ReplicaOperationResponseStatus.NOT_FOUND,
-]);
-
 function isStrandedRemove(operation) {
   return operation?.type === OperationType.REMOVE &&
     operation.workflowStep === WORKFLOW_STEP.ACTIVE && operation.status === ReplicaStatus.ACTIVE &&
@@ -126,7 +120,7 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response, pre
     assertOperationUpdateRecord(durable, {terminal: true});
     return adoptTerminal(owner, operation, durable);
   }
-  if (!ACCEPTED_REMOVE_RESPONSES.has(response?.status) ||
+  if (!isRemoveDispatchReceipt(response) ||
       !isSameStrandedRemovePreimage(preimage, durable)) return OUTCOME.WAITING;
   const now = Date.now();
   const projected = {...durable, workflowStep: WORKFLOW_STEP.STOPPING,
