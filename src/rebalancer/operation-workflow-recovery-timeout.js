@@ -1,3 +1,6 @@
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE,
+} from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {OperationWorkflowRecoveryStatusReconcile} from './operation-workflow-recovery-status-reconcile.js';
 import {
@@ -261,24 +264,6 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
         operation, timeoutReconcileTasks)) {
         continue;
       }
-      const operationDrainSnapshot =
-        await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
-      if (
-        await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
-          operation,
-          operationDrainSnapshot,
-        )
-      ) {
-        continue;
-      }
-      if (
-        !this.shouldEnterOperationLifecycleFromDrainSnapshot(
-          operationDrainSnapshot,
-        )
-      ) {
-        continue;
-      }
-
       const singleFlightKey = this.getOperationOwnerSingleFlightKey(
         operation.operationId,
       );
@@ -286,21 +271,18 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       const reconcileTask = this.operationWorkflowRunExclusive(
         singleFlightKey,
         async () => {
-          const visibilityObservation =
-            await this.repository.getOperationByIdVisibilityObservation(
+          // The census schedules the turn. The exact current row authorizes
+          // lifecycle effects and supplies the step whose deadline is evaluated.
+          const {operation: timeoutOperation} =
+            await this.repository.queryAuthoritativeOperationVisibilityObservation(
               operation.operationId,
               {
-                allowPriorityRecoveryDeferredVisibility: true,
+                authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+                leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+                requireCompleteExactKey: true,
               },
             );
-          const timeoutOperation = this.selectTimeoutReconcileOperation(
-            visibilityObservation,
-            operation,
-          );
-          if (!timeoutOperation) {
-            return;
-          }
-          if (this.repository.isOperationTerminal(timeoutOperation)) {
+          if (!timeoutOperation || this.repository.isOperationTerminal(timeoutOperation)) {
             return;
           }
           const timeoutOperationDrainSnapshot =
