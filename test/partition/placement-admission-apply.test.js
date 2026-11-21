@@ -31,7 +31,7 @@ import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
-import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-operation-progress.js';
 import {
   applyCommitted, awaitProposal, beginMessage, clearFixtureSingletons,
   decisionCommandOf, durableAppliedIndex, identityOf, isPrepareCommand,
@@ -139,6 +139,35 @@ test('F6: an unresolved ledger transition refuses every other admission until te
     const admitted = await admitOnLeader(leader, proposed, 'other-3',
       placementStatement({partitionId: 'tables-p1', target: NODE.C}));
     assert.equal(resultOf(admitted.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+  }));
+
+test('an incomplete REPLACE holds the native entity lane during source removal', () =>
+  onLedgerLeader(async (leader, proposed) => {
+    const partitionId = 'tables-p1';
+    const replacement = await admitOnLeader(leader, proposed, 'remove-holder-replace',
+      placementStatement({partitionId, type: OperationType.REPLACE, target: NODE.B,
+        sourceReplicaId: `${partitionId}-r1`}));
+    assert.equal(resultOf(replacement.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+    const [holder] = ledgerRows(leader);
+    const remove = placementStatement({partitionId, type: OperationType.REMOVE, target: NODE.C,
+      replicaId: `${partitionId}-r3`, voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}});
+    for (const phase of [WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]) {
+      assert.equal(stepLedgerRow(leader, holder.operation_id, phase), null);
+      const refusing = await admitOnLeader(leader, proposed, `remove-holder-${phase}`, remove);
+      assert.equal(refusing.apply, null);
+      assert.equal(refusing.answer.committed, true);
+      assert.deepEqual(resultOf(refusing.answer), {outcome: PLACEMENT_OUTCOME.REFUSED,
+        reason: PLACEMENT_REFUSAL.PARTITION_BUSY, operationIds: [holder.operation_id]});
+      assert.deepEqual(ledgerRows(leader).map((row) => row.operation_id), [holder.operation_id]);
+    }
+    assert.equal(commitLedgerStatement(leader, 'remove-holder-terminal',
+      'UPDATE replica_operations SET workflow_step = ?, status = ?, completed_at = updated_at ' +
+      'WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL',
+      [WORKFLOW_STEP.REMOVED, ReplicaStatus.REMOVED, holder.operation_id, WORKFLOW_STEP.STOPPING]),
+    null);
+    const admitted = await admitOnLeader(leader, proposed, 'remove-holder-after-terminal', remove);
+    assert.equal(resultOf(admitted.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+    assert.equal(ledgerRows(leader).length, 2);
   }));
 
 test('F5: the same entryId committed twice replays the first answer, never a second ' +
