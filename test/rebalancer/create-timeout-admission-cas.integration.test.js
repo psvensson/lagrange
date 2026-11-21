@@ -85,10 +85,12 @@ async function withExpiredStep(measure, {
     const cache = createMockCache({services: source ? [source] : []});
     const otherTables = createCoordinatorSqlStore(cache);
     let exactPointReadUnavailable = false;
+    let unavailableExactPointReads = 0;
     const sql = {async executeQuery(statement, params = []) {
       if (/\breplica_operations\b/u.test(statement)) {
         if (exactPointReadUnavailable && statement.includes('WHERE operation_id = ?') &&
             params[0] === OPERATION_ID) {
+          unavailableExactPointReads += 1;
           return {success: false, error: 'control_plane_pressure_degraded',
             errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED', retryAfterMs: 1};
         }
@@ -201,16 +203,18 @@ async function withExpiredStep(measure, {
           const observeAuthority = repository.queryAuthoritativeOperationVisibilityObservation
             .bind(repository);
           let armed = true;
+          let observation;
+          let strictPointRead;
+          const previousFaultCount = unavailableExactPointReads;
           const deferOnce = async (observe, id, options, isSweepRead) => {
             if (id !== OPERATION_ID || !isSweepRead || !armed) return observe(id, options);
             armed = false;
+            strictPointRead = options.requireCompleteExactKey === true;
             await interleave();
             exactPointReadUnavailable = true;
             try {
-              const observed = await observe(id, options);
-              assert.equal(observed.operation, null, 'the sweep point read is unavailable');
-              assert.equal(observed.deferredOutcome?.deferRetry, true);
-              return observed;
+              observation = await observe(id, options);
+              return observation;
             } finally {
               exactPointReadUnavailable = false;
             }
@@ -224,6 +228,10 @@ async function withExpiredStep(measure, {
           try {
             await coordinator.checkTimeouts();
             assert.equal(armed, false, 'the periodic sweep reached the exact point read');
+            assert.ok(unavailableExactPointReads > previousFaultCount,
+              'the gateway returned pressure at the exact operation key');
+            assert.equal(observation?.operation, null, 'the sweep point read returned no operation');
+            if (strictPointRead) assert.equal(observation?.deferredOutcome?.deferRetry, true);
           } finally {
             repository.getOperationByIdVisibilityObservation = observeVisibility;
             repository.queryAuthoritativeOperationVisibilityObservation = observeAuthority;
@@ -695,7 +703,9 @@ test('a priority timeout sweep waits for the current operation before failing ex
       assert.equal(run.failWrites.length, 1);
       assert.equal(run.failures.length, 1);
       assert.ok(Number.isFinite(run.reservation().released_at));
-      assert.equal(run.owner.stats.operationsTimedOut, before + 1);
+      assert.match(run.row().error_message, /Priority recovery drain settled stale operation/u);
+      assert.equal(run.owner.stats.operationsTimedOut, before,
+        'the priority drain owns this settlement, outside ordinary timeout accounting');
     }, {
       partitionId,
       controlPlaneReadinessService: buildPriorityDrainReadinessService(
