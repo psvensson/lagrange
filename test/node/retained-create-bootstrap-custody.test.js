@@ -16,7 +16,7 @@ import {
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {
-  createHandlerFixture, targetLifecycle, waitForCreateCompletion,
+  createHandlerFixture, targetLifecycle, waitForCreateCompletion, waitForPhysicalStart,
 } from '../test-helpers/replica-create-admission-recovery-fixture.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 
@@ -147,6 +147,43 @@ test('exact durable target FAILED can settle without inventing original bootstra
       assert.equal(durable.create_admission_attempt_token, row.create_admission_attempt_token);
       assert.equal(fixture.physicalStarts(), 0, 'permanent exact failure is adopted, not re-created');
     } finally {
+      await fixture.handler.shutdown();
+    }
+  }));
+
+test('only a durable original bootstrap and its publication wake the exact stopped attempt',
+  async () => onLedgerLeader(async (leader, proposed) => {
+    const row = await admitBeforeRestart(leader, proposed, null);
+    const fixture = await createHandlerFixture({
+      row, authorityFor: (cache) => restartAuthority(leader, cache),
+    });
+    try {
+      await fixture.handler.startReplicaCreateAdmissionRecovery();
+      const parked = fixture.authority.read(row.operation_id);
+      const history = JSON.parse(parked.steps_history);
+      history[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] = committedStampFor(['leader-replica']);
+      const publish = (publishedRow) =>
+        fixture.cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPSERT', publishedRow);
+      const projected = {...parked, steps_history: JSON.stringify(history)};
+      publish(projected);
+      await waitForPhysicalStart(fixture);
+      assert.equal(fixture.physicalStarts(), 0, 'projection is never bootstrap authority');
+
+      const completed = waitForCreateCompletion(fixture.handler);
+      completed.catch(() => {});
+      assert.equal(commitLedgerStatement(leader, 'retained-bootstrap:publish-original',
+        'UPDATE replica_operations SET steps_history = ?, updated_at = ? WHERE operation_id = ?',
+        [projected.steps_history, parked.updated_at + 1, parked.operation_id]), null);
+      publish(fixture.authority.read(row.operation_id));
+      await waitForPhysicalStart(fixture);
+      assert.equal(fixture.physicalStarts(), 1, 'the durable original publication wakes recovery');
+      fixture.releaseFactory();
+      await completed;
+      const durable = fixture.authority.read(row.operation_id);
+      assert.equal(durable.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
+      assert.equal(durable.create_admission_attempt_token, parked.create_admission_attempt_token);
+    } finally {
+      fixture.releaseFactory();
       await fixture.handler.shutdown();
     }
   }));
