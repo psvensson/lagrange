@@ -1,3 +1,5 @@
+import {promotedVoterReplicaIdsByPartition} from
+  './replica-placement-owner-retained-repair-statement.js';
 // Public entry: createReplicaPlacementOwner, attachReplicaPlacementOwner, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
 // Required collaborators: nodeId, ledgerPartitionService (replica_operations-p1), nodeAuthority, systemTableCache, now, logger; optional workflowOwner, storageAccountingService, timer functions.
 // Durable authority / commit point: committed replica_operations rows via requestPlacementAdmission and requestPlacementHoldRelease on ledgerPartitionService.
@@ -224,20 +226,6 @@ function moveIntentKeyOf(partitionId, move) {
     `${move.sourceReplicaId ?? ''}:${move.replicaId ?? ''}:${move.copySourceNodeId ?? ''}`;
 }
 
-function promotedVoterReplicaIdsByPartition(census) {
-  const byPartition = new Map();
-  for (const row of census) {
-    if (row.entityType !== UNIFIED_SERVICE_TYPE.PARTITION ||
-        row.type !== OperationType.GROWTH_PROMOTE || row.incomplete ||
-        row.step !== WORKFLOW_STEP.ACTIVE || row.promoteReplicaIds === null) {
-      continue;
-    }
-    const promoted = byPartition.get(row.entityId) ?? new Set();
-    for (const replicaId of row.promoteReplicaIds) promoted.add(replicaId);
-    byPartition.set(row.entityId, promoted);
-  }
-  return byPartition;
-}
 
 class ReplicaPlacementOwner {
   constructor(options = {}) {

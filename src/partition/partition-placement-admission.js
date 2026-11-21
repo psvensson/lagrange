@@ -208,9 +208,10 @@ function retainedResult(recorded) {
   return deepFreezeResult(result);
 }
 
-function recordedAnswer(service, recorded) {
+function recordedAnswer(service, recorded, command) {
   return placementAnswer(service, retainedResult(recorded), {committed: true,
-    logIndex: recorded.logIndex, term: recorded.term});
+    logIndex: recorded.logIndex, term: recorded.term,
+    ...(command.type === PLACEMENT_REPAIR_TYPE ? {entryId: command.entryId} : {})});
 }
 
 // The leader-local proposal of a built command: leadership, the cutover
@@ -231,7 +232,7 @@ function proposePlacementCommand(service, command) {
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
     if (!isSameCommandReplay(service, recorded, command)) return refusal(service, ERROR.BYTES);
-    const answer = recordedAnswer(service, recorded);
+    const answer = recordedAnswer(service, recorded, command);
     return command.type === PLACEMENT_ADMIT_TYPE &&
       command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
       {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} :
@@ -375,7 +376,7 @@ function applyPlacementCommand(service, committed) {
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
     if (!isSameCommandReplay(service, recorded, command)) throw new Error(ERROR.BYTES);
-    const answer = recordedAnswer(service, recorded);
+    const answer = recordedAnswer(service, recorded, command);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }
@@ -394,7 +395,8 @@ function applyPlacementCommand(service, committed) {
       advancePartitionWriteGeneration(service.db);
     }
     afterCommit(() => service.resolveCommittedWrite(command.entryId,
-      placementAnswer(service, result, {committed: true, logIndex: index, term})));
+      placementAnswer(service, result, {committed: true, logIndex: index, term,
+        ...(command.type === PLACEMENT_REPAIR_TYPE ? {entryId: command.entryId} : {})})));
     afterCommit(() => service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED,
       {partitionId: service.partitionId, command}));
     return APPLY.APPLIED;

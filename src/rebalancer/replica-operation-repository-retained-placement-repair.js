@@ -1,8 +1,9 @@
+import {readPlacementCensus, readPlacementCopyOccupancy} from
+  '../partition/partition-placement-admission-decision.js';
 import {v4 as uuidv4} from 'uuid';
 import {isDeepStrictEqual} from 'node:util';
 import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
-import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-write-kernel.js';
-import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from './replica-placement-owner-constants.js';
+import {PLACEMENT_CLEARING_TRIGGER, PLACEMENT_TRIGGER, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from './replica-placement-owner-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {copyOperationOutcomeData} from './replica-operation-update-outcome.js';
 
@@ -16,6 +17,11 @@ function sameBlocker(row, blocker) {
 
 function shouldWake(attempt, event, db) {
   if (event?.command?.entryId === attempt.entryId) return false;
+  if (attempt.clearingTrigger !== PLACEMENT_TRIGGER.LEDGER_COMMIT) return false;
+  if (attempt.occupancy) {
+    return !isDeepStrictEqual(attempt.occupancy,
+      readPlacementCopyOccupancy(attempt.body.admissionStatement, readPlacementCensus(db)));
+  }
   if (!attempt.blockers) return true;
   return attempt.blockers.some((blocker) => !sameBlocker(db.prepare(
     'SELECT created_at, workflow_step, completed_at FROM replica_operations ' +
@@ -30,7 +36,8 @@ function assignRetainedPlacementRepairMethods(Repository) {
       let attempt = this.retainedPlacementRepairs.get(operation.operationId);
       if (!attempt) {
         attempt = {operation: copyOperationOutcomeData(operation), entryId: null,
-          blockers: null, pending: null, writePaused: false};
+          blockers: null, pending: null,
+          clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};
         this.retainedPlacementRepairs.set(operation.operationId, attempt);
       }
       if (!isDeepStrictEqual(attempt.operation, operation)) return false;
@@ -42,12 +49,14 @@ function assignRetainedPlacementRepairMethods(Repository) {
 
     async submitRetainedPlacementRepairAttempt(operation, attempt) {
       if (attempt.entryId === null) {
+        attempt.body = this.prepareRetainedPlacementRepair(attempt.operation);
         attempt.entryId = `retained-repair:${operation.operationId}:${uuidv4()}`;
       }
+      const releaseSequence = this.retainedPlacementRepairReleaseSequence ?? 0;
       let answer;
       try {
         answer = await this.repairRetainedPlacement({
-          entryId: attempt.entryId, body: {operation: attempt.operation},
+          entryId: attempt.entryId, body: attempt.body,
         });
       } catch (error) {
         this.logger.warn('Retained placement repair answer unavailable',
@@ -57,21 +66,73 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (this.isShuttingDownRequested() ||
           this.retainedPlacementRepairs.get(operation.operationId) !== attempt) return false;
       const result = answer?.placementResult;
+      const committed = answer?.committed === true && answer.entryId === attempt.entryId &&
+        Number.isSafeInteger(answer.logIndex) && answer.logIndex > 0 &&
+        Number.isSafeInteger(answer.term) && answer.term > 0;
+      const failureCode = answer?.failureCode;
+      if (!committed) {
+        if (Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, failureCode)) {
+          attempt.clearingTrigger = PLACEMENT_CLEARING_TRIGGER[failureCode];
+          if (attempt.clearingTrigger === PLACEMENT_TRIGGER.WRITE_PATH_RELEASED &&
+              (this.retainedPlacementRepairReleaseSequence ?? 0) > releaseSequence) {
+            this.wakeRetainedPlacementRepairs((candidate) => candidate === attempt);
+          }
+        }
+        return false;
+      }
       if (result?.outcome === PLACEMENT_OUTCOME.ADMITTED &&
           isDeepStrictEqual(result.operationIds, [operation.operationId])) {
-        this.retainedPlacementRepairs.delete(operation.operationId);
-        this.syncIncompleteOperationObservation(attempt.operation);
-        return true;
+        const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(
+          attempt.operation, {requireAbsenceConfirmation: true});
+        if (this.isShuttingDownRequested() ||
+            this.retainedPlacementRepairs.get(operation.operationId) !== attempt) return false;
+        const observed = observation?.operation;
+        if (observed?.createdAt === attempt.operation.createdAt &&
+            this.isReplicaOperationUpdateSatisfied(attempt.operation, observed)) {
+          this.retainedPlacementRepairs.delete(operation.operationId);
+          this.syncIncompleteOperationObservation(observed);
+          return true;
+        }
+        if (observed) {
+          this.retainedPlacementRepairs.delete(operation.operationId);
+        } else if (!observation?.deferredOutcome) {
+          attempt.entryId = null;
+        }
+        return false;
       }
-      attempt.writePaused = answer?.failureCode ===
-        PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED;
-      if (result?.reason === PLACEMENT_REFUSAL.PARTITION_BUSY) {
-        attempt.blockers = result.blockingOperations;
-        attempt.entryId = null;
-      } else if (result?.outcome === PLACEMENT_OUTCOME.REFUSED) {
-        // A permanent native refusal retains caller evidence, but cannot
-        // repeatedly re-propose the same invalid restoration.
+      if (result?.outcome !== PLACEMENT_OUTCOME.REFUSED ||
+          !Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, result.reason)) return false;
+      let blockers = null;
+      let occupancy = null;
+      if (result.reason === PLACEMENT_REFUSAL.PARTITION_BUSY ||
+          result.reason === PLACEMENT_REFUSAL.LEDGER_TRANSITION_UNRESOLVED) {
+        if (!Array.isArray(result.blockingOperations) || result.blockingOperations.length === 0 ||
+            !isDeepStrictEqual(result.operationIds,
+              result.blockingOperations.map((blocker) => blocker.operationId)) ||
+            result.blockingOperations.some((blocker) =>
+              typeof blocker.operationId !== 'string' || !Number.isFinite(blocker.createdAt) ||
+              typeof blocker.workflowStep !== 'string' || blocker.completedAt !== null)) return false;
+        blockers = result.blockingOperations;
+      }
+      if (result.reason === PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY ||
+          result.reason === PLACEMENT_REFUSAL.TARGET_AT_CAPACITY) {
+        const statement = attempt.body.admissionStatement;
+        const candidate = result.occupancy;
+        if (!statement || !candidate ||
+            candidate.copySourceNodeId !== statement.moves[0].copySourceNodeId ||
+            candidate.targetNodeId !== statement.moves[0].targetNodeId ||
+            candidate.sourceLimit !== statement.kSrcForClass || candidate.targetLimit !== statement.kTgt ||
+            !Number.isSafeInteger(candidate.sourceOccupancy) || candidate.sourceOccupancy < 0 ||
+            !Number.isSafeInteger(candidate.targetOccupancy) || candidate.targetOccupancy < 0) return false;
+        occupancy = candidate;
+      }
+      attempt.blockers = blockers;
+      attempt.occupancy = occupancy;
+      attempt.clearingTrigger = PLACEMENT_CLEARING_TRIGGER[result.reason];
+      if (attempt.clearingTrigger === null) {
         this.retainedPlacementRepairs.delete(operation.operationId);
+      } else {
+        attempt.entryId = null;
       }
       return false;
     },
@@ -85,7 +146,12 @@ function assignRetainedPlacementRepairMethods(Repository) {
       this.retainedPlacementRepairDrain = this.redriveRetainedPlacementRepairs()
         .catch((error) => this.logger.warn('Retained placement repair deferred',
           {error: error?.message || String(error)}))
-        .finally(() => { this.retainedPlacementRepairDrain = null; });
+        .finally(() => {
+          this.retainedPlacementRepairDrain = null;
+          if ([...this.retainedPlacementRepairs.values()].some((attempt) => attempt.wakePending)) {
+            this.wakeRetainedPlacementRepairs(() => false);
+          }
+        });
     },
 
     async redriveRetainedPlacementRepairs() {
@@ -94,6 +160,10 @@ function assignRetainedPlacementRepairMethods(Repository) {
           .filter((attempt) => attempt.wakePending);
         if (attempts.length === 0) return;
         for (const attempt of attempts) {
+          // A clearing commit can arrive before the refused proposal's reply.
+          // Join that reply first, then spend the retained wake on a fresh try.
+          if (attempt.pending) await attempt.pending;
+          if (this.retainedPlacementRepairs.get(attempt.operation.operationId) !== attempt) continue;
           attempt.wakePending = false;
           await this.repairRetainedOperation(attempt.operation);
         }
@@ -102,7 +172,10 @@ function assignRetainedPlacementRepairMethods(Repository) {
 
     observeRetainedPlacementRepairCommit(tableName, row) {
       this.wakeRetainedPlacementRepairs((attempt) => {
-        if (tableName === SYSTEM_TABLE_NAME.SERVICES) return attempt.blockers === null;
+        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+          return attempt.clearingTrigger === PLACEMENT_TRIGGER.LEADERSHIP_START ||
+            attempt.clearingTrigger === PLACEMENT_TRIGGER.NODES_OR_FORMATION;
+        }
         if (attempt.blockers === null) return row?.operation_id !== attempt.operation.operationId;
         return attempt.blockers?.some((blocker) =>
           blocker.operationId === row?.operation_id && !sameBlocker(row, blocker)) === true;
@@ -113,7 +186,12 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (this.retainedPlacementRepairWakes.has(service)) return;
       const onCommit = (event) => this.wakeRetainedPlacementRepairs((attempt) =>
         shouldWake(attempt, event, service.db));
-      const onReleased = () => this.wakeRetainedPlacementRepairs((attempt) => attempt.writePaused);
+      const onReleased = () => {
+        this.retainedPlacementRepairReleaseSequence =
+          (this.retainedPlacementRepairReleaseSequence ?? 0) + 1;
+        this.wakeRetainedPlacementRepairs((attempt) =>
+          attempt.clearingTrigger === PLACEMENT_TRIGGER.WRITE_PATH_RELEASED);
+      };
       service.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommit);
       service.on(PARTITION_SERVICE_EVENT.WRITE_PATH_RELEASED, onReleased);
       this.retainedPlacementRepairWakes.set(service, () => {

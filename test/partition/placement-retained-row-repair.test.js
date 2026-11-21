@@ -6,12 +6,13 @@ import fs from 'node:fs';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
-import {requestPlacementAdmission, requestPlacementRepair} from
+import * as placementAdmission from
   '../../src/partition/partition-placement-admission.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
+import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
 import {createOperationAt, OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
@@ -62,9 +63,12 @@ async function withRepairLedger(measure) {
         commands.push(entry);
         queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
       });
+      const world = {leader, coordinator, gateway, commands};
       try {
-        await measure({leader, coordinator, gateway, commands});
+        await measure(world);
       } finally {
+        world.placementOwner?.shutdown();
+        leader.setRebalancerLeadershipSink(null);
         await coordinator.shutdown();
       }
     }, {dbPath: temporary.dbPath});
@@ -76,7 +80,12 @@ async function withRepairLedger(measure) {
 async function retainMissing(world, type = OperationType.REMOVE) {
   const operation = createOperationAt({operationId: `historical-${type}`,
     type, partitionId: PARTITION_ID, sourceNodeId: NODE.A, targetNodeId: NODE.B,
-    replicaId: `${PARTITION_ID}-r1`, membershipPublicationEpoch: 7}, Date.now());
+    replicaId: `${PARTITION_ID}-retained`, membershipPublicationEpoch: 7,
+    ...(type === OperationType.ADD || type === OperationType.REPLACE ?
+      {targetNodeBootIncarnation: 1} : {})}, Date.now());
+  if (type === OperationType.ADD || type === OperationType.REPLACE) {
+    operation.copySourceNodeId = NODE.A;
+  }
   operation.entityType = 'partition';
   operation.entityId = PARTITION_ID;
   await world.coordinator.repository.persistNewOperation(operation);
@@ -89,9 +98,10 @@ async function retainMissing(world, type = OperationType.REMOVE) {
 }
 
 async function compete(world) {
-  const answer = await requestPlacementAdmission(world.leader, {entryId: 'normal-competitor',
+  const answer = await placementAdmission.requestPlacementAdmission(world.leader, {entryId: 'normal-competitor',
     body: placementStatement({partitionId: PARTITION_ID, type: OperationType.REMOVE,
-      target: NODE.C, replicaId: `${PARTITION_ID}-r2`})});
+      target: NODE.C, replicaId: `${PARTITION_ID}-r2`,
+      voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}})});
   return answer.placementResult;
 }
 
@@ -117,7 +127,9 @@ for (const first of ['normal', 'retained']) {
         const proposals = world.commands.length;
         await settleTicks();
         world.leader.emit(PARTITION_SERVICE_EVENT.WRITE_PATH_RELEASED);
-        commitLedgerStatement(world.leader, 'unrelated-change', 'SELECT 1', []);
+        commitLedgerStatement(world.leader, 'unrelated-change',
+          'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
+          ['unrelated']);
         await settleRepair(world);
         assert.equal(world.commands.length, proposals, 'no self or unrelated wake loop');
         stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
@@ -138,8 +150,9 @@ for (const first of ['normal', 'retained']) {
 
 test('reservation gate consumes native repair refusal and retains the original reservation', () =>
   withRepairLedger(async (world) => {
+    attachCurrentCopyOwner(world);
     const retained = await retainMissing(world, OperationType.ADD);
-    await compete(world);
+    const normal = await compete(world);
     const owner = world.coordinator.workflowOwner;
     owner.hasStorageReservationSupport = () => true;
     owner.ensureReservationForOperation = async () => ({outcome: RESERVATION.CREATED});
@@ -147,6 +160,13 @@ test('reservation gate consumes native repair refusal and retains the original r
     assert.ok(result, 'a repaired reservation never overrides native ledger refusal');
     assert.equal(ledgerRows(world.leader).length, 1);
     assert.equal(world.coordinator.repository.retainedPlacementRepairs.size, 1);
+    owner.ensureReservationForOperation = async () => ({outcome: RESERVATION.ALREADY_ACTIVE});
+    assert.ok(await ensureDispatchReservationOrSkip(owner, retained),
+      'the next ACTIVE-reservation invocation still withholds dispatch');
+    stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+    await settleRepair(world);
+    assert.equal(await ensureDispatchReservationOrSkip(owner, retained), null,
+      'only the original native holder clearing makes this same candidate dispatchable');
   }));
 
 test('lost committed answer reuses pinned bytes and preserves the retained lease', () =>
@@ -176,18 +196,117 @@ test('lost committed answer reuses pinned bytes and preserves the retained lease
 test('exact existing row succeeds; changed birth and history refuse without replacement', () =>
   withRepairLedger(async (world) => {
     const retained = await retainMissing(world);
-    const first = await requestPlacementRepair(world.leader,
+    const first = await placementAdmission.requestPlacementRepair(world.leader,
       {entryId: 'exact-insert', body: {operation: retained}});
     assert.equal(first.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
-    const replay = await requestPlacementRepair(world.leader,
+    const replay = await placementAdmission.requestPlacementRepair(world.leader,
       {entryId: 'exact-existing', body: {operation: retained}});
     assert.equal(replay.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
     for (const operation of [{...retained, createdAt: retained.createdAt + 1},
       {...retained, stepsHistory: [...retained.stepsHistory,
         {step: retained.workflowStep, timestamp: retained.updatedAt}]}]) {
-      const answer = await requestPlacementRepair(world.leader,
+      const answer = await placementAdmission.requestPlacementRepair(world.leader,
         {entryId: `changed-${operation.stepsHistory.length}`, body: {operation}});
       assert.equal(answer.placementResult.outcome, PLACEMENT_OUTCOME.REFUSED);
     }
     assert.equal(ledgerRows(world.leader)[0].created_at, retained.createdAt);
+  }));
+
+function attachCurrentCopyOwner(world) {
+  const now = Date.now();
+  const cache = {
+    getAll(table) {
+      if (table === 'partitions') return [{partition_id: PARTITION_ID, status: 'active',
+        replica_count: 3, leader_node_id: NODE.A}];
+      if (table === 'services') return [{replica_id: `${PARTITION_ID}-source`,
+        partition_id: PARTITION_ID, node_id: NODE.A, status: 'active', raft_role: 'leader'}];
+      return [];
+    },
+    onCacheApplyChange() {}, offCacheApplyChange() {},
+  };
+  const owner = createReplicaPlacementOwner({nodeId: NODE.A,
+    ledgerPartitionService: world.leader, systemTableCache: cache,
+    nodeAuthority: {
+      answerCommittedNodes: () => ({state: 'ready', epoch: {publicationEpoch: 7},
+        formation: {state: 'FORMED', latchEpoch: 7},
+        nodeRows: [NODE.A, NODE.B, NODE.C].map((node, index) => ({node_id: node,
+          host_id: `host-${index}`, status: 'active', boot_incarnation: 1,
+          ready_lease_expires_at: now + 60_000}))}),
+      subscribe: () => () => {}, scheduleRefresh() {},
+    }, now: () => now, logger: world.leader.logger});
+  world.leader.setRebalancerLeadershipSink(owner);
+  // Pause ordinary planning while measuring the supported pure preparation
+  // path. This does not replace its real node/deficit/classification algorithm.
+  owner.setLeader(false);
+  world.placementOwner = owner;
+}
+
+test('a clearing holder commit during the old BUSY reply owns a successor attempt', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const normal = await compete(world);
+    const repository = world.coordinator.repository;
+    const submit = repository.repairRetainedPlacement;
+    let release;
+    let committed;
+    const gotBusy = new Promise((resolve) => { committed = resolve; });
+    repository.repairRetainedPlacement = async (payload) => {
+      const answer = await submit(payload);
+      if (answer.placementResult?.reason === PLACEMENT_REFUSAL.PARTITION_BUSY) {
+        committed();
+        await new Promise((resolve) => { release = resolve; });
+      }
+      return answer;
+    };
+    const pending = repository.persistOperationUpdate(retained,
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    await gotBusy;
+    stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+    release();
+    await pending;
+    await settleRepair(world);
+    assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId));
+    assert.equal(repository.retainedPlacementRepairs.size, 0,
+      'no unrelated later traffic is needed to consume the already observed clearing');
+  }));
+
+test('terminal evidence restoration does not consume the live entity or copy lane', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world, OperationType.ADD);
+    const normal = await compete(world);
+    const completedAt = retained.updatedAt + 1;
+    const terminal = {...retained, workflowStep: WORKFLOW_STEP.FAILED, status: 'failed',
+      updatedAt: completedAt, completedAt, stepsHistory: [...retained.stepsHistory,
+        {step: WORKFLOW_STEP.FAILED, timestamp: completedAt}]};
+    const result = await world.coordinator.repository.persistOperationUpdate(terminal,
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    assert.equal(result.disposition, DISPOSITION.REINSERTED);
+    assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === normal.operationIds[0]));
+    assert.equal(ledgerRows(world.leader).length, 2);
+  }));
+
+test('current actual deficit policy preserves same-ID copies and native capacity clearing', () =>
+  withRepairLedger(async (world) => {
+    attachCurrentCopyOwner(world);
+    const retained = await retainMissing(world, OperationType.ADD);
+    const holders = [];
+    for (const partitionId of ['copy-holder-one-p1', 'copy-holder-two-p1']) {
+      const answer = await placementAdmission.requestPlacementAdmission(world.leader, {
+        entryId: partitionId, body: placementStatement({partitionId, target: NODE.B})});
+      assert.equal(answer.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+      holders.push(answer.placementResult.operationIds[0]);
+    }
+    const result = await world.coordinator.repository.persistOperationUpdate(retained,
+      {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+    assert.equal(result.disposition, DISPOSITION.REFUSED);
+    assert.equal(world.commands.at(-1).body.admissionStatement.repair, true,
+      'UNDER_REPLICATED is classified repair by the ordinary actual deficit owner');
+    assert.equal(world.commands.at(-1).body.operation.operationId, retained.operationId);
+    const outcome = readCommittedStatementOutcome(world.leader,
+      `entry:${world.commands.at(-1).entryId}`);
+    assert.equal(JSON.parse(outcome.ownerResultText).reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
+    stepLedgerRow(world.leader, holders[0], WORKFLOW_STEP.FAILED);
+    await settleRepair(world);
+    assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId),
+      'native clearing re-admits the original identity instead of minting another operation');
   }));

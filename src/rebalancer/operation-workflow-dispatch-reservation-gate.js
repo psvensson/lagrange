@@ -80,9 +80,6 @@ function isDispatchReservationGateEngaged(owner) {
  * @private
  */
 async function repairGateRepairedOperationRow(owner, operation, attempt) {
-  if (attempt?.outcome !== OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED) {
-    return true;
-  }
   return repairOperationRowForGateRepairedReservation(owner, operation);
 }
 

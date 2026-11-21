@@ -9,39 +9,62 @@ import {operationCarriesReplicaCreateAdmission} from
   '../rebalancer/replica-operation-create-admission-fields.js';
 import {operationCarriesMessageGroupMembership} from
   '../rebalancer/replica-operation-message-group-membership-fields.js';
-import {PLACEMENT_STATEMENT_VALIDITY as VALIDITY} from
+import {canonicalPlacementStatement, PLACEMENT_STATEMENT_VALIDITY as VALIDITY} from
   '../rebalancer/replica-placement-owner-admission-statement.js';
-import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
+import {classifyPlacementClass} from '../rebalancer/replica-placement-owner-order.js';
+import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
+import {PLACEMENT_TRANSITION_KIND, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../rebalancer/replica-placement-owner-constants.js';
-import {readPlacementCensus} from './partition-placement-admission-decision.js';
+import {admissionRefusal, entityAdmissionRefusal, readPlacementCensus} from './partition-placement-admission-decision.js';
 
 const INVALID = Object.freeze({validity: VALIDITY.INVALID});
 const IDENTITY_COLUMNS = Object.freeze(['operation_id', 'type', 'partition_id',
   'entity_type', 'entity_id', 'replica_id', 'source_replica_id', 'source_node_id',
   'target_node_id', 'created_at']);
-const RETAINED_REPAIR_REFUSAL = Object.freeze({
-  IDENTITY_CHANGED: 'retained_identity_changed',
-  EXISTING_CHANGED: 'retained_row_changed',
-  ADMISSION_REQUIRED: 'retained_admission_required',
-});
+
 
 function canonicalRetainedPlacementRepair(input) {
   const body = copyStrictOwnDataRecord(input);
-  if (body === null || Object.keys(body).length !== 1 ||
-      !Object.hasOwn(body, 'operation')) return INVALID;
+  if (body === null || Object.keys(body).some((key) =>
+    key !== 'operation' && key !== 'admissionStatement') || !Object.hasOwn(body, 'operation')) {
+    return INVALID;
+  }
   try {
     assertOperationUpdateRecord(body.operation);
+    let admissionStatement = null;
+    if (body.admissionStatement !== null && body.admissionStatement !== undefined) {
+      const canonical = canonicalPlacementStatement(body.admissionStatement);
+      if (canonical.validity !== VALIDITY.VALID ||
+          !matchesRepairStatement(body.operation, canonical.statement)) return INVALID;
+      admissionStatement = canonical.statement;
+    }
     return Object.freeze({validity: VALIDITY.VALID,
-      statement: Object.freeze({operation: copyOperationOutcomeData(body.operation)})});
+      statement: Object.freeze({operation: copyOperationOutcomeData(body.operation),
+        admissionStatement})});
   } catch {
     return INVALID;
   }
 }
 
+function matchesRepairStatement(operation, statement) {
+  const [move] = statement.moves;
+  return statement.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT &&
+    statement.entityType === operation.entityType && statement.entityId === operation.entityId &&
+    statement.partitionId === operation.partitionId &&
+    statement.sourceNodeId === operation.sourceNodeId &&
+    statement.membershipPublicationEpoch === (operation.membershipPublicationEpoch ?? null) &&
+    statement.placementClass === classifyPlacementClass(operation.partitionId) &&
+    statement.moves.length === 1 && move.type === operation.type &&
+    move.replicaId === operation.replicaId && move.targetNodeId === operation.targetNodeId &&
+    move.copySourceNodeId === operation.copySourceNodeId &&
+    (move.targetNodeBootIncarnation ?? null) === (operation.targetNodeBootIncarnation ?? null) &&
+    (move.targetNodeStorageIncarnation ?? null) === (operation.targetNodeStorageIncarnation ?? null) &&
+    (move.sourceReplicaId ?? null) === (operation.sourceReplicaId ?? null);
+}
+
 function rowOf(operation) {
   // Repair restores the retained raw lease; lease renewal remains its own write.
-  return {...buildCanonicalReplicaOperationRow(operation, operation.ownerLeaseExpiresAt ?? null),
-    copy_source_node_id: operation.copySourceNodeId ?? null};
+  return buildCanonicalReplicaOperationRow(operation, operation.ownerLeaseExpiresAt ?? null);
 }
 
 function refuse(reason, blockingOperations = []) {
@@ -57,16 +80,18 @@ function blockerOf(db, peer) {
     workflowStep: row.workflow_step, completedAt: row.completed_at});
 }
 
-function decideRetainedPlacementRepair(db, {operation}) {
+function decideRetainedPlacementRepair(db, {operation, admissionStatement}) {
   const row = rowOf(operation);
   const existing = db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
     .get(operation.operationId);
   if (existing !== undefined) {
     if (IDENTITY_COLUMNS.some((key) => existing[key] !== row[key])) {
-      return refuse(RETAINED_REPAIR_REFUSAL.IDENTITY_CHANGED);
+      return refuse(PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED);
     }
-    if (Object.keys(row).some((key) => existing[key] !== row[key])) {
-      return refuse(RETAINED_REPAIR_REFUSAL.EXISTING_CHANGED);
+    // Lease renewal has its own write owner. A newer raw SQLite lease is
+    // consumed as-is; this idempotent branch never replaces it.
+    if (Object.keys(row).some((key) => key !== 'lease_expires_at' && existing[key] !== row[key])) {
+      return refuse(PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED);
     }
     return {result: Object.freeze({outcome: PLACEMENT_OUTCOME.ADMITTED,
       operationIds: Object.freeze([operation.operationId])}), rows: []};
@@ -77,14 +102,32 @@ function decideRetainedPlacementRepair(db, {operation}) {
   // the normal FOUND admission/replay algorithm remains unchanged.
   if (operationCarriesReplicaCreateAdmission(operation) ||
       operationCarriesMessageGroupMembership(operation)) {
-    return refuse(RETAINED_REPAIR_REFUSAL.ADMISSION_REQUIRED);
+    return refuse(PLACEMENT_REFUSAL.RETAINED_ADMISSION_REQUIRED);
   }
   // A terminal restoration retains evidence; it creates no live entity lane.
   if (operation.completedAt === null) {
-    const peers = readPlacementCensus(db).filter((peer) => peer.incomplete &&
-      peer.entityType === row.entity_type && peer.entityId === row.entity_id);
-    if (peers.length > 0) return refuse(PLACEMENT_REFUSAL.PARTITION_BUSY,
-      peers.map((peer) => blockerOf(db, peer)));
+    const census = readPlacementCensus(db);
+    const decision = entityAdmissionRefusal({
+      transitionKind: PLACEMENT_TRANSITION_KIND.PLACEMENT,
+      entityType: row.entity_type, entityId: row.entity_id,
+      moves: [{type: operation.type}],
+    }, census);
+    // Copies require a current policy statement before their capacity arm;
+    // do not substitute a guessed historical repair flag or copy source.
+    if (decision !== null) return {result: Array.isArray(decision.operationIds) && decision.operationIds.length > 0 ?
+      Object.freeze({...decision, blockingOperations: Object.freeze(census.filter((peer) =>
+        decision.operationIds.includes(peer.operationId)).map((peer) => blockerOf(db, peer)))}) :
+      decision, rows: []};
+    if (operation.type === OperationType.ADD || operation.type === OperationType.REPLACE) {
+      if (admissionStatement === null ||
+          (admissionStatement.dispatchHold !== null &&
+            operation.stepsHistory[0]?.[OPERATION_METADATA_KEY.DISPATCH_HOLD] !==
+              admissionStatement.dispatchHold)) {
+        return refuse(PLACEMENT_REFUSAL.RETAINED_COPY_POLICY_UNAVAILABLE);
+      }
+      const capacity = admissionRefusal(db, admissionStatement, census);
+      if (capacity !== null) return {result: capacity, rows: []};
+    }
   }
   const columns = Object.keys(row);
   db.prepare(`INSERT INTO replica_operations (${columns.join(', ')}) VALUES ` +
@@ -93,5 +136,4 @@ function decideRetainedPlacementRepair(db, {operation}) {
     operationIds: Object.freeze([operation.operationId])}), rows: [row]};
 }
 
-export {canonicalRetainedPlacementRepair, decideRetainedPlacementRepair,
-  RETAINED_REPAIR_REFUSAL};
+export {canonicalRetainedPlacementRepair, decideRetainedPlacementRepair};

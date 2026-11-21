@@ -500,6 +500,7 @@ class ReplicaOperationRepository {
     // Bound by the node composition owner, never read from an operation command.
     this.membershipOwnerBootIncarnation = options.membershipOwnerBootIncarnation ?? null;
     this.repairRetainedPlacement = options.repairRetainedPlacement;
+    this.prepareRetainedPlacementRepair = options.prepareRetainedPlacementRepair;
     this.retainedPlacementRepairs = new Map();
     this.retainedPlacementRepairWakes = new Map();
     this.systemTableCache = options.systemTableCache;
