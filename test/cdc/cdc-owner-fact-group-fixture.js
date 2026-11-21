@@ -405,6 +405,11 @@ async function openLedgerGroupSurface(t, testFileUrl) {
         {timeoutMs: READ_TIMEOUT_MS, deliveryPriority: 'critical'});
       return deliveryAnswerOf(delivery);
     },
+    async awaitKnownLeader(service, leader) {
+      assert.equal(await group.waitFor(() =>
+        service.raft.readStatus().leaderId === leader.replicaId), true,
+      `setup: ${service.replicaId} knows ${leader.replicaId} leads`);
+    },
     async settleLeader(service) {
       assert.equal(await group.waitFor(() => {
         const status = service.raft.readStatus();

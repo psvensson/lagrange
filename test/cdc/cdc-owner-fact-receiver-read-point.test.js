@@ -102,6 +102,9 @@ test('one receiver contract: the same owner-fact request gets the same typed ans
   const insufficient = await compare('insufficiently applied leader', second, follower.nodeId);
   t.equal(insufficient.failureCode, REASON.ELECTION_LOG_NOT_APPLIED);
   t.equal(insufficient.shipsRows, false);
+  // A deposed replica learns its successor from the successor's first
+  // heartbeat; the comparison is made once it has.
+  await group.awaitKnownLeader(first, second);
   const deposed = await compare('deposed leader', first, follower.nodeId);
   t.equal(deposed.failureCode, REASON.NOT_LEADER);
   t.equal(deposed.shipsRows, false);
