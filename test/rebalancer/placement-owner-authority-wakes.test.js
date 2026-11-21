@@ -340,3 +340,66 @@ test('poisoned candidate: a failure attributable to one partition\'s candidate i
     `at most one failure per pass (failures ${poisoned}); ${report}`);
   assert.ok(n1.probe.passes.length - passesAfterIdle <= 5, `no spin; ${report}`);
 }));
+
+// Corrective round 2, item 1 (lead ruling): a failed candidate is re-attempted
+// because planning re-derives it from the census on the next wake (at the
+// latest on the resync), never through retained pass triggers. Over several
+// wakes a permanently failing candidate retains no trigger, is re-attempted
+// exactly once per pass, and a pass woken by the resync alone is resync-only:
+// the admission it makes is counted by placementResyncAdmissions (the sealed
+// contract's missed-wake signal).
+test('poisoned candidate over several wakes and a resync: a candidate failure retains no ' +
+  'trigger; it is re-attempted once per wake; a pure resync pass is resync-only',
+(t) => withPlacementWorld(TWO_DEFICITS, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [n1] = nodes;
+  const owner = ownerOf(n1);
+  const admissible = owner.isCandidateAdmissibleNow;
+  const failures = {[TARGET]: 0, [SECOND]: 0};
+  let secondBlocked = true;
+  owner.isCandidateAdmissibleNow = function poisonedFor(candidate, ...rest) {
+    if (candidate.partitionId === TARGET ||
+        (candidate.partitionId === SECOND && secondBlocked)) {
+      failures[candidate.partitionId] += 1;
+      throw new Error(`fixture: poisoned candidate ${candidate.partitionId}`);
+    }
+    return admissible.call(this, candidate, ...rest);
+  };
+  await world.electLedger(n1);
+  await world.idle();
+  const custody = owner.custody;
+  const report = () => JSON.stringify({failures, retained: [...custody.retainedTriggers],
+    passes: n1.probe.passes.map((pass) => pass.triggers.join('+')),
+    resyncAdmissions: owner.placementResyncAdmissions, snapshot: owner.lastPassSnapshot});
+  assert.ok(failures[TARGET] >= 1, `premise: the first pass failed the candidate; ${report()}`);
+  assert.equal(custody.retainedTriggers.size, 0,
+    `a candidate failure retains no trigger (first pass); ${report()}`);
+  for (let wake = 0; wake < 3; wake += 1) {
+    const passesBefore = n1.probe.passes.length;
+    const failedBefore = failures[TARGET];
+    owner.notify(PLACEMENT_TRIGGER.SERVICES_CHANGED);
+    await world.idle();
+    const passes = n1.probe.passes.length - passesBefore;
+    assert.ok(passes >= 1, `the wake ran a pass; ${report()}`);
+    assert.equal(failures[TARGET] - failedBefore, passes,
+      `the failing candidate is re-attempted exactly once per pass; ${report()}`);
+    assert.equal(custody.retainedTriggers.size, 0,
+      `the pending-trigger set does not grow (wake ${wake + 1}); ${report()}`);
+  }
+  assert.equal(owner.placementResyncAdmissions, 0, `premise: nothing admitted yet; ${report()}`);
+  secondBlocked = false;
+  const resync = world.timers.placementOwnerIntervals().filter((timer) => timer.alive);
+  assert.equal(resync.length, 1, `premise: the custody's resync is armed; ${report()}`);
+  const passesBeforeResync = n1.probe.passes.length;
+  resync[0].fn();
+  await waitUntil(() => admittedOperations(world, n1, SECOND).length === 1,
+    'the resync pass admits the unblocked deficit', PROGRESS_BOUND_MS);
+  await world.idle();
+  t.diagnostic(report());
+  const resyncPass = n1.probe.passes[passesBeforeResync];
+  assert.deepEqual(resyncPass?.triggers, [PLACEMENT_TRIGGER.RESYNC],
+    `the pass woken by the resync carries the resync alone; ${report()}`);
+  assert.equal(owner.placementResyncAdmissions, 1,
+    `the resync-only pass's admission is counted as a resync admission; ${report()}`);
+  assert.equal(admittedOperations(world, n1, TARGET).length, 0, report());
+}));
