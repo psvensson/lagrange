@@ -110,8 +110,16 @@ test('kernel: a placement write the port deferred is not proposed under a tenure
 // admission boundary; the deficit is satisfied (the renewed tenure plans nothing
 // for it); the renewal is armed for the kernel's leadership read of that
 // admission; the admission is released.
+// Executed before the kernel repair (lab kernel-red-0bb5c473): green, and not
+// by the kernel. The placement admission checks the participant cutover pause
+// AFTER the leadership read (partition-placement-admission.js proposePlacementCommand),
+// and that pause's admission proof carries the term
+// (partition-participant-transaction-pause.js admissionProofMatchesStatus), so it
+// refuses CUTOVER_PAUSED. The kernel's own fence is witnessed where nothing
+// else stands after the read: the ordinary write path checks the pause first
+// (partition-write-kernel-tenure-fence.test.js, witness g).
 test('kernel: a placement write is not proposed under a tenure renewed inside the kernel\'s ' +
-  'own leadership read, between the owner\'s fence and the propose (refused NOT_LEADER)',
+  'own leadership read, between the owner\'s fence and the propose (refused, nothing proposed)',
 (t) => withPlacementWorld(SPEC, async (world) => {
   const nodes = await startThreeNodeLedger(world);
   const [a] = nodes;

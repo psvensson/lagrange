@@ -25,6 +25,7 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-write-kernel.js';
+import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
 import {
   RAFT_EVENT,
   RAFT_LEADERSHIP_TRANSFER_REASON,
@@ -147,6 +148,31 @@ function renewWithoutRoleEdge(leader) {
   return port.term;
 }
 
+// The write kernel's leadership read of an ordinary write
+// (partitionWriteLeadershipRefusalOf, called by startAdmittedPartitionWrite
+// after the cutover-pause check), read from the synchronous call stack.
+const KERNEL_WRITE_LEADERSHIP_READ =
+  /partitionWriteLeadershipRefusalOf[\s\S]*startAdmittedPartitionWrite/u;
+
+// A status read that runs a consensus turn announcing a renewed term
+// (raft-rs-runtime-owner.js readStatusNow drains inbound; announce emits
+// TERM_CHANGE, no role event): armed once, for the kernel's leadership read of
+// an ordinary write, and run before the status is answered.
+function renewInsideKernelLeadershipRead(leader) {
+  const port = leader.raft;
+  const renewal = {term: null, before: null};
+  leader.raft = createRaftOperationPort({...port, readStatus: () => {
+    if (renewal.term === null && KERNEL_WRITE_LEADERSHIP_READ.test(creationStack())) {
+      renewal.before = leader.leadershipTenure;
+      leader.controllablePort.setTerm(leader.controllablePort.term + 1);
+      leader.controllablePort.emitEvent(RAFT_EVENT.TERM_CHANGE, leader.controllablePort.term);
+      renewal.term = leader.controllablePort.term;
+    }
+    return port.readStatus();
+  }});
+  return renewal;
+}
+
 // What remains of a released write: pending writes in the proposal queue, its
 // pending outcome, and live kernel timers.
 function remainderOf(leader, clock, entryId) {
@@ -244,4 +270,33 @@ test('kernel tenure fence (d): a write handed to consensus before the renewal co
     rows: 1, queued: 0, handOvers: 1},
   `handed over at term ${handover.portTerm}, committed after the renewal to ${renewedTerm}; ` +
     JSON.stringify({answer: write.value ?? null}));
+}));
+
+// The status read between a writer's decision and the registration (record
+// section 8): the kernel's leadership read runs a consensus turn that renews
+// the tenure. An ordinary write checks the cutover pause before that read, so
+// nothing but the kernel stands between the renewal and the registration.
+test('kernel tenure fence (g): an ordinary write is not registered under a tenure renewed ' +
+  'inside the kernel\'s own leadership read (refused NOT_LEADER, nothing proposed)',
+() => withKernelLeader(async ({leader, clock}) => {
+  const entryId = 'kernel-fence-read-renewal';
+  const {handed} = recordHandOvers(leader);
+  const renewal = renewInsideKernelLeadershipRead(leader);
+  const write = track(leader.executeQuery(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
+    {entryId}));
+  await waitUntil(() => write.settled || handOversOf(handed, entryId).length > 0, WAIT_MS);
+  await settleTicks();
+  assert.notEqual(renewal.term, null,
+    'premise: the renewal ran inside the kernel\'s leadership read of the write');
+  assert.notEqual(renewal.before, null, 'premise: the replica held a leadership tenure');
+  assert.notEqual(leader.leadershipTenure, renewal.before, 'premise: the tenure was renewed');
+  assert.equal(leader.isLeader, true, 'premise: no role edge, the replica still leads');
+  const facts = {enteredUnderRenewedTerm: enteredUnder(handed, entryId, renewal.term),
+    answer: write.settled ? pick(write.value, ['success', 'failureCode']) : 'pending',
+    ...remainderOf(leader, clock, entryId)};
+  assert.deepEqual(facts, {enteredUnderRenewedTerm: 0, answer: RELEASED_NOT_LEADER,
+    ...NOTHING_REMAINS},
+  `renewed to term ${renewal.term} inside the kernel's leadership read: refused, nothing ` +
+    `registered or proposed; ${JSON.stringify({handed: handed.map(
+      ({entryId: id, portTerm}) => ({id, portTerm})), answer: write.value ?? null})}`);
 }));
