@@ -35,7 +35,7 @@ const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL_PARAMETER = '?';
 const SQL_LIST_SEPARATOR = ', ';
 const LEDGER_PARTITION_ID = `${TABLE}-p1`;
-const CENSUS_SQL = 'SELECT operation_id, type, entity_type, entity_id, ' +
+const CENSUS_SQL = 'SELECT operation_id, type, partition_id, entity_type, entity_id, ' +
   'replica_id, source_replica_id, ' +
   'target_node_id, copy_source_node_id, target_claim_key, workflow_step, status, completed_at, ' +
   `steps_history FROM ${TABLE} WHERE workflow_step IN ` +

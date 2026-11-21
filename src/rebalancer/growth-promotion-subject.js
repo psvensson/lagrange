@@ -1,3 +1,4 @@
+import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {OPERATION_METADATA_KEY} from './replica-operation-progress.js';
 
 const COHORT = OPERATION_METADATA_KEY.PROMOTE_REPLICA_IDS;
@@ -44,6 +45,10 @@ function readGrowthPromotionCohort(operation) {
 }
 
 function readGrowthPromotionCohortFromRow(row, stepsHistory) {
+  if (row.entity_type !== UNIFIED_SERVICE_TYPE.PARTITION ||
+      !isReplicaIdentity(row.partition_id) || row.partition_id !== row.entity_id) {
+    return null;
+  }
   return readGrowthPromotionCohort({
     replicaId: row.replica_id,
     sourceReplicaId: row.source_replica_id,

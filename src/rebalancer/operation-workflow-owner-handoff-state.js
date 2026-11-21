@@ -1,3 +1,4 @@
+import {buildReplicaOperationWakeRow} from './replica-operation-repository-mutation-row-methods.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -288,7 +289,7 @@ function withOwnerHandoffState(Base) {
             type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
             [ControlPlaneField.OPERATION_ID]: operation.operationId,
             [ControlPlaneField.OPERATION_ROW]:
-              this.buildCoordinatorCreatedDispatchRow(operation),
+              buildReplicaOperationWakeRow(operation),
             [ControlPlaneField.HANDOFF_MODE]:
               options.handoffMode ||
               CONTROL_PLANE_OPERATION_HANDOFF_MODE.INITIAL_DISPATCH,

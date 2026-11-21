@@ -1,4 +1,3 @@
-import {buildReplicaOperationWakeRow} from './replica-operation-repository-mutation-row-methods.js';
 import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {
@@ -504,7 +503,6 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
 export {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
   buildCoordinatorCreatedDispatchIngress,
-  buildReplicaOperationWakeRow as buildCoordinatorCreatedDispatchRow,
   buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
   canContinueCoordinatorCreatedRemoteHandoff,
   cloneOperationSnapshot,

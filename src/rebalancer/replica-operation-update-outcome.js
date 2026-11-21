@@ -50,8 +50,9 @@ function assertOperationData(value, visited = new Set()) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     requireOutcome(typeof key === 'string' && Object.hasOwn(descriptor, 'value'),
       'operation data contains an accessor or symbol');
-    requireOutcome(typeof descriptor.value !== 'function', 'operation data contains a function');
-    assertOperationData(descriptor.value, visited);
+    const {value: child} = descriptor;
+    requireOutcome(typeof child !== 'function', 'operation data contains a function');
+    assertOperationData(child, visited);
   }
   visited.delete(value);
 }
