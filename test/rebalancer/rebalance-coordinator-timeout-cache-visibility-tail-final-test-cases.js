@@ -1,3 +1,4 @@
+import {createCoordinatorSqlStore} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 
@@ -19,7 +20,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       replica_id: 'control_plane_publications-p1-r4',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
-      status: 'creating',
+      status: ReplicaStatus.PENDING,
       workflow_step: 'PENDING',
       created_at: nowMs - 5000,
       updated_at: nowMs - 5000,
@@ -56,103 +57,30 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
 
-    const cdcIntegrationService = {
-      refreshAuthoritativeCacheRow: async () => true,
-      async executeAuthoritativeSystemTableRead(
-        tableName,
-        sql,
-        params,
-        options = {},
-      ) {
-        authoritativeReadCalls.push({
-          tableName,
-          sql: String(sql),
-          params: [...(Array.isArray(params) ? params : [])],
-          options: {...options},
-        });
-
-        if (tableName === 'replica_operations') {
-          if (
-            options.authoritativeReadMode === 'owner_rpc_required'
-          ) {
-            return {
-              success: false,
-              error: 'owner-rpc-read-failed',
-              rows: [],
-            };
-          }
-          return {
-            success: true,
-            source: 'local_partition_replica',
-            rows: [{...operationRow}],
-          };
-        }
-
-        if (tableName === 'services') {
-          if (String(sql).includes('WHERE service_id = ?')) {
-            return {
-              success: true,
-              source: 'local_partition_replica',
-              rows: [{...serviceRow}],
-            };
-          }
-          if (String(sql).includes('WHERE partition_id = ? AND node_id = ?')) {
-            return {
-              success: true,
-              source: 'local_partition_replica',
-              rows:
-              serviceRow.partition_id === params?.[0] &&
-                serviceRow.node_id === params?.[1] ?
-                [{...serviceRow}] :
-                [],
-            };
-          }
-        }
-
-        return {
-          success: true,
-          source: 'local_partition_replica',
-          rows: [],
-        };
+    const store = createCoordinatorSqlStore({
+      getAll(table) {
+        if (table === 'replica_operations') return [operationRow];
+        if (table === 'services') return [serviceRow, sourceServiceRow];
+        return [];
       },
-    };
-
+      upsert(_table, row) {
+        Object.assign(operationRow, row);
+      },
+    });
     const controlPlaneSystemTableGateway = {
       async readRows(tableName, sql, params = [], options = {}) {
-        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-          options,
-        );
+        return this.readAuthoritativeRows(tableName, sql, params, options);
       },
       async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
-        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-          options,
-        );
-      },
-      async executeQuery(sql, params = []) {
-        if (String(sql).startsWith('UPDATE replica_operations SET')) {
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
+        authoritativeReadCalls.push({tableName, sql, params, options});
+        if (tableName === 'replica_operations' &&
+            options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
+          return {success: false, error: 'owner-rpc-read-failed'};
         }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: 0,
-        };
+        return store.execute(sql, params);
+      },
+      async executeQuery(sql, params) {
+        return store.execute(sql, params);
       },
     };
 
@@ -187,7 +115,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           return rows.filter(predicate);
         },
       },
-      cdcIntegrationService,
+      cdcIntegrationService: {refreshAuthoritativeCacheRow: async () => true},
       controlPlaneSystemTableGateway,
       messageRouter: {
         async deliver(target, request) {
@@ -214,6 +142,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       await new Promise((resolve) => setImmediate(resolve));
     } finally {
       await coordinator.shutdown();
+      store.suspend();
     }
 
     t.equal(
@@ -238,19 +167,19 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     t.ok(
       authoritativeReadCalls.some((call) =>
         call.tableName === 'replica_operations' &&
-      call.options.readAuthority?.authoritativeReadMode !==
-        'owner_rpc_required',
+      call.options.authoritativeReadMode !==
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       ),
       'observed progress should stay on the non-strict local owner read path',
     );
-    t.ok(
-      authoritativeReadCalls.every((call) =>
-        call.tableName !== 'replica_operations' ||
-      call.options.readAuthority?.authoritativeReadMode !==
-        'owner_rpc_required',
-      ),
-      'observed progress should not widen replica_operations reads to strict owner-rpc',
-    );
+    const strictOperationReads = authoritativeReadCalls.filter((call) =>
+      call.tableName === 'replica_operations' &&
+      call.options.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+    t.ok(strictOperationReads.length > 0,
+      'the owner attempts the optional strict check for a more advanced REPLACE winner');
+    t.ok(strictOperationReads.every((call) => call.sql.includes('operation_id = ?') &&
+      call.params[0] === operationRow.operation_id),
+    'the strict winner check remains scoped to this operation');
   });
 
   test('observed progress prefers local authoritative target status over ' +
@@ -1301,6 +1230,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
             createdAt: Date.now() - TEST_STALE_STEP_AGE_MS,
             updatedAt: Date.now() - TEST_STALE_STEP_AGE_MS,
             completedAt: TEST_NULL_VALUE,
+            stepsHistory: [],
           });
 
         t.equal(

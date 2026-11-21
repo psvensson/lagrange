@@ -1,3 +1,5 @@
+import {createCoordinatorSqlStore, createTestCoordinator} from './test-helpers.js';
+import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
 
@@ -123,114 +125,74 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
     }
   });
 
-  test('storage reservation cleanup reads opt into authoritative SQL fallback',
+  test('terminal reservation release uses strict owner reads while reconciliation uses the routed sweep',
     async (t) => {
       const gatewayCalls = [];
-      const coordinator = createCoordinator({
-        nodeId: 'node-1',
-        transactionCoordinator: buildTransactionCoordinator(),
-        systemTableCache: {
-          get() {
-            return null;
+      const now = Date.now();
+      const operation = {type: 'ADD', operationId: 'op-1', entityType: 'partition',
+        entityId: 'partition-1', partitionId: 'partition-1', targetNodeId: 'node-1'};
+      const store = createCoordinatorSqlStore({});
+      for (const [id, operationId, expiresAt] of [
+        ['res-op-1', operation.operationId, now + 60_000],
+        ['res-expired-1', 'op-expired-1', now - 60_000],
+        ['res-orphan-1', 'op-orphan-1', now + 60_000],
+      ]) {
+        const insert = store.submitMutation({
+          operation: 'insert',
+          tableName: 'storage_reservations',
+          row: {
+            reservation_id: id, operation_id: operationId, entity_type: operation.entityType,
+            entity_id: operation.entityId, partition_id: operation.partitionId,
+            target_node_id: operation.targetNodeId, status: RESERVATION_STATUS.ACTIVE,
+            estimated_bytes: 1, created_at: now, updated_at: now, expires_at: expiresAt,
+            released_at: null,
           },
-        },
-        cdcIntegrationService: {
-      refreshAuthoritativeCacheRow: async () => true,
-        },
+        });
+        t.ok(insert.success, `committed reservation fixture ${id}`);
+      }
+      const coordinator = createTestCoordinator({
         controlPlaneSystemTableGateway: {
-          async readRows(tableName, sql, params, options = {}) {
-            gatewayCalls.push({
-              tableName,
-              sql: String(sql),
-              params: [...(Array.isArray(params) ? params : [])],
-              options,
-            });
-            if (String(sql).includes('operation_id = ?')) {
-              return {
-                success: true,
-                rows: [{
-                  reservation_id: 'res-op-1',
-                  operation_id: 'op-1',
-                }],
-              };
-            }
-            if (String(sql).includes('expires_at <= ?')) {
-              return {
-                success: true,
-                rows: [{
-                  reservation_id: 'res-expired-1',
-                  operation_id: 'op-expired-1',
-                }],
-              };
-            }
-            return {
-              success: true,
-              rows: [{
-                reservation_id: 'res-orphan-1',
-                operation_id: 'op-orphan-1',
-              }],
-            };
+          async readAuthoritativeRows(tableName, sql, params, options) {
+            gatewayCalls.push({tableName, sql, options});
+            return store.execute(sql, params);
           },
-        },
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-          },
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        sqlQueryEngine: {
-          async executeQuery() {
-            throw new Error('raw SQL path should not be used');
+          async executeQuery(sql, params) {
+            return store.execute(sql, params);
           },
         },
         enableTimeouts: false,
       });
-
-      coordinator.initialize();
-      coordinator.transitionActiveReservationById = async () => ({
-        success: true,
-        changed: true,
-      });
-      coordinator.getReservationOperationVisibilityObservation = async () =>
-        Object.freeze({
-          operation: null,
-          deferredOutcome: null,
-        });
+      const readStatuses = () => store.execute(
+        'SELECT status FROM storage_reservations ORDER BY reservation_id',
+      ).rows.map((row) => row.status);
       try {
-        await coordinator.releaseReservationForOperation({
-          type: 'ADD',
-          operationId: 'op-1',
-        });
-        await coordinator.reconcileReservations();
-        t.equal(
-          gatewayCalls.length,
-          3,
-          'reservation cleanup should query active-by-operation, expired, and active sets',
-        );
-        for (const call of gatewayCalls) {
-          t.equal(
-            call.tableName,
-            'storage_reservations',
-            'reservation cleanup should stay on the storage_reservations system table',
-          );
-          t.equal(
-            call.options.authoritativeReadMode,
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-              .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-            `reservation cleanup should opt into routed authoritative SQL fallback for ${call.sql}`,
-          );
-          t.equal(
-            call.options.timeoutMs,
-            CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
-            `reservation cleanup should preserve control-plane timeout options on ${call.sql}`,
-          );
+        await coordinator.releaseReservationForOperation(operation);
+        t.same(readStatuses(),
+          [RESERVATION_STATUS.ACTIVE, RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.ACTIVE],
+          'the keyed terminal release commits before the sweep and only for its exact operation');
+        const sweep = await coordinator.reconcileReservations();
+        t.same(sweep, {expired: 1, orphansReleased: 1},
+          'the sweep transitions just its expired and orphan rows');
+        const reservationReads = gatewayCalls.filter((call) =>
+          call.tableName === 'storage_reservations');
+        t.equal(reservationReads.length, 3,
+          'cleanup reads the active operation reservations, expired rows and active sweep');
+        t.equal(reservationReads[0]?.options.authoritativeReadMode,
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          'terminal release observes the exact active tuple through the strict owner');
+        for (const call of reservationReads.slice(1)) {
+          t.equal(call.options.authoritativeReadMode,
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+            'discovery of sweep candidates uses the routed authority policy');
+          t.equal(call.options.timeoutMs, CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
+            'reservation sweep retains its read timeout');
         }
+        t.same(readStatuses(),
+          [RESERVATION_STATUS.EXPIRED, RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.RELEASED],
+          'terminal release, expiry and confirmed absence each close their exact reservation');
       } finally {
         await coordinator.shutdown();
+        store.suspend();
       }
     });
 
@@ -405,7 +367,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
 
   test(
     'handleRecovery preserves cache-visible local-owner operations when ' +
-    'authoritative replica_operations owner rows are unavailable',
+    'owner rows are unavailable and settles only after authority recovers',
     async (t) => {
       let authoritativeReadCalls = 0;
       const recoveryRow = {
@@ -425,6 +387,12 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         entity_type: 'partition',
         entity_id: 'partition-recovery-1',
       };
+      const store = createCoordinatorSqlStore({
+        getAll: (table) => table === 'replica_operations' ? [recoveryRow] : [],
+        upsert: (_table, row) => Object.assign(recoveryRow, row),
+      });
+      let authorityAvailable = false;
+      let terminalWrites = 0;
       const coordinator = createCoordinator({
         nodeId: 'node-recovery-cache',
         transactionCoordinator: buildTransactionCoordinator(),
@@ -439,18 +407,22 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
             return [{...recoveryRow}];
           },
         },
-        cdcIntegrationService: {
-      refreshAuthoritativeCacheRow: async () => true,
-          async executeAuthoritativeSystemTableRead(tableName, sql) {
-            if (tableName === 'replica_operations' &&
-              String(sql).includes('SELECT * FROM replica_operations')) {
+        cdcIntegrationService: {refreshAuthoritativeCacheRow: async () => true},
+        controlPlaneSystemTableGateway: {
+          async readAuthoritativeRows(tableName, sql, params) {
+            if (tableName === 'replica_operations') {
               authoritativeReadCalls += 1;
+              if (!authorityAvailable) {
+                return {success: false, error: 'authoritative_row_source_unavailable'};
+              }
             }
-            return {
-              success: false,
-              error: 'authoritative_row_source_unavailable',
-              rows: [],
-            };
+            return store.execute(sql, params);
+          },
+          async executeQuery(sql, params) {
+            if (sql.includes('UPDATE replica_operations') && sql.includes('completed_at IS NULL')) {
+              terminalWrites += 1;
+            }
+            return store.execute(sql, params);
           },
         },
         messageRouter: {
@@ -461,28 +433,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         tablePolicyService: {
           async getPolicyForPartition() {
             return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        sqlQueryEngine: {
-          async executeQuery(sql, params = []) {
-            if (String(sql).startsWith('UPDATE replica_operations SET')) {
-              recoveryRow.status = params[0];
-              recoveryRow.workflow_step = params[1];
-              recoveryRow.updated_at = params[2];
-              recoveryRow.completed_at = params[3];
-              recoveryRow.error_message = params[4];
-              recoveryRow.steps_history = params[5];
-              recoveryRow.replica_id = params[6];
-              return {
-                success: true,
-                affectedRows: 1,
-              };
-            }
-            return {
-              success: true,
-              rows: [],
-              affectedRows: 0,
-            };
           },
         },
         enableTimeouts: false,
@@ -507,27 +457,23 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           1,
           'recovery should preserve the cache-visible local-owner operation set instead of collapsing to empty',
         );
-        t.equal(
-          result.markedFailed,
-          1,
-          'recovery should still reconcile the cache-visible pending operation',
-        );
-        t.ok(
-          authoritativeReadCalls >= 1,
-          'recovery should still attempt one authoritative owner read before falling back to cached visibility',
-        );
-        t.equal(
-          recoveryRow.status,
-          ReplicaStatus.FAILED,
-          'recovery should fail the cached pending operation through the normal owner workflow',
-        );
-        t.equal(
-          recoveryRow.workflow_step,
-          'FAILED',
-          'recovery should advance the cached pending operation to the failed terminal step',
-        );
+        t.equal(result.markedFailed, 0,
+          'cached visibility alone cannot write the terminal failure');
+        t.ok(authoritativeReadCalls >= 1,
+          'recovery still consults the production owner read path');
+        t.equal(recoveryRow.status, ReplicaStatus.PENDING,
+          'failure cannot settle while operation authority is unavailable');
+        t.equal(terminalWrites, 0, 'unavailable authority refused before the guarded SQL write');
+
+        authorityAvailable = true;
+        const recovered = await coordinator.handleRecovery();
+        t.equal(recovered.markedFailed, 1, 'the normal recovery owner settles after authority returns');
+        t.equal(recoveryRow.status, ReplicaStatus.FAILED);
+        t.equal(recoveryRow.workflow_step, 'FAILED');
+        t.equal(terminalWrites, 1, 'the exact guarded failure commits once');
       } finally {
         await coordinator.shutdown();
+        store.suspend();
       }
     },
   );

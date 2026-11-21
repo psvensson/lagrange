@@ -9,6 +9,8 @@ import {
   CDC_OPERATION, COLUMN, SERVICE_STATUS, TABLES, WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {assignReplicaHandlerCreateMethods} from '../../src/node/replica-handler-create-methods.js';
+import {assignReplicaHandlerCreateStatusMethods} from
+  '../../src/node/replica-handler-create-status-methods.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {createParticipantReleaseAuthorizationOwner} from
   '../../src/node/participant-release-authorization-owner.js';
@@ -1017,6 +1019,7 @@ test(
       }
     }
     assignReplicaHandlerVoterReadinessMethods(TestLearnerWaitReplicaHandler);
+    assignReplicaHandlerCreateStatusMethods(TestLearnerWaitReplicaHandler);
     assignReplicaHandlerCreateMethods(TestLearnerWaitReplicaHandler);
 
     let nowMs = 10_000;
@@ -1243,7 +1246,6 @@ test(
       markProgress: async () => true,
       releasePhysicalWorker: () => {},
     });
-    createHandler.shouldGateActivationOnVoterReadiness = () => false;
     createHandler.updateReplicaCreationProgress = () => {};
     createHandler.setLocalReplica = (id, record) => {
       if (record?.service) createHandler.localServices.set(id, record.service);
@@ -1252,7 +1254,6 @@ test(
     createHandler.persistReplicaStatusWithRetry = async () => {};
     createHandler.fenceFailedReplicaCreateRuntime = async () => {};
     createHandler.persistOrConfirmReplicaCreateFailed = async () => true;
-    createHandler.shouldUsePriorityReplicaCreateStatusFallback = () => false;
     createHandler.emit = () => {};
     createHandler.replicaIdentityRepository = {
       observeIdentity: async () => ({existed: false, record: {recorded: true}}),

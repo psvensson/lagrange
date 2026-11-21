@@ -569,31 +569,45 @@ test('(h) a repeated request is idempotent: ALREADY_MEMBER, no second ' +
     'the identity is reserved once');
 });
 
-// The target asks only once its SYNCING fact is committed (verifier N3: a
-// replica whose port-opened fact is not durable steps nothing, so it must
-// not be counted a member): in createReplicaAsync the request follows the
-// SYNCING commit (recordReplicaIdentity) and precedes the voter-ready wait
-// (the dead leader sync from a cached leader address is deleted, quest
-// peer-and-leader-address-from-committed-configuration attempt 2). This is the one point at which a partition
-// admission input first exists (Stream B2 binds its cleanup state to it).
-test('(i) static: the target requests admission right after its SYNCING ' +
-  'commit and before it waits to become a voter', async (t) => {
-  const ast = parse(path.join(SRC_ROOT, 'node/replica-handler-create-methods.js'));
-  const [create] = functionNodesNamed(ast, 'createReplicaAsync');
-  t.ok(create, 'createReplicaAsync is declared');
-  const order = [];
-  walk(create, (node) => {
-    const name = calleeName(node);
-    if (['recordReplicaIdentity', 'requestReplicaAdmission', 'syncFromLeader',
-      'waitForVoterReadyActivation'].includes(name)) {
-      // syncFromLeader stays in the list so a reintroduced call is seen.
-      order.push([node.range[0], name]);
-    }
-  });
-  t.same(order.sort((a, b) => a[0] - b[0]).map(([, name]) => name),
-    ['recordReplicaIdentity', 'requestReplicaAdmission',
-      'waitForVoterReadyActivation'],
-    'SYNCING commit, then the admission request, then the voter wait');
+// Structural companion to replica-admission-delivery-lifetime.test.js, which
+// drives native delivery with a held reply, original deadline and voter veto.
+test('(i) static: CREATE awaits its SYNCING commit before entering ' +
+  'the materialized admission and voter readiness path', async (t) => {
+  const createAst = parse(path.join(SRC_ROOT, 'node/replica-handler-create-methods.js'));
+  const readinessPath = './replica-handler-create-work.js';
+  const readiness = 'waitForMaterializedCreateReadiness';
+  t.ok(createAst.body.some((node) => node.type === 'ImportDeclaration' &&
+    node.source.value === readinessPath && node.specifiers.some((specifier) =>
+    specifier.imported?.name === readiness && specifier.local.name === readiness)),
+  'the CREATE caller imports the readiness owner it invokes');
+
+  const segments = [
+    {
+      fn: functionNodesNamed(createAst, 'createReplicaAsync')[0],
+      expected: ['recordReplicaIdentity', readiness, 'activate'],
+    },
+    {
+      fn: functionNodesNamed(parse(path.join(SRC_ROOT, 'node', readinessPath)), readiness)[0],
+      expected: ['observeCreateActivation', 'requestReplicaAdmission',
+        'requireReplicaCreateWork', 'shouldGateActivationOnVoterReadiness',
+        'waitForVoterReadyActivation', 'requireReplicaCreateWork',
+        'requireReplicaCreateWork'],
+    },
+  ];
+  const synchronous = new Set(['requireReplicaCreateWork', 'shouldGateActivationOnVoterReadiness']);
+  for (const {fn, expected} of segments) {
+    const calls = [];
+    walk(fn, (node, ancestors) => {
+      const name = calleeName(node);
+      if (expected.includes(name) || name === 'syncFromLeader') {
+        const awaited = ancestors.at(-1)?.type === 'AwaitExpression';
+        calls.push([node.range[0], awaited ? `await ${name}` : name]);
+      }
+    });
+    t.same(calls.sort((a, b) => a[0] - b[0]).map(([, name]) => name),
+      expected.map((name) => synchronous.has(name) ? name : `await ${name}`),
+      'the production segment keeps its ordered barriers and never syncs from a cached leader');
+  }
 });
 
 // A request answered NOT_ADMITTING must not be admitted on a row that names
