@@ -136,26 +136,46 @@ three-host service gate still need a passing composition.
 [public SQL and writer-order originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--guarded-ledger-fixtures-and-public-sql-nov21.tar.gz),
 [static original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-static-a2a3-5522-nov21.tar.gz).
 
-Two decisions currently block the next composition.
+The workflow owner now treats a wake as a request to inspect the current
+operation. At `41e0bf0f3` on tv-dator, an unavailable SERVICES read caused
+the owner to consume the successor wake and report a fictitious dispatch.
+With the correction at `4f7fa56f3`, repeated observations left the
+progress version and history unchanged. When the ACTIVE publication
+arrived, the same SQLite ADD settled once, with no additional CREATE.
+The matched file passed 287 assertions; four files on adam-laptop and
+seven on adams-gamla passed 672 and 511 respectively. The operation row
+was readable throughout these tests. The lifetime owner is checking a
+deferred read of that row and shutdown during the read.
+[Original and corrected runs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--concrete-progress-observation-paired-nov21.tar.gz).
 
-* The concrete operation workflow owner receives both a timer and a SERVICES
-  publication. In `e4376a09a` the first turn returned WAITING and its cleanup
-  cleared the next wake. The next publication reached the right operation,
-  but the workflow interpreted it as a second accepted dispatch and skipped
-  the lifecycle call. The workflow owner must let repeated observations
-  reread authority without counting a dispatch or clearing another turn.
-  [Exact owner trace](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--concrete-progress-owner-and-cdc-nov21.tar.gz).
-* Removal planning evaluates an unsaved move. Dispatch evaluates a committed
-  operation. Requiring the committed subject for planning blocked legitimate
-  removals on `538bd3330`. The placement owner must preserve one quorum
-  policy while requiring the evidence appropriate to each caller. A separate
-  fault-injection case removed a ledger row, then let its real recovery owner
-  reinsert it after the safety check while CDC was held. The removal effect
-  still left. The admission and recovery owners must serialize that decision
-  and preserve the legitimate clearing event. The physical trial has no
-  established instance of the injected deletion.
-  [Placement and original refusal](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--removal-census-538b-and-replay-sql-nov21.tar.gz),
-  [retained reinsertion original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--placement-plan-and-injected-reinsert-c366-nov21.tar.gz).
+Three removal decisions remain assigned.
+
+* Planning checks the entity's competing operations before it has a row
+  of its own. Dispatch verifies its existing committed subject and the
+  same quorum policy. The original conflation blocked healthy moves at
+  `538bd3330`. Two companions passed at `cf7c66e39`. One fixture failed
+  before quorum arbitration because its historical row lacked the entity
+  type. The placement author owns that fixture and the composed caller run.
+* A reply to a stranded REMOVE can arrive after its row changes. On the
+  matched adams-gamla host the first correction passed the earlier
+  generation and history cases (74 assertions). Independent review then
+  traced a missing condition in the zero-row path. The response and
+  persistence owners must bind both accepted and rejected replies to the
+  sent row through the conditional write and preserve a replacement row
+  or a conflicting terminal outcome.
+  [Removal and post-reply originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--remove-prospective-and-original-postreply-limits-nov21.tar.gz).
+* Normal native placement and restoration of a missing operation row
+  disagree about entity occupancy. In the fault-injection run the
+  repository restored a peer after the removal check and before its
+  network effect. The test uses an in-memory SQLite operation ledger and
+  a real rs-raft replica group. A file-backed ledger through the placement
+  apply transaction is the outstanding recovery witness. Both the zero-change update and the reservation repair
+  can reach restoration. The placement-ledger owner must decide at the
+  committed insert, preserve legitimate CL-017 restorations and resume a
+  refused repair after the holder clears. Reconstruction of an
+  absent row after process loss needs its own durable source. The
+  physical trial has no established instance of the injected deletion.
+  [Original placement and reinsertion order](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--placement-plan-and-injected-reinsert-c366-nov21.tar.gz).
 
 
 | Decision | Current evidence | Next owner action |
