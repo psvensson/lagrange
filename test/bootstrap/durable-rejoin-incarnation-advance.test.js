@@ -71,6 +71,7 @@ import {COMMITTED_MEMBERSHIP_REFUSAL} from
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   COLUMN,
+  META_SERVICE_ID,
   NODE_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -1194,8 +1195,17 @@ test('R2-1 (4C): blind BIRTH lost-ACK + unavailable reread replays held ' +
     '4C-ours preserves Call 1 committed updated_at_hlc');
   t.equal(ours.getPhysicalInserts(), 1,
     '4C-ours executes one physical INSERT and settles Call 2 by replay');
-  t.same(ours.durable.endpoints().map((row) => row[COLUMN.BOOT_INCARNATION]),
-    [THIS_BOOT, THIS_BOOT], 'both endpoint tables publish the healed boot');
+  const nodeEndpoints = await ours.durable.gateway.readAuthoritativeRows(TABLES.NODE_ENDPOINTS);
+  t.same(nodeEndpoints.rows.map((row) =>
+    [row[COLUMN.ENDPOINT_ID], row[COLUMN.BOOT_INCARNATION]]), [[`ep-${NODE_ID}-ws`, THIS_BOOT]],
+  'the healed boot owns its WebSocket endpoint');
+  const serviceEndpoints = await ours.durable.gateway.readAuthoritativeRows(
+    TABLES.SERVICE_ENDPOINTS);
+  t.same(serviceEndpoints.rows.map((row) =>
+    [row[COLUMN.SERVICE_ID], row[COLUMN.ENDPOINT_ID], row[COLUMN.BOOT_INCARNATION]]), [
+    [META_SERVICE_ID.WASM_META, `${META_SERVICE_ID.WASM_META}-ep-${NODE_ID}`, THIS_BOOT],
+    [META_SERVICE_ID.ADMIN_META, `${META_SERVICE_ID.ADMIN_META}-ep-${NODE_ID}`, THIS_BOOT],
+  ], 'the healed boot owns both boot-time meta service endpoints');
   t.equal(oursOwner.registrationIssueRecord.issuedAtIncarnation, THIS_BOOT);
   t.equal(oursOwner.registrationIssueRecord.indeterminateMode, null);
 
