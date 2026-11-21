@@ -100,28 +100,43 @@ async function settleRetainedOwner(ledger, holder) {
   await settleTurns();
 }
 
-function holdNextOrdinaryProposal(ledger, partitionId) {
-  const {placementOwner} = ledger;
-  const admit = placementOwner.admitPlacement;
+function orderAfterWinner(ledger, delayedType) {
+  const port = ledger.leader.controllablePort;
+  const forward = port.proposeHandler;
   const release = Promise.withResolvers();
-  const held = {
-    request: null,
-    repairCountAtEntry: null,
-    settlement: null,
-    close() {
-      placementOwner.admitPlacement = admit;
+  const pending = [];
+  port.setProposeHandler((command) => {
+    if (command.type !== delayedType) return forward(command);
+    const delivery = release.promise.then(() => forward(command));
+    pending.push({command, delivery});
+    return delivery;
+  });
+  return {
+    pending,
+    async close() {
+      port.setProposeHandler(forward);
       release.resolve();
-      return held.settlement;
+      await Promise.all(pending.map(({delivery}) => delivery));
     },
   };
-  placementOwner.admitPlacement = (request) => {
-    if (held.request || request.body.partitionId !== partitionId) return admit(request);
-    held.request = request;
-    held.repairCountAtEntry = committedRepairCount(ledger);
-    held.settlement = release.promise.then(() => admit(request));
-    return held.settlement;
+}
+
+function stageOrdinaryAdmission({world, ledger}) {
+  const request = {
+    entryId: 'native-s11-racing-ordinary',
+    body: placementStatement({partitionId: world.partitionId, type: OperationType.REPLACE,
+      target: NODE.PEER_C, source: NODE.SOURCE, sourceReplicaId: world.sourceReplicaId,
+      placementClass: classifyPlacementClass(world.partitionId)}),
   };
-  return held;
+  const release = Promise.withResolvers();
+  const settlement = release.promise.then(() => requestPlacementAdmission(ledger.leader, request));
+  return {
+    request,
+    release() {
+      release.resolve();
+      return settlement;
+    },
+  };
 }
 
 function committedPlacementResult(observation, command) {
@@ -132,13 +147,14 @@ function committedPlacementResult(observation, command) {
 
 function confirmOrdinaryFirst(context, postRelease) {
   const {world, observation, retained} = context;
-  const ordinary = postRelease.find(({type}) => type === 'PLACEMENT_ADMIT');
   const repair = postRelease.find(({type}) => type === 'PLACEMENT_REPAIR');
-  assert.ok(ordinary && repair && postRelease.indexOf(ordinary) < postRelease.indexOf(repair));
-  const fresh = committedPlacementResult(observation, ordinary);
-  assert.equal(fresh.outcome, 'ADMITTED');
-  assert.equal(fresh.operationIds.length, 1);
-  const [winner] = fresh.operationIds;
+  const beforeRepair = postRelease.slice(0, postRelease.indexOf(repair));
+  const admissions = beforeRepair.filter(({type}) => type === 'PLACEMENT_ADMIT')
+    .map((command) => committedPlacementResult(observation, command))
+    .filter(({outcome}) => outcome === 'ADMITTED');
+  assert.ok(repair);
+  assert.equal(admissions.length, 1);
+  const [winner] = admissions[0].operationIds;
   assert.notEqual(winner, world.operation.operationId, 'the winner is freshly admitted');
   assert.equal(observation.readCommitted(winner)?.completed_at, null);
   const renewed = committedPlacementResult(observation, repair);
@@ -148,23 +164,21 @@ function confirmOrdinaryFirst(context, postRelease) {
   assert.equal(observation.readCommitted(retained.operationId), undefined);
 }
 
-async function confirmRetainedFirst(context, held, before) {
+async function confirmRetainedFirst(context, ordinary, gate) {
   const {ledger, observation, retained} = context;
-  assert.ok(held.request, 'real autonomous placement reached its existing submit port');
-  assert.equal(held.repairCountAtEntry, before,
-    'ordinary work was pending before the retained successor proposed');
-  assert.ok(!ledger.commands.some(({entryId}) => entryId === held.request.entryId),
-    'the held admission has not proposed or committed yet');
+  assert.ok(!ledger.commands.some(({entryId}) => entryId === ordinary.request.entryId),
+    'the staged competing request was held before proposal');
   const restored = observation.readCommitted(retained.operationId);
   const repair = ledger.commands.filter(({type}) => type === 'PLACEMENT_REPAIR').at(-1);
   assert.equal(committedPlacementResult(observation, repair).outcome, 'ADMITTED');
   assert.equal(restored?.operation_id, retained.operationId);
   assert.equal(restored?.replica_id, retained.replicaId);
   assert.equal(restored?.created_at, retained.createdAt);
-  await held.close();
-  const ordinary = ledger.commands.find(({entryId}) => entryId === held.request.entryId);
-  assert.ok(ordinary, 'the identical postponed ordinary request reaches native apply');
-  const refused = committedPlacementResult(observation, ordinary);
+  await gate.close();
+  await ordinary.release();
+  const command = ledger.commands.find(({entryId}) => entryId === ordinary.request.entryId);
+  assert.ok(command, 'the identical staged ordinary request reaches native apply');
+  const refused = committedPlacementResult(observation, command);
   assert.equal(refused.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
   assert.deepEqual(refused.operationIds, [retained.operationId]);
 }
@@ -181,22 +195,26 @@ async function confirmRetainedRecovery(context, order) {
   assert.equal(committedRepairCount(ledger), before, 'unchanged BUSY does not propose again');
   assert.equal(observation.readCommitted(retained.operationId), undefined);
   const firstReleaseCommand = ledger.commands.length;
-  const held = order === 'retained-first' ? holdNextOrdinaryProposal(ledger, world.partitionId) :
-    null;
+  const retainedFirst = order === 'retained-first';
+  const ordinary = stageOrdinaryAdmission(context);
+  const gate = orderAfterWinner(ledger, retainedFirst ? 'PLACEMENT_ADMIT' : 'PLACEMENT_REPAIR');
   try {
     const released = await stepRetainedLedgerRow(
       ledger, incumbent.operation_id, WORKFLOW_STEP.FAILED);
     assert.equal(observation.readCommitted(incumbent.operation_id)?.completed_at,
       released.completed_at);
-    // Replay the exact committed event to the remote observer. The local
-    // retained owner receives it from apply. No caller invokes repair again.
     holder.repository.observeRetainedPlacementRepairCommit('replica_operations', released);
+    if (!retainedFirst) {
+      await ordinary.release();
+      await gate.close();
+    }
     await settleRetainedOwner(ledger, holder);
     assert.equal(committedRepairCount(ledger), before + 1, 'release owns one new native repair');
-    if (held) await confirmRetainedFirst(context, held, before);
+    if (retainedFirst) await confirmRetainedFirst(context, ordinary, gate);
     else confirmOrdinaryFirst(context, ledger.commands.slice(firstReleaseCommand));
   } finally {
-    await held?.close();
+    await gate.close();
+    await ordinary.release();
   }
 }
 
