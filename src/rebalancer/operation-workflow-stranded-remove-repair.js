@@ -4,13 +4,16 @@ import {OperationType, ReplicaStatus} from './replica-status.js';
 import {ReplicaOperationResponseStatus} from './replica-operation-constants.js';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
-  copyOperationOutcomeData, invalidOperationPersistenceOutcome,
+  copyOperationOutcomeData, INVALID_OPERATION_PERSISTENCE_OUTCOME,
+  invalidOperationPersistenceOutcome,
 } from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
   './replica-operation-update-disposition.js';
 import {OPERATION_RECONCILE_OUTCOME as OUTCOME} from './operation-workflow-reconcile-outcome.js';
 
+const REMOVE_REPLY_SUBJECT_MOVED = Object.freeze({state: 'subject_moved', operation: null});
+const REMOVE_REPLY_SUBJECT_BOUND = 'subject_bound';
 const INVALID_REPLY_PREIMAGE = 'the sent REMOVE preimage does not bind the requested correction';
 const CORRECTION_REASON = 'safety-gated stranded REMOVE correction';
 const ACCEPTED_REMOVE_RESPONSES = new Set([
@@ -44,6 +47,10 @@ function buildStrandedRemoveCasFields(preimage, operation, expectedStep, expecte
       preimage.createdAt !== operation.createdAt || !Number.isFinite(preimage.updatedAt)) {
     throw invalidOperationPersistenceOutcome(INVALID_REPLY_PREIMAGE);
   }
+  return buildRemoveReplyBindings(preimage);
+}
+
+function buildRemoveReplyBindings(preimage) {
   return Object.freeze({
     status: preimage.status,
     updated_at: preimage.updatedAt,
@@ -59,14 +66,43 @@ function buildStrandedRemoveCasFields(preimage, operation, expectedStep, expecte
   });
 }
 
+function isAcknowledgedRemoveStopping(operation) {
+  return operation?.type === OperationType.REMOVE &&
+    operation.workflowStep === WORKFLOW_STEP.STOPPING &&
+    operation.status === ReplicaStatus.REMOVING && operation.completedAt === null &&
+    Number.isFinite(operation.updatedAt) && Array.isArray(operation.stepsHistory);
+}
+
+function isSameAcknowledgedRemovePreimage(preimage, durable) {
+  return isAcknowledgedRemoveStopping(durable) &&
+    durable.createdAt === preimage.createdAt && durable.updatedAt === preimage.updatedAt &&
+    isDeepStrictEqual(durable.stepsHistory, preimage.stepsHistory);
+}
+
+function buildAcknowledgedRemoveCasFields(preimage, operation, terminalTransition) {
+  assertOperationUpdateSubject(preimage, operation);
+  if (!terminalTransition || !isAcknowledgedRemoveStopping(preimage) ||
+      operation.createdAt !== preimage.createdAt) {
+    throw invalidOperationPersistenceOutcome(INVALID_REPLY_PREIMAGE);
+  }
+  return Object.freeze({...buildRemoveReplyBindings(preimage), created_at: preimage.createdAt,
+    workflow_step: preimage.workflowStep, steps_history: JSON.stringify(preimage.stepsHistory)});
+}
+
 async function readCurrentRemoveSubject(repository, preimage) {
   const rows = await repository.readRequiredEntityOperationRows(
     preimage.entityType, preimage.entityId);
   const row = rows.find((candidate) => candidate.operation_id === preimage.operationId);
-  if (!row) return null;
+  if (!row) return REMOVE_REPLY_SUBJECT_MOVED;
   const durable = repository.rowToOperation(row);
-  assertOperationUpdateSubject(preimage, durable);
-  return durable.createdAt === preimage.createdAt ? durable : null;
+  if (durable.createdAt !== preimage.createdAt) return REMOVE_REPLY_SUBJECT_MOVED;
+  try {
+    assertOperationUpdateSubject(preimage, durable);
+  } catch (error) {
+    if (error.code !== INVALID_OPERATION_PERSISTENCE_OUTCOME) throw error;
+    return REMOVE_REPLY_SUBJECT_MOVED;
+  }
+  return {state: REMOVE_REPLY_SUBJECT_BOUND, operation: durable};
 }
 
 async function adoptTerminal(owner, operation, durable) {
@@ -78,13 +114,13 @@ async function adoptTerminal(owner, operation, durable) {
 
 /**
  * Recover the recorded REMOVE/ACTIVE contradiction from the July run-1 failure.
- * Called only after the normal remove-safety gate and an actual accepted REMOVE
- * reply. ACTIVE remains invalid as a new operation outcome; this conditional
- * correction enters the ordinary STOPPING owner before processing that reply.
+ * An accepted REMOVE reply can correct the exact stranded preimage. A failure
+ * or missing reply can observe a same-generation terminal winner or wait.
+ * No reply makes ACTIVE a valid operation result.
  */
 async function repairStrandedRemoveAfterResponse(owner, operation, response, preimage) {
   if (!preimage) return null;
-  const durable = await readCurrentRemoveSubject(owner.repository, preimage);
+  const {operation: durable} = await readCurrentRemoveSubject(owner.repository, preimage);
   if (!durable) return OUTCOME.WAITING;
   if (durable.completedAt !== null) {
     assertOperationUpdateRecord(durable, {terminal: true});
@@ -113,7 +149,7 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response, pre
   }
   // The same CAS may lose to terminal completion. Its refusal is not proof of
   // absence: consult the winner before deciding whether the reply can proceed.
-  const current = await readCurrentRemoveSubject(owner.repository, preimage);
+  const {operation: current} = await readCurrentRemoveSubject(owner.repository, preimage);
   if (current && current.completedAt !== null) {
     return adoptTerminal(owner, operation, current);
   }
@@ -121,6 +157,7 @@ async function repairStrandedRemoveAfterResponse(owner, operation, response, pre
 }
 
 async function resolveStrandedRemoveReply(owner, operation, response, preimage) {
+  if (!preimage) return null;
   const outcome = await repairStrandedRemoveAfterResponse(owner, operation, response, preimage);
   if (outcome === OUTCOME.FAILED) {
     return owner.buildFailedOperationResult(operation.operationId, operation.errorMessage);
@@ -128,10 +165,15 @@ async function resolveStrandedRemoveReply(owner, operation, response, preimage) 
   if (outcome === OUTCOME.COMPLETED) {
     return owner.buildSuccessfulOperationResult(operation.operationId, {status: outcome});
   }
-  return outcome ? owner.buildSkippedOperationResult(outcome, operation.operationId) : null;
+  if (outcome) return owner.buildSkippedOperationResult(outcome, operation.operationId);
+  owner.clearDispatchRetry(operation.operationId);
+  return owner.handleStopPhaseSatisfiedResponse(operation, response.status, {
+    acknowledgedRemovePreimage: copyOperationOutcomeData(operation),
+  });
 }
 
 export {
-  buildStrandedRemoveCasFields, captureStrandedRemovePreimage, isSameStrandedRemovePreimage,
+  buildAcknowledgedRemoveCasFields, buildStrandedRemoveCasFields, captureStrandedRemovePreimage,
+  isSameAcknowledgedRemovePreimage, isSameStrandedRemovePreimage, readCurrentRemoveSubject,
   resolveStrandedRemoveReply,
 };

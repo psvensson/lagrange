@@ -448,16 +448,20 @@ class OperationWorkflowTransitionPersistence
    * @return {Promise<Object>} Typed transition outcome
    *   ({committed, disposition}) of the terminal persist.
    */
-  async completeOperation(operation) {
+  async completeOperation(operation, completionOptions = {}) {
+    const {acknowledgedRemovePreimage} = completionOptions;
+    const boundReply = acknowledgedRemovePreimage ? {acknowledgedRemovePreimage} : {};
     const now = Date.now();
     const finalStep =
       operation.type === OperationType.ADD ?
         WORKFLOW_STEP.ACTIVE :
         WORKFLOW_STEP.REMOVED;
     const replay = await this.resolveOperationTransitionBeforeWrite(operation, finalStep,
-      {terminalTransition: true, terminalErrorMessage: null});
+      {terminalTransition: true, terminalErrorMessage: null, ...boundReply});
     if (replay) {
-      await this.releaseDurableTerminalOperation(operation, replay);
+      if (shouldReleaseReservationForTerminalOutcome(replay)) {
+        await this.releaseDurableTerminalOperation(operation, replay);
+      }
       return replay;
     }
     // R-1a (quest replace-source-removal-owner): every success edge of a
@@ -492,6 +496,7 @@ class OperationWorkflowTransitionPersistence
     };
     const persistOptions = {
       ...this.buildOperationTransitionPersistOptions(),
+      ...boundReply,
       terminalTransition: true,
     };
     if (isPartitionReplace(operation)) {

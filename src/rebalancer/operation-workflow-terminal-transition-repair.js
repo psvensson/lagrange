@@ -1,3 +1,4 @@
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from './replica-operation-update-disposition.js';
 import {elapsedWorkflowPreimageMatches} from './operation-workflow-elapsed-preimage.js';
 import {assertOperationUpdateRecord, assertOperationUpdateSubject, invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
@@ -434,9 +435,10 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         );
         return;
       }
+      const {acknowledgedRemovePreimage} = heldState.persistOptions;
       const observation = await owner.repository.observeOperationTransition(
         heldState.projectedOperation, heldState.projectedOperation.workflowStep,
-        {terminalTransition: true, exactRequest: true});
+        {terminalTransition: true, exactRequest: true, acknowledgedRemovePreimage});
       if (observation.deferredOutcome) {
         rearmTerminalTransitionRepairIfHeld(owner, operationId);
         return;
@@ -449,6 +451,11 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       }
       if (observation.outcome) {
         const outcome = buildOperationTransitionOutcome(observation.outcome);
+        if (acknowledgedRemovePreimage &&
+            outcome.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED) {
+          clearTerminalTransitionRepair(owner, operationId);
+          return;
+        }
         if (isTerminalTransitionOutcomeSettled(outcome)) {
           await owner.releaseDurableTerminalOperation(heldState.projectedOperation, outcome);
           return;

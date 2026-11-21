@@ -71,7 +71,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     return Object.freeze(timeoutMap);
   }
 
-  async handleStopPhaseSatisfiedResponse(operation, responseStatus) {
+  async handleStopPhaseSatisfiedResponse(operation, responseStatus, completionOptions) {
     // A partition REPLACE's stop-phase answer (the source's lifecycle
     // retired) is not its completion: the STOPPING owner decides from the
     // witness's committed configuration (R-1a) and re-drives the membership
@@ -96,7 +96,8 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
             status: ReplicaOperationResponseStatus.IN_PROGRESS,
           });
         }
-        const outcome = assertOperationTransitionOutcome(await this.completeOperation(operation));
+        const outcome = assertOperationTransitionOutcome(
+          await this.completeOperation(operation, completionOptions));
         if (outcome.reconcileOutcome !== OPERATION_RECONCILE_OUTCOME.COMPLETED) {
           return this.buildSkippedOperationResult(outcome.reconcileOutcome, operation.operationId);
         }
