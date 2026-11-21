@@ -188,6 +188,10 @@ async function createHarness({stepDownResponse} = {}) {
   operation.replicaId = TARGET_REPLICA_ID;
   operation.workflowStep = WORKFLOW_STEP.ACTIVE;
   operation.status = 'active';
+  // The owner decides from the durable row, not from this caller's copy: the
+  // REPLACE's ACTIVE source-removal phase is written through the repository's
+  // own persistence path before any case runs it.
+  await coordinator.repository.persistOperationUpdate(operation);
   const owner = coordinator.workflowOwner;
   const stepDowns = () => deliveries.filter((delivery) =>
     delivery.payload?.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA);
