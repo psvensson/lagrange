@@ -67,10 +67,16 @@ const CORE = Object.freeze({
   PROPOSE_CONF_CHANGE: 'propose_conf_change_v2',
 });
 const READS = new Set([CORE.STATUS, CORE.CONF_STATE]);
+// A fenced proposal's last core entries: the decision's status read, then
+// the refusal's classification (status, conf_state).
+const FENCED_TAIL = Object.freeze([CORE.STATUS, CORE.STATUS, CORE.CONF_STATE]);
 // What the decision's reads must sit next to.
 const EFFECT = Object.freeze({
   TRANSFER_STEP: 'transfer-step',
   REFUSED_PROPOSAL: 'refused-proposal',
+  // A core that no longer leads never proposes (raft-rs-proposal-term.js):
+  // the proposal is decided on a status read after the drain and refused.
+  FENCED_PROPOSAL: 'fenced-proposal',
   NONE: 'none',
 });
 
@@ -119,6 +125,16 @@ function assertDecidedAfterDrain(entries, delivered, {effect, operation}) {
     assert.ok(entries.slice(Math.min(statusAt, confAt), effectAt)
       .every((entry) => READS.has(entry)),
     `nothing but the decision's reads lies before the step (${trace})`);
+    return;
+  }
+  if (effect === EFFECT.FENCED_PROPOSAL) {
+    assert.equal(entries.lastIndexOf(operation), -1,
+      `a core that does not lead never proposes (${trace})`);
+    const decidedAt = entries.length - FENCED_TAIL.length;
+    assert.deepEqual(entries.slice(decidedAt), FENCED_TAIL,
+      `the proposal was decided on a status read, then the drop classified (${trace})`);
+    assert.ok(decidedAt > lastDelivered,
+      `the proposal was decided after the drain (${trace})`);
     return;
   }
   if (effect === EFFECT.REFUSED_PROPOSAL) {
@@ -300,7 +316,7 @@ test('drain order: an acknowledgement pending at a proposal commits the ' +
     assert.notEqual(driver.status(A).role, LEADER_ROLE,
       'A stepped down when it applied its own removal');
     assertDecidedAfterDrain(entries, delivered,
-      {effect: EFFECT.REFUSED_PROPOSAL, operation: CORE.PROPOSE});
+      {effect: EFFECT.FENCED_PROPOSAL, operation: CORE.PROPOSE});
   } finally {
     driver.dispose();
   }
