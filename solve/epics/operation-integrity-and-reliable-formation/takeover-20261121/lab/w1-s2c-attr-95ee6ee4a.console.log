@@ -1,0 +1,2849 @@
+lab test: tv-dator: ordinary (4 files) cores=12 mem=15.4GiB speed x1.27
+[tv-dator] placement-shell=3139930
+[tv-dator] placement-head=95ee6ee4a2327ea1e7bf0f936aa075f64d0dd1bd
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.3 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3140373
+[tv-dator] # test-files planned=4
+[tv-dator] classified lane ordinary: 4 file(s), jobs=4
+[tv-dator] thermal: ok cpu 62C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/rebalance-coordinator-outcome-routing.test.js (102 assertions, 1600ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: Executor outcome routing through owner-key reconcile path
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'SYNCING',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   workflowStep: 'SYNCING'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'CREATING',
+[tv-dator]   newStep: 'SYNCING',
+[tv-dator]   reason: 'executor_outcome',
+[tv-dator]   status: 'syncing',
+[tv-dator]   partitionId: 'partition-1'
+[tv-dator] }
+[tv-dator]     # Subtest: REPLICA_CREATE_SYNCING routes through runExclusive and calls updateStep with SYNCING
+[tv-dator]         ok 1 - outcome must be routed through runExclusive
+[tv-dator]         ok 2 - owner key must contain the operationId
+[tv-dator]         ok 3 - action should be updateStep
+[tv-dator]         ok 4 - outcomeType should match
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..4
+[tv-dator]     ok 1 - REPLICA_CREATE_SYNCING routes through runExclusive and calls updateStep with SYNCING # time=71.549ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_CREATING',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'CREATING',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_CREATING',
+[tv-dator]   workflowStep: 'CREATING'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'executor_outcome',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'partition-1'
+[tv-dator] }
+[tv-dator]     # Subtest: REPLICA_CREATE_CREATING routes through runExclusive and calls updateStep with CREATING
+[tv-dator]         ok 1 - outcome must be routed through runExclusive
+[tv-dator]         ok 2 - owner key must contain the operationId
+[tv-dator]         ok 3 - action should be updateStep
+[tv-dator]         ok 4 - outcomeType should match
+[tv-dator]         ok 5 - operation should advance to the accepted create step
+[tv-dator]         ok 6 - operation status should advance with the workflow step
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..6
+[tv-dator]     ok 2 - REPLICA_CREATE_CREATING routes through runExclusive and calls updateStep with CREATING # time=6.219ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'SYNCING',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   workflowStep: 'SYNCING'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'CREATING',
+[tv-dator]   newStep: 'SYNCING',
+[tv-dator]   reason: 'executor_outcome',
+[tv-dator]   status: 'syncing',
+[tv-dator]   partitionId: 'users-p1'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'SYNCING',
+[tv-dator]   newStep: 'ACTIVE',
+[tv-dator]   reason: 'reconcile_active',
+[tv-dator]   status: 'active',
+[tv-dator]   partitionId: 'users-p1'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'ACTIVE',
+[tv-dator]   newStep: 'STOPPING',
+[tv-dator]   reason: 'dispatch_stopping',
+[tv-dator]   status: 'removing',
+[tv-dator]   partitionId: 'users-p1'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   target: 'node-local/service/replica-handler',
+[tv-dator]   type: 'REMOVE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'users-p1',
+[tv-dator]   replaceRemovePhase: true,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] REPLACE source removal waiting {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   phase: 'STOPPING',
+[tv-dator]   sourceReplicaId: 'users-p1-r1',
+[tv-dator]   targetReplicaId: 'users-p1-r2',
+[tv-dator]   reason: 'source_membership_removal_pending',
+[tv-dator]   waitingSinceMs: 1795275524124,
+[tv-dator]   waitedMs: 0,
+[tv-dator]   lastAttemptSeq: 1,
+[tv-dator]   lastAttemptUncertain: false,
+[tv-dator]   attemptRebuiltAfter: 'not_rebuilt',
+[tv-dator]   ownerPhase: 'membership_removal_uncommitted',
+[tv-dator]   stalenessClass: 'never_stale_by_age',
+[tv-dator]   retirementAdmissible: true,
+[tv-dator]   leaderReplicaId: 'users-p1-r2',
+[tv-dator]   sourceMembership: 'voter',
+[tv-dator]   authorityWaitReason: null,
+[tv-dator]   severity: 'normal'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   partitionId: 'users-p1',
+[tv-dator]   targetNodeId: 'node-local',
+[tv-dator]   workflowStep: 'STOPPING',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   deferReason: 'source_membership_removal_pending',
+[tv-dator]   errorMessage: 'source_membership_removal_pending'
+[tv-dator] }
+[tv-dator]     # Subtest: REPLICA_CREATE_SYNCING reconciles already-active REPLACE target
+[tv-dator]         ok 1 - active target reconciliation should resume source removal
+[tv-dator]         ok 2 - source removal should be dispatched after the active resample
+[tv-dator]         ok 3 - source removal should target the retained source replica
+[tv-dator]         ok 4 - operation should not remain pinned in SYNCING
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..4
+[tv-dator]     ok 3 - REPLICA_CREATE_SYNCING reconciles already-active REPLACE target # time=21.264ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'SYNCING',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   workflowStep: 'SYNCING'
+[tv-dator] }
+[tv-dator]     # Subtest: REPLICA_CREATE_SYNCING does not regress REPLACE source removal
+[tv-dator]         ok 1 - delayed SYNCING outcome should not rewind source removal
+[tv-dator]         ok 2 - operation status should remain in the remove phase
+[tv-dator]         ok 3 - stale create progress should not dispatch another removal
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..3
+[tv-dator]     ok 4 - REPLICA_CREATE_SYNCING does not regress REPLACE source removal # time=3.741ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+[tv-dator]     # Subtest: REPLICA_CREATE_ACTIVE routes through runExclusive and calls completeOperation
+[tv-dator]         ok 1 - outcome must be routed through runExclusive
+[tv-dator] Operation completed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   targetNodeId: 'node-local'
+[tv-dator] }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   finalState: 'active',
+[tv-dator]   totalDurationMs: 2
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..1
+[tv-dator]     ok 5 - REPLICA_CREATE_ACTIVE routes through runExclusive and calls completeOperation # time=7.006ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: deferred visibility retains the furthest executor outcome
+[tv-dator]         ok 1 - deferred visibility should retain one retry timer
+[tv-dator]         ok 2 - retry should use the owner visibility retry delay
+[tv-dator]         ok 3 - deferred visibility should retain the furthest queued workflow step
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+[tv-dator] Operation completed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   targetNodeId: 'node-local'
+[tv-dator] }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   finalState: 'active',
+[tv-dator]   totalDurationMs: 2
+[tv-dator] }
+[tv-dator]         ok 4 - retained furthest ACTIVE outcome should complete after visibility recovers
+[tv-dator]         ok 5 - retained ACTIVE outcome should not be lost
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..5
+[tv-dator]     ok 6 - deferred visibility retains the furthest executor outcome # time=5.913ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator]     # Subtest: empty visibility retains fresh create-active outcome until visible
+[tv-dator]         ok 1 - fresh empty visibility should retain one retry timer
+[tv-dator]         ok 2 - fresh empty visibility should retain the ACTIVE outcome
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+[tv-dator] Operation completed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   targetNodeId: 'node-local'
+[tv-dator] }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   finalState: 'active',
+[tv-dator]   totalDurationMs: 1
+[tv-dator] }
+[tv-dator]         ok 3 - retained ACTIVE outcome should complete once the row appears
+[tv-dator]         ok 4 - retained ACTIVE outcome should not be skipped
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..4
+[tv-dator]     ok 7 - empty visibility retains fresh create-active outcome until visible # time=4.845ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: deferred visibility retry keeps executor outcome partition scope
+[tv-dator]         ok 1 - retry warning should keep the executor outcome partition id
+[tv-dator]         ok 2 - retry warning should keep deferred visibility completion state
+[tv-dator]         ok 3 - retryable owner-read failures during retry should re-arm the executor outcome
+[tv-dator]         ok 4 - retryable owner-read failures should not drop the outcome via error logging
+[tv-dator]         ok 5 - re-armed retry should keep the operation partition scope
+[tv-dator]         ok 6 - re-armed retry should preserve deferred completion state
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..6
+[tv-dator]     ok 8 - deferred visibility retry keeps executor outcome partition scope # time=2.518ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   replicaId: 'nodes-p1-r2'
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'SYNCING',
+[tv-dator]   newStep: 'ACTIVE',
+[tv-dator]   reason: 'reconcile_active',
+[tv-dator]   status: 'active',
+[tv-dator]   partitionId: 'users-p1'
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   previousStep: 'ACTIVE',
+[tv-dator]   newStep: 'STOPPING',
+[tv-dator]   reason: 'dispatch_stopping',
+[tv-dator]   status: 'removing',
+[tv-dator]   partitionId: 'users-p1'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   target: 'node-local/service/replica-handler',
+[tv-dator]   type: 'REMOVE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'users-p1',
+[tv-dator]   replaceRemovePhase: true,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] REPLACE source removal waiting {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   phase: 'STOPPING',
+[tv-dator]   sourceReplicaId: 'users-p1-r1',
+[tv-dator]   targetReplicaId: 'users-p1-r2',
+[tv-dator]   reason: 'source_membership_removal_pending',
+[tv-dator]   waitingSinceMs: 1795275524165,
+[tv-dator]   waitedMs: 0,
+[tv-dator]   lastAttemptSeq: 1,
+[tv-dator]   lastAttemptUncertain: false,
+[tv-dator]   attemptRebuiltAfter: 'not_rebuilt',
+[tv-dator]   ownerPhase: 'membership_removal_uncommitted',
+[tv-dator]   stalenessClass: 'never_stale_by_age',
+[tv-dator]   retirementAdmissible: true,
+[tv-dator]   leaderReplicaId: 'users-p1-r2',
+[tv-dator]   sourceMembership: 'voter',
+[tv-dator]   authorityWaitReason: null,
+[tv-dator]   severity: 'normal'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   partitionId: 'users-p1',
+[tv-dator]   targetNodeId: 'node-local',
+[tv-dator]   workflowStep: 'STOPPING',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   deferReason: 'source_membership_removal_pending',
+[tv-dator]   errorMessage: 'source_membership_removal_pending'
+[tv-dator] }
+[tv-dator]     # Subtest: REPLICA_CREATE_ACTIVE resumes source removal for REPLACE instead of completing terminally
+[tv-dator]         ok 1 - outcome must still route through runExclusive
+[tv-dator]         ok 2 - REPLACE active outcome should continue into source removal
+[tv-dator]         ok 3 - the resumed phase should dispatch source removal
+[tv-dator]         ok 4 - source removal should target the retained source replica
+[tv-dator]         ok 5 - REPLACE should move into STOPPING instead of terminal completion
+[tv-dator]         ok 6 - REPLACE create-active should not mark the operation complete
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..6
+[tv-dator]     ok 9 - REPLICA_CREATE_ACTIVE resumes source removal for REPLACE instead of completing terminally # time=13.794ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_FAILED',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_FAILED',
+[tv-dator]   workflowStep: 'FAILED'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+[tv-dator]     # Subtest: REPLICA_CREATE_FAILED routes through runExclusive and calls failOperation
+[tv-dator]         ok 1 - error message should propagate
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   finalState: 'failed',
+[tv-dator]   totalDurationMs: 3
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..1
+[tv-dator]     ok 10 - REPLICA_CREATE_FAILED routes through runExclusive and calls failOperation # time=9.127ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_FAILED',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_FAILED',
+[tv-dator]   workflowStep: 'FAILED'
+[tv-dator] }
+[tv-dator]     # Subtest: REPLICA_CREATE_FAILED preserves retryable critical create failures in the owner retry lane
+[tv-dator]         ok 1 - retryable critical create failure should not fail terminally
+[tv-dator]         ok 2 - retryable create failure should keep the create-rearm step
+[tv-dator]         ok 3 - retryable create failure should preserve the in-flight status
+[tv-dator]         ok 4 - retryable create failure should not mark the operation complete
+[tv-dator]         ok 5 - retryable create failure should not persist a terminal error
+[tv-dator]         ok 6 - retryable create failure should arm transition retry grace
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..6
+[tv-dator]     ok 11 - REPLICA_CREATE_FAILED preserves retryable critical create failures in the owner retry lane # time=7.047ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_REMOVE_COMPLETED',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'REMOVED',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_REMOVE_COMPLETED',
+[tv-dator]   workflowStep: 'REMOVED'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'REMOVED',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Operation completed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'REMOVE',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   targetNodeId: 'node-local'
+[tv-dator] }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   finalState: 'removed',
+[tv-dator]   totalDurationMs: 1
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     # Subtest: REPLICA_REMOVE_COMPLETED calls completeOperation
+[tv-dator]         1..0
+[tv-dator]     ok 12 - REPLICA_REMOVE_COMPLETED calls completeOperation # time=3.462ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'MESSAGE_GROUP_CREATE_ACTIVE',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'MESSAGE_GROUP_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+[tv-dator] Operation completed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   targetNodeId: 'node-local'
+[tv-dator] }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'message_group',
+[tv-dator]   finalState: 'active',
+[tv-dator]   totalDurationMs: 1
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     # Subtest: MESSAGE_GROUP_CREATE_ACTIVE calls completeOperation
+[tv-dator]         1..0
+[tv-dator]     ok 13 - MESSAGE_GROUP_CREATE_ACTIVE calls completeOperation # time=3.371ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'MESSAGE_GROUP_CREATE_FAILED',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'MESSAGE_GROUP_CREATE_FAILED',
+[tv-dator]   workflowStep: 'FAILED'
+[tv-dator] }
+[tv-dator]     # Subtest: MESSAGE_GROUP_CREATE_FAILED preserves retryable ingress failures in the owner retry lane
+[tv-dator]         ok 1 - retryable message-group ingress failure must not fail terminally
+[tv-dator]         ok 2 - retryable message-group failure should keep the create-rearm step
+[tv-dator]         ok 3 - retryable message-group failure should preserve the in-flight status
+[tv-dator]         ok 4 - retryable message-group failure should not mark the operation complete
+[tv-dator]         ok 5 - retryable message-group failure should not persist a terminal error
+[tv-dator]         ok 6 - retryable message-group failure should arm transition retry grace
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..6
+[tv-dator]     ok 14 - MESSAGE_GROUP_CREATE_FAILED preserves retryable ingress failures in the owner retry lane # time=5.127ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'RUNTIME_SERVICE_CREATE_FAILED',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'RUNTIME_SERVICE_CREATE_FAILED',
+[tv-dator]   workflowStep: 'FAILED'
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'rs-1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   finalState: 'failed',
+[tv-dator]   totalDurationMs: 1
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     # Subtest: RUNTIME_SERVICE_CREATE_FAILED calls failOperation
+[tv-dator]         1..0
+[tv-dator]     ok 15 - RUNTIME_SERVICE_CREATE_FAILED calls failOperation # time=4.644ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Executor outcome ignored: operation already terminal {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   step: 'ACTIVE'
+[tv-dator] }
+[tv-dator]     # Subtest: outcome for terminal operation is skipped
+[tv-dator]         ok 1 - terminal operation should not be routed
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..1
+[tv-dator]     ok 16 - outcome for terminal operation is skipped # time=2.38ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Executor outcome ignored: operation not locally owned {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   remoteOwnerWake: true
+[tv-dator] }
+[tv-dator]     # Subtest: outcome for non-local operation is skipped
+[tv-dator]         ok 1 - non-local operation should not be routed
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..1
+[tv-dator]     ok 17 - outcome for non-local operation is skipped # time=4.039ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   workflowStep: 'SYNCING'
+[tv-dator] }
+[tv-dator] Executor outcome ignored: operation not locally owned {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_SYNCING',
+[tv-dator]   remoteOwnerWake: true
+[tv-dator] }
+[tv-dator]     # Subtest: priority recovery non-local create progress wakes operation owner
+[tv-dator]         ok 1 - eligible non-local progress should wake the owner
+[tv-dator]         ok 2 - non-local priority progress should issue one owner wake
+[tv-dator]         ok 3 - owner wake should target the source owner dispatch service
+[tv-dator]         ok 4 - owner wake should use replica operation dispatch
+[tv-dator]         ok 5 - owner wake should carry the operation id
+[tv-dator]         ok 6 - owner wake should carry the operation row
+[tv-dator]         ok 7 - owner wake should retain the remote handoff delivery source
+[tv-dator]         ok 8 - priority recovery owner wake should use critical delivery
+[tv-dator]         ok 9 - target-side outcome should not mutate the non-local operation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..9
+[tv-dator]     ok 18 - priority recovery non-local create progress wakes operation owner # time=4.007ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Executor outcome emitted {
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   operationId: 'op-nonexistent',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   replicaId: undefined
+[tv-dator] }
+[tv-dator] Executor outcome received via reconcile queue {
+[tv-dator]   operationId: 'op-nonexistent',
+[tv-dator]   outcomeType: 'REPLICA_CREATE_ACTIVE',
+[tv-dator]   workflowStep: 'ACTIVE'
+[tv-dator] }
+[tv-dator] Executor outcome ignored: operation not found { operationId: 'op-nonexistent', outcomeType: 'REPLICA_CREATE_ACTIVE' }
+[tv-dator]     # Subtest: outcome for unknown operation is skipped
+[tv-dator]         ok 1 - unknown operation should not be routed
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]         1..1
+[tv-dator]     ok 19 - outcome for unknown operation is skipped # time=2.561ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     # Subtest: shutdown removes emitter subscription
+[tv-dator]         ok 1 - emitter should have no listeners after shutdown
+[tv-dator]         1..1
+[tv-dator]     ok 20 - shutdown removes emitter subscription # time=1.469ms
+[tv-dator]     
+[tv-dator]     1..20
+[tv-dator] ok 1 - Executor outcome routing through owner-key reconcile path # time=210.278ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: priority recovery in-progress create dispatch reconciles observed target progress
+[tv-dator]     not ok 1 - create rearm should still issue one dispatch request
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1533
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1533:7)
+[tv-dator]       source: |2
+[tv-dator]             await coordinator.workflowOwner.dispatchOperationInternal(operation);
+[tv-dator]       
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               deliveries.length,
+[tv-dator]               1,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - in-progress create dispatch should advance to the observed target progress state
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1538
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1538:7)
+[tv-dator]       source: |2
+[tv-dator]               'create rearm should still issue one dispatch request',
+[tv-dator]             );
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               (await coordinator.getOperation(operation.operationId)).workflowStep,
+[tv-dator]               WORKFLOW_STEP.SYNCING,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -SYNCING
+[tv-dator]         +CREATING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - in-progress create dispatch should persist the reconciled target status
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1543
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1543:7)
+[tv-dator]       source: >2
+[tv-dator]               'in-progress create dispatch should advance to the observed target progress state',
+[tv-dator]             );
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               (await coordinator.getOperation(operation.operationId)).status,
+[tv-dator]               ReplicaStatus.SYNCING,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -syncing
+[tv-dator]         +creating
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     1..3
+[tv-dator] not ok 2 - priority recovery in-progress create dispatch reconciles observed target progress # time=27.018ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]     lineNumber: 1500
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     );
+[tv-dator]   
+[tv-dator]     test('priority recovery in-progress create dispatch reconciles observed ' +
+[tv-dator]     ^
+[tv-dator]       'target progress',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: priority recovery in-progress create dispatch uses response target status when cache is unavailable
+[tv-dator]     not ok 1 - create rearm should still issue one dispatch request
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1598
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1598:7)
+[tv-dator]       source: |2
+[tv-dator]             await coordinator.workflowOwner.dispatchOperationInternal(operation);
+[tv-dator]       
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               deliveries.length,
+[tv-dator]               1,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - response target status should advance without services-cache coverage
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1603
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1603:7)
+[tv-dator]       source: |2
+[tv-dator]               'create rearm should still issue one dispatch request',
+[tv-dator]             );
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               (await coordinator.getOperation(operation.operationId)).workflowStep,
+[tv-dator]               WORKFLOW_STEP.SYNCING,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -SYNCING
+[tv-dator]         +CREATING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - response target status should persist the reconciled workflow status
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1608
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1608:7)
+[tv-dator]       source: |2
+[tv-dator]               'response target status should advance without services-cache coverage',
+[tv-dator]             );
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               (await coordinator.getOperation(operation.operationId)).status,
+[tv-dator]               ReplicaStatus.SYNCING,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -syncing
+[tv-dator]         +creating
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 4 - SYNCING response progress should arm observed-progress recheck
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]         lineNumber: 1613
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1613:7)
+[tv-dator]       source: |2
+[tv-dator]               'response target status should persist the reconciled workflow status',
+[tv-dator]             );
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               scheduledTimers.length,
+[tv-dator]               1,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] not ok 3 - priority recovery in-progress create dispatch uses response target status when cache is unavailable # time=11.78ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+[tv-dator]     lineNumber: 1553
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('priority recovery in-progress create dispatch uses response target ' +
+[tv-dator]     ^
+[tv-dator]       'status when cache is unavailable',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   target: 'node-local/service/replica-handler',
+[tv-dator]   type: 'REMOVE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transaction_participants-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] # Subtest: in-progress remove dispatch does not reconcile active target as create progress
+[tv-dator]     ok 1 - remove rearm should issue one dispatch request
+[tv-dator]     ok 2 - remove rearm should keep the remove-phase message type
+[tv-dator]     ok 3 - in-progress remove dispatch should remain parked in STOPPING
+[tv-dator]     ok 4 - observed active target should not complete a remove operation
+[tv-dator]     ok 5 - in-progress remove dispatch should not mark completion
+[tv-dator]     ok 6 - in-progress remove dispatch should not emit completion
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 4 - in-progress remove dispatch does not reconcile active target as create progress # time=2.68ms
+[tv-dator] 
+[tv-dator] 1..4
+[tv-dator] # { total: 81, pass: 74, fail: 7 }
+[tv-dator] # time=265.088ms
+[tv-dator] not ok test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js (35 assertions, 1618ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: delivered CREATE evidence upgrades an existing observed wake without a second timer and survives deferred operation visibility
+[tv-dator]     ok 1 - delivered CREATE should be retained
+[tv-dator]     ok 2 - ordinary and delivered evidence share one owner registry entry
+[tv-dator]     ok 3 - the earlier observed wake remains the next attempt
+[tv-dator]     ok 4 - the stronger delivered obligation must dominate the weak wake
+[tv-dator]     ok 5 - missing operation-row visibility must rearm the bounded obligation
+[tv-dator]     ok 6 - visibility deferral must not weaken the retained evidence
+[tv-dator]     ok 7 - only one live timer remains after bounded rearm
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     1..7
+[tv-dator] ok 1 - delivered CREATE evidence upgrades an existing observed wake without a second timer and survives deferred operation visibility # time=62.139ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: delivered CREATE starts on the existing observed-progress cadence
+[tv-dator]     ok 1 - retention must leave repeated visibility attempts inside the budget
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     1..1
+[tv-dator] ok 2 - delivered CREATE starts on the existing observed-progress cadence # time=1.786ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: generic observed cleanup cannot consume stronger delivered evidence
+[tv-dator]     ok 1 - a stale generic observation must leave delivered evidence owned
+[tv-dator]     ok 2 - explicit completion cleanup consumes the delivered obligation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     1..2
+[tv-dator] ok 3 - generic observed cleanup cannot consume stronger delivered evidence # time=1.643ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: exact runtime target ACTIVE cache proof satisfies terminal handoff while system operations keep refresh-only semantics
+[tv-dator]     ok 1 - an already-aligned exact runtime row does not wait on a no-op refresh
+[tv-dator]     ok 2 - system operation terminal handoff retains its refresh-only contract
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     1..2
+[tv-dator] ok 4 - exact runtime target ACTIVE cache proof satisfies terminal handoff while system operations keep refresh-only semantics # time=2.148ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: delivered-create retention rejects excluded operation and response shapes
+[tv-dator]     ok 1 - system-operation must remain outside retention scope
+[tv-dator]     ok 2 - partition-operation must remain outside retention scope
+[tv-dator]     ok 3 - remove-operation must remain outside retention scope
+[tv-dator]     ok 4 - replace-remove-operation must remain outside retention scope
+[tv-dator]     ok 5 - a delivered error response must not retain create progress
+[tv-dator]     ok 6 - excluded shapes leave no owner work
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 5 - delivered-create retention rejects excluded operation and response shapes # time=1.825ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: workflow-owner shutdown clears delivered-create retention
+[tv-dator]     ok 1 - precondition: delivered-create work is retained
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     ok 2 - shutdown clears the retained timer
+[tv-dator]     ok 3 - shutdown empties the shared observed-progress registry
+[tv-dator]     1..3
+[tv-dator] ok 6 - workflow-owner shutdown clears delivered-create retention # time=1.234ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: durable REPLACE target-active progress consumes delivered-create retention
+[tv-dator]     ok 1 - a durably applied REPLACE target clears its create obligation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+[tv-dator]     1..1
+[tv-dator] ok 7 - durable REPLACE target-active progress consumes delivered-create retention # time=1.418ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'source-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-completed-response-operation',
+[tv-dator]   operationId: 'completed-response-operation',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795275824264
+[tv-dator] }
+[tv-dator] # Subtest: a terminal CREATE response consumes retention before owner return
+[tv-dator]     not ok 1 - the completed response should succeed
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+[tv-dator]         lineNumber: 380
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js:380:9)
+[tv-dator]       source: >2
+[tv-dator]                 await coordinator.repository.queryOperationById(operation.operationId);
+[tv-dator]       
+[tv-dator]               t.ok(result?.success, 'the completed response should succeed');
+[tv-dator]         --------^
+[tv-dator]               t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
+[tv-dator]               t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - should be equal
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+[tv-dator]         lineNumber: 381
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js:381:9)
+[tv-dator]       source: |2
+[tv-dator]       
+[tv-dator]               t.ok(result?.success, 'the completed response should succeed');
+[tv-dator]               t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
+[tv-dator]         --------^
+[tv-dator]               t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
+[tv-dator]               t.notOk(
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -ACTIVE
+[tv-dator]         +PENDING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - should be equal
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+[tv-dator]         lineNumber: 382
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js:382:9)
+[tv-dator]       source: |2
+[tv-dator]               t.ok(result?.success, 'the completed response should succeed');
+[tv-dator]               t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
+[tv-dator]               t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
+[tv-dator]         --------^
+[tv-dator]               t.notOk(
+[tv-dator]                 coordinator.workflowOwner.observedProgressRetryTimerByOperationId.has(
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -active
+[tv-dator]         +pending
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 4 - terminal completion must clear the delivered-create entry
+[tv-dator]     ok 5 - any timer armed at delivery is cleared during terminal completion
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 1 }
+[tv-dator]     1..5
+[tv-dator] not ok 8 - a terminal CREATE response consumes retention before owner return # time=26.79ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+[tv-dator]     lineNumber: 345
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     );
+[tv-dator]   
+[tv-dator]     test(
+[tv-dator]     ^
+[tv-dator]       'a terminal CREATE response consumes retention before owner return',
+[tv-dator]       async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..8
+[tv-dator] # { total: 27, pass: 24, fail: 3 }
+[tv-dator] # time=110.934ms
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'syncing',
+[tv-dator]     workflow_step: 'SYNCING',
+[tv-dator]     updated_at: 1795275524079,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524089
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795275524100,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524102
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'users-p1-r2',
+[tv-dator]     status: 'syncing',
+[tv-dator]     workflow_step: 'SYNCING',
+[tv-dator]     updated_at: 1795275524107,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524108
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'users-p1-r2',
+[tv-dator]     status: 'active',
+[tv-dator]     workflow_step: 'ACTIVE',
+[tv-dator]     updated_at: 1795275524110,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524112
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'users-p1-r2',
+[tv-dator]     status: 'removing',
+[tv-dator]     workflow_step: 'STOPPING',
+[tv-dator]     updated_at: 1795275524119,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524121
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'active',
+[tv-dator]     workflow_step: 'ACTIVE',
+[tv-dator]     updated_at: 1795275524134,
+[tv-dator]     completed_at: 1795275524134,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524136
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   boundary: 'executor_outcome',
+[tv-dator]   workflowStep: 'SYNCING',
+[tv-dator]   partitionId: 'executor_outcome_partition_unavailable',
+[tv-dator]   completionState: 'authoritative_operation_read_deferred',
+[tv-dator]   reasonCode: null,
+[tv-dator]   delayMs: 1,
+[tv-dator]   errorMessage: 'Executor outcome operation visibility deferred'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'active',
+[tv-dator]     workflow_step: 'ACTIVE',
+[tv-dator]     updated_at: 1795275524142,
+[tv-dator]     completed_at: 1795275524142,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524144
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   boundary: 'executor_outcome',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'executor_outcome_partition_unavailable',
+[tv-dator]   completionState: null,
+[tv-dator]   reasonCode: null,
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Executor outcome operation visibility deferred'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'active',
+[tv-dator]     workflow_step: 'ACTIVE',
+[tv-dator]     updated_at: 1795275524148,
+[tv-dator]     completed_at: 1795275524148,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524150
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'users-p1-r2',
+[tv-dator]     status: 'active',
+[tv-dator]     workflow_step: 'ACTIVE',
+[tv-dator]     updated_at: 1795275524157,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524158
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'users-p1-r2',
+[tv-dator]     status: 'removing',
+[tv-dator]     workflow_step: 'STOPPING',
+[tv-dator]     updated_at: 1795275524161,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524162
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'failed',
+[tv-dator]     workflow_step: 'FAILED',
+[tv-dator]     updated_at: 1795275524173,
+[tv-dator]     completed_at: 1795275524173,
+[tv-dator]     error_message: 'disk full'
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524176
+[tv-dator] }
+[tv-dator] Operation failed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'partition-1',
+[tv-dator]   targetNodeId: 'node-local',
+[tv-dator]   errorMessage: 'disk full'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   boundary: 'executor_outcome',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   workflowStep: 'CREATING',
+[tv-dator]   delayMs: 5000,
+[tv-dator]   errorMessage: 'Operational message-group ingress not ready for replica_operations CDC subscription'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'removed',
+[tv-dator]     workflow_step: 'REMOVED',
+[tv-dator]     updated_at: 1795275524189,
+[tv-dator]     completed_at: 1795275524189,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524190
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'active',
+[tv-dator]     workflow_step: 'ACTIVE',
+[tv-dator]     updated_at: 1795275524193,
+[tv-dator]     completed_at: 1795275524193,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524194
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   boundary: 'executor_outcome',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   workflowStep: 'CREATING',
+[tv-dator]   delayMs: 5000,
+[tv-dator]   errorMessage: 'Operational message-group ingress not ready for replica_operations CDC subscription'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-outcome-1',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-outcome-1',
+[tv-dator]     replica_id: 'partition-1-r1',
+[tv-dator]     status: 'failed',
+[tv-dator]     workflow_step: 'FAILED',
+[tv-dator]     updated_at: 1795275524203,
+[tv-dator]     completed_at: 1795275524203,
+[tv-dator]     error_message: 'container pull failed'
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275524204
+[tv-dator] }
+[tv-dator] Operation failed {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'rs-1',
+[tv-dator]   targetNodeId: 'node-local',
+[tv-dator]   errorMessage: 'container pull failed'
+[tv-dator] }
+[tv-dator] Failed to repair operation row for gate-repaired reservation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   error: 'cache.getAll is not a function'
+[tv-dator] }
+[tv-dator] Failed to repair operation row for gate-repaired reservation {
+[tv-dator]   operationId: 'op-outcome-1',
+[tv-dator]   error: 'cache.getAll is not a function'
+[tv-dator] }
+[tv-dator] not ok test/rebalancer/coordinator-dedup-gap.test.js (67 assertions, 2097ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: Bug: coordinator dedup gap on sequential calls
+[tv-dator]     # Subtest: sequential createOperation for same partition+node deduplicates
+[tv-dator]         ok 1 - first call creates an operation
+[tv-dator]         ok 2 - the exact second call replays the existing operation
+[tv-dator]         ok 3 - exact replay creates only one operation
+[tv-dator]         not ok 4 - Partition nodes-p1 already has a different create intent
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             RebalanceCoordinator.createConcurrentOperationBudgetError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:188:19)
+[tv-dator]             RebalanceCoordinator.refuseConflictingCreation (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:197:16)
+[tv-dator]             RebalanceCoordinator.resolveKnownCreationOperation (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:233:23)
+[tv-dator]             async file:/home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:270:30
+[tv-dator]             async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]             async Test.<anonymous> (test/rebalancer/coordinator-dedup-gap.test.js:110:26)
+[tv-dator]           at:
+[tv-dator]             fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+[tv-dator]             lineNumber: 188
+[tv-dator]             columnNumber: 19
+[tv-dator]             typeName: RebalanceCoordinator
+[tv-dator]             methodName: createConcurrentOperationBudgetError
+[tv-dator]             functionName: RebalanceCoordinator.createConcurrentOperationBudgetError
+[tv-dator]           rebalanceSkipReason: budget_exceeded
+[tv-dator]           operationType: ADD
+[tv-dator]           limit: 1
+[tv-dator]           conflictingOperationId: 847468d4-5688-45e4-8289-985049b4d435
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: >2
+[tv-dator]                 options = {},
+[tv-dator]               ) {
+[tv-dator]                 const error = new Error(
+[tv-dator]             ------------------^
+[tv-dator]                   options.message ||
+[tv-dator]                     `Concurrent ${String(normalizedMoveType || 'operation').toLowerCase()} ` +
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..4
+[tv-dator]     not ok 1 - sequential createOperation for same partition+node deduplicates # time=71.69ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/coordinator-dedup-gap.test.js
+[tv-dator]         lineNumber: 85
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]           });
+[tv-dator]       
+[tv-dator]           t.test('sequential createOperation for same partition+node deduplicates',
+[tv-dator]         ----^
+[tv-dator]             async (t) => {
+[tv-dator]               const coordinator = createTestCoordinator({
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: different partition+node combinations are not deduplicated
+[tv-dator]         ok 1 - different nodes should create separate operations
+[tv-dator]         ok 2 - two operations should have been created
+[tv-dator]         1..2
+[tv-dator]     ok 2 - different partition+node combinations are not deduplicated # time=9.345ms
+[tv-dator]     
+[tv-dator]     # Subtest: ADD allocation uses unique replica IDs across target nodes
+[tv-dator]         ok 1 - first ADD should allocate canonical replica r1
+[tv-dator]         ok 2 - second ADD should allocate next canonical replica
+[tv-dator]         ok 3 - sequential ADD operations for one partition must not reuse replica ID
+[tv-dator]         1..3
+[tv-dator]     ok 3 - ADD allocation uses unique replica IDs across target nodes # time=10.012ms
+[tv-dator]     
+[tv-dator]     # Subtest: REPLACE allocation uses authoritative service rows when cache lags
+[tv-dator]         ok 1 - allocator should avoid reusing authoritative replica IDs that are missing in cache
+[tv-dator]         1..1
+[tv-dator]     ok 4 - REPLACE allocation uses authoritative service rows when cache lags # time=2.358ms
+[tv-dator]     
+[tv-dator]     # Subtest: REPLACE allocation stays monotonic when stale topology omits lower replica ids
+[tv-dator]         ok 1 - allocator should extend past the highest observed/excluded replica id instead of recycling a lower gap
+[tv-dator]         1..1
+[tv-dator]     ok 5 - REPLACE allocation stays monotonic when stale topology omits lower replica ids # time=1.836ms
+[tv-dator]     
+[tv-dator]     # Subtest: REMOVE operations are deduplicated by replica intent, not only node
+[tv-dator]         ok 1 - same REMOVE intent should dedupe to existing operation
+[tv-dator]         ok 2 - different REMOVE replica intent should create distinct operation
+[tv-dator]         1..2
+[tv-dator]     ok 6 - REMOVE operations are deduplicated by replica intent, not only node # time=18.49ms
+[tv-dator]     
+[tv-dator]     # Subtest: REMOVE is rejected when replica is owned by in-flight REPLACE
+[tv-dator]         ok 1 - conflicting REMOVE should be rejected
+[tv-dator]         ok 2 - conflicting remove should surface stable skip reason
+[tv-dator]         ok 3 - conflicting replace operation id should be attached
+[tv-dator]         ok 4 - no REMOVE operation should be created when conflict exists
+[tv-dator]         1..4
+[tv-dator]     ok 7 - REMOVE is rejected when replica is owned by in-flight REPLACE # time=2.496ms
+[tv-dator]     
+[tv-dator]     # Subtest: critical REPLACE keeps one existing add-like recovery operation when authoritative entity reads miss and the planner switches target nodes
+[tv-dator]         ok 1 - critical replacement retains the incumbent and refuses the different target
+[tv-dator]         ok 2 - critical recovery should not mint duplicate PENDING replacements when authoritative entity reads miss
+[tv-dator]         1..2
+[tv-dator]     ok 8 - critical REPLACE keeps one existing add-like recovery operation when authoritative entity reads miss and the planner switches target nodes # time=10.93ms
+[tv-dator]     
+[tv-dator]     # Subtest: priority REPLACE source-removal recent intent survives deferred entity visibility past remove timeout
+[tv-dator]         ok 1 - the source-removal incumbent excludes a different target under pressure
+[tv-dator]         ok 2 - deferred authoritative visibility must not mint a second add-like recovery operation during source removal
+[tv-dator]         1..2
+[tv-dator]     ok 9 - priority REPLACE source-removal recent intent survives deferred entity visibility past remove timeout # time=4.705ms
+[tv-dator]     
+[tv-dator]     # Subtest: positive terminal ledger evidence retires the recent creation hint
+[tv-dator]         ok 1 - the owner row reached terminal in SQLite
+[tv-dator]         ok 2 - a fresh operation follows exactly observed terminal evidence
+[tv-dator]         1..2
+[tv-dator]     ok 10 - positive terminal ledger evidence retires the recent creation hint # time=12.21ms
+[tv-dator]     
+[tv-dator]     # Subtest: priority recent intent survives deferred entity visibility after authoritative dedupe misses
+[tv-dator]         ok 1 - a missing exact row cannot replay a remembered operation
+[tv-dator]         ok 2 - authoritative dedupe misses should not mint a duplicate priority operation
+[tv-dator]         ok 3 - unconfirmed pending evidence cannot arm the owner lane
+[tv-dator]         ok 4 - the existing recent-intent hint remains retained
+[tv-dator]         1..4
+[tv-dator]     ok 11 - priority recent intent survives deferred entity visibility after authoritative dedupe misses # time=2.751ms
+[tv-dator]     
+[tv-dator]     # Subtest: authoritative duplicate pending operation is re-armed when create dedupes
+[tv-dator]         ok 1 - create should return the authoritative duplicate operation
+[tv-dator]         ok 2 - deduped pending operation should be re-armed through the owner lane
+[tv-dator]         1..2
+[tv-dator]     ok 12 - authoritative duplicate pending operation is re-armed when create dedupes # time=2.207ms
+[tv-dator]     
+[tv-dator]     # Subtest: deferred priority entity visibility still blocks duplicate add-like create when cache shows source removal in flight
+[tv-dator]         ok 1 - the lane owner retains the conservative cached conflict
+[tv-dator]         ok 2 - creation refuses earlier while required identity visibility is deferred
+[tv-dator]         ok 3 - the original required-read reason survives
+[tv-dator]         ok 4 - no duplicate replacement should be created under deferred visibility
+[tv-dator]         1..4
+[tv-dator]     ok 13 - deferred priority entity visibility still blocks duplicate add-like create when cache shows source removal in flight # time=3.468ms
+[tv-dator]     
+[tv-dator]     # Subtest: stale priority recent intent does not suppress fresh recovery create
+[tv-dator]         ok 1 - stale priority intent should stop suppressing fresh recovery creation after its timeout window
+[tv-dator]         ok 2 - stale priority intent should allow a fresh recovery operation to be created
+[tv-dator]         1..2
+[tv-dator]     ok 14 - stale priority recent intent does not suppress fresh recovery create # time=6.711ms
+[tv-dator]     
+[tv-dator]     # Subtest: priority recent intent is pruned when entity visibility only shows the terminal row
+[tv-dator]         ok 1 - entity-level authoritative terminal visibility should stop stale recent-intent reuse
+[tv-dator]         ok 2 - stale recent intent should allow a fresh recovery operation to be created
+[tv-dator]         ok 3 - terminal entity visibility should prune the stale recent-intent entry
+[tv-dator]         1..3
+[tv-dator]     ok 15 - priority recent intent is pruned when entity visibility only shows the terminal row # time=1.862ms
+[tv-dator]     
+[tv-dator]     # Subtest: priority recent intent is pruned when authoritative entity visibility is explicitly empty
+[tv-dator]         ok 1 - explicit empty authoritative entity visibility should allow a fresh recovery create
+[tv-dator]         ok 2 - fresh recovery creation should proceed once the stale recent intent is pruned
+[tv-dator]         ok 3 - explicit empty authoritative entity visibility should prune the stale recent-intent entry
+[tv-dator]         1..3
+[tv-dator]     ok 16 - priority recent intent is pruned when authoritative entity visibility is explicitly empty # time=1.675ms
+[tv-dator]     
+[tv-dator]     # Subtest: a cache terminal hint with complete durable absence permits a fresh create
+[tv-dator]         ok 1 - terminal cache-visible priority intent should allow a fresh recovery create
+[tv-dator]         ok 2 - fresh create path should run once after terminal intent pruning
+[tv-dator]         ok 3 - terminal intent should be removed from recent-intent cache
+[tv-dator]         1..3
+[tv-dator]     ok 17 - a cache terminal hint with complete durable absence permits a fresh create # time=1.998ms
+[tv-dator]     
+[tv-dator]     1..17
+[tv-dator] not ok 1 - Bug: coordinator dedup gap on sequential calls # time=622.423ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/coordinator-dedup-gap.test.js
+[tv-dator]     lineNumber: 70
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]       'cache-visible add-like work should close the critical create lane';
+[tv-dator]   
+[tv-dator]     test('Bug: coordinator dedup gap on sequential calls', async (t) => {
+[tv-dator]     ^
+[tv-dator]       t.beforeEach(async () => {
+[tv-dator]         ConfigurationManager.resetInstance();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'seed-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: priority create lane blocks cache-visible add-like work when authoritative visibility is deferred
+[tv-dator]     ok 1 - the critical lane owner still names its cache-visible conflict
+[tv-dator]     ok 2 - creation refuses earlier at required identity visibility
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - no duplicate operation was created
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'seed-node', inFlightOperations: 1 }
+[tv-dator]     1..4
+[tv-dator] ok 2 - priority create lane blocks cache-visible add-like work when authoritative visibility is deferred # time=23.44ms
+[tv-dator] 
+[tv-dator] 1..2
+[tv-dator] # { total: 48, pass: 47, fail: 1 }
+[tv-dator] # time=657.588ms
+[tv-dator] not ok test/partition/placement-create-dispatch-execution-mirror.test.js (3 assertions, 3125ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] TAP version 13
+[tv-dator] Became leader {
+[tv-dator]   term: 1,
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   rebalancerActive: true
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] Fetching updated row for CDC {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   keyColumn: 'operation_id',
+[tv-dator]   keyValue: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cdcPartitionId: 'replica_operations-p1',
+[tv-dator]   cdcReplicaId: 'tx1-v3-r1',
+[tv-dator]   suppressedSinceLastEmit: 0
+[tv-dator] }
+[tv-dator] Fetched updated row for CDC {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   rowKeys: [
+[tv-dator]     'operation_id',
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'message_group_membership_owner_claim',
+[tv-dator]     'message_group_membership_permit',
+[tv-dator]     'source_replica_id',
+[tv-dator]     'message_group_membership_lane_key',
+[tv-dator]     'message_group_membership_phase',
+[tv-dator]     'message_group_membership_obligation_state',
+[tv-dator]     'message_group_membership_identity',
+[tv-dator]     'message_group_learner_stamp',
+[tv-dator]     'message_group_voter_stamp',
+[tv-dator]     'message_group_removal_stamp',
+[tv-dator]     'message_group_source_lifecycle_claim',
+[tv-dator]     'create_admission_state',
+[tv-dator]     'create_admission_token',
+[tv-dator]     'create_admission_replica_created_at',
+[tv-dator]     'create_admission_attempt_token',
+[tv-dator]     'create_admission_previous_attempt_token',
+[tv-dator]     'create_admission_attempt_seq',
+[tv-dator]     'create_admission_workflow_updated_at',
+[tv-dator]     'create_admission_owner_incarnation',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'created_at',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'copy_source_node_id'
+[tv-dator]   ],
+[tv-dator]   cdcPartitionId: 'replica_operations-p1',
+[tv-dator]   cdcReplicaId: 'tx1-v3-r1',
+[tv-dator]   suppressedSinceLastEmit: 0
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   targetNodeId: 'node-b',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795275825725
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'workflow_step',
+[tv-dator]     'status',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:competing-terminal',
+[tv-dator]   logIndex: 6,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'sql_transactions-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] # Subtest: fresh placement CREATE binds its topology and advances through actual dispatch transitions
+[tv-dator] ok 1 - fresh placement CREATE binds its topology and advances through actual dispatch transitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1799.157419
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+[tv-dator] not ok 2 - a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.948474
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-create-dispatch-execution-mirror.test.js:144:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     0 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 0
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     assertCreateDelivery (file:///home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-create-dispatch-execution-mirror.test.js:113:10)
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-create-dispatch-execution-mirror.test.js:154:7
+[tv-dator]     async file:///home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-create-dispatch-execution-mirror.test.js:101:7
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withPlacementExecution (file:///home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-create-dispatch-execution-mirror.test.js:43:3)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/95ee6ee4a232-mwqkokpj-1445529/test/partition/placement-create-dispatch-execution-mirror.test.js:146:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: a competing terminal result survives acknowledgement of a previously stamped CREATE
+[tv-dator] ok 3 - a competing terminal result survives acknowledgement of a previously stamped CREATE
+[tv-dator]   ---
+[tv-dator]   duration_ms: 18.176917
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..3
+[tv-dator] # tests 3
+[tv-dator] # suites 0
+[tv-dator] # pass 2
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 1848.875109
+[tv-dator] # time=3125ms
+[tv-dator] # test-files total=4 pass=0 fail=4 assertions=207
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795275525683,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275525690
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795275525695,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275525698
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795275525716,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275525718
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795275525733,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275525738
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795275525739,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795275525741
+[tv-dator] }
+lab test: tv-dator: # test-files total=4 pass=0 fail=4 assertions=207
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=4 pass=0 fail=4 assertions=207

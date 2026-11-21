@@ -1,0 +1,71 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.11
+[adams-gamla] placement-shell=1902274
+[adams-gamla] placement-head=1472e704d1bb127ae82686effc9a8922c475c1f4
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1902730
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/partition/placement-outcome-format.test.js (5 assertions, 4970ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] {"level":50,"time":"2026-11-21T16:11:54.471Z","nodeId":"test-node","pid":1902745,"subsystem":"partition","partitionId":"replica_operations-p1","error":"NOT NULL constraint failed: replica_operations.type","sql":"UPDATE replica_operations SET type = NULL WHERE operation_id = ?","params":["pl-tables-p1-3-0"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+[adams-gamla] # Subtest: a current-format applied SQL record under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla] ok 1 - a current-format applied SQL record under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3129.441573
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a current-format statement-failure record (no result) under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla] ok 2 - a current-format statement-failure record (no result) under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 85.31071
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a store whose outcome table has the prior format (released builds, pre-identity development builds, pre-fingerprint placement rows) is refused typed at open, read-only
+[adams-gamla] not ok 3 - a store whose outcome table has the prior format (released builds, pre-identity development builds, pre-fingerprint placement rows) is refused typed at open, read-only
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 227.557658
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1472e704d1bb-mwqluwpa-1515913/test/partition/placement-outcome-format.test.js:119:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: '_partition_statement_outcomes of partition replica_operations-p1 has columns [entry_key, outcome, log_index, term, failure_code, failure_message, changes, last_insert_rowid, owner_result_text], not [entry_key, outcome, log_index, term, failure_code, failure_message, changes, last_insert_rowid, owner_result_text, command_digest]: a store of another format is refused, never migrated; re-found the data directory'
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: true
+[adams-gamla]   actual: false
+[adams-gamla]   operator: '=='
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1472e704d1bb-mwqluwpa-1515913/test/partition/placement-outcome-format.test.js:161:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a table with the owner columns but not the owner definition (no identity CHECK) is refused typed at open
+[adams-gamla] ok 4 - a table with the owner columns but not the owner definition (no identity CHECK) is refused typed at open
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 116.452069
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an owner result is recorded only with its command identity, by the recorder and by the table CHECK
+[adams-gamla] ok 5 - an owner result is recorded only with its command identity, by the recorder and by the table CHECK
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 34.701589
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..5
+[adams-gamla] # tests 5
+[adams-gamla] # suites 0
+[adams-gamla] # pass 4
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3604.035859
+[adams-gamla] # time=4970ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=5
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=5
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=5

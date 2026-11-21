@@ -1,0 +1,18 @@
+fallback-read-closure: census 6a240d3def91f05191214c3c1d4768904945b0bf (17 runs); supplementary, never the proof
+  fallback_sites: 2621
+  fallback_sites_uncensused: 25
+  fallback_sites_bucket: 2596 (N0 141 N1 1105 N2 33 N3 589 N4b 85 N4c 228 N5 415)
+  fallback_sites_kept: 0
+  census_records_unreproducible: 1
+  census_head_not_ancestor: 1
+  read_mode_fallback_members: 124
+  non_required_leader_mode: 72
+  role_derived_leader_reads: 31
+  fixture_leader_role_rows: 542
+  fixture_leader_role_rows_message_group: 49
+  fixture_leader_role_rows_exempt: 16
+  fixture_leader_role_rows exempt (wasm/meta rows, not counted): 16
+  census_head_not_ancestor: census head is not an ancestor of HEAD (its records still bind by slice hash): 6a240d3def91f05191214c3c1d4768904945b0bf
+  census_records_unreproducible: src/partition/partition-cdc-delivery.js [18004,18164] slice-hash-does-not-reproduce-at-census-head
+fallback-read-closure: ratchet OK: 6062 sites in one-way cells, baseline 6062
+check-rc=0

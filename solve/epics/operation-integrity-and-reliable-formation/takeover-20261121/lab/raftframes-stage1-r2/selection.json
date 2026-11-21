@@ -1,0 +1,29 @@
+{
+  "sha": "f1265c5cae96e6cc05ffc3626f6ab48b2daf74b5",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-quiet-ready-cost.test.js",
+    "test/transport/raft-frame-unacknowledged-delivery.test.js",
+    "test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js",
+    "test/transport/raft-frame-pair-coalescing.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-quiet-ready-cost.test.js",
+        "test/transport/raft-frame-unacknowledged-delivery.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js",
+        "test/transport/raft-frame-pair-coalescing.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

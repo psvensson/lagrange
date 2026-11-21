@@ -1,0 +1,2 @@
+{"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":1564,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":3031,"retriedOnce":false,"firstFailureLine":null}

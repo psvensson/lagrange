@@ -1,0 +1,185 @@
+placement-shell=2961625
+placement-head=b58b02f45fde09467b360b4ead14f46cd8bada96
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2962074
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 60C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/partition/placement-retained-continuation.test.js (21 assertions, 3576ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+  ---
+  duration_ms: 1670.094705
+  type: 'test'
+  ...
+# Subtest: W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+ok 2 - W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+  ---
+  duration_ms: 72.048216
+  type: 'test'
+  ...
+# Subtest: W6 one real release and one transient read failure complete the original repair exactly once
+ok 3 - W6 one real release and one transient read failure complete the original repair exactly once
+  ---
+  duration_ms: 56.26034
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T13:54:51.723Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS","awaited":"a qualified retained placement repair authority read","boundMs":300000,"elapsedMs":300000,"lastObserved":{"reason":"owner_read_failed","attempts":300},"scope":{"operationId":"retained-continuation-remove"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+ok 4 - W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+  ---
+  duration_ms: 96.94363
+  type: 'test'
+  ...
+# Subtest: W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+ok 5 - W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+  ---
+  duration_ms: 55.034224
+  type: 'test'
+  ...
+# Subtest: W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+ok 6 - W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+  ---
+  duration_ms: 51.561948
+  type: 'test'
+  ...
+# Subtest: W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+ok 7 - W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+  ---
+  duration_ms: 47.069286
+  type: 'test'
+  ...
+# Subtest: W8 shutdown with an armed continuation leaves nothing to fire
+ok 8 - W8 shutdown with an armed continuation leaves nothing to fire
+  ---
+  duration_ms: 43.632389
+  type: 'test'
+  ...
+# Subtest: W8 retirement with an armed continuation leaves nothing to fire
+ok 9 - W8 retirement with an armed continuation leaves nothing to fire
+  ---
+  duration_ms: 61.282952
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T13:54:52.028Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T13:54:52.028Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T13:54:52.073Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: partial authority, overlapping arrivals: one owned decision and one qualified read
+ok 10 - partial authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 46.364149
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T13:54:52.075Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T13:54:52.075Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: partial authority, sequential arrivals: a bounded later decision with a fresh read
+ok 11 - partial authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 45.894712
+  type: 'test'
+  ...
+# Subtest: failed authority, overlapping arrivals: one owned decision and one qualified read
+ok 12 - failed authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 44.974729
+  type: 'test'
+  ...
+# Subtest: failed authority, sequential arrivals: a bounded later decision with a fresh read
+ok 13 - failed authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 45.464743
+  type: 'test'
+  ...
+# Subtest: stale authority, overlapping arrivals: one owned decision and one qualified read
+ok 14 - stale authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 42.035465
+  type: 'test'
+  ...
+# Subtest: stale authority, sequential arrivals: a bounded later decision with a fresh read
+ok 15 - stale authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 43.601447
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T13:54:52.294Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T13:54:52.294Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T13:54:52.333Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+ok 16 - wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 42.299871
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T13:54:52.336Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T13:54:52.336Z","nodeId":"test-node","pid":2962089,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+ok 17 - wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 42.200027
+  type: 'test'
+  ...
+# Subtest: Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+ok 18 - Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+  ---
+  duration_ms: 36.199487
+  type: 'test'
+  ...
+# Subtest: Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+ok 19 - Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+  ---
+  duration_ms: 38.852299
+  type: 'test'
+  ...
+# Subtest: B5 a custodian record released at its tenure end, without a read, cancels its continuation
+not ok 20 - B5 a custodian record released at its tenure end, without a read, cancels its continuation
+  ---
+  duration_ms: 46.366109
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b58b02f45fde-mwqgyx1c-1199128/test/partition/placement-retained-continuation.test.js:546:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the released record left no continuation armed
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/b58b02f45fde-mwqgyx1c-1199128/test/partition/placement-retained-continuation.test.js:566:14
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b58b02f45fde-mwqgyx1c-1199128/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b58b02f45fde-mwqgyx1c-1199128/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b58b02f45fde-mwqgyx1c-1199128/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Q9 an event storm during an outage reads once in flight plus once owed
+ok 21 - Q9 an event storm during an outage reads once in flight plus once owed
+  ---
+  duration_ms: 40.135414
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 20
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2673.899143
+# time=3576ms
+# test-files total=1 pass=0 fail=1 assertions=21
+placement-results={"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":21,"durationMs":3576,"retriedOnce":false,"firstFailureLine":"not ok 20 - B5 a custodian record released at its tenure end, without a read, cancels its continuation"}

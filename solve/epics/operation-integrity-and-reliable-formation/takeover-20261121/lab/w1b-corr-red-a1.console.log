@@ -1,0 +1,134 @@
+lab test: adams-gamla: ordinary (3 files) cores=4 mem=15.6GiB speed x2.19
+[adams-gamla] placement-shell=1889778
+[adams-gamla] placement-head=d9289d64dccad8532306c22573e0366410df9848
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1890234
+[adams-gamla] # test-files planned=3
+[adams-gamla] classified lane ordinary: 3 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-blocked-attempt.test.js (0 assertions, 1677ms)
+[adams-gamla] # no assertions executed; test process exited 1
+[adams-gamla] # time=1677ms
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (2 assertions, 1934ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: an unresolved attempt is discharged only by the record of its exact command
+[adams-gamla] ok 1 - an unresolved attempt is discharged only by the record of its exact command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 7.191905
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the ledger census never discharges an attempt: a row under its entry id from another command, or a released hold, is not its exact record
+[adams-gamla] not ok 2 - the ledger census never discharges an attempt: a row under its entry id from another command, or a released hold, is not its exact record
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.896182
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d9289d64dcca-mwqkawix-1425334/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:89:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a census row is never the exact record of an attempt
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + []
+[adams-gamla]     - [
+[adams-gamla]     -   'admit:tables-p1',
+[adams-gamla]     -   'release:pl-tables-p1-3-0'
+[adams-gamla]     - ]
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     0: 'admit:tables-p1'
+[adams-gamla]     1: 'release:pl-tables-p1-3-0'
+[adams-gamla]   actual:
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d9289d64dcca-mwqkawix-1425334/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:113:12)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adams-gamla]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1101:12)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 37.178261
+[adams-gamla] # time=1934ms
+[adams-gamla] file:///home/peter/projects/lagrange/test-output/placement-worktrees/d9289d64dcca-mwqkawix-1425334/test/rebalancer/replica-placement-owner-blocked-attempt.test.js:19
+[adams-gamla] import {PARTITION_COMMITTED_RECORD_CLASS} from
+[adams-gamla]         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[adams-gamla] SyntaxError: The requested module '../../src/partition/partition-committed-statement-outcome-constants.js' does not provide an export named 'PARTITION_COMMITTED_RECORD_CLASS'
+[adams-gamla]     at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+[adams-gamla]     at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+[adams-gamla]     at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+[adams-gamla]     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+[adams-gamla] 
+[adams-gamla] Node.js v22.23.2
+[adams-gamla] not ok test/partition/placement-outcome-format.test.js (5 assertions, 5238ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] {"level":50,"time":"2026-11-21T15:28:25.779Z","nodeId":"test-node","pid":1890249,"subsystem":"partition","partitionId":"replica_operations-p1","error":"NOT NULL constraint failed: replica_operations.type","sql":"UPDATE replica_operations SET type = NULL WHERE operation_id = ?","params":["pl-tables-p1-3-0"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+[adams-gamla] # Subtest: a current-format applied SQL record under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla] ok 1 - a current-format applied SQL record under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3180.071357
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a current-format statement-failure record (no result) under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla] ok 2 - a current-format statement-failure record (no result) under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 78.165135
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a store whose outcome table has the prior format (released builds, pre-identity development builds, pre-fingerprint placement rows) is refused typed at open, read-only
+[adams-gamla] ok 3 - a store whose outcome table has the prior format (released builds, pre-identity development builds, pre-fingerprint placement rows) is refused typed at open, read-only
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 67.674014
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a table with the owner columns but not the owner definition (no identity CHECK) is refused typed at open
+[adams-gamla] not ok 4 - a table with the owner columns but not the owner definition (no identity CHECK) is refused typed at open
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 62.293455
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d9289d64dcca-mwqkawix-1425334/test/partition/placement-outcome-format.test.js:178:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'the store opened with an outcome table that lacks the identity CHECK'
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   operator: 'fail'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d9289d64dcca-mwqkawix-1425334/test/partition/placement-outcome-format.test.js:209:14)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an owner result is recorded only with its command identity, by the recorder and by the table CHECK
+[adams-gamla] ok 5 - an owner result is recorded only with its command identity, by the recorder and by the table CHECK
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 33.172591
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..5
+[adams-gamla] # tests 5
+[adams-gamla] # suites 0
+[adams-gamla] # pass 4
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3449.072069
+[adams-gamla] # time=5238ms
+[adams-gamla] # test-files total=3 pass=0 fail=3 assertions=7
+lab test: adams-gamla: # test-files total=3 pass=0 fail=3 assertions=7
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=3 pass=0 fail=3 assertions=7

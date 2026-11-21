@@ -1,0 +1,272 @@
+lab test: adams-gamla: ordinary (2 files) cores=4 mem=15.6GiB speed x2.11
+[adams-gamla] placement-shell=1806981
+[adams-gamla] placement-head=2a689f1b9324c6416324d22323ec600cd08ffc19
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1807853
+[adams-gamla] # test-files planned=2
+[adams-gamla] classified lane ordinary: 2 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/scripts/fallback-necessity-trap.test.js (18 assertions, 1635ms)
+[adams-gamla] not ok test/scripts/fallback-read-closure.test.js (19 assertions, 3041ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: every cell family counts its known sites, and a hand-edited record is unreproducible
+[adams-gamla] not ok 1 - every cell family counts its known sites, and a hand-edited record is unreproducible
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 108.577847
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:212:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly deep-equal:
+[adams-gamla]     + actual - expected
+[adams-gamla]     ... Skipped lines
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]         'census_records_unreproducible/typeof_dual_paths/alpha': 1,
+[adams-gamla]         'fallback_sites/catch_returns_default/alpha': 1,
+[adams-gamla]         'fallback_sites/two_source_fallback_reads/alpha': 1,
+[adams-gamla]         'fallback_sites/typeof_dual_paths/alpha': 1,
+[adams-gamla]     ...
+[adams-gamla]         'fallback_sites_uncensused/typeof_dual_paths/alpha': 1,
+[adams-gamla]     +   'fixture_leader_role_rows/alpha': 5,
+[adams-gamla]     -   'fixture_leader_role_rows/alpha': 4,
+[adams-gamla]         'fixture_leader_role_rows_message_group/alpha': 1,
+[adams-gamla]         'non_required_leader_mode/alpha': 5,
+[adams-gamla]         'read_mode_fallback_members/alpha': 3,
+[adams-gamla]         'role_derived_leader_reads/alpha': 7
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     census_records_unreproducible/typeof_dual_paths/alpha: 1
+[adams-gamla]     fallback_sites/catch_returns_default/alpha: 1
+[adams-gamla]     fallback_sites/two_source_fallback_reads/alpha: 1
+[adams-gamla]     fallback_sites/typeof_dual_paths/alpha: 1
+[adams-gamla]     fallback_sites_bucket/catch_returns_default/alpha/N1: 1
+[adams-gamla]     fallback_sites_bucket/two_source_fallback_reads/alpha/N5: 1
+[adams-gamla]     fallback_sites_uncensused/typeof_dual_paths/alpha: 1
+[adams-gamla]     fixture_leader_role_rows/alpha: 4
+[adams-gamla]     fixture_leader_role_rows_message_group/alpha: 1
+[adams-gamla]     non_required_leader_mode/alpha: 5
+[adams-gamla]     read_mode_fallback_members/alpha: 3
+[adams-gamla]     role_derived_leader_reads/alpha: 7
+[adams-gamla]   actual:
+[adams-gamla]     census_records_unreproducible/typeof_dual_paths/alpha: 1
+[adams-gamla]     fallback_sites/catch_returns_default/alpha: 1
+[adams-gamla]     fallback_sites/two_source_fallback_reads/alpha: 1
+[adams-gamla]     fallback_sites/typeof_dual_paths/alpha: 1
+[adams-gamla]     fallback_sites_bucket/catch_returns_default/alpha/N1: 1
+[adams-gamla]     fallback_sites_bucket/two_source_fallback_reads/alpha/N5: 1
+[adams-gamla]     fallback_sites_uncensused/typeof_dual_paths/alpha: 1
+[adams-gamla]     fixture_leader_role_rows/alpha: 5
+[adams-gamla]     fixture_leader_role_rows_message_group/alpha: 1
+[adams-gamla]     non_required_leader_mode/alpha: 5
+[adams-gamla]     read_mode_fallback_members/alpha: 3
+[adams-gamla]     role_derived_leader_reads/alpha: 7
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:215:10)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.start (node:internal/test_runner/test:944:17)
+[adams-gamla]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a new site anywhere fails, naming it; a removed site prints the tightening hint
+[adams-gamla] not ok 2 - a new site anywhere fails, naming it; a removed site prints the tightening hint
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 144.256757
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:237:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly deep-equal:
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       [
+[adams-gamla]         true,
+[adams-gamla]     -   26,
+[adams-gamla]         27,
+[adams-gamla]     +   28
+[adams-gamla]       ]
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     0: true
+[adams-gamla]     1: 26
+[adams-gamla]     2: 27
+[adams-gamla]   actual:
+[adams-gamla]     0: true
+[adams-gamla]     1: 27
+[adams-gamla]     2: 28
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:250:10)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adams-gamla]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1101:12)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a raised baseline in history is refused even when the tree is within it
+[adams-gamla] ok 3 - a raised baseline in history is refused even when the tree is within it
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 121.96266
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a census edited without a re-join is refused
+[adams-gamla] ok 4 - a census edited without a re-join is refused
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 107.517194
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a refresh may move a site toward less exercised buckets only
+[adams-gamla] ok 5 - a refresh may move a site toward less exercised buckets only
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 212.890475
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a census head off the lineage is a one-way cell; an absent one is unmeasurable
+[adams-gamla] ok 6 - a census head off the lineage is a one-way cell; an absent one is unmeasurable
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 114.083746
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: without a baseline the ratchet refuses to run
+[adams-gamla] ok 7 - without a baseline the ratchet refuses to run
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 89.653768
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a kept arm stands only on a red throw-mode trap run and a classified witness
+[adams-gamla] not ok 8 - a kept arm stands only on a red throw-mode trap run and a classified witness
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 352.093917
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:326:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     The input did not match the regular expression /witness is not a classified \.test\.js file/u. Input:
+[adams-gamla]     
+[adams-gamla]     "fallback-read-closure: kept entry's witness is not a test the trap run failed: ts.467710968ec7.0"
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]   actual: "fallback-read-closure: kept entry's witness is not a test the trap run failed: ts.467710968ec7.0"
+[adams-gamla]   operator: 'match'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:353:10)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adams-gamla]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1101:12)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: --metric prints the selected cells as the last line for a script probe
+[adams-gamla] not ok 9 - --metric prints the selected cells as the last line for a script probe
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 88.616782
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:363:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     
+[adams-gamla]     '28' !== '27'
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: '27'
+[adams-gamla]   actual: '28'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/2a689f1b9324-mwqi8jlx-1278980/test/scripts/fallback-read-closure.test.js:370:10)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adams-gamla]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1101:12)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 5: the slice probe counts the sites its scope made uncensused
+[adams-gamla] ok 10 - hole 5: the slice probe counts the sites its scope made uncensused
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 81.683738
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 6: an absent census head names the ref to fetch and exits with its own code
+[adams-gamla] ok 11 - hole 6: an absent census head names the ref to fetch and exits with its own code
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 74.72014
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 7: one red bucket-wide throw run cannot keep an arm
+[adams-gamla] ok 12 - hole 7: one red bucket-wide throw run cannot keep an arm
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 105.313625
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 7: a kept arm needs a run that armed that site alone and failed its witness
+[adams-gamla] ok 13 - hole 7: a kept arm needs a run that armed that site alone and failed its witness
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 223.029089
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 8: a leader constant injected through options is still a leader token
+[adams-gamla] ok 14 - hole 8: a leader constant injected through options is still a leader token
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 97.674235
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 9: a fixture row is exempt by its service type, not a substring of its id
+[adams-gamla] ok 15 - hole 9: a fixture row is exempt by its service type, not a substring of its id
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 96.052446
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 10: a census edit is refused even with generatedAt bumped
+[adams-gamla] ok 16 - hole 10: a census edit is refused even with generatedAt bumped
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 87.092926
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 10: the baseline must name the census head it was measured against
+[adams-gamla] ok 17 - hole 10: the baseline must name the census head it was measured against
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 84.189077
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: hole 11: baselines tightened on two branches compose by cell-wise minimum
+[adams-gamla] ok 18 - hole 11: baselines tightened on two branches compose by cell-wise minimum
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 214.632096
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a new semantic detectors version re-bases the semantic cells and only them
+[adams-gamla] ok 19 - a new semantic detectors version re-bases the semantic cells and only them
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 251.652589
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..19
+[adams-gamla] # tests 19
+[adams-gamla] # suites 0
+[adams-gamla] # pass 15
+[adams-gamla] # fail 4
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 2757.167276
+[adams-gamla] # time=3041ms
+[adams-gamla] # test-files total=2 pass=1 fail=1 assertions=37
+lab test: adams-gamla: # test-files total=2 pass=1 fail=1 assertions=37
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=2 pass=1 fail=1 assertions=37

@@ -1,0 +1,17 @@
+{"file":"test/control-plane/formation-transition-settled-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6499,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6709,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/coordinator-settlement-exact-settlement.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2029,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-coordinator-settlement.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2103,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-statement-outcome.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":8869,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6644,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6903,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":3105,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":10584,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1853,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/settled-replay-preserves-result.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":7837,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":7209,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+{"file":"test/rebalancer/replica-placement-owner-blocked-attempt.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6292,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6387,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":6026,"retriedOnce":false,"firstFailureLine":"not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal"}
+{"file":"test/bootstrap/removed-formation-barrier-and-handoff-census.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2893,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-retained-effects.test.js","attempt":1,"ok":true,"assertions":169,"durationMs":4756,"retriedOnce":false,"firstFailureLine":null}

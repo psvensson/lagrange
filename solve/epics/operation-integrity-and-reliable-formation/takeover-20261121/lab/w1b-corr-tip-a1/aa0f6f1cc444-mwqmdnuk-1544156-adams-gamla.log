@@ -1,0 +1,637 @@
+placement-shell=1906636
+placement-head=aa0f6f1cc4446a26960b2fe5819178505b4d3de5
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=1907093
+# test-files planned=17
+classified lane ordinary: 15 file(s), jobs=3
+thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+ok test/control-plane/formation-transition-settled-replay.test.js (2 assertions, 6499ms)
+ok test/partition/committed-outcome-identity-boundary.test.js (2 assertions, 6709ms)
+ok test/partition/coordinator-settlement-exact-settlement.test.js (2 assertions, 2029ms)
+ok test/partition/partition-coordinator-settlement.test.js (4 assertions, 2103ms)
+ok test/partition/committed-statement-outcome.test.js (20 assertions, 8869ms)
+ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 6644ms)
+ok test/partition/placement-outcome-format.test.js (5 assertions, 6903ms)
+ok test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js (68 assertions, 3105ms)
+ok test/partition/placement-admission-apply.test.js (9 assertions, 10584ms)
+ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (2 assertions, 1853ms)
+ok test/partition/settled-replay-preserves-result.test.js (6 assertions, 7837ms)
+not ok test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions, 7209ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role
+    ok 1 - projected SERVICES follower rows must never complete an incomplete GROWTH_PROMOTE
+    ok 2 - provenance check rejects mismatched partitionId
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - provenance check rejects partial promotedReplicaIds
+    ok 6 - provenance check rejects voterReplicaIds missing a promoted learner
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..14
+ok 1 - D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role # time=96.144ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - expected to reject
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..13
+ok 2 - Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED) # time=9.188ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equivalent
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..14
+ok 3 - D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId # time=8.685ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-growth-promote-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 11 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-growth-promote-terminal-failed',
+  workflowStep: 'FAILED',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - should be equal
+    ok 15 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..15
+ok 4 - D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED) # time=16.712ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation
+    ok 1 - unconfirmed active terminal handoff must report WAITING
+    ok 2 - unapplied REPLACE active progress must report WAITING
+    ok 3 - re-armed dispatch that does not advance workflowStep must report WAITING
+    ok 4 - skipped EXECUTE_ACTIVE_REPLACE must report WAITING
+    ok 5 - skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING
+    ok 6 - reconcileOperationLifecycle reports WAITING when dispatch is skipped
+    ok 7 - WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation
+    ok 8 - should be equal
+    ok 9 - should match pattern
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..9
+ok 5 - D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation # time=7.8ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equivalent
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..6
+ok 6 - D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner # time=4.762ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery
+    ok 1 - seed op-real-repo-updated into real SQLite repository
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Operation completed {
+  operationId: 'op-real-repo-updated',
+  type: 'GROWTH_PROMOTE',
+  partitionId: 'user_orders-p1',
+  targetNodeId: 'node-leader-1'
+}
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 14 - should be equal
+    ok 15 - should be equal
+    ok 16 - should be equal
+    ok 17 - should be equal
+    ok 18 - should be equal
+    ok 19 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 20 - should be equal
+    ok 21 - should be equal
+    ok 22 - should be equal
+    ok 23 - should be equal
+    ok 24 - seed op-real-repo-terminal-adopted into real SQLite repository
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-terminal-adopted',
+  workflowStep: 'FAILED',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 25 - should be equal
+    ok 26 - should be equal
+    ok 27 - should be equal
+    ok 28 - should be equal
+    ok 29 - should be equal
+    ok 30 - should be equal
+    ok 31 - should be equal
+    ok 32 - should be equal
+    ok 33 - should be equivalent
+    ok 34 - should be equivalent
+    ok 35 - should be equal
+    ok 36 - should be equal
+    ok 37 - should be equal
+    ok 38 - seed op-real-repo-reinserted into real SQLite repository
+    ok 39 - should be equal
+    not ok 40 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+        lineNumber: 904
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:904:9)
+      source: >2
+              );
+              t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+              t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+        --------^
+              t.equal(reinsertedSettlement.committed, false);
+              t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -waiting
+        +refused
+      ...
+    
+    ok 41 - should be equal
+    not ok 42 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+        lineNumber: 906
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:906:9)
+      source: >2
+              t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+              t.equal(reinsertedSettlement.committed, false);
+              t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+        --------^
+              t.same(releasedReservationIds, []);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -reinserted
+        +refused
+      ...
+    
+    ok 43 - should be equivalent
+    ok 44 - seed op-real-repo-refused into real SQLite repository
+    ok 45 - should be equal
+    ok 46 - should be equal
+    ok 47 - should be equal
+    ok 48 - should be equal
+    ok 49 - should be equivalent
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 50 - should be equal
+    ok 51 - should be equal
+    ok 52 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-terminal-adopted',
+  workflowStep: 'FAILED',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 53 - should be equal
+    ok 54 - should be equal
+    ok 55 - should be equal
+    ok 56 - seed op-real-repo-lost-reply into real SQLite repository
+    ok 57 - expected to reject
+    ok 58 - should be equal
+    ok 59 - should be equal
+    ok 60 - should be equal
+    ok 61 - should be equal
+    ok 62 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..62
+not ok 7 - Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery # time=66.132ms
+  ---
+  at:
+    fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+    lineNumber: 737
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    );
+  
+    test(
+    ^
+      'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+        '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+  ...
+
+# Subtest: Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - should be equal
+    ok 15 - should be equal
+    ok 16 - should be equal
+    ok 17 - should be equal
+    ok 18 - should be equal
+    ok 19 - should be equal
+    ok 20 - should be equal
+    ok 21 - should be equal
+    ok 22 - should be equal
+    ok 23 - expected to reject
+    ok 24 - should be equal
+    ok 25 - should be equal
+    ok 26 - should be equal
+    ok 27 - should be equal
+    ok 28 - should be equal
+    1..28
+ok 8 - Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget # time=4789.613ms
+
+# Subtest: Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equivalent
+    ok 6 - ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion
+    ok 7 - should be equivalent
+    1..7
+ok 9 - Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner # time=11.152ms
+
+1..9
+# { total: 168, pass: 166, fail: 2 }
+# time=5027.361ms
+ok test/rebalancer/replica-placement-owner-blocked-attempt.test.js (1 assertions, 6292ms)
+ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 6387ms)
+not ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 6026ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: class order: the ledger, the priority control plane, nodes-p1, system, user
+ok 1 - class order: the ledger, the priority control plane, nodes-p1, system, user
+  ---
+  duration_ms: 2.9113
+  type: 'test'
+  ...
+# Subtest: formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+ok 2 - formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+  ---
+  duration_ms: 0.31911
+  type: 'test'
+  ...
+# Subtest: within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+ok 3 - within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+  ---
+  duration_ms: 0.439552
+  type: 'test'
+  ...
+# Subtest: HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+ok 4 - HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+  ---
+  duration_ms: 3.325718
+  type: 'test'
+  ...
+# Subtest: per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+ok 5 - per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+  ---
+  duration_ms: 1.642787
+  type: 'test'
+  ...
+# Subtest: inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+ok 6 - inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+  ---
+  duration_ms: 1.081346
+  type: 'test'
+  ...
+# Subtest: UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+ok 7 - UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+  ---
+  duration_ms: 0.901887
+  type: 'test'
+  ...
+# Subtest: the repair reservation is level-triggered and travels in the statement as kSrcForClass
+ok 8 - the repair reservation is level-triggered and travels in the statement as kSrcForClass
+  ---
+  duration_ms: 1.654902
+  type: 'test'
+  ...
+# Subtest: the canonical statement refuses what its kind cannot carry
+ok 9 - the canonical statement refuses what its kind cannot carry
+  ---
+  duration_ms: 1.678768
+  type: 'test'
+  ...
+# Subtest: the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+ok 10 - the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+  ---
+  duration_ms: 0.672465
+  type: 'test'
+  ...
+# Subtest: real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+ok 11 - real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+  ---
+  duration_ms: 33.040163
+  type: 'test'
+  ...
+# Subtest: ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+ok 12 - ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+  ---
+  duration_ms: 7.393123
+  type: 'test'
+  ...
+# Subtest: P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+ok 13 - P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+  ---
+  duration_ms: 2.276872
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T16:26:56.246Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+{"level":50,"time":"2026-11-21T16:26:56.307Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REBALANCE_OPERATION_STEP_TIMEOUT","awaited":"replica operation progressed past its current workflow step","boundMs":60000,"elapsedMs":120000,"lastObserved":{"type":"GROWTH_PROMOTE","workflowStep":"SYNCING","status":"syncing","targetNodeId":"n1","stepExceeded":true,"budgetExhausted":false,"timeoutClassification":{"classification":"rebalance_operation_timeout","configuredBudgetMs":300000,"remainingBudgetMs":180000,"boundaryHit":false,"nestedOperation":"rebalance:syncing","operationName":"rebalance","originalClassification":null}},"scope":{"nodeId":"n2","partitionId":"replica_operations-p1","operationId":"pl-promote-3to5-timeout"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: control-plane attachment admits a scoped voter removal only with its workflow owner
+ok 14 - control-plane attachment admits a scoped voter removal only with its workflow owner
+  ---
+  duration_ms: 3354.206213
+  type: 'test'
+  ...
+# Subtest: P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+ok 15 - P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+  ---
+  duration_ms: 76.031086
+  type: 'test'
+  ...
+# Subtest: WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+ok 16 - WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+  ---
+  duration_ms: 1.34806
+  type: 'test'
+  ...
+# Subtest: WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+ok 17 - WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+  ---
+  duration_ms: 50.060124
+  type: 'test'
+  ...
+# Subtest: Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+  ---
+  duration_ms: 101.796418
+  type: 'test'
+  ...
+# Subtest: Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+ok 19 - Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+  ---
+  duration_ms: 76.28694
+  type: 'test'
+  ...
+# Subtest: Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+  ---
+  duration_ms: 61.10766
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/test/rebalancer/replica-placement-owner-core.test.js:1399:1'
+  failureType: 'testCodeFailure'
+  error: 'ReplicaOperationRepository requires a control-plane mutation ingress'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:438:21)
+    ReplicaOperationRepository.resolveFailedOperationUpdateResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/src/rebalancer/replica-operation-repository-mutation-update-methods.js:504:35)
+    async OperationWorkflowOwner.runAtomicTransitionUnderLane (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/src/rebalancer/operation-workflow-transition-orchestration.js:113:29)
+  ...
+{"level":50,"time":"2026-11-21T16:26:56.311Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","error":"ReplicaOperationRepository requires a control-plane mutation ingress","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-11-21T16:26:56.556Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","tableName":"services","cacheOperation":"UPSERT","error":"Cannot read properties of null (reading 'prepare')","nodeId":"test-node","msg":"Observed replica progress transition failed"}
+1..20
+# tests 20
+# suites 0
+# pass 19
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4030.302504
+# time=6026ms
+# test-files total=15 pass=13 fail=2 assertions=324
+classified lane bootstrap: 2 file(s), jobs=2
+thermal: ok cpu 59C (coretemp/Package id 0) nvme unmeasured
+ok test/bootstrap/removed-formation-barrier-and-handoff-census.test.js (4 assertions, 2893ms)
+ok test/bootstrap/seed-retained-effects.test.js (169 assertions, 4756ms)
+# test-files total=2 pass=2 fail=0 assertions=173
+placement-results={"file":"test/control-plane/formation-transition-settled-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6499,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6709,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/coordinator-settlement-exact-settlement.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2029,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-coordinator-settlement.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2103,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/committed-statement-outcome.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":8869,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6644,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6903,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":3105,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":10584,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1853,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/settled-replay-preserves-result.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":7837,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":7209,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+placement-results={"file":"test/rebalancer/replica-placement-owner-blocked-attempt.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6292,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6387,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":6026,"retriedOnce":false,"firstFailureLine":"not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal"}
+placement-results={"file":"test/bootstrap/removed-formation-barrier-and-handoff-census.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2893,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/seed-retained-effects.test.js","attempt":1,"ok":true,"assertions":169,"durationMs":4756,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,26 @@
+placement-shell=1912347
+placement-head=393ece6400e781fee9f5e4d99da4a2ebe1082786
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:1.9 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1913356
+# test-files planned=6
+classified lane ordinary: 5 file(s), jobs=3
+thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+ok test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js (8 assertions, 2375ms)
+ok test/partition/raft-rs-transport-demux.test.js (16 assertions, 2528ms)
+ok test/message-group/message-group-service-raft-replication-and-cdc.test.js (110 assertions, 3611ms)
+ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 2032ms)
+ok test/transport/message-router.test.js (499 assertions, 6323ms)
+# test-files total=5 pass=5 fail=0 assertions=635
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+ok test/transport/raft-frame-turn-not-held.integration.test.js (1 assertions, 1500ms)
+# test-files total=1 pass=1 fail=0 assertions=1
+placement-results={"file":"test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":2375,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/raft-rs-transport-demux.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2528,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-service-raft-replication-and-cdc.test.js","attempt":1,"ok":true,"assertions":110,"durationMs":3611,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2032,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router.test.js","attempt":1,"ok":true,"assertions":499,"durationMs":6323,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-turn-not-held.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1500,"retriedOnce":false,"firstFailureLine":null}

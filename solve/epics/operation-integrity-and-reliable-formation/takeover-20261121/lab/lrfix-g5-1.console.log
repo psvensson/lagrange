@@ -1,0 +1,150 @@
+lab test: tv-dator: ordinary, exclusive (4 files) cores=12 mem=15.4GiB speed x1.45
+[tv-dator] placement-shell=3148510
+[tv-dator] placement-head=c22d786d5fb1ddf13416b1f27835e286e7bb8076
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3148978
+[tv-dator] # test-files planned=4
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 58C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] ok test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (61 assertions, 1380ms)
+[tv-dator] ok test/control-plane/replica-dispatch-routing.property.test.js (41 assertions, 1397ms)
+[tv-dator] not ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 1505ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'expiry-node-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] # Subtest: reconcileReservations - a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, not expired
+[tv-dator]     ok 1 - no expiry while the backing operation is still live
+[tv-dator]     ok 2 - live operation keeps its reservation active past expires_at
+[tv-dator]     1..2
+[tv-dator] ok 1 - reconcileReservations - a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, not expired # time=54.763ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'expiry-node-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] # Subtest: reconcileReservations - a TTL-expired reservation for a TERMINAL operation is expired
+[tv-dator]     not ok 1 - terminal operation lets its expired reservation expire
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-expiry-operation-aware.test.js
+[tv-dator]         lineNumber: 239
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-expiry-operation-aware.test.js:239:5)
+[tv-dator]       source: |2
+[tv-dator]           const result = await coordinator.reconcileReservations();
+[tv-dator]       
+[tv-dator]           t.equal(result.expired, 1,
+[tv-dator]         ----^
+[tv-dator]             'terminal operation lets its expired reservation expire');
+[tv-dator]           t.equal(
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - reservation transitions to EXPIRED once the operation is terminal
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-expiry-operation-aware.test.js
+[tv-dator]         lineNumber: 241
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-expiry-operation-aware.test.js:241:5)
+[tv-dator]       source: |2
+[tv-dator]           t.equal(result.expired, 1,
+[tv-dator]             'terminal operation lets its expired reservation expire');
+[tv-dator]           t.equal(
+[tv-dator]         ----^
+[tv-dator]             store.reservations.get(TERMINAL_RESERVATION_ID).status,
+[tv-dator]             RESERVATION_STATUS.EXPIRED,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -expired
+[tv-dator]         +active
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 2 - reconcileReservations - a TTL-expired reservation for a TERMINAL operation is expired # time=41.255ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/reservation-expiry-operation-aware.test.js
+[tv-dator]     lineNumber: 228
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('reconcileReservations - a TTL-expired reservation for a TERMINAL ' +
+[tv-dator]     ^
+[tv-dator]       'operation is expired', async (t) => {
+[tv-dator]       initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: getCapacitySnapshots - an expired reservation for a LIVE operation keeps its reserved bytes counted
+[tv-dator]     ok 1 - live operation keeps its expired reservation counted
+[tv-dator]     1..1
+[tv-dator] ok 3 - getCapacitySnapshots - an expired reservation for a LIVE operation keeps its reserved bytes counted # time=25.567ms
+[tv-dator] 
+[tv-dator] # Subtest: getCapacitySnapshots - an expired reservation for a TERMINAL operation is excluded from reserved bytes
+[tv-dator]     ok 1 - terminal operation lets its expired reservation stop counting
+[tv-dator]     1..1
+[tv-dator] ok 4 - getCapacitySnapshots - an expired reservation for a TERMINAL operation is excluded from reserved bytes # time=24.154ms
+[tv-dator] 
+[tv-dator] 1..4
+[tv-dator] # { total: 6, pass: 4, fail: 2 }
+[tv-dator] # time=156.393ms
+[tv-dator] # test-files total=3 pass=2 fail=1 assertions=112
+[tv-dator] classified lane exclusive: 1 file(s), jobs=1
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 1168ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=21
+lab test: tv-dator: # test-files total=4 pass=3 fail=1 assertions=133
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=4 pass=3 fail=1 assertions=133
+exit=1

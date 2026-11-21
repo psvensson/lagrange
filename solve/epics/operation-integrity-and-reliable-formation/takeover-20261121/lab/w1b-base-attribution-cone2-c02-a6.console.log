@@ -1,0 +1,142 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.09
+[adams-gamla] placement-shell=1807433
+[adams-gamla] placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1811258
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/raft/snapshot-dispatcher-wiring.test.js (13 assertions, 2673ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - the join-factory-built service carries the seam (durable-rejoin restores use THIS path — reverting the join attach reds this)
+[adams-gamla]     ok 3 - anti-vacuous: the real join factory built and tracked the service
+[adams-gamla]     1..3
+[adams-gamla] ok 1 - PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam # time=73.943ms
+[adams-gamla] 
+[adams-gamla] # Subtest: the wired dispatcher types SOCKET_UNAVAILABLE for an unreachable follower and never throws into the consensus caller
+[adams-gamla]     ok 1 - the unreachable follower is the typed socket_unavailable refusal
+[adams-gamla]     1..1
+[adams-gamla] ok 2 - the wired dispatcher types SOCKET_UNAVAILABLE for an unreachable follower and never throws into the consensus caller # time=37.351ms
+[adams-gamla] 
+[adams-gamla] # Subtest: the wired dispatcher serves a real transfer over an existing bulk connection (no driver token bucket — pacing stays with sendChunkFrame)
+[adams-gamla]     ok 1 - the production dispatcher serves over the existing bulk connection
+[adams-gamla]     ok 2 - the peer receives the complete generation
+[adams-gamla]     1..2
+[adams-gamla] ok 3 - the wired dispatcher serves a real transfer over an existing bulk connection (no driver token bucket — pacing stays with sendChunkFrame) # time=45.89ms
+[adams-gamla] 
+[adams-gamla] # Subtest: an adopted bulk OFFER recreates through the concrete factory and swaps the live replica
+[adams-gamla]     not ok 1 - ReplicaHandlerSetup requires systemTableCache
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         ReplicaHandlerSetup.create
+[adams-gamla]         (src/bootstrap/shared/replica-handler-setup.js:205:13)
+[adams-gamla]       
+[adams-gamla]         createHandlerSetup (test/raft/snapshot-dispatcher-wiring.test.js:139:37)
+[adams-gamla]       
+[adams-gamla]         checkBulkOfferAdoption (test/raft/snapshot-dispatcher-wiring.test.js:346:17)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/bootstrap/shared/replica-handler-setup.js
+[adams-gamla]         lineNumber: 205
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         typeName: ReplicaHandlerSetup
+[adams-gamla]         methodName: create
+[adams-gamla]         functionName: ReplicaHandlerSetup.create
+[adams-gamla]       type: DependencyError
+[adams-gamla]       context:
+[adams-gamla]         serviceName: ReplicaHandlerSetup
+[adams-gamla]         dependencyName: systemTableCache
+[adams-gamla]       serviceName: ReplicaHandlerSetup
+[adams-gamla]       dependencyName: systemTableCache
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]             }
+[adams-gamla]             if (!hasSystemCacheChangeReader(systemTableCache)) {
+[adams-gamla]               throw new DependencyError(
+[adams-gamla]         ------------^
+[adams-gamla]                 REPLICA_HANDLER_SETUP_NAME,
+[adams-gamla]                 ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 4 - an adopted bulk OFFER recreates through the concrete factory and swaps the live replica # time=52.987ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/raft/snapshot-dispatcher-wiring.test.js
+[adams-gamla]     lineNumber: 435
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('an adopted bulk OFFER recreates through the concrete factory and swaps
+[adams-gamla]     the live replica',
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       (t) => checkBulkOfferAdoption(t, false));
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: an adopted bulk OFFER retires its recreated replica when shutdown blocks adoption
+[adams-gamla]     not ok 1 - ReplicaHandlerSetup requires systemTableCache
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         ReplicaHandlerSetup.create
+[adams-gamla]         (src/bootstrap/shared/replica-handler-setup.js:205:13)
+[adams-gamla]       
+[adams-gamla]         createHandlerSetup (test/raft/snapshot-dispatcher-wiring.test.js:139:37)
+[adams-gamla]       
+[adams-gamla]         checkBulkOfferAdoption (test/raft/snapshot-dispatcher-wiring.test.js:346:17)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/bootstrap/shared/replica-handler-setup.js
+[adams-gamla]         lineNumber: 205
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         typeName: ReplicaHandlerSetup
+[adams-gamla]         methodName: create
+[adams-gamla]         functionName: ReplicaHandlerSetup.create
+[adams-gamla]       type: DependencyError
+[adams-gamla]       context:
+[adams-gamla]         serviceName: ReplicaHandlerSetup
+[adams-gamla]         dependencyName: systemTableCache
+[adams-gamla]       serviceName: ReplicaHandlerSetup
+[adams-gamla]       dependencyName: systemTableCache
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]             }
+[adams-gamla]             if (!hasSystemCacheChangeReader(systemTableCache)) {
+[adams-gamla]               throw new DependencyError(
+[adams-gamla]         ------------^
+[adams-gamla]                 REPLICA_HANDLER_SETUP_NAME,
+[adams-gamla]                 ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 5 - an adopted bulk OFFER retires its recreated replica when shutdown blocks adoption # time=35.492ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/raft/snapshot-dispatcher-wiring.test.js
+[adams-gamla]     lineNumber: 438
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >2
+[adams-gamla]       (t) => checkBulkOfferAdoption(t, false));
+[adams-gamla]   
+[adams-gamla]     test('an adopted bulk OFFER retires its recreated replica when shutdown blocks
+[adams-gamla]     adoption',
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       (t) => checkBulkOfferAdoption(t, true));
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..5
+[adams-gamla] # { total: 8, pass: 6, fail: 2 }
+[adams-gamla] # time=469.769ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=13
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=13
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=13

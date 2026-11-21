@@ -1,0 +1,13 @@
+placement-shell=3542399
+placement-head=28d3ff7bcc437ab07e533e7b256fc36515a7c291
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3542945
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 73C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/query/named-write-verdict-table-probe.test.js (5 assertions, 4931ms)
+# test-files total=1 pass=1 fail=0 assertions=5
+placement-results={"file":"test/query/named-write-verdict-table-probe.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":4931,"retriedOnce":false,"firstFailureLine":null}

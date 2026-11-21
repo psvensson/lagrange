@@ -381,6 +381,11 @@ Labels as above: **[exec]** executed (where, sha), **[read]** read-only.
 | 1 | `38708b6fa0ae54f04c1c5f8c516154bd2c482844` | exact placement replay identity (NULL branch and `OUTCOME_IDENTITY_UNAVAILABLE` deleted), repair capability probe removed, trigger rows for `ORIGIN`/`BYTES`/`TARGET`/`REMOVE_INTENT_UNSCOPED`/`RESULT` (null = definite), F11 enumerates the vocabularies (W3 folded in), F5b deleted |
 | 2 | `6d3a0c4f67d63ac6ae19a98a918783e9608459bb` + `b213e5e79b5f03e357e42bb88872824553d6f8a7` + `080223004532d0bd380602a88c175932c3885698` (two boundary-witness fixture repairs) | owner identity column `command_digest` + CHECK, typed store-open format refusal (ADD COLUMN loop deleted), exact-settlement owner function for placement/formation/coordinator/attempts, one owner-command prelude for placement and formation |
 | 3 | `7652bb014c693a1d940090deaaf3f82e18238edf` | coupled pairs + contract in `test/shards/impact-contracts.json` (selects the whole corpus; not run by me) |
+| 2 (follow-up) | `054971a7db5ca06cfc92004f73bea4f5f24c5e41` | `settled-replay-preserves-result` W5 rewritten to the typed store-open refusal (found red by the step-2 cone); lands after the pair commit, so the pair commit is not the tip |
+| C1 (corrective, red) | `d9289d64dccad8532306c22573e0366410df9848` | red witnesses: census near miss (F4), blocked attempt (F6), owner columns without the CHECK (F9) |
+| C2 (corrective, fix) | `87a2e83b863a66f5f2726c8e438bbbae9270c4ca` | F4 census settlement deleted; F6 typed blocked attempts; F9 one definition-based format decider; F3 owner-declared DEFINITE set + waiting map |
+| C3 (corrective, red) | `1472e704d1bb127ae82686effc9a8922c475c1f4` | F7 red witness: the refusal's message names its code, and the refusal carries partitionId |
+| C4 (corrective, fix, branch tip) | `aa0f6f1cc4446a26960b2fe5819178505b4d3de5` | F7 my side: refusal message leads with the typed code, carries partitionId, describes the definition decision |
 
 ## 11. The owned receipt identity (reviewer's completion criterion)
 
@@ -412,7 +417,8 @@ Labels as above: **[exec]** executed (where, sha), **[read]** read-only.
 | --- | --- | --- | --- | --- | --- |
 | 1 | placement replay, request (`proposePlacementCommand` -> `ownerCommandPrelude`) | answers E0's receipt | 48-bit fingerprint in `last_insert_rowid`; NULL branch (WIP) | full digest via `readSettledOwnerCommandIn`; OTHER_RECORD -> `BYTES` | `placement-outcome-format` #1/#2 (SQL applied, statement_failed), boundary near miss, `placement-admission-apply` F5/P4 |
 | 2 | placement replay, apply (`applyPlacementCommand`) | REPLAYED without effect | same as 1 | same; OTHER_RECORD -> throw `BYTES` (fail closed) | same |
-| 3 | placement unresolved attempts (`replica-placement-owner-attempts.js` `isSettledInStatementOutcomes`) | deletes a durable unresolved attempt | NONE: any row (`SELECT 1 ... WHERE entry_key = ?`, hand-built key) | digest of the attempt's own command (`placementBodyDigestOf(type of its kind, body)`) through `readSettledOwnerCommandIn`; only SAME_COMMAND discharges | `replica-placement-owner-attempts-exact-settlement` (SQL record, other body, other command type: kept; exact admit/release: discharged) |
+| 3 | placement unresolved attempts (`replica-placement-owner-attempts.js` `attemptSettlementOf`, was `isSettledInStatementOutcomes`) | deletes a durable unresolved attempt | NONE: any row (`SELECT 1 ... WHERE entry_key = ?`, hand-built key) | digest of the attempt's own command (`placementBodyDigestOf(type of its kind, body)`) through `readSettledOwnerCommandIn`; only SAME_COMMAND discharges; OTHER_RECORD keeps it as typed blocked work (F6) | `replica-placement-owner-attempts-exact-settlement` #1 (SQL record, other body, other command type: kept and listed blocked with their record class; exact admit/release: discharged) |
+| 3b | placement unresolved attempts, ledger census (`isSettledInCensus`, `replica-placement-owner-attempts.js` ~:98-103 at `054971a7d`; DELETED in `87a2e83b8`) | deleted a durable unresolved attempt when a `replica_operations` row's `admission.entryId` equalled the attempt's entry id, or a release's hold was no longer engaged | NONE: entry-id equality / hold state | removed: the census cannot carry the identity (a ledger row names only the entry id its admission ran under; a hold's state names no release command), so the census never discharges. Ledger rows and the outcome row commit in the same apply transaction, so the exact settlement needs no census | `replica-placement-owner-attempts-exact-settlement` #2 (an outcome row of another command under the attempt's entry + a census row naming that entry: kept; an unsettled release whose hold is released: kept). Red at `d9289d64d`, green at `87a2e83b8` |
 | 4 | formation replay, request and apply | answers / REPLAYED | 48-bit fingerprint; pause before settled | full digest through the prelude; `INVALID_COMMAND` / fail closed | `formation-transition-settled-replay`, boundary near miss |
 | 5 | coordinator settlement, request and apply | answers / REPLAYED | NONE: any record under the key (entryId is content-addressed, so only another owner's record can collide) | digest of `type:settlementText`; `BYTES` / fail closed | `coordinator-settlement-exact-settlement` (SQL record; another command's owner record) |
 | 6 | retained-repair ingress (`replica-operation-retained-repair-ingress.js:56-58`, other writer) | nothing: a SETTLED record only routes to native submission | any row | unchanged; native submission (= consumer 1) applies the exact check | covered by 1 |
@@ -428,10 +434,8 @@ entryId; the prelude finds OTHER_RECORD and answers `BYTES` (a definite
 answer, trigger row null). `BYTES` is not `committed`, so the attempt is
 neither deleted nor replaced: that intent's admission stays blocked, without
 any invented effect, until the intent changes (a different intent creates a
-fresh attempt and entryId). Nothing retires such an attempt today; whether a
-definite collision should retire it is a lead/owner decision (the original
-command can never apply successfully: its committed apply would fail closed,
-see section 13).
+fresh attempt and entryId). Nothing retires such an attempt (lead ruling,
+corrective round): it is now VISIBLE as typed blocked work (section 19, F6).
 
 ## 13. "Fails closed at apply" (ruling 7) [read]
 
@@ -567,3 +571,249 @@ ready" / "not a ready lab machine" / lab setup exit 97 (no test result).
 | `w1b-step2c-witnesses-r2-a1` | `080223004532d0bd380602a88c175932c3885698` (final step-2 head) | boundary, W2, W1, formation replay | 4/4 files green (10 tests): boundary placement + formation (reopen and image), W2 4/4, W1 2/2, formation 2/2 |
 | `w1b-step1-cone-remainder-r2-a1` | `38708b6fa` | the 76 deadline files of the step-1 cone | 72 pass / 4 red: `test/scripts/select-change-tests.test.js`, `test/integration/control-plane-rebalance.integration.test.js`, `test/integration/lagrange-server-npm-package.integration.test.js`, `test/rebalancer/message-group-operation-routing.integration.test.js` |
 | `w1b-base-attribution-step1-fails-r2-a1` | `0993265e53601cba4a6a41baa08158725cfcea7f` (base) | the 57 step-1 cone reds that exist at the base | 57/57 red at the base too: every step-1 cone red is pre-existing; the 58th, `placement-outcome-format`, was the expected W2 #3 red before step 2 |
+| `w1b-step2-cone-r2-chunk00-a1` | `080223004` | step-2 cone vs `0993265e5`, part 1 of 3 (573 of 1742) | 562 pass / 11 red. 3 reds known pre-existing (dt-formation latch, joint-admission release liveness, placement-owner formation drain); 8 `test/control-plane/replica-dispatch-*` reds not in the step-1 cone: attribution at the base queued (`w1b-base-attribution-cone2-c00-*`) |
+| `w1b-step2-cone-r2-chunk01-a1` | `080223004` | part 2 of 3 (572) | 522 pass / 14 red / 36 no result (runner deadline). New reds: `test/partition/settled-replay-preserves-result.test.js` W5 - CAUSED BY STEP 2 (the test planted a pre-result-column table through ALTER ... DROP COLUMN, which the CHECK now forbids, and asserted the deleted ADD COLUMN migration); rewritten to the typed store-open refusal. Others queued for base attribution: `replica-image-checkpoint-transfer`, `fresh-create-resumed-syncing-claim`, `message-group-learner-join.integration`, `rolling-restart-acknowledged-write-durability-visibility` |
+| `w1b-step2-cone-r2-chunk02-a1` | `080223004` | part 3 of 3 (584 listed; 597 results incl. sub-files) | 548 pass / 49 red. 48 reds are files already red in the step-1 cone (pre-existing at the base); 1 new: `test/raft/snapshot-dispatcher-wiring.test.js` ("ReplicaHandlerSetup requires systemTableCache") |
+| `w1b-step2-cone-r2-chunk01-remainder-a2` | `080223004` | the 36 deadline files of part 2 | 35 pass / 1 red: `test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js` (`work.owner.ownsPhysicalWorker is not a function`) |
+| `w1b-base-attribution-cone2-c01-a1` | base `0993265e5` | the 4 other new part-2 reds | 4/4 red at the base: pre-existing |
+| `w1b-base-attribution-cone2-c02-a6` | base | `snapshot-dispatcher-wiring` | red at the base: pre-existing |
+| `w1b-base-attribution-cone2-c01-remainder-a9` | base | `initialization-shutdown-serialization.integration` | red at the base: pre-existing |
+| `w1b-base-attribution-remainder-fails-a46` | base | the 4 step-1 remainder reds | 4/4 red at the base: pre-existing |
+| `w1b-w5-fix-a13` | `054971a7db5ca06cfc92004f73bea4f5f24c5e41` (W5 rewrite, after the pair commit) | `settled-replay-preserves-result`, boundary, `placement-outcome-format` | 3/3 green (12 tests) |
+| `w1b-base-attribution-cone2-c00-a41` | base | the 8 `replica-dispatch-*` part-1 reds | 8/8 red at the base: pre-existing |
+
+Cone totals [exec]:
+- Step 1 (`38708b6fa`, 819 files): 685 + 72 (deadline remainder) = 757 pass; 62 red files =
+  58 (main run) + 4 (remainder). All 61 that exist at the base are red at the base too; the 62nd,
+  `placement-outcome-format`, was the expected W2 #3 red before step 2.
+- Step 2 (`080223004`, 1742 files in three parts + one deadline remainder): 562 + 522 + 548 + 35
+  pass; reds 11 + 14 + 49 + 1. Every red except `settled-replay-preserves-result` W5 is either a
+  step-1 cone red (pre-existing at the base) or was run at the base and is red there too.
+  `settled-replay-preserves-result` W5 was caused by step 2 and is green at `054971a7d`.
+- Attribution is per FILE (red at the base), not per failing subtest.
+
+## 18. Not green, and why
+
+- Pre-existing reds at the base `0993265e5` (not caused by this work; other writers' areas):
+  formation convergence (`dt-formation-declared-size-latch` #4/#6, joint-admission release
+  liveness, placement-owner formation drain), `replica-placement-owner-core` #20 ("requires a
+  control-plane mutation ingress"), the retained-repair/coordinator fixture family
+  (`placement-create-bootstrap-binding`, `placement-creation-terminal-replay`,
+  `placement-founding-and-runtime-service-admission`, `placement-retained-row-repair` ...),
+  the rebalancer operation-workflow family, `replica-dispatch-*`, `snapshot-dispatcher-wiring`,
+  `initialization-shutdown-serialization`, `replica-image-checkpoint-transfer`,
+  `fresh-create-resumed-syncing-claim`, `message-group-learner-join`, the rolling-restart
+  durability harness, `select-change-tests`, `control-plane-rebalance`, npm-package,
+  `message-group-operation-routing`. Full lists: the cone and attribution run directories.
+- The step-3 pair commit selects the whole corpus: not run (lead to schedule). The exact branch
+  tip `054971a7d` was run only for the three files above; the cones were run at `38708b6fa` and
+  `080223004`.
+- The boundary witness crosses the snapshot boundary through the producer's payload scrub and
+  the store-open step, not through the checkpoint watermark gate or the install marker protocol
+  (the controllable port has no raft-rs checkpoint boundary).
+
+## 19. Corrective round (verify-w1b-outcome-identity.md, APPROVE-WITH-CONDITIONS)
+
+Commits C1-C4 (section 10), on `work/placement-outcome-format-20261121`, pushed;
+tip `aa0f6f1cc4446a26960b2fe5819178505b4d3de5`. Red-first: C1 and C3 carry only
+witnesses; C2 and C4 carry the repairs.
+
+### F3 (BLOCKING): the DEFINITE set is the owner's declaration [exec]
+
+- `src/rebalancer/replica-placement-owner-constants.js`: one classification in
+  one owner place. `PLACEMENT_DEFINITE_ANSWER_CODES` (frozen list, each code
+  with its reason in the comment above it) and
+  `PLACEMENT_WAITING_CLEARING_TRIGGER` (code -> declared trigger).
+  `PLACEMENT_CLEARING_TRIGGER`, the table every consumer reads, is built from
+  the two (DEFINITE -> null); no consumer changed.
+- F11 (`replica-placement-owner-clearing-triggers.test.js`) imports the
+  declaration, no hand list: (a) every code of every admission-path vocabulary
+  has a row (unchanged enumeration); (b) the codes whose row is null are
+  exactly `PLACEMENT_DEFINITE_ANSWER_CODES`, declared once; no code is both
+  DEFINITE and waiting; every waiting code names a declared
+  `PLACEMENT_TRIGGER` (never null).
+- Mutant `b6a89872e1be457eba07cbebfaa09fca5f078cec` (detached, local ref
+  `probe/w1b-mutant-definite`: `WRITE_REFUSAL.BACKPRESSURE` mapped to null in
+  the waiting map): KILLED, `lab/w1b-mutant-definite-a1`, F11 #1 red "the null
+  rows are exactly the declared DEFINITE codes".
+
+### F4 (BLOCKING): the census never discharges [exec]
+
+- Which: the census CANNOT carry the identity, so it must not discharge. A
+  `replica_operations` row's admission metadata names only the entry id its
+  admission ran under (no command type, no body digest); a release attempt
+  could only be matched by "hold no longer engaged", which names no command
+  at all. Ledger rows and the outcome row are written in the same apply
+  transaction, so any command whose effect the census shows has its exact
+  outcome record; the census adds no settlement, only false positives.
+- `isSettledInCensus` deleted; `reconcilePlacementAttempts(db, uncertain,
+  blockedAttempts)` decides only by `attemptSettlementOf` ->
+  `readSettledOwnerCommandIn` (the function replay uses). The owner's
+  leadership-start caller passes its blocked-attempt registry instead of the
+  refreshed census (it still returns the refreshed census to its own caller).
+- Near-miss witness: `replica-placement-owner-attempts-exact-settlement` #2
+  (an outcome row of another command under the attempt's entry plus a census
+  row naming that entry: kept; an unsettled release whose hold is released:
+  kept). Red at C1 (`lab/w1b-corr-red-a1`), green at C2
+  (`lab/w1b-corr-green-a1`). Consumer table: row 3b (section 12).
+
+### F6: a kept, colliding attempt is visible blocked work [exec]
+
+- Outcome owner: `PARTITION_COMMITTED_RECORD_CLASS {OWNER_COMMAND, STATEMENT,
+  STATEMENT_FAILURE}`; `readSettledOwnerCommandIn` returns OTHER_RECORD with
+  `recordClass` (named, not inferred by the caller).
+- Attempts module: `PLACEMENT_ATTEMPT_STATE.BLOCKED_ON_KEY_COLLISION`;
+  `createBlockedPlacementAttempts(logger)` holds one frozen state per attempt
+  key `{state, attemptKey, entryId, recordClass}`; one `warn` per
+  (attempt key, entry id), not per pass; `observePlacementAttemptAnswer`
+  records it when a submitted attempt is answered `BYTES` and its entry key
+  holds another record, forgets it when the attempt commits or is replaced
+  (another entry id); leadership-start reconcile records it for every kept
+  attempt that meets OTHER_RECORD.
+- Owner: `blockedPlacementAttempts()` and `blockedAttempts` in both
+  `lastPassSnapshot` shapes (the diagnostic).
+- Release condition (no automatic retirement): the intent changes (a fresh
+  attempt and entry id replaces the blocked one and drops its state), or an
+  operator acts on the conflicting record or entry. The durable attempt row
+  stays.
+- Witness `replica-placement-owner-blocked-attempt.test.js` (real
+  `replica_operations-p1` partition and admission request; an SQL statement
+  settles first under the attempt's entry; two passes): both answers `BYTES`,
+  one typed blocked state with entry id and `statement` class, exactly one
+  warning, durable row kept. Red at C1 (missing capability), green at C2.
+
+### F9: one format decider [exec]
+
+- `detectCommittedStatementOutcomeFormat` now decides with the cold census's
+  own rule (`partition-retained-store-observation.js`
+  `retainedStoreTableExistsIn` + `readRetainedStoreRowsIn` with a zero-row
+  probe and the owner's `CREATE_TABLE`: normalized CREATE text, no trigger, no
+  stray index), inside one read transaction: absent -> ABSENT, the owner's
+  definition -> CURRENT, any retained-store refusal -> UNSUPPORTED (other
+  errors propagate). Column names are kept only for the refusal text.
+- The decision runs once: store open (`partition-service-raft-init-base.js`)
+  calls only `createCommittedStatementOutcomeTable(db, partitionId)` and
+  closes its handle on the typed refusal.
+- Witness `placement-outcome-format` #4 (the ten owner columns without the
+  identity CHECK): red at C1 (opened), green at C2 (refused typed).
+
+### F7: refusal after the destructive install [read; my side exec]
+
+Call order (not my files; not edited):
+1. `src/bootstrap/shared/snapshot-catchup-wiring.js:195-247` `orchestrate`
+   -> `orchestrateSnapshotCatchupInstall`.
+2. `src/raft/snapshot-catchup.js:353-358` receive the transfer;
+   `:359-366` `service.shutdown()`.
+3. `:367-378` `requestSnapshotInstall` -> `src/raft/snapshot-install.js:606-610`
+   staging digest check, `:611-617` open staging DB + `populateStagedInstallDb`,
+   `:619` `commitPreparedInstall` (the destructive swap of the replica store),
+   `:625` INSTALLED. The checkpoint validation
+   (`snapshot-checkpoint-store.js:481` `validateRaftRsPayloadTables`) does not
+   look at the outcome table.
+4. `snapshot-catchup.js:380-382` `options.createPartitionService` ->
+   wiring `:226-238` -> partition initialize -> init-base throws the typed
+   `partition_statement_outcome_format_unsupported`; wiring `retireOpening`
+   (`:205-212`) rethrows the same error object (code intact).
+5. `snapshot-catchup.js:384-388` returns `RECREATE_FAILED` with only
+   `detail: error.message`: `error.code` is dropped here.
+
+Smallest change for the snapshot owner: in `requestSnapshotInstall`, on the
+staging DB it already opens (`snapshot-install.js:611`), before
+`populateStagedInstallDb`/`commitPreparedInstall`, call
+`detectCommittedStatementOutcomeFormat(stagingDb)` and on UNSUPPORTED
+`rejectInstall(checkpointsRoot, marker, <new REJECTION code>)`, leaving the
+replica store untouched; and add `code: error.code` to the RECREATE_FAILED
+result (`snapshot-catchup.js:384-388`).
+
+My side (C3 red, C4 fix): the refusal carries `code` and `partitionId`, and its
+message leads with the code (`partition_statement_outcome_format_unsupported:
+... is not the owner's definition ...`), so the message-only RECREATE_FAILED
+detail still names it. Witness `placement-outcome-format` #3: red at C3
+(`lab/w1b-f7-red-a1`), green at the tip.
+
+Not done (documentation, other owner): `src/partition/README.md` does not
+list this refusal; the remedy is in the error text and the constants comment.
+
+### F5 (report only) [read]
+
+Unchanged: the generic SQL replay (`answerSettledWrite`,
+`settleRecordedCommittedStatement`, `isSettledRedelivery`) settles on any
+record under the key. Proposed witness kept (section 12 row 7): settle a
+placement or coordinator command under entry X; an SQL write under X must be
+refused, and a committed SQL entry under X must not be consumed as REPLAYED.
+
+### F8 (report only) [read]
+
+- Where the PLACEMENT_REPAIR text is pinned:
+  `partition-placement-admission-command.js:46` ->
+  `canonicalRetainedPlacementRepair` (`partition-placement-retained-repair.js:37-53`)
+  -> `{operation: copyOperationOutcomeData(operation), copyPolicy}`
+  (`copyOperationOutcomeData` = `structuredClone` + freeze,
+  `replica-operation-update-outcome.js:109-118`: the input's key order is
+  kept); `bodyText = JSON.stringify(canonical.statement)` (`:72`), checked at
+  apply against the same function (`:94`). So the text depends on the
+  operation object's key order.
+- Can the retained-repair owner produce a second text under one entry? Not at
+  this head: it mints the entry id together with the body
+  (`replica-operation-repository-retained-placement-repair.js:185-188`,
+  `entryId = retained-repair:<op>:<uuid>` right after `attempt.body =
+  preparation.body`) and re-presents that same object for that entry
+  (`:224`); the remote path forwards the payload as JSON
+  (`rebalance-coordinator-operation-creation-support.js:290-299`), which keeps
+  key order; attempts are volatile, so a restart mints a new entry id. A
+  second text would need a producer that rebuilds the body under a kept entry
+  id. The ingress would not stop that (`replica-operation-retained-repair-ingress.js:42,68`
+  compare with `isDeepStrictEqual`, which ignores key order); the partition
+  then answers `BYTES` and apply fails closed. Checked at this head only, not
+  on the retained-repair writer's current branch.
+
+### F10 (report only) [read]
+
+`partition-coordinator-settlement.js:58-83` keeps its own order (leadership,
+admission, exact settlement, pending join) and joins a pending write by entry
+id only (`:74-75`). Its entry id is content-addressed (prefix + sha256 of the
+settlement), so a pending write under that id is a settlement of the same
+content unless another owner proposes under that id; it is not moved onto
+`ownerCommandPrelude` in this slice.
+
+### Merge note (integration `23344cddc`, merge base `812dd3a1b`) [exec: `git merge-tree`, read-only]
+
+- The merge base carries the 14 WIP commits `812dd3a1b..0993265e5` (not mine;
+  the retained-repair writer's). This branch merges after the retained-repair
+  branch.
+- My files changed on both sides: two.
+  - `src/partition/partition-placement-admission.js`: one textual conflict,
+    `proposePlacementCommand` (ours: `ownerCommandPrelude`; theirs: the inline
+    leadership -> admission -> `isSameCommandReplay` -> pause ->
+    `commandFingerprintOf` pending join). Resolve to ours. The other hunks
+    merge without a conflict: the pre-fingerprint heuristic
+    (`matchesPreFingerprintAdmittedResult`, `isPreFingerprintCommandReplay`)
+    and the capability probe are unchanged on the integration side since the
+    base, so our deletions win; `observedLedgerAppliedIndex` for FOUND is kept
+    in our `recordedRequestAnswer`. `applyPlacementCommand` and
+    `requestPlacementRepair` merge cleanly (to ours).
+  - `src/partition/partition-committed-statement-outcome.js`: merges cleanly
+    (the integration side adds `entryId: command.entryId` to the two
+    STATEMENT_FAILED answers).
+- Other both-side conflicts are the retained-repair writer's
+  (`replica-operation-repository-retained-placement-repair.js`, `-repository.js`,
+  `-retained-repair-authority/-ingress/-observation/-record.js`,
+  `placement-retained-*` tests), the generated `INDEX.md` files and the
+  `test/shards/*` generated classes (regenerate).
+- Semantic risk after the merge (unrun): the integration line's fixtures whose
+  ledger has no outcome table or whose repository double lacks
+  `acceptRetainedPlacementRepairRequest` (verifier F1); the integration line's
+  consumers of `PLACEMENT_CLEARING_TRIGGER` read the same table.
+
+### Lab results (corrective round) [exec, adams-gamla]
+
+| Run dir | Sha | Files | Result |
+| --- | --- | --- | --- |
+| `w1b-corr-red-a1` | `d9289d64d` (C1) | attempts exact, blocked attempt, outcome format | 0/3: census near miss #2 red, blocked-attempt red (no capability), outcome format #4 red (opened without the CHECK) |
+| `w1b-corr-green-a1` | `87a2e83b8` (C2) | 14 files | 13/14 green; `replica-placement-owner-core` #20 red with the same error as at the base (`w1b-base-0993265e5-core-formation`: "ReplicaOperationRepository requires a control-plane mutation ingress"), pre-existing |
+| `w1b-mutant-definite-a1` | `b6a89872e` (mutant of C2) | F11 | KILLED |
+| `w1b-f7-red-a1` | `1472e704d` (C3) | outcome format | #3 red (message did not name the code) |
+| `w1b-corr-tip-a1` | `aa0f6f1cc4446a26960b2fe5819178505b4d3de5` (tip) | 17 files: every witness above, the boundary, W5, `committed-statement-outcome`, `seed-retained-effects`, apply, cutover pause, formation replay, both coordinator files, snapshot compaction catch-up, owner core, growth-promote, formation-barrier census | 15/17 green (497 assertions). Red: `replica-placement-owner-core` #20 (same error as at the base) and `growth-promote-authoritative-completion-and-progress` #7 subtests 40/42 (same subtests red at the base, `w1b-base-attribution-step1-fails-r2-a1`): both pre-existing |
+
+Not rerun for C2-C4: the change cone vs `0993265e5` (C2-C4 touch the step-2 owner files plus
+`replica-placement-owner.js`), and the pair commit's whole-corpus selection: lead to schedule.

@@ -1,0 +1,2 @@
+placement-shell=1842463
+machine-lock-busy={"project":"lagrange","agent":"claude:w1b-format","controller":"peter-System-Product-Name","purpose":"test:ordinary,exclusive","sha":"0993265e53601cba4a6a41baa08158725cfcea7f","startedAt":"2026-11-21T14:43:41Z","expectedMinutes":1,"pid":1841482}

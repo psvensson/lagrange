@@ -17,7 +17,14 @@ L=/mnt/data/peter/projects/lagrange-takeover-20261121/lab/heavy.log
 echo "heavy.sh: start $(date -u +%T) load=$load availGB=$avail cpu=${t}C: $1 $2" >> $L
 setsid taskset -c 8,9,18,19 nice -n 19 ionice -c3 "$@" &
 child=$!; echo "$child" > /tmp/lagrange-local-heavy.pgid
-wait $child; rc=$?
+# The thermal governor may SIGSTOP the job; `wait` then returns early (128+19). Keep waiting until the job has
+# really exited, so the wrapper, the published pgid and the lock all live exactly as long as the job.
+rc=0
+while :; do
+  wait $child; rc=$?
+  kill -0 $child 2>/dev/null || break
+  sleep 2
+done
 rm -f /tmp/lagrange-local-heavy.pgid
 echo "heavy.sh: end   $(date -u +%T) rc=$rc: $1 $2" >> $L
 exit $rc

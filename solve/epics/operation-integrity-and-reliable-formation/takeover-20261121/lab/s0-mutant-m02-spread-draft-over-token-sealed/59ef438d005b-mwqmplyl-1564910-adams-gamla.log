@@ -1,0 +1,1561 @@
+placement-shell=1911896
+placement-head=59ef438d005bbc9082723db8b10717a667d00047
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1912767
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 49C (coretemp/Package id 0) nvme unmeasured
+not ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 782ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a request that names no mode reaches the reader leader-required
+    ok 1 - one read
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equivalent
+    ok 5 - never a weaker default mode
+    ok 6 - never a weaker default leader mode
+    ok 7 - the caller's floors travel with the read
+    ok 8 - the token cannot be weakened downstream
+    ok 9 - a failed read is typed unavailability, with no rows field
+    ok 10 - should be equal
+    1..10
+ok 1 - readOwnerFact: a request that names no mode reaches the reader leader-required # time=7.809ms
+
+# Subtest: buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction
+    not ok 1 - authoritativeReadMode=owner_local_only: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 2 - authoritativeReadMode=owner_local_only: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 3 - authoritativeReadMode=owner_local_only: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -authoritativeReadMode
+        +undefined
+      ...
+    
+    not ok 4 - authoritativeReadMode=owner_local_only: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 5 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 6 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 7 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -authoritativeReadMode
+        +undefined
+      ...
+    
+    not ok 8 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 9 - authoritativeReadMode=owner_rpc_required: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 10 - authoritativeReadMode=owner_rpc_required: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 11 - authoritativeReadMode=owner_rpc_required: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -authoritativeReadMode
+        +undefined
+      ...
+    
+    not ok 12 - authoritativeReadMode=owner_rpc_required: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 13 - authoritativeReadMode=no_such_mode: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 14 - authoritativeReadMode=no_such_mode: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 15 - authoritativeReadMode=no_such_mode: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -authoritativeReadMode
+        +undefined
+      ...
+    
+    not ok 16 - authoritativeReadMode=no_such_mode: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 17 - authoritativeReadMode=undefined: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 18 - authoritativeReadMode=undefined: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 19 - authoritativeReadMode=undefined: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -authoritativeReadMode
+        +undefined
+      ...
+    
+    not ok 20 - authoritativeReadMode=undefined: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 21 - leaderMode=any: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 22 - leaderMode=any: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 23 - leaderMode=any: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -leaderMode
+        +undefined
+      ...
+    
+    not ok 24 - leaderMode=any: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 25 - leaderMode=preferred: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 26 - leaderMode=preferred: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 27 - leaderMode=preferred: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -leaderMode
+        +undefined
+      ...
+    
+    not ok 28 - leaderMode=preferred: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 29 - leaderMode=required: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 30 - leaderMode=required: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 31 - leaderMode=required: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -leaderMode
+        +undefined
+      ...
+    
+    not ok 32 - leaderMode=required: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 33 - leaderMode=no_such_leader_mode: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 34 - leaderMode=no_such_leader_mode: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 35 - leaderMode=no_such_leader_mode: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -leaderMode
+        +undefined
+      ...
+    
+    not ok 36 - leaderMode=no_such_leader_mode: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 37 - leaderMode=undefined: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 38 - leaderMode=undefined: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 39 - leaderMode=undefined: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -leaderMode
+        +undefined
+      ...
+    
+    not ok 40 - leaderMode=undefined: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 41 - strategy=cache: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 42 - strategy=cache: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 43 - strategy=cache: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -strategy
+        +undefined
+      ...
+    
+    not ok 44 - strategy=cache: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 45 - readProfile=planning: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 46 - readProfile=planning: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 47 - readProfile=planning: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -readProfile
+        +undefined
+      ...
+    
+    not ok 48 - readProfile=planning: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 49 - localReadConsistency=any_replica: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 50 - localReadConsistency=any_replica: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 51 - localReadConsistency=any_replica: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -localReadConsistency
+        +undefined
+      ...
+    
+    not ok 52 - localReadConsistency=any_replica: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 53 - replicaFallbackConsistency=any_replica: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 54 - replicaFallbackConsistency=any_replica: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 55 - replicaFallbackConsistency=any_replica: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -replicaFallbackConsistency
+        +undefined
+      ...
+    
+    not ok 56 - replicaFallbackConsistency=any_replica: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 57 - preferLeader=false: typed refusal
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 97
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:97:9)
+      source: >2
+              const refusal = await refusalOf(reader, {...VALID, [field]: value});
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+        --------^
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+      ...
+    
+    not ok 58 - preferLeader=false: refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 98
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:98:9)
+      source: >2
+              const label = `${field}=${String(value)}`;
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+        --------^
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_unknown_field
+        +undefined
+      ...
+    
+    not ok 59 - preferLeader=false: the refused field is named
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 99
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:99:9)
+      source: >2
+              t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+        --------^
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+            }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -preferLeader
+        +undefined
+      ...
+    
+    not ok 60 - preferLeader=false: no read was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 100
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:100:9)
+      source: |2
+              t.equal(refusal?.code, REFUSAL.UNKNOWN_FIELD, `${label}: refusal code`);
+              t.equal(refusal?.field, field, `${label}: the refused field is named`);
+              t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+        --------^
+            }
+          });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    1..60
+not ok 2 - buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction # time=142.285ms
+  ---
+  at:
+    fileName: test/control-plane/control-plane-owner-fact-read.test.js
+    lineNumber: 74
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is
+    refused at construction',
+  
+    ^
+      async (t) => {
+        const chosen = [
+  ...
+
+# Subtest: buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted
+    ok 1 - no index floor: typed refusal
+    ok 2 - no index floor: refusal code
+    ok 3 - no index floor: the refused field is named
+    ok 4 - no index floor: no read was issued
+    ok 5 - no term floor: typed refusal
+    ok 6 - no term floor: refusal code
+    ok 7 - no term floor: the refused field is named
+    ok 8 - no term floor: no read was issued
+    ok 9 - negative index floor: typed refusal
+    ok 10 - negative index floor: refusal code
+    ok 11 - negative index floor: the refused field is named
+    ok 12 - negative index floor: no read was issued
+    ok 13 - fractional term floor: typed refusal
+    ok 14 - fractional term floor: refusal code
+    ok 15 - fractional term floor: the refused field is named
+    ok 16 - fractional term floor: no read was issued
+    ok 17 - text index floor: typed refusal
+    ok 18 - text index floor: refusal code
+    ok 19 - text index floor: the refused field is named
+    ok 20 - text index floor: no read was issued
+    ok 21 - no statement: typed refusal
+    ok 22 - no statement: refusal code
+    ok 23 - no statement: the refused field is named
+    ok 24 - no statement: no read was issued
+    ok 25 - params not a list: typed refusal
+    ok 26 - params not a list: refusal code
+    ok 27 - params not a list: the refused field is named
+    ok 28 - params not a list: no read was issued
+    ok 29 - a table with no owner partition: typed refusal
+    ok 30 - a table with no owner partition: refusal code
+    ok 31 - a table with no owner partition: the refused field is named
+    ok 32 - a table with no owner partition: no read was issued
+    ok 33 - half an expected replica: typed refusal
+    ok 34 - half an expected replica: refusal code
+    ok 35 - half an expected replica: the refused field is named
+    ok 36 - half an expected replica: no read was issued
+    ok 37 - a missing reader port: typed refusal
+    ok 38 - should be equal
+    1..38
+ok 3 - buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted # time=4.14ms
+
+# Subtest: readHint: a hint is not an owner fact and cannot be read as one
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    ok 3 - a hint carries no owner-fact identity
+    ok 4 - a hint cannot be passed where an owner fact is required
+    ok 5 - a shape-compatible object is not an owner fact
+    ok 6 - only an answer readOwnerFact issued yields rows
+    ok 7 - a failed hint read is typed, never []
+    ok 8 - should be equal
+    1..8
+ok 4 - readHint: a hint is not an owner fact and cannot be read as one # time=1.669ms
+
+1..4
+# { total: 116, pass: 56, fail: 60 }
+# time=179.875ms
+# test-files total=1 pass=0 fail=1 assertions=120
+placement-results={"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":false,"assertions":120,"durationMs":782,"retriedOnce":false,"firstFailureLine":"not ok 1 - authoritativeReadMode=owner_local_only: typed refusal"}

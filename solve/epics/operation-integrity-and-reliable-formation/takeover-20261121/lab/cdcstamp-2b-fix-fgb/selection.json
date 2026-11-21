@@ -1,0 +1,17 @@
+{
+  "sha": "82295c47e5bc3825dcb301c20536decc8e1509c3",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/topology/cdc-group-propagation-foreground-boundary.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/topology/cdc-group-propagation-foreground-boundary.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

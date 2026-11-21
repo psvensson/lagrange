@@ -1,0 +1,17 @@
+placement-shell=1858780
+placement-head=054971a7db5ca06cfc92004f73bea4f5f24c5e41
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=1860211
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=3
+thermal: ok cpu 46C (coretemp/Package id 0) nvme unmeasured
+ok test/partition/placement-outcome-format.test.js (4 assertions, 6747ms)
+ok test/partition/committed-outcome-identity-boundary.test.js (2 assertions, 7098ms)
+ok test/partition/settled-replay-preserves-result.test.js (6 assertions, 7626ms)
+# test-files total=3 pass=3 fail=0 assertions=12
+placement-results={"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6747,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":7098,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/settled-replay-preserves-result.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":7626,"retriedOnce":false,"firstFailureLine":null}

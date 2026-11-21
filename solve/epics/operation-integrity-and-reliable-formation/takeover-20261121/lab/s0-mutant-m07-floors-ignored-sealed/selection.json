@@ -1,0 +1,17 @@
+{
+  "sha": "a4d3d4833fa29f03c62aed0c11916e3dd6a48807",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-owner-fact-non-leader-absence.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

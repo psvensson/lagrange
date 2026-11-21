@@ -1,0 +1,1684 @@
+lab test: tv-dator: ordinary, bootstrap (13 files) cores=12 mem=15.4GiB speed x1.44
+[tv-dator] placement-shell=3135069
+[tv-dator] placement-head=974320ad37f84aac7c247e871be5dcd94422abdb
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3135517
+[tv-dator] # test-files planned=13
+[tv-dator] classified lane ordinary: 12 file(s), jobs=4
+[tv-dator] thermal: ok cpu 65C (coretemp/Package id 0) nvme 51C (nvme/Sensor 1)
+[tv-dator] ok test/partition/placement-retained-post-copy.test.js (2 assertions, 4056ms)
+[tv-dator] ok test/partition/placement-growth-dispatch-identity.test.js (13 assertions, 4114ms)
+[tv-dator] not ok test/partition/placement-retained-leadership.test.js (4 assertions, 4247ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+[tv-dator] not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2513.290772
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership.test.js:36:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'A used current B route instead of saved A closure'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership.test.js:47:12
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership-fixture.js:94:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: paused pinned A request survives B custody and genuine A recovery unchanged
+[tv-dator] not ok 2 - paused pinned A request survives B custody and genuine A recovery unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 112.90113
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership.test.js:58:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "Cannot read properties of undefined (reading 'entryId')"
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   name: 'TypeError'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership.test.js:69:27
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership-fixture.js:94:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: a lost committed reply retires from the visible winner without another native proposal
+[tv-dator] ok 3 - a lost committed reply retires from the visible winner without another native proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 123.252448
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+[tv-dator] not ok 4 - genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+[tv-dator]   ---
+[tv-dator]   duration_ms: 87.955214
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership.test.js:122:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'false == true'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership.test.js:133:12
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership-fixture.js:94:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] 1..4
+[tv-dator] # tests 4
+[tv-dator] # suites 0
+[tv-dator] # pass 1
+[tv-dator] # fail 3
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2843.447502
+[tv-dator] # time=4247ms
+[tv-dator] ok test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js (3 assertions, 3891ms)
+[tv-dator] ok test/raft/raft-rs-backend/formation-placement-lease-authority.test.js (4 assertions, 4164ms)
+[tv-dator] not ok test/partition/placement-retained-row-repair.test.js (45 assertions, 5025ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:22.508Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:22.633Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: native entity repair and ordinary admission serialize: normal first
+[tv-dator] ok 1 - native entity repair and ordinary admission serialize: normal first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2265.10281
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: native entity repair and ordinary admission serialize: retained first
+[tv-dator] ok 2 - native entity repair and ordinary admission serialize: retained first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 81.893626
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:22.760Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:22.886Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: reservation gate consumes native repair refusal and retains the original reservation
+[tv-dator] ok 3 - reservation gate consumes native repair refusal and retains the original reservation
+[tv-dator]   ---
+[tv-dator]   duration_ms: 68.052868
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: lost committed answer reuses pinned bytes and preserves the retained lease
+[tv-dator] ok 4 - lost committed answer reuses pinned bytes and preserves the retained lease
+[tv-dator]   ---
+[tv-dator]   duration_ms: 58.841926
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: exact existing row succeeds; changed birth and history refuse without replacement
+[tv-dator] ok 5 - exact existing row succeeds; changed birth and history refuse without replacement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 63.570641
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:22.954Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"FAILED","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:23.011Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: a clearing holder commit during the old BUSY reply owns a successor attempt
+[tv-dator] ok 6 - a clearing holder commit during the old BUSY reply owns a successor attempt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 63.089698
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal evidence restoration does not consume the live entity or copy lane
+[tv-dator] ok 7 - terminal evidence restoration does not consume the live entity or copy lane
+[tv-dator]   ---
+[tv-dator]   duration_ms: 61.764344
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:23.467Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: current actual deficit policy preserves same-ID copies and native capacity clearing
+[tv-dator] ok 8 - current actual deficit policy preserves same-ID copies and native capacity clearing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 67.292283
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: foreign and malformed native answers retain one exact unknown attempt
+[tv-dator] ok 9 - foreign and malformed native answers retain one exact unknown attempt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 252.528132
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: shutdown retires volatile custody and late committed replies cannot rearm it
+[tv-dator] ok 10 - shutdown retires volatile custody and late committed replies cannot rearm it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 82.203618
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+[tv-dator] ok 11 - an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 54.907178
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:23.531Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:23.709Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: retained ledger self-move global exclusion: normal first
+[tv-dator] ok 12 - retained ledger self-move global exclusion: normal first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 60.192026
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: retained ledger self-move global exclusion: ledger first
+[tv-dator] ok 13 - retained ledger self-move global exclusion: ledger first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 58.876266
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: remote-only current copy preparation succeeds and changed target boot stays debt
+[tv-dator] not ok 14 - remote-only current copy preparation succeeds and changed target boot stays debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 51.733364
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:384:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     false !== true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:389:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+[tv-dator] not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+[tv-dator]   ---
+[tv-dator]   duration_ms: 56.864999
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:410:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the actual remote ledger owner holds the exact pinned request
+[tv-dator]     
+[tv-dator]     0 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 0
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:418:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:23.800Z","nodeId":"test-node","pid":3135587,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: a retained ordinary copy consumes source capacity and resumes on its actual release
+[tv-dator] ok 16 - a retained ordinary copy consumes source capacity and resumes on its actual release
+[tv-dator]   ---
+[tv-dator]   duration_ms: 84.62852
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: retained-copy-first occupies the ordinary target lane until its own committed release
+[tv-dator] ok 17 - retained-copy-first occupies the ordinary target lane until its own committed release
+[tv-dator]   ---
+[tv-dator]   duration_ms: 84.712658
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+[tv-dator] not ok 18 - different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 47.504631
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:483:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "Cannot read properties of undefined (reading 'repairCustody')"
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   name: 'TypeError'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:502:26
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote E2 joins active E1 and retains renewed BUSY without spending its entry
+[tv-dator] not ok 19 - remote E2 joins active E1 and retains renewed BUSY without spending its entry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 61.229473
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:521:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "Cannot read properties of undefined (reading 'retainedRepairObservation')"
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   name: 'TypeError'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:561:26
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote E2 owns one authoritative own-row observation: CDC-before-answer
+[tv-dator] not ok 20 - remote E2 owns one authoritative own-row observation: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.029985
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:623:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote E2 owns one authoritative own-row observation: answer-before-CDC
+[tv-dator] not ok 21 - remote E2 owns one authoritative own-row observation: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:623:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: an in-flight stale own-row observation reads absence once; genuine successor still confirms
+[tv-dator] not ok 22 - an in-flight stale own-row observation reads absence once; genuine successor still confirms
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:666:1'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+[tv-dator] not ok 23 - remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:715:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+[tv-dator] not ok 24 - remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:715:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+[tv-dator] not ok 25 - still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:792:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+[tv-dator] not ok 26 - still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:792:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary source capacity release crosses entities: CDC-before-answer
+[tv-dator] not ok 27 - remote ordinary source capacity release crosses entities: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:878:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary source capacity release crosses entities: answer-before-CDC
+[tv-dator] not ok 28 - remote ordinary source capacity release crosses entities: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:878:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary target capacity release crosses entities: CDC-before-answer
+[tv-dator] not ok 29 - remote ordinary target capacity release crosses entities: CDC-before-answer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:878:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: remote ordinary target capacity release crosses entities: answer-before-CDC
+[tv-dator] not ok 30 - remote ordinary target capacity release crosses entities: answer-before-CDC
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:878:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: impossible source capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator] not ok 31 - impossible source capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:938:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: impossible target capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator] not ok 32 - impossible target capacity answer preserves original entry until genuine same-pin outcome
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:938:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: partial capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 33 - partial capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:973:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: failed capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 34 - failed capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:973:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: stale capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 35 - stale capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:973:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: wrong-partition capacity census cannot spend or retire remote repair debt
+[tv-dator] not ok 36 - wrong-partition capacity census cannot spend or retire remote repair debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:973:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+[tv-dator] not ok 37 - incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1018:1'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: mutation shares serial repair decision when clearing is sender-first
+[tv-dator] not ok 38 - mutation shares serial repair decision when clearing is sender-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1065:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: mutation shares serial repair decision when clearing is receiver-first
+[tv-dator] not ok 39 - mutation shares serial repair decision when clearing is receiver-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1065:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: ACTIVE-reservation shares serial repair decision when clearing is sender-first
+[tv-dator] not ok 40 - ACTIVE-reservation shares serial repair decision when clearing is sender-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1065:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+[tv-dator] not ok 41 - ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1065:5'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: queued real E2 joins E1 winner and confirms exact authority without relabeling
+[tv-dator] not ok 42 - queued real E2 joins E1 winner and confirms exact authority without relabeling
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1157:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: queued real E2 joins E1 winner and confirms changed authority without relabeling
+[tv-dator] not ok 43 - queued real E2 joins E1 winner and confirms changed authority without relabeling
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1157:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+[tv-dator] not ok 44 - queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1157:3'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+[tv-dator] not ok 45 - real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/partition/placement-retained-row-repair.test.js:1212:1'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] 1..45
+[tv-dator] # tests 45
+[tv-dator] # suites 0
+[tv-dator] # pass 15
+[tv-dator] # fail 4
+[tv-dator] # cancelled 26
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 3676.024995
+[tv-dator] # time=5025ms
+[tv-dator] ok test/rebalancer/placement-removed-mechanism-and-caller-census.test.js (39 assertions, 2483ms)
+[tv-dator] not ok test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions, 4864ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role
+[tv-dator]     ok 1 - projected SERVICES follower rows must never complete an incomplete GROWTH_PROMOTE
+[tv-dator]     ok 2 - provenance check rejects mismatched partitionId
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - provenance check rejects partial promotedReplicaIds
+[tv-dator]     ok 6 - provenance check rejects voterReplicaIds missing a promoted learner
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - should be equal
+[tv-dator]     ok 10 - should be equal
+[tv-dator]     ok 11 - should be equal
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator]     ok 14 - durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..14
+[tv-dator] ok 1 - D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role # time=88.169ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - expected to reject
+[tv-dator]     ok 10 - should be equal
+[tv-dator]     ok 11 - should be equal
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..13
+[tv-dator] ok 2 - Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED) # time=18.736ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - should be equal
+[tv-dator]     ok 10 - should be equivalent
+[tv-dator]     ok 11 - should be equal
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator]     ok 14 - should be equal
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..14
+[tv-dator] ok 3 - D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId # time=8.459ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - should be equal
+[tv-dator]     ok 10 - should be equal
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-growth-promote-1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 11 - should be equal
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-growth-promote-terminal-failed',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator]     ok 14 - should be equal
+[tv-dator]     ok 15 - should be equal
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..15
+[tv-dator] ok 4 - D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED) # time=27.048ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation
+[tv-dator]     ok 1 - unconfirmed active terminal handoff must report WAITING
+[tv-dator]     ok 2 - unapplied REPLACE active progress must report WAITING
+[tv-dator]     ok 3 - re-armed dispatch that does not advance workflowStep must report WAITING
+[tv-dator]     ok 4 - skipped EXECUTE_ACTIVE_REPLACE must report WAITING
+[tv-dator]     ok 5 - skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING
+[tv-dator]     ok 6 - reconcileOperationLifecycle reports WAITING when dispatch is skipped
+[tv-dator]     ok 7 - WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - should match pattern
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..9
+[tv-dator] ok 5 - D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation # time=9.064ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equivalent
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 6 - D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner # time=7.325ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-leader-1',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery
+[tv-dator]     ok 1 - seed op-real-repo-updated into real SQLite repository
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-real-repo-updated',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Operation completed {
+[tv-dator]   operationId: 'op-real-repo-updated',
+[tv-dator]   type: 'GROWTH_PROMOTE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   targetNodeId: 'node-leader-1'
+[tv-dator] }
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - should be equal
+[tv-dator]     ok 10 - should be equal
+[tv-dator]     ok 11 - should be equal
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-real-repo-updated',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 14 - should be equal
+[tv-dator]     ok 15 - should be equal
+[tv-dator]     ok 16 - should be equal
+[tv-dator]     ok 17 - should be equal
+[tv-dator]     ok 18 - should be equal
+[tv-dator]     ok 19 - should be equal
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-real-repo-updated',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 20 - should be equal
+[tv-dator]     ok 21 - should be equal
+[tv-dator]     ok 22 - should be equal
+[tv-dator]     ok 23 - should be equal
+[tv-dator]     ok 24 - seed op-real-repo-terminal-adopted into real SQLite repository
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-real-repo-terminal-adopted',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 25 - should be equal
+[tv-dator]     ok 26 - should be equal
+[tv-dator]     ok 27 - should be equal
+[tv-dator]     ok 28 - should be equal
+[tv-dator]     ok 29 - should be equal
+[tv-dator]     ok 30 - should be equal
+[tv-dator]     ok 31 - should be equal
+[tv-dator]     ok 32 - should be equal
+[tv-dator]     ok 33 - should be equivalent
+[tv-dator]     ok 34 - should be equivalent
+[tv-dator]     ok 35 - should be equal
+[tv-dator]     ok 36 - should be equal
+[tv-dator]     ok 37 - should be equal
+[tv-dator]     ok 38 - seed op-real-repo-reinserted into real SQLite repository
+[tv-dator]     ok 39 - should be equal
+[tv-dator]     not ok 40 - should be equal
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[tv-dator]         lineNumber: 904
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:904:9)
+[tv-dator]       source: >2
+[tv-dator]               );
+[tv-dator]               t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+[tv-dator]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[tv-dator]         --------^
+[tv-dator]               t.equal(reinsertedSettlement.committed, false);
+[tv-dator]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -waiting
+[tv-dator]         +refused
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 41 - should be equal
+[tv-dator]     not ok 42 - should be equal
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[tv-dator]         lineNumber: 906
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:906:9)
+[tv-dator]       source: >2
+[tv-dator]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[tv-dator]               t.equal(reinsertedSettlement.committed, false);
+[tv-dator]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[tv-dator]         --------^
+[tv-dator]               t.same(releasedReservationIds, []);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -reinserted
+[tv-dator]         +refused
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 43 - should be equivalent
+[tv-dator]     ok 44 - seed op-real-repo-refused into real SQLite repository
+[tv-dator]     ok 45 - should be equal
+[tv-dator]     ok 46 - should be equal
+[tv-dator]     ok 47 - should be equal
+[tv-dator]     ok 48 - should be equal
+[tv-dator]     ok 49 - should be equivalent
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-real-repo-updated',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 50 - should be equal
+[tv-dator]     ok 51 - should be equal
+[tv-dator]     ok 52 - should be equal
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-real-repo-terminal-adopted',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator]     ok 53 - should be equal
+[tv-dator]     ok 54 - should be equal
+[tv-dator]     ok 55 - should be equal
+[tv-dator]     ok 56 - seed op-real-repo-lost-reply into real SQLite repository
+[tv-dator]     ok 57 - expected to reject
+[tv-dator]     ok 58 - should be equal
+[tv-dator]     ok 59 - should be equal
+[tv-dator]     ok 60 - should be equal
+[tv-dator]     ok 61 - should be equal
+[tv-dator]     ok 62 - should be equal
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[tv-dator]     1..62
+[tv-dator] not ok 7 - Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery # time=93.99ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[tv-dator]     lineNumber: 737
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     );
+[tv-dator]   
+[tv-dator]     test(
+[tv-dator]     ^
+[tv-dator]       'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+[tv-dator]         '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equal
+[tv-dator]     ok 9 - should be equal
+[tv-dator]     ok 10 - should be equal
+[tv-dator]     ok 11 - should be equal
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator]     ok 14 - should be equal
+[tv-dator]     ok 15 - should be equal
+[tv-dator]     ok 16 - should be equal
+[tv-dator]     ok 17 - should be equal
+[tv-dator]     ok 18 - should be equal
+[tv-dator]     ok 19 - should be equal
+[tv-dator]     ok 20 - should be equal
+[tv-dator]     ok 21 - should be equal
+[tv-dator]     ok 22 - should be equal
+[tv-dator]     ok 23 - expected to reject
+[tv-dator]     ok 24 - should be equal
+[tv-dator]     ok 25 - should be equal
+[tv-dator]     ok 26 - should be equal
+[tv-dator]     ok 27 - should be equal
+[tv-dator]     ok 28 - should be equal
+[tv-dator]     1..28
+[tv-dator] ok 8 - Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget # time=2811.775ms
+[tv-dator] 
+[tv-dator] # Subtest: Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equivalent
+[tv-dator]     ok 6 - ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion
+[tv-dator]     ok 7 - should be equivalent
+[tv-dator]     1..7
+[tv-dator] ok 9 - Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner # time=12.578ms
+[tv-dator] 
+[tv-dator] 1..9
+[tv-dator] # { total: 168, pass: 166, fail: 2 }
+[tv-dator] # time=3098.112ms
+[tv-dator] Wait bound spent {
+[tv-dator]   event: 'wait_bound_spent',
+[tv-dator]   wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+[tv-dator]   awaited: 'replica operation progressed past its current workflow step',
+[tv-dator]   boundMs: 30000,
+[tv-dator]   elapsedMs: 120000,
+[tv-dator]   lastObserved: {
+[tv-dator]     type: 'REMOVE',
+[tv-dator]     workflowStep: 'PENDING',
+[tv-dator]     status: 'pending',
+[tv-dator]     targetNodeId: 'node-leader-1',
+[tv-dator]     stepExceeded: true,
+[tv-dator]     budgetExhausted: false,
+[tv-dator]     timeoutClassification: {
+[tv-dator]       classification: 'rebalance_operation_timeout',
+[tv-dator]       configuredBudgetMs: 300000,
+[tv-dator]       remainingBudgetMs: 180000,
+[tv-dator]       boundaryHit: false,
+[tv-dator]       nestedOperation: 'rebalance:pending',
+[tv-dator]       operationName: 'rebalance',
+[tv-dator]       originalClassification: null
+[tv-dator]     }
+[tv-dator]   },
+[tv-dator]   scope: {
+[tv-dator]     nodeId: 'node-leader-1',
+[tv-dator]     partitionId: 'user_orders-p1',
+[tv-dator]     operationId: 'op-remove-stuck-dispatch'
+[tv-dator]   },
+[tv-dator]   repeats: 0
+[tv-dator] }
+[tv-dator] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[tv-dator]   operationId: 'op-real-repo-reinserted',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   expectedWorkflowStep: null
+[tv-dator] }
+[tv-dator] Terminal transition persist not committed; retry ownership kept and repair armed {
+[tv-dator]   operationId: 'op-real-repo-reinserted',
+[tv-dator]   disposition: 'refused',
+[tv-dator]   step: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1'
+[tv-dator] }
+[tv-dator] Committed terminal transition not authoritatively visible; repair scheduled {
+[tv-dator]   operationId: 'op-real-repo-reinserted',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'persist_not_committed',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[tv-dator]   operationId: 'op-real-repo-refused',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   expectedWorkflowStep: null
+[tv-dator] }
+[tv-dator] Terminal transition persist not committed; retry ownership kept and repair armed {
+[tv-dator]   operationId: 'op-real-repo-refused',
+[tv-dator]   disposition: 'refused',
+[tv-dator]   step: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1'
+[tv-dator] }
+[tv-dator] Committed terminal transition not authoritatively visible; repair scheduled {
+[tv-dator]   operationId: 'op-real-repo-refused',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'persist_not_committed',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Committed terminal transition not authoritatively visible; repair scheduled {
+[tv-dator]   operationId: 'op-real-repo-lost-reply',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'user_orders-p1',
+[tv-dator]   cause: 'persist_not_committed',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] not ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 5084ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: F11: every refusal and waiting reason maps to a trigger whose subscription exists, and none clears on RESYNC or a retry delay
+[tv-dator] not ok 1 - F11: every refusal and waiting reason maps to a trigger whose subscription exists, and none clears on RESYNC or a retry delay
+[tv-dator]   ---
+[tv-dator]   duration_ms: 77.215815
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/rebalancer/replica-placement-owner-clearing-triggers.test.js:72:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly deep-equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]       [
+[tv-dator]         'ALREADY_FOUNDED',
+[tv-dator]         'HOLD_NOT_HELD',
+[tv-dator]         'LEDGER_PARTITION_REQUIRED',
+[tv-dator]         'SYSTEM_PARTITION_SEED_FOUNDED',
+[tv-dator]         'TARGET_CLAIM_TAKEN',
+[tv-dator]     +   'retained_admission_required',
+[tv-dator]     +   'retained_identity_changed',
+[tv-dator]     +   'retained_row_changed'
+[tv-dator]       ]
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]     0: 'ALREADY_FOUNDED'
+[tv-dator]     1: 'HOLD_NOT_HELD'
+[tv-dator]     2: 'LEDGER_PARTITION_REQUIRED'
+[tv-dator]     3: 'SYSTEM_PARTITION_SEED_FOUNDED'
+[tv-dator]     4: 'TARGET_CLAIM_TAKEN'
+[tv-dator]   actual:
+[tv-dator]     0: 'ALREADY_FOUNDED'
+[tv-dator]     1: 'HOLD_NOT_HELD'
+[tv-dator]     2: 'LEDGER_PARTITION_REQUIRED'
+[tv-dator]     3: 'SYSTEM_PARTITION_SEED_FOUNDED'
+[tv-dator]     4: 'TARGET_CLAIM_TAKEN'
+[tv-dator]     5: 'retained_admission_required'
+[tv-dator]     6: 'retained_identity_changed'
+[tv-dator]     7: 'retained_row_changed'
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/rebalancer/replica-placement-owner-clearing-triggers.test.js:87:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # Subtest: WRITE_PATH_RELEASED: the cutover pause refuses the admission typed and its release emits the event once
+[tv-dator] ok 2 - WRITE_PATH_RELEASED: the cutover pause refuses the admission typed and its release emits the event once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2854.755173
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: PRESSURE_RELEASED: a watcher of a deferred request is told once when the governor stops deferring it, never while pressure lasts
+[tv-dator] ok 3 - PRESSURE_RELEASED: a watcher of a deferred request is told once when the governor stops deferring it, never while pressure lasts
+[tv-dator]   ---
+[tv-dator]   duration_ms: 290.47079
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: TARGET_CAPACITY_CHANGED: capacity freed by a released reservation reaches the capacity owner's subscribers
+[tv-dator] ok 4 - TARGET_CAPACITY_CHANGED: capacity freed by a released reservation reaches the capacity owner's subscribers
+[tv-dator]   ---
+[tv-dator]   duration_ms: 49.869417
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..4
+[tv-dator] # tests 4
+[tv-dator] # suites 0
+[tv-dator] # pass 3
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 3280.814522
+[tv-dator] # time=5084ms
+[tv-dator] not ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 4829ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: class order: the ledger, the priority control plane, nodes-p1, system, user
+[tv-dator] ok 1 - class order: the ledger, the priority control plane, nodes-p1, system, user
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.466052
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[tv-dator] ok 2 - formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.399239
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[tv-dator] ok 3 - within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.532154
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[tv-dator] ok 4 - HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.520262
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[tv-dator] ok 5 - per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.818669
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[tv-dator] ok 6 - inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.241351
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[tv-dator] ok 7 - UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.075066
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[tv-dator] ok 8 - the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.823392
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the canonical statement refuses what its kind cannot carry
+[tv-dator] ok 9 - the canonical statement refuses what its kind cannot carry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.895224
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[tv-dator] ok 10 - the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.817123
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[tv-dator] ok 11 - real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 43.693471
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[tv-dator] ok 12 - ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.621521
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[tv-dator] ok 13 - P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.638591
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:32.960Z","nodeId":"test-node","pid":3135663,"subsystem":"rebalance-coordinator","operationId":"pl-replica_operations-p1-7-0","error":"cdcIntegrationService.updateSystemTableRow is not a function","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to persist operation"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:33.023Z","nodeId":"test-node","pid":3135663,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:33.089Z","nodeId":"test-node","pid":3135663,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REBALANCE_OPERATION_STEP_TIMEOUT","awaited":"replica operation progressed past its current workflow step","boundMs":60000,"elapsedMs":120000,"lastObserved":{"type":"GROWTH_PROMOTE","workflowStep":"SYNCING","status":"syncing","targetNodeId":"n1","stepExceeded":true,"budgetExhausted":false,"timeoutClassification":{"classification":"rebalance_operation_timeout","configuredBudgetMs":300000,"remainingBudgetMs":180000,"boundaryHit":false,"nestedOperation":"rebalance:syncing","operationName":"rebalance","originalClassification":null}},"scope":{"nodeId":"n2","partitionId":"replica_operations-p1","operationId":"pl-promote-3to5-timeout"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: control-plane attachment admits a scoped voter removal only with its workflow owner
+[tv-dator] ok 14 - control-plane attachment admits a scoped voter removal only with its workflow owner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2306.085542
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[tv-dator] ok 15 - P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[tv-dator]   ---
+[tv-dator]   duration_ms: 60.732299
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[tv-dator] ok 16 - WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.193715
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[tv-dator] ok 17 - WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[tv-dator]   ---
+[tv-dator]   duration_ms: 44.111846
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[tv-dator] not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[tv-dator]   ---
+[tv-dator]   duration_ms: 72.75973
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/rebalancer/replica-placement-owner-core.test.js:1373:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'cdcIntegrationService.updateSystemTableRow is not a function'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:355:21)
+[tv-dator]     ReplicaOperationRepository.resolveFailedOperationUpdateResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/src/rebalancer/replica-operation-repository-mutation-update-methods.js:488:35)
+[tv-dator]     async repository.runReplicaOperationTransitionExclusive.operation.operation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/src/rebalancer/operation-workflow-transition-persistence.js:253:29)
+[tv-dator]   ...
+[tv-dator] # Subtest: Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[tv-dator] ok 19 - Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[tv-dator]   ---
+[tv-dator]   duration_ms: 64.536568
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[tv-dator] ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 67.841525
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:25:33.093Z","nodeId":"test-node","pid":3135663,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","type":"GROWTH_PROMOTE","partitionId":"replica_operations-p1","targetNodeId":"n1","errorMessage":"Timeout in SYNCING step after 120000ms","nodeId":"test-node","msg":"Operation failed"}
+[tv-dator] 1..20
+[tv-dator] # tests 20
+[tv-dator] # suites 0
+[tv-dator] # pass 19
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2703.756676
+[tv-dator] # time=4829ms
+[tv-dator] not ok test/convergence/dt-placement-owner-formation-drain.test.js (11 assertions, 18681ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.002Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":1,"acknowledgedCount":1},"scope":{"nodeId":"seed","publicationId":"membership-publication:1:6f46017b7910843c80a18707"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.025Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.039Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.039Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.039Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.049Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.049Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.049Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] PLACEMENT DRAIN (losing order)
+[tv-dator] FROZEN: fixpoint=true rounds=2 formed=false complete=false admissions=1 elapsed=35 ms (shortest armed execution bound 1000 ms) spentBounds=0
+[tv-dator] FROZEN spread deficits 46/46: artifact_payload_chunks-p1:1/3 artifact_payloads-p1:1/3 call_activation_leases-p1:1/3 call_cell_reduce_results-p1:1/3 call_cell_reduce_slots-p1:1/3 code-p1:1/3 config-p1:1/3 contexts-p1:1/3 control_plane_publications-p1:1/3 debug_breakpoints-p1:1/3 debug_sessions-p1:1/3 debug_snapshots-p1:1/3 indices-p1:1/3 inter_group_latencies-p1:1/3 latency_groups-p1:1/3 live_queries-p1:1/3 logs-p1:1/3 message_groups-p1:1/3 module_dependency_locks-p1:1/3 module_manifests-p1:1/3 node_endpoints-p1:1/3 nodes-p1:1/3 package_registry_mappings-p1:1/3 package_registry_overrides-p1:1/3 partitions-p1:1/3 replica_operations-p1:2/3 schema_migration_partitions-p1:1/3 schema_migrations-p1:1/3 schema_operations-p1:1/3 service_bindings-p1:1/3 service_definitions-p1:1/3 service_endpoints-p1:1/3 service_install_failures-p1:1/3 service_installations-p1:1/3 service_instances-p1:1/3 service_packages-p1:1/3 service_partition_access-p1:1/3 service_revisions-p1:1/3 service_timers-p1:1/3 services-p1:1/3 sql_transaction_participants-p1:1/3 sql_transactions-p1:1/3 sql_write_operations-p1:1/3 storage_reservations-p1:1/3 tables-p1:1/3 wasm_operations-p1:1/3
+[tv-dator] FROZEN surplus: replica_operations-p1:4
+[tv-dator] FROZEN unresolved: REPLACE replica_operations-p1 seed>j1 ACTIVE
+[tv-dator] FROZEN armed placement timers (0): {}
+[tv-dator] PROBE: steps=0 timers fired=0 rounds=0 capReached=false admissions=0
+[tv-dator] FINAL: fixpoint=true rounds=0 formed=false complete=false admissions=1 elapsed=45 ms (shortest armed execution bound 1000 ms) spentBounds=0
+[tv-dator] FINAL spread deficits 46/46: artifact_payload_chunks-p1:1/3 artifact_payloads-p1:1/3 call_activation_leases-p1:1/3 call_cell_reduce_results-p1:1/3 call_cell_reduce_slots-p1:1/3 code-p1:1/3 config-p1:1/3 contexts-p1:1/3 control_plane_publications-p1:1/3 debug_breakpoints-p1:1/3 debug_sessions-p1:1/3 debug_snapshots-p1:1/3 indices-p1:1/3 inter_group_latencies-p1:1/3 latency_groups-p1:1/3 live_queries-p1:1/3 logs-p1:1/3 message_groups-p1:1/3 module_dependency_locks-p1:1/3 module_manifests-p1:1/3 node_endpoints-p1:1/3 nodes-p1:1/3 package_registry_mappings-p1:1/3 package_registry_overrides-p1:1/3 partitions-p1:1/3 replica_operations-p1:2/3 schema_migration_partitions-p1:1/3 schema_migrations-p1:1/3 schema_operations-p1:1/3 service_bindings-p1:1/3 service_definitions-p1:1/3 service_endpoints-p1:1/3 service_install_failures-p1:1/3 service_installations-p1:1/3 service_instances-p1:1/3 service_packages-p1:1/3 service_partition_access-p1:1/3 service_revisions-p1:1/3 service_timers-p1:1/3 services-p1:1/3 sql_transaction_participants-p1:1/3 sql_transactions-p1:1/3 sql_write_operations-p1:1/3 storage_reservations-p1:1/3 tables-p1:1/3 wasm_operations-p1:1/3
+[tv-dator] FINAL surplus: replica_operations-p1:4
+[tv-dator] FINAL unresolved: REPLACE replica_operations-p1 seed>j1 ACTIVE
+[tv-dator] FINAL armed placement timers (0): {}
+[tv-dator] redeliveries: 0 rows -> 0 admissions; 0 rows -> 0 admissions
+[tv-dator] admissions by step: {"ready-signals":1}
+[tv-dator] admissions by class: {"1":1}
+[tv-dator] max unresolved copy-phase operations per copy source {"seed":1}, per target {"j1":1} (K_src=3, K_tgt=2)
+[tv-dator] admission order (seq:type:partition>target@round/step): 1:REPLACE:replica_operations-p1>j1@r0/ready-signals/unformed
+[tv-dator] # Subtest: A1 capacity: unresolved copy-phase operations never exceed K_src per copy source nor K_tgt per target
+[tv-dator] ok 1 - A1 capacity: unresolved copy-phase operations never exceed K_src per copy source nor K_tgt per target
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5932.811116
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: A2 causality: every admission follows a committed change; none is caused by a placement timer or a poll
+[tv-dator] ok 2 - A2 causality: every admission follows a committed change; none is caused by a placement timer or a poll
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.375283
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: A3 work conservation: no copy source is idle while an admissible copy candidate on it exists
+[tv-dator] ok 3 - A3 work conservation: no copy source is idle while an admissible copy candidate on it exists
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.117147
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: A4 quiescence in frozen time: the drain completes with no placement timer firing, no bound spent and mg-1 unchanged
+[tv-dator] not ok 4 - A4 quiescence in frozen time: the drain completes with no placement timer firing, no bound spent and mg-1 unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.407378
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/convergence/dt-placement-owner-formation-drain.test.js:128:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     every partition is on min(RF, READY) distinct READY voter nodes at the frozen fixpoint (46/46 below, 1 admissions, 0 placement timers armed: {})
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + [
+[tv-dator]     +   'artifact_payload_chunks-p1:1/3',
+[tv-dator]     +   'artifact_payloads-p1:1/3',
+[tv-dator]     +   'call_activation_leases-p1:1/3',
+[tv-dator]     +   'call_cell_reduce_results-p1:1/3',
+[tv-dator]     +   'call_cell_reduce_slots-p1:1/3',
+[tv-dator]     +   'code-p1:1/3',
+[tv-dator]     +   'config-p1:1/3',
+[tv-dator]     +   'contexts-p1:1/3',
+[tv-dator]     +   'control_plane_publications-p1:1/3',
+[tv-dator]     +   'debug_breakpoints-p1:1/3',
+[tv-dator]     +   'debug_sessions-p1:1/3',
+[tv-dator]     +   'debug_snapshots-p1:1/3',
+[tv-dator]     +   'indices-p1:1/3',
+[tv-dator]     +   'inter_group_latencies-p1:1/3',
+[tv-dator]     +   'latency_groups-p1:1/3',
+[tv-dator]     +   'live_queries-p1:1/3',
+[tv-dator]     +   'logs-p1:1/3',
+[tv-dator]     +   'message_groups-p1:1/3',
+[tv-dator]     +   'module_dependency_locks-p1:1/3',
+[tv-dator]     +   'module_manifests-p1:1/3',
+[tv-dator]     +   'node_endpoints-p1:1/3',
+[tv-dator]     +   'nodes-p1:1/3',
+[tv-dator]     +   'package_registry_mappings-p1:1/3',
+[tv-dator]     +   'package_registry_overrides-p1:1/3',
+[tv-dator]     +   'partitions-p1:1/3',
+[tv-dator]     +   'replica_operations-p1:2/3',
+[tv-dator]     +   'schema_migration_partitions-p1:1/3',
+[tv-dator]     +   'schema_migrations-p1:1/3',
+[tv-dator]     +   'schema_operations-p1:1/3',
+[tv-dator]     +   'service_bindings-p1:1/3',
+[tv-dator]     +   'service_definitions-p1:1/3',
+[tv-dator]     +   'service_endpoints-p1:1/3',
+[tv-dator]     +   'service_install_failures-p1:1/3',
+[tv-dator]     +   'service_installations-p1:1/3',
+[tv-dator]     +   'service_instances-p1:1/3',
+[tv-dator]     +   'service_packages-p1:1/3',
+[tv-dator]     +   'service_partition_access-p1:1/3',
+[tv-dator]     +   'service_revisions-p1:1/3',
+[tv-dator]     +   'service_timers-p1:1/3',
+[tv-dator]     +   'services-p1:1/3',
+[tv-dator]     +   'sql_transaction_participants-p1:1/3',
+[tv-dator]     +   'sql_transactions-p1:1/3',
+[tv-dator]     +   'sql_write_operations-p1:1/3',
+[tv-dator]     +   'storage_reservations-p1:1/3',
+[tv-dator]     +   'tables-p1:1/3',
+[tv-dator]     +   'wasm_operations-p1:1/3'
+[tv-dator]     + ]
+[tv-dator]     - []
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]   actual:
+[tv-dator]     0: 'artifact_payload_chunks-p1:1/3'
+[tv-dator]     1: 'artifact_payloads-p1:1/3'
+[tv-dator]     2: 'call_activation_leases-p1:1/3'
+[tv-dator]     3: 'call_cell_reduce_results-p1:1/3'
+[tv-dator]     4: 'call_cell_reduce_slots-p1:1/3'
+[tv-dator]     5: 'code-p1:1/3'
+[tv-dator]     6: 'config-p1:1/3'
+[tv-dator]     7: 'contexts-p1:1/3'
+[tv-dator]     8: 'control_plane_publications-p1:1/3'
+[tv-dator]     9: 'debug_breakpoints-p1:1/3'
+[tv-dator]     10: 'debug_sessions-p1:1/3'
+[tv-dator]     11: 'debug_snapshots-p1:1/3'
+[tv-dator]     12: 'indices-p1:1/3'
+[tv-dator]     13: 'inter_group_latencies-p1:1/3'
+[tv-dator]     14: 'latency_groups-p1:1/3'
+[tv-dator]     15: 'live_queries-p1:1/3'
+[tv-dator]     16: 'logs-p1:1/3'
+[tv-dator]     17: 'message_groups-p1:1/3'
+[tv-dator]     18: 'module_dependency_locks-p1:1/3'
+[tv-dator]     19: 'module_manifests-p1:1/3'
+[tv-dator]     20: 'node_endpoints-p1:1/3'
+[tv-dator]     21: 'nodes-p1:1/3'
+[tv-dator]     22: 'package_registry_mappings-p1:1/3'
+[tv-dator]     23: 'package_registry_overrides-p1:1/3'
+[tv-dator]     24: 'partitions-p1:1/3'
+[tv-dator]     25: 'replica_operations-p1:2/3'
+[tv-dator]     26: 'schema_migration_partitions-p1:1/3'
+[tv-dator]     27: 'schema_migrations-p1:1/3'
+[tv-dator]     28: 'schema_operations-p1:1/3'
+[tv-dator]     29: 'service_bindings-p1:1/3'
+[tv-dator]     30: 'service_definitions-p1:1/3'
+[tv-dator]     31: 'service_endpoints-p1:1/3'
+[tv-dator]     32: 'service_install_failures-p1:1/3'
+[tv-dator]     33: 'service_installations-p1:1/3'
+[tv-dator]     34: 'service_instances-p1:1/3'
+[tv-dator]     35: 'service_packages-p1:1/3'
+[tv-dator]     36: 'service_partition_access-p1:1/3'
+[tv-dator]     37: 'service_revisions-p1:1/3'
+[tv-dator]     38: 'service_timers-p1:1/3'
+[tv-dator]     39: 'services-p1:1/3'
+[tv-dator]     40: 'sql_transaction_participants-p1:1/3'
+[tv-dator]     41: 'sql_transactions-p1:1/3'
+[tv-dator]     42: 'sql_write_operations-p1:1/3'
+[tv-dator]     43: 'storage_reservations-p1:1/3'
+[tv-dator]     44: 'tables-p1:1/3'
+[tv-dator]     45: 'wasm_operations-p1:1/3'
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/convergence/dt-placement-owner-formation-drain.test.js:136:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: A5 no churn: a duplicate delivery of every terminal row at a fixpoint admits nothing
+[tv-dator] ok 5 - A5 no churn: a duplicate delivery of every terminal row at a fixpoint admits nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.129408
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: A6 order: the formation gate, ledger exclusivity, class order and fewest hosts first
+[tv-dator] ok 6 - A6 order: the formation gate, ledger exclusivity, class order and fewest hosts first
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.216089
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.002Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":1,"acknowledgedCount":1},"scope":{"nodeId":"seed","publicationId":"membership-publication:1:6f46017b7910843c80a18707"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.032Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.036Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.036Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.036Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.046Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.046Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.046Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.056Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.056Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.056Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] FAILED LEDGER CREATE
+[tv-dator] FROZEN: fixpoint=true rounds=3 formed=false complete=false admissions=2 elapsed=42 ms (shortest armed execution bound 250 ms) spentBounds=0
+[tv-dator] FROZEN spread deficits 46/46: artifact_payload_chunks-p1:1/3 artifact_payloads-p1:1/3 call_activation_leases-p1:1/3 call_cell_reduce_results-p1:1/3 call_cell_reduce_slots-p1:1/3 code-p1:1/3 config-p1:1/3 contexts-p1:1/3 control_plane_publications-p1:1/3 debug_breakpoints-p1:1/3 debug_sessions-p1:1/3 debug_snapshots-p1:1/3 indices-p1:1/3 inter_group_latencies-p1:1/3 latency_groups-p1:1/3 live_queries-p1:1/3 logs-p1:1/3 message_groups-p1:1/3 module_dependency_locks-p1:1/3 module_manifests-p1:1/3 node_endpoints-p1:1/3 nodes-p1:1/3 package_registry_mappings-p1:1/3 package_registry_overrides-p1:1/3 partitions-p1:1/3 replica_operations-p1:2/3 schema_migration_partitions-p1:1/3 schema_migrations-p1:1/3 schema_operations-p1:1/3 service_bindings-p1:1/3 service_definitions-p1:1/3 service_endpoints-p1:1/3 service_install_failures-p1:1/3 service_installations-p1:1/3 service_instances-p1:1/3 service_packages-p1:1/3 service_partition_access-p1:1/3 service_revisions-p1:1/3 service_timers-p1:1/3 services-p1:1/3 sql_transaction_participants-p1:1/3 sql_transactions-p1:1/3 sql_write_operations-p1:1/3 storage_reservations-p1:1/3 tables-p1:1/3 wasm_operations-p1:1/3
+[tv-dator] FROZEN surplus: replica_operations-p1:4
+[tv-dator] FROZEN unresolved: REPLACE replica_operations-p1 seed>j1 ACTIVE
+[tv-dator] FROZEN armed placement timers (0): {}
+[tv-dator] PROBE: steps=0 timers fired=0 rounds=0 capReached=false admissions=0
+[tv-dator] FINAL: fixpoint=true rounds=0 formed=false complete=false admissions=2 elapsed=52 ms (shortest armed execution bound 250 ms) spentBounds=0
+[tv-dator] FINAL spread deficits 46/46: artifact_payload_chunks-p1:1/3 artifact_payloads-p1:1/3 call_activation_leases-p1:1/3 call_cell_reduce_results-p1:1/3 call_cell_reduce_slots-p1:1/3 code-p1:1/3 config-p1:1/3 contexts-p1:1/3 control_plane_publications-p1:1/3 debug_breakpoints-p1:1/3 debug_sessions-p1:1/3 debug_snapshots-p1:1/3 indices-p1:1/3 inter_group_latencies-p1:1/3 latency_groups-p1:1/3 live_queries-p1:1/3 logs-p1:1/3 message_groups-p1:1/3 module_dependency_locks-p1:1/3 module_manifests-p1:1/3 node_endpoints-p1:1/3 nodes-p1:1/3 package_registry_mappings-p1:1/3 package_registry_overrides-p1:1/3 partitions-p1:1/3 replica_operations-p1:2/3 schema_migration_partitions-p1:1/3 schema_migrations-p1:1/3 schema_operations-p1:1/3 service_bindings-p1:1/3 service_definitions-p1:1/3 service_endpoints-p1:1/3 service_install_failures-p1:1/3 service_installations-p1:1/3 service_instances-p1:1/3 service_packages-p1:1/3 service_partition_access-p1:1/3 service_revisions-p1:1/3 service_timers-p1:1/3 services-p1:1/3 sql_transaction_participants-p1:1/3 sql_transactions-p1:1/3 sql_write_operations-p1:1/3 storage_reservations-p1:1/3 tables-p1:1/3 wasm_operations-p1:1/3
+[tv-dator] FINAL surplus: replica_operations-p1:4
+[tv-dator] FINAL unresolved: REPLACE replica_operations-p1 seed>j1 ACTIVE
+[tv-dator] FINAL armed placement timers (0): {}
+[tv-dator] redeliveries: 1 rows -> 0 admissions; 1 rows -> 0 admissions
+[tv-dator] admissions by step: {"ready-signals":1,"coordinator-tick":1}
+[tv-dator] admissions by class: {"1":2}
+[tv-dator] max unresolved copy-phase operations per copy source {"seed":1}, per target {"j1":1} (K_src=3, K_tgt=2)
+[tv-dator] admission order (seq:type:partition>target@round/step): 1:REPLACE:replica_operations-p1>j1@r0/ready-signals/unformed 2:REPLACE:replica_operations-p1>j1@r1/coordinator-tick/unformed
+[tv-dator] retry: {"operationId":"pl-replica_operations-p1-2-0","partitionId":"replica_operations-p1","failedRowRetained":true,"failedAt":{"type":"REPLACE","partitionId":"replica_operations-p1","targetNodeId":"j1","admissionsBefore":1,"round":1,"step":"coordinator-tick"},"retries":[{"seq":2,"operationId":"pl-replica_operations-p1-4-0","step":"coordinator-tick","round":1,"workflowStep":"ACTIVE"}]}
+[tv-dator] # Subtest: ledger repair is never starved by lower-class work
+[tv-dator] ok 7 - ledger repair is never starved by lower-class work
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3881.118621
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a move whose create FAILED with membership unchanged is admitted again, beside its retained terminal row
+[tv-dator] ok 8 - a move whose create FAILED with membership unchanged is admitted again, beside its retained terminal row
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.64798
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: A7 accounting: one unresolved operation per partition, no FAILED operation, one copy per host gained
+[tv-dator] ok 9 - A7 accounting: one unresolved operation per partition, no FAILED operation, one copy per host gained
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.48814
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.002Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":1,"acknowledgedCount":1},"scope":{"nodeId":"seed","publicationId":"membership-publication:1:6f46017b7910843c80a18707"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.018Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.022Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.025Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.029Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.039Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.039Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:1d4090ebfda46f8a4cda3ee5","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.039Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:1d4090ebfda46f8a4cda3ee5"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.002Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":1,"acknowledgedCount":1},"scope":{"nodeId":"seed","publicationId":"membership-publication:1:6f46017b7910843c80a18707"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.015Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":2},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:e5c169782778b27a79e7ec5e"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.015Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:2:e5c169782778b27a79e7ec5e","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.015Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":2,"acknowledgedCount":2},"scope":{"nodeId":"seed","publicationId":"membership-publication:2:e5c169782778b27a79e7ec5e"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.020Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.020Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:3:ef84d6a20814d92b2e62fea1","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.020Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.024Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.024Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:3:ef84d6a20814d92b2e62fea1","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.024Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.031Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.031Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:3:ef84d6a20814d92b2e62fea1","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.031Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.038Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.038Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:3:ef84d6a20814d92b2e62fea1","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.038Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.045Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.045Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","nodeId":"test-node","message":"Publication write unconfirmed for membership-publication:3:ef84d6a20814d92b2e62fea1","contextNodeId":"seed","msg":"Owner-driven membership reconcile error"}
+[tv-dator] {"level":50,"time":"2026-11-14T12:31:02.045Z","nodeId":"test-node","pid":3135532,"subsystem":"control-plane-readiness","event":"wait_bound_spent","wait":"PUBLICATION_WRITE_MAX_ATTEMPTS","awaited":"durable publication row satisfying the desired state after upsert + readback","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":3,"outcome":"durable_publication_unconfirmed","status":"PUBLISHED","publicationEpoch":3,"acknowledgedCount":3},"scope":{"nodeId":"seed","publicationId":"membership-publication:3:ef84d6a20814d92b2e62fea1"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: A8 sweep and safety: every arrival order drains in frozen time without a floor violation or an early cluster gate
+[tv-dator] not ok 10 - A8 sweep and safety: every arrival order drains in frozen time without a floor violation or an early cluster gate
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6886.17282
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/convergence/dt-placement-owner-formation-drain.test.js:271:1'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] # Subtest: WP-F1/WP-F2 single-voter founding & odd-voter growth witness: 1 voter on seed -> ADD learner j1 -> ADD learner j2 -> GROWTH_PROMOTE (1 -> 3 voters) with zero REPLACE/REMOVE, zero even voter sets, zero co-location, and 2-host window stability (F1-F5)
+[tv-dator] not ok 11 - WP-F1/WP-F2 single-voter founding & odd-voter growth witness: 1 voter on seed -> ADD learner j1 -> ADD learner j2 -> GROWTH_PROMOTE (1 -> 3 voters) with zero REPLACE/REMOVE, zero even voter sets, zero co-location, and 2-host window stability (F1-F5)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/974320ad37f8-mwqk77ws-1420255/test/convergence/dt-placement-owner-formation-drain.test.js:298:1'
+[tv-dator]   failureType: 'cancelledByParent'
+[tv-dator]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     process.emit (node:events:519:28)
+[tv-dator]   ...
+[tv-dator] 1..11
+[tv-dator] # tests 11
+[tv-dator] # suites 0
+[tv-dator] # pass 8
+[tv-dator] # fail 1
+[tv-dator] # cancelled 2
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 16713.298028
+[tv-dator] # time=18681ms
+[tv-dator] ok test/raft/raft-rs-backend/formation-placement-native-retirement.test.js (24 assertions, 34074ms)
+[tv-dator] # test-files total=12 pass=6 fail=6 assertions=346
+[tv-dator] classified lane bootstrap: 1 file(s), jobs=2
+[tv-dator] thermal: ok cpu 56C (coretemp/Package id 0) nvme 57C (nvme/Sensor 1)
+[tv-dator] ok test/bootstrap/shared/control-plane-setup.test.js (22 assertions, 1069ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=22
+lab test: tv-dator: # test-files total=13 pass=7 fail=6 assertions=368
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=13 pass=7 fail=6 assertions=368

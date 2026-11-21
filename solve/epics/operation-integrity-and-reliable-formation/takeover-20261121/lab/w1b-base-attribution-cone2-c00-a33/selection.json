@@ -1,0 +1,31 @@
+{
+  "sha": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js",
+    "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+    "test/control-plane/replica-dispatch-reservation-identity.test.js",
+    "test/control-plane/replica-dispatch-routing.property.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+        "test/control-plane/replica-dispatch-routing.property.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+        "test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js",
+        "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+        "test/control-plane/replica-dispatch-reservation-identity.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -1,0 +1,249 @@
+lab test: adams-gamla: ordinary, exclusive (4 files) cores=4 mem=15.6GiB speed x2.12
+[adams-gamla] placement-shell=1866481
+[adams-gamla] placement-head=f1265c5cae96e6cc05ffc3626f6ab48b2daf74b5
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1867429
+[adams-gamla] # test-files planned=4
+[adams-gamla] classified lane ordinary: 2 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 46C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 1877ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: (e) a raft envelope is one frame with nothing back: no ACK, no SERVICE_RESPONSE, no orphan, no per-message deadline timer
+[adams-gamla] not ok 1 - (e) a raft envelope is one frame with nothing back: no ACK, no SERVICE_RESPONSE, no orphan, no per-message deadline timer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 277.424075
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-unacknowledged-delivery.test.js:72:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     raft envelopes carry no transport answer and no delivery lifetime: measured {"raftEnvelopesSent":50,"raftEnvelopesReceived":50,"framesAtoB":50,"framesBtoA":100,"framesBtoAByType":{"ack":50,"service_response":50},"orphanedResponsesAtA":50,"routerTimersArmedAtA":50}
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   framesBtoA: 100,
+[adams-gamla]     +   orphanedResponsesAtA: 50,
+[adams-gamla]     +   routerTimersArmedAtA: 50,
+[adams-gamla]     +   totalFramesWithinEnvelopes: false
+[adams-gamla]     -   framesBtoA: 0,
+[adams-gamla]     -   orphanedResponsesAtA: 0,
+[adams-gamla]     -   routerTimersArmedAtA: 0,
+[adams-gamla]     -   totalFramesWithinEnvelopes: true
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     totalFramesWithinEnvelopes: true
+[adams-gamla]     framesBtoA: 0
+[adams-gamla]     orphanedResponsesAtA: 0
+[adams-gamla]     routerTimersArmedAtA: 0
+[adams-gamla]   actual:
+[adams-gamla]     totalFramesWithinEnvelopes: false
+[adams-gamla]     framesBtoA: 100
+[adams-gamla]     orphanedResponsesAtA: 50
+[adams-gamla]     routerTimersArmedAtA: 50
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-unacknowledged-delivery.test.js:113:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: (e) anchor: an ordinary request on the same link still gets its ACK and its SERVICE_RESPONSE and settles with the answer
+[adams-gamla] ok 2 - (e) anchor: an ordinary request on the same link still gets its ACK and its SERVICE_RESPONSE and settles with the answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 144.214628
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 427.435947
+[adams-gamla] # time=1877ms
+[adams-gamla] not ok test/raft/raft-rs-quiet-ready-cost.test.js (3 assertions, 1935ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: (h)(i) a follower stepping heartbeats that change nothing opens no transaction and reads no status
+[adams-gamla] not ok 1 - (h)(i) a follower stepping heartbeats that change nothing opens no transaction and reads no status
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 272.941572
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:240:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a Ready with nothing to persist and nothing to announce costs neither: measured over 100 heartbeats {"transactions":100,"prepares":0,"pragmas":0,"applications":0,"responses":100,"entries":{"step":100,"has_ready":200,"take_ready":100,"persist_ready":100,"advance_append":100,"advance_apply":100,"status":100,"conf_state":100}}
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   conf_state: 100,
+[adams-gamla]     -   conf_state: 0,
+[adams-gamla]         pragmas: 0,
+[adams-gamla]         prepares: 0,
+[adams-gamla]     +   status: 100,
+[adams-gamla]     +   transactions: 100
+[adams-gamla]     -   status: 0,
+[adams-gamla]     -   transactions: 0
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     transactions: 0
+[adams-gamla]     prepares: 0
+[adams-gamla]     pragmas: 0
+[adams-gamla]     status: 0
+[adams-gamla]     conf_state: 0
+[adams-gamla]   actual:
+[adams-gamla]     transactions: 100
+[adams-gamla]     prepares: 0
+[adams-gamla]     pragmas: 0
+[adams-gamla]     status: 100
+[adams-gamla]     conf_state: 100
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:263:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: (h) a quiet follower tick reads no status
+[adams-gamla] not ok 2 - (h) a quiet follower tick reads no status
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 178.602697
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:275:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a tick without a Ready announces nothing: measured over 100 ticks {"transactions":0,"prepares":0,"pragmas":0,"applications":0,"responses":0,"entries":{"tick":100,"has_ready":100,"status":100,"conf_state":100}}
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   conf_state: 100,
+[adams-gamla]     +   status: 100,
+[adams-gamla]     -   conf_state: 0,
+[adams-gamla]     -   status: 0,
+[adams-gamla]         transactions: 0
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     transactions: 0
+[adams-gamla]     status: 0
+[adams-gamla]     conf_state: 0
+[adams-gamla]   actual:
+[adams-gamla]     transactions: 0
+[adams-gamla]     status: 100
+[adams-gamla]     conf_state: 100
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:292:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: (h)(i) anchor: a heartbeat that advances the commit index persists once and announces once
+[adams-gamla] ok 3 - (h)(i) anchor: a heartbeat that advances the commit index persists once and announces once
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 86.544302
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..3
+[adams-gamla] # tests 3
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 543.535344
+[adams-gamla] # time=1935ms
+[adams-gamla] # test-files total=2 pass=0 fail=2 assertions=5
+[adams-gamla] classified lane exclusive: 2 file(s), jobs=1
+[adams-gamla] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js (1 assertions, 6539ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: (b) a node arms drain wakes independent of its idle groups, and every delivered envelope is stepped once, in order, fairly
+[adams-gamla] not ok 1 - (b) a node arms drain wakes independent of its idle groups, and every delivered envelope is stepped once, in order, fairly
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 5286.270708
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js:249:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     drain wakes per second do not grow with the idle groups a node hosts: measured per 1000 virtual ms [{"groupCount":8,"zeroDelayAtMeasuredNode":272,"zeroDelayAllNodes":816,"envelopesToMeasuredNode":272,"deliveredKeys":24,"mismatchedKeys":0},{"groupCount":16,"zeroDelayAtMeasuredNode":544,"zeroDelayAllNodes":1632,"envelopesToMeasuredNode":544,"deliveredKeys":48,"mismatchedKeys":0},{"groupCount":32,"zeroDelayAtMeasuredNode":1088,"zeroDelayAllNodes":3264,"envelopesToMeasuredNode":1088,"deliveredKeys":96,"mismatchedKeys":0}] fairness {"burstStepped":100,"singlesStepped":7,"burstStepsBeforeLastSingle":32,"singles":7}
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   allNodes: false,
+[adams-gamla]     +   measuredNode: false
+[adams-gamla]     -   allNodes: true,
+[adams-gamla]     -   measuredNode: true
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     measuredNode: true
+[adams-gamla]     allNodes: true
+[adams-gamla]   actual:
+[adams-gamla]     measuredNode: false
+[adams-gamla]     allNodes: false
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js:282:10)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] 1..1
+[adams-gamla] # tests 1
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 5292.451764
+[adams-gamla] # time=6539ms
+[adams-gamla] not ok test/transport/raft-frame-pair-coalescing.integration.test.js (1 assertions, 4993ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: (c1) frames per node pair per second do not grow with the raft groups the pair shares
+[adams-gamla] not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3700.816193
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-pair-coalescing.integration.test.js:98:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'frames per pair grew {"rfc-a>rfc-b":4,"rfc-a>rfc-c":0,"rfc-b>rfc-a":4,"rfc-b>rfc-c":4,"rfc-c>rfc-a":0,"rfc-c>rfc-b":4} from 4 to 16 groups (allowed 1.5): measured per 1000 virtual ms [{"groupCount":4,"pairs":{"rfc-a>rfc-b":396,"rfc-a>rfc-c":0,"rfc-b>rfc-a":396,"rfc-b>rfc-c":396,"rfc-c>rfc-a":0,"rfc-c>rfc-b":396},"raftEnvelopesReceived":528,"leadershipStable":true},{"groupCount":8,"pairs":{"rfc-a>rfc-b":792,"rfc-a>rfc-c":0,"rfc-b>rfc-a":792,"rfc-b>rfc-c":792,"rfc-c>rfc-a":0,"rfc-c>rfc-b":792},"raftEnvelopesReceived":1056,"leadershipStable":true},{"groupCount":16,"pairs":{"rfc-a>rfc-b":1584,"rfc-a>rfc-c":0,"rfc-b>rfc-a":1584,"rfc-b>rfc-c":1584,"rfc-c>rfc-a":0,"rfc-c>rfc-b":1584},"raftEnvelopesReceived":2112,"leadershipStable":true}]'
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: true
+[adams-gamla]   actual: false
+[adams-gamla]   operator: '=='
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-pair-coalescing.integration.test.js:116:10)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] 1..1
+[adams-gamla] # tests 1
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3707.008807
+[adams-gamla] # time=4993ms
+[adams-gamla] # test-files total=2 pass=0 fail=2 assertions=2
+lab test: adams-gamla: # test-files total=4 pass=0 fail=4 assertions=7
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=4 pass=0 fail=4 assertions=7

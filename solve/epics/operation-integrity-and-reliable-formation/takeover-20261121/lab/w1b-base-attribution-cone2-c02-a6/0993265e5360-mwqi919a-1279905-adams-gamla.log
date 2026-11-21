@@ -1,0 +1,139 @@
+placement-shell=1807433
+placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1811258
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+not ok test/raft/snapshot-dispatcher-wiring.test.js (13 assertions, 2673ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam
+    ok 1 - should be equal
+    ok 2 - the join-factory-built service carries the seam (durable-rejoin restores use THIS path — reverting the join attach reds this)
+    ok 3 - anti-vacuous: the real join factory built and tracked the service
+    1..3
+ok 1 - PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam # time=73.943ms
+
+# Subtest: the wired dispatcher types SOCKET_UNAVAILABLE for an unreachable follower and never throws into the consensus caller
+    ok 1 - the unreachable follower is the typed socket_unavailable refusal
+    1..1
+ok 2 - the wired dispatcher types SOCKET_UNAVAILABLE for an unreachable follower and never throws into the consensus caller # time=37.351ms
+
+# Subtest: the wired dispatcher serves a real transfer over an existing bulk connection (no driver token bucket — pacing stays with sendChunkFrame)
+    ok 1 - the production dispatcher serves over the existing bulk connection
+    ok 2 - the peer receives the complete generation
+    1..2
+ok 3 - the wired dispatcher serves a real transfer over an existing bulk connection (no driver token bucket — pacing stays with sendChunkFrame) # time=45.89ms
+
+# Subtest: an adopted bulk OFFER recreates through the concrete factory and swaps the live replica
+    not ok 1 - ReplicaHandlerSetup requires systemTableCache
+      ---
+      stack: >
+        ReplicaHandlerSetup.create
+        (src/bootstrap/shared/replica-handler-setup.js:205:13)
+      
+        createHandlerSetup (test/raft/snapshot-dispatcher-wiring.test.js:139:37)
+      
+        checkBulkOfferAdoption (test/raft/snapshot-dispatcher-wiring.test.js:346:17)
+      at:
+        fileName: src/bootstrap/shared/replica-handler-setup.js
+        lineNumber: 205
+        columnNumber: 13
+        typeName: ReplicaHandlerSetup
+        methodName: create
+        functionName: ReplicaHandlerSetup.create
+      type: DependencyError
+      context:
+        serviceName: ReplicaHandlerSetup
+        dependencyName: systemTableCache
+      serviceName: ReplicaHandlerSetup
+      dependencyName: systemTableCache
+      tapCaught: returnedPromiseRejection
+      source: |2
+            }
+            if (!hasSystemCacheChangeReader(systemTableCache)) {
+              throw new DependencyError(
+        ------------^
+                REPLICA_HANDLER_SETUP_NAME,
+                ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      ...
+    
+    1..1
+not ok 4 - an adopted bulk OFFER recreates through the concrete factory and swaps the live replica # time=52.987ms
+  ---
+  at:
+    fileName: test/raft/snapshot-dispatcher-wiring.test.js
+    lineNumber: 435
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('an adopted bulk OFFER recreates through the concrete factory and swaps
+    the live replica',
+  
+    ^
+      (t) => checkBulkOfferAdoption(t, false));
+  ...
+
+# Subtest: an adopted bulk OFFER retires its recreated replica when shutdown blocks adoption
+    not ok 1 - ReplicaHandlerSetup requires systemTableCache
+      ---
+      stack: >
+        ReplicaHandlerSetup.create
+        (src/bootstrap/shared/replica-handler-setup.js:205:13)
+      
+        createHandlerSetup (test/raft/snapshot-dispatcher-wiring.test.js:139:37)
+      
+        checkBulkOfferAdoption (test/raft/snapshot-dispatcher-wiring.test.js:346:17)
+      at:
+        fileName: src/bootstrap/shared/replica-handler-setup.js
+        lineNumber: 205
+        columnNumber: 13
+        typeName: ReplicaHandlerSetup
+        methodName: create
+        functionName: ReplicaHandlerSetup.create
+      type: DependencyError
+      context:
+        serviceName: ReplicaHandlerSetup
+        dependencyName: systemTableCache
+      serviceName: ReplicaHandlerSetup
+      dependencyName: systemTableCache
+      tapCaught: returnedPromiseRejection
+      source: |2
+            }
+            if (!hasSystemCacheChangeReader(systemTableCache)) {
+              throw new DependencyError(
+        ------------^
+                REPLICA_HANDLER_SETUP_NAME,
+                ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      ...
+    
+    1..1
+not ok 5 - an adopted bulk OFFER retires its recreated replica when shutdown blocks adoption # time=35.492ms
+  ---
+  at:
+    fileName: test/raft/snapshot-dispatcher-wiring.test.js
+    lineNumber: 438
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      (t) => checkBulkOfferAdoption(t, false));
+  
+    test('an adopted bulk OFFER retires its recreated replica when shutdown blocks
+    adoption',
+  
+    ^
+      (t) => checkBulkOfferAdoption(t, true));
+  ...
+
+1..5
+# { total: 8, pass: 6, fail: 2 }
+# time=469.769ms
+# test-files total=1 pass=0 fail=1 assertions=13
+placement-results={"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":false,"assertions":13,"durationMs":2673,"retriedOnce":false,"firstFailureLine":"not ok 1 - ReplicaHandlerSetup requires systemTableCache"}

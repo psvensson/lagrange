@@ -1,0 +1,29 @@
+{
+  "sha": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/scripts/select-change-tests.test.js",
+    "test/integration/control-plane-rebalance.integration.test.js",
+    "test/integration/lagrange-server-npm-package.integration.test.js",
+    "test/rebalancer/message-group-operation-routing.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/select-change-tests.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/integration/control-plane-rebalance.integration.test.js",
+        "test/rebalancer/message-group-operation-routing.integration.test.js",
+        "test/integration/lagrange-server-npm-package.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

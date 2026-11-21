@@ -1,0 +1,15 @@
+placement-shell=1863264
+placement-head=29502803bb25587b2adadca435997c2274e42cd9
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1865004
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=3
+thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+ok test/scripts/fallback-necessity-trap.test.js (18 assertions, 1564ms)
+ok test/scripts/fallback-read-closure.test.js (19 assertions, 3031ms)
+# test-files total=2 pass=2 fail=0 assertions=37
+placement-results={"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":1564,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":3031,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,17 @@
+{
+  "sha": "939b8c7b42d805bba405793646f39d7b28e5a8c8",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/named-write-verdict-table-probe.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/named-write-verdict-table-probe.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

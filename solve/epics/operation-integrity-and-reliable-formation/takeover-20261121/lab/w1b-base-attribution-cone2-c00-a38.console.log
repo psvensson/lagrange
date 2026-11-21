@@ -1,0 +1,5 @@
+lab test: adams-gamla: ordinary (8 files) cores=4 mem=15.6GiB speed x2.22
+[adams-gamla] placement-shell=1863263
+lab test: adams-gamla: # test-files total=8 pass=0 fail=8 assertions=0
+lab test: adams-gamla: 8 file(s) reported no result: exit 97
+# test-files total=8 pass=0 fail=8 assertions=0

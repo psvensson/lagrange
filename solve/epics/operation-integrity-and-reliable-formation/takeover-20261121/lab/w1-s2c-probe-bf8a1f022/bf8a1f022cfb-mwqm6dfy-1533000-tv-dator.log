@@ -1,0 +1,2279 @@
+placement-shell=3154562
+placement-head=bf8a1f022cfb035a23f5c37c7af20dc40921a265
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3155010
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+not ok test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js (35 assertions, 1518ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: delivered CREATE evidence upgrades an existing observed wake without a second timer and survives deferred operation visibility
+    ok 1 - delivered CREATE should be retained
+    ok 2 - ordinary and delivered evidence share one owner registry entry
+    ok 3 - the earlier observed wake remains the next attempt
+    ok 4 - the stronger delivered obligation must dominate the weak wake
+    ok 5 - missing operation-row visibility must rearm the bounded obligation
+    ok 6 - visibility deferral must not weaken the retained evidence
+    ok 7 - only one live timer remains after bounded rearm
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    1..7
+ok 1 - delivered CREATE evidence upgrades an existing observed wake without a second timer and survives deferred operation visibility # time=103.067ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: delivered CREATE starts on the existing observed-progress cadence
+    ok 1 - retention must leave repeated visibility attempts inside the budget
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    1..1
+ok 2 - delivered CREATE starts on the existing observed-progress cadence # time=3.252ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: generic observed cleanup cannot consume stronger delivered evidence
+    ok 1 - a stale generic observation must leave delivered evidence owned
+    ok 2 - explicit completion cleanup consumes the delivered obligation
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    1..2
+ok 3 - generic observed cleanup cannot consume stronger delivered evidence # time=5.279ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: exact runtime target ACTIVE cache proof satisfies terminal handoff while system operations keep refresh-only semantics
+    ok 1 - an already-aligned exact runtime row does not wait on a no-op refresh
+    ok 2 - system operation terminal handoff retains its refresh-only contract
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    1..2
+ok 4 - exact runtime target ACTIVE cache proof satisfies terminal handoff while system operations keep refresh-only semantics # time=2.588ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: delivered-create retention rejects excluded operation and response shapes
+    ok 1 - system-operation must remain outside retention scope
+    ok 2 - partition-operation must remain outside retention scope
+    ok 3 - remove-operation must remain outside retention scope
+    ok 4 - replace-remove-operation must remain outside retention scope
+    ok 5 - a delivered error response must not retain create progress
+    ok 6 - excluded shapes leave no owner work
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    1..6
+ok 5 - delivered-create retention rejects excluded operation and response shapes # time=2.181ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: workflow-owner shutdown clears delivered-create retention
+    ok 1 - precondition: delivered-create work is retained
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    ok 2 - shutdown clears the retained timer
+    ok 3 - shutdown empties the shared observed-progress registry
+    1..3
+ok 6 - workflow-owner shutdown clears delivered-create retention # time=1.438ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: durable REPLACE target-active progress consumes delivered-create retention
+    ok 1 - a durably applied REPLACE target clears its create obligation
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 0 }
+    1..1
+ok 7 - durable REPLACE target-active progress consumes delivered-create retention # time=1.671ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'source-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Storage reservation created with operation {
+  reservationId: 'res-completed-response-operation',
+  operationId: 'completed-response-operation',
+  targetNodeId: 'target-node',
+  estimatedBytes: 1,
+  expiresAt: 1795278336382
+}
+# Subtest: a terminal CREATE response consumes retention before owner return
+    not ok 1 - the completed response should succeed
+      ---
+      at:
+        fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+        lineNumber: 380
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js:380:9)
+      source: >2
+                await coordinator.repository.queryOperationById(operation.operationId);
+      
+              t.ok(result?.success, 'the completed response should succeed');
+        --------^
+              t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
+              t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
+      ...
+    
+    not ok 2 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+        lineNumber: 381
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js:381:9)
+      source: |2
+      
+              t.ok(result?.success, 'the completed response should succeed');
+              t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
+        --------^
+              t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
+              t.notOk(
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ACTIVE
+        +PENDING
+      ...
+    
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+        lineNumber: 382
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js:382:9)
+      source: |2
+              t.ok(result?.success, 'the completed response should succeed');
+              t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
+              t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
+        --------^
+              t.notOk(
+                coordinator.workflowOwner.observedProgressRetryTimerByOperationId.has(
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -active
+        +pending
+      ...
+    
+    ok 4 - terminal completion must clear the delivered-create entry
+    ok 5 - any timer armed at delivery is cleared during terminal completion
+Shutting down RebalanceCoordinator { nodeId: 'source-node', inFlightOperations: 1 }
+    1..5
+not ok 8 - a terminal CREATE response consumes retention before owner return # time=30.972ms
+  ---
+  at:
+    fileName: test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+    lineNumber: 345
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    );
+  
+    test(
+    ^
+      'a terminal CREATE response consumes retention before owner return',
+      async (t) => {
+  ...
+
+1..8
+# { total: 27, pass: 24, fail: 3 }
+# time=163.122ms
+not ok test/rebalancer/rebalance-coordinator-outcome-routing.test.js (102 assertions, 1679ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Executor outcome routing through owner-key reconcile path
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  operationId: 'op-outcome-1',
+  workflowStep: 'SYNCING',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  workflowStep: 'SYNCING'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  reason: 'executor_outcome',
+  status: 'syncing',
+  partitionId: 'partition-1'
+}
+    # Subtest: REPLICA_CREATE_SYNCING routes through runExclusive and calls updateStep with SYNCING
+        ok 1 - outcome must be routed through runExclusive
+        ok 2 - owner key must contain the operationId
+        ok 3 - action should be updateStep
+        ok 4 - outcomeType should match
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..4
+    ok 1 - REPLICA_CREATE_SYNCING routes through runExclusive and calls updateStep with SYNCING # time=100.442ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_CREATING',
+  operationId: 'op-outcome-1',
+  workflowStep: 'CREATING',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_CREATING',
+  workflowStep: 'CREATING'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'executor_outcome',
+  status: 'creating',
+  partitionId: 'partition-1'
+}
+    # Subtest: REPLICA_CREATE_CREATING routes through runExclusive and calls updateStep with CREATING
+        ok 1 - outcome must be routed through runExclusive
+        ok 2 - owner key must contain the operationId
+        ok 3 - action should be updateStep
+        ok 4 - outcomeType should match
+        ok 5 - operation should advance to the accepted create step
+        ok 6 - operation status should advance with the workflow step
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..6
+    ok 2 - REPLICA_CREATE_CREATING routes through runExclusive and calls updateStep with CREATING # time=12.513ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  operationId: 'op-outcome-1',
+  workflowStep: 'SYNCING',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  workflowStep: 'SYNCING'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'CREATING',
+  newStep: 'SYNCING',
+  reason: 'executor_outcome',
+  status: 'syncing',
+  partitionId: 'users-p1'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  reason: 'reconcile_active',
+  status: 'active',
+  partitionId: 'users-p1'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'ACTIVE',
+  newStep: 'STOPPING',
+  reason: 'dispatch_stopping',
+  status: 'removing',
+  partitionId: 'users-p1'
+}
+Sending replica operation {
+  operationId: 'op-outcome-1',
+  target: 'node-local/service/replica-handler',
+  type: 'REMOVE_REPLICA',
+  entityType: 'partition',
+  entityId: 'users-p1',
+  replaceRemovePhase: true,
+  firstAttemptForStep: true
+}
+REPLACE source removal waiting {
+  operationId: 'op-outcome-1',
+  phase: 'STOPPING',
+  sourceReplicaId: 'users-p1-r1',
+  targetReplicaId: 'users-p1-r2',
+  reason: 'source_membership_removal_pending',
+  waitingSinceMs: 1795278036418,
+  waitedMs: 0,
+  lastAttemptSeq: 1,
+  lastAttemptUncertain: false,
+  attemptRebuiltAfter: 'not_rebuilt',
+  ownerPhase: 'membership_removal_uncommitted',
+  stalenessClass: 'never_stale_by_age',
+  retirementAdmissible: true,
+  leaderReplicaId: 'users-p1-r2',
+  sourceMembership: 'voter',
+  authorityWaitReason: null,
+  severity: 'normal'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'op-outcome-1',
+  partitionId: 'users-p1',
+  targetNodeId: 'node-local',
+  workflowStep: 'STOPPING',
+  delayMs: 1000,
+  deferReason: 'source_membership_removal_pending',
+  errorMessage: 'source_membership_removal_pending'
+}
+    # Subtest: REPLICA_CREATE_SYNCING reconciles already-active REPLACE target
+        ok 1 - active target reconciliation should resume source removal
+        ok 2 - source removal should be dispatched after the active resample
+        ok 3 - source removal should target the retained source replica
+        ok 4 - operation should not remain pinned in SYNCING
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..4
+    ok 3 - REPLICA_CREATE_SYNCING reconciles already-active REPLACE target # time=24.408ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  operationId: 'op-outcome-1',
+  workflowStep: 'SYNCING',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  workflowStep: 'SYNCING'
+}
+    # Subtest: REPLICA_CREATE_SYNCING does not regress REPLACE source removal
+        ok 1 - delayed SYNCING outcome should not rewind source removal
+        ok 2 - operation status should remain in the remove phase
+        ok 3 - stale create progress should not dispatch another removal
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..3
+    ok 4 - REPLICA_CREATE_SYNCING does not regress REPLACE source removal # time=3.295ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+    # Subtest: REPLICA_CREATE_ACTIVE routes through runExclusive and calls completeOperation
+        ok 1 - outcome must be routed through runExclusive
+Operation completed {
+  operationId: 'op-outcome-1',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-local'
+}
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'partition',
+  finalState: 'active',
+  totalDurationMs: 2
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..1
+    ok 5 - REPLICA_CREATE_ACTIVE routes through runExclusive and calls completeOperation # time=10.642ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: deferred visibility retains the furthest executor outcome
+        ok 1 - deferred visibility should retain one retry timer
+        ok 2 - retry should use the owner visibility retry delay
+        ok 3 - deferred visibility should retain the furthest queued workflow step
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+Operation completed {
+  operationId: 'op-outcome-1',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-local'
+}
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'partition',
+  finalState: 'active',
+  totalDurationMs: 3
+}
+        ok 4 - retained furthest ACTIVE outcome should complete after visibility recovers
+        ok 5 - retained ACTIVE outcome should not be lost
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..5
+    ok 6 - deferred visibility retains the furthest executor outcome # time=7.392ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+    # Subtest: empty visibility retains fresh create-active outcome until visible
+        ok 1 - fresh empty visibility should retain one retry timer
+        ok 2 - fresh empty visibility should retain the ACTIVE outcome
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+Operation completed {
+  operationId: 'op-outcome-1',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-local'
+}
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'partition',
+  finalState: 'active',
+  totalDurationMs: 1
+}
+        ok 3 - retained ACTIVE outcome should complete once the row appears
+        ok 4 - retained ACTIVE outcome should not be skipped
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..4
+    ok 7 - empty visibility retains fresh create-active outcome until visible # time=5.499ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: deferred visibility retry keeps executor outcome partition scope
+        ok 1 - retry warning should keep the executor outcome partition id
+        ok 2 - retry warning should keep deferred visibility completion state
+        ok 3 - retryable owner-read failures during retry should re-arm the executor outcome
+        ok 4 - retryable owner-read failures should not drop the outcome via error logging
+        ok 5 - re-armed retry should keep the operation partition scope
+        ok 6 - re-armed retry should preserve deferred completion state
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..6
+    ok 8 - deferred visibility retry keeps executor outcome partition scope # time=3.328ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  replicaId: 'nodes-p1-r2'
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'SYNCING',
+  newStep: 'ACTIVE',
+  reason: 'reconcile_active',
+  status: 'active',
+  partitionId: 'users-p1'
+}
+Operation step changed {
+  operationId: 'op-outcome-1',
+  previousStep: 'ACTIVE',
+  newStep: 'STOPPING',
+  reason: 'dispatch_stopping',
+  status: 'removing',
+  partitionId: 'users-p1'
+}
+Sending replica operation {
+  operationId: 'op-outcome-1',
+  target: 'node-local/service/replica-handler',
+  type: 'REMOVE_REPLICA',
+  entityType: 'partition',
+  entityId: 'users-p1',
+  replaceRemovePhase: true,
+  firstAttemptForStep: true
+}
+REPLACE source removal waiting {
+  operationId: 'op-outcome-1',
+  phase: 'STOPPING',
+  sourceReplicaId: 'users-p1-r1',
+  targetReplicaId: 'users-p1-r2',
+  reason: 'source_membership_removal_pending',
+  waitingSinceMs: 1795278036464,
+  waitedMs: 0,
+  lastAttemptSeq: 1,
+  lastAttemptUncertain: false,
+  attemptRebuiltAfter: 'not_rebuilt',
+  ownerPhase: 'membership_removal_uncommitted',
+  stalenessClass: 'never_stale_by_age',
+  retirementAdmissible: true,
+  leaderReplicaId: 'users-p1-r2',
+  sourceMembership: 'voter',
+  authorityWaitReason: null,
+  severity: 'normal'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'op-outcome-1',
+  partitionId: 'users-p1',
+  targetNodeId: 'node-local',
+  workflowStep: 'STOPPING',
+  delayMs: 1000,
+  deferReason: 'source_membership_removal_pending',
+  errorMessage: 'source_membership_removal_pending'
+}
+    # Subtest: REPLICA_CREATE_ACTIVE resumes source removal for REPLACE instead of completing terminally
+        ok 1 - outcome must still route through runExclusive
+        ok 2 - REPLACE active outcome should continue into source removal
+        ok 3 - the resumed phase should dispatch source removal
+        ok 4 - source removal should target the retained source replica
+        ok 5 - REPLACE should move into STOPPING instead of terminal completion
+        ok 6 - REPLACE create-active should not mark the operation complete
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..6
+    ok 9 - REPLICA_CREATE_ACTIVE resumes source removal for REPLACE instead of completing terminally # time=17.068ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_FAILED',
+  operationId: 'op-outcome-1',
+  workflowStep: 'FAILED',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_FAILED',
+  workflowStep: 'FAILED'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'FAILED',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+    # Subtest: REPLICA_CREATE_FAILED routes through runExclusive and calls failOperation
+        ok 1 - error message should propagate
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 3
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..1
+    ok 10 - REPLICA_CREATE_FAILED routes through runExclusive and calls failOperation # time=8.113ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_FAILED',
+  operationId: 'op-outcome-1',
+  workflowStep: 'FAILED',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_FAILED',
+  workflowStep: 'FAILED'
+}
+    # Subtest: REPLICA_CREATE_FAILED preserves retryable critical create failures in the owner retry lane
+        ok 1 - retryable critical create failure should not fail terminally
+        ok 2 - retryable create failure should keep the create-rearm step
+        ok 3 - retryable create failure should preserve the in-flight status
+        ok 4 - retryable create failure should not mark the operation complete
+        ok 5 - retryable create failure should not persist a terminal error
+        ok 6 - retryable create failure should arm transition retry grace
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..6
+    ok 11 - REPLICA_CREATE_FAILED preserves retryable critical create failures in the owner retry lane # time=3.45ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_REMOVE_COMPLETED',
+  operationId: 'op-outcome-1',
+  workflowStep: 'REMOVED',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_REMOVE_COMPLETED',
+  workflowStep: 'REMOVED'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'REMOVED',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Operation completed {
+  operationId: 'op-outcome-1',
+  type: 'REMOVE',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-local'
+}
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'partition',
+  finalState: 'removed',
+  totalDurationMs: 1
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    # Subtest: REPLICA_REMOVE_COMPLETED calls completeOperation
+        1..0
+    ok 12 - REPLICA_REMOVE_COMPLETED calls completeOperation # time=3.562ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'MESSAGE_GROUP_CREATE_ACTIVE',
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'MESSAGE_GROUP_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+Operation completed {
+  operationId: 'op-outcome-1',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-local'
+}
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'message_group',
+  finalState: 'active',
+  totalDurationMs: 1
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    # Subtest: MESSAGE_GROUP_CREATE_ACTIVE calls completeOperation
+        1..0
+    ok 13 - MESSAGE_GROUP_CREATE_ACTIVE calls completeOperation # time=4.064ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'MESSAGE_GROUP_CREATE_FAILED',
+  operationId: 'op-outcome-1',
+  workflowStep: 'FAILED',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'MESSAGE_GROUP_CREATE_FAILED',
+  workflowStep: 'FAILED'
+}
+    # Subtest: MESSAGE_GROUP_CREATE_FAILED preserves retryable ingress failures in the owner retry lane
+        ok 1 - retryable message-group ingress failure must not fail terminally
+        ok 2 - retryable message-group failure should keep the create-rearm step
+        ok 3 - retryable message-group failure should preserve the in-flight status
+        ok 4 - retryable message-group failure should not mark the operation complete
+        ok 5 - retryable message-group failure should not persist a terminal error
+        ok 6 - retryable message-group failure should arm transition retry grace
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..6
+    ok 14 - MESSAGE_GROUP_CREATE_FAILED preserves retryable ingress failures in the owner retry lane # time=2.847ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'RUNTIME_SERVICE_CREATE_FAILED',
+  operationId: 'op-outcome-1',
+  workflowStep: 'FAILED',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'RUNTIME_SERVICE_CREATE_FAILED',
+  workflowStep: 'FAILED'
+}
+Durable terminal release obligations registered {
+  operationId: 'op-outcome-1',
+  workflowStep: 'FAILED',
+  partitionId: 'rs-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-outcome-1', releasedCount: 1 }
+metrics.rebalance.operation {
+  operationId: 'op-outcome-1',
+  entityType: 'runtime_service',
+  finalState: 'failed',
+  totalDurationMs: 1
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    # Subtest: RUNTIME_SERVICE_CREATE_FAILED calls failOperation
+        1..0
+    ok 15 - RUNTIME_SERVICE_CREATE_FAILED calls failOperation # time=5.923ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Executor outcome ignored: operation already terminal {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  step: 'ACTIVE'
+}
+    # Subtest: outcome for terminal operation is skipped
+        ok 1 - terminal operation should not be routed
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..1
+    ok 16 - outcome for terminal operation is skipped # time=2.683ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  operationId: 'op-outcome-1',
+  workflowStep: 'ACTIVE',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Executor outcome ignored: operation not locally owned {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  remoteOwnerWake: true
+}
+    # Subtest: outcome for non-local operation is skipped
+        ok 1 - non-local operation should not be routed
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..1
+    ok 17 - outcome for non-local operation is skipped # time=3.82ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  workflowStep: 'SYNCING'
+}
+Executor outcome ignored: operation not locally owned {
+  operationId: 'op-outcome-1',
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  remoteOwnerWake: true
+}
+    # Subtest: priority recovery non-local create progress wakes operation owner
+        ok 1 - eligible non-local progress should wake the owner
+        ok 2 - non-local priority progress should issue one owner wake
+        ok 3 - owner wake should target the source owner dispatch service
+        ok 4 - owner wake should use replica operation dispatch
+        ok 5 - owner wake should carry the operation id
+        ok 6 - owner wake should carry the operation row
+        ok 7 - owner wake should retain the remote handoff delivery source
+        ok 8 - priority recovery owner wake should use critical delivery
+        ok 9 - target-side outcome should not mutate the non-local operation
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..9
+    ok 18 - priority recovery non-local create progress wakes operation owner # time=2.112ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  operationId: 'op-nonexistent',
+  workflowStep: 'ACTIVE',
+  replicaId: undefined
+}
+Executor outcome received via reconcile queue {
+  operationId: 'op-nonexistent',
+  outcomeType: 'REPLICA_CREATE_ACTIVE',
+  workflowStep: 'ACTIVE'
+}
+Executor outcome ignored: operation not found { operationId: 'op-nonexistent', outcomeType: 'REPLICA_CREATE_ACTIVE' }
+    # Subtest: outcome for unknown operation is skipped
+        ok 1 - unknown operation should not be routed
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+        1..1
+    ok 19 - outcome for unknown operation is skipped # time=1.523ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    # Subtest: shutdown removes emitter subscription
+        ok 1 - emitter should have no listeners after shutdown
+        1..1
+    ok 20 - shutdown removes emitter subscription # time=1.492ms
+    
+    1..20
+ok 1 - Executor outcome routing through owner-key reconcile path # time=251.23ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: priority recovery in-progress create dispatch reconciles observed target progress
+    not ok 1 - create rearm should still issue one dispatch request
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1533
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1533:7)
+      source: |2
+            await coordinator.workflowOwner.dispatchOperationInternal(operation);
+      
+            t.equal(
+        ------^
+              deliveries.length,
+              1,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - in-progress create dispatch should advance to the observed target progress state
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1538
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1538:7)
+      source: |2
+              'create rearm should still issue one dispatch request',
+            );
+            t.equal(
+        ------^
+              (await coordinator.getOperation(operation.operationId)).workflowStep,
+              WORKFLOW_STEP.SYNCING,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -SYNCING
+        +CREATING
+      ...
+    
+    not ok 3 - in-progress create dispatch should persist the reconciled target status
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1543
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1543:7)
+      source: >2
+              'in-progress create dispatch should advance to the observed target progress state',
+            );
+            t.equal(
+        ------^
+              (await coordinator.getOperation(operation.operationId)).status,
+              ReplicaStatus.SYNCING,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -syncing
+        +creating
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..3
+not ok 2 - priority recovery in-progress create dispatch reconciles observed target progress # time=24.779ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+    lineNumber: 1500
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    );
+  
+    test('priority recovery in-progress create dispatch reconciles observed ' +
+    ^
+      'target progress',
+    async (t) => {
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: priority recovery in-progress create dispatch uses response target status when cache is unavailable
+    not ok 1 - create rearm should still issue one dispatch request
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1598
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1598:7)
+      source: |2
+            await coordinator.workflowOwner.dispatchOperationInternal(operation);
+      
+            t.equal(
+        ------^
+              deliveries.length,
+              1,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - response target status should advance without services-cache coverage
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1603
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1603:7)
+      source: |2
+              'create rearm should still issue one dispatch request',
+            );
+            t.equal(
+        ------^
+              (await coordinator.getOperation(operation.operationId)).workflowStep,
+              WORKFLOW_STEP.SYNCING,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -SYNCING
+        +CREATING
+      ...
+    
+    not ok 3 - response target status should persist the reconciled workflow status
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1608
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1608:7)
+      source: |2
+              'response target status should advance without services-cache coverage',
+            );
+            t.equal(
+        ------^
+              (await coordinator.getOperation(operation.operationId)).status,
+              ReplicaStatus.SYNCING,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -syncing
+        +creating
+      ...
+    
+    not ok 4 - SYNCING response progress should arm observed-progress recheck
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+        lineNumber: 1613
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1613:7)
+      source: |2
+              'response target status should persist the reconciled workflow status',
+            );
+            t.equal(
+        ------^
+              scheduledTimers.length,
+              1,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..4
+not ok 3 - priority recovery in-progress create dispatch uses response target status when cache is unavailable # time=10.011ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+    lineNumber: 1553
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('priority recovery in-progress create dispatch uses response target ' +
+    ^
+      'status when cache is unavailable',
+    async (t) => {
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Sending replica operation {
+  operationId: 'op-outcome-1',
+  target: 'node-local/service/replica-handler',
+  type: 'REMOVE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transaction_participants-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+# Subtest: in-progress remove dispatch does not reconcile active target as create progress
+    ok 1 - remove rearm should issue one dispatch request
+    ok 2 - remove rearm should keep the remove-phase message type
+    ok 3 - in-progress remove dispatch should remain parked in STOPPING
+    ok 4 - observed active target should not complete a remove operation
+    ok 5 - in-progress remove dispatch should not mark completion
+    ok 6 - in-progress remove dispatch should not emit completion
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..6
+ok 4 - in-progress remove dispatch does not reconcile active target as create progress # time=2.783ms
+
+1..4
+# { total: 81, pass: 74, fail: 7 }
+# time=302.061ms
+not ok test/rebalancer/coordinator-dedup-gap.test.js (67 assertions, 2083ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Bug: coordinator dedup gap on sequential calls
+    # Subtest: sequential createOperation for same partition+node deduplicates
+        ok 1 - first call creates an operation
+{"level":50,"time":"2026-11-21T16:20:36.422Z","nodeId":"be0df4f1-86b5-47c8-9a25-3b6ec7f9f566","pid":3155033,"subsystem":"rebalance-coordinator","operationId":"7dd29a1e-c6a0-4efe-84f0-4e0d91cb5609","type":"ADD","workflowStep":"SENDING","confirmed":false,"routePort":"() => resolveRetainedPlacementRepairBinding(this)","record":{"binding":{"state":"unavailable"},"lastDecision":{"state":"unavailable","reason":"route_unavailable"},"owed":6,"continuation":"idle","entry":"unpinned"},"bindingNow":{"state":"unavailable"},"readNow":{"success":true,"rows":1,"witness":{"state":"observed","partitionId":"replica_operations-p1","servingNodeId":"test-node-1","servingReplicaId":"replica_operations-p1-r1","role":"leader","term":1,"appliedIndex":1,"commitIndex":1}},"nodeId":"be0df4f1-86b5-47c8-9a25-3b6ec7f9f566","msg":"W1S2C-PROBE dispatch gate retained row decision"}
+        ok 2 - the exact second call replays the existing operation
+        ok 3 - exact replay creates only one operation
+        not ok 4 - Partition nodes-p1 already has a different create intent
+          ---
+          stack: |
+            RebalanceCoordinator.createConcurrentOperationBudgetError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:188:19)
+            RebalanceCoordinator.refuseConflictingCreation (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:197:16)
+            RebalanceCoordinator.resolveKnownCreationOperation (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:233:23)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:270:30
+            async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+            async Test.<anonymous> (test/rebalancer/coordinator-dedup-gap.test.js:110:26)
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+            lineNumber: 188
+            columnNumber: 19
+            typeName: RebalanceCoordinator
+            methodName: createConcurrentOperationBudgetError
+            functionName: RebalanceCoordinator.createConcurrentOperationBudgetError
+          rebalanceSkipReason: budget_exceeded
+          operationType: ADD
+          limit: 1
+          conflictingOperationId: 7dd29a1e-c6a0-4efe-84f0-4e0d91cb5609
+          tapCaught: returnedPromiseRejection
+          source: >2
+                options = {},
+              ) {
+                const error = new Error(
+            ------------------^
+                  options.message ||
+                    `Concurrent ${String(normalizedMoveType || 'operation').toLowerCase()} ` +
+          ...
+        
+        1..4
+    not ok 1 - sequential createOperation for same partition+node deduplicates # time=54.574ms
+      ---
+      at:
+        fileName: test/rebalancer/coordinator-dedup-gap.test.js
+        lineNumber: 85
+        columnNumber: 5
+        typeName: Test
+      source: |2
+          });
+      
+          t.test('sequential createOperation for same partition+node deduplicates',
+        ----^
+            async (t) => {
+              const coordinator = createTestCoordinator({
+      ...
+    
+    # Subtest: different partition+node combinations are not deduplicated
+        ok 1 - different nodes should create separate operations
+        ok 2 - two operations should have been created
+        1..2
+    ok 2 - different partition+node combinations are not deduplicated # time=7.85ms
+    
+    # Subtest: ADD allocation uses unique replica IDs across target nodes
+        ok 1 - first ADD should allocate canonical replica r1
+        ok 2 - second ADD should allocate next canonical replica
+        ok 3 - sequential ADD operations for one partition must not reuse replica ID
+        1..3
+    ok 3 - ADD allocation uses unique replica IDs across target nodes # time=8.666ms
+    
+    # Subtest: REPLACE allocation uses authoritative service rows when cache lags
+        ok 1 - allocator should avoid reusing authoritative replica IDs that are missing in cache
+        1..1
+    ok 4 - REPLACE allocation uses authoritative service rows when cache lags # time=1.891ms
+    
+    # Subtest: REPLACE allocation stays monotonic when stale topology omits lower replica ids
+        ok 1 - allocator should extend past the highest observed/excluded replica id instead of recycling a lower gap
+        1..1
+    ok 5 - REPLACE allocation stays monotonic when stale topology omits lower replica ids # time=1.772ms
+    
+    # Subtest: REMOVE operations are deduplicated by replica intent, not only node
+        ok 1 - same REMOVE intent should dedupe to existing operation
+        ok 2 - different REMOVE replica intent should create distinct operation
+        1..2
+    ok 6 - REMOVE operations are deduplicated by replica intent, not only node # time=20.611ms
+    
+    # Subtest: REMOVE is rejected when replica is owned by in-flight REPLACE
+        ok 1 - conflicting REMOVE should be rejected
+        ok 2 - conflicting remove should surface stable skip reason
+        ok 3 - conflicting replace operation id should be attached
+        ok 4 - no REMOVE operation should be created when conflict exists
+        1..4
+    ok 7 - REMOVE is rejected when replica is owned by in-flight REPLACE # time=3.033ms
+    
+    # Subtest: critical REPLACE keeps one existing add-like recovery operation when authoritative entity reads miss and the planner switches target nodes
+        ok 1 - critical replacement retains the incumbent and refuses the different target
+        ok 2 - critical recovery should not mint duplicate PENDING replacements when authoritative entity reads miss
+        1..2
+    ok 8 - critical REPLACE keeps one existing add-like recovery operation when authoritative entity reads miss and the planner switches target nodes # time=11.286ms
+    
+    # Subtest: priority REPLACE source-removal recent intent survives deferred entity visibility past remove timeout
+        ok 1 - the source-removal incumbent excludes a different target under pressure
+        ok 2 - deferred authoritative visibility must not mint a second add-like recovery operation during source removal
+        1..2
+    ok 9 - priority REPLACE source-removal recent intent survives deferred entity visibility past remove timeout # time=3.355ms
+    
+    # Subtest: positive terminal ledger evidence retires the recent creation hint
+        ok 1 - the owner row reached terminal in SQLite
+        ok 2 - a fresh operation follows exactly observed terminal evidence
+        1..2
+    ok 10 - positive terminal ledger evidence retires the recent creation hint # time=8.524ms
+    
+    # Subtest: priority recent intent survives deferred entity visibility after authoritative dedupe misses
+        ok 1 - a missing exact row cannot replay a remembered operation
+        ok 2 - authoritative dedupe misses should not mint a duplicate priority operation
+        ok 3 - unconfirmed pending evidence cannot arm the owner lane
+        ok 4 - the existing recent-intent hint remains retained
+        1..4
+    ok 11 - priority recent intent survives deferred entity visibility after authoritative dedupe misses # time=2.532ms
+    
+    # Subtest: authoritative duplicate pending operation is re-armed when create dedupes
+        ok 1 - create should return the authoritative duplicate operation
+        ok 2 - deduped pending operation should be re-armed through the owner lane
+        1..2
+    ok 12 - authoritative duplicate pending operation is re-armed when create dedupes # time=2.209ms
+    
+    # Subtest: deferred priority entity visibility still blocks duplicate add-like create when cache shows source removal in flight
+        ok 1 - the lane owner retains the conservative cached conflict
+        ok 2 - creation refuses earlier while required identity visibility is deferred
+        ok 3 - the original required-read reason survives
+        ok 4 - no duplicate replacement should be created under deferred visibility
+        1..4
+    ok 13 - deferred priority entity visibility still blocks duplicate add-like create when cache shows source removal in flight # time=4.164ms
+    
+    # Subtest: stale priority recent intent does not suppress fresh recovery create
+        ok 1 - stale priority intent should stop suppressing fresh recovery creation after its timeout window
+        ok 2 - stale priority intent should allow a fresh recovery operation to be created
+        1..2
+    ok 14 - stale priority recent intent does not suppress fresh recovery create # time=2.522ms
+    
+    # Subtest: priority recent intent is pruned when entity visibility only shows the terminal row
+        ok 1 - entity-level authoritative terminal visibility should stop stale recent-intent reuse
+        ok 2 - stale recent intent should allow a fresh recovery operation to be created
+        ok 3 - terminal entity visibility should prune the stale recent-intent entry
+        1..3
+    ok 15 - priority recent intent is pruned when entity visibility only shows the terminal row # time=1.667ms
+    
+    # Subtest: priority recent intent is pruned when authoritative entity visibility is explicitly empty
+        ok 1 - explicit empty authoritative entity visibility should allow a fresh recovery create
+        ok 2 - fresh recovery creation should proceed once the stale recent intent is pruned
+        ok 3 - explicit empty authoritative entity visibility should prune the stale recent-intent entry
+        1..3
+    ok 16 - priority recent intent is pruned when authoritative entity visibility is explicitly empty # time=2.922ms
+    
+    # Subtest: a cache terminal hint with complete durable absence permits a fresh create
+        ok 1 - terminal cache-visible priority intent should allow a fresh recovery create
+        ok 2 - fresh create path should run once after terminal intent pruning
+        ok 3 - terminal intent should be removed from recent-intent cache
+        1..3
+    ok 17 - a cache terminal hint with complete durable absence permits a fresh create # time=2.873ms
+    
+    1..17
+not ok 1 - Bug: coordinator dedup gap on sequential calls # time=599.389ms
+  ---
+  at:
+    fileName: test/rebalancer/coordinator-dedup-gap.test.js
+    lineNumber: 70
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      'cache-visible add-like work should close the critical create lane';
+  
+    test('Bug: coordinator dedup gap on sequential calls', async (t) => {
+    ^
+      t.beforeEach(async () => {
+        ConfigurationManager.resetInstance();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'seed-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: priority create lane blocks cache-visible add-like work when authoritative visibility is deferred
+    ok 1 - the critical lane owner still names its cache-visible conflict
+    ok 2 - creation refuses earlier at required identity visibility
+    ok 3 - should be equal
+    ok 4 - no duplicate operation was created
+Shutting down RebalanceCoordinator { nodeId: 'seed-node', inFlightOperations: 1 }
+    1..4
+ok 2 - priority create lane blocks cache-visible add-like work when authoritative visibility is deferred # time=23.964ms
+
+1..2
+# { total: 48, pass: 47, fail: 1 }
+# time=649.863ms
+not ok test/partition/placement-create-dispatch-execution-mirror.test.js (3 assertions, 3203ms)
+# TAP assertions failed; test process exited 1
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+TAP version 13
+Became leader {
+  term: 1,
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1',
+  rebalancerActive: true
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+Fetching updated row for CDC {
+  tableName: 'replica_operations',
+  keyColumn: 'operation_id',
+  keyValue: 'pl-sql_transactions-p1-3-0',
+  cdcPartitionId: 'replica_operations-p1',
+  cdcReplicaId: 'tx1-v3-r1',
+  suppressedSinceLastEmit: 0
+}
+Fetched updated row for CDC {
+  tableName: 'replica_operations',
+  rowKeys: [
+    'operation_id',
+    'type',
+    'partition_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'message_group_membership_owner_claim',
+    'message_group_membership_permit',
+    'source_replica_id',
+    'message_group_membership_lane_key',
+    'message_group_membership_phase',
+    'message_group_membership_obligation_state',
+    'message_group_membership_identity',
+    'message_group_learner_stamp',
+    'message_group_voter_stamp',
+    'message_group_removal_stamp',
+    'message_group_source_lifecycle_claim',
+    'create_admission_state',
+    'create_admission_token',
+    'create_admission_replica_created_at',
+    'create_admission_attempt_token',
+    'create_admission_previous_attempt_token',
+    'create_admission_attempt_seq',
+    'create_admission_workflow_updated_at',
+    'create_admission_owner_incarnation',
+    'replica_id',
+    'target_claim_key',
+    'source_node_id',
+    'target_node_id',
+    'status',
+    'workflow_step',
+    'created_at',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'copy_source_node_id'
+  ],
+  cdcPartitionId: 'replica_operations-p1',
+  cdcReplicaId: 'tx1-v3-r1',
+  suppressedSinceLastEmit: 0
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_transactions-p1'
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Storage reservation created with operation {
+  reservationId: 'res-pl-sql_transactions-p1-3-0',
+  operationId: 'pl-sql_transactions-p1-3-0',
+  targetNodeId: 'node-b',
+  estimatedBytes: 1,
+  expiresAt: 1795278338022
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'workflow_step',
+    'status',
+    'updated_at',
+    'completed_at',
+    'error_message',
+    'steps_history',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:competing-terminal',
+  logIndex: 6,
+  obligations: 1
+}
+Durable terminal release obligations registered {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  workflowStep: 'FAILED',
+  partitionId: 'sql_transactions-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+# Subtest: fresh placement CREATE binds its topology and advances through actual dispatch transitions
+ok 1 - fresh placement CREATE binds its topology and advances through actual dispatch transitions
+  ---
+  duration_ms: 1720.7337
+  type: 'test'
+  ...
+# Subtest: a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+not ok 2 - a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+  ---
+  duration_ms: 26.011396
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-create-dispatch-execution-mirror.test.js:144:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    assertCreateDelivery (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-create-dispatch-execution-mirror.test.js:113:10)
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-create-dispatch-execution-mirror.test.js:154:7
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-create-dispatch-execution-mirror.test.js:101:7
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-admission-fixture.js:40:12)
+    async withPlacementExecution (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-create-dispatch-execution-mirror.test.js:43:3)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bf8a1f022cfb-mwqm6dfy-1533000/test/partition/placement-create-dispatch-execution-mirror.test.js:146:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a competing terminal result survives acknowledgement of a previously stamped CREATE
+ok 3 - a competing terminal result survives acknowledgement of a previously stamped CREATE
+  ---
+  duration_ms: 18.493132
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1771.689263
+# time=3203ms
+# test-files total=4 pass=0 fail=4 assertions=207
+placement-results={"file":"test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js","attempt":1,"ok":false,"assertions":35,"durationMs":1518,"retriedOnce":false,"firstFailureLine":"not ok 1 - the completed response should succeed"}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":false,"assertions":102,"durationMs":1679,"retriedOnce":false,"firstFailureLine":"not ok 1 - create rearm should still issue one dispatch request"}
+placement-results={"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":false,"assertions":67,"durationMs":2083,"retriedOnce":false,"firstFailureLine":"not ok 4 - Partition nodes-p1 already has a different create intent"}
+placement-results={"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":3203,"retriedOnce":false,"firstFailureLine":"not ok 2 - a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement"}

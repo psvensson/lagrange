@@ -1,0 +1,29 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: 1ede7a19dffb6a3039563c9c01b7e9102fcff3d2
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 1 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 1 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 1 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 1 JavaScript files
+Found 0 navigability violations
+Matched 1 inherited navigability baseline violations
+Scoped complexity ratchet: 1 violation(s) in 1 target(s) (threshold: 12).
+src/rebalancer/operation-workflow-gate-operation-row-repair.js:49:1 Async function 'repairOperationRowForGateRepairedReservation' has a complexity of 16. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[detached HEAD bf8a1f022] probe(w1): trace the retained owner decision at the dispatch gate (diagnostic only, never on the work branch)
+ 3 files changed, 70 insertions(+), 30 deletions(-)

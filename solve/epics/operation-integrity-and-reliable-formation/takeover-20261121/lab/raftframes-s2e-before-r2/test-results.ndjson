@@ -1,0 +1,1 @@
+{"file":"test/transport/raft-frame-reconnect-owner.integration.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":21098,"retriedOnce":false,"firstFailureLine":"not ok 2 - C13: after an outage that outlasts the dialing end's reconnect schedule, the link still comes back once the network heals"}

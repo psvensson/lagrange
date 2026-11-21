@@ -1,0 +1,46 @@
+lab test: adam-laptop: ordinary, bootstrap, exclusive (23 files) cores=8 mem=15.5GiB speed x1.01
+[adam-laptop] placement-shell=3505316
+[adam-laptop] placement-head=49495f7e47ff7fc03d2a1bbdf92ab92e9fc09778
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:1.1 mode:local retry:0 timeout: lanecap:7 base:49495f7e47ff7fc03d2a1bbdf92ab92e9fc09778
+[adam-laptop] placement-pid=3506762
+[adam-laptop] # test-files planned=23
+[adam-laptop] classified lane ordinary: 19 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 82C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 82C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 45C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (8 assertions, 950ms)
+[adam-laptop] ok test/control-plane/heartbeat-liveness-at-commit.test.js (7 assertions, 1196ms)
+[adam-laptop] ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 1942ms)
+[adam-laptop] ok test/node/node-reintegration-service.test.js (82 assertions, 2259ms)
+[adam-laptop] ok test/rebalancer/admission-real-size-estimates.test.js (27 assertions, 2576ms)
+[adam-laptop] ok test/raft/snapshot-dispatcher-wiring.test.js (18 assertions, 3729ms)
+[adam-laptop] ok test/control-plane/heartbeat-memory-trend.test.js (144 assertions, 4977ms)
+[adam-laptop] ok test/rebalancer/coordinator-created-operation-progress.test.js (41 assertions, 2194ms)
+[adam-laptop] ok test/rebalancer/message-group-membership-operation-lane.test.js (8 assertions, 1920ms)
+[adam-laptop] ok test/rebalancer/node-storage-budget-service.test.js (22 assertions, 2016ms)
+[adam-laptop] ok test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js (15 assertions, 1852ms)
+[adam-laptop] ok test/rebalancer/replica-operation-insert-retry-idempotency.test.js (10 assertions, 1824ms)
+[adam-laptop] ok test/rebalancer/rebalance-coordinator-topology-guard.test.js (113 assertions, 4105ms)
+[adam-laptop] ok test/rebalancer/replica-operation-membership-epoch-binding.test.js (110 assertions, 4080ms)
+[adam-laptop] ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 2710ms)
+[adam-laptop] ok test/rebalancer/terminal-status-constants.test.js (25 assertions, 952ms)
+[adam-laptop] ok test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (9 assertions, 2493ms)
+[adam-laptop] ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 2583ms)
+[adam-laptop] ok test/rebalancer/executor-bypasses-workflow-owner.test.js (7 assertions, 12209ms)
+[adam-laptop] # test-files total=19 pass=19 fail=0 assertions=703
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 53C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/node-registration-idempotency.test.js (6 assertions, 2034ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=6
+[adam-laptop] classified lane exclusive: 3 file(s), jobs=1
+[adam-laptop] thermal: ok cpu 72C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/integration/control-plane-postgres-wire-scale.integration.test.js (27 assertions, 1402ms)
+[adam-laptop] ok test/integration/lagrange-server-npm-package.integration.test.js (3 assertions, 34083ms)
+[adam-laptop] ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 2919ms)
+[adam-laptop] # test-files total=3 pass=3 fail=0 assertions=32
+lab test: adam-laptop: # test-files total=23 pass=23 fail=0 assertions=741
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=23 pass=23 fail=0 assertions=741
+exit=0

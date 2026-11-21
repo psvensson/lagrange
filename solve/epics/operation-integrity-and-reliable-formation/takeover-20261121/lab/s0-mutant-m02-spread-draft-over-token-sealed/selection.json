@@ -1,0 +1,17 @@
+{
+  "sha": "59ef438d005bbc9082723db8b10717a667d00047",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/control-plane-owner-fact-read.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/control-plane-owner-fact-read.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

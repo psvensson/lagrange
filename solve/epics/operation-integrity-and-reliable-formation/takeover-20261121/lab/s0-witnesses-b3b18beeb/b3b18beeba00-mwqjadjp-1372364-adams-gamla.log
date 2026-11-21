@@ -1,0 +1,178 @@
+placement-shell=1875994
+placement-head=b3b18beeba00c15d0c1863723ecff77ebe2b6ff5
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.5 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1876944
+# test-files planned=9
+classified lane ordinary: 9 file(s), jobs=3
+thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 2871ms)
+ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 3459ms)
+not ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (2 assertions, 8276ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent
+    # {"observed":{"success":true,"rows":[],"failureCode":null,"witness":{"state":"observed","partitionId":"replica_operations-p1","servingNodeId":"owner-fact-node-c","servingReplicaId":"replica_operations-p1-r3","term":2,"appliedIndex":4,"commitIndex":4,"electionLogApplied":false,"role":"leader","observedAtMs":1795273218160},"committedIndex":5,"freshLeader":{"role":"leader","commitIndex":4,"appliedIndex":4,"confChangePending":true}}}
+    not ok 1 - a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read has no read-point refusal; consumers must migrate to readOwnerFact)
+      ---
+      at:
+        fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+        lineNumber: 50
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/cdc/cdc-leader-required-fresh-leader-absence.test.js:50:5)
+      source: >2
+            committedIndex, freshLeader: {role: status.role, commitIndex: status.commitIndex,
+              appliedIndex: status.appliedIndex, confChangePending: status.confChangePending}}}));
+          t.notOk(answer.success === true && Array.isArray(answer.rows) && answer.rows.length === 0,
+        ----^
+            'a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read ' +
+            'has no read-point refusal; consumers must migrate to readOwnerFact)');
+      ...
+    
+    1..1
+not ok 1 - FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent # time=5811.018ms
+  ---
+  at:
+    fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+    lineNumber: 37
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('FINDING (open): a leader-REQUIRED read that is not an owner fact answers
+    a row its ' +
+  
+    ^
+      'leader\'s predecessor committed as absent', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=5827.728ms
+ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 6776ms)
+ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2377ms)
+not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 8554ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+    ok 1 - in process: never READY without the row
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - routed: never READY without the row
+    ok 5 - should be equal
+    ok 6 - the fresh leader ships no rows
+    1..6
+ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=4719.938ms
+
+# Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+    ok 1 - leader: same typed answer
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - follower: same typed answer
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - names the leader it knows
+    ok 8 - insufficiently applied leader: same typed answer
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - deposed leader: same typed answer
+    ok 12 - should be equal
+    ok 13 - should be equal
+    not ok 14 - names the leader that replaced it
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 108
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:108:5)
+      source: >2
+          t.equal(deposed.failureCode, REASON.NOT_LEADER);
+          t.equal(deposed.shipsRows, false);
+          t.equal(deposed.leaderAddress, second.unifiedAddress, 'names the leader that replaced it');
+        ----^
+      
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner-fact-node-c/partition/replica_operations-p1-r3
+        +null
+      ...
+    
+    1..14
+not ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=421.624ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 81
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('one receiver contract: the same owner-fact request gets the same typed
+    answer in ' +
+  
+    ^
+      'process and over the transport', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+# Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+    ok 1 - the read reaches the replica that leads now
+    ok 2 - never the replica that stopped leading during its read
+    ok 3 - should be equivalent
+    ok 4 - the old leader refused after its read, shipping no rows
+    1..4
+ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=376.458ms
+
+# Subtest: readOwnerFact: an apply landing while the leader reads never mis-states the witness
+    ok 1 - beforeRead: typed
+    ok 2 - beforeRead: the receiver cannot name the snapshot it read, so it refuses
+    ok 3 - beforeRead: a read that spans no apply is READY
+    ok 4 - should be equivalent
+    ok 5 - should be equal
+    ok 6 - afterRead: typed
+    ok 7 - afterRead: the receiver cannot name the snapshot it read, so it refuses
+    ok 8 - afterRead: a read that spans no apply is READY
+    ok 9 - should be equivalent
+    ok 10 - should be equal
+    1..10
+ok 4 - readOwnerFact: an apply landing while the leader reads never mis-states the witness # time=389.936ms
+
+# Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+    ok 1 - never READY with no rows
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 5 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=313.819ms
+
+1..5
+# { total: 37, pass: 36, fail: 1 }
+# time=6240.944ms
+ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 828ms)
+ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 2509ms)
+ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 7912ms)
+# test-files total=9 pass=7 fail=2 assertions=465
+placement-results={"file":"test/cdc/cdc-owner-fact-hosted-replica.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2871,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":3459,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-leader-required-fresh-leader-absence.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":8276,"retriedOnce":false,"firstFailureLine":"not ok 1 - a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read has no read-point refusal; consumers must migrate to readOwnerFact)"}
+placement-results={"file":"test/cdc/cdc-owner-fact-redirect-deadline.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":6776,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":2377,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":42,"durationMs":8554,"retriedOnce":false,"firstFailureLine":"not ok 14 - names the leader that replaced it"}
+placement-results={"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":true,"assertions":120,"durationMs":828,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":true,"assertions":107,"durationMs":2509,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/query-executor-recovery-read-lifetime.test.js","attempt":1,"ok":true,"assertions":122,"durationMs":7912,"retriedOnce":false,"firstFailureLine":null}

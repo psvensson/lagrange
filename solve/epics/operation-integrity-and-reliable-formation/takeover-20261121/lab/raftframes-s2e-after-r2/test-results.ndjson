@@ -1,0 +1,6 @@
+{"file":"test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":2375,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/raft-rs-transport-demux.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2528,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-service-raft-replication-and-cdc.test.js","attempt":1,"ok":true,"assertions":110,"durationMs":3611,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2032,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router.test.js","attempt":1,"ok":true,"assertions":499,"durationMs":6323,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-turn-not-held.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1500,"retriedOnce":false,"firstFailureLine":null}

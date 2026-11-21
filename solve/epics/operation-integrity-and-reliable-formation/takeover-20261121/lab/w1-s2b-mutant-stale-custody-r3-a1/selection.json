@@ -1,0 +1,17 @@
+{
+  "sha": "308a8e348ec470bb0bd8821dcb995f55a97580cd",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-retained-continuation.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-retained-continuation.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

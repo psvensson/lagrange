@@ -1,0 +1,29 @@
+{
+  "sha": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js",
+    "test/integration/message-group-learner-join.integration.test.js",
+    "test/node/fresh-create-resumed-syncing-claim.test.js",
+    "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js",
+        "test/node/fresh-create-resumed-syncing-claim.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/integration/message-group-learner-join.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+lab test: adams-gamla: exclusive (1 files) cores=4 mem=15.6GiB speed x2.04
+[adams-gamla] placement-shell=1871043
+[adams-gamla] placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1872457
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane exclusive: 1 file(s), jobs=1
+[adams-gamla] thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js (6 assertions, 2024ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: partition concurrent initialize callers join one native opening
+[adams-gamla] ok 1 - partition concurrent initialize callers join one native opening
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 157.862284
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: partition shutdown waits for in-flight initialization before teardown
+[adams-gamla] ok 2 - partition shutdown waits for in-flight initialization before teardown
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 82.032413
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: message-group concurrent initialize callers join one native opening
+[adams-gamla] ok 3 - message-group concurrent initialize callers join one native opening
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 71.494112
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: message-group shutdown waits for in-flight initialization before teardown
+[adams-gamla] ok 4 - message-group shutdown waits for in-flight initialization before teardown
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 68.839772
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation
+[adams-gamla] not ok 5 - ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 57.626457
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:83:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'work.owner.ownsPhysicalWorker is not a function'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   name: 'TypeError'
+[adams-gamla]   stack: |-
+[adams-gamla]     ownsReplicaCreateWork (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/src/node/replica-handler-create-work.js:75:32)
+[adams-gamla]     failCreate (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/src/node/replica-handler-create-methods.js:332:14)
+[adams-gamla]     ReplicaHandler.createReplicaAsync (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/src/node/replica-handler-create-methods.js:715:22)
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:108:17)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: ReplicaHandler releases CREATE claim when shutdown cleanup rejects
+[adams-gamla] not ok 6 - ReplicaHandler releases CREATE claim when shutdown cleanup rejects
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 54.874721
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:118:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'false == true'
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: true
+[adams-gamla]   actual: false
+[adams-gamla]   operator: '=='
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj3xk3-1359657/test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:158:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] 1..6
+[adams-gamla] # tests 6
+[adams-gamla] # suites 0
+[adams-gamla] # pass 4
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 510.212433
+[adams-gamla] # time=2024ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=6
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=6
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=6

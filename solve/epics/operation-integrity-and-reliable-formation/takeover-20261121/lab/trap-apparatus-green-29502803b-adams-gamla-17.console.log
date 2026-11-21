@@ -1,0 +1,17 @@
+lab test: adams-gamla: ordinary (2 files) cores=4 mem=15.6GiB speed x2.24
+[adams-gamla] placement-shell=1863264
+[adams-gamla] placement-head=29502803bb25587b2adadca435997c2274e42cd9
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1865004
+[adams-gamla] # test-files planned=2
+[adams-gamla] classified lane ordinary: 2 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/scripts/fallback-necessity-trap.test.js (18 assertions, 1564ms)
+[adams-gamla] ok test/scripts/fallback-read-closure.test.js (19 assertions, 3031ms)
+[adams-gamla] # test-files total=2 pass=2 fail=0 assertions=37
+lab test: adams-gamla: # test-files total=2 pass=2 fail=0 assertions=37
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=2 pass=2 fail=0 assertions=37

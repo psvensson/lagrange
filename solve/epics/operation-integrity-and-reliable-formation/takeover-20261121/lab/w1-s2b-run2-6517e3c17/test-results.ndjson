@@ -1,0 +1,9 @@
+{"file":"test/partition/placement-growth-dispatch-identity.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":4020,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-post-copy.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":4053,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":4448,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":22,"durationMs":5846,"retriedOnce":false,"firstFailureLine":"not ok 3 - W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender"}
+{"file":"test/partition/placement-retained-real-publication.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":4530,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4971,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-real-group-native-ledger-recovery.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":5000,"retriedOnce":false,"firstFailureLine":"not ok 3 - S11 real ledger after SAFE: raw-bypass-negative"}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":7230,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":3658,"retriedOnce":false,"firstFailureLine":"not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal"}

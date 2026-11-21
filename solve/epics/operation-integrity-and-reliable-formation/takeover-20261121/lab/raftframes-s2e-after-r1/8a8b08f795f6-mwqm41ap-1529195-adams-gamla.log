@@ -1,0 +1,332 @@
+placement-shell=1903771
+placement-head=8a8b08f795f67557fe21ea76abc5a394e2dcea47
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1904227
+# test-files planned=34
+classified lane ordinary: 28 file(s), jobs=3
+thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+ok test/message-group/message-group-native-application-membership.test.js (2 assertions, 2326ms)
+ok test/message-group/message-group-fresh-learner-snapshot.test.js (1 assertions, 2999ms)
+ok test/message-group/message-group-native-mixed-vector.test.js (3 assertions, 2372ms)
+ok test/message-group/message-group-peer-address-committed-configuration.test.js (68 assertions, 2445ms)
+not ok test/message-group/message-group-service-raft-replication-and-cdc.test.js (110 assertions, 2930ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: MessageGroupService - Raft CDC propose failures preserve deferred retry metadata for upstream owners
+    ok 1 - wrapped error should preserve the original defer reason
+    ok 2 - wrapped raft propose error should preserve defer-retry metadata
+    ok 3 - wrapped raft propose error should preserve retryAfterMs for upstream owners
+    ok 4 - wrapped raft propose error should preserve non-retryable semantics
+    ok 5 - wrapped raft propose error should preserve the upstream error code
+    ok 6 - should log one bounded propose failure
+    ok 7 - should be equal
+    ok 8 - failure log should classify local leadership state
+    ok 9 - failure log should preserve the published raft role
+    ok 10 - failure log should identify the leader routing path
+    ok 11 - failure log should preserve the configured retry budget
+    ok 12 - failure log should preserve the propose timeout budget
+    1..12
+ok 1 - MessageGroupService - Raft CDC propose failures preserve deferred retry metadata for upstream owners # time=18.914ms
+
+# Subtest: MessageGroupService - strict CDC forward delivery preserves retryable defer semantics for closed leader connections
+    ok 1 - closed leader delivery should preserve defer-retry semantics
+    ok 2 - closed leader delivery should preserve the retry-after hint
+    ok 3 - closed leader delivery should stay retryable so the routing can re-resolve a new target
+    ok 4 - closed leader delivery should preserve the transport error code
+    ok 5 - closed leader delivery should still surface the canonical forward failure message
+    1..5
+ok 2 - MessageGroupService - strict CDC forward delivery preserves retryable defer semantics for closed leader connections # time=4.005ms
+
+# Subtest: MessageGroupService - proposeCDCCommand retries retryable strict forward failures through the routing budget
+    ok 1 - retryable strict forward failures should consume the remaining routing retry budget before surfacing a final error
+    1..1
+ok 3 - MessageGroupService - proposeCDCCommand retries retryable strict forward failures through the routing budget # time=3.447ms
+
+# Subtest: MessageGroupService - non-query sendMessage honors deferred retry hints
+    ok 1 - deferred transport failures should not multiply direct retries
+    ok 2 - deferred transport failures should not schedule retry delays
+    ok 3 - deferred transport failures should fall back to raft persistence
+    ok 4 - non-query messages should still be persisted once for later replay
+    1..4
+ok 4 - MessageGroupService - non-query sendMessage honors deferred retry hints # time=2.321ms
+
+# Subtest: MessageGroupService - control-plane targets default to critical router priority
+    ok 1 - should perform one direct delivery attempt
+    ok 2 - critical transport targets should claim the critical router lane by default
+    ok 3 - typed payloads should keep router-derived delivery source semantics
+    1..3
+ok 5 - MessageGroupService - control-plane targets default to critical router priority # time=1.713ms
+
+# Subtest: MessageGroupService - typeless control-plane target messages use a sender-scoped delivery source
+    ok 1 - should perform both direct deliveries
+    ok 2 - typeless critical transport targets should stay on the critical lane
+    ok 3 - typeless critical partition sends should carry a sender-scoped source
+    ok 4 - caller-provided deliverySource should remain authoritative
+    1..4
+ok 6 - MessageGroupService - typeless control-plane target messages use a sender-scoped delivery source # time=1.737ms
+
+# Subtest: MessageGroupService - non-critical initial partitions do not claim the critical router lane by default
+    ok 1 - should perform one direct delivery attempt
+    ok 2 - non-critical initial partitions should inherit the router background default
+    1..2
+ok 7 - MessageGroupService - non-critical initial partitions do not claim the critical router lane by default # time=1.263ms
+
+# Subtest: MessageGroupService - consensus envelopes to message-group peers use the readiness router lane
+    ok 1 - the consensus envelope should be delivered once
+    ok 2 - the semantic envelope should reach the transport unchanged
+    not ok 3 - consensus delivery to an mg-1 peer should use the readiness router lane
+      ---
+      compare: ===
+      at:
+        fileName: test/message-group/message-group-service-raft-replication-and-cdc.test.js
+        lineNumber: 571
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/message-group/message-group-service-raft-replication-and-cdc.test.js:571:9)
+      source: |2
+              t.same(deliveries[0]?.payload, envelope,
+                'the semantic envelope should reach the transport unchanged');
+              t.equal(
+        --------^
+                deliveries[0]?.options?.deliveryPriority,
+                TEST_DELIVERY_PRIORITY.READINESS,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -readiness
+        +undefined
+      ...
+    
+    1..3
+not ok 8 - MessageGroupService - consensus envelopes to message-group peers use the readiness router lane # time=32.79ms
+  ---
+  at:
+    fileName: test/message-group/message-group-service-raft-replication-and-cdc.test.js
+    lineNumber: 533
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('MessageGroupService - consensus envelopes to message-group peers use the
+    readiness router lane',
+  
+    ^
+      async (t) => {
+        const deliveries = [];
+  ...
+
+# Subtest: MessageGroupService - receiveMessage processes message
+    ok 1 - Should return messageId
+    ok 2 - Should return received status
+    ok 3 - Should emit messageReceived event
+    ok 4 - Event should have messageId
+    ok 5 - completion ownership requires an explicit message-type scope
+    ok 6 - one application owner can register the completion boundary
+    ok 7 - typed ownership does not swallow unrelated application interactions
+    ok 8 - a second subsystem cannot steal the completion boundary
+    ok 9 - message delivery remains pending until the application owner finishes
+    ok 10 - the owner completion is returned to the transport caller
+    ok 11 - the same owner releases its completion registration
+    1..11
+ok 9 - MessageGroupService - receiveMessage processes message # time=79.991ms
+
+# Subtest: MessageGroupService - receiveMessage detects duplicates
+    ok 1 - Should detect duplicate
+    ok 2 - the receipt is the router's fact, not a field of the CDC answer
+    1..2
+ok 10 - MessageGroupService - receiveMessage detects duplicates # time=16.595ms
+
+# Subtest: MessageGroupService - acknowledgeMessage marks message
+    ok 1 - Should return messageId
+    ok 2 - Should be acknowledged
+    ok 3 - Should have log index
+    ok 4 - Should emit messageAcknowledged event
+    1..4
+ok 11 - MessageGroupService - acknowledgeMessage marks message # time=15.209ms
+
+# Subtest: MessageGroupService - subscribeToCDC adds subscription
+    ok 1 - Should subscribe to nodes
+    ok 2 - Should subscribe to partitions
+    1..2
+ok 12 - MessageGroupService - subscribeToCDC adds subscription # time=14.907ms
+
+# Subtest: MessageGroupService - applyCDCEvent updates cache
+    ok 1 - Should emit cdcApplied event
+    ok 2 - Event should have tableName
+    ok 3 - Event should have operation
+    ok 4 - Should find record in cache
+    ok 5 - Should have correct address
+    1..5
+ok 13 - MessageGroupService - applyCDCEvent updates cache # time=19.388ms
+
+# Subtest: MessageGroupService - applyCDCEvent fails closed on Raft propose error
+    ok 1 - the lone replica leads its group
+{"level":50,"time":"2026-11-21T16:19:06.749Z","nodeId":"test-node","pid":1904308,"subsystem":"message-group","groupId":"mg-raft-fail","replicaId":"mg-raft-fail-r1","tableName":"nodes","causeId":"cacd0b77-774f-4070-bfea-e29f0f95aca6","attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"Message-group consensus refused the proposal: CORE_REFUSED (reason raft propose failed, phase undefined)","nodeId":"test-node","msg":"Raft CDC command failed"}
+    ok 2 - should surface Raft replication failure to caller
+    1..2
+ok 14 - MessageGroupService - applyCDCEvent fails closed on Raft propose error # time=17.169ms
+
+# Subtest: MessageGroupService - proposeCDCCommand does not locally propose from published role before live raft leadership converges
+    ok 1 - published leader role without live raft leadership should route through forward-to-leader instead of proposing locally
+    ok 2 - published leader role alone must not authorize a local propose while the core does not lead
+    1..2
+ok 15 - MessageGroupService - proposeCDCCommand does not locally propose from published role before live raft leadership converges # time=4.745ms
+
+# Subtest: MessageGroupService - applyCDCEvent forwards when published follower ownership disagrees with stale local raft leadership
+    ok 1 - the core still leads while the published ownership moved away
+    ok 2 - non-leader CDC should forward instead of applying locally when the core leadership is stale
+    ok 3 - forwarding should still target the known remote leader address
+    ok 4 - forwarded payload should preserve the non-system CDC table name
+    1..4
+ok 16 - MessageGroupService - applyCDCEvent forwards when published follower ownership disagrees with stale local raft leadership # time=16.3ms
+
+# Subtest: MessageGroupService - applyCDCEvent defers strict CDC on followers before leader routing when ingress is not ready
+    ok 1 - the follower announcement publishes the follower role
+    ok 2 - strict CDC defer should preserve deferRetry metadata
+    ok 3 - strict CDC defer should preserve retryAfterMs
+    ok 4 - strict CDC defer should preserve the readiness reason
+    1..4
+ok 17 - MessageGroupService - applyCDCEvent defers strict CDC on followers before leader routing when ingress is not ready # time=19.872ms
+
+# Subtest: MessageGroupService - replicated CDC retry must re-propose even with same timestamp
+{"level":50,"time":"2026-11-21T16:19:06.948Z","nodeId":"test-node","pid":1904308,"subsystem":"message-group","groupId":"mg-retry-same-ts","replicaId":"mg-retry-same-ts-r1","tableName":"nodes","causeId":"ad594457-b472-4446-9a13-840bf132ac31","attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"Message-group consensus refused the proposal: CORE_REFUSED (reason synthetic propose failure, phase undefined)","nodeId":"test-node","msg":"Raft CDC command failed"}
+    ok 1 - first attempt should surface replicated CDC propose failure
+    ok 2 - second attempt with same timestamp should still re-propose
+    ok 3 - leader path may apply locally before commit; retry path must still re-propose
+    1..3
+ok 18 - MessageGroupService - replicated CDC retry must re-propose even with same timestamp # time=13.285ms
+
+# Subtest: MessageGroupService - CDC batch propagation proposes one raft command
+    ok 1 - batched propagation should acknowledge success
+    ok 2 - batched propagation should report the full event count
+    ok 3 - batched propagation should propose one raft command
+    ok 4 - batched propagation should use the CDC_BATCH command type
+    ok 5 - raft command should retain all batch events
+    ok 6 - leader should apply first batched event locally
+    ok 7 - leader should apply second batched event locally
+    1..7
+ok 19 - MessageGroupService - CDC batch propagation proposes one raft command # time=11.258ms
+
+# Subtest: MessageGroupService - a lone-founded group replicates CDC through its port once the services cache names a second replica
+    ok 1 - the lone founder leads its group
+    ok 2 - the leader admits the second replica the services cache names
+    ok 3 - the admitted replica is kept in the group hint list
+    ok 4 - CDC of a group that grew past one replica is proposed through the port
+    ok 5 - the proposal carries the CDC command
+    1..5
+ok 20 - MessageGroupService - a lone-founded group replicates CDC through its port once the services cache names a second replica # time=11.633ms
+
+# Subtest: MessageGroupService - CDC paths delegate to CDCHandler owner
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 21 - MessageGroupService - CDC paths delegate to CDCHandler owner # time=16.059ms
+
+1..21
+# { total: 89, pass: 88, fail: 1 }
+# time=1075.44ms
+ok test/message-group/message-group-service.test.js (83 assertions, 2750ms)
+ok test/message-group/message-group-native-custody-handoff.test.js (2 assertions, 13330ms)
+ok test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js (8 assertions, 2025ms)
+ok test/message-group/raft-response-address-validation.test.js (5 assertions, 2843ms)
+ok test/message-group/message-group-native-provisional-route.test.js (1 assertions, 13325ms)
+ok test/partition/participant-release-control-three-member.test.js (1 assertions, 6971ms)
+ok test/partition/participant-release-native-application-order.test.js (1 assertions, 7153ms)
+ok test/partition/raft-rs-transport-demux.test.js (16 assertions, 2062ms)
+ok test/partition/partition-service-size-split-transport.test.js (101 assertions, 10255ms)
+ok test/partition/partition-write-leadership-transfer.test.js (2 assertions, 6961ms)
+ok test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js (3 assertions, 6206ms)
+ok test/raft/raft-rs-backend/log-marker-partition.test.js (1 assertions, 5744ms)
+ok test/raft/raft-rs-backend/message-group-on-raft-rs.test.js (6 assertions, 4874ms)
+ok test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js (68 assertions, 2640ms)
+ok test/partition/replica-admission-delivery-lifetime.test.js (16 assertions, 14253ms)
+ok test/raft/raft-rs-peer-delivery-transport-outcome.test.js (34 assertions, 895ms)
+ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 3060ms)
+ok test/simulation/formation-sim-connection-environment.test.js (6 assertions, 732ms)
+ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 2194ms)
+ok test/wasm-service/wasm-service-lifecycle.test.js (63 assertions, 3740ms)
+ok test/transport/message-router.test.js (499 assertions, 7055ms)
+ok test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js (2 assertions, 17164ms)
+ok test/wasm-service/wasm-service-replica.test.js (54 assertions, 15169ms)
+# test-files total=28 pass=27 fail=1 assertions=1162
+classified lane exclusive: 6 file(s), jobs=1
+thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+ok test/message-group/message-group-native-w7-multi-target-route.integration.test.js (1 assertions, 8360ms)
+ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 1730ms)
+ok test/transport/raft-frame-liveness-residual.integration.test.js (1 assertions, 1830ms)
+not ok test/transport/raft-frame-pair-coalescing.integration.test.js (1 assertions, 4494ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (c1) frames per node pair per second do not grow with the raft groups the pair shares
+not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares
+  ---
+  duration_ms: 3174.827637
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8a8b08f795f6-mwqm41ap-1529195/test/transport/raft-frame-pair-coalescing.integration.test.js:98:1'
+  failureType: 'testCodeFailure'
+  error: 'frames per pair grew {"rfc-a>rfc-b":4,"rfc-a>rfc-c":0,"rfc-b>rfc-a":4,"rfc-b>rfc-c":4,"rfc-c>rfc-a":0,"rfc-c>rfc-b":4} from 4 to 16 groups (allowed 1.5): measured per 1000 virtual ms [{"groupCount":4,"pairs":{"rfc-a>rfc-b":132,"rfc-a>rfc-c":0,"rfc-b>rfc-a":132,"rfc-b>rfc-c":132,"rfc-c>rfc-a":0,"rfc-c>rfc-b":132},"raftEnvelopesReceived":528,"leadershipStable":true},{"groupCount":8,"pairs":{"rfc-a>rfc-b":264,"rfc-a>rfc-c":0,"rfc-b>rfc-a":264,"rfc-b>rfc-c":264,"rfc-c>rfc-a":0,"rfc-c>rfc-b":264},"raftEnvelopesReceived":1056,"leadershipStable":true},{"groupCount":16,"pairs":{"rfc-a>rfc-b":528,"rfc-a>rfc-c":0,"rfc-b>rfc-a":528,"rfc-b>rfc-c":528,"rfc-c>rfc-a":0,"rfc-c>rfc-b":528},"raftEnvelopesReceived":2112,"leadershipStable":true}]'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8a8b08f795f6-mwqm41ap-1529195/test/transport/raft-frame-pair-coalescing.integration.test.js:116:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3181.105148
+# time=4494ms
+ok test/transport/raft-frame-reconnect-owner.integration.test.js (2 assertions, 18217ms)
+ok test/transport/raft-frame-turn-not-held.integration.test.js (1 assertions, 1463ms)
+# test-files total=6 pass=5 fail=1 assertions=8
+placement-results={"file":"test/message-group/message-group-native-application-membership.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2326,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-fresh-learner-snapshot.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2999,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-native-mixed-vector.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2372,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-peer-address-committed-configuration.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":2445,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-service-raft-replication-and-cdc.test.js","attempt":1,"ok":false,"assertions":110,"durationMs":2930,"retriedOnce":false,"firstFailureLine":"not ok 3 - consensus delivery to an mg-1 peer should use the readiness router lane"}
+placement-results={"file":"test/message-group/message-group-service.test.js","attempt":1,"ok":true,"assertions":83,"durationMs":2750,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-native-custody-handoff.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":13330,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":2025,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/raft-response-address-validation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2843,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-native-provisional-route.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":13325,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-control-three-member.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6971,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":7153,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/raft-rs-transport-demux.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2062,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-service-size-split-transport.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":10255,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-write-leadership-transfer.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6961,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":6206,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/log-marker-partition.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5744,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/message-group-on-raft-rs.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4874,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":2640,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/replica-admission-delivery-lifetime.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":14253,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-peer-delivery-transport-outcome.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":895,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3060,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/simulation/formation-sim-connection-environment.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":732,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2194,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/wasm-service-lifecycle.test.js","attempt":1,"ok":true,"assertions":63,"durationMs":3740,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router.test.js","attempt":1,"ok":true,"assertions":499,"durationMs":7055,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":17164,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/wasm-service-replica.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":15169,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-native-w7-multi-target-route.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":8360,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-origin-retained-history.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1730,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-liveness-residual.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1830,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-pair-coalescing.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4494,"retriedOnce":false,"firstFailureLine":"not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares"}
+placement-results={"file":"test/transport/raft-frame-reconnect-owner.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":18217,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-turn-not-held.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1463,"retriedOnce":false,"firstFailureLine":null}

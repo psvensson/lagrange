@@ -1,0 +1,47 @@
+{
+  "sha": "b07094a76b4b981049f747cad2c015bb59cf8040",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/heartbeat-liveness-at-commit.test.js",
+    "test/runtime/service-runtime-consensus-publication.test.js",
+    "test/bootstrap/node-registration-idempotency.test.js",
+    "test/control-plane/heartbeat-memory-trend.test.js",
+    "test/control-plane/service-instance-creation-cas.test.js",
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+    "test/query/sql-query-engine-create-table-quorum.test.js",
+    "test/bootstrap/bootstrap-api.test.js",
+    "test/integration/control-plane-rebalance.integration.test.js",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/heartbeat-memory-trend.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/control-plane/heartbeat-liveness-at-commit.test.js",
+        "test/query/sql-query-engine-create-table-quorum.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/bootstrap-api.test.js",
+        "test/bootstrap/node-registration-idempotency.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+        "test/integration/control-plane-rebalance.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

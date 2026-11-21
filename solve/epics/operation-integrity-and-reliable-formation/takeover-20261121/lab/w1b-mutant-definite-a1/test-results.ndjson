@@ -1,0 +1,1 @@
+{"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":4998,"retriedOnce":false,"firstFailureLine":"not ok 1 - F11: every code on the admission path maps to a definite answer (null) or a trigger whose subscription exists, and none clears on RESYNC or a retry delay"}

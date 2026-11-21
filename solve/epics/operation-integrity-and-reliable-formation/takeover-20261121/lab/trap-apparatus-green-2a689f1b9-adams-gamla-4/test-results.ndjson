@@ -1,0 +1,2 @@
+{"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":1635,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":false,"assertions":19,"durationMs":3041,"retriedOnce":false,"firstFailureLine":"not ok 1 - every cell family counts its known sites, and a hand-edited record is unreproducible"}

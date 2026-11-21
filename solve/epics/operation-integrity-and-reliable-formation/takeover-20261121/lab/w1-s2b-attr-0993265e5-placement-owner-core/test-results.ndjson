@@ -1,0 +1,1 @@
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":3144,"retriedOnce":false,"firstFailureLine":"not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal"}

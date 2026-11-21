@@ -1,0 +1,148 @@
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-dispatch-growth-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-dispatch-growth-p1-3-0',
+    replica_id: 'placement-dispatch-growth-p1-first',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795274653180,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795274653189
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-dispatch-growth-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-dispatch-growth-p1-3-0',
+    replica_id: 'placement-dispatch-growth-p1-first',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795274653195,
+    completed_at: 1795274653195,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795274653198
+}
+growth_promotion_cohort_unresolved {
+  operationId: 'pl-placement-dispatch-growth-p1-3-0',
+  partitionId: 'placement-dispatch-growth-p1'
+}
+growth_promotion_cohort_unresolved {
+  operationId: 'pl-placement-dispatch-growth-p1-3-0',
+  partitionId: 'placement-dispatch-growth-p1'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'ledger-waiter',
+  partitionId: 'replica_operations-p1',
+  targetNodeId: 'node-a',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'operation-ledger self-move waiting for incumbent operation pl-placement-dispatch-growth-p1-3-0'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 120000,
+  lastObserved: {
+    type: 'REMOVE',
+    workflowStep: 'PENDING',
+    status: 'pending',
+    targetNodeId: 'node-leader-1',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 180000,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:pending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-leader-1',
+    partitionId: 'user_orders-p1',
+    operationId: 'op-remove-stuck-dispatch'
+  },
+  repeats: 0
+}
+Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+  operationId: 'op-real-repo-reinserted',
+  partitionId: 'user_orders-p1',
+  workflowStep: 'ACTIVE',
+  expectedWorkflowStep: null
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-real-repo-reinserted',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'user_orders-p1'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-real-repo-reinserted',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+  operationId: 'op-real-repo-refused',
+  partitionId: 'user_orders-p1',
+  workflowStep: 'ACTIVE',
+  expectedWorkflowStep: null
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-real-repo-refused',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'user_orders-p1'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-real-repo-refused',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-real-repo-lost-reply',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}

@@ -1,0 +1,19 @@
+{
+  "sha": "4c4bf1cd1d0b19ea12f267dfca8863ce9bf5b767",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/scripts/fallback-necessity-trap.test.js",
+    "test/scripts/fallback-read-closure.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/fallback-necessity-trap.test.js",
+        "test/scripts/fallback-read-closure.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

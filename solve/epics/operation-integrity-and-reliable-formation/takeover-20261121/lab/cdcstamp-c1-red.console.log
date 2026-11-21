@@ -1,0 +1,517 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.87
+[adam-laptop] placement-shell=3554428
+[adam-laptop] placement-head=f150ae13fe4981d944105093e0f02ddf9608b2d5
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:1.9 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3554885
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 38C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/partition/partition-cdc-currentness-stamp-witness.test.js (67 assertions, 7135ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+[adam-laptop] ok 1 - one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3175.641712
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+[adam-laptop] # Subtest: one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+[adam-laptop] not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 77.633254
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:364:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:367:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+[adam-laptop] # Subtest: one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+[adam-laptop] ok 3 - one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 58.330644
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+[adam-laptop] # Subtest: one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+[adam-laptop] not ok 4 - one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 55.766224
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:364:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:367:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+[adam-laptop] # Subtest: the currentness input list is one complete, well-formed enumeration
+[adam-laptop] ok 5 - the currentness input list is one complete, well-formed enumeration
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 29.911917
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+[adam-laptop] ok 6 - the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 49.412349
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+[adam-laptop] ok 7 - the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 59.806271
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+[adam-laptop] ok 8 - the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 38.872847
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+[adam-laptop] ok 9 - the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 37.875784
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+[adam-laptop] ok 10 - the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 41.643224
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+[adam-laptop] ok 11 - the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 42.92186
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+[adam-laptop] ok 12 - the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 41.725346
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+[adam-laptop] ok 13 - the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 40.292634
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+[adam-laptop] ok 14 - the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 37.645366
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+[adam-laptop] ok 15 - the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 39.749935
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+[adam-laptop] ok 16 - the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 50.871046
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after invocation.retired changes answers per the new fact (not-current)
+[adam-laptop] ok 17 - the next currentness check after invocation.retired changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.114306
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+[adam-laptop] ok 18 - the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 33.758721
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after topology.stopped changes answers per the new fact (not-current)
+[adam-laptop] ok 19 - the next currentness check after topology.stopped changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.622455
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+[adam-laptop] ok 20 - the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.410944
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+[adam-laptop] ok 21 - the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.699726
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+[adam-laptop] ok 22 - the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.853564
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:19.991Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-renamed"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 23 - the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 38.436106
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.029Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+[adam-laptop] ok 24 - the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 36.920184
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+[adam-laptop] ok 25 - the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.413804
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after source.initialized changes answers per the new fact (not-current)
+[adam-laptop] ok 26 - the next currentness check after source.initialized changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 36.970062
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after source.raft changes answers per the new fact (not-current)
+[adam-laptop] ok 27 - the next currentness check after source.raft changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 48.607603
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+[adam-laptop] ok 28 - the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 31.837494
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after source.group-id changes answers per the new fact (not-current)
+[adam-laptop] ok 29 - the next currentness check after source.group-id changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 33.942363
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+[adam-laptop] ok 30 - the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.173039
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+[adam-laptop] ok 31 - the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.792599
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+[adam-laptop] ok 32 - the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 42.843931
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.address changes answers per the new fact (reobserved)
+[adam-laptop] ok 33 - the next currentness check after services.address changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 38.031445
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.node-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 34 - the next currentness check after services.node-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.73027
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.service-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 35 - the next currentness check after services.service-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.473052
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.created-at changes answers per the new fact (reobserved)
+[adam-laptop] ok 36 - the next currentness check after services.created-at changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.104422
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+[adam-laptop] ok 37 - the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 38.021062
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 38 - the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 47.692354
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+[adam-laptop] ok 39 - the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.283402
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.628Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after services.status changes answers per the new fact (reobserved)
+[adam-laptop] ok 40 - the next currentness check after services.status changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.821019
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.663Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after services.service-type changes answers per the new fact (reobserved)
+[adam-laptop] ok 41 - the next currentness check after services.service-type changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.045071
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.699Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after services.group-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 42 - the next currentness check after services.group-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.957626
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+[adam-laptop] ok 43 - the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.412807
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.770Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 44 - the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.515119
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.804Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after nodes.status changes answers per the new fact (reobserved)
+[adam-laptop] ok 45 - the next currentness check after nodes.status changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.080438
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.839Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 46 - the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.181167
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.873Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+[adam-laptop] ok 47 - the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.225689
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.909Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+[adam-laptop] ok 48 - the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.920457
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.945Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+[adam-laptop] ok 49 - the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 36.003353
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:20.995Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+[adam-laptop] ok 50 - the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 47.015245
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:21.027Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+[adam-laptop] ok 51 - the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 33.717935
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:21.061Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+[adam-laptop] ok 52 - the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.803854
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:21.095Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+[adam-laptop] ok 53 - the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 34.461644
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:21.131Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+[adam-laptop] ok 54 - the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.420858
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the currentness check evaluates the response deadline on every read with nothing else changing
+[adam-laptop] ok 55 - the currentness check evaluates the response deadline on every read with nothing else changing
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 33.468995
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: checks of one delivery with no plan input changed reuse the owner-held plan
+[adam-laptop] ok 56 - checks of one delivery with no plan input changed reuse the owner-held plan
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.229219
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+[adam-laptop] ok 57 - an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.078539
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:21.269Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: a plan input changed between two drives (different turns) is seen by the next read
+[adam-laptop] ok 58 - a plan input changed between two drives (different turns) is seen by the next read
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 38.282379
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CDCGroupPropagationService refuses wiring a system table cache without table versions
+[adam-laptop] not ok 59 - CDCGroupPropagationService refuses wiring a system table cache without table versions
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 23.056492
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:855:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'Missing expected exception.'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: [Function (anonymous)]
+[adam-laptop]   operator: 'throws'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:863:12)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+[adam-laptop] not ok 60 - CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 24.75952
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:867:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'Missing expected exception.'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: [Function (anonymous)]
+[adam-laptop]   operator: 'throws'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:872:12)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+[adam-laptop] ok 61 - the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 31.414413
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a plan input moved during a plan observation is not held: the next read observes anew
+[adam-laptop] not ok 62 - a plan input moved during a plan observation is not held: the next read observes anew
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 31.472326
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:914:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     a plan whose inputs moved during its observation is observed again
+[adam-laptop]     
+[adam-laptop]     1 !== 2
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 2
+[adam-laptop]   actual: 1
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f150ae13fe49-mwqmlua1-1557509/test/partition/partition-cdc-currentness-stamp-witness.test.js:922:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: stamp component: the tree routing generation (a recompute alone reorders the plan)
+[adam-laptop] ok 63 - stamp component: the tree routing generation (a recompute alone reorders the plan)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 59.65617
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: stamp component: the tree identity (a tree re-wired at an equal generation)
+[adam-laptop] ok 64 - stamp component: the tree identity (a tree re-wired at an equal generation)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 52.640243
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: stamp component: the cache identity (a cache re-wired at equal table versions)
+[adam-laptop] ok 65 - stamp component: the cache identity (a cache re-wired at equal table versions)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 43.980609
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-21T16:33:21.578Z","nodeId":"node-a","pid":3554991,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: stamp component: the router identity (a router wired late makes grouped targets routable)
+[adam-laptop] ok 66 - stamp component: the router identity (a router wired late makes grouped targets routable)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 39.739162
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+[adam-laptop] ok 67 - production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 27.438089
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..67
+[adam-laptop] # tests 67
+[adam-laptop] # suites 0
+[adam-laptop] # pass 62
+[adam-laptop] # fail 5
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 5756.749524
+[adam-laptop] # time=7135ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=67
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=67
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=67

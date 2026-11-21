@@ -1,0 +1,17 @@
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.51
+[tv-dator] placement-shell=3164053
+[tv-dator] placement-head=abd8506f39a404cafc6146a431d2e0c6ec323e28
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3164506
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/placement-owner-authority-await-points.test.js (3 assertions, 6353ms)
+[tv-dator] ok test/rebalancer/placement-owner-authority-tenure.test.js (14 assertions, 16178ms)

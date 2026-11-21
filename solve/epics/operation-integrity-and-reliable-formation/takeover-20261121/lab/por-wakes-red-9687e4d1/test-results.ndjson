@@ -1,0 +1,1 @@
+{"file":"test/rebalancer/placement-owner-authority-wakes.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":14915,"retriedOnce":false,"firstFailureLine":"not ok 2 - P1 the LEADER_UNKNOWN wait is explicit pending work: the owner reports it with the target named, and its declared clearing trigger is the event that ends it"}

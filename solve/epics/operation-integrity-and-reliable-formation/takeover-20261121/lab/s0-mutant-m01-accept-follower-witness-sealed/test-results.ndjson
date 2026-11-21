@@ -1,0 +1,2 @@
+{"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":2500,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":2671,"retriedOnce":false,"firstFailureLine":null}

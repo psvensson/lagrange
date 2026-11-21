@@ -1,0 +1,1 @@
+{"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":21,"durationMs":3576,"retriedOnce":false,"firstFailureLine":"not ok 20 - B5 a custodian record released at its tenure end, without a read, cancels its continuation"}

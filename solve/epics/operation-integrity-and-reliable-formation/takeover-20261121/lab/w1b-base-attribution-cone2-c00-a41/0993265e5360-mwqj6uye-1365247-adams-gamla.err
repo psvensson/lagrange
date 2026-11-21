@@ -1,0 +1,20 @@
+file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:67
+  const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+                ^
+
+Error: Invalid replica operation persistence outcome: persisted operation history is not JSON text
+    at invalidOperationPersistenceOutcome (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:67:17)
+    at requireOutcome (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:74:25)
+    at decodePersistedOperationHistory (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:97:3)
+    at decodeReplicaOperationRow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+    at ReplicaDispatchService.buildOperationFromRow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+    at ReplicaDispatchService.replayReplicaOperationRow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/control-plane/replica-dispatch-replay-health-readiness.js:143:40)
+    at ReplicaDispatchService.handleCdcApplied (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/control-plane/replica-dispatch-service-lifecycle.js:548:10)
+    at Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js:51:13)
+    at TapWrap.runInAsyncScope (node:async_hooks:214:14)
+    at Test.cb (/home/peter/projects/lagrange/node_modules/@tapjs/core/src/test-base.ts:332:17) {
+  code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME',
+  [cause]: undefined
+}
+
+Node.js v22.23.2

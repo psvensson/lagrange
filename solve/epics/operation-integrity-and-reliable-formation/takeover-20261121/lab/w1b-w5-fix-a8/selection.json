@@ -1,0 +1,21 @@
+{
+  "sha": "054971a7db5ca06cfc92004f73bea4f5f24c5e41",
+  "host": "adams-gamla",
+  "checkBase": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "files": [
+    "test/partition/settled-replay-preserves-result.test.js",
+    "test/partition/committed-outcome-identity-boundary.test.js",
+    "test/partition/placement-outcome-format.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/committed-outcome-identity-boundary.test.js",
+        "test/partition/placement-outcome-format.test.js",
+        "test/partition/settled-replay-preserves-result.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

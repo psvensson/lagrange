@@ -1,0 +1,495 @@
+lab test: tv-dator: ordinary (8 files) cores=12 mem=15.4GiB speed x1.48
+[tv-dator] placement-shell=3120572
+[tv-dator] placement-head=aae3106ad6074a075e6cfe7a811502d9b609f91b
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3121564
+[tv-dator] # test-files planned=8
+[tv-dator] classified lane ordinary: 8 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 52C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/placement-owner-construction-orders.test.js (5 assertions, 4387ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.134Z","nodeId":"test-node","pid":3121579,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P0 seed order: coordinator from ControlPlaneSetup.create handed to every partition service at construction
+[tv-dator] ok 1 - P0 seed order: coordinator from ControlPlaneSetup.create handed to every partition service at construction
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2429.590631
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.286Z","nodeId":"test-node","pid":3121579,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.362Z","nodeId":"test-node","pid":3121579,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P0 join order: partition services initialised and leading before the coordinator exists, then bound by StartupRuntimeSurfaceOwner.bindControlPlaneServices
+[tv-dator] ok 2 - P0 join order: partition services initialised and leading before the coordinator exists, then bound by StartupRuntimeSurfaceOwner.bindControlPlaneServices
+[tv-dator]   ---
+[tv-dator]   duration_ms: 104.139804
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.448Z","nodeId":"test-node","pid":3121579,"subsystem":"control-plane-readiness","nodeId":"test-node","owner":"CDCGroupPropagationService","strictOwnerDependencies":true,"contextNodeId":"n1","msg":"ControlPlaneReadinessService missing CDC publication owner"}
+[tv-dator] # Subtest: P0 late ledger replica: a joiner whose ledger replica is created after the coordinator was bound to its other partitions
+[tv-dator] ok 3 - P0 late ledger replica: a joiner whose ledger replica is created after the coordinator was bound to its other partitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 94.759182
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.450Z","nodeId":"test-node","pid":3121579,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"ControlPlaneReadinessService requires cdcGroupPropagationService for strict readiness evaluation","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.557Z","nodeId":"test-node","pid":3121579,"subsystem":"control-plane-readiness","nodeId":"test-node","owner":"CDCGroupPropagationService","strictOwnerDependencies":true,"contextNodeId":"n1","msg":"ControlPlaneReadinessService missing CDC publication owner"}
+[tv-dator] # Subtest: P0 existing coordinator, user and priority partitions initialised before the ledger: a coordinator handed to leading partition services before ControlPlaneSetup.create binds its factory (the existing-rebalancer branch precedes the placement guard)
+[tv-dator] not ok 4 - P0 existing coordinator, user and priority partitions initialised before the ledger: a coordinator handed to leading partition services before ControlPlaneSetup.create binds its factory (the existing-rebalancer branch precedes the placement guard)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 103.598876
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/partition/placement-owner-construction-orders.test.js:240:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     existing-coordinator orders-p1 > sql_transactions-p1 > replica_operations-p1 (before binding: [{"partitionId":"orders-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"sql_transactions-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"replica_operations-p1","leads":true,"rebalancer":null,"placementOwner":true,"sinkIsOwner":true}]): no partition service holds a per-partition rebalancer; observed [{"partitionId":"orders-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"sql_transactions-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"replica_operations-p1","leads":true,"rebalancer":null,"placementOwner":true,"sinkIsOwner":true}]
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + [
+[tv-dator]     +   {
+[tv-dator]     +     leads: true,
+[tv-dator]     +     partitionId: 'orders-p1',
+[tv-dator]     +     placementOwner: false,
+[tv-dator]     +     rebalancer: 'UnifiedRebalancer',
+[tv-dator]     +     sinkIsOwner: false
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     leads: true,
+[tv-dator]     +     partitionId: 'sql_transactions-p1',
+[tv-dator]     +     placementOwner: false,
+[tv-dator]     +     rebalancer: 'UnifiedRebalancer',
+[tv-dator]     +     sinkIsOwner: false
+[tv-dator]     +   }
+[tv-dator]     + ]
+[tv-dator]     - []
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]   actual:
+[tv-dator]     0:
+[tv-dator]       partitionId: 'orders-p1'
+[tv-dator]       leads: true
+[tv-dator]       rebalancer: 'UnifiedRebalancer'
+[tv-dator]       placementOwner: false
+[tv-dator]       sinkIsOwner: false
+[tv-dator]     1:
+[tv-dator]       partitionId: 'sql_transactions-p1'
+[tv-dator]       leads: true
+[tv-dator]       rebalancer: 'UnifiedRebalancer'
+[tv-dator]       placementOwner: false
+[tv-dator]       sinkIsOwner: false
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     assertSingleScheduler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/partition/placement-owner-construction-orders.test.js:110:10)
+[tv-dator]     existingCoordinatorOrder (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/partition/placement-owner-construction-orders.test.js:235:3)
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:36.559Z","nodeId":"test-node","pid":3121579,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"ControlPlaneReadinessService requires cdcGroupPropagationService for strict readiness evaluation","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P0 existing coordinator, ledger initialised first: the ledger replica is handed the coordinator before any partition service of the node reached the placement guard
+[tv-dator] not ok 5 - P0 existing coordinator, ledger initialised first: the ledger replica is handed the coordinator before any partition service of the node reached the placement guard
+[tv-dator]   ---
+[tv-dator]   duration_ms: 93.232843
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/partition/placement-owner-construction-orders.test.js:246:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     existing-coordinator replica_operations-p1 > orders-p1 > sql_transactions-p1 (before binding: [{"partitionId":"replica_operations-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"orders-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"sql_transactions-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false}]): no partition service holds a per-partition rebalancer; observed [{"partitionId":"orders-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"sql_transactions-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":false,"sinkIsOwner":false},{"partitionId":"replica_operations-p1","leads":true,"rebalancer":"UnifiedRebalancer","placementOwner":true,"sinkIsOwner":true}]
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + [
+[tv-dator]     +   {
+[tv-dator]     +     leads: true,
+[tv-dator]     +     partitionId: 'orders-p1',
+[tv-dator]     +     placementOwner: false,
+[tv-dator]     +     rebalancer: 'UnifiedRebalancer',
+[tv-dator]     +     sinkIsOwner: false
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     leads: true,
+[tv-dator]     +     partitionId: 'sql_transactions-p1',
+[tv-dator]     +     placementOwner: false,
+[tv-dator]     +     rebalancer: 'UnifiedRebalancer',
+[tv-dator]     +     sinkIsOwner: false
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     leads: true,
+[tv-dator]     +     partitionId: 'replica_operations-p1',
+[tv-dator]     +     placementOwner: true,
+[tv-dator]     +     rebalancer: 'UnifiedRebalancer',
+[tv-dator]     +     sinkIsOwner: true
+[tv-dator]     +   }
+[tv-dator]     + ]
+[tv-dator]     - []
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]   actual:
+[tv-dator]     0:
+[tv-dator]       partitionId: 'orders-p1'
+[tv-dator]       leads: true
+[tv-dator]       rebalancer: 'UnifiedRebalancer'
+[tv-dator]       placementOwner: false
+[tv-dator]       sinkIsOwner: false
+[tv-dator]     1:
+[tv-dator]       partitionId: 'sql_transactions-p1'
+[tv-dator]       leads: true
+[tv-dator]       rebalancer: 'UnifiedRebalancer'
+[tv-dator]       placementOwner: false
+[tv-dator]       sinkIsOwner: false
+[tv-dator]     2:
+[tv-dator]       partitionId: 'replica_operations-p1'
+[tv-dator]       leads: true
+[tv-dator]       rebalancer: 'UnifiedRebalancer'
+[tv-dator]       placementOwner: true
+[tv-dator]       sinkIsOwner: true
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     assertSingleScheduler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/partition/placement-owner-construction-orders.test.js:110:10)
+[tv-dator]     existingCoordinatorOrder (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/partition/placement-owner-construction-orders.test.js:235:3)
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..5
+[tv-dator] # tests 5
+[tv-dator] # suites 0
+[tv-dator] # pass 3
+[tv-dator] # fail 2
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2831.114937
+[tv-dator] # time=4387ms
+[tv-dator] placement-owner-authority-fixture: active resources after the last world: ["Immediate","Immediate","Immediate"]
+[tv-dator] ok test/rebalancer/placement-owner-authority-five-nodes.test.js (1 assertions, 5393ms)
+[tv-dator] ok test/rebalancer/placement-owner-authority-disruptions.test.js (3 assertions, 6574ms)
+[tv-dator] ok test/rebalancer/placement-owner-authority-await-points.test.js (3 assertions, 6934ms)
+[tv-dator] not ok test/rebalancer/placement-owner-authority-provisioner.test.js (1 assertions, 4404ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:41.468Z","nodeId":"test-node","pid":3121635,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:41.494Z","nodeId":"test-node","pid":3121635,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:41.501Z","nodeId":"test-node","pid":3121635,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P15 the provisioner's ADD for a partition with routable replicas, beside the placement owner's pending admission for the same deficit: only the placement owner may propose placement beyond founding
+[tv-dator] not ok 1 - P15 the provisioner's ADD for a partition with routable replicas, beside the placement owner's pending admission for the same deficit: only the placement owner may propose placement beyond founding
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2936.801578
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-provisioner.test.js:39:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: `anti-vacuity: the provisioner's call reached placement admission (refused before it: {"message":"Authoritative operation visibility deferred for partition:orders-p1 (operation_visibility_deferred)","code":null,"failureCode":null}); {"nodes":[{"nodeId":"n1","currentTenure":"n1#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n1#1@t2","done":true}],"constructionPasses":{"n1#1@t2":2},"capacityChecks":{"n1#1@t2":2},"candidateChecks":{"n1#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:orders-p1:775ea0","decisionTenure":"n1#1@t2","boundaryTenure":"n1#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"775ea0","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-orders-p1-3-0<=n1:775ea0"]},{"replica":"n2","operations":["pl-orders-p1-3-0<=n1:775ea0"]},{"replica":"n3","operations":["pl-orders-p1-3-0<=n1:775ea0"]}],"committedOutcomes":[{"entryTail":"775ea0","outcome":"ADMITTED","reason":null,"operationIds":["pl-orders-p1-3-0"]}]}`
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-provisioner.test.js:76:10
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # {"provisioned":null,"refusal":{"message":"Authoritative operation visibility deferred for partition:orders-p1 (operation_visibility_deferred)","code":null,"failureCode":null},"routes":[{"fromNodeId":"n2","address":"n1/service/replica-dispatch","type":"REPLICA_OPERATION_DISPATCH"},{"fromNodeId":"n3","address":"n1/service/replica-dispatch","type":"REPLICA_OPERATION_DISPATCH"}],"report":{"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":2},"capacityChecks":{"n1\#1@t2":2},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:orders-p1:775ea0","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"775ea0","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-orders-p1-3-0<=n1:775ea0"]},{"replica":"n2","operations":["pl-orders-p1-3-0<=n1:775ea0"]},{"replica":"n3","operations":["pl-orders-p1-3-0<=n1:775ea0"]}],"committedOutcomes":[{"entryTail":"775ea0","outcome":"ADMITTED","reason":null,"operationIds":["pl-orders-p1-3-0"]}]}}
+[tv-dator] 1..1
+[tv-dator] # tests 1
+[tv-dator] # suites 0
+[tv-dator] # pass 0
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2945.414745
+[tv-dator] # time=4404ms
+[tv-dator] placement-owner-authority-fixture: active resources after the last world: ["Immediate"]
+[tv-dator] ok test/rebalancer/placement-owner-authority-negatives.test.js (3 assertions, 5711ms)
+[tv-dator] not ok test/rebalancer/placement-owner-authority-tenure.test.js (13 assertions, 15324ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:42.404Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:42.422Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:42.426Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.408Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 delayed notification, deposed leader learns late: the old leader's held admission is proposed at its expired term and never admitted; the successor admits without waiting
+[tv-dator] ok 1 - P4 delayed notification, deposed leader learns late: the old leader's held admission is proposed at its expired term and never admitted; the successor admits without waiting
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3051.868457
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":1},"capacityChecks":{"n1\#1@t2":1},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:1fb194","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"partition_write_outcome_unknown"}]},{"nodeId":"n2","currentTenure":"n2\#2@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#2@t3","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n2\#2@t3","done":true}],"constructionPasses":{"n2\#2@t3":2},"capacityChecks":{"n2\#2@t3":2},"candidateChecks":{"n2\#2@t3":1},"admissionAttempts":[{"entryId":"placement-owner:n2:admit:sql_transactions-p1:4ccbad","decisionTenure":"n2\#2@t3","boundaryTenure":"n2\#2@t3","boundaryCore":"leader@t3","outcome":"ADMITTED"}]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n2","entryTail":"4ccbad","portTerm":3,"groupTerm":3,"disposition":"log[2]"},{"nodeId":"n1","entryTail":"1fb194","portTerm":2,"groupTerm":3,"disposition":"stale-term-never-committed"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n2:4ccbad"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n2:4ccbad"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n2:4ccbad"]}],"committedOutcomes":[{"entryTail":"4ccbad","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.423Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.425Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:44.262Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 delayed role event of the new leader: nobody schedules while no owner leads, the old held admission is refused at the boundary, the successor admits once its event arrives
+[tv-dator] ok 2 - P4 delayed role event of the new leader: nobody schedules while no owner leads, the old held admission is refused at the boundary, the successor admits once its event arrives
+[tv-dator]   ---
+[tv-dator]   duration_ms: 861.152481
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":1},"capacityChecks":{"n1\#1@t2":1},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:d05421","decisionTenure":"n1\#1@t2","boundaryTenure":"none","boundaryCore":"follower@t3","outcome":"partition_write_not_leader"}]},{"nodeId":"n2","currentTenure":"n2\#2@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#2@t3","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n2\#2@t3","done":true}],"constructionPasses":{"n2\#2@t3":2},"capacityChecks":{"n2\#2@t3":2},"candidateChecks":{"n2\#2@t3":1},"admissionAttempts":[{"entryId":"placement-owner:n2:admit:sql_transactions-p1:1228d7","decisionTenure":"n2\#2@t3","boundaryTenure":"n2\#2@t3","boundaryCore":"leader@t3","outcome":"ADMITTED"}]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n2","entryTail":"1228d7","portTerm":3,"groupTerm":3,"disposition":"log[2]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n2:1228d7"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n2:1228d7"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n2:1228d7"]}],"committedOutcomes":[{"entryTail":"1228d7","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:44.271Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:44.273Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:45.089Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 pass suspended at A1 (LEADERSHIP_START CDC drive) across a graceful transfer: the successor admits while it is suspended; the obsolete pass checks its tenure after the wait
+[tv-dator] ok 3 - P4 pass suspended at A1 (LEADERSHIP_START CDC drive) across a graceful transfer: the successor admits while it is suspended; the obsolete pass checks its tenure after the wait
+[tv-dator]   ---
+[tv-dator]   duration_ms: 833.773847
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n2","currentTenure":"n2\#2@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#2@t3","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n2\#2@t3","done":true}],"constructionPasses":{"n2\#2@t3":2},"capacityChecks":{"n2\#2@t3":2},"candidateChecks":{"n2\#2@t3":1},"admissionAttempts":[{"entryId":"placement-owner:n2:admit:sql_transactions-p1:a756bb","decisionTenure":"n2\#2@t3","boundaryTenure":"n2\#2@t3","boundaryCore":"leader@t3","outcome":"ADMITTED"}]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n2","entryTail":"a756bb","portTerm":3,"groupTerm":3,"disposition":"log[2]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n2:a756bb"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n2:a756bb"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n2:a756bb"]}],"committedOutcomes":[{"entryTail":"a756bb","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:45.099Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:45.101Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:45.960Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P5 A->B->A with an old continuation held at A1 across both changes: the old pass must find its tenure expired and admit nothing
+[tv-dator] ok 4 - P5 A->B->A with an old continuation held at A1 across both changes: the old pass must find its tenure expired and admit nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 868.411269
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t4","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t4","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t4","done":true}],"constructionPasses":{"n1\#1@t4":2},"capacityChecks":{"n1\#1@t4":2},"candidateChecks":{"n1\#1@t4":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:324dd1","decisionTenure":"n1\#1@t4","boundaryTenure":"n1\#1@t4","boundaryCore":"leader@t4","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"324dd1","portTerm":4,"groupTerm":4,"disposition":"log[3]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:324dd1"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:324dd1"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:324dd1"]}],"committedOutcomes":[{"entryTail":"324dd1","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:45.970Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:45.972Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:46.805Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P5 A->B->A: the successor tenure progresses while the obsolete continuation is still suspended at A1
+[tv-dator] ok 5 - P5 A->B->A: the successor tenure progresses while the obsolete continuation is still suspended at A1
+[tv-dator]   ---
+[tv-dator]   duration_ms: 849.115934
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t4","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t4","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t4","done":true}],"constructionPasses":{"n1\#1@t4":2},"capacityChecks":{"n1\#1@t4":2},"candidateChecks":{"n1\#1@t4":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:84b1e6","decisionTenure":"n1\#1@t4","boundaryTenure":"n1\#1@t4","boundaryCore":"leader@t4","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"84b1e6","portTerm":4,"groupTerm":4,"disposition":"log[3]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:84b1e6"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:84b1e6"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:84b1e6"]}],"committedOutcomes":[{"entryTail":"84b1e6","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:46.815Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:46.816Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:47.619Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P5 admission boundary fence: tenure lost and regained (A->B->A) between the last planning check and requestPlacementAdmission => not admitted
+[tv-dator] ok 6 - P5 admission boundary fence: tenure lost and regained (A->B->A) between the last planning check and requestPlacementAdmission => not admitted
+[tv-dator]   ---
+[tv-dator]   duration_ms: 817.038817
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t4","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t4","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t4","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t4":2},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t4":2},"candidateChecks":{"n1\#2@t2":1,"n1\#1@t4":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:1946af","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#1@t4","boundaryCore":"leader@t4","outcome":"partition_write_not_leader"},{"entryId":"placement-owner:n1:admit:sql_transactions-p1:1946af","decisionTenure":"n1\#1@t4","boundaryTenure":"n1\#1@t4","boundaryCore":"leader@t4","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"1946af","portTerm":4,"groupTerm":4,"disposition":"log[3]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:1946af"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:1946af"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:1946af"]}],"committedOutcomes":[{"entryTail":"1946af","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:47.629Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:47.630Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:48.414Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 admission boundary fence, graceful transfer: the held admission of a deposed leader is refused NOT_LEADER and counted apart; the successor admits
+[tv-dator] ok 7 - P4 admission boundary fence, graceful transfer: the held admission of a deposed leader is refused NOT_LEADER and counted apart; the successor admits
+[tv-dator]   ---
+[tv-dator]   duration_ms: 788.466969
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":1},"capacityChecks":{"n1\#1@t2":1},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:952713","decisionTenure":"n1\#1@t2","boundaryTenure":"none","boundaryCore":"follower@t3","outcome":"partition_write_not_leader"}]},{"nodeId":"n2","currentTenure":"n2\#2@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#2@t3","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n2\#2@t3","done":true}],"constructionPasses":{"n2\#2@t3":2},"capacityChecks":{"n2\#2@t3":2},"candidateChecks":{"n2\#2@t3":1},"admissionAttempts":[{"entryId":"placement-owner:n2:admit:sql_transactions-p1:46f7fc","decisionTenure":"n2\#2@t3","boundaryTenure":"n2\#2@t3","boundaryCore":"leader@t3","outcome":"ADMITTED"}]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n2","entryTail":"46f7fc","portTerm":3,"groupTerm":3,"disposition":"log[2]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n2:46f7fc"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n2:46f7fc"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n2:46f7fc"]}],"committedOutcomes":[{"entryTail":"46f7fc","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:48.425Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:48.426Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:49.225Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 term-start barrier: a predecessor entry committed but not yet applied on the new leader is inherited under its identity; the new leader must not plan before applying it
+[tv-dator] ok 8 - P4 term-start barrier: a predecessor entry committed but not yet applied on the new leader is inherited under its identity; the new leader must not plan before applying it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 816.831984
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":2},"capacityChecks":{"n1\#1@t2":2},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:4cd545","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"n2\#2@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#2@t3","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n2\#2@t3","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT+TERM_START_APPLIED","startTenure":"n2\#2@t3","done":true}],"constructionPasses":{"n2\#2@t3":1},"capacityChecks":{"n2\#2@t3":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"4cd545","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:4cd545"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:4cd545"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:4cd545"]}],"committedOutcomes":[{"entryTail":"4cd545","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:49.235Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:49.236Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:49.741Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4/P8 term-start barrier does not depend on publication: the ledger leader's publication never reaches the other nodes, the new leader still admits
+[tv-dator] ok 9 - P4/P8 term-start barrier does not depend on publication: the ledger leader's publication never reaches the other nodes, the new leader still admits
+[tv-dator]   ---
+[tv-dator]   duration_ms: 518.406532
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n2","currentTenure":"n2\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n2\#1@t2","done":true}],"constructionPasses":{"n2\#1@t2":2},"capacityChecks":{"n2\#1@t2":2},"candidateChecks":{"n2\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n2:admit:sql_transactions-p1:afedb8","decisionTenure":"n2\#1@t2","boundaryTenure":"n2\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n2","entryTail":"afedb8","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n2:afedb8"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n2:afedb8"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n2:afedb8"]}],"committedOutcomes":[{"entryTail":"afedb8","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:49.752Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:49.756Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.742Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[],"firstFailedParticipant":null,"completionState":"operation_visibility_deferred","contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.867Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P5 A->B->A with a lost response: the committed entry is recovered under its existing identity, never re-proposed or recreated
+[tv-dator] ok 10 - P5 A->B->A with a lost response: the committed entry is recovered under its existing identity, never re-proposed or recreated
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1108.957637
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t4","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t4","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t4":1},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t4":1},"candidateChecks":{"n1\#2@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:513edc","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#2@t2","boundaryCore":"leader@t2","outcome":"partition_write_outcome_unknown"}]},{"nodeId":"n2","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#3@t3","done":true}],"constructionPasses":{"n2\#3@t3":1},"capacityChecks":{"n2\#3@t3":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"513edc","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:513edc"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:513edc"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:513edc"]}],"committedOutcomes":[{"entryTail":"513edc","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.877Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.878Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:51.388Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P5 new term without a role edge: a pass decided under the previous tenure must not be admitted under the new one; the new tenure gets its own leadership start
+[tv-dator] ok 11 - P5 new term without a role edge: a pass decided under the previous tenure must not be admitted under the new one; the new tenure gets its own leadership start
+[tv-dator]   ---
+[tv-dator]   duration_ms: 534.337714
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t3","done":true},{"sequence":3,"triggers":"WRITE_PATH_RELEASED+LEDGER_COMMIT","startTenure":"n1\#1@t3","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t3":2},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t3":2},"candidateChecks":{"n1\#2@t2":1,"n1\#1@t3":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:2a054f","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#1@t3","boundaryCore":"leader@t3","outcome":"partition_write_not_leader"},{"entryId":"placement-owner:n1:admit:sql_transactions-p1:2a054f","decisionTenure":"n1\#1@t3","boundaryTenure":"n1\#1@t3","boundaryCore":"leader@t3","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"2a054f","portTerm":3,"groupTerm":3,"disposition":"log[2]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:2a054f"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:2a054f"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:2a054f"]}],"committedOutcomes":[{"entryTail":"2a054f","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:51.398Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:51.399Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:52.203Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 graceful transfer of an idle leader: its demotion starts no placement pass on the deposed owner
+[tv-dator] ok 12 - P4 graceful transfer of an idle leader: its demotion starts no placement pass on the deposed owner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 803.062585
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":2},"capacityChecks":{"n1\#1@t2":2},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:c6fbe0","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"n2\#2@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#2@t3","done":true}],"constructionPasses":{"n2\#2@t3":1},"capacityChecks":{"n2\#2@t3":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"c6fbe0","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:c6fbe0"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:c6fbe0"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:c6fbe0"]}],"committedOutcomes":[{"entryTail":"c6fbe0","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:52.213Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:52.214Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:53.199Z","nodeId":"test-node","pid":3121647,"subsystem":"rebalance-coordinator","error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[],"firstFailedParticipant":null,"completionState":"operation_visibility_deferred","contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P4 bound over repeated transfers: N transfers with every leadership-start drive suspended do not accumulate obsolete passes, triggers, writes, attempts or timers
+[tv-dator] not ok 13 - P4 bound over repeated transfers: N transfers with every leadership-start drive suspended do not accumulate obsolete passes, triggers, writes, attempts or timers
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1994.322103
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-tenure.test.js:420:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'property 3: timers does not grow with N (after 3: 4, after 5: 5); samples [{"transfer":1,"inFlightPasses":1,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":0,"heldDrives":1},{"transfer":2,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":0,"heldDrives":2},{"transfer":3,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":4,"heldDrives":2},{"transfer":4,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":5,"heldDrives":2},{"transfer":5,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":5,"heldDrives":2},{"transfer":6,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":5,"heldDrives":2}]; {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1#2@t4","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1#2@t4","done":true},{"sequence":4,"triggers":"LEADERSHIP_START","startTenure":"n1#3@t6","done":true}],"constructionPasses":{"n1#2@t4":2,"n1#3@t6":1},"capacityChecks":{"n1#2@t4":2,"n1#3@t6":1},"candidateChecks":{"n1#2@t4":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:1dac4a","decisionTenure":"n1#2@t4","boundaryTenure":"n1#2@t4","boundaryCore":"leader@t4","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"n2#4@t7","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2#5@t3","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n2#6@t5","done":true},{"sequence":3,"triggers":"LEADERSHIP_START","startTenure":"n2#4@t7","done":true}],"constructionPasses":{"n2#6@t5":1,"n2#4@t7":1},"capacityChecks":{"n2#6@t5":1,"n2#4@t7":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"1dac4a","portTerm":4,"groupTerm":4,"disposition":"log[3]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:1dac4a"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:1dac4a"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:1dac4a"]}],"committedOutcomes":[{"entryTail":"1dac4a","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-tenure.test.js:446:14
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"none","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t4","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#2@t4","done":true},{"sequence":4,"triggers":"LEADERSHIP_START","startTenure":"n1\#3@t6","done":true}],"constructionPasses":{"n1\#2@t4":2,"n1\#3@t6":1},"capacityChecks":{"n1\#2@t4":2,"n1\#3@t6":1},"candidateChecks":{"n1\#2@t4":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:1dac4a","decisionTenure":"n1\#2@t4","boundaryTenure":"n1\#2@t4","boundaryCore":"leader@t4","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"n2\#4@t7","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n2\#5@t3","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n2\#6@t5","done":true},{"sequence":3,"triggers":"LEADERSHIP_START","startTenure":"n2\#4@t7","done":true}],"constructionPasses":{"n2\#6@t5":1,"n2\#4@t7":1},"capacityChecks":{"n2\#6@t5":1,"n2\#4@t7":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"1dac4a","portTerm":4,"groupTerm":4,"disposition":"log[3]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:1dac4a"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:1dac4a"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:1dac4a"]}],"committedOutcomes":[{"entryTail":"1dac4a","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] # [{"transfer":1,"inFlightPasses":1,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":0,"heldDrives":1},{"transfer":2,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":0,"heldDrives":2},{"transfer":3,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":4,"heldDrives":2},{"transfer":4,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":5,"heldDrives":2},{"transfer":5,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":5,"heldDrives":2},{"transfer":6,"inFlightPasses":2,"pendingTriggers":0,"pendingWrites":0,"unresolvedAttempts":0,"timers":5,"heldDrives":2}]
+[tv-dator] 1..13
+[tv-dator] # tests 13
+[tv-dator] # suites 0
+[tv-dator] # pass 12
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 13856.941684
+[tv-dator] # time=15324ms
+[tv-dator] placement-owner-authority-fixture: active resources after the last world: ["Immediate","Immediate"]
+[tv-dator] not ok test/rebalancer/placement-owner-authority-wakes.test.js (5 assertions, 15247ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:42.666Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:42.687Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:42.691Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.385Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P1/P14 ownerless priority partition: zero proposals while no leader is published; the real producer's PARTITIONS leader_node_id publication resumes it, copy source = the node whose core leads
+[tv-dator] ok 1 - P1/P14 ownerless priority partition: zero proposals while no leader is published; the real producer's PARTITIONS leader_node_id publication resumes it, copy source = the node whose core leads
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2682.995288
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"PARTITIONS_CHANGED","startTenure":"n1\#1@t2","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":3},"capacityChecks":{"n1\#1@t2":3},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:4a0ae8","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"4a0ae8","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:4a0ae8"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:4a0ae8"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:4a0ae8"]}],"committedOutcomes":[{"entryTail":"4a0ae8","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.397Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.399Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.979Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P1 the LEADER_UNKNOWN wait is explicit pending work: the owner reports it with the target named, and its declared clearing trigger is the event that ends it
+[tv-dator] not ok 2 - P1 the LEADER_UNKNOWN wait is explicit pending work: the owner reports it with the target named, and its declared clearing trigger is the event that ends it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 600.927291
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:130:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'declared clearing trigger SERVICES_CHANGED vs the triggers of the pass that ended the wait ["PARTITIONS_CHANGED"]; {"nodes":[{"nodeId":"n1","currentTenure":"n1#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t2","done":true},{"sequence":2,"triggers":"PARTITIONS_CHANGED","startTenure":"n1#1@t2","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1#1@t2","done":true}],"constructionPasses":{"n1#1@t2":3},"capacityChecks":{"n1#1@t2":3},"candidateChecks":{"n1#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:98ac19","decisionTenure":"n1#1@t2","boundaryTenure":"n1#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"98ac19","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:98ac19"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:98ac19"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:98ac19"]}],"committedOutcomes":[{"entryTail":"98ac19","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:147:10
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"PARTITIONS_CHANGED","startTenure":"n1\#1@t2","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":3},"capacityChecks":{"n1\#1@t2":3},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:98ac19","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"98ac19","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:98ac19"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:98ac19"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:98ac19"]}],"committedOutcomes":[{"entryTail":"98ac19","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.988Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:43.990Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:47.429Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P3(ii) missed wake: the one clearing notification is dropped, the cache content is current; the deficit is admitted within the declared resync cadence
+[tv-dator] not ok 3 - P3(ii) missed wake: the one clearing notification is dropped, the cache content is current; the deficit is admitted within the declared resync cadence
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3452.517577
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:154:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'admitted within 3000 ms after a dropped wake (resync armed: false, interval 60000 ms); {"nodes":[{"nodeId":"n1","currentTenure":"n1#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t2","done":true}],"constructionPasses":{"n1#1@t2":1},"capacityChecks":{"n1#1@t2":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:178:10
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":1},"capacityChecks":{"n1\#1@t2":1},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:47.439Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:47.441Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.879Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P3(i) a pass that throws: the only clearing event starts a pass that throws once; its triggers must not be lost
+[tv-dator] not ok 4 - P3(i) a pass that throws: the only clearing event starts a pass that throws once; its triggers must not be lost
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3452.431529
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:182:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'admitted within 3000 ms after a pass threw (pending triggers after the throw: 0, rejection: fixture: capacity read failed once); {"nodes":[{"nodeId":"n1","currentTenure":"n1#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t2","done":true},{"sequence":2,"triggers":"PARTITIONS_CHANGED","startTenure":"n1#1@t2","done":true,"threw":"fixture: capacity read failed once"}],"constructionPasses":{"n1#1@t2":1},"capacityChecks":{"n1#1@t2":2},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:214:10
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"PARTITIONS_CHANGED","startTenure":"n1\#1@t2","done":true,"threw":"fixture: capacity read failed once"}],"constructionPasses":{"n1\#1@t2":1},"capacityChecks":{"n1\#1@t2":2},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}
+[tv-dator] # pass rejection propagated out of the owner's drain: fixture: capacity read failed once
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.894Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T15:08:50.896Z","nodeId":"test-node","pid":3121659,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[tv-dator] # Subtest: P8 start path: with the ledger's CDC drive stalled (a subscriber that never answers), the placement owner still starts from live ledger leadership and admits
+[tv-dator] not ok 5 - P8 start path: with the ledger's CDC drive stalled (a subscriber that never answers), the placement owner still starts from live ledger leadership and admits
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3585.154683
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:219:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'admitted within 3000 ms while the leadership-start CDC drive stayed unanswered; {"nodes":[{"nodeId":"n1","currentTenure":"n1#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n1#1@t2","done":true}],"constructionPasses":{"n1#1@t2":2},"capacityChecks":{"n1#1@t2":2},"candidateChecks":{"n1#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:8ce8d8","decisionTenure":"n1#1@t2","boundaryTenure":"n1#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"8ce8d8","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:8ce8d8"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:8ce8d8"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:8ce8d8"]}],"committedOutcomes":[{"entryTail":"8ce8d8","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-wakes.test.js:236:10
+[tv-dator]     async withPlacementWorld (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aae3106ad607-mwqjlop3-1388383/test/rebalancer/placement-owner-authority-fixture.js:933:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # {"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t2","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t2","done":true},{"sequence":2,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t2","done":true}],"constructionPasses":{"n1\#1@t2":2},"capacityChecks":{"n1\#1@t2":2},"candidateChecks":{"n1\#1@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:8ce8d8","decisionTenure":"n1\#1@t2","boundaryTenure":"n1\#1@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"8ce8d8","portTerm":2,"groupTerm":2,"disposition":"log[1]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:8ce8d8"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:8ce8d8"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:8ce8d8"]}],"committedOutcomes":[{"entryTail":"8ce8d8","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}
+[tv-dator] 1..5
+[tv-dator] # tests 5
+[tv-dator] # suites 0
+[tv-dator] # pass 1
+[tv-dator] # fail 4
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 13780.440767
+[tv-dator] # time=15247ms
+[tv-dator] # test-files total=8 pass=4 fail=4 assertions=34
+[tv-dator] placement-owner-authority-fixture: active resources after the last world: ["Immediate"]
+lab test: tv-dator: # test-files total=8 pass=4 fail=4 assertions=34
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=8 pass=4 fail=4 assertions=34

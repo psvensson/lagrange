@@ -1,0 +1,639 @@
+W1S2C-PROBE dispatch gate retained row decision {
+  operationId: 'completed-response-operation',
+  type: 'ADD',
+  workflowStep: 'PENDING',
+  confirmed: false,
+  routePort: '() => resolveRetainedPlacementRepairBinding(this)',
+  record: {
+    binding: { state: 'unavailable' },
+    lastDecision: { state: 'unavailable', reason: 'route_unavailable' },
+    owed: 6,
+    continuation: 'idle',
+    entry: 'unpinned'
+  },
+  bindingNow: { state: 'unavailable' },
+  readNow: {
+    success: true,
+    rows: 1,
+    witness: {
+      state: 'observed',
+      partitionId: 'replica_operations-p1',
+      servingNodeId: 'test-node-1',
+      servingReplicaId: 'replica_operations-p1-r1',
+      role: 'leader',
+      term: 1,
+      appliedIndex: 1,
+      commitIndex: 1
+    }
+  }
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+    updated_at: 1795278036353,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036360
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    updated_at: 1795278036385,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036389
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'users-p1-r2',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+    updated_at: 1795278036399,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036401
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'users-p1-r2',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795278036404,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036406
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'users-p1-r2',
+    status: 'removing',
+    workflow_step: 'STOPPING',
+    updated_at: 1795278036413,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036414
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795278036428,
+    completed_at: 1795278036428,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036430
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-outcome-1',
+  boundary: 'executor_outcome',
+  workflowStep: 'SYNCING',
+  partitionId: 'executor_outcome_partition_unavailable',
+  completionState: 'authoritative_operation_read_deferred',
+  reasonCode: null,
+  delayMs: 1,
+  errorMessage: 'Executor outcome operation visibility deferred'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795278036440,
+    completed_at: 1795278036440,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036441
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-outcome-1',
+  boundary: 'executor_outcome',
+  workflowStep: 'ACTIVE',
+  partitionId: 'executor_outcome_partition_unavailable',
+  completionState: null,
+  reasonCode: null,
+  delayMs: 250,
+  errorMessage: 'Executor outcome operation visibility deferred'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795278036447,
+    completed_at: 1795278036447,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036449
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'users-p1-r2',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795278036458,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036459
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'users-p1-r2',
+    status: 'removing',
+    workflow_step: 'STOPPING',
+    updated_at: 1795278036461,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036462
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795278036477,
+    completed_at: 1795278036477,
+    error_message: 'disk full'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036479
+}
+Operation failed {
+  operationId: 'op-outcome-1',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-local',
+  errorMessage: 'disk full'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-outcome-1',
+  boundary: 'executor_outcome',
+  partitionId: 'replica_operations-p1',
+  workflowStep: 'CREATING',
+  delayMs: 5000,
+  errorMessage: 'Operational message-group ingress not ready for replica_operations CDC subscription'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'removed',
+    workflow_step: 'REMOVED',
+    updated_at: 1795278036488,
+    completed_at: 1795278036488,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036489
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795278036492,
+    completed_at: 1795278036492,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036493
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-outcome-1',
+  boundary: 'executor_outcome',
+  partitionId: 'replica_operations-p1',
+  workflowStep: 'CREATING',
+  delayMs: 5000,
+  errorMessage: 'Operational message-group ingress not ready for replica_operations CDC subscription'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-outcome-1',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-outcome-1',
+    replica_id: 'partition-1-r1',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795278036500,
+    completed_at: 1795278036500,
+    error_message: 'container pull failed'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278036502
+}
+Operation failed {
+  operationId: 'op-outcome-1',
+  type: 'ADD',
+  partitionId: 'rs-1',
+  targetNodeId: 'node-local',
+  errorMessage: 'container pull failed'
+}
+W1S2C-PROBE dispatch gate retained row decision threw {
+  operationId: 'op-outcome-1',
+  error: 'cache.getAll is not a function',
+  record: 'present'
+}
+Failed to repair operation row for gate-repaired reservation {
+  operationId: 'op-outcome-1',
+  error: 'cache.getAll is not a function'
+}
+W1S2C-PROBE dispatch gate retained row decision threw {
+  operationId: 'op-outcome-1',
+  error: 'cache.getAll is not a function',
+  record: 'present'
+}
+Failed to repair operation row for gate-repaired reservation {
+  operationId: 'op-outcome-1',
+  error: 'cache.getAll is not a function'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-sql_transactions-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-sql_transactions-p1-3-0',
+    replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795278037980,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278037987
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-sql_transactions-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-sql_transactions-p1-3-0',
+    replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    updated_at: 1795278037992,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278037995
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-sql_transactions-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-sql_transactions-p1-3-0',
+    replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795278038013,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278038015
+}
+W1S2C-PROBE dispatch gate retained row decision {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  type: 'ADD',
+  workflowStep: 'SENDING',
+  confirmed: false,
+  routePort: '() => resolveRetainedPlacementRepairBinding(this)',
+  record: {
+    binding: { state: 'unavailable' },
+    lastDecision: { state: 'unavailable', reason: 'route_unavailable' },
+    owed: 6,
+    continuation: 'idle',
+    entry: 'unpinned'
+  },
+  bindingNow: { state: 'unavailable' },
+  readNow: {
+    success: true,
+    rows: 1,
+    witness: {
+      state: 'observed',
+      partitionId: 'replica_operations-p1',
+      servingNodeId: 'test-node-1',
+      servingReplicaId: 'replica_operations-p1-r1',
+      role: 'leader',
+      term: 1,
+      appliedIndex: 1,
+      commitIndex: 1
+    }
+  }
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-sql_transactions-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-sql_transactions-p1-3-0',
+    replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795278038031,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278038035
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-sql_transactions-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-sql_transactions-p1-3-0',
+    replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795278038036,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795278038038
+}

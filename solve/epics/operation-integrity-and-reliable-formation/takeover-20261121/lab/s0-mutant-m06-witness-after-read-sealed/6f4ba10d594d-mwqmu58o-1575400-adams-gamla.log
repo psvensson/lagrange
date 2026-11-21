@@ -1,0 +1,116 @@
+placement-shell=1917482
+placement-head=6f4ba10d594d8aaa01f2ebea5fcbba187fa96567
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1918353
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 6816ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+    ok 1 - in process: never READY without the row
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - routed: never READY without the row
+    ok 5 - should be equal
+    ok 6 - the fresh leader ships no rows
+    1..6
+ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=3762.771ms
+
+# Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+    ok 1 - leader: same typed answer
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - follower: same typed answer
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - names the leader it knows
+    ok 8 - insufficiently applied leader: same typed answer
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - deposed leader: same typed answer
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - names the leader that replaced it
+    1..14
+ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=434.239ms
+
+# Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+    ok 1 - the read reaches the replica that leads now
+    ok 2 - never the replica that stopped leading during its read
+    ok 3 - should be equivalent
+    ok 4 - the old leader refused after its read, shipping no rows
+    1..4
+ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=300.876ms
+
+# Subtest: readOwnerFact: an apply landing while the leader reads never mis-states the witness
+    ok 1 - beforeRead: typed
+    ok 2 - beforeRead: the witness names the applied position of the rows it carries
+    ok 3 - beforeRead: a read that spans no apply is READY
+    ok 4 - should be equivalent
+    ok 5 - should be equal
+    ok 6 - afterRead: typed
+    not ok 7 - afterRead: the witness names the applied position of the rows it carries
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 159
+        columnNumber: 11
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:159:11)
+      source: >2
+              t.ok([STATE.READY, STATE.UNAVAILABLE].includes(answer.state), `${placement}: typed`);
+              if (answer.state === STATE.READY) {
+                t.equal(ownerFactRows(answer).length === 1, answer.witness.appliedIndex >= writtenAt,
+        ----------^
+                  `${placement}: the witness names the applied position of the rows it carries`);
+              } else {
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 8 - afterRead: a read that spans no apply is READY
+    ok 9 - should be equivalent
+    ok 10 - should be equal
+    1..10
+not ok 4 - readOwnerFact: an apply landing while the leader reads never mis-states the witness # time=375.01ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 140
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('readOwnerFact: an apply landing while the leader reads never mis-states
+    the witness',
+  
+    ^
+      {timeout: TEST_TIMEOUT_MS}, async (t) => {
+        const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+# Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+    ok 1 - never READY with no rows
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 5 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=261.188ms
+
+1..5
+# { total: 37, pass: 36, fail: 1 }
+# time=5149.014ms
+# test-files total=1 pass=0 fail=1 assertions=42
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":42,"durationMs":6816,"retriedOnce":false,"firstFailureLine":"not ok 7 - afterRead: the witness names the applied position of the rows it carries"}

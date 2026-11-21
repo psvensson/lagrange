@@ -1,0 +1,1419 @@
+placement-shell=1873975
+placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1874426
+# test-files planned=8
+classified lane ordinary: 8 file(s), jobs=3
+thermal: ok cpu 37C (coretemp/Package id 0) nvme unmeasured
+not ok test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (2 assertions, 1702ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: direct remote wake-up verifies a delivered outcome and defers a deferred one
+    not ok 1 - Unsupported rebalancer entity type: undefined
+      ---
+      stack: |
+        buildIdentityError (src/rebalancer/rebalancer-entity-identity.js:21:17)
+        assertCanonicalRebalancerEntityIdentity (src/rebalancer/rebalancer-entity-identity.js:30:11)
+        buildCanonicalReplicaOperationRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:33:5)
+        buildReplicaOperationWakeRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:97:10)
+        ReplicaDispatchService.buildOperationRowFromCoordinator (src/control-plane/replica-dispatch-readiness-capture.js:129:12)
+        ReplicaDispatchService.sendDirectDispatchWakeup (src/control-plane/replica-dispatch-direct-wakeup.js:103:31)
+        ReplicaDispatchService.handleCoordinatorOperationCreated (src/control-plane/replica-dispatch-service-lifecycle.js:571:18)
+        wake (test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js:53:19)
+        Test.<anonymous> (test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js:68:18)
+      at:
+        fileName: src/rebalancer/rebalancer-entity-identity.js
+        lineNumber: 21
+        columnNumber: 17
+        functionName: buildIdentityError
+      code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+      tapCaught: returnedPromiseRejection
+      source: |
+      
+        function buildIdentityError(message, code) {
+          const error = new Error(message);
+        ----------------^
+          error.code = code;
+          return error;
+      ...
+    
+    1..1
+not ok 1 - direct remote wake-up verifies a delivered outcome and defers a deferred one # time=119.282ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js
+    lineNumber: 66
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('direct remote wake-up verifies a delivered outcome and defers a deferred
+    one',
+  
+    ^
+      async (t) => {
+        t.same(await wake(OUTCOMES.DELIVERED, 'op-direct-wake-delivered'),
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=135.921ms
+not ok test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (54 assertions, 2210ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: ReplicaDispatchService ignores non-owner replica_operations cache rows
+    not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      ---
+      stack: |
+        invalidOperationPersistenceOutcome (src/rebalancer/replica-operation-update-outcome.js:67:17)
+        requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+        decodePersistedOperationHistory (src/rebalancer/replica-operation-update-outcome.js:97:3)
+        decodeReplicaOperationRow (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+        ReplicaDispatchService.buildOperationFromRow (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+        ReplicaDispatchService.replayReplicaOperationRow (src/control-plane/replica-dispatch-replay-health-readiness.js:143:40)
+        ReplicaDispatchService.handleCacheNodeChange (src/control-plane/replica-dispatch-reconcile-callbacks.js:450:12)
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js:65:13)
+      at:
+        fileName: src/rebalancer/replica-operation-update-outcome.js
+        lineNumber: 67
+        columnNumber: 17
+        functionName: invalidOperationPersistenceOutcome
+      code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+      tapCaught: returnedPromiseRejection
+      source: >
+      
+        function invalidOperationPersistenceOutcome(reason, cause) {
+          const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+        ----------------^
+          error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+          if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+      ...
+    
+    1..1
+not ok 1 - ReplicaDispatchService ignores non-owner replica_operations cache rows # time=140.469ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js
+    lineNumber: 33
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    import {OperationType} from '../../src/rebalancer/replica-status.js';
+  
+    test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
+    ^
+      async (t) => {
+        initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService refuses missing registered node identity despite a complete NODE_STATE_UPDATE payload
+    ok 1 - expected to reject
+    ok 2 - registration absence remains the creation owner concern
+    ok 3 - publication does not mutate before authoritative registration exists
+    ok 4 - payload contents cannot recreate canonical node identity
+    1..4
+ok 2 - ReplicaDispatchService refuses missing registered node identity despite a complete NODE_STATE_UPDATE payload # time=64.919ms
+
+# Subtest: ReplicaDispatchService refuses missing registered identity for heartbeat-only NODE_STATE_UPDATE payloads
+    ok 1 - expected to reject
+    ok 2 - heartbeat recovery cannot become a registration creator
+    ok 3 - heartbeat publication does not mutate an absent identity
+    ok 4 - heartbeat-only publication never invents canonical identity
+    1..4
+ok 3 - ReplicaDispatchService refuses missing registered identity for heartbeat-only NODE_STATE_UPDATE payloads # time=55.966ms
+
+# Subtest: ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane system-table gateway
+    ok 1 - gateway should own the node-state write
+    ok 2 - dispatch should route NODE_STATE_UPDATE through the gateway
+    ok 3 - dispatch gateway writes should target the nodes table
+    1..3
+ok 4 - ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane system-table gateway # time=49.961ms
+
+# Subtest: ReplicaDispatchService defers retryable replica operation dispatch failures back onto the owner queue
+    ok 1 - dispatch should attempt the operation once before deferring
+    ok 2 - retryable dispatch failure should arm one deferred retry timer
+    ok 3 - retryable dispatch deferral should honor retryAfterMs
+    ok 4 - deferred retry state should be retained until the timer fires
+    ok 5 - deferred retry should re-enter the canonical operation owner queue with the last dispatch row
+    ok 6 - deferred retry state should clear after re-enqueue
+    1..6
+ok 5 - ReplicaDispatchService defers retryable replica operation dispatch failures back onto the owner queue # time=53.245ms
+
+# Subtest: ReplicaDispatchService preserves refresh-row metadata across retryable replica operation dispatch failures
+    ok 1 - retryable dispatch failure should arm one deferred retry timer
+    ok 2 - deferred retry state should retain refresh-row metadata
+    ok 3 - deferred retry should re-enter with refresh-row metadata intact
+    1..3
+ok 6 - ReplicaDispatchService preserves refresh-row metadata across retryable replica operation dispatch failures # time=42.075ms
+
+# Subtest: ReplicaDispatchService defers one retry when dispatch wake-up arrives before the authoritative operation row is visible
+    ok 1 - dispatch should still attempt the coordinator owner path once
+    ok 2 - dispatch should consult the authoritative operation row before dropping one unsuccessful wake-up
+    ok 3 - visibility lag should arm one deferred retry instead of recording a terminal dispatch failure
+    ok 4 - visibility-lag retry should honor the operation dispatch retry budget
+    ok 5 - the deferred retry state should retain the direct wake-up row until visibility converges
+    ok 6 - visibility lag should not record one dropped dispatch failure signature
+    1..6
+ok 7 - ReplicaDispatchService defers one retry when dispatch wake-up arrives before the authoritative operation row is visible # time=43.953ms
+
+# Subtest: ReplicaDispatchService preserves canonical visibility retry metadata when authoritative dispatch visibility lags
+    ok 1 - visibility recovery should query the same operation id
+    ok 2 - dispatch should still attempt the coordinator owner path once
+    ok 3 - visibility recovery should consult the canonical repository visibility observation
+    ok 4 - canonical visibility recovery should replace the raw authoritative row miss path when available
+    ok 5 - visibility recovery should still arm one deferred retry
+    ok 6 - the deferred retry should honor the canonical visibility retry delay
+    ok 7 - the deferred retry should retain the canonical visibility fallback row, not the stale wake-up payload
+    1..7
+ok 8 - ReplicaDispatchService preserves canonical visibility retry metadata when authoritative dispatch visibility lags # time=72.226ms
+
+# Subtest: ReplicaDispatchService suppresses stale dispatch failures when the authoritative operation row already advanced
+    ok 1 - authoritative suppression should inspect the same operation id
+    ok 2 - dispatch should still attempt one owner-lane execution against the queued stale row
+    ok 3 - stale-row suppression should read the authoritative operation row once
+    ok 4 - authoritative progression should not arm another deferred retry
+    ok 5 - authoritative progression should clear any deferred dispatch retry state
+    ok 6 - authoritative progression should not record a generic dispatch failure signature
+    1..6
+ok 9 - ReplicaDispatchService suppresses stale dispatch failures when the authoritative operation row already advanced # time=68.863ms
+
+# Subtest: ReplicaDispatchService retries SENDING operations for ready target nodes
+    not ok 1 - test unfinished
+      ---
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-operation-dispatch-retry-test-cases.js
+        lineNumber: 658
+        columnNumber: 3
+        functionName: registerReplicaDispatchNodeStateOperationDispatchRetryTests
+        isToplevel: true
+      stack: |
+        registerReplicaDispatchNodeStateOperationDispatchRetryTests (test/control-plane/replica-dispatch-node-state-operation-dispatch-retry-test-cases.js:658:3)
+        test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js:293:1
+      test: ReplicaDispatchService retries SENDING operations for ready target nodes
+      source: >2
+          });
+      
+          test('ReplicaDispatchService retries SENDING operations for ready target nodes',
+        --^
+            async (t) => {
+              initEnv();
+      ...
+    
+    1..1
+not ok 10 - ReplicaDispatchService retries SENDING operations for ready target nodes # time=52.412ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-operation-dispatch-retry-test-cases.js
+    lineNumber: 658
+    columnNumber: 3
+    functionName: registerReplicaDispatchNodeStateOperationDispatchRetryTests
+    isToplevel: true
+  source: >2
+      });
+  
+      test('ReplicaDispatchService retries SENDING operations for ready target nodes',
+    --^
+        async (t) => {
+          initEnv();
+  ...
+
+not ok 11 - child test left in queue: ReplicaDispatchService retries CREATING system-table operations for ready target nodes
+not ok 12 - child test left in queue: ReplicaDispatchService retries ACTIVE priority REPLACE source-removal operations for ready source nodes
+not ok 13 - child test left in queue: ReplicaDispatchService retries ACTIVE priority REPLACE source-removal operations for ready owner nodes
+1..13
+# { total: 44, pass: 39, fail: 5 }
+# time=669.337ms
+not ok test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js (24 assertions, 2606ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: a stranded CREATING ADD whose row visibility never converges is still re-entered through the canonical source owner to terminal ACTIVE
+    ok 1 - the initial source dispatch pass should reach the owner once
+    ok 2 - the visibility-lag failure should arm the existing deferred retry
+    ok 3 - the deferred-retry dispatch should succeed and clear its slot
+    ok 4 - the source-owned ADD must reach ACTIVE through the canonical owner even though the dispatch-service row reads never converge, because the owner repository and the exact-target ACTIVE services proof are both available
+    ok 5 - the durable operation must reach its terminal state so the stranded row stops consuming the rebalancer in-flight budget
+    1..5
+ok 1 - a stranded CREATING ADD whose row visibility never converges is still re-entered through the canonical source owner to terminal ACTIVE # time=154.152ms
+
+# Subtest: a dispatch success observed with a pre-transition PENDING payload row still retains the target-progress verification re-entry
+    ok 1 - the initial source dispatch pass should reach the owner once
+    ok 2 - the visibility-lag failure should arm the existing deferred retry
+    ok 3 - the deferred-retry dispatch should succeed and clear its slot
+    ok 4 - a stale pre-transition PENDING payload must not silently drop the retained verification re-entry: the owner must still drive the durable CREATING row to ACTIVE from exact-target ACTIVE proof
+    ok 5 - the durable operation must reach its terminal state instead of stranding CREATING with the budget slot held
+    1..5
+ok 2 - a dispatch success observed with a pre-transition PENDING payload row still retains the target-progress verification re-entry # time=70.412ms
+
+# Subtest: coordinator-first CREATE delivery retains owner progress across a stale dispatch-service retry and lost target handoff
+    ok 1 - dispatch-service visibility lag should be retained before the coordinator-created lane sends
+    ok 2 - the coordinator-created owner lane should deliver CREATE once
+    ok 3 - the successful direct delivery should durably advance to CREATING
+    ok 4 - the workflow owner must retain target-progress verification before the direct caller completes
+    ok 5 - the stale dispatch-service payload should produce the observed duplicate delivery attempt
+    not ok 6 - the deferred dispatch-service pass must traverse the canonical owner delivery sink instead of simulating a successful duplicate
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+        lineNumber: 451
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js:451:9)
+      source: |2
+                'duplicate delivery attempt',
+              );
+              t.equal(
+        --------^
+                deliveries.length,
+                2,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -2
+        +1
+      ...
+    
+    not ok 7 - the second target delivery must be the same CREATE request class
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+        lineNumber: 457
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js:457:9)
+      source: |2
+                'delivery sink instead of simulating a successful duplicate',
+              );
+              t.equal(
+        --------^
+                deliveries[1]?.payload?.type,
+                deliveries[0]?.payload?.type,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -CREATE_REPLICA
+        +undefined
+      ...
+    
+    ok 8 - the retained owner turn must apply exact-target ACTIVE evidence
+    ok 9 - the durable terminal ADD must release its operation-budget slot
+    not ok 10 - the deterministic seam should preserve the immutable live ordering
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,7 +1,6 @@
+         Array [
+           "dispatch_service_visibility_defer",
+           "coordinator_create_delivery",
+           "target_active",
+        -  "deferred_duplicate_delivery",
+           "owner_retained_verify",
+         ]
+      at:
+        fileName: test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+        lineNumber: 485
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js:485:9)
+      source: |2
+                'the durable terminal ADD must release its operation-budget slot',
+              );
+              t.same(
+        --------^
+                ordering,
+                [
+      ...
+    
+    ok 11 - terminal owner progress should consume the retained obligation
+    1..11
+not ok 3 - coordinator-first CREATE delivery retains owner progress across a stale dispatch-service retry and lost target handoff # time=117.424ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+    lineNumber: 313
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    // executor-outcome handoff is absent. Successful delivery itself must retain
+    a
+  
+    // bounded owner turn, independent of which caller observes the success.
+  
+    test(
+  
+    ^
+      'coordinator-first CREATE delivery retains owner progress across a stale ' +
+      'dispatch-service retry and lost target handoff',
+  ...
+
+1..3
+# { total: 21, pass: 18, fail: 3 }
+# time=357.825ms
+not ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js (34 assertions, 2530ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: ReplicaDispatchService ready-node retry prefers membership publication owner dispatch rows when available
+    ok 1 - ready-node retry should ask the membership publication owner for dispatch rows first
+    ok 2 - owner-returned retry rows should still re-enter the canonical operation queue
+    1..2
+ok 1 - ReplicaDispatchService ready-node retry prefers membership publication owner dispatch rows when available # time=109.736ms
+
+# Subtest: ReplicaDispatchService ready-node retry prefers cache-visible rows over authoritative priority fallback
+    ok 1 - cache-visible retry rows should not trigger authoritative fallback
+    ok 2 - cache-visible retry rows should keep the existing dispatch retry path
+    1..2
+ok 2 - ReplicaDispatchService ready-node retry prefers cache-visible rows over authoritative priority fallback # time=69.927ms
+
+# Subtest: ReplicaDispatchService ready-node retry merges authoritative priority rows when cache coverage is partial
+    ok 1 - partial priority cache coverage should query authoritative operations
+    not ok 2 - partial priority cache coverage should enqueue cached and authoritative rows
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,5 +1,4 @@
+         Array [
+        -  "op-priority-retry-cache-missing",
+           "op-priority-retry-cache-visible",
+           "op-priority-retry-cache-visible-2",
+         ]
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+        lineNumber: 427
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:427:5)
+      source: |2
+            READY_RETRY_ASSERT_PARTIAL_AUTHORITY_READ,
+          );
+          t.same(
+        ----^
+            enqueueCalls.map((call) => call.operationId).sort(),
+            [
+      ...
+    
+    not ok 3 - partial priority cache coverage should enqueue cached and authoritative rows
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+        lineNumber: 436
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:436:5)
+      source: |2
+            READY_RETRY_ASSERT_PARTIAL_QUEUE_IDS,
+          );
+          t.equal(
+        ----^
+            enqueueCalls.length,
+            READY_RETRY_PARTIAL_CACHE_EXPECTED_QUEUE_COUNT,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -3
+        +2
+      ...
+    
+    1..3
+not ok 3 - ReplicaDispatchService ready-node retry merges authoritative priority rows when cache coverage is partial # time=104.891ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+    lineNumber: 290
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
+    ^
+      initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService ready-node retry rediscovers the priority witness operation when its partition is cache-visible
+    ok 1 - operation-level priority witness coverage should query authoritative rows
+    not ok 2 - operation-level priority witness coverage should enqueue the blocked row
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,3 @@
+         Array [
+        -  "b81411d7-43b0-4fd2-8803-46d413628e9d",
+           "op-priority-retry-witness-visible",
+         ]
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+        lineNumber: 564
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:564:5)
+      source: |2
+            READY_RETRY_ASSERT_WITNESS_AUTHORITY_READ,
+          );
+          t.same(
+        ----^
+            enqueueCalls.map((call) => call.operationId).sort(),
+            [
+      ...
+    
+    not ok 3 - operation-level priority witness coverage should enqueue the blocked row
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+        lineNumber: 572
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:572:5)
+      source: |2
+            READY_RETRY_ASSERT_WITNESS_QUEUE_IDS,
+          );
+          t.equal(
+        ----^
+            enqueueCalls.length,
+            READY_RETRY_OPERATION_WITNESS_EXPECTED_QUEUE_COUNT,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -2
+        +1
+      ...
+    
+    1..3
+not ok 4 - ReplicaDispatchService ready-node retry rediscovers the priority witness operation when its partition is cache-visible # time=67.308ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+    lineNumber: 446
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, async (t) => {
+    ^
+      initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService publication updates advance membership publication without replaying an unchanged ready watermark
+    ok 1 - publication CDC should not repeat ready-node authoritative rediscovery
+    ok 2 - publication CDC should not bypass membership publication ownership through dispatch replay
+    ok 3 - publication CDC should delegate to membership publication advancement
+    1..3
+ok 5 - ReplicaDispatchService publication updates advance membership publication without replaying an unchanged ready watermark # time=72.302ms
+
+# Subtest: ReplicaDispatchService ready-node retry wakes remote owners for remote-owned pending operations
+    not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      ---
+      stack: |
+        invalidOperationPersistenceOutcome (src/rebalancer/replica-operation-update-outcome.js:67:17)
+        requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+        decodePersistedOperationHistory (src/rebalancer/replica-operation-update-outcome.js:97:3)
+        decodeReplicaOperationRow (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+        ReplicaDispatchService.buildOperationFromRow (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+        ReplicaDispatchService.retryPendingDispatchesForNode (src/control-plane/replica-dispatch-replay-readiness.js:81:52)
+        async ReplicaDispatchService.retryPendingDispatchesForReadyNode (src/control-plane/replica-dispatch-reconcile-callbacks.js:153:5)
+        async Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:778:3)
+      at:
+        fileName: src/rebalancer/replica-operation-update-outcome.js
+        lineNumber: 67
+        columnNumber: 17
+        functionName: invalidOperationPersistenceOutcome
+      code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+      tapCaught: returnedPromiseRejection
+      source: >
+      
+        function invalidOperationPersistenceOutcome(reason, cause) {
+          const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+        ----------------^
+          error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+          if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+      ...
+    
+    1..1
+not ok 6 - ReplicaDispatchService ready-node retry wakes remote owners for remote-owned pending operations # time=46.872ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+    lineNumber: 711
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('ReplicaDispatchService ready-node retry wakes remote owners for ' +
+    ^
+      'remote-owned pending operations',
+    async (t) => {
+  ...
+
+# Subtest: ReplicaDispatchService ignores bootstrap-owned MOVE_ASSIGNMENT rows for ready-node retry
+    ok 1 - ready-node retry must ignore bootstrap-owned reservations
+    1..1
+ok 7 - ReplicaDispatchService ignores bootstrap-owned MOVE_ASSIGNMENT rows for ready-node retry # time=46.233ms
+
+# Subtest: ReplicaDispatchService ignores bootstrap-owned MOVE_ASSIGNMENT rows from replica_operations CDC
+    ok 1 - CDC dispatch trigger must ignore bootstrap-owned reservations
+    1..1
+ok 8 - ReplicaDispatchService ignores bootstrap-owned MOVE_ASSIGNMENT rows from replica_operations CDC # time=75.129ms
+
+# Subtest: ReplicaDispatchService enqueues locally owned pending replica_operations cache rows
+    ok 1 - cache visibility must wake the owning node for pending operations
+    1..1
+ok 9 - ReplicaDispatchService enqueues locally owned pending replica_operations cache rows # time=46.111ms
+
+# Subtest: ReplicaDispatchService enqueues target-owned priority REPLACE pending replica_operations cache rows
+    ok 1 - target-owned priority REPLACE rows should wake the target owner queue
+    1..1
+ok 10 - ReplicaDispatchService enqueues target-owned priority REPLACE pending replica_operations cache rows # time=39.268ms
+
+# Subtest: ReplicaDispatchService enqueues target-owned priority REPLACE sending replica_operations cache rows
+    ok 1 - target-owned priority REPLACE rows should remain dispatch-replayable in SENDING
+    1..1
+ok 11 - ReplicaDispatchService enqueues target-owned priority REPLACE sending replica_operations cache rows # time=49.041ms
+
+# Subtest: ReplicaDispatchService cache replay wakes remote owners for remote-owned priority REPLACE pending rows
+    not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      ---
+      stack: |
+        invalidOperationPersistenceOutcome (src/rebalancer/replica-operation-update-outcome.js:67:17)
+        requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+        decodePersistedOperationHistory (src/rebalancer/replica-operation-update-outcome.js:97:3)
+        decodeReplicaOperationRow (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+        ReplicaDispatchService.buildOperationFromRow (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+        ReplicaDispatchService.replayReplicaOperationRow (src/control-plane/replica-dispatch-replay-health-readiness.js:143:40)
+        ReplicaDispatchService.handleCacheNodeChange (src/control-plane/replica-dispatch-reconcile-callbacks.js:450:12)
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:1132:11)
+      at:
+        fileName: src/rebalancer/replica-operation-update-outcome.js
+        lineNumber: 67
+        columnNumber: 17
+        functionName: invalidOperationPersistenceOutcome
+      code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+      tapCaught: returnedPromiseRejection
+      source: >
+      
+        function invalidOperationPersistenceOutcome(reason, cause) {
+          const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+        ----------------^
+          error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+          if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+      ...
+    
+    1..1
+not ok 12 - ReplicaDispatchService cache replay wakes remote owners for remote-owned priority REPLACE pending rows # time=55.777ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+    lineNumber: 1092
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('ReplicaDispatchService cache replay wakes remote owners for remote-owned
+    ' +
+  
+    ^
+      'priority REPLACE pending rows',
+    async (t) => {
+  ...
+
+# Subtest: ReplicaDispatchService replica_operations CDC replay wakes remote owners for remote-owned priority REPLACE pending rows
+    not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      ---
+      stack: |
+        invalidOperationPersistenceOutcome (src/rebalancer/replica-operation-update-outcome.js:67:17)
+        requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+        decodePersistedOperationHistory (src/rebalancer/replica-operation-update-outcome.js:97:3)
+        decodeReplicaOperationRow (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+        ReplicaDispatchService.buildOperationFromRow (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+        ReplicaDispatchService.replayReplicaOperationRow (src/control-plane/replica-dispatch-replay-health-readiness.js:143:40)
+        ReplicaDispatchService.handleCdcApplied (src/control-plane/replica-dispatch-service-lifecycle.js:548:10)
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js:1231:17)
+      at:
+        fileName: src/rebalancer/replica-operation-update-outcome.js
+        lineNumber: 67
+        columnNumber: 17
+        functionName: invalidOperationPersistenceOutcome
+      code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+      tapCaught: returnedPromiseRejection
+      source: >
+      
+        function invalidOperationPersistenceOutcome(reason, cause) {
+          const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+        ----------------^
+          error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+          if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+      ...
+    
+    1..1
+not ok 13 - ReplicaDispatchService replica_operations CDC replay wakes remote owners for remote-owned priority REPLACE pending rows # time=80.4ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js
+    lineNumber: 1191
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('ReplicaDispatchService replica_operations CDC replay wakes remote ' +
+    ^
+      'owners for remote-owned priority REPLACE pending rows',
+    async (t) => {
+  ...
+
+1..13
+# { total: 21, pass: 14, fail: 7 }
+# time=925.777ms
+not ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js (54 assertions, 2228ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: ReplicaDispatchService rehydrates retry dispatches through the coordinator repository authoritative operation owner path
+    ok 1 - the canonical repository read should target the deferred operation id
+    ok 2 - dispatch retry rehydration should use the repository default mode
+    ok 3 - dispatch should receive the operation rehydrated from the repository owner path
+    ok 4 - retry dispatch lookup should consult the canonical repository owner path once
+    ok 5 - gateway row reads should be bypassed when the coordinator repository owner is available
+    ok 6 - retry dispatch should continue once the authoritative owner row is rehydrated
+    1..6
+ok 1 - ReplicaDispatchService rehydrates retry dispatches through the coordinator repository authoritative operation owner path # time=89.448ms
+
+# Subtest: ReplicaDispatchService demotes non-ready node-state churn to the background lane
+    ok 1 - persists one nodes row update
+    ok 2 - non-ready node-state churn should use the background work class
+    ok 3 - non-ready node-state churn should not claim critical transport capacity
+    1..3
+ok 2 - ReplicaDispatchService demotes non-ready node-state churn to the background lane # time=64.132ms
+
+# Subtest: ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missing node row
+    ok 1 - NODE_STATE_UPDATE should not recreate missing authoritative rows
+    ok 2 - authoritative absence refuses before any mutation attempt
+    ok 3 - dispatch updates should not fall back to upsert
+    1..3
+ok 3 - ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missing node row # time=70.768ms
+
+# Subtest: ReplicaDispatchService answers AUTHORITY_UNAVAILABLE as a typed deferred completion while authoritative recovery is unavailable
+    ok 1 - an unavailable authoritative read is a typed deferred completion
+    ok 2 - the receiver arms no in-process retry; the sender tick owns the retry
+    ok 3 - no hidden node-state queue exists
+    1..3
+ok 4 - ReplicaDispatchService answers AUTHORITY_UNAVAILABLE as a typed deferred completion while authoritative recovery is unavailable # time=63.537ms
+
+# Subtest: ReplicaDispatchService ready-node retry re-enters operationDispatchQueue
+    ok 1 - ready-node retries must route pending operations through the canonical operation queue
+    ok 2 - ready-node retries must not dispatch operations inline
+    1..2
+ok 5 - ReplicaDispatchService ready-node retry re-enters operationDispatchQueue # time=71.379ms
+
+# Subtest: ReplicaDispatchService initialize replays already-ready cached nodes through nodeReadyRetryQueue
+    ok 1 - initialize should replay already-ready cached nodes through the canonical ready-node queue
+    ok 2 - initialize replay must not dispatch operations inline
+    1..2
+ok 6 - ReplicaDispatchService initialize replays already-ready cached nodes through nodeReadyRetryQueue # time=91.858ms
+
+# Subtest: ReplicaDispatchService consumes readiness-owner completion wakes through nodeReadyRetryQueue
+    ok 1 - initialize attaches the runtime completion subscriber
+    ok 2 - the transient enqueue failure is visible to its publication caller
+    ok 3 - one semantic completion reaches downstream dispatch progress once
+    ok 4 - completion wakes re-enter the canonical dispatch owner queue
+    ok 5 - a transient downstream failure retries the same semantic wake once
+    ok 6 - a successfully consumed semantic token suppresses later duplicates
+    ok 7 - shutdown releases the runtime completion subscriber exactly once
+    1..7
+ok 7 - ReplicaDispatchService consumes readiness-owner completion wakes through nodeReadyRetryQueue # time=54.561ms
+
+# Subtest: ReplicaDispatchService shards operation dispatch reconcile so one blocked operation id does not head-of-line block another
+    ok 1 - test should find two operation ids that route to different shards
+    ok 2 - distinct operation ids on separate shards should reconcile independently
+    1..2
+ok 8 - ReplicaDispatchService shards operation dispatch reconcile so one blocked operation id does not head-of-line block another # time=66.435ms
+
+# Subtest: ReplicaDispatchService ready-node retry uses authoritative fallback for priority recovery when cache is empty
+    ok 1 - priority recovery should fall back to the authoritative repository when cache coverage is empty
+    ok 2 - authoritative retry discovery should use the canonical repository owner path
+    not ok 3 - authoritative rediscovery should still re-enter the canonical per-operation queue
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,33 +1,54 @@
+         Array [
+           Object {
+             "operationId": "op-priority-retry-1",
+             "reason": "node_ready_dispatch_retry",
+             "context": Object {
+               "row": Object {
+                 "operation_id": "op-priority-retry-1",
+                 "type": "REPLACE",
+                 "partition_id": "replica_operations-p1",
+                 "replica_id": undefined,
+        +        "target_claim_key": null,
+                 "source_node_id": "node-1",
+                 "target_node_id": "node-2",
+                 "status": "pending",
+                 "workflow_step": "PENDING",
+                 "created_at": undefined,
+                 "updated_at": undefined,
+                 "completed_at": undefined,
+        +        "lease_expires_at": null,
+                 "error_message": undefined,
+                 "steps_history": "[]",
+                 "entity_type": "partition",
+                 "entity_id": "replica_operations-p1",
+        -        "target_claim_key": null,
+                 "membership_publication_epoch": null,
+        +        "source_replica_id": null,
+        +        "copy_source_node_id": null,
+        +        "message_group_membership_lane_key": null,
+        +        "message_group_membership_phase": null,
+        +        "message_group_membership_obligation_state": null,
+        +        "message_group_membership_identity": null,
+        +        "message_group_membership_owner_claim": null,
+        +        "message_group_membership_permit": null,
+        +        "message_group_learner_stamp": null,
+        +        "message_group_voter_stamp": null,
+        +        "message_group_removal_stamp": null,
+        +        "message_group_source_lifecycle_claim": null,
+        +        "create_admission_state": null,
+        +        "create_admission_token": null,
+        +        "create_admission_replica_created_at": null,
+        +        "create_admission_attempt_token": null,
+        +        "create_admission_previous_attempt_token": null,
+        +        "create_admission_attempt_seq": null,
+        +        "create_admission_workflow_updated_at": null,
+        +        "create_admission_owner_incarnation": null,
+               },
+               "readyNodeId": "node-2",
+               "readyNodeRow": Object {
+                 "node_id": "node-2",
+                 "status": "active",
+                 "connection_state": "ready",
+                 "last_heartbeat": 1795273017214,
+                 "ready_lease_expires_at": 1795273077214,
+               },
+             },
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js
+        lineNumber: 955
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js:955:7)
+      source: >2
+              'authoritative retry discovery should use the canonical repository owner path',
+            );
+            t.same(
+        ------^
+              enqueueCalls,
+              [{
+      ...
+    
+    1..3
+not ok 9 - ReplicaDispatchService ready-node retry uses authoritative fallback for priority recovery when cache is empty # time=77.112ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js
+    lineNumber: 856
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('ReplicaDispatchService ready-node retry uses authoritative fallback for
+    priority recovery when cache is empty',
+  
+    ^
+      async (t) => {
+        initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService retries ready-node rediscovered PENDING rows when workflow owner initialization is still catching up
+    ok 1 - ready-node rediscovery should attempt dispatch once before owner initialization finishes
+    ok 2 - shutdown-in-progress owner skips should arm a dispatch retry
+    ok 3 - dispatch retry should use the bounded operation retry delay
+    ok 4 - the pending operation should remain in the dispatch retry lane
+    ok 5 - first dispatch attempt should use the rediscovered pending operation
+    not ok 6 - deferred retry should re-enter the canonical dispatch queue with the rediscovered PENDING row
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,28 +1,49 @@
+         Array [
+           Object {
+             "operationId": "op-priority-retry-owner-starting",
+             "reason": "retryable_operation_dispatch",
+             "context": Object {
+               "row": Object {
+                 "operation_id": "op-priority-retry-owner-starting",
+                 "type": "REPLACE",
+                 "partition_id": "replica_operations-p1",
+                 "replica_id": undefined,
+        +        "target_claim_key": null,
+                 "source_node_id": "node-1",
+                 "target_node_id": "node-2",
+                 "status": "pending",
+                 "workflow_step": "PENDING",
+                 "created_at": undefined,
+                 "updated_at": 1795272957289,
+                 "completed_at": undefined,
+        +        "lease_expires_at": null,
+                 "error_message": undefined,
+                 "steps_history": "[]",
+                 "entity_type": "partition",
+                 "entity_id": "replica_operations-p1",
+        -        "target_claim_key": null,
+                 "membership_publication_epoch": null,
+        +        "source_replica_id": null,
+        +        "copy_source_node_id": null,
+        +        "message_group_membership_lane_key": null,
+        +        "message_group_membership_phase": null,
+        +        "message_group_membership_obligation_state": null,
+        +        "message_group_membership_identity": null,
+        +        "message_group_membership_owner_claim": null,
+        +        "message_group_membership_permit": null,
+        +        "message_group_learner_stamp": null,
+        +        "message_group_voter_stamp": null,
+        +        "message_group_removal_stamp": null,
+        +        "message_group_source_lifecycle_claim": null,
+        +        "create_admission_state": null,
+        +        "create_admission_token": null,
+        +        "create_admission_replica_created_at": null,
+        +        "create_admission_attempt_token": null,
+        +        "create_admission_previous_attempt_token": null,
+        +        "create_admission_attempt_seq": null,
+        +        "create_admission_workflow_updated_at": null,
+        +        "create_admission_owner_incarnation": null,
+               },
+               "deferredRetryProvenance": true,
+             },
+           },
+         ]
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js
+        lineNumber: 1154
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js:1154:7)
+      source: |2
+              READY_RETRY_ASSERT_INITIAL_OPERATION,
+            );
+            t.same(
+        ------^
+              retryEnqueues,
+              [{
+      ...
+    
+    ok 7 - retry enqueue should clear the deferred dispatch slot before re-entry
+    1..7
+not ok 10 - ReplicaDispatchService retries ready-node rediscovered PENDING rows when workflow owner initialization is still catching up # time=53.858ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js
+    lineNumber: 991
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test(READY_RETRY_OWNER_STARTING_TEST_NAME,
+    ^
+      async (t) => {
+        initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService retains direct wake-up rows when workflow owner has a deferred retry pending
+    ok 1 - ready-node rediscovery should attempt dispatch once before owner initialization finishes
+    ok 2 - owner-deferred dispatch should keep the direct wake-up row in the retry lane
+    ok 3 - owner-deferred dispatch should keep the direct wake-up row in the retry lane
+    ok 4 - owner-deferred dispatch retry should re-enter with the original wake-up row
+    ok 5 - retry enqueue should clear the deferred dispatch slot before re-entry
+    1..5
+ok 11 - ReplicaDispatchService retains direct wake-up rows when workflow owner has a deferred retry pending # time=46ms
+
+1..11
+# { total: 43, pass: 41, fail: 2 }
+# time=773.962ms
+not ok test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js (30 assertions, 2016ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: ReplicaDispatchService sends direct remote wake-up for target-owned coordinator-created operations
+    not ok 1 - Unsupported rebalancer entity type: undefined
+      ---
+      stack: |
+        buildIdentityError (src/rebalancer/rebalancer-entity-identity.js:21:17)
+        assertCanonicalRebalancerEntityIdentity (src/rebalancer/rebalancer-entity-identity.js:30:11)
+        buildCanonicalReplicaOperationRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:33:5)
+        buildReplicaOperationWakeRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:97:10)
+        ReplicaDispatchService.buildOperationRowFromCoordinator (src/control-plane/replica-dispatch-readiness-capture.js:129:12)
+        ReplicaDispatchService.sendDirectDispatchWakeup (src/control-plane/replica-dispatch-direct-wakeup.js:103:31)
+        ReplicaDispatchService.handleCoordinatorOperationCreated (src/control-plane/replica-dispatch-service-lifecycle.js:571:18)
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js:102:19)
+      at:
+        fileName: src/rebalancer/rebalancer-entity-identity.js
+        lineNumber: 21
+        columnNumber: 17
+        functionName: buildIdentityError
+      code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+      tapCaught: returnedPromiseRejection
+      source: |
+      
+        function buildIdentityError(message, code) {
+          const error = new Error(message);
+        ----------------^
+          error.code = code;
+          return error;
+      ...
+    
+    1..1
+not ok 1 - ReplicaDispatchService sends direct remote wake-up for target-owned coordinator-created operations # time=159.145ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js
+    lineNumber: 75
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      'verification timer should refresh the row before re-waking the remote
+    owner';
+  
+    test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
+  
+    ^
+      'coordinator-created operations', async (t) => {
+      initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService refreshes rows for direct dispatch ingress
+    ok 1 - target ingress should use the payload row only as a fallback
+    1..1
+ok 2 - ReplicaDispatchService refreshes rows for direct dispatch ingress # time=63.354ms
+
+# Subtest: ReplicaDispatchService verifies acknowledged remote direct wake-ups
+    not ok 1 - Unsupported rebalancer entity type: undefined
+      ---
+      stack: |
+        buildIdentityError (src/rebalancer/rebalancer-entity-identity.js:21:17)
+        assertCanonicalRebalancerEntityIdentity (src/rebalancer/rebalancer-entity-identity.js:30:11)
+        buildCanonicalReplicaOperationRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:33:5)
+        buildReplicaOperationWakeRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:97:10)
+        ReplicaDispatchService.buildOperationRowFromCoordinator (src/control-plane/replica-dispatch-readiness-capture.js:129:12)
+        ReplicaDispatchService.sendDirectDispatchWakeup (src/control-plane/replica-dispatch-direct-wakeup.js:103:31)
+        ReplicaDispatchService.handleCoordinatorOperationCreated (src/control-plane/replica-dispatch-service-lifecycle.js:571:18)
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js:265:19)
+      at:
+        fileName: src/rebalancer/rebalancer-entity-identity.js
+        lineNumber: 21
+        columnNumber: 17
+        functionName: buildIdentityError
+      code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+      tapCaught: returnedPromiseRejection
+      source: |
+      
+        function buildIdentityError(message, code) {
+          const error = new Error(message);
+        ----------------^
+          error.code = code;
+          return error;
+      ...
+    
+    1..1
+not ok 3 - ReplicaDispatchService verifies acknowledged remote direct wake-ups # time=56.412ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js
+    lineNumber: 216
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
+    ^
+      initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService coalesces duplicate remote direct wake-ups while transport delivery is still in flight
+    not ok 1 - Unsupported rebalancer entity type: undefined
+      ---
+      stack: |
+        buildIdentityError (src/rebalancer/rebalancer-entity-identity.js:21:17)
+        assertCanonicalRebalancerEntityIdentity (src/rebalancer/rebalancer-entity-identity.js:30:11)
+        buildCanonicalReplicaOperationRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:33:5)
+        buildReplicaOperationWakeRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:97:10)
+        ReplicaDispatchService.buildOperationRowFromCoordinator (src/control-plane/replica-dispatch-readiness-capture.js:129:12)
+        ReplicaDispatchService.sendDirectDispatchWakeup (src/control-plane/replica-dispatch-direct-wakeup.js:103:31)
+        ReplicaDispatchService.handleCoordinatorOperationCreated (src/control-plane/replica-dispatch-service-lifecycle.js:571:18)
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js:404:19)
+      at:
+        fileName: src/rebalancer/rebalancer-entity-identity.js
+        lineNumber: 21
+        columnNumber: 17
+        functionName: buildIdentityError
+      code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+      tapCaught: returnedPromiseRejection
+      source: |
+      
+        function buildIdentityError(message, code) {
+          const error = new Error(message);
+        ----------------^
+          error.code = code;
+          return error;
+      ...
+    
+    1..1
+not ok 4 - ReplicaDispatchService coalesces duplicate remote direct wake-ups while transport delivery is still in flight # time=44.331ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js
+    lineNumber: 348
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
+    ^
+      'while transport delivery is still in flight', async (t) => {
+      initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService promotes coalesced direct wake retries to row refresh
+    ok 1 - plain deferred retries should keep the default no-refresh mode
+    ok 2 - coalesced retry should retain the freshest operation row
+    ok 3 - coalesced direct wake should promote deferred retry row refresh
+    ok 4 - coalesced direct wake retry should re-enter with row refresh metadata
+    1..4
+ok 5 - ReplicaDispatchService promotes coalesced direct wake retries to row refresh # time=39.477ms
+
+# Subtest: ReplicaDispatchService retries bounded remote direct dispatch wake-ups
+    ok 1 - initial remote wake-up should use bounded target-owner delivery
+    not ok 2 - initial remote wake-up should use bounded target-owner delivery
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,6 +1,27 @@
+         Object {
+           "payload": Object {
+             "operationRow": Object {
+        +      "lease_expires_at": null,
+        +      "source_replica_id": null,
+        +      "copy_source_node_id": null,
+        +      "message_group_membership_lane_key": null,
+        +      "message_group_membership_phase": null,
+        +      "message_group_membership_obligation_state": null,
+        +      "message_group_membership_identity": null,
+        +      "message_group_membership_owner_claim": null,
+        +      "message_group_membership_permit": null,
+        +      "message_group_learner_stamp": null,
+        +      "message_group_voter_stamp": null,
+        +      "message_group_removal_stamp": null,
+        +      "message_group_source_lifecycle_claim": null,
+        +      "create_admission_state": null,
+        +      "create_admission_token": null,
+        +      "create_admission_replica_created_at": null,
+        +      "create_admission_attempt_token": null,
+        +      "create_admission_previous_attempt_token": null,
+        +      "create_admission_attempt_seq": null,
+        +      "create_admission_workflow_updated_at": null,
+        +      "create_admission_owner_incarnation": null,
+             },
+           },
+         }
+      at:
+        fileName: test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js
+        lineNumber: 621
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js:621:7)
+      source: |2
+              DIRECT_WAKEUP_RETRY_ASSERT_FIRST_DELIVERY,
+            );
+            t.same(
+        ------^
+              deliveries[0],
+              {
+      ...
+    
+    ok 3 - retryable remote wake-up failure should stay on the dispatch retry lane
+    ok 4 - remote wake-up retry should honor the transport retry-after
+    ok 5 - duplicate remote wake-up should coalesce while retry is armed
+    ok 6 - coalesced retry should retain the freshest operation row
+    ok 7 - retry timer should re-enter the remote direct wake-up path
+    ok 8 - coalesced retry should retain the freshest operation row
+    ok 9 - retry timer should re-enter the remote direct wake-up path
+    ok 10 - successful remote wake-up retry should arm a verification dispatch slot
+    1..10
+not ok 6 - ReplicaDispatchService retries bounded remote direct dispatch wake-ups # time=55.056ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js
+    lineNumber: 555
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
+    ^
+      initEnv();
+  ...
+
+# Subtest: ReplicaDispatchService registers a direct dispatch wake-up handler
+    ok 1 - dispatch service should register one direct wake-up handler
+    ok 2 - dispatch service should register on the local service address
+    ok 3 - direct wake-up handler should enqueue the target operation
+    ok 4 - dispatch service should retire its exact direct wake-up handler on stop
+    1..4
+ok 7 - ReplicaDispatchService registers a direct dispatch wake-up handler # time=40.199ms
+
+not ok 8 - Unsupported rebalancer entity type: undefined
+  ---
+  stack: |
+    buildIdentityError (src/rebalancer/rebalancer-entity-identity.js:21:17)
+    assertCanonicalRebalancerEntityIdentity (src/rebalancer/rebalancer-entity-identity.js:30:11)
+    buildCanonicalReplicaOperationRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:33:5)
+    buildReplicaOperationWakeRow (src/rebalancer/replica-operation-repository-mutation-row-methods.js:97:10)
+    ReplicaDispatchService.buildOperationRowFromCoordinator (src/control-plane/replica-dispatch-readiness-capture.js:129:12)
+    ReplicaDispatchService.sendDirectDispatchWakeup (src/control-plane/replica-dispatch-direct-wakeup.js:103:31)
+    ReplicaDispatchService.handleCoordinatorOperationCreated (src/control-plane/replica-dispatch-service-lifecycle.js:571:18)
+    Test.<anonymous> (test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js:391:33)
+  at:
+    fileName: src/rebalancer/rebalancer-entity-identity.js
+    lineNumber: 21
+    columnNumber: 17
+    functionName: buildIdentityError
+  code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+  tapCaught: unhandledRejection
+  test: TAP
+  source: |
+  
+    function buildIdentityError(message, code) {
+      const error = new Error(message);
+    ----------------^
+      error.code = code;
+      return error;
+  ...
+
+1..8
+# { total: 23, pass: 18, fail: 5 }
+# time=481.117ms
+not ok test/control-plane/replica-dispatch-reservation-identity.test.js (27 assertions, 2027ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'dispatch-projection-owner',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: dispatch projection preserves the exact reservation identity through the canonical dispatch gate
+    ok 1 - the exact planning epoch was seeded in SQLite
+Storage reservation created with operation {
+  reservationId: 'res-dispatch-projection-runtime-create',
+  operationId: 'dispatch-projection-runtime-create',
+  targetNodeId: 'dispatch-projection-target',
+  estimatedBytes: 11,
+  expiresAt: 1795273319106
+}
+    ok 2 - setup creates one exact ACTIVE reservation through the real owner
+    ok 3 - the coordinator row projection retains the durable target claim
+    ok 4 - the coordinator row projection retains the durable planning epoch
+    ok 5 - the dispatch operation retains the exact target claim
+    ok 6 - the dispatch operation retains the exact planning epoch
+    not ok 7 - the canonical owner dispatches after the strict identity gate
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/replica-dispatch-reservation-identity.test.js
+        lineNumber: 129
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/replica-dispatch-reservation-identity.test.js:129:7)
+      source: |2
+      
+            const result = await coordinator.dispatchOperation(projectedOperation);
+            t.equal(result.success, true,
+        ------^
+              'the canonical owner dispatches after the strict identity gate');
+            t.same(
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 8 - the canonical dispatch gate adopts the exact existing hold once
+    not ok 9 - the exact projected operation dispatches once
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "dispatch-projection-runtime-create",
+        -]
+        +Array []
+      at:
+        fileName: test/control-plane/replica-dispatch-reservation-identity.test.js
+        lineNumber: 136
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/replica-dispatch-reservation-identity.test.js:136:7)
+      source: |2
+              'the canonical dispatch gate adopts the exact existing hold once',
+            );
+            t.same(dispatchCalls, [OPERATION_ID],
+        ------^
+              'the exact projected operation dispatches once');
+          } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'dispatch-projection-owner', inFlightOperations: 0 }
+    1..9
+not ok 1 - dispatch projection preserves the exact reservation identity through the canonical dispatch gate # time=119.243ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-reservation-identity.test.js
+    lineNumber: 62
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('dispatch projection preserves the exact reservation identity through ' +
+    ^
+      'the canonical dispatch gate', async (t) => {
+      initializeConfig();
+  ...
+
+# Subtest: dispatch projection preserves unbound identity and rejects malformed durable epochs
+    ok 1 - an absent target claim remains SQL-null in row shape
+    ok 2 - an unbound planning epoch remains SQL-null in row shape
+    ok 3 - an absent target claim remains explicitly null after decode
+    ok 4 - an unbound planning epoch remains omitted after canonical decode
+    ok 5 - an empty in-memory target claim uses canonical SQL-null writer shape
+    ok 6 - a malformed durable planning epoch fails closed at dispatch decode
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-0' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-1' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-2' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-3' }
+Reconcile queue shutdown { queue: 'dispatch-node-ready-reconcile' }
+Reconcile queue shutdown { queue: 'dispatch-membership-publication-advance-reconcile' }
+ReplicaDispatchService stopped { nodeId: 'dispatch-projection-owner' }
+    1..6
+ok 2 - dispatch projection preserves unbound identity and rejects malformed durable epochs # time=46.856ms
+
+# Subtest: legacy REMOVE dispatch consumer requests strict original-operation observation
+    ok 1 - should be equal
+    ok 2 - legacy authority reads the exact original operation
+    ok 3 - projection or local cache cannot authorize physical deletion
+    ok 4 - a failed owner read must remain distinct from confirmed absence
+    ok 5 - owner refuses caller entity mismatch
+    ok 6 - owner refuses foreign physical host
+    ok 7 - terminal operation grants no new physical STOP
+    ok 8 - confirmed owner absence is not permission
+    ok 9 - temporarily missing owner leaves cleanup retryable
+    1..9
+ok 3 - legacy REMOVE dispatch consumer requests strict original-operation observation # time=1.729ms
+
+1..3
+# { total: 24, pass: 22, fail: 2 }
+# time=185.345ms
+not ok test/control-plane/replica-dispatch-routing.property.test.js (2 assertions, 2417ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property 16: Replica dispatch forwards to correct leader
+    not ok 1 - Property failed after 1 tests { seed: 2059277882, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [{"operation_id":"op-xxxxx","type":"ADD","partition_id":"part-xxx","replica_id":"rep-xxx","source_node_id":"node-xxx","target_node_id":"tgt-xxx","status":"pending","workflow_step":"PENDING","created_at":1000000000000,"updated_at":1000000000000,"entity_type":"partition","entity_id":"part-xxx"}] Shrunk 24 time(s) Got error: Invalid replica operation persistence outcome: persisted operation history is not JSON text     at invalidOperationPersistenceOutcome (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:67:17)     at requireOutcome (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:74:25)     at decodePersistedOperationHistory (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-update-outcome.js:97:3)     at decodeReplicaOperationRow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/rebalancer/replica-operation-repository-row-methods.js:96:20)     at ReplicaDispatchService.buildOperationFromRow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/control-plane/replica-dispatch-readiness-capture.js:119:12)     at ReplicaDispatchService.dispatchOperationRow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/src/control-plane/replica-dispatch-operation-execution.js:219:31)     at file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqj6uye-1365247/test/control-plane/replica-dispatch-routing.property.test.js:206:25     at AsyncProperty.predicate (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
+    1..1
+not ok 1 - Property 16: Replica dispatch forwards to correct leader # time=937.143ms
+  ---
+  at:
+    fileName: test/control-plane/replica-dispatch-routing.property.test.js
+    lineNumber: 78
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }));
+  
+    test('Property 16: Replica dispatch forwards to correct leader',
+    ^
+      async (t) => {
+        await fc.assert(
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=951.474ms
+# test-files total=8 pass=0 fail=8 assertions=227
+placement-results={"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":1702,"retriedOnce":false,"firstFailureLine":"not ok 1 - Unsupported rebalancer entity type: undefined"}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":false,"assertions":54,"durationMs":2210,"retriedOnce":false,"firstFailureLine":"not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text"}
+placement-results={"file":"test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":2606,"retriedOnce":false,"firstFailureLine":"not ok 6 - the deferred dispatch-service pass must traverse the canonical owner delivery sink instead of simulating a successful duplicate"}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js","attempt":1,"ok":false,"assertions":34,"durationMs":2530,"retriedOnce":false,"firstFailureLine":"not ok 2 - partial priority cache coverage should enqueue cached and authoritative rows"}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js","attempt":1,"ok":false,"assertions":54,"durationMs":2228,"retriedOnce":false,"firstFailureLine":"not ok 3 - authoritative rediscovery should still re-enter the canonical per-operation queue"}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js","attempt":1,"ok":false,"assertions":30,"durationMs":2016,"retriedOnce":false,"firstFailureLine":"not ok 1 - Unsupported rebalancer entity type: undefined"}
+placement-results={"file":"test/control-plane/replica-dispatch-reservation-identity.test.js","attempt":1,"ok":false,"assertions":27,"durationMs":2027,"retriedOnce":false,"firstFailureLine":"not ok 7 - the canonical owner dispatches after the strict identity gate"}
+placement-results={"file":"test/control-plane/replica-dispatch-routing.property.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":2417,"retriedOnce":false,"firstFailureLine":"not ok 1 - Property failed after 1 tests { seed: 2059277882, path: \"0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [{\"operation_id\":\"op-xxxxx\",\"type\":\"ADD\",\"partition_id\":\"part-xxx\",\"replica_id\":\"rep-xxx\",\"sour"}

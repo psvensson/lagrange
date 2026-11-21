@@ -1,0 +1,3 @@
+{"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6747,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":7098,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/settled-replay-preserves-result.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":7626,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,17 @@
+{
+  "sha": "65f53d7016a6ccc9b822aeb72300ed85f0ed6b6a",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/topology-guard-inventory-authority.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/topology-guard-inventory-authority.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

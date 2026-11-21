@@ -135,3 +135,149 @@ heavy.sh: end   13:41:36 rc=0: npm run
 heavy.sh: start 13:41:46 load=3.19 availGB=11 cpu=59C: git commit
 heavy.sh: end   13:43:35 rc=0: git commit
 heavy.sh: start 13:43:35 load=2.71 availGB=12 cpu=47C: git commit
+heavy.sh: end   13:45:55 rc=0: git commit
+heavy.sh: start 13:45:56 load=2.90 availGB=12 cpu=54C: git commit
+heavy.sh: end   13:47:44 rc=0: git commit
+heavy.sh: start 13:47:58 load=1.43 availGB=12 cpu=60C: git commit
+heavy.sh: end   13:49:49 rc=0: git commit
+heavy.sh: start 13:49:49 load=1.79 availGB=12 cpu=59C: git worktree
+heavy.sh: end   13:50:07 rc=0: git worktree
+heavy.sh: start 13:50:07 load=2.05 availGB=12 cpu=44C: git commit
+heavy.sh: end   13:51:58 rc=0: git commit
+heavy.sh: start 13:52:14 load=1.40 availGB=12 cpu=61C: git commit
+heavy.sh: end   13:54:06 rc=0: git commit
+heavy.sh: start 13:55:03 load=2.93 availGB=12 cpu=42C: git commit
+heavy.sh: end   13:58:28 rc=0: git commit
+heavy.sh: start 13:58:28 load=1.88 availGB=12 cpu=65C: git commit
+heavy.sh: end   14:01:52 rc=0: git commit
+heavy.sh: start 14:01:52 load=1.93 availGB=12 cpu=48C: git commit
+heavy.sh: end   14:03:44 rc=0: git commit
+heavy.sh: start 14:04:12 load=1.95 availGB=12 cpu=49C: git commit
+heavy.sh: end   14:06:03 rc=0: git commit
+heavy.sh: start 14:08:00 load=1.10 availGB=12 cpu=42C: git worktree
+heavy.sh: end   14:08:01 rc=0: git worktree
+heavy.sh: start 14:08:03 load=1.01 availGB=12 cpu=40C: git worktree
+heavy.sh: end   14:08:04 rc=0: git worktree
+heavy.sh: start 14:08:21 load=0.85 availGB=12 cpu=42C: git commit
+heavy.sh: end   14:10:13 rc=0: git commit
+heavy.sh: start 14:11:07 load=1.32 availGB=12 cpu=46C: git commit
+heavy.sh: end   14:12:58 rc=0: git commit
+heavy.sh: start 14:12:58 load=1.34 availGB=12 cpu=50C: git commit
+heavy.sh: end   14:15:32 rc=0: git commit
+heavy.sh: start 14:15:32 load=2.23 availGB=12 cpu=44C: git commit
+heavy.sh: end   14:18:57 rc=0: git commit
+heavy.sh: start 14:18:57 load=2.11 availGB=12 cpu=45C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   14:19:07 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 14:19:49 load=2.81 availGB=12 cpu=43C: git commit
+heavy.sh: end   14:22:22 rc=0: git commit
+heavy.sh: start 14:22:22 load=2.76 availGB=12 cpu=65C: bash /mnt/data/peter/projects/lagrange/.git/worktrees/fallback-trap-apparatus-20261121/TRAP_CHEAP_CHECKS.sh
+heavy.sh: end   14:22:25 rc=0: bash /mnt/data/peter/projects/lagrange/.git/worktrees/fallback-trap-apparatus-20261121/TRAP_CHEAP_CHECKS.sh
+heavy.sh: start 14:22:52 load=1.95 availGB=12 cpu=50C: bash /mnt/data/peter/projects/lagrange/.git/worktrees/fallback-trap-apparatus-20261121/TRAP_MEASURE.sh
+heavy.sh: end   14:23:00 rc=0: bash /mnt/data/peter/projects/lagrange/.git/worktrees/fallback-trap-apparatus-20261121/TRAP_MEASURE.sh
+heavy.sh: start 14:23:31 load=1.58 availGB=12 cpu=45C: git commit
+heavy.sh: end   14:26:54 rc=0: git commit
+heavy.sh: start 14:28:11 load=1.64 availGB=12 cpu=42C: git commit
+heavy.sh: end   14:30:03 rc=1: git commit
+heavy.sh: start 14:31:35 load=1.24 availGB=12 cpu=48C: git commit
+heavy.sh: end   14:34:04 rc=0: git commit
+heavy.sh: start 14:34:04 load=2.00 availGB=12 cpu=64C: git commit
+heavy.sh: end   14:35:58 rc=1: git commit
+heavy.sh: start 14:35:58 load=1.95 availGB=12 cpu=53C: bash /mnt/data/peter/projects/lagrange/.git/worktrees/fallback-trap-apparatus-20261121/TRAP_ARTIFACT.sh
+heavy.sh: end   14:36:07 rc=0: bash /mnt/data/peter/projects/lagrange/.git/worktrees/fallback-trap-apparatus-20261121/TRAP_ARTIFACT.sh
+heavy.sh: start 14:36:21 load=1.93 availGB=12 cpu=43C: git commit
+heavy.sh: end   14:39:43 rc=0: git commit
+heavy.sh: start 14:39:43 load=1.83 availGB=12 cpu=49C: git commit
+heavy.sh: end   14:43:07 rc=0: git commit
+heavy.sh: start 14:43:07 load=2.32 availGB=12 cpu=47C: git commit
+heavy.sh: end   14:45:01 rc=0: git commit
+heavy.sh: start 14:56:15 load=1.66 availGB=12 cpu=56C: git commit
+heavy.sh: end   14:58:45 rc=0: git commit
+heavy.sh: start 14:58:45 load=1.96 availGB=12 cpu=48C: git commit
+heavy.sh: end   15:01:21 rc=0: git commit
+heavy.sh: start 15:01:21 load=1.87 availGB=12 cpu=45C: git commit
+heavy.sh: end   15:03:54 rc=0: git commit
+heavy.sh: start 15:04:26 load=1.91 availGB=12 cpu=44C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   15:06:13 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 15:06:13 load=1.59 availGB=12 cpu=60C: git commit
+heavy.sh: end   15:09:36 rc=0: git commit
+heavy.sh: start 15:09:36 load=1.89 availGB=12 cpu=62C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   15:11:22 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 15:11:22 load=2.10 availGB=12 cpu=60C: git commit
+heavy.sh: end   15:13:53 rc=0: git commit
+heavy.sh: start 15:13:53 load=2.07 availGB=12 cpu=45C: git commit
+heavy.sh: end   15:17:23 rc=0: git commit
+heavy.sh: start 15:17:23 load=2.34 availGB=12 cpu=51C: git commit
+heavy.sh: end   15:19:55 rc=0: git commit
+heavy.sh: start 15:19:55 load=1.89 availGB=12 cpu=62C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   15:21:41 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 15:21:41 load=1.56 availGB=12 cpu=58C: git worktree
+heavy.sh: end   15:21:42 rc=0: git worktree
+heavy.sh: start 15:21:42 load=1.60 availGB=12 cpu=54C: git commit
+heavy.sh: end   15:25:03 rc=1: git commit
+heavy.sh: start 15:25:03 load=1.86 availGB=12 cpu=50C: git commit
+heavy.sh: end   15:27:32 rc=0: git commit
+heavy.sh: start 15:27:32 load=1.95 availGB=12 cpu=44C: git commit
+heavy.sh: end   15:30:06 rc=0: git commit
+heavy.sh: start 15:30:06 load=3.66 availGB=12 cpu=44C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   15:31:53 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 15:31:53 load=3.35 availGB=12 cpu=48C: git worktree
+heavy.sh: end   15:31:54 rc=0: git worktree
+heavy.sh: start 15:31:54 load=3.35 availGB=12 cpu=48C: git commit
+heavy.sh: end   15:33:48 rc=0: git commit
+heavy.sh: start 15:33:48 load=2.03 availGB=12 cpu=45C: git commit
+heavy.sh: end   15:36:23 rc=0: git commit
+heavy.sh: start 15:36:23 load=2.55 availGB=12 cpu=61C: node scripts/check-guideline-navigability.js
+heavy.sh: end   15:36:25 rc=0: node scripts/check-guideline-navigability.js
+heavy.sh: start 15:36:25 load=2.55 availGB=12 cpu=61C: git commit
+heavy.sh: end   15:39:51 rc=0: git commit
+heavy.sh: start 15:39:51 load=2.61 availGB=12 cpu=44C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   15:41:37 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 15:41:37 load=2.70 availGB=12 cpu=65C: git commit
+heavy.sh: end   15:44:14 rc=0: git commit
+heavy.sh: start 15:44:14 load=1.53 availGB=12 cpu=64C: git commit
+heavy.sh: end   15:46:11 rc=0: git commit
+heavy.sh: start 15:46:11 load=2.91 availGB=12 cpu=44C: node scripts/check-guideline-navigability.js
+heavy.sh: end   15:46:15 rc=1: node scripts/check-guideline-navigability.js
+heavy.sh: start 15:46:15 load=2.84 availGB=11 cpu=49C: git commit
+heavy.sh: end   15:49:36 rc=0: git commit
+heavy.sh: start 15:49:36 load=1.61 availGB=12 cpu=45C: git commit
+heavy.sh: end   15:51:26 rc=0: git commit
+heavy.sh: start 15:51:26 load=1.67 availGB=12 cpu=67C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   15:53:12 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 15:53:12 load=2.38 availGB=12 cpu=51C: git commit
+heavy.sh: end   15:56:42 rc=0: git commit
+heavy.sh: start 15:56:42 load=2.54 availGB=12 cpu=59C: git commit
+heavy.sh: end   15:59:29 rc=0: git commit
+heavy.sh: start 15:59:29 load=2.11 availGB=11 cpu=68C: git commit
+heavy.sh: end   16:03:11 rc=0: git commit
+heavy.sh: start 16:03:11 load=1.82 availGB=12 cpu=53C: git commit
+heavy.sh: end   16:05:05 rc=1: git commit
+heavy.sh: start 16:05:05 load=1.76 availGB=12 cpu=58C: git commit
+heavy.sh: end   16:07:38 rc=0: git commit
+heavy.sh: start 16:07:38 load=2.32 availGB=12 cpu=49C: git commit
+heavy.sh: end   16:11:02 rc=0: git commit
+heavy.sh: start 16:11:02 load=1.79 availGB=12 cpu=47C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   16:12:48 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 16:12:48 load=1.71 availGB=12 cpu=61C: git commit
+heavy.sh: end   16:12:51 rc=1: git commit
+heavy.sh: start 16:12:51 load=1.73 availGB=12 cpu=49C: git commit
+heavy.sh: end   16:14:41 rc=0: git commit
+heavy.sh: start 16:14:41 load=1.88 availGB=12 cpu=49C: git commit
+heavy.sh: end   16:18:02 rc=0: git commit
+heavy.sh: start 16:18:02 load=1.79 availGB=12 cpu=50C: git commit
+heavy.sh: end   16:19:56 rc=0: git commit
+heavy.sh: start 16:19:56 load=1.41 availGB=12 cpu=46C: git commit
+heavy.sh: end   16:23:24 rc=0: git commit
+heavy.sh: start 16:23:24 load=1.98 availGB=12 cpu=53C: git commit
+heavy.sh: end   16:25:18 rc=0: git commit
+heavy.sh: start 16:25:18 load=2.16 availGB=12 cpu=66C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   16:27:01 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 16:27:01 load=1.80 availGB=12 cpu=62C: git commit
+heavy.sh: end   16:29:11 rc=143: git commit
+heavy.sh: start 16:29:11 load=1.81 availGB=12 cpu=60C: git commit
+heavy.sh: end   16:31:43 rc=0: git commit
+heavy.sh: start 16:31:43 load=1.84 availGB=12 cpu=44C: git commit
+heavy.sh: end   16:35:08 rc=0: git commit
+heavy.sh: start 16:35:08 load=1.67 availGB=12 cpu=50C: git commit
+heavy.sh: end   16:38:34 rc=0: git commit
+heavy.sh: start 16:38:34 load=2.20 availGB=12 cpu=66C: git commit

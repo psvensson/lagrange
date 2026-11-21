@@ -1,0 +1,29 @@
+{
+  "sha": "c22d786d5fb1ddf13416b1f27835e286e7bb8076",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js",
+    "test/rebalancer/message-group-operation-routing.integration.test.js",
+    "test/rebalancer/reservation-expiry-operation-aware.test.js",
+    "test/control-plane/replica-dispatch-routing.property.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js",
+        "test/control-plane/replica-dispatch-routing.property.test.js",
+        "test/rebalancer/reservation-expiry-operation-aware.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/rebalancer/message-group-operation-routing.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

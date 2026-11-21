@@ -1,0 +1,56 @@
+trap plan at 29502803bb25587b2adadca435997c2274e42cd9 (census 6a240d3def91f05191214c3c1d4768904945b0bf): 2621 sites, 3294 arms; instrumentable 2621, UNINSTRUMENTED 0
+by bucket:
+  N0: instrumentable 141 uninstrumented 0
+  N1: instrumentable 1105 uninstrumented 0
+  N2: instrumentable 33 uninstrumented 0
+  N3: instrumentable 589 uninstrumented 0
+  N4b: instrumentable 85 uninstrumented 0
+  N4c: instrumentable 228 uninstrumented 0
+  N5: instrumentable 415 uninstrumented 0
+  uncensused: instrumentable 25 uninstrumented 0
+by row:
+  two_source_fallback_reads: instrumentable 1660 uninstrumented 0
+  typeof_dual_paths: instrumentable 587 uninstrumented 0
+  catch_returns_default: instrumentable 374 uninstrumented 0
+by directory:
+  .: instrumentable 15 uninstrumented 0
+  admin: instrumentable 126 uninstrumented 0
+  authoring: instrumentable 1 uninstrumented 0
+  bootstrap: instrumentable 271 uninstrumented 0
+  cache: instrumentable 18 uninstrumented 0
+  cdc: instrumentable 45 uninstrumented 0
+  cli: instrumentable 30 uninstrumented 0
+  config: instrumentable 5 uninstrumented 0
+  control-plane: instrumentable 517 uninstrumented 0
+  debug: instrumentable 3 uninstrumented 0
+  debug-runtime: instrumentable 30 uninstrumented 0
+  diagnostics: instrumentable 56 uninstrumented 0
+  function: instrumentable 5 uninstrumented 0
+  hlc: instrumentable 3 uninstrumented 0
+  index-management: instrumentable 33 uninstrumented 0
+  live-query: instrumentable 13 uninstrumented 0
+  logging: instrumentable 38 uninstrumented 0
+  message-group: instrumentable 41 uninstrumented 0
+  migration: instrumentable 11 uninstrumented 0
+  node: instrumentable 111 uninstrumented 0
+  partition: instrumentable 179 uninstrumented 0
+  policy: instrumentable 11 uninstrumented 0
+  query: instrumentable 206 uninstrumented 0
+  raft: instrumentable 64 uninstrumented 0
+  random: instrumentable 1 uninstrumented 0
+  rebalancer: instrumentable 377 uninstrumented 0
+  runtime: instrumentable 109 uninstrumented 0
+  sea: instrumentable 1 uninstrumented 0
+  service: instrumentable 95 uninstrumented 0
+  storage: instrumentable 1 uninstrumented 0
+  test-helpers: instrumentable 1 uninstrumented 0
+  threading: instrumentable 4 uninstrumented 0
+  time: instrumentable 3 uninstrumented 0
+  topology: instrumentable 19 uninstrumented 0
+  transport: instrumentable 69 uninstrumented 0
+  utils: instrumentable 2 uninstrumented 0
+  wasm-service: instrumentable 80 uninstrumented 0
+  workflow: instrumentable 27 uninstrumented 0
+CENSUS RECORD UNREPRODUCIBLE src/partition/partition-cdc-delivery.js [18004,18164] slice-hash-does-not-reproduce-at-census-head: its site is uncensused
+plan: wrote /mnt/data/peter/projects/lagrange-takeover-20261121/lab/trap-apparatus-plan-29502803b/plan.json
+plan-rc=0

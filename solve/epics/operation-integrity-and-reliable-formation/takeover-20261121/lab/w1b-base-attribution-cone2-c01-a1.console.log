@@ -1,0 +1,2500 @@
+lab test: adams-gamla: ordinary, exclusive (4 files) cores=4 mem=15.6GiB speed x2.05
+[adams-gamla] placement-shell=1836993
+[adams-gamla] placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1838432
+[adams-gamla] # test-files planned=4
+[adams-gamla] classified lane ordinary: 3 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js (29 assertions, 1268ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: the canonical checkpoint owner seals a group-neutral raft-rs image
+[adams-gamla]     ok 1 - source peer 0 is refused before sealing
+[adams-gamla]     ok 2 - source peer 7 is refused before sealing
+[adams-gamla]     ok 3 - source peer 01 is refused before sealing
+[adams-gamla]     ok 4 - the SQL-image kind refuses a raft-rs record instead of copying it
+[adams-gamla]     ok 5 - file-backed raft-rs state is a supported canonical payload
+[adams-gamla]     ok 6 - the sealed replica image validates
+[adams-gamla]     ok 7 - the built descriptor deeply freezes ConfState member arrays
+[adams-gamla]     ok 8 - the sealed descriptor carries the target's committed node
+[adams-gamla]     ok 9 - descriptor/payload peer map disagreement is refused before CREATE admission
+[adams-gamla]     ok 10 - descriptor/payload peer map disagreement performs no physical target mutation
+[adams-gamla]     ok 11 - descriptor/payload committed node disagreement is refused before CREATE admission
+[adams-gamla]     ok 12 - descriptor/payload committed node disagreement performs no physical target mutation
+[adams-gamla]     ok 13 - noncanonical generation is refused before CREATE admission
+[adams-gamla]     ok 14 - noncanonical generation performs no physical target mutation
+[adams-gamla]     ok 15 - matched descriptor/payload peer 0 is refused
+[adams-gamla]     ok 16 - matched peer 0 cannot materialize a target
+[adams-gamla]     ok 17 - matched descriptor/payload peer 7 is refused
+[adams-gamla]     ok 18 - matched peer 7 cannot materialize a target
+[adams-gamla]     ok 19 - matched descriptor/payload peer 01 is refused
+[adams-gamla]     ok 20 - matched peer 01 cannot materialize a target
+[adams-gamla]     ok 21 - direct install without CREATE authority is refused
+[adams-gamla]     ok 22 - direct refusal performs zero physical target mutation
+[adams-gamla]     ok 23 - the real CREATE owner grants the sole physical worker
+[adams-gamla]     not ok 24 - terminal settlement after admission preserves the exact install
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+[adams-gamla]         lineNumber: 300
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:300:9)
+[adams-gamla]       source: |2
+[adams-gamla]                 createPhysicalWorkerClaim: physicalClaim,
+[adams-gamla]               });
+[adams-gamla]               t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+[adams-gamla]         --------^
+[adams-gamla]                 'terminal settlement after admission preserves the exact install');
+[adams-gamla]               const targetDb = new Database(targetDbPath);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -installed
+[adams-gamla]         +rejected
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 25 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+[adams-gamla]         lineNumber: 305
+[adams-gamla]         columnNumber: 11
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:305:11)
+[adams-gamla]       source: >2
+[adams-gamla]               try {
+[adams-gamla]                 const restored = new RaftRsDurableStore(targetDb).readDurableRecord(GROUP);
+[adams-gamla]                 t.equal(restored.appliedIndex, APPLIED_INDEX);
+[adams-gamla]         ----------^
+[adams-gamla]                 t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+[adams-gamla]                 t.same(restored.confState.learners, [targetPeer]);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -12
+[adams-gamla]         +0
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 26 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+[adams-gamla]         lineNumber: 306
+[adams-gamla]         columnNumber: 11
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:306:11)
+[adams-gamla]       source: >2
+[adams-gamla]                 const restored = new RaftRsDurableStore(targetDb).readDurableRecord(GROUP);
+[adams-gamla]                 t.equal(restored.appliedIndex, APPLIED_INDEX);
+[adams-gamla]                 t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+[adams-gamla]         ----------^
+[adams-gamla]                 t.same(restored.confState.learners, [targetPeer]);
+[adams-gamla]                 t.equal(restored.hardState.term, APPLIED_TERM,
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -9
+[adams-gamla]         +0
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 27 - should be equivalent
+[adams-gamla]       ---
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,3 +1,1 @@
+[adams-gamla]         -Array [
+[adams-gamla]         -  "5115292586583479468",
+[adams-gamla]         -]
+[adams-gamla]         +Array []
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+[adams-gamla]         lineNumber: 307
+[adams-gamla]         columnNumber: 11
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:307:11)
+[adams-gamla]       source: |2
+[adams-gamla]                 t.equal(restored.appliedIndex, APPLIED_INDEX);
+[adams-gamla]                 t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+[adams-gamla]                 t.same(restored.confState.learners, [targetPeer]);
+[adams-gamla]         ----------^
+[adams-gamla]                 t.equal(restored.hardState.term, APPLIED_TERM,
+[adams-gamla]                   'the receiver-local term starts at the installed boundary');
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 28 - Cannot read properties of null (reading 'term')
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:308:36)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+[adams-gamla]         lineNumber: 308
+[adams-gamla]         columnNumber: 36
+[adams-gamla]         typeName: Test
+[adams-gamla]         methodName: <anonymous>
+[adams-gamla]         functionName: Test.<anonymous>
+[adams-gamla]       type: TypeError
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]                 t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+[adams-gamla]                 t.same(restored.confState.learners, [targetPeer]);
+[adams-gamla]                 t.equal(restored.hardState.term, APPLIED_TERM,
+[adams-gamla]         -----------------------------------^
+[adams-gamla]                   'the receiver-local term starts at the installed boundary');
+[adams-gamla]                 t.equal(restored.hardState.vote, '0',
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..28
+[adams-gamla] not ok 1 - the canonical checkpoint owner seals a group-neutral raft-rs image # time=283.734ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+[adams-gamla]     lineNumber: 143
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: |
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]     test('the canonical checkpoint owner seals a group-neutral raft-rs image',
+[adams-gamla]     ^
+[adams-gamla]       async (t) => {
+[adams-gamla]         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fresh-mg-rs-image-'));
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 28, pass: 23, fail: 5 }
+[adams-gamla] # time=297.689ms
+[adams-gamla] not ok test/node/fresh-create-resumed-syncing-claim.test.js (3 assertions, 1916ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: B1: a create resumed on its durable SYNCING row that fails deferRetry at runtime-step keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+[adams-gamla] not ok 1 - B1: a create resumed on its durable SYNCING row that fails deferRetry at runtime-step keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 90.822215
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:215:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the coordinator admits the FAILED
+[adams-gamla]     
+[adams-gamla]     false !== true
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: true
+[adams-gamla]   actual: false
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     plannerMovesFor (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:188:10)
+[adams-gamla]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:229:19)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: B1: a create resumed on its durable SYNCING row that fails deferRetry at prior-existence keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+[adams-gamla] not ok 2 - B1: a create resumed on its durable SYNCING row that fails deferRetry at prior-existence keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 57.957449
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:215:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the coordinator admits the FAILED
+[adams-gamla]     
+[adams-gamla]     false !== true
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: true
+[adams-gamla]   actual: false
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     plannerMovesFor (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:188:10)
+[adams-gamla]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:229:19)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: B1 control: a first create (no admission input) failing deferRetry before its runtime stays unclaimed and re-dispatchable
+[adams-gamla] ok 3 - B1 control: a first create (no admission input) failing deferRetry before its runtime stays unclaimed and re-dispatchable
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 44.691724
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..3
+[adams-gamla] # tests 3
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 199.134856
+[adams-gamla] # time=1916ms
+[adams-gamla] not ok test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js (17 assertions, 6129ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-5VUD52/b01ff99f-167b-4c1b-b879-2bb0af6fee56.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-5VUD52/9c847442-605f-44c9-86dd-34d7d40484b3.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-5VUD52/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-5VUD52/8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-5VUD52/c60a00c6-88ec-4e7d-b7ff-e39a201f61bf.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-5VUD52/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 2
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 2,
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 2,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   term: 2,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 127128,
+[adams-gamla]   sizeMB: '0.12'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   sizeBytes: 127128
+[adams-gamla] }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 1,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] # Subtest: rolling-restart acknowledged-write durability and visibility
+[adams-gamla]     # Subtest: binds a real INSERT identity through partition, coordinator, admin, and acknowledged-write ledger
+[adams-gamla]     ok 1 - binds a real INSERT identity through partition, coordinator, admin, and acknowledged-write ledger
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 3211.11436
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-ZH4OZF/b01ff99f-167b-4c1b-b879-2bb0af6fee56.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-ZH4OZF/9c847442-605f-44c9-86dd-34d7d40484b3.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-ZH4OZF/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-ZH4OZF/8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-ZH4OZF/c60a00c6-88ec-4e7d-b7ff-e39a201f61bf.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 1
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 1,
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 1,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   term: 1,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 214248,
+[adams-gamla]   sizeMB: '0.20'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+[adams-gamla]   sizeBytes: 214248
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Initializing partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   tableId: 'benchmark_events',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   replicaCount: 1,
+[adams-gamla]   dbPath: '/tmp/lagrange-run13-ZH4OZF/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+[adams-gamla] }
+[adams-gamla] Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'role_transition',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'quorum_elected',
+[adams-gamla]   term: 2
+[adams-gamla] }
+[adams-gamla] Became leader {
+[adams-gamla]   term: 2,
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   rebalancerActive: true
+[adams-gamla] }
+[adams-gamla] Raft leadership transition evidence {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+[adams-gamla]   eventType: 'leader_observation',
+[adams-gamla]   role: 'leader',
+[adams-gamla]   trigger: 'leader_change',
+[adams-gamla]   term: 2,
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   demoted: false
+[adams-gamla] }
+[adams-gamla] Leader changed {
+[adams-gamla]   newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   term: 2,
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Single replica - becoming leader immediately {
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   partitionId: 'benchmark_events-p1'
+[adams-gamla] }
+[adams-gamla] Partition size updated {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sizeBytes: 127128,
+[adams-gamla]   sizeMB: '0.12'
+[adams-gamla] }
+[adams-gamla] Partition service initialized {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+[adams-gamla]   sizeBytes: 127128
+[adams-gamla] }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 0
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla]     # Subtest: replays run13 through real Raft quorum and guarded restart catch-up
+[adams-gamla]     not ok 2 - replays run13 through real Raft quorum and guarded restart catch-up
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 491.271527
+[adams-gamla]       type: 'test'
+[adams-gamla]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:476:3'
+[adams-gamla]       failureType: 'testCodeFailure'
+[adams-gamla]       error: 'Acknowledged writes missing after rolling restart on node b01ff99f-167b-4c1b-b879-2bb0af6fee56: ["bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-412","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-414","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-416","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-418","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-420"]'
+[adams-gamla]       code: 'ERR_TEST_FAILURE'
+[adams-gamla]       stack: |-
+[adams-gamla]         buildVisibilityFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/acknowledged-write-visibility.js:510:17)
+[adams-gamla]         assertAcknowledgedWritesVisibleOnReachableNodes (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/acknowledged-write-visibility.js:574:11)
+[adams-gamla]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:480:28)
+[adams-gamla]         async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]       ...
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 0
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 0
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 1,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 0
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 1,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 0
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 0
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Handling remote query {
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Executing query {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+[adams-gamla] }
+[adams-gamla] metrics.partition.sqlite {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   operation: 'select',
+[adams-gamla]   durationMs: 0,
+[adams-gamla]   rowCount: 5
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+[adams-gamla] }
+[adams-gamla] Shutting down partition service {
+[adams-gamla]   partitionId: 'benchmark_events-p1',
+[adams-gamla]   replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+[adams-gamla] }
+[adams-gamla]     # Subtest: fails red when a committed replica stops applying the accepted entries
+[adams-gamla]     not ok 3 - fails red when a committed replica stops applying the accepted entries
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 378.026856
+[adams-gamla]       type: 'test'
+[adams-gamla]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:503:3'
+[adams-gamla]       failureType: 'testCodeFailure'
+[adams-gamla]       error: |-
+[adams-gamla]         Expected values to be strictly equal:
+[adams-gamla]         + actual - expected
+[adams-gamla]         
+[adams-gamla]         + 'durable_absent_everywhere'
+[adams-gamla]         - 'durable_replica_catchup_failure'
+[adams-gamla]                    ^
+[adams-gamla]         
+[adams-gamla]       code: 'ERR_ASSERTION'
+[adams-gamla]       name: 'AssertionError'
+[adams-gamla]       expected: 'durable_replica_catchup_failure'
+[adams-gamla]       actual: 'durable_absent_everywhere'
+[adams-gamla]       operator: 'strictEqual'
+[adams-gamla]       stack: |-
+[adams-gamla]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:514:16)
+[adams-gamla]         async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: reproduces run13 and inspects every node after b01ff reports all five writes missing
+[adams-gamla]     ok 4 - reproduces run13 and inspects every node after b01ff reports all five writes missing
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 21.607083
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: classifies absent-everywhere writes without a witness as an acknowledgment-before-durability breach
+[adams-gamla]     ok 5 - classifies absent-everywhere writes without a witness as an acknowledgment-before-durability breach
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 20.297936
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: rejects a receipt when any successful participant lacks evidence
+[adams-gamla]     ok 6 - rejects a receipt when any successful participant lacks evidence
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.424801
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: prioritizes missing durability evidence over a blind read authority
+[adams-gamla]     ok 7 - prioritizes missing durability evidence over a blind read authority
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.396108
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: rejects a non-empty acknowledged ledger without durable receipts
+[adams-gamla]     ok 8 - rejects a non-empty acknowledged ledger without durable receipts
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.370232
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: rejects a forged complete receipt when the acceptor is not its leader
+[adams-gamla]     ok 9 - rejects a forged complete receipt when the acceptor is not its leader
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.407748
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: rejects forged complete receipts with invalid Raft positions
+[adams-gamla]     ok 10 - rejects forged complete receipts with invalid Raft positions
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.785693
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: rejects forged receipts with blank identities or negative acceptance time
+[adams-gamla]     ok 11 - rejects forged receipts with blank identities or negative acceptance time
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.648081
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: stays oracle blind when visible rows have malformed read authority
+[adams-gamla]     ok 12 - stays oracle blind when visible rows have malformed read authority
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.390027
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: stays oracle blind for whitespace-only read authority identities
+[adams-gamla]     ok 13 - stays oracle blind for whitespace-only read authority identities
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.359027
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: rejects read authority from a partition unrelated to the durable commit
+[adams-gamla]     ok 14 - rejects read authority from a partition unrelated to the durable commit
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 0.472026
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: distinguishes a durable but unreadable node from clean partial visibility
+[adams-gamla]     ok 15 - distinguishes a durable but unreadable node from clean partial visibility
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 20.378105
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: retains retry errors after a clean missing read and stays oracle blind
+[adams-gamla]     ok 16 - retains retry errors after a clean missing read and stays oracle blind
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 21.793651
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..16
+[adams-gamla] not ok 1 - rolling-restart acknowledged-write durability and visibility
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4171.372605
+[adams-gamla]   type: 'suite'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:419:1'
+[adams-gamla]   failureType: 'subtestsFailed'
+[adams-gamla]   error: '2 subtests failed'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   ...
+[adams-gamla] 1..1
+[adams-gamla] # tests 16
+[adams-gamla] # suites 1
+[adams-gamla] # pass 14
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 4180.390254
+[adams-gamla] # time=6129ms
+[adams-gamla] # test-files total=3 pass=0 fail=3 assertions=49
+[adams-gamla] classified lane exclusive: 1 file(s), jobs=1
+[adams-gamla] thermal: ok cpu 53C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/integration/message-group-learner-join.integration.test.js (51 assertions, 20293ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: a recorded learner CREATE joins the real group as a non-voting learner, installs, opens and runs only after the leader acknowledges it caught up
+[adams-gamla] ok 1 - a recorded learner CREATE joins the real group as a non-voting learner, installs, opens and runs only after the leader acknowledges it caught up
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 433.011225
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the founders' leader changing mid-join: the new leader acknowledges the learner (positive control)
+[adams-gamla] ok 2 - the founders' leader changing mid-join: the new leader acknowledges the learner (positive control)
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 271.451224
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:07.788Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_unavailable: membership-read-not-leader","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a descriptor from a demoted leader is refused not-leader: nothing is installed or opened
+[adams-gamla] ok 3 - a descriptor from a demoted leader is refused not-leader: nothing is installed or opened
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 206.995689
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:08.008Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_stale","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a replayed descriptor older than the recorded learner fact is refused stale
+[adams-gamla]     # Subtest: older term
+[adams-gamla]     ok 1 - older term
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 218.079483
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:08.247Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_stale","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: older configuration generation in the same term
+[adams-gamla]     ok 2 - older configuration generation in the same term
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 238.547642
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..2
+[adams-gamla] ok 4 - a replayed descriptor older than the recorded learner fact is refused stale
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 457.475679
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:08.496Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a REMOVE selection recorded after MATERIALIZED defeats the install at its commit
+[adams-gamla] ok 5 - a REMOVE selection recorded after MATERIALIZED defeats the install at its commit
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 247.700575
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:08.668Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_learner_not_in_configuration","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a later native REMOVE of the learner leaves the leader no descriptor for it
+[adams-gamla] ok 6 - a later native REMOVE of the learner leaves the leader no descriptor for it
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 173.532909
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:08.932Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_learner_not_in_configuration: removed","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a native REMOVE while the learner awaits the acknowledgement closes it: never reported running
+[adams-gamla] ok 7 - a native REMOVE while the learner awaits the acknowledgement closes it: never reported running
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 265.108314
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:09.141Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a descriptor for another group, target or cluster is refused before any install
+[adams-gamla]     # Subtest: group
+[adams-gamla]     ok 1 - group
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 206.296691
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:09.344Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: cluster
+[adams-gamla]     ok 2 - cluster
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 202.901714
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:09.535Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: target
+[adams-gamla]     ok 3 - target
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 191.815675
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..3
+[adams-gamla] ok 8 - a descriptor for another group, target or cluster is refused before any install
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 601.928762
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:09.735Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: an image whose learner origin names another operation is refused (identity anchoring)
+[adams-gamla] ok 9 - an image whose learner origin names another operation is refused (identity anchoring)
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 199.786647
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:09.956Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"Current boot authority unavailable for consumer-successor","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a replaced boot or a replaced admission generation fences the install
+[adams-gamla]     # Subtest: boot replaced after MATERIALIZED
+[adams-gamla]     ok 1 - boot replaced after MATERIALIZED
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 219.180084
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:10.177Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_admission_required","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: admission attempt replaced before staging
+[adams-gamla]     ok 2 - admission attempt replaced before staging
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 220.531168
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: admission attempt replaced at install commit
+[adams-gamla]         # Subtest: dry run: the install commit's reads before its swap
+[adams-gamla]         ok 1 - dry run: the install commit's reads before its swap
+[adams-gamla]           ---
+[adams-gamla]           duration_ms: 248.958336
+[adams-gamla]           type: 'test'
+[adams-gamla]           ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:10.640Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]         1..1
+[adams-gamla]     ok 3 - admission attempt replaced at install commit
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 463.470348
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..3
+[adams-gamla] ok 10 - a replaced boot or a replaced admission generation fences the install
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 903.915025
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:10.829Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_admission_required","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a competing terminal settlement after MATERIALIZED defeats the install; the debt stays
+[adams-gamla] not ok 11 - a competing terminal settlement after MATERIALIZED defeats the install; the debt stays
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 190.335029
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/integration/message-group-learner-join.integration.test.js:444:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + 'create_admission_required'
+[adams-gamla]     - 'create_generation_mismatch'
+[adams-gamla]               ^
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 'create_generation_mismatch'
+[adams-gamla]   actual: 'create_admission_required'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/integration/message-group-learner-join.integration.test.js:452:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:11.020Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: corrupt_payload","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: an install failure (a corrupt transferred image) opens nothing
+[adams-gamla] ok 12 - an install failure (a corrupt transferred image) opens nothing
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 189.253436
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:11.227Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"CREATE admission read deferred for consumer-operation","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: process loss around install and open: the restarted node starts no second learner
+[adams-gamla]     # Subtest: lost during the install, before the swap
+[adams-gamla]     ok 1 - lost during the install, before the swap
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 209.124336
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:11.464Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_open_refused: fixture: the process died before the open","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: lost after the install, before the open
+[adams-gamla]     ok 2 - lost after the install, before the open
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 238.18698
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: lost while the learner is open
+[adams-gamla]     ok 3 - lost while the learner is open
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 264.68874
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..3
+[adams-gamla] ok 13 - process loss around install and open: the restarted node starts no second learner
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 712.717596
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:11.968Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a later admission for an installed target refuses target-present and leaves the learner alone
+[adams-gamla] ok 14 - a later admission for an installed target refuses target-present and leaves the learner alone
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 237.342916
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:12.785Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group","groupId":"b2-image-only","replicaId":"b2-image-only-false","error":"message-group b2-image-only replica b2-image-only-false cannot initialize: its consensus port refused it in phase durable-record-read (CORE_REFUSED: durable-record-missing)","nodeId":"consumer-node","msg":"Failed during initialize, cleaning up raft"}
+[adams-gamla] Creating MessageGroupServiceHandler { nodeId: 'node-target' }
+[adams-gamla] Initializing MessageGroupServiceHandler { nodeId: 'node-target' }
+[adams-gamla] Registered MessageGroupServiceHandler with message router {
+[adams-gamla]   address: 'node-target/service/message-group-handler',
+[adams-gamla]   nodeId: 'node-target'
+[adams-gamla] }
+[adams-gamla] MessageGroupServiceHandler created and registered { nodeId: 'node-target' }
+[adams-gamla] Creating MessageGroupServiceHandler { nodeId: 'node-target' }
+[adams-gamla] Initializing MessageGroupServiceHandler { nodeId: 'node-target' }
+[adams-gamla] Registered MessageGroupServiceHandler with message router {
+[adams-gamla]   address: 'node-target/service/message-group-handler',
+[adams-gamla]   nodeId: 'node-target'
+[adams-gamla] }
+[adams-gamla] MessageGroupServiceHandler created and registered { nodeId: 'node-target' }
+[adams-gamla] Unregistered MessageGroupServiceHandler from message router {
+[adams-gamla]   address: 'node-target/service/message-group-handler',
+[adams-gamla]   nodeId: 'node-target'
+[adams-gamla] }
+[adams-gamla] Shutting down MessageGroupServiceHandler { nodeId: 'node-target' }
+[adams-gamla] Unregistered MessageGroupServiceHandler from message router {
+[adams-gamla]   address: 'node-target/service/message-group-handler',
+[adams-gamla]   nodeId: 'node-target'
+[adams-gamla] }
+[adams-gamla] Shutting down MessageGroupServiceHandler { nodeId: 'node-target' }
+[adams-gamla] # Subtest: a learner held behind is not reported running: NOT_CAUGHT_UP, still a learner
+[adams-gamla] ok 15 - a learner held behind is not reported running: NOT_CAUGHT_UP, still a learner
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 667.848842
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a replica opened from the durable-record bootstrap alone is refused without its image, joining flag or not: it is never founded
+[adams-gamla] ok 16 - a replica opened from the durable-record bootstrap alone is refused without its image, joining flag or not: it is never founded
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 156.930554
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the handler setup composes the learner-join capability only from a host
+[adams-gamla] ok 17 - the handler setup composes the learner-join capability only from a host
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4.118073
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:12.794Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group","groupId":"b2-image-only","replicaId":"b2-image-only-true","error":"message-group b2-image-only replica b2-image-only-true cannot initialize: its consensus port refused it in phase durable-record-read (CORE_REFUSED: durable-record-missing)","nodeId":"consumer-node","msg":"Failed during initialize, cleaning up raft"}
+[adams-gamla] # Subtest: a REMOVE selection recorded while the install commit's last read before its swap is in flight defeats the install: no await follows that read
+[adams-gamla]     # Subtest: dry run: the install commit's reads before its swap
+[adams-gamla]     ok 1 - dry run: the install commit's reads before its swap
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 242.338759
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:13.252Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     1..1
+[adams-gamla] ok 18 - a REMOVE selection recorded while the install commit's last read before its swap is in flight defeats the install: no await follows that read
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 452.181991
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a terminal settlement recorded while the install commit's last read before its swap is in flight defeats the install; the debt stays
+[adams-gamla]     # Subtest: dry run: the install commit's reads before its swap
+[adams-gamla]     ok 1 - dry run: the install commit's reads before its swap
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 253.678178
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:13.724Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     1..1
+[adams-gamla] ok 19 - a terminal settlement recorded while the install commit's last read before its swap is in flight defeats the install; the debt stays
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 471.791665
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:13.920Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_admission_required","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: one basis column moved after MATERIALIZED defeats the install at its commit
+[adams-gamla]     # Subtest: admission CLOSED before staging, tokens kept
+[adams-gamla]     ok 1 - admission CLOSED before staging, tokens kept
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 196.180849
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: admission CLOSED, tokens kept
+[adams-gamla]         # Subtest: dry run: the install commit's reads before its swap
+[adams-gamla]         ok 1 - dry run: the install commit's reads before its swap
+[adams-gamla]           ---
+[adams-gamla]           duration_ms: 243.586093
+[adams-gamla]           type: 'test'
+[adams-gamla]           ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:14.373Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]         1..1
+[adams-gamla]     ok 2 - admission CLOSED, tokens kept
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 452.820919
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: membership obligation moved
+[adams-gamla]         # Subtest: dry run: the install commit's reads before its swap
+[adams-gamla]         ok 1 - dry run: the install commit's reads before its swap
+[adams-gamla]           ---
+[adams-gamla]           duration_ms: 230.268573
+[adams-gamla]           type: 'test'
+[adams-gamla]           ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:14.805Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]         1..1
+[adams-gamla]     ok 3 - membership obligation moved
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 430.944175
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..3
+[adams-gamla] ok 20 - one basis column moved after MATERIALIZED defeats the install at its commit
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1080.652907
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:14.971Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_moved: corrupt_descriptor","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a configuration that moves between the leader's committed read and its image seal answers descriptor-moved, and the target refuses it
+[adams-gamla] ok 21 - a configuration that moves between the leader's committed read and its image seal answers descriptor-moved, and the target refuses it
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 167.724335
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a learner that acked its installed boundary but is held below the leader's commit is not running: NOT_CAUGHT_UP, behind
+[adams-gamla] ok 22 - a learner that acked its installed boundary but is held below the leader's commit is not running: NOT_CAUGHT_UP, behind
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2785.17146
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:18.033Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_open_not_learner","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a learner applying its own native REMOVE while no leader is observable is closed: open-not-learner, nothing adopted
+[adams-gamla] ok 23 - a learner applying its own native REMOVE while no leader is observable is closed: open-not-learner, nothing adopted
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 275.915627
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a leader answer at an older configuration than the learner applied is no acknowledgement: the two configuration epochs are compared
+[adams-gamla] ok 24 - a leader answer at an older configuration than the learner applied is no acknowledgement: the two configuration epochs are compared
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2726.015151
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a leader observation pairing one leader's committed answer with another leader's status is no acknowledgement
+[adams-gamla] ok 25 - a leader observation pairing one leader's committed answer with another leader's status is no acknowledgement
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2760.837669
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:23.751Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla] # Subtest: a pending install marker, staging or replica sidecar of the target is a present generation: refused before any descriptor request
+[adams-gamla]     # Subtest: install marker
+[adams-gamla]     ok 1 - install marker
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 230.51567
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:23.893Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: install staging
+[adams-gamla]     ok 2 - install staging
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 145.236902
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla] {"level":50,"time":"2026-11-21T14:43:24.062Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+[adams-gamla]     # Subtest: replica sidecar
+[adams-gamla]     ok 3 - replica sidecar
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 164.286429
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..3
+[adams-gamla] ok 26 - a pending install marker, staging or replica sidecar of the target is a present generation: refused before any descriptor request
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 541.181366
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a leader answer whose commit or match index is absent or not an exact integer is no acknowledgement: NOT_CAUGHT_UP, never running
+[adams-gamla]     # Subtest: absent
+[adams-gamla]     ok 1 - absent
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 831.907712
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     # Subtest: not integers
+[adams-gamla]     ok 2 - not integers
+[adams-gamla]       ---
+[adams-gamla]       duration_ms: 838.26004
+[adams-gamla]       type: 'test'
+[adams-gamla]       ...
+[adams-gamla]     1..2
+[adams-gamla] ok 27 - a leader answer whose commit or match index is absent or not an exact integer is no acknowledgement: NOT_CAUGHT_UP, never running
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1670.987402
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..27
+[adams-gamla] # tests 51
+[adams-gamla] # suites 0
+[adams-gamla] # pass 50
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 18861.829409
+[adams-gamla] # time=20293ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=51
+lab test: adams-gamla: # test-files total=4 pass=0 fail=4 assertions=100
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=4 pass=0 fail=4 assertions=100

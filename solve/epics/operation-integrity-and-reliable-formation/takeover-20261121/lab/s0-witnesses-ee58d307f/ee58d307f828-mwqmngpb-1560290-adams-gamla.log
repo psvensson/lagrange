@@ -1,0 +1,75 @@
+placement-shell=1908804
+placement-head=ee58d307f828744790974973fcfbd3aa8c0f7e1a
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1909260
+# test-files planned=9
+classified lane ordinary: 9 file(s), jobs=3
+thermal: ok cpu 43C (coretemp/Package id 0) nvme unmeasured
+ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 3133ms)
+ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 3188ms)
+not ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (2 assertions, 8122ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent
+    # {"observed":{"success":true,"rows":[],"failureCode":null,"witness":{"state":"observed","partitionId":"replica_operations-p1","servingNodeId":"owner-fact-node-c","servingReplicaId":"replica_operations-p1-r3","term":2,"appliedIndex":4,"commitIndex":4,"electionLogApplied":false,"role":"leader","observedAtMs":1795278851398},"committedIndex":5,"freshLeader":{"role":"leader","commitIndex":4,"appliedIndex":4,"confChangePending":true}}}
+    not ok 1 - a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read has no read-point refusal; consumers must migrate to readOwnerFact)
+      ---
+      at:
+        fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+        lineNumber: 50
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/cdc/cdc-leader-required-fresh-leader-absence.test.js:50:5)
+      source: >2
+            committedIndex, freshLeader: {role: status.role, commitIndex: status.commitIndex,
+              appliedIndex: status.appliedIndex, confChangePending: status.confChangePending}}}));
+          t.notOk(answer.success === true && Array.isArray(answer.rows) && answer.rows.length === 0,
+        ----^
+            'a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read ' +
+            'has no read-point refusal; consumers must migrate to readOwnerFact)');
+      ...
+    
+    1..1
+not ok 1 - FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent # time=5629.875ms
+  ---
+  at:
+    fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+    lineNumber: 37
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('FINDING (open): a leader-REQUIRED read that is not an owner fact answers
+    a row its ' +
+  
+    ^
+      'leader\'s predecessor committed as absent', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=5644.663ms
+ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 7317ms)
+ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2447ms)
+ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 815ms)
+ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 8418ms)
+ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 2561ms)
+ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 7908ms)
+# test-files total=9 pass=8 fail=1 assertions=465
+placement-results={"file":"test/cdc/cdc-owner-fact-hosted-replica.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3133,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":3188,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-leader-required-fresh-leader-absence.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":8122,"retriedOnce":false,"firstFailureLine":"not ok 1 - a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read has no read-point refusal; consumers must migrate to readOwnerFact)"}
+placement-results={"file":"test/cdc/cdc-owner-fact-redirect-deadline.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":7317,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":2447,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":true,"assertions":120,"durationMs":815,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":42,"durationMs":8418,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":true,"assertions":107,"durationMs":2561,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/query-executor-recovery-read-lifetime.test.js","attempt":1,"ok":true,"assertions":122,"durationMs":7908,"retriedOnce":false,"firstFailureLine":null}

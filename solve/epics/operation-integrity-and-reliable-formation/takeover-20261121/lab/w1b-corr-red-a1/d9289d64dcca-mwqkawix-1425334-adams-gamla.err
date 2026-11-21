@@ -1,0 +1,10 @@
+file:///home/peter/projects/lagrange/test-output/placement-worktrees/d9289d64dcca-mwqkawix-1425334/test/rebalancer/replica-placement-owner-blocked-attempt.test.js:19
+import {PARTITION_COMMITTED_RECORD_CLASS} from
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: The requested module '../../src/partition/partition-committed-statement-outcome-constants.js' does not provide an export named 'PARTITION_COMMITTED_RECORD_CLASS'
+    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.23.2

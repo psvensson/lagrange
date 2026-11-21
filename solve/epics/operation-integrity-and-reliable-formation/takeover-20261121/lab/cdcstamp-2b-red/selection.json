@@ -1,0 +1,19 @@
+{
+  "sha": "8abec5e92c64c38c7272ea1f8a97d52a29e541f6",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js",
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cache/system-table-cache-mutation-version-survives-clear.test.js",
+        "test/partition/partition-cdc-currentness-stamp-witness.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

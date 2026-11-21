@@ -1,0 +1,17 @@
+{
+  "sha": "1472e704d1bb127ae82686effc9a8922c475c1f4",
+  "host": "adams-gamla",
+  "checkBase": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "files": [
+    "test/partition/placement-outcome-format.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-outcome-format.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

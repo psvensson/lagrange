@@ -1,0 +1,1 @@
+{"file":"test/partition/partition-cdc-currentness-stamp-witness.test.js","attempt":1,"ok":false,"assertions":54,"durationMs":6724,"retriedOnce":false,"firstFailureLine":"not ok 1 - one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan and reads raft status at most once"}

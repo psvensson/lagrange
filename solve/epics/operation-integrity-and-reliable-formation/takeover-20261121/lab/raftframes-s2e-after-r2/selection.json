@@ -1,0 +1,33 @@
+{
+  "sha": "393ece6400e781fee9f5e4d99da4a2ebe1082786",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+    "test/transport/raft-frame-unacknowledged-delivery.test.js",
+    "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js",
+    "test/transport/message-router.test.js",
+    "test/partition/raft-rs-transport-demux.test.js",
+    "test/transport/raft-frame-turn-not-held.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/raft-frame-unacknowledged-delivery.test.js",
+        "test/transport/message-router.test.js",
+        "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+        "test/partition/raft-rs-transport-demux.test.js",
+        "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/transport/raft-frame-turn-not-held.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

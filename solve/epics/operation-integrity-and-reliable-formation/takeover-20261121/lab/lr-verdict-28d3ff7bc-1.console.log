@@ -1,0 +1,16 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.01
+[adam-laptop] placement-shell=3542399
+[adam-laptop] placement-head=28d3ff7bcc437ab07e533e7b256fc36515a7c291
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3542945
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: ok cpu 73C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/query/named-write-verdict-table-probe.test.js (5 assertions, 4931ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=5
+lab test: adam-laptop: # test-files total=1 pass=1 fail=0 assertions=5
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=1 fail=0 assertions=5

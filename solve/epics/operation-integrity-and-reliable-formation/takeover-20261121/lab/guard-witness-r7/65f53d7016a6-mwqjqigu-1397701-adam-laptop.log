@@ -1,0 +1,691 @@
+placement-shell=3509426
+placement-head=65f53d7016a6ccc9b822aeb72300ed85f0ed6b6a
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3510968
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 82C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 82C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 45C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/rebalancer/topology-guard-inventory-authority.test.js (113 assertions, 2241ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: services-p1 led by another node: the planner's topology guard and the SERVICES authority
+    ok 1 - setup: the planner node's router is connected to peer-node-a
+    ok 2 - setup: the planner node's router is connected to peer-node-b
+    ok 3 - setup: peer-node-a leads services-p1 (its consensus core)
+    ok 4 - setup: no partition SERVICES row is published with raft_role leader
+    ok 5 - setup: the planner node hosts a services-p1 replica that follows
+    # Subtest: witness (red today): leader reachable, the guard refuses from the local follower's incomplete answer
+        # OBSERVATION completeness {"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}}
+        # OBSERVATION witness {"accompanying":null,"accompanyingList":[],"servingReplica":{"nodeId":"planner-node","replicaId":"services-p1-r2","role":"follower","consensusRole":"follower"},"servingReplicaOwnWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"role":"follower","observedAtMs":1795273977038}}
+        # OBSERVATION routing {"guardOwnerRpcCalls":0,"transportHops":[],"route":{"publishedLeaderNodeId":"peer-node-a","publishedRaftRoles":[["peer-node-a","follower"],["planner-node","follower"],["peer-node-b","follower"]],"routingCanonicalLeaderNodeId":"peer-node-a","correctTarget":{"nodeId":"peer-node-a","replicaId":"services-p1-r1","address":"peer-node-a/partition/services-p1-r1","consensusRole":"leader"},"plannerReplica":{"nodeId":"planner-node","replicaId":"services-p1-r2","role":"follower","consensusRole":"follower"}}}
+        # OBSERVATION guard-decision {"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"operationsCreated":0,"ledger":[],"plannerMove":{"success":false,"skipped":true,"reason":"blocked","operation":"add","nodeId":"planner-node","admission":{"allowed":false,"decisionType":"blocked","blockingReasons":["replica_inventory_unusable"],"eligibleNodeIds":[],"ineligibleNodes":[],"reason":"replica_inventory_unusable","topologySnapshot":{"observedDistinctNodeIds":[],"observedDistinctNodeCount":0,"observedServiceRowCount":0,"targetNodeId":"planner-node","targetReplicaCount":null,"authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"inventorySourceRevisions":{"committedRows":null,"inFlightOperations":null},"inventorySourceWatermarks":{"committedRows":{"before":1795273977002,"after":1795273977002,"causeId":null},"inFlightOperations":{"before":null,"after":null,"causeId":null}}}}}}
+        # OBSERVATION retry {"identical":true,"second":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"secondRead":{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}},"secondOwnerRpcCalls":0}
+        # Subtest: diagnosis completeness: the guard's SERVICES read is the local follower's success with an incomplete row set
+            ok 1 - the guard issued its SERVICES inventory read
+            ok 2 - the read names no mode: the gateway default applies
+            ok 3 - the read reports success
+            ok 4 - its row set is incomplete
+            ok 5 - and carries no rows
+            ok 6 - it was answered by the local replica
+            ok 7 - through the any-replica fallback after the local-leader pass found none
+            ok 8 - with no error
+            ok 9 - and no reason code
+            1..9
+        ok 1 - diagnosis completeness: the guard's SERVICES read is the local follower's success with an incomplete row set # time=3.196ms
+        
+        # Subtest: diagnosis witness: no leader witness accompanied that answer; the replica that served it follows
+            ok 1 - no witness accompanied it
+            ok 2 - none at all
+            ok 3 - the serving replica is the planner node's follower
+            ok 4 - the witness it would build names a follower
+            ok 5 - which is not a leader witness
+            1..5
+        ok 2 - diagnosis witness: no leader witness accompanied that answer; the replica that served it follows # time=0.933ms
+        
+        # Subtest: diagnosis routing: the owner RPC is never attempted although the published leader is reachable
+            ok 1 - no owner RPC for the read
+            ok 2 - no transport hop at all
+            ok 3 - the answer's own diagnostics name the published leader node
+            ok 4 - and route nowhere
+            ok 5 - partitions.leader_node_id names the leader
+            ok 6 - the query executor's routing names the same leader
+            ok 7 - the correct target peer-node-a/partition/services-p1-r1 leads
+            1..7
+        ok 3 - diagnosis routing: the owner RPC is never attempted although the published leader is reachable # time=1.088ms
+        
+        # Subtest: diagnosis guard decision: replica_inventory_unusable, no reason code, nothing created, the planner skips
+            ok 1 - the request is refused
+            ok 2 - the refusal code is replica_inventory_unusable
+            ok 3 - should be equivalent
+            ok 4 - should be equal
+            ok 5 - the inventory read counts as unavailable
+            ok 6 - with no reason code
+            ok 7 - and no retry-after
+            ok 8 - the SERVICES rows are unavailable
+            ok 9 - while the operation ledger read is usable (empty): SERVICES alone refuses
+            ok 10 - no typed skip reason
+            ok 11 - no operation is returned
+            ok 12 - no operation row exists
+            ok 13 - nothing was created
+            1..13
+        ok 4 - diagnosis guard decision: replica_inventory_unusable, no reason code, nothing created, the planner skips # time=1.847ms
+        
+        # Subtest: diagnosis planner: the planner records the refusal as a skipped move
+            ok 1 - the planner's move execution settles (undefined)
+            ok 2 - the move is skipped
+            ok 3 - under the admission decision type
+            ok 4 - carrying the guard's refusal
+            ok 5 - again without owner RPC
+            1..5
+        ok 5 - diagnosis planner: the planner records the refusal as a skipped move # time=0.787ms
+        
+        # Subtest: diagnosis retry: an identical request gives a byte-identical refusal with no owned wake
+            ok 1 - both requests are refused
+            ok 2 - the second refusal is byte-identical to the first
+            ok 3 - from the same incomplete answer
+            ok 4 - should be equal
+            ok 5 - still no owner RPC
+            ok 6 - the refusal carries no retry deadline or next action
+            ok 7 - and nothing was created
+            1..7
+        ok 6 - diagnosis retry: an identical request gives a byte-identical refusal with no owned wake # time=1.225ms
+        
+        # Subtest: contract (red today): the guard decides from the leader's complete, witnessed SERVICES inventory
+            not ok 1 - a complete SERVICES inventory witnessed by the services-p1 leader was read: [{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}}]
+              ---
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 243
+                columnNumber: 9
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:243:9)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:240:13)
+              source: >2
+                      'witnessed SERVICES inventory', async (t) => {
+                      const reads = first.servicesReads.filter(isGuardServicesRead);
+                      t.ok(reads.some((read) => isLeaderWitnessedComplete(read, NODE.PEER_A)),
+                --------^
+                        'a complete SERVICES inventory witnessed by the services-p1 leader was read: ' +
+                        JSON.stringify(reads.map(summarizeServicesRead)));
+              ...
+            
+            1..1
+        not ok 7 - contract (red today): the guard decides from the leader's complete, witnessed SERVICES inventory # time=21.188ms
+          ---
+          at:
+            fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+            lineNumber: 240
+            columnNumber: 13
+            typeName: Test
+          source: >2
+                });
+          
+                await t.test('contract (red today): the guard decides from the leader\'s complete, ' +
+            ------------^
+                  'witnessed SERVICES inventory', async (t) => {
+                  const reads = first.servicesReads.filter(isGuardServicesRead);
+          ...
+        
+        # Subtest: contract (red today): with the leader reachable the ADD is admitted once and the identical retry reuses it
+            not ok 1 - the request is admitted: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+              ---
+              compare: ===
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 250
+                columnNumber: 9
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:250:9)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:248:13)
+              source: >2
+                    await t.test('contract (red today): with the leader reachable the ADD is admitted ' +
+                      'once and the identical retry reuses it', async (t) => {
+                      t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+                --------^
+                      t.type(first.operation?.operationId, 'string', 'an operation is returned');
+                      t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+              diff: >
+                --- expected
+              
+                +++ actual
+              
+                @@ -1,1 +1,46 @@
+              
+                -null
+              
+                +Error: Topology guard blocked for ADD on planner-node:
+                replica_inventory_unusable {
+              
+                +  "admissionResult": Object {
+              
+                +    "allowed": false,
+              
+                +    "decisionType": "blocked",
+              
+                +    "blockingReasons": Array [
+              
+                +      "replica_inventory_unusable",
+              
+                +    ],
+              
+                +    "eligibleNodeIds": Array [],
+              
+                +    "ineligibleNodes": Array [],
+              
+                +    "reason": "replica_inventory_unusable",
+              
+                +    "topologySnapshot": Object {
+              
+                +      "observedDistinctNodeIds": Array [],
+              
+                +      "observedDistinctNodeCount": 0,
+              
+                +      "observedServiceRowCount": 0,
+              
+                +      "targetNodeId": "planner-node",
+              
+                +      "targetReplicaCount": null,
+              
+                +      "authoritativeAvailable": false,
+              
+                +      "authoritativeReasonCode": null,
+              
+                +      "authoritativeRetryAfterMs": null,
+              
+                +      "inventoryProvenance": Object {
+              
+                +        "atomicityClaim": "not_claimed",
+              
+                +        "committedRowsState": "unavailable",
+              
+                +        "inFlightOperationsState": "empty",
+              
+                +        "observedAtSkewMs": null,
+              
+                +        "consistency": "source_unavailable",
+              
+                +        "topologyIncreaseUsable": false,
+              
+                +      },
+              
+                +      "inventorySourceRevisions": Object {
+              
+                +        "committedRows": null,
+              
+                +        "inFlightOperations": null,
+              
+                +      },
+              
+                +      "inventorySourceWatermarks": Object {
+              
+                +        "committedRows": Object {
+              
+                +          "before": 1795273977002,
+              
+                +          "after": 1795273977002,
+              
+                +          "causeId": null,
+              
+                +        },
+              
+                +        "inFlightOperations": Object {
+              
+                +          "before": null,
+              
+                +          "after": null,
+              
+                +          "causeId": null,
+              
+                +        },
+              
+                +      },
+              
+                +    },
+              
+                +  },
+              
+                +}
+              ...
+            
+            not ok 2 - an operation is returned
+              ---
+              compare: ===
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 251
+                columnNumber: 9
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:251:9)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:248:13)
+              source: >2
+                      'once and the identical retry reuses it', async (t) => {
+                      t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+                      t.type(first.operation?.operationId, 'string', 'an operation is returned');
+                --------^
+                      t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+                        target_node_id: NODE.PLANNER}], 'exactly one operation row targets the planner node');
+              diff: |
+                --- expected
+                +++ actual
+                @@ -1,1 +1,1 @@
+                -string
+                +undefined
+              ...
+            
+            not ok 3 - exactly one operation row targets the planner node
+              ---
+              diff: |
+                --- expected
+                +++ actual
+                @@ -1,7 +1,1 @@
+                -Array [
+                -  Object {
+                -    "entity_type": "runtime_service",
+                -    "entity_id": "sys-postgres-wire",
+                -    "target_node_id": "planner-node",
+                -  },
+                -]
+                +Array []
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 252
+                columnNumber: 9
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:252:9)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:248:13)
+              source: >2
+                      t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+                      t.type(first.operation?.operationId, 'string', 'an operation is returned');
+                      t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+                --------^
+                        target_node_id: NODE.PLANNER}], 'exactly one operation row targets the planner node');
+                      t.equal(second.operation?.operationId, first.operation?.operationId,
+              ...
+            
+            ok 4 - the identical retry reuses the admitted operation
+            not ok 5 - the planner's move is scheduled
+              ---
+              compare: ===
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 256
+                columnNumber: 9
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:256:9)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:248:13)
+              source: >2
+                      t.equal(second.operation?.operationId, first.operation?.operationId,
+                        'the identical retry reuses the admitted operation');
+                      t.equal(planned.result?.success, true, 'the planner\'s move is scheduled');
+                --------^
+                    });
+                  });
+              diff: |
+                --- expected
+                +++ actual
+                @@ -1,1 +1,1 @@
+                -true
+                +false
+              ...
+            
+            1..5
+        not ok 8 - contract (red today): with the leader reachable the ADD is admitted once and the identical retry reuses it # time=25.64ms
+          ---
+          at:
+            fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+            lineNumber: 248
+            columnNumber: 13
+            typeName: Test
+          source: >2
+                });
+          
+                await t.test('contract (red today): with the leader reachable the ADD is admitted ' +
+            ------------^
+                  'once and the identical retry reuses it', async (t) => {
+                  t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+          ...
+        
+        1..8
+    not ok 6 - witness (red today): leader reachable, the guard refuses from the local follower's incomplete answer # time=106.275ms
+      ---
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+        lineNumber: 109
+        columnNumber: 11
+        typeName: Test
+      source: >2
+            'setup: the planner node hosts a services-p1 replica that follows');
+      
+          await t.test('witness (red today): leader reachable, the guard refuses from the ' +
+        ----------^
+            'local follower\'s incomplete answer', async (t) => {
+            const host = openPlannerHost(t, world);
+      ...
+    
+    # Subtest: anchor (green): the services-p1 leader is reachable from the planner node through the owner-RPC path
+        # OBSERVATION reachability {"observation":{"available":true,"rows":[],"rowSetComplete":true,"partial":false,"readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"peer-node-a","servingReplicaId":"services-p1-r1","term":1,"appliedIndex":3,"commitIndex":3,"role":"leader","observedAtMs":1795273977118},"error":null,"reasonCode":null,"source":"owner_rpc_lane","retryAfterMs":0,"snapshotVersion":null,"observedAtMs":null},"ownerRpc":[{"sql":"SELECT * FROM services\n    WHERE service_type = ? AND service_id LIKE ?","params":["runtime_service","sys-postgres-wire-r%"],"preferLeader":true}],"hops":[{"address":"peer-node-a/partition/services-p1-r1","nodeId":"peer-node-a","refused":false,"remainingMs":1996,"answer":{"success":true,"rowSet":{"v":1,"columns":["service_id","service_type","node_id","partition_id","group_id","replica_id","raft_role","status","state_entered_at","previous_state","trigger_reason","error_message","cleanup_token","create_attempt_token","address","created_at","updated_at"],"rows":[]},"executionEnvelope":{"sqliteVersion":"3.49.2","sqliteSourceId":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","compileOptionsDigest":"fdd54a75caac0923b9c70f0e0fc260cb651b8ae5f1c606d21e134ceca3bc0e2a","classifierListVersion":"tx1-leg-a-3"},"count":0,"partitionId":"services-p1","rowSetComplete":true,"readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"peer-node-a","servingReplicaId":"services-p1-r1","term":1,"appliedIndex":3,"commitIndex":3,"role":"leader","observedAtMs":1795273977118}}}]}
+        ok 1 - the strict read settles (undefined)
+        ok 2 - the leader-required owner read is available
+        ok 3 - with a complete row set
+        ok 4 - answered on the owner-RPC lane
+        ok 5 - witnessed by a leader
+        ok 6 - served on the leader's node
+        ok 7 - by the leader replica
+        ok 8 - the owner RPC was issued
+        ok 9 - and crossed to the leader's address
+        1..9
+    ok 7 - anchor (green): the services-p1 leader is reachable from the planner node through the owner-RPC path # time=13.064ms
+    
+    # Subtest: anchor (b): the leader genuinely unreachable (its hop refuses)
+        # OBSERVATION unreachable-guard {"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"read":{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}},"guardOwnerRpcCalls":0,"hops":[],"ledger":[]}
+        # OBSERVATION unreachable-owner-read {"observation":{"available":false,"rows":[],"rowSetComplete":false,"partial":false,"readAuthorityWitness":null,"error":"Partition service not found","reasonCode":null,"source":"owner_rpc_lane","retryAfterMs":0,"snapshotVersion":null,"observedAtMs":null},"hops":[{"address":"peer-node-a/partition/services-p1-r1","nodeId":"peer-node-a","refused":true,"remainingMs":2000,"answer":null}]}
+        # Subtest: diagnosis: the same untyped refusal from the local follower; the owner-RPC lane itself reports the leader unavailable
+            ok 1 - should be equal
+            ok 2 - should be equal
+            ok 3 - should be equal
+            ok 4 - the guard never reached the refused hop
+            ok 5 - a leader-required owner read is unavailable
+            ok 6 - every hop it made to the leader was refused
+            1..6
+        ok 1 - diagnosis: the same untyped refusal from the local follower; the owner-RPC lane itself reports the leader unavailable # time=2.25ms
+        
+        # Subtest: contract (red today): a typed unavailability with a named reason and an owned reconsideration
+            ok 1 - the request is refused
+            ok 2 - the authority is unavailable
+            not ok 3 - the refusal names why: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+              ---
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 317
+                columnNumber: 11
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:317:11)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:312:15)
+              source: >2
+                        t.ok(first.error, 'the request is refused');
+                        t.equal(refusal?.authoritativeAvailable, false, 'the authority is unavailable');
+                        t.ok(typeof refusal?.authoritativeReasonCode === 'string' &&
+                ----------^
+                          refusal.authoritativeReasonCode.length > 0,
+                        `the refusal names why: ${JSON.stringify(refusal)}`);
+              ...
+            
+            not ok 4 - the refusal carries its reconsideration (retry deadline or next action)
+              ---
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 320
+                columnNumber: 11
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:320:11)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:312:15)
+              source: >2
+                          refusal.authoritativeReasonCode.length > 0,
+                        `the refusal names why: ${JSON.stringify(refusal)}`);
+                        t.ok(reconsiderationOf(first.error),
+                ----------^
+                          'the refusal carries its reconsideration (retry deadline or next action)');
+                        t.same(ledger, [], 'nothing is created');
+              ...
+            
+            ok 5 - nothing is created
+            1..5
+        not ok 2 - contract (red today): a typed unavailability with a named reason and an owned reconsideration # time=16.855ms
+          ---
+          at:
+            fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+            lineNumber: 312
+            columnNumber: 15
+            typeName: Test
+          source: >2
+                  });
+          
+                  await t.test('contract (red today): a typed unavailability with a named reason and ' +
+            --------------^
+                    'an owned reconsideration', async (t) => {
+                    const refusal = refusalOf(first.error);
+          ...
+        
+        1..2
+    not ok 8 - anchor (b): the leader genuinely unreachable (its hop refuses) # time=140.452ms
+      ---
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+        lineNumber: 284
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('anchor (b): the leader genuinely unreachable (its hop refuses)',
+        ----------^
+            async (t) => {
+              const host = openPlannerHost(t, world, {unreachableNodeIds: [NODE.PEER_A]});
+      ...
+    
+    # Subtest: anchor (c): the leader holds an occupant on the target that the planner's follower and cache have not received
+        ok 1 - setup: the leader's replica holds the occupant
+        ok 2 - setup: the planner's follower replica does not yet
+        ok 3 - setup: nor does the planner's cache
+        # OBSERVATION leader-only-occupant {"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"read":{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}},"ledger":[],"leaderRows":[{"service_id":"sys-postgres-wire-r1","service_type":"runtime_service","node_id":"planner-node","partition_id":null,"group_id":null,"replica_id":null,"raft_role":null,"status":"active","state_entered_at":null,"previous_state":null,"trigger_reason":null,"error_message":null,"cleanup_token":null,"create_attempt_token":null,"address":null,"created_at":1795273977268,"updated_at":1795273977268}]}
+        # Subtest: anchor (green, must stay green): no operation is created while the leader holds an occupant on the target
+            ok 1 - no operation is returned
+            ok 2 - no operation row exists
+            ok 3 - the leader-required owner read returns the occupant
+            1..3
+        ok 4 - anchor (green, must stay green): no operation is created while the leader holds an occupant on the target # time=1.174ms
+        
+        # Subtest: contract (red today): the guard refuses target_node_already_occupied, decided from the leader
+            not ok 1 - refused on the leader's inventory: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+              ---
+              compare: ===
+              at:
+                fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+                lineNumber: 355
+                columnNumber: 9
+                typeName: Test
+              stack: >
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:355:9)
+              
+                Test.<anonymous>
+                (test/rebalancer/topology-guard-inventory-authority.test.js:353:13)
+              source: >2
+                    await t.test('contract (red today): the guard refuses target_node_already_occupied, ' +
+                      'decided from the leader', async (t) => {
+                      t.equal(refusalOf(first.error)?.reason, TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
+                --------^
+                        `refused on the leader's inventory: ${JSON.stringify(refusalOf(first.error))}`);
+                    });
+              diff: |
+                --- expected
+                +++ actual
+                @@ -1,1 +1,1 @@
+                -target_node_already_occupied
+                +replica_inventory_unusable
+              ...
+            
+            1..1
+        not ok 5 - contract (red today): the guard refuses target_node_already_occupied, decided from the leader # time=4.324ms
+          ---
+          at:
+            fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+            lineNumber: 353
+            columnNumber: 13
+            typeName: Test
+          source: >2
+                });
+          
+                await t.test('contract (red today): the guard refuses target_node_already_occupied, ' +
+            ------------^
+                  'decided from the leader', async (t) => {
+                  t.equal(refusalOf(first.error)?.reason, TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
+          ...
+        
+        1..5
+    not ok 9 - anchor (c): the leader holds an occupant on the target that the planner's follower and cache have not received # time=21.614ms
+      ---
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+        lineNumber: 326
+        columnNumber: 11
+        typeName: Test
+      source: >2
+            });
+      
+          await t.test('anchor (c): the leader holds an occupant on the target that the planner\'s ' +
+        ----------^
+            'follower and cache have not received', async (t) => {
+            world.seedLeaderOnlyRow(buildRuntimeOccupantRow(NODE.PLANNER, Date.now()));
+      ...
+    
+    1..9
+not ok 1 - services-p1 led by another node: the planner's topology guard and the SERVICES authority # time=526.492ms
+  ---
+  at:
+    fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+    lineNumber: 103
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('services-p1 led by another node: the planner\'s topology guard and the
+    SERVICES ' +
+  
+    ^
+      'authority', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+      const world = await openWorld(t, NODE.PEER_A, FOLLOWER_LED_PORT);
+  ...
+
+# Subtest: anchor (a, green today): the planner node leading services-p1 admits the same request
+    ok 1 - setup: the planner node's router is connected to peer-node-a
+    ok 2 - setup: the planner node's router is connected to peer-node-b
+    ok 3 - setup: planner-node leads services-p1 (its consensus core)
+    ok 4 - setup: no partition SERVICES row is published with raft_role leader
+{"level":50,"time":"2026-11-21T15:12:57.457Z","nodeId":"planner-node","pid":3511479,"subsystem":"rebalance-coordinator","operationId":"fb0188b9-bb45-4b4f-92c4-80a1ddcdeb9b","error":"Cannot read properties of undefined (reading 'partitionId')","nodeId":"planner-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"msg":"Failed to persist operation"}
+    # OBSERVATION planner-led {"read":{"mode":{},"success":true,"rowSetComplete":true,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":false,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"role":"leader","observedAtMs":1795273977441},"readAuthorityWitnesses":[{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"role":"leader","observedAtMs":1795273977441}],"diagnostics":{"leaderNodeId":"planner-node","localReadHit":true,"localReplicaFallbackHit":false,"routedToNode":null}},"refusal":{"message":"Cannot read properties of undefined (reading 'partitionId')","reconsideration":null},"guardOwnerRpcCalls":0,"ledger":[{"entity_type":"runtime_service","entity_id":"sys-postgres-wire","target_node_id":"planner-node"}]}
+    not ok 5 - the request is admitted: {"message":"Cannot read properties of undefined (reading 'partitionId')","reconsideration":null}
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+        lineNumber: 372
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/topology-guard-inventory-authority.test.js:372:7)
+      source: >2
+              guardOwnerRpcCalls: first.ownerRpc.filter(isGuardOwnerRpc).length,
+              ledger: ledgerShape(ledger)});
+            t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+        ------^
+            t.type(first.operation?.operationId, 'string', 'an operation is returned');
+            t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,3 @@
+      
+        -null
+      
+        +Error: Cannot read properties of undefined (reading 'partitionId') {
+      
+        +  "cause": TypeError: Cannot read properties of undefined (reading
+        'partitionId'),
+      
+        +}
+      ...
+    
+    not ok 6 - an operation is returned
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+        lineNumber: 373
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/topology-guard-inventory-authority.test.js:373:7)
+      source: >2
+              ledger: ledgerShape(ledger)});
+            t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+            t.type(first.operation?.operationId, 'string', 'an operation is returned');
+        ------^
+            t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+              target_node_id: NODE.PLANNER}], 'exactly one operation row targets the planner node');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -string
+        +undefined
+      ...
+    
+    ok 7 - exactly one operation row targets the planner node
+    ok 8 - the guard read its own replica as the leader: complete and witnessed
+    ok 9 - should be equal
+    ok 10 - on the local-leader pass, not the any-replica fallback
+    ok 11 - without owner RPC
+    1..11
+not ok 2 - anchor (a, green today): the planner node leading services-p1 admits the same request # time=167.222ms
+  ---
+  at:
+    fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+    lineNumber: 361
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('anchor (a, green today): the planner node leading services-p1 admits the
+    same request',
+  
+    ^
+      {timeout: CASE_TIMEOUT_MS}, async (t) => {
+        const world = await openWorld(t, NODE.PLANNER, PLANNER_LED_PORT);
+  ...
+
+1..2
+# { total: 95, pass: 85, fail: 10 }
+# time=705.4ms
+# test-files total=1 pass=0 fail=1 assertions=113
+placement-results={"file":"test/rebalancer/topology-guard-inventory-authority.test.js","attempt":1,"ok":false,"assertions":113,"durationMs":2241,"retriedOnce":false,"firstFailureLine":"not ok 1 - a complete SERVICES inventory witnessed by the services-p1 leader was read: [{\"mode\":{},\"success\":true,\"rowSetComplete\":false,\"rows\":[],\"source\":\"local_partition_replica\",\"localReadHit\":true,\"localReplicaFallbackHit\":true,\"outcome\":\""}

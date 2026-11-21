@@ -1,0 +1,267 @@
+lab test: adams-gamla: ordinary (9 files) cores=4 mem=15.6GiB speed x2.08
+[adams-gamla] placement-shell=1868982
+[adams-gamla] placement-head=9a6d3da527ba2c8b649754df1e3fc95f3492889d
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1869932
+[adams-gamla] # test-files planned=9
+[adams-gamla] classified lane ordinary: 9 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (2 assertions, 2970ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent
+[adams-gamla]     not ok 1 - setup: the leader committed the row ({"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"replica_operations-p1"})  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         writeRow (test/cdc/cdc-owner-fact-group-fixture.js:324:12)
+[adams-gamla]       
+[adams-gamla]         async Object.freshLeaderBehindCommit
+[adams-gamla]         (test/cdc/cdc-owner-fact-group-fixture.js:383:20)
+[adams-gamla]       
+[adams-gamla]         async Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-leader-required-fresh-leader-absence.test.js:42:28)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 324
+[adams-gamla]         columnNumber: 12
+[adams-gamla]         functionName: writeRow
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             const written = await leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
+[adams-gamla]               {entryId: `owner-fact-write-${operationId}`});
+[adams-gamla]             assert.equal(written?.success, true,
+[adams-gamla]         -----------^
+[adams-gamla]               `setup: the leader committed the row (${JSON.stringify(written)})`);
+[adams-gamla]             return leader.raft.readStatus().appliedIndex;
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent # time=437.354ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+[adams-gamla]     lineNumber: 37
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('FINDING (open): a leader-REQUIRED read that is not an owner fact answers
+[adams-gamla]     a row its ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'leader\'s predecessor committed as absent', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 1, pass: 0, fail: 1 }
+[adams-gamla] # time=450.602ms
+[adams-gamla] ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 3165ms)
+[adams-gamla] ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 3266ms)
+[adams-gamla] ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2879ms)
+[adams-gamla] not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (22 assertions, 4410ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+[adams-gamla]     not ok 1 - setup: the leader committed the row ({"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"replica_operations-p1"})  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         writeRow (test/cdc/cdc-owner-fact-group-fixture.js:324:12)
+[adams-gamla]       
+[adams-gamla]         async Object.freshLeaderBehindCommit
+[adams-gamla]         (test/cdc/cdc-owner-fact-group-fixture.js:383:20)
+[adams-gamla]       
+[adams-gamla]         async Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-owner-fact-receiver-read-point.test.js:66:3)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 324
+[adams-gamla]         columnNumber: 12
+[adams-gamla]         functionName: writeRow
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             const written = await leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
+[adams-gamla]               {entryId: `owner-fact-write-${operationId}`});
+[adams-gamla]             assert.equal(written?.success, true,
+[adams-gamla]         -----------^
+[adams-gamla]               `setup: the leader committed the row (${JSON.stringify(written)})`);
+[adams-gamla]             return leader.raft.readStatus().appliedIndex;
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=459.937ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 61
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: a fresh leader that has not applied its election log
+[adams-gamla]     refuses typed, ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'in process and routed', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+[adams-gamla]     ok 1 - leader: same typed answer
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - follower: same typed answer
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - names the leader it knows
+[adams-gamla]     not ok 8 - setup: the leader committed the row ({"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"replica_operations-p1"})  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         writeRow (test/cdc/cdc-owner-fact-group-fixture.js:324:12)
+[adams-gamla]       
+[adams-gamla]         async Object.freshLeaderBehindCommit
+[adams-gamla]         (test/cdc/cdc-owner-fact-group-fixture.js:383:20)
+[adams-gamla]       
+[adams-gamla]         async Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-owner-fact-receiver-read-point.test.js:101:3)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 324
+[adams-gamla]         columnNumber: 12
+[adams-gamla]         functionName: writeRow
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             const written = await leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
+[adams-gamla]               {entryId: `owner-fact-write-${operationId}`});
+[adams-gamla]             assert.equal(written?.success, true,
+[adams-gamla]         -----------^
+[adams-gamla]               `setup: the leader committed the row (${JSON.stringify(written)})`);
+[adams-gamla]             return leader.raft.readStatus().appliedIndex;
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..8
+[adams-gamla] not ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=392.176ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 81
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('one receiver contract: the same owner-fact request gets the same typed
+[adams-gamla]     answer in ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'process and over the transport', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+[adams-gamla]     ok 1 - the read reaches the replica that leads now
+[adams-gamla]     ok 2 - never the replica that stopped leading during its read
+[adams-gamla]     ok 3 - should be equivalent
+[adams-gamla]     ok 4 - the old leader refused after its read, shipping no rows
+[adams-gamla]     1..4
+[adams-gamla] ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=417.683ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: an apply landing while the leader reads never mis-states the witness
+[adams-gamla]     not ok 1 - setup: the leader committed the row ({"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"replica_operations-p1"})  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         Object.writeRow (test/cdc/cdc-owner-fact-group-fixture.js:324:12)
+[adams-gamla]       
+[adams-gamla]         async Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-owner-fact-receiver-read-point.test.js:151:25)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 324
+[adams-gamla]         columnNumber: 12
+[adams-gamla]         typeName: Object
+[adams-gamla]         methodName: writeRow
+[adams-gamla]         functionName: Object.writeRow
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             const written = await leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
+[adams-gamla]               {entryId: `owner-fact-write-${operationId}`});
+[adams-gamla]             assert.equal(written?.success, true,
+[adams-gamla]         -----------^
+[adams-gamla]               `setup: the leader committed the row (${JSON.stringify(written)})`);
+[adams-gamla]             return leader.raft.readStatus().appliedIndex;
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 4 - readOwnerFact: an apply landing while the leader reads never mis-states the witness # time=383.185ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 137
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: an apply landing while the leader reads never mis-states
+[adams-gamla]     the witness',
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]         const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+[adams-gamla]     ok 1 - never READY with no rows
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     1..3
+[adams-gamla] ok 5 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=253.281ms
+[adams-gamla] 
+[adams-gamla] 1..5
+[adams-gamla] # { total: 17, pass: 14, fail: 3 }
+[adams-gamla] # time=1927.446ms
+[adams-gamla] ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 716ms)
+[adams-gamla] ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 2431ms)
+[adams-gamla] ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 7709ms)
+[adams-gamla] ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 7845ms)
+[adams-gamla] # test-files total=9 pass=7 fail=2 assertions=445
+lab test: adams-gamla: # test-files total=9 pass=7 fail=2 assertions=445
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=9 pass=7 fail=2 assertions=445

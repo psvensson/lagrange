@@ -1,0 +1,34 @@
+{"file":"test/message-group/message-group-native-application-membership.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2326,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-fresh-learner-snapshot.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2999,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-mixed-vector.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2372,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-peer-address-committed-configuration.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":2445,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-service-raft-replication-and-cdc.test.js","attempt":1,"ok":false,"assertions":110,"durationMs":2930,"retriedOnce":false,"firstFailureLine":"not ok 3 - consensus delivery to an mg-1 peer should use the readiness router lane"}
+{"file":"test/message-group/message-group-service.test.js","attempt":1,"ok":true,"assertions":83,"durationMs":2750,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-custody-handoff.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":13330,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":2025,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/raft-response-address-validation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2843,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-provisional-route.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":13325,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-control-three-member.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6971,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":7153,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/raft-rs-transport-demux.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2062,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-size-split-transport.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":10255,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-write-leadership-transfer.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6961,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":6206,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/log-marker-partition.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5744,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/message-group-on-raft-rs.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4874,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":2640,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/replica-admission-delivery-lifetime.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":14253,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-peer-delivery-transport-outcome.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":895,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3060,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/simulation/formation-sim-connection-environment.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":732,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2194,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/wasm-service-lifecycle.test.js","attempt":1,"ok":true,"assertions":63,"durationMs":3740,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router.test.js","attempt":1,"ok":true,"assertions":499,"durationMs":7055,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":17164,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/wasm-service-replica.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":15169,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-w7-multi-target-route.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":8360,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-origin-retained-history.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1730,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-liveness-residual.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1830,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-pair-coalescing.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4494,"retriedOnce":false,"firstFailureLine":"not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares"}
+{"file":"test/transport/raft-frame-reconnect-owner.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":18217,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-turn-not-held.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1463,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,540 @@
+placement-shell=2981371
+placement-head=4c4bf1cd1d0b19ea12f267dfca8863ce9bf5b767
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2982887
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 65C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/scripts/fallback-necessity-trap.test.js (18 assertions, 998ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: plan arms every census-row site and reports what it cannot arm, with the reason
+ok 1 - plan arms every census-row site and reports what it cannot arm, with the reason
+  ---
+  duration_ms: 23.021445
+  type: 'test'
+  ...
+# Subtest: every rewritten fixture parses, keeps its line count and is armed exactly once
+ok 2 - every rewritten fixture parses, keeps its line count and is armed exactly once
+  ---
+  duration_ms: 6.959134
+  type: 'test'
+  ...
+# Subtest: a planned file whose slice no longer matches is refused, naming the site
+ok 3 - a planned file whose slice no longer matches is refused, naming the site
+  ---
+  duration_ms: 9.524512
+  type: 'test'
+  ...
+# Subtest: the syntax gate refuses a rewrite that does not parse and keeps the rest
+ok 4 - the syntax gate refuses a rewrite that does not parse and keeps the rest
+  ---
+  duration_ms: 0.813907
+  type: 'test'
+  ...
+# Subtest: observe mode records exactly the arms that ran and changes no result
+ok 5 - observe mode records exactly the arms that ran and changes no result
+  ---
+  duration_ms: 102.340499
+  type: 'test'
+  ...
+# Subtest: throw mode throws at exactly the selected arm, with the original error as cause
+ok 6 - throw mode throws at exactly the selected arm, with the original error as cause
+  ---
+  duration_ms: 91.276655
+  type: 'test'
+  ...
+# Subtest: throw mode without a selection and an unknown mode refuse the process
+ok 7 - throw mode without a selection and an unknown mode refuse the process
+  ---
+  duration_ms: 76.105274
+  type: 'test'
+  ...
+# Subtest: a drifted file refuses to load and the refusal is recorded
+ok 8 - a drifted file refuses to load and the refusal is recorded
+  ---
+  duration_ms: 37.211071
+  type: 'test'
+  ...
+# Subtest: worker threads are armed and write their own observation file
+ok 9 - worker threads are armed and write their own observation file
+  ---
+  duration_ms: 73.923355
+  type: 'test'
+  ...
+# Subtest: the census pre-kill flush signal writes the counts so far
+ok 10 - the census pre-kill flush signal writes the counts so far
+  ---
+  duration_ms: 71.038922
+  type: 'test'
+  ...
+# Subtest: merge is deterministic, sums arms, unions callers and refuses bad inputs
+ok 11 - merge is deterministic, sums arms, unions callers and refuses bad inputs
+  ---
+  duration_ms: 3.63748
+  type: 'test'
+  ...
+# Subtest: the recorder refuses an unknown mode and records an unplanned arm without a site
+ok 12 - the recorder refuses an unknown mode and records an unplanned arm without a site
+  ---
+  duration_ms: 1.211459
+  type: 'test'
+  ...
+# Subtest: hole 1: a restarted process never overwrites an earlier observation
+not ok 13 - hole 1: a restarted process never overwrites an earlier observation
+  ---
+  duration_ms: 1.170288
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:507:1'
+  failureType: 'testCodeFailure'
+  error: 'two starts of pid 1 must get two files'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'trap-1-0.json'
+  actual: 'trap-1-0.json'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:508:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 2: a child that ran unarmed leaves the merge incomplete, naming it
+not ok 14 - hole 2: a child that ran unarmed leaves the merge incomplete, naming it
+  ---
+  duration_ms: 125.350415
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:521:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a rostered process with no observation is a gap
+    + actual - expected
+    
+    + undefined
+    - false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:537:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 2: a planned file no process loaded is NOT-LOADED, never not-reached
+not ok 15 - hole 2: a planned file no process loaded is NOT-LOADED, never not-reached
+  ---
+  duration_ms: 46.124822
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:547:1'
+  failureType: 'testCodeFailure'
+  error: 'trapTool.reportRun is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:559:27)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 3: a throw selection that arms nothing refuses to start
+not ok 16 - hole 3: a throw selection that arms nothing refuses to start
+  ---
+  duration_ms: 38.008084
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:570:1'
+  failureType: 'testCodeFailure'
+  error: 'no planned arm is in N4c'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 0
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:576:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 3: an arm id names its side, the same with and without a census
+not ok 17 - hole 3: an arm id names its side, the same with and without a census
+  ---
+  duration_ms: 4.835207
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:584:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    N2: the primary side is armed
+    + actual - expected
+    
+      [
+    +   0
+    -   'p0'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'p0'
+  actual:
+    0: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:588:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 4: a throw run classifies every armed arm as not reached, surfaced or swallowed
+not ok 18 - hole 4: a throw run classifies every armed arm as not reached, surfaced or swallowed
+  ---
+  duration_ms: 50.380876
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:593:1'
+  failureType: 'testCodeFailure'
+  error: 'trapTool.reportRun is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-necessity-trap.test.js:610:28)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 12
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 775.44716
+# time=998ms
+not ok test/scripts/fallback-read-closure.test.js (18 assertions, 3018ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: every cell family counts its known sites, and a hand-edited record is unreproducible
+ok 1 - every cell family counts its known sites, and a hand-edited record is unreproducible
+  ---
+  duration_ms: 124.453913
+  type: 'test'
+  ...
+# Subtest: a new site anywhere fails, naming it; a removed site prints the tightening hint
+ok 2 - a new site anywhere fails, naming it; a removed site prints the tightening hint
+  ---
+  duration_ms: 148.174735
+  type: 'test'
+  ...
+# Subtest: a raised baseline in history is refused even when the tree is within it
+ok 3 - a raised baseline in history is refused even when the tree is within it
+  ---
+  duration_ms: 113.569847
+  type: 'test'
+  ...
+# Subtest: a census edited without a re-join is refused
+ok 4 - a census edited without a re-join is refused
+  ---
+  duration_ms: 104.301431
+  type: 'test'
+  ...
+# Subtest: a refresh may move a site toward less exercised buckets only
+ok 5 - a refresh may move a site toward less exercised buckets only
+  ---
+  duration_ms: 187.44126
+  type: 'test'
+  ...
+# Subtest: a census head off the lineage is a one-way cell; an absent one is unmeasurable
+ok 6 - a census head off the lineage is a one-way cell; an absent one is unmeasurable
+  ---
+  duration_ms: 109.151691
+  type: 'test'
+  ...
+# Subtest: without a baseline the ratchet refuses to run
+ok 7 - without a baseline the ratchet refuses to run
+  ---
+  duration_ms: 97.8945
+  type: 'test'
+  ...
+# Subtest: a kept arm stands only on a red throw-mode trap run and a classified witness
+ok 8 - a kept arm stands only on a red throw-mode trap run and a classified witness
+  ---
+  duration_ms: 433.823186
+  type: 'test'
+  ...
+# Subtest: --metric prints the selected cells as the last line for a script probe
+ok 9 - --metric prints the selected cells as the last line for a script probe
+  ---
+  duration_ms: 243.343224
+  type: 'test'
+  ...
+# Subtest: hole 5: the slice probe counts the sites its scope made uncensused
+not ok 10 - hole 5: the slice probe counts the sites its scope made uncensused
+  ---
+  duration_ms: 119.477506
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:365:1'
+  failureType: 'testCodeFailure'
+  error: 'editing a site must not reach the target'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '0'
+  actual: '0'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:371:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 6: an absent census head names the ref to fetch and exits with its own code
+not ok 11 - hole 6: an absent census head names the ref to fetch and exits with its own code
+  ---
+  duration_ms: 96.108196
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:375:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    2 !== 3
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 3
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:380:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 7: one red bucket-wide throw run cannot keep an arm
+not ok 12 - hole 7: one red bucket-wide throw run cannot keep an arm
+  ---
+  duration_ms: 127.456715
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:386:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a run that armed other sites keeps nothing
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:397:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 7: a kept arm needs a run that armed that site alone and failed its witness
+not ok 13 - hole 7: a kept arm needs a run that armed that site alone and failed its witness
+  ---
+  duration_ms: 134.29981
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:410:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /did not arm that site alone/u. Input:
+    
+    'fallback-read-closure: kept entry names no red throw-mode trap run in which its arm threw: ts.467710968ec7.0'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: 'fallback-read-closure: kept entry names no red throw-mode trap run in which its arm threw: ts.467710968ec7.0'
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:426:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 8: a leader constant injected through options is still a leader token
+not ok 14 - hole 8: a leader constant injected through options is still a leader token
+  ---
+  duration_ms: 117.091494
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:435:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    '0' !== '1'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '1'
+  actual: '0'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:444:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 9: a fixture row is exempt by its service type, not a substring of its id
+not ok 15 - hole 9: a fixture row is exempt by its service type, not a substring of its id
+  ---
+  duration_ms: 117.775283
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:448:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    '0' !== '1'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '1'
+  actual: '0'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:455:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 10: a census edit is refused even with generatedAt bumped
+not ok 16 - hole 10: a census edit is refused even with generatedAt bumped
+  ---
+  duration_ms: 124.443929
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:459:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:464:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 10: the baseline must name the census head it was measured against
+not ok 17 - hole 10: the baseline must name the census head it was measured against
+  ---
+  duration_ms: 121.856093
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:468:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:473:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: hole 11: baselines tightened on two branches compose by cell-wise minimum
+not ok 18 - hole 11: baselines tightened on two branches compose by cell-wise minimum
+  ---
+  duration_ms: 242.940404
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:477:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    fallback-read-closure: baseline raised (ratchet baselines are one-way): fixture_leader_role_rows/alpha 3 (16cedf632e70b31c46cc7fb94d0fa18b0716a5bb) -> 4 (9cf59183cc9c2eef88ba7071191ba8216eec6f30)
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4c4bf1cd1d0b-mwqhqoh8-1242070/test/scripts/fallback-read-closure.test.js:505:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 9
+# fail 9
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2817.985985
+# time=3018ms
+# test-files total=2 pass=0 fail=2 assertions=36
+placement-results={"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":false,"assertions":18,"durationMs":998,"retriedOnce":false,"firstFailureLine":"not ok 13 - hole 1: a restarted process never overwrites an earlier observation"}
+placement-results={"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":false,"assertions":18,"durationMs":3018,"retriedOnce":false,"firstFailureLine":"not ok 10 - hole 5: the slice probe counts the sites its scope made uncensused"}

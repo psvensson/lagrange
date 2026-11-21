@@ -1,0 +1,25 @@
+lab test: adams-gamla: ordinary, exclusive (6 files) cores=4 mem=15.6GiB speed x1.80
+[adams-gamla] placement-shell=1912347
+[adams-gamla] placement-head=393ece6400e781fee9f5e4d99da4a2ebe1082786
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:1.9 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1913356
+[adams-gamla] # test-files planned=6
+[adams-gamla] classified lane ordinary: 5 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js (8 assertions, 2375ms)
+[adams-gamla] ok test/partition/raft-rs-transport-demux.test.js (16 assertions, 2528ms)
+[adams-gamla] ok test/message-group/message-group-service-raft-replication-and-cdc.test.js (110 assertions, 3611ms)
+[adams-gamla] ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 2032ms)
+[adams-gamla] ok test/transport/message-router.test.js (499 assertions, 6323ms)
+[adams-gamla] # test-files total=5 pass=5 fail=0 assertions=635
+[adams-gamla] classified lane exclusive: 1 file(s), jobs=1
+[adams-gamla] thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/transport/raft-frame-turn-not-held.integration.test.js (1 assertions, 1500ms)
+[adams-gamla] # test-files total=1 pass=1 fail=0 assertions=1
+lab test: adams-gamla: # test-files total=6 pass=6 fail=0 assertions=636
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=6 pass=6 fail=0 assertions=636
+exit=0

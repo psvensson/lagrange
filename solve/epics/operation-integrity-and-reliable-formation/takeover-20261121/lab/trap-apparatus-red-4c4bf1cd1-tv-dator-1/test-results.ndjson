@@ -1,0 +1,2 @@
+{"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":false,"assertions":18,"durationMs":998,"retriedOnce":false,"firstFailureLine":"not ok 13 - hole 1: a restarted process never overwrites an earlier observation"}
+{"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":false,"assertions":18,"durationMs":3018,"retriedOnce":false,"firstFailureLine":"not ok 10 - hole 5: the slice probe counts the sites its scope made uncensused"}

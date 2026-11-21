@@ -1,0 +1,33 @@
+{
+  "sha": "393ece6400e781fee9f5e4d99da4a2ebe1082786",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/simulation/formation-sim-production-partitions.test.js",
+    "test/simulation/formation-sim-production-message-groups.test.js",
+    "test/simulation/formation-sim-production-handoff.test.js",
+    "test/simulation/formation-sim-production-bootstrap-phase-one.test.js",
+    "test/raft/raft-rs-quiet-ready-cost.test.js",
+    "test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-quiet-ready-cost.test.js",
+        "test/simulation/formation-sim-production-handoff.test.js",
+        "test/simulation/formation-sim-production-partitions.test.js",
+        "test/simulation/formation-sim-production-message-groups.test.js",
+        "test/simulation/formation-sim-production-bootstrap-phase-one.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

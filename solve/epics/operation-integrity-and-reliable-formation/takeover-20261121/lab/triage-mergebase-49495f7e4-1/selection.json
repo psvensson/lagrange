@@ -1,0 +1,73 @@
+{
+  "sha": "49495f7e47ff7fc03d2a1bbdf92ab92e9fc09778",
+  "host": "adam-laptop",
+  "checkBase": "49495f7e47ff7fc03d2a1bbdf92ab92e9fc09778",
+  "files": [
+    "test/bootstrap/node-registration-idempotency.test.js",
+    "test/rebalancer/node-storage-budget-service.test.js",
+    "test/control-plane/heartbeat-liveness-at-commit.test.js",
+    "test/runtime/service-runtime-consensus-publication.test.js",
+    "test/control-plane/heartbeat-memory-trend.test.js",
+    "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js",
+    "test/raft/snapshot-dispatcher-wiring.test.js",
+    "test/rebalancer/reservation-expiry-operation-aware.test.js",
+    "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js",
+    "test/rebalancer/admission-real-size-estimates.test.js",
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
+    "test/rebalancer/coordinator-created-operation-progress.test.js",
+    "test/rebalancer/executor-bypasses-workflow-owner.test.js",
+    "test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js",
+    "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+    "test/rebalancer/terminal-status-constants.test.js",
+    "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+    "test/rebalancer/message-group-membership-operation-lane.test.js",
+    "test/control-plane/service-instance-creation-cas.test.js",
+    "test/node/node-reintegration-service.test.js",
+    "test/integration/lagrange-server-npm-package.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/admission-real-size-estimates.test.js",
+        "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "test/rebalancer/executor-bypasses-workflow-owner.test.js",
+        "test/rebalancer/message-group-membership-operation-lane.test.js",
+        "test/control-plane/heartbeat-memory-trend.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/rebalancer/node-storage-budget-service.test.js",
+        "test/node/node-reintegration-service.test.js",
+        "test/raft/snapshot-dispatcher-wiring.test.js",
+        "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "test/rebalancer/reservation-expiry-operation-aware.test.js",
+        "test/rebalancer/coordinator-created-operation-progress.test.js",
+        "test/control-plane/heartbeat-liveness-at-commit.test.js",
+        "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js",
+        "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js",
+        "test/rebalancer/terminal-status-constants.test.js",
+        "test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/node-registration-idempotency.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+        "test/integration/lagrange-server-npm-package.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

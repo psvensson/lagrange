@@ -1,0 +1,19 @@
+{
+  "sha": "2a689f1b9324c6416324d22323ec600cd08ffc19",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/scripts/fallback-necessity-trap.test.js",
+    "test/scripts/fallback-read-closure.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/fallback-necessity-trap.test.js",
+        "test/scripts/fallback-read-closure.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

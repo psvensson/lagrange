@@ -1,0 +1,1 @@
+{"file":"test/rebalancer/placement-owner-authority-tenure.test.js","attempt":1,"ok":false,"assertions":13,"durationMs":14342,"retriedOnce":false,"firstFailureLine":"not ok 13 - P4 bound over repeated transfers: N transfers with every leadership-start drive suspended do not accumulate obsolete passes, triggers, writes, attempts or timers"}

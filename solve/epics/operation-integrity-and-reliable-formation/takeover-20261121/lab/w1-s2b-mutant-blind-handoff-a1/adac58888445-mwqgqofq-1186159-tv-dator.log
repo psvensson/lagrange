@@ -1,0 +1,113 @@
+placement-shell=2955151
+placement-head=adac588884456ef6f6eefc4098869ff9b428ac45
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2955605
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+ok test/partition/placement-retained-leadership.test.js (5 assertions, 3184ms)
+not ok test/partition/placement-retained-publication.test.js (6 assertions, 3385ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+ok 1 - W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+  ---
+  duration_ms: 1902.981957
+  type: 'test'
+  ...
+# Subtest: W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+ok 2 - W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+  ---
+  duration_ms: 102.909017
+  type: 'test'
+  ...
+# Subtest: W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+ok 3 - W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+  ---
+  duration_ms: 77.079362
+  type: 'test'
+  ...
+# Subtest: W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+ok 4 - W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+  ---
+  duration_ms: 69.044371
+  type: 'test'
+  ...
+# Subtest: W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+not ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+  ---
+  duration_ms: 75.096684
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-publication.test.js:169:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the origin as ledger leader evaluates the known blocker first: zero native proposals
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-publication.test.js:184:12
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: W9 a route publication during an in-flight read is queued and applied after that decision
+not ok 6 - W9 a route publication during an in-flight read is queued and applied after that decision
+  ---
+  duration_ms: 85.16961
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-publication.test.js:193:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    unchanged BUSY across the flap: zero native proposals
+    
+    2 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-publication.test.js:209:12
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/adac58888445-mwqgqofq-1186159/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 4
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2317.829879
+# time=3385ms
+# test-files total=2 pass=1 fail=1 assertions=11
+placement-results={"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3184,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":3385,"retriedOnce":false,"firstFailureLine":"not ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing"}

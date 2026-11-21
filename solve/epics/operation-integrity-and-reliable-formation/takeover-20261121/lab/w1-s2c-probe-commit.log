@@ -1,0 +1,35 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: 1ede7a19dffb6a3039563c9c01b7e9102fcff3d2
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 1 JavaScript files
+Found 3 new literal-guideline violations
+Top files:
+- src/rebalancer/operation-workflow-gate-operation-row-repair.js: 3
+Matched 0 inherited literal-guideline baseline violations
+pre-commit: FAIL - literal guideline (staged files)
+Scanned 1 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 1 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 1 JavaScript files
+Found 2 navigability violations
+Top files:
+- src/rebalancer/operation-workflow-gate-operation-row-repair.js: 2
+src/rebalancer/operation-workflow-gate-operation-row-repair.js:15 probeBinding catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-gate-operation-row-repair.js:30 probeRead catch_returns_default: catch that returns a default; surface a typed refusal instead
+Matched 1 inherited navigability baseline violations
+pre-commit: FAIL - navigability patterns (staged files)
+Scoped complexity ratchet: 0 violation(s) in 1 target(s) (threshold: 12).
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: 2 staged check(s) failed - fix and re-commit
+pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)

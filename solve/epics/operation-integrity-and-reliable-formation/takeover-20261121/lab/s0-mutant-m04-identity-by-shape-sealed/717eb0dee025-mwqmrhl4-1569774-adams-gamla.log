@@ -1,0 +1,235 @@
+placement-shell=1914444
+placement-head=717eb0dee0254c49ceb9fb30e144a0a77747d36e
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1915317
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+not ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 654ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a request that names no mode reaches the reader leader-required
+    ok 1 - one read
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equivalent
+    ok 5 - never a weaker default mode
+    ok 6 - never a weaker default leader mode
+    ok 7 - the caller's floors travel with the read
+    ok 8 - the token cannot be weakened downstream
+    ok 9 - a failed read is typed unavailability, with no rows field
+    ok 10 - should be equal
+    1..10
+ok 1 - readOwnerFact: a request that names no mode reaches the reader leader-required # time=7.91ms
+
+# Subtest: buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction
+    ok 1 - authoritativeReadMode=owner_local_only: typed refusal
+    ok 2 - authoritativeReadMode=owner_local_only: refusal code
+    ok 3 - authoritativeReadMode=owner_local_only: the refused field is named
+    ok 4 - authoritativeReadMode=owner_local_only: no read was issued
+    ok 5 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: typed refusal
+    ok 6 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: refusal code
+    ok 7 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: the refused field is named
+    ok 8 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: no read was issued
+    ok 9 - authoritativeReadMode=owner_rpc_required: typed refusal
+    ok 10 - authoritativeReadMode=owner_rpc_required: refusal code
+    ok 11 - authoritativeReadMode=owner_rpc_required: the refused field is named
+    ok 12 - authoritativeReadMode=owner_rpc_required: no read was issued
+    ok 13 - authoritativeReadMode=no_such_mode: typed refusal
+    ok 14 - authoritativeReadMode=no_such_mode: refusal code
+    ok 15 - authoritativeReadMode=no_such_mode: the refused field is named
+    ok 16 - authoritativeReadMode=no_such_mode: no read was issued
+    ok 17 - authoritativeReadMode=undefined: typed refusal
+    ok 18 - authoritativeReadMode=undefined: refusal code
+    ok 19 - authoritativeReadMode=undefined: the refused field is named
+    ok 20 - authoritativeReadMode=undefined: no read was issued
+    ok 21 - leaderMode=any: typed refusal
+    ok 22 - leaderMode=any: refusal code
+    ok 23 - leaderMode=any: the refused field is named
+    ok 24 - leaderMode=any: no read was issued
+    ok 25 - leaderMode=preferred: typed refusal
+    ok 26 - leaderMode=preferred: refusal code
+    ok 27 - leaderMode=preferred: the refused field is named
+    ok 28 - leaderMode=preferred: no read was issued
+    ok 29 - leaderMode=required: typed refusal
+    ok 30 - leaderMode=required: refusal code
+    ok 31 - leaderMode=required: the refused field is named
+    ok 32 - leaderMode=required: no read was issued
+    ok 33 - leaderMode=no_such_leader_mode: typed refusal
+    ok 34 - leaderMode=no_such_leader_mode: refusal code
+    ok 35 - leaderMode=no_such_leader_mode: the refused field is named
+    ok 36 - leaderMode=no_such_leader_mode: no read was issued
+    ok 37 - leaderMode=undefined: typed refusal
+    ok 38 - leaderMode=undefined: refusal code
+    ok 39 - leaderMode=undefined: the refused field is named
+    ok 40 - leaderMode=undefined: no read was issued
+    ok 41 - strategy=cache: typed refusal
+    ok 42 - strategy=cache: refusal code
+    ok 43 - strategy=cache: the refused field is named
+    ok 44 - strategy=cache: no read was issued
+    ok 45 - readProfile=planning: typed refusal
+    ok 46 - readProfile=planning: refusal code
+    ok 47 - readProfile=planning: the refused field is named
+    ok 48 - readProfile=planning: no read was issued
+    ok 49 - localReadConsistency=any_replica: typed refusal
+    ok 50 - localReadConsistency=any_replica: refusal code
+    ok 51 - localReadConsistency=any_replica: the refused field is named
+    ok 52 - localReadConsistency=any_replica: no read was issued
+    ok 53 - replicaFallbackConsistency=any_replica: typed refusal
+    ok 54 - replicaFallbackConsistency=any_replica: refusal code
+    ok 55 - replicaFallbackConsistency=any_replica: the refused field is named
+    ok 56 - replicaFallbackConsistency=any_replica: no read was issued
+    ok 57 - preferLeader=false: typed refusal
+    ok 58 - preferLeader=false: refusal code
+    ok 59 - preferLeader=false: the refused field is named
+    ok 60 - preferLeader=false: no read was issued
+    1..60
+ok 2 - buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction # time=5.654ms
+
+# Subtest: buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted
+    ok 1 - no index floor: typed refusal
+    ok 2 - no index floor: refusal code
+    ok 3 - no index floor: the refused field is named
+    ok 4 - no index floor: no read was issued
+    ok 5 - no term floor: typed refusal
+    ok 6 - no term floor: refusal code
+    ok 7 - no term floor: the refused field is named
+    ok 8 - no term floor: no read was issued
+    ok 9 - negative index floor: typed refusal
+    ok 10 - negative index floor: refusal code
+    ok 11 - negative index floor: the refused field is named
+    ok 12 - negative index floor: no read was issued
+    ok 13 - fractional term floor: typed refusal
+    ok 14 - fractional term floor: refusal code
+    ok 15 - fractional term floor: the refused field is named
+    ok 16 - fractional term floor: no read was issued
+    ok 17 - text index floor: typed refusal
+    ok 18 - text index floor: refusal code
+    ok 19 - text index floor: the refused field is named
+    ok 20 - text index floor: no read was issued
+    ok 21 - no statement: typed refusal
+    ok 22 - no statement: refusal code
+    ok 23 - no statement: the refused field is named
+    ok 24 - no statement: no read was issued
+    ok 25 - params not a list: typed refusal
+    ok 26 - params not a list: refusal code
+    ok 27 - params not a list: the refused field is named
+    ok 28 - params not a list: no read was issued
+    ok 29 - a table with no owner partition: typed refusal
+    ok 30 - a table with no owner partition: refusal code
+    ok 31 - a table with no owner partition: the refused field is named
+    ok 32 - a table with no owner partition: no read was issued
+    ok 33 - half an expected replica: typed refusal
+    ok 34 - half an expected replica: refusal code
+    ok 35 - half an expected replica: the refused field is named
+    ok 36 - half an expected replica: no read was issued
+    ok 37 - a missing reader port: typed refusal
+    ok 38 - should be equal
+    1..38
+ok 3 - buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted # time=3.242ms
+
+# Subtest: readHint: a hint is not an owner fact and cannot be read as one
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    not ok 3 - a hint carries no owner-fact identity
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 142
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:142:5)
+      source: >2
+          t.equal(hint.state, HINT_STATE.OBSERVED);
+          t.same(hint.rows, rows);
+          t.equal(isOwnerFactAnswer(hint), false, 'a hint carries no owner-fact identity');
+        ----^
+          t.throws(() => ownerFactRows(hint), 'a hint cannot be passed where an owner fact is required');
+          const lookalike = {state: STATE.READY, rows: []};
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    ok 4 - a hint cannot be passed where an owner fact is required
+    not ok 5 - a shape-compatible object is not an owner fact
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 145
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:145:5)
+      source: >2
+          t.throws(() => ownerFactRows(hint), 'a hint cannot be passed where an owner
+        fact is required');
+          const lookalike = {state: STATE.READY, rows: []};
+          t.equal(isOwnerFactAnswer(lookalike), false, 'a shape-compatible object is not an owner fact');
+        ----^
+          t.throws(() => ownerFactRows(lookalike), 'only an answer readOwnerFact issued yields rows');
+          const unavailable = await readHint(async () => ({success: false, error: 'no projection'}),
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    not ok 6 - only an answer readOwnerFact issued yields rows
+      ---
+      at:
+        fileName: test/control-plane/control-plane-owner-fact-read.test.js
+        lineNumber: 146
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-owner-fact-read.test.js:146:5)
+      source: >2
+          const lookalike = {state: STATE.READY, rows: []};
+          t.equal(isOwnerFactAnswer(lookalike), false, 'a shape-compatible object is not an owner fact');
+          t.throws(() => ownerFactRows(lookalike), 'only an answer readOwnerFact issued yields rows');
+        ----^
+          const unavailable = await readHint(async () => ({success: false, error: 'no projection'}),
+            {tableName: TABLE});
+      ...
+    
+    ok 7 - a failed hint read is typed, never []
+    ok 8 - should be equal
+    1..8
+not ok 4 - readHint: a hint is not an owner fact and cannot be read as one # time=22.6ms
+  ---
+  at:
+    fileName: test/control-plane/control-plane-owner-fact-read.test.js
+    lineNumber: 137
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('readHint: a hint is not an owner fact and cannot be read as one', async
+    (t) => {
+  
+    ^
+      const rows = [{operation_id: 'operation-1'}];
+      const hint = await readHint(async () => ({success: true, rows}), {tableName: TABLE});
+  ...
+
+1..4
+# { total: 116, pass: 113, fail: 3 }
+# time=50.582ms
+# test-files total=1 pass=0 fail=1 assertions=120
+placement-results={"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":false,"assertions":120,"durationMs":654,"retriedOnce":false,"firstFailureLine":"not ok 3 - a hint carries no owner-fact identity"}

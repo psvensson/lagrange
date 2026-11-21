@@ -1,0 +1,10 @@
+file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2684
+  if (machines.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
+                                   ^
+
+Error: no lab machine is ready
+    at placeLabLanes (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2684:36)
+    at runLabTest (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2973:21)
+    at async file:///mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs:22:18
+
+Node.js v22.23.2

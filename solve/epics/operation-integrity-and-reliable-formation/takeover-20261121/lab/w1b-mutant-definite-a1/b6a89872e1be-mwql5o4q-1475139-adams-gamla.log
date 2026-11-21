@@ -1,0 +1,105 @@
+placement-shell=1898830
+placement-head=b6a89872e1be457eba07cbebfaa09fca5f078cec
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=1899286
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 43C (coretemp/Package id 0) nvme unmeasured
+not ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 4998ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: F11: every code on the admission path maps to a definite answer (null) or a trigger whose subscription exists, and none clears on RESYNC or a retry delay
+not ok 1 - F11: every code on the admission path maps to a definite answer (null) or a trigger whose subscription exists, and none clears on RESYNC or a retry delay
+  ---
+  duration_ms: 64.638356
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b6a89872e1be-mwql5o4q-1475139/test/rebalancer/replica-placement-owner-clearing-triggers.test.js:95:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the null rows are exactly the declared DEFINITE codes
+    + actual - expected
+    
+      [
+        'ALREADY_FOUNDED',
+        'HOLD_NOT_HELD',
+        'LEDGER_PARTITION_REQUIRED',
+        'SYSTEM_PARTITION_SEED_FOUNDED',
+        'TARGET_CLAIM_TAKEN',
+    +   'partition_write_backpressure',
+        'placement_admission_bytes_invalid',
+        'placement_admission_origin_refused',
+        'placement_admission_result_unavailable',
+        'placement_admission_target_invalid',
+        'placement_remove_intent_unscoped',
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'ALREADY_FOUNDED'
+    1: 'HOLD_NOT_HELD'
+    2: 'LEDGER_PARTITION_REQUIRED'
+    3: 'SYSTEM_PARTITION_SEED_FOUNDED'
+    4: 'TARGET_CLAIM_TAKEN'
+    5: 'placement_admission_bytes_invalid'
+    6: 'placement_admission_origin_refused'
+    7: 'placement_admission_result_unavailable'
+    8: 'placement_admission_target_invalid'
+    9: 'placement_remove_intent_unscoped'
+    10: 'retained_admission_required'
+    11: 'retained_identity_changed'
+    12: 'retained_row_changed'
+  actual:
+    0: 'ALREADY_FOUNDED'
+    1: 'HOLD_NOT_HELD'
+    2: 'LEDGER_PARTITION_REQUIRED'
+    3: 'SYSTEM_PARTITION_SEED_FOUNDED'
+    4: 'TARGET_CLAIM_TAKEN'
+    5: 'partition_write_backpressure'
+    6: 'placement_admission_bytes_invalid'
+    7: 'placement_admission_origin_refused'
+    8: 'placement_admission_result_unavailable'
+    9: 'placement_admission_target_invalid'
+    10: 'placement_remove_intent_unscoped'
+    11: 'retained_admission_required'
+    12: 'retained_identity_changed'
+    13: 'retained_row_changed'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b6a89872e1be-mwql5o4q-1475139/test/rebalancer/replica-placement-owner-clearing-triggers.test.js:112:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: WRITE_PATH_RELEASED: the cutover pause refuses the admission typed and its release emits the event once
+ok 2 - WRITE_PATH_RELEASED: the cutover pause refuses the admission typed and its release emits the event once
+  ---
+  duration_ms: 3158.09192
+  type: 'test'
+  ...
+# Subtest: PRESSURE_RELEASED: a watcher of a deferred request is told once when the governor stops deferring it, never while pressure lasts
+ok 3 - PRESSURE_RELEASED: a watcher of a deferred request is told once when the governor stops deferring it, never while pressure lasts
+  ---
+  duration_ms: 289.180068
+  type: 'test'
+  ...
+# Subtest: TARGET_CAPACITY_CHANGED: capacity freed by a released reservation reaches the capacity owner's subscribers
+ok 4 - TARGET_CAPACITY_CHANGED: capacity freed by a released reservation reaches the capacity owner's subscribers
+  ---
+  duration_ms: 82.131666
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 3
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3602.613811
+# time=4998ms
+# test-files total=1 pass=0 fail=1 assertions=4
+placement-results={"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":4998,"retriedOnce":false,"firstFailureLine":"not ok 1 - F11: every code on the admission path maps to a definite answer (null) or a trigger whose subscription exists, and none clears on RESYNC or a retry delay"}

@@ -1,0 +1,17 @@
+{
+  "sha": "6f4ba10d594d8aaa01f2ebea5fcbba187fa96567",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-owner-fact-receiver-read-point.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-owner-fact-receiver-read-point.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

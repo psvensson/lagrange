@@ -1,0 +1,70 @@
+lab test: adams-gamla: ordinary (9 files) cores=4 mem=15.6GiB speed x2.11
+[adams-gamla] placement-shell=1908804
+[adams-gamla] placement-head=ee58d307f828744790974973fcfbd3aa8c0f7e1a
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1909260
+[adams-gamla] # test-files planned=9
+[adams-gamla] classified lane ordinary: 9 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 43C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 3133ms)
+[adams-gamla] ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 3188ms)
+[adams-gamla] not ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (2 assertions, 8122ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent
+[adams-gamla]     # {"observed":{"success":true,"rows":[],"failureCode":null,"witness":{"state":"observed","partitionId":"replica_operations-p1","servingNodeId":"owner-fact-node-c","servingReplicaId":"replica_operations-p1-r3","term":2,"appliedIndex":4,"commitIndex":4,"electionLogApplied":false,"role":"leader","observedAtMs":1795278851398},"committedIndex":5,"freshLeader":{"role":"leader","commitIndex":4,"appliedIndex":4,"confChangePending":true}}}
+[adams-gamla]     not ok 1 - a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read has no read-point refusal; consumers must migrate to readOwnerFact)
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+[adams-gamla]         lineNumber: 50
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-leader-required-fresh-leader-absence.test.js:50:5)
+[adams-gamla]       source: >2
+[adams-gamla]             committedIndex, freshLeader: {role: status.role, commitIndex: status.commitIndex,
+[adams-gamla]               appliedIndex: status.appliedIndex, confChangePending: status.confChangePending}}}));
+[adams-gamla]           t.notOk(answer.success === true && Array.isArray(answer.rows) && answer.rows.length === 0,
+[adams-gamla]         ----^
+[adams-gamla]             'a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read ' +
+[adams-gamla]             'has no read-point refusal; consumers must migrate to readOwnerFact)');
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent # time=5629.875ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+[adams-gamla]     lineNumber: 37
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('FINDING (open): a leader-REQUIRED read that is not an owner fact answers
+[adams-gamla]     a row its ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'leader\'s predecessor committed as absent', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 1, pass: 0, fail: 1 }
+[adams-gamla] # time=5644.663ms
+[adams-gamla] ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 7317ms)
+[adams-gamla] ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2447ms)
+[adams-gamla] ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 815ms)
+[adams-gamla] ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 8418ms)
+[adams-gamla] ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 2561ms)
+[adams-gamla] ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 7908ms)
+[adams-gamla] # test-files total=9 pass=8 fail=1 assertions=465
+lab test: adams-gamla: # test-files total=9 pass=8 fail=1 assertions=465
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=9 pass=8 fail=1 assertions=465

@@ -1,0 +1,2500 @@
+placement-shell=1836993
+placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1838432
+# test-files planned=4
+classified lane ordinary: 3 file(s), jobs=3
+thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+not ok test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js (29 assertions, 1268ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: the canonical checkpoint owner seals a group-neutral raft-rs image
+    ok 1 - source peer 0 is refused before sealing
+    ok 2 - source peer 7 is refused before sealing
+    ok 3 - source peer 01 is refused before sealing
+    ok 4 - the SQL-image kind refuses a raft-rs record instead of copying it
+    ok 5 - file-backed raft-rs state is a supported canonical payload
+    ok 6 - the sealed replica image validates
+    ok 7 - the built descriptor deeply freezes ConfState member arrays
+    ok 8 - the sealed descriptor carries the target's committed node
+    ok 9 - descriptor/payload peer map disagreement is refused before CREATE admission
+    ok 10 - descriptor/payload peer map disagreement performs no physical target mutation
+    ok 11 - descriptor/payload committed node disagreement is refused before CREATE admission
+    ok 12 - descriptor/payload committed node disagreement performs no physical target mutation
+    ok 13 - noncanonical generation is refused before CREATE admission
+    ok 14 - noncanonical generation performs no physical target mutation
+    ok 15 - matched descriptor/payload peer 0 is refused
+    ok 16 - matched peer 0 cannot materialize a target
+    ok 17 - matched descriptor/payload peer 7 is refused
+    ok 18 - matched peer 7 cannot materialize a target
+    ok 19 - matched descriptor/payload peer 01 is refused
+    ok 20 - matched peer 01 cannot materialize a target
+    ok 21 - direct install without CREATE authority is refused
+    ok 22 - direct refusal performs zero physical target mutation
+    ok 23 - the real CREATE owner grants the sole physical worker
+    not ok 24 - terminal settlement after admission preserves the exact install
+      ---
+      compare: ===
+      at:
+        fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+        lineNumber: 300
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:300:9)
+      source: |2
+                createPhysicalWorkerClaim: physicalClaim,
+              });
+              t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+        --------^
+                'terminal settlement after admission preserves the exact install');
+              const targetDb = new Database(targetDbPath);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -installed
+        +rejected
+      ...
+    
+    not ok 25 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+        lineNumber: 305
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:305:11)
+      source: >2
+              try {
+                const restored = new RaftRsDurableStore(targetDb).readDurableRecord(GROUP);
+                t.equal(restored.appliedIndex, APPLIED_INDEX);
+        ----------^
+                t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+                t.same(restored.confState.learners, [targetPeer]);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -12
+        +0
+      ...
+    
+    not ok 26 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+        lineNumber: 306
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:306:11)
+      source: >2
+                const restored = new RaftRsDurableStore(targetDb).readDurableRecord(GROUP);
+                t.equal(restored.appliedIndex, APPLIED_INDEX);
+                t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+        ----------^
+                t.same(restored.confState.learners, [targetPeer]);
+                t.equal(restored.hardState.term, APPLIED_TERM,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -9
+        +0
+      ...
+    
+    not ok 27 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "5115292586583479468",
+        -]
+        +Array []
+      at:
+        fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+        lineNumber: 307
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:307:11)
+      source: |2
+                t.equal(restored.appliedIndex, APPLIED_INDEX);
+                t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+                t.same(restored.confState.learners, [targetPeer]);
+        ----------^
+                t.equal(restored.hardState.term, APPLIED_TERM,
+                  'the receiver-local term starts at the installed boundary');
+      ...
+    
+    not ok 28 - Cannot read properties of null (reading 'term')
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js:308:36)
+      at:
+        fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+        lineNumber: 308
+        columnNumber: 36
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+                t.equal(restored.membershipGenerationIndex, MEMBERSHIP_GENERATION);
+                t.same(restored.confState.learners, [targetPeer]);
+                t.equal(restored.hardState.term, APPLIED_TERM,
+        -----------------------------------^
+                  'the receiver-local term starts at the installed boundary');
+                t.equal(restored.hardState.vote, '0',
+      ...
+    
+    1..28
+not ok 1 - the canonical checkpoint owner seals a group-neutral raft-rs image # time=283.734ms
+  ---
+  at:
+    fileName: test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js
+    lineNumber: 143
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('the canonical checkpoint owner seals a group-neutral raft-rs image',
+    ^
+      async (t) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fresh-mg-rs-image-'));
+  ...
+
+1..1
+# { total: 28, pass: 23, fail: 5 }
+# time=297.689ms
+not ok test/node/fresh-create-resumed-syncing-claim.test.js (3 assertions, 1916ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: B1: a create resumed on its durable SYNCING row that fails deferRetry at runtime-step keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+not ok 1 - B1: a create resumed on its durable SYNCING row that fails deferRetry at runtime-step keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+  ---
+  duration_ms: 90.822215
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:215:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    the coordinator admits the FAILED
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    plannerMovesFor (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:188:10)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:229:19)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: B1: a create resumed on its durable SYNCING row that fails deferRetry at prior-existence keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+not ok 2 - B1: a create resumed on its durable SYNCING row that fails deferRetry at prior-existence keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed
+  ---
+  duration_ms: 57.957449
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:215:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    the coordinator admits the FAILED
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    plannerMovesFor (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:188:10)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/node/fresh-create-resumed-syncing-claim.test.js:229:19)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: B1 control: a first create (no admission input) failing deferRetry before its runtime stays unclaimed and re-dispatchable
+ok 3 - B1 control: a first create (no admission input) failing deferRetry before its runtime stays unclaimed and re-dispatchable
+  ---
+  duration_ms: 44.691724
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 1
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 199.134856
+# time=1916ms
+not ok test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js (17 assertions, 6129ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-5VUD52/b01ff99f-167b-4c1b-b879-2bb0af6fee56.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-5VUD52/9c847442-605f-44c9-86dd-34d7d40484b3.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+  peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+  peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-5VUD52/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-5VUD52/8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-5VUD52/c60a00c6-88ec-4e7d-b7ff-e39a201f61bf.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  sizeBytes: 214248
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-5VUD52/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 2
+}
+Became leader {
+  term: 2,
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 2,
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  term: 2,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 127128,
+  sizeMB: '0.12'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  sizeBytes: 127128
+}
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 1,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+# Subtest: rolling-restart acknowledged-write durability and visibility
+    # Subtest: binds a real INSERT identity through partition, coordinator, admin, and acknowledged-write ledger
+    ok 1 - binds a real INSERT identity through partition, coordinator, admin, and acknowledged-write ledger
+      ---
+      duration_ms: 3211.11436
+      type: 'test'
+      ...
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-ZH4OZF/b01ff99f-167b-4c1b-b879-2bb0af6fee56.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  nodeId: 'b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  peerCohort: [ 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  previousLeader: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-ZH4OZF/9c847442-605f-44c9-86dd-34d7d40484b3.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+  peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  nodeId: '9c847442-605f-44c9-86dd-34d7d40484b3',
+  peerCohort: [ 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  previousLeader: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-ZH4OZF/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-ZH4OZF/8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  nodeId: '8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  peerCohort: [ 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  previousLeader: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f',
+  sizeBytes: 214248
+}
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-ZH4OZF/c60a00c6-88ec-4e7d-b7ff-e39a201f61bf.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  nodeId: 'c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  peerCohort: [ 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 1,
+  previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  previousLeader: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  term: 1,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 214248,
+  sizeMB: '0.20'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf',
+  sizeBytes: 214248
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Initializing partition service {
+  partitionId: 'benchmark_events-p1',
+  tableId: 'benchmark_events',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  replicaCount: 1,
+  dbPath: '/tmp/lagrange-run13-ZH4OZF/2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03.db'
+}
+Created table { tableName: 'benchmark_events', partitionId: 'benchmark_events-p1' }
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 2
+}
+Became leader {
+  term: 2,
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1',
+  rebalancerActive: true
+}
+Raft leadership transition evidence {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  nodeId: '2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  peerCohort: [ 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03' ],
+  eventType: 'leader_observation',
+  role: 'leader',
+  trigger: 'leader_change',
+  term: 2,
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  demoted: false
+}
+Leader changed {
+  newLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  previousLeader: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  term: 2,
+  partitionId: 'benchmark_events-p1'
+}
+Single replica - becoming leader immediately {
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  partitionId: 'benchmark_events-p1'
+}
+Partition size updated {
+  partitionId: 'benchmark_events-p1',
+  sizeBytes: 127128,
+  sizeMB: '0.12'
+}
+Partition service initialized {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03',
+  sizeBytes: 127128
+}
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Applying committed entry { partitionId: 'benchmark_events-p1', commandType: 'INSERT' }
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 0
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+    # Subtest: replays run13 through real Raft quorum and guarded restart catch-up
+    not ok 2 - replays run13 through real Raft quorum and guarded restart catch-up
+      ---
+      duration_ms: 491.271527
+      type: 'test'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:476:3'
+      failureType: 'testCodeFailure'
+      error: 'Acknowledged writes missing after rolling restart on node b01ff99f-167b-4c1b-b879-2bb0af6fee56: ["bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-412","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-414","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-416","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-418","bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-420"]'
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildVisibilityFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/acknowledged-write-visibility.js:510:17)
+        assertAcknowledgedWritesVisibleOnReachableNodes (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/acknowledged-write-visibility.js:574:11)
+        async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:480:28)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 0
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 0
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 1,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 0
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 1,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 0
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 0
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Handling remote query {
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3",
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Executing query {
+  partitionId: 'benchmark_events-p1',
+  sql: "SELECT event_id AS ack_id FROM benchmark_events WHERE event_id IN ('bench-9fc36d55-8126-4f3d-ad77-c3"
+}
+metrics.partition.sqlite {
+  partitionId: 'benchmark_events-p1',
+  operation: 'select',
+  durationMs: 0,
+  rowCount: 5
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-b01ff99f-167b-4c1b-b879-2bb0af6fee56'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-9c847442-605f-44c9-86dd-34d7d40484b3'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-8b6ebd73-ff2c-4b98-a1d2-7a8d8beff77f'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-c60a00c6-88ec-4e7d-b7ff-e39a201f61bf'
+}
+Shutting down partition service {
+  partitionId: 'benchmark_events-p1',
+  replicaId: 'benchmark_events-p1-2623e7e1-d6e3-4ab6-8d9c-7ed95cd83b03'
+}
+    # Subtest: fails red when a committed replica stops applying the accepted entries
+    not ok 3 - fails red when a committed replica stops applying the accepted entries
+      ---
+      duration_ms: 378.026856
+      type: 'test'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:503:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+        + actual - expected
+        
+        + 'durable_absent_everywhere'
+        - 'durable_replica_catchup_failure'
+                   ^
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'durable_replica_catchup_failure'
+      actual: 'durable_absent_everywhere'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:514:16)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: reproduces run13 and inspects every node after b01ff reports all five writes missing
+    ok 4 - reproduces run13 and inspects every node after b01ff reports all five writes missing
+      ---
+      duration_ms: 21.607083
+      type: 'test'
+      ...
+    # Subtest: classifies absent-everywhere writes without a witness as an acknowledgment-before-durability breach
+    ok 5 - classifies absent-everywhere writes without a witness as an acknowledgment-before-durability breach
+      ---
+      duration_ms: 20.297936
+      type: 'test'
+      ...
+    # Subtest: rejects a receipt when any successful participant lacks evidence
+    ok 6 - rejects a receipt when any successful participant lacks evidence
+      ---
+      duration_ms: 0.424801
+      type: 'test'
+      ...
+    # Subtest: prioritizes missing durability evidence over a blind read authority
+    ok 7 - prioritizes missing durability evidence over a blind read authority
+      ---
+      duration_ms: 0.396108
+      type: 'test'
+      ...
+    # Subtest: rejects a non-empty acknowledged ledger without durable receipts
+    ok 8 - rejects a non-empty acknowledged ledger without durable receipts
+      ---
+      duration_ms: 0.370232
+      type: 'test'
+      ...
+    # Subtest: rejects a forged complete receipt when the acceptor is not its leader
+    ok 9 - rejects a forged complete receipt when the acceptor is not its leader
+      ---
+      duration_ms: 0.407748
+      type: 'test'
+      ...
+    # Subtest: rejects forged complete receipts with invalid Raft positions
+    ok 10 - rejects forged complete receipts with invalid Raft positions
+      ---
+      duration_ms: 0.785693
+      type: 'test'
+      ...
+    # Subtest: rejects forged receipts with blank identities or negative acceptance time
+    ok 11 - rejects forged receipts with blank identities or negative acceptance time
+      ---
+      duration_ms: 0.648081
+      type: 'test'
+      ...
+    # Subtest: stays oracle blind when visible rows have malformed read authority
+    ok 12 - stays oracle blind when visible rows have malformed read authority
+      ---
+      duration_ms: 0.390027
+      type: 'test'
+      ...
+    # Subtest: stays oracle blind for whitespace-only read authority identities
+    ok 13 - stays oracle blind for whitespace-only read authority identities
+      ---
+      duration_ms: 0.359027
+      type: 'test'
+      ...
+    # Subtest: rejects read authority from a partition unrelated to the durable commit
+    ok 14 - rejects read authority from a partition unrelated to the durable commit
+      ---
+      duration_ms: 0.472026
+      type: 'test'
+      ...
+    # Subtest: distinguishes a durable but unreadable node from clean partial visibility
+    ok 15 - distinguishes a durable but unreadable node from clean partial visibility
+      ---
+      duration_ms: 20.378105
+      type: 'test'
+      ...
+    # Subtest: retains retry errors after a clean missing read and stays oracle blind
+    ok 16 - retains retry errors after a clean missing read and stays oracle blind
+      ---
+      duration_ms: 21.793651
+      type: 'test'
+      ...
+    1..16
+not ok 1 - rolling-restart acknowledged-write durability and visibility
+  ---
+  duration_ms: 4171.372605
+  type: 'suite'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js:419:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 16
+# suites 1
+# pass 14
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4180.390254
+# time=6129ms
+# test-files total=3 pass=0 fail=3 assertions=49
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 53C (coretemp/Package id 0) nvme unmeasured
+not ok test/integration/message-group-learner-join.integration.test.js (51 assertions, 20293ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: a recorded learner CREATE joins the real group as a non-voting learner, installs, opens and runs only after the leader acknowledges it caught up
+ok 1 - a recorded learner CREATE joins the real group as a non-voting learner, installs, opens and runs only after the leader acknowledges it caught up
+  ---
+  duration_ms: 433.011225
+  type: 'test'
+  ...
+# Subtest: the founders' leader changing mid-join: the new leader acknowledges the learner (positive control)
+ok 2 - the founders' leader changing mid-join: the new leader acknowledges the learner (positive control)
+  ---
+  duration_ms: 271.451224
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:07.788Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_unavailable: membership-read-not-leader","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a descriptor from a demoted leader is refused not-leader: nothing is installed or opened
+ok 3 - a descriptor from a demoted leader is refused not-leader: nothing is installed or opened
+  ---
+  duration_ms: 206.995689
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:08.008Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_stale","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a replayed descriptor older than the recorded learner fact is refused stale
+    # Subtest: older term
+    ok 1 - older term
+      ---
+      duration_ms: 218.079483
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:08.247Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_stale","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: older configuration generation in the same term
+    ok 2 - older configuration generation in the same term
+      ---
+      duration_ms: 238.547642
+      type: 'test'
+      ...
+    1..2
+ok 4 - a replayed descriptor older than the recorded learner fact is refused stale
+  ---
+  duration_ms: 457.475679
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:08.496Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a REMOVE selection recorded after MATERIALIZED defeats the install at its commit
+ok 5 - a REMOVE selection recorded after MATERIALIZED defeats the install at its commit
+  ---
+  duration_ms: 247.700575
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:08.668Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_learner_not_in_configuration","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a later native REMOVE of the learner leaves the leader no descriptor for it
+ok 6 - a later native REMOVE of the learner leaves the leader no descriptor for it
+  ---
+  duration_ms: 173.532909
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:08.932Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_learner_not_in_configuration: removed","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a native REMOVE while the learner awaits the acknowledgement closes it: never reported running
+ok 7 - a native REMOVE while the learner awaits the acknowledgement closes it: never reported running
+  ---
+  duration_ms: 265.108314
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:09.141Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a descriptor for another group, target or cluster is refused before any install
+    # Subtest: group
+    ok 1 - group
+      ---
+      duration_ms: 206.296691
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:09.344Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: cluster
+    ok 2 - cluster
+      ---
+      duration_ms: 202.901714
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:09.535Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: target
+    ok 3 - target
+      ---
+      duration_ms: 191.815675
+      type: 'test'
+      ...
+    1..3
+ok 8 - a descriptor for another group, target or cluster is refused before any install
+  ---
+  duration_ms: 601.928762
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:09.735Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: an image whose learner origin names another operation is refused (identity anchoring)
+ok 9 - an image whose learner origin names another operation is refused (identity anchoring)
+  ---
+  duration_ms: 199.786647
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:09.956Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"Current boot authority unavailable for consumer-successor","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a replaced boot or a replaced admission generation fences the install
+    # Subtest: boot replaced after MATERIALIZED
+    ok 1 - boot replaced after MATERIALIZED
+      ---
+      duration_ms: 219.180084
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:10.177Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_admission_required","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: admission attempt replaced before staging
+    ok 2 - admission attempt replaced before staging
+      ---
+      duration_ms: 220.531168
+      type: 'test'
+      ...
+    # Subtest: admission attempt replaced at install commit
+        # Subtest: dry run: the install commit's reads before its swap
+        ok 1 - dry run: the install commit's reads before its swap
+          ---
+          duration_ms: 248.958336
+          type: 'test'
+          ...
+{"level":50,"time":"2026-11-21T14:43:10.640Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+        1..1
+    ok 3 - admission attempt replaced at install commit
+      ---
+      duration_ms: 463.470348
+      type: 'test'
+      ...
+    1..3
+ok 10 - a replaced boot or a replaced admission generation fences the install
+  ---
+  duration_ms: 903.915025
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:10.829Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_admission_required","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a competing terminal settlement after MATERIALIZED defeats the install; the debt stays
+not ok 11 - a competing terminal settlement after MATERIALIZED defeats the install; the debt stays
+  ---
+  duration_ms: 190.335029
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/integration/message-group-learner-join.integration.test.js:444:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'create_admission_required'
+    - 'create_generation_mismatch'
+              ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'create_generation_mismatch'
+  actual: 'create_admission_required'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqion5s-1319135/test/integration/message-group-learner-join.integration.test.js:452:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+{"level":50,"time":"2026-11-21T14:43:11.020Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: corrupt_payload","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: an install failure (a corrupt transferred image) opens nothing
+ok 12 - an install failure (a corrupt transferred image) opens nothing
+  ---
+  duration_ms: 189.253436
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:11.227Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"CREATE admission read deferred for consumer-operation","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: process loss around install and open: the restarted node starts no second learner
+    # Subtest: lost during the install, before the swap
+    ok 1 - lost during the install, before the swap
+      ---
+      duration_ms: 209.124336
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:11.464Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_open_refused: fixture: the process died before the open","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: lost after the install, before the open
+    ok 2 - lost after the install, before the open
+      ---
+      duration_ms: 238.18698
+      type: 'test'
+      ...
+    # Subtest: lost while the learner is open
+    ok 3 - lost while the learner is open
+      ---
+      duration_ms: 264.68874
+      type: 'test'
+      ...
+    1..3
+ok 13 - process loss around install and open: the restarted node starts no second learner
+  ---
+  duration_ms: 712.717596
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:11.968Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a later admission for an installed target refuses target-present and leaves the learner alone
+ok 14 - a later admission for an installed target refuses target-present and leaves the learner alone
+  ---
+  duration_ms: 237.342916
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:12.785Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group","groupId":"b2-image-only","replicaId":"b2-image-only-false","error":"message-group b2-image-only replica b2-image-only-false cannot initialize: its consensus port refused it in phase durable-record-read (CORE_REFUSED: durable-record-missing)","nodeId":"consumer-node","msg":"Failed during initialize, cleaning up raft"}
+Creating MessageGroupServiceHandler { nodeId: 'node-target' }
+Initializing MessageGroupServiceHandler { nodeId: 'node-target' }
+Registered MessageGroupServiceHandler with message router {
+  address: 'node-target/service/message-group-handler',
+  nodeId: 'node-target'
+}
+MessageGroupServiceHandler created and registered { nodeId: 'node-target' }
+Creating MessageGroupServiceHandler { nodeId: 'node-target' }
+Initializing MessageGroupServiceHandler { nodeId: 'node-target' }
+Registered MessageGroupServiceHandler with message router {
+  address: 'node-target/service/message-group-handler',
+  nodeId: 'node-target'
+}
+MessageGroupServiceHandler created and registered { nodeId: 'node-target' }
+Unregistered MessageGroupServiceHandler from message router {
+  address: 'node-target/service/message-group-handler',
+  nodeId: 'node-target'
+}
+Shutting down MessageGroupServiceHandler { nodeId: 'node-target' }
+Unregistered MessageGroupServiceHandler from message router {
+  address: 'node-target/service/message-group-handler',
+  nodeId: 'node-target'
+}
+Shutting down MessageGroupServiceHandler { nodeId: 'node-target' }
+# Subtest: a learner held behind is not reported running: NOT_CAUGHT_UP, still a learner
+ok 15 - a learner held behind is not reported running: NOT_CAUGHT_UP, still a learner
+  ---
+  duration_ms: 667.848842
+  type: 'test'
+  ...
+# Subtest: a replica opened from the durable-record bootstrap alone is refused without its image, joining flag or not: it is never founded
+ok 16 - a replica opened from the durable-record bootstrap alone is refused without its image, joining flag or not: it is never founded
+  ---
+  duration_ms: 156.930554
+  type: 'test'
+  ...
+# Subtest: the handler setup composes the learner-join capability only from a host
+ok 17 - the handler setup composes the learner-join capability only from a host
+  ---
+  duration_ms: 4.118073
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:12.794Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group","groupId":"b2-image-only","replicaId":"b2-image-only-true","error":"message-group b2-image-only replica b2-image-only-true cannot initialize: its consensus port refused it in phase durable-record-read (CORE_REFUSED: durable-record-missing)","nodeId":"consumer-node","msg":"Failed during initialize, cleaning up raft"}
+# Subtest: a REMOVE selection recorded while the install commit's last read before its swap is in flight defeats the install: no await follows that read
+    # Subtest: dry run: the install commit's reads before its swap
+    ok 1 - dry run: the install commit's reads before its swap
+      ---
+      duration_ms: 242.338759
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:13.252Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    1..1
+ok 18 - a REMOVE selection recorded while the install commit's last read before its swap is in flight defeats the install: no await follows that read
+  ---
+  duration_ms: 452.181991
+  type: 'test'
+  ...
+# Subtest: a terminal settlement recorded while the install commit's last read before its swap is in flight defeats the install; the debt stays
+    # Subtest: dry run: the install commit's reads before its swap
+    ok 1 - dry run: the install commit's reads before its swap
+      ---
+      duration_ms: 253.678178
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:13.724Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    1..1
+ok 19 - a terminal settlement recorded while the install commit's last read before its swap is in flight defeats the install; the debt stays
+  ---
+  duration_ms: 471.791665
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:13.920Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_admission_required","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: one basis column moved after MATERIALIZED defeats the install at its commit
+    # Subtest: admission CLOSED before staging, tokens kept
+    ok 1 - admission CLOSED before staging, tokens kept
+      ---
+      duration_ms: 196.180849
+      type: 'test'
+      ...
+    # Subtest: admission CLOSED, tokens kept
+        # Subtest: dry run: the install commit's reads before its swap
+        ok 1 - dry run: the install commit's reads before its swap
+          ---
+          duration_ms: 243.586093
+          type: 'test'
+          ...
+{"level":50,"time":"2026-11-21T14:43:14.373Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+        1..1
+    ok 2 - admission CLOSED, tokens kept
+      ---
+      duration_ms: 452.820919
+      type: 'test'
+      ...
+    # Subtest: membership obligation moved
+        # Subtest: dry run: the install commit's reads before its swap
+        ok 1 - dry run: the install commit's reads before its swap
+          ---
+          duration_ms: 230.268573
+          type: 'test'
+          ...
+{"level":50,"time":"2026-11-21T14:43:14.805Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_install_refused: create_generation_mismatch","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+        1..1
+    ok 3 - membership obligation moved
+      ---
+      duration_ms: 430.944175
+      type: 'test'
+      ...
+    1..3
+ok 20 - one basis column moved after MATERIALIZED defeats the install at its commit
+  ---
+  duration_ms: 1080.652907
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:14.971Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_descriptor_moved: corrupt_descriptor","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a configuration that moves between the leader's committed read and its image seal answers descriptor-moved, and the target refuses it
+ok 21 - a configuration that moves between the leader's committed read and its image seal answers descriptor-moved, and the target refuses it
+  ---
+  duration_ms: 167.724335
+  type: 'test'
+  ...
+# Subtest: a learner that acked its installed boundary but is held below the leader's commit is not running: NOT_CAUGHT_UP, behind
+ok 22 - a learner that acked its installed boundary but is held below the leader's commit is not running: NOT_CAUGHT_UP, behind
+  ---
+  duration_ms: 2785.17146
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:18.033Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_open_not_learner","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a learner applying its own native REMOVE while no leader is observable is closed: open-not-learner, nothing adopted
+ok 23 - a learner applying its own native REMOVE while no leader is observable is closed: open-not-learner, nothing adopted
+  ---
+  duration_ms: 275.915627
+  type: 'test'
+  ...
+# Subtest: a leader answer at an older configuration than the learner applied is no acknowledgement: the two configuration epochs are compared
+ok 24 - a leader answer at an older configuration than the learner applied is no acknowledgement: the two configuration epochs are compared
+  ---
+  duration_ms: 2726.015151
+  type: 'test'
+  ...
+# Subtest: a leader observation pairing one leader's committed answer with another leader's status is no acknowledgement
+ok 25 - a leader observation pairing one leader's committed answer with another leader's status is no acknowledgement
+  ---
+  duration_ms: 2760.837669
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T14:43:23.751Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+# Subtest: a pending install marker, staging or replica sidecar of the target is a present generation: refused before any descriptor request
+    # Subtest: install marker
+    ok 1 - install marker
+      ---
+      duration_ms: 230.51567
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:23.893Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: install staging
+    ok 2 - install staging
+      ---
+      duration_ms: 145.236902
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T14:43:24.062Z","nodeId":"consumer-node","pid":1838488,"subsystem":"message-group-service-handler","operationId":"consumer-operation","replicaId":"consumer-fresh","nodeId":"consumer-node","error":"message_group_learner_join_target_present","contextNodeId":"consumer-successor","msg":"Message-group replica creation failed"}
+    # Subtest: replica sidecar
+    ok 3 - replica sidecar
+      ---
+      duration_ms: 164.286429
+      type: 'test'
+      ...
+    1..3
+ok 26 - a pending install marker, staging or replica sidecar of the target is a present generation: refused before any descriptor request
+  ---
+  duration_ms: 541.181366
+  type: 'test'
+  ...
+# Subtest: a leader answer whose commit or match index is absent or not an exact integer is no acknowledgement: NOT_CAUGHT_UP, never running
+    # Subtest: absent
+    ok 1 - absent
+      ---
+      duration_ms: 831.907712
+      type: 'test'
+      ...
+    # Subtest: not integers
+    ok 2 - not integers
+      ---
+      duration_ms: 838.26004
+      type: 'test'
+      ...
+    1..2
+ok 27 - a leader answer whose commit or match index is absent or not an exact integer is no acknowledgement: NOT_CAUGHT_UP, never running
+  ---
+  duration_ms: 1670.987402
+  type: 'test'
+  ...
+1..27
+# tests 51
+# suites 0
+# pass 50
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18861.829409
+# time=20293ms
+# test-files total=1 pass=0 fail=1 assertions=51
+placement-results={"file":"test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js","attempt":1,"ok":false,"assertions":29,"durationMs":1268,"retriedOnce":false,"firstFailureLine":"not ok 24 - terminal settlement after admission preserves the exact install"}
+placement-results={"file":"test/node/fresh-create-resumed-syncing-claim.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1916,"retriedOnce":false,"firstFailureLine":"not ok 1 - B1: a create resumed on its durable SYNCING row that fails deferRetry at runtime-step keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed"}
+placement-results={"file":"test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js","attempt":1,"ok":false,"assertions":17,"durationMs":6129,"retriedOnce":false,"firstFailureLine":"not ok 2 - replays run13 through real Raft quorum and guarded restart catch-up"}
+placement-results={"file":"test/integration/message-group-learner-join.integration.test.js","attempt":1,"ok":false,"assertions":51,"durationMs":20293,"retriedOnce":false,"firstFailureLine":"not ok 11 - a competing terminal settlement after MATERIALIZED defeats the install; the debt stays"}

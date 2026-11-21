@@ -828,3 +828,277 @@ Patches: `/tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-
 | Mechanism | Mutant (src change) | Commit (local ref) | Lab run | Killed by (first failure) |
 | --- | --- | --- | --- | --- |
 | lost wake | `routePublication` (wake module): a ledger PARTITIONS/SERVICES row wakes ROUTE only if `row.raft_role === RAFT_ROLE.LEADER` (the role-keyed notified-row predicate of `a046d5495`; production never publishes it) | `80826174e` `probe/w1-mutant-lost-wake` | `w1-s2b-mutant-lost-wake-a1` | KILLED: W2 partition-first (publication 2) "the completing publication alone makes reconsideration reach the current leader B" (`:122`); also W2 endpoint-first, W2 ambiguous, W9, real-publication |
+| stale custody | `recordRetainedRepairCustody`: an answer without matching custody keeps the previous custody (`: attempt.custody` instead of `: SELF_CUSTODY`) | `c8369ccbc` `probe/w1-mutant-stale-custody` | `w1-s2b-mutant-stale-custody-a1` (continuation, row-repair, leadership) | **NOT KILLED** (21/21, 45/45, 5/5). Finding: no witness gives a delegated sender a typed disclaim WITHOUT custody. W5 disclaim does not: the demoted receiver's refusal comes from `requestPlacementRepair`'s leadership check (W1b's file), an uncommitted refusal that arms the sender's continuation whatever its custody. Witness added (16.6) and the mutant re-run on it (row below). |
+| blind handoff | `retryRetainedRepairDecision`: HANDOFF reads SUBJECT scope also at the local leader (`mode === MODE.HANDOFF ? SUBJECT : CURRENT`) | `adac58888` `probe/w1-mutant-blind-handoff` | `w1-s2b-mutant-blind-handoff-a1` | KILLED: W3 (publication 5) "the origin as ledger leader evaluates the known blocker first: zero native proposals" `1 !== 0`; also W9 |
+| reused unavailable | `completeIncomingRetainedRepair`: an arrival with no decision in flight is answered from `lastDecision` when it is UNAVAILABLE (no read) | `768679a5a` `probe/w1-mutant-reused-unavailable` | `w1-s2b-mutant-reused-unavailable-a1` | KILLED: C1 sequential x4 (continuation 11, 13, 15, 17) "an arrival after settlement starts one fresh decision: an unavailable result is not reused" `1 !== 2`; also the four C1 overlapping cases (10, 12, 14, 16) |
+| overwritten trigger | `oweRetainedRepair`: a failed read sets `attempt.clearingTrigger = PLACEMENT_TRIGGER.LEADERSHIP_START` (the B2 defect) | `3ddd34710` `probe/w1-mutant-overwritten-trigger` | `w1-s2b-mutant-overwritten-trigger-a1` | KILLED: W7 ingress (continuation 5) "a failed read owes revalidation; it does not rewrite what the committed refusal waits for" `'LEADERSHIP_START'` vs `'LEDGER_COMMIT'`; W7 post-resolution (7) "the failed post-resolution read owes revalidation; the committed trigger is unchanged", same values. NOTE: W7 consume (6), the planned killer, stays GREEN: its sender holds receiver custody at the UNAVAILABLE observation (`consumeRetainedRepairObservation` returns before owing when DELEGATED), so the sender's own owe path is not exercised there; the mechanism is killed by the other two W7 witnesses (finding recorded in 16.8). |
+| uncancelled timer | `retireRetainedRepair` no longer calls `cancelRetainedRepairContinuation` | `b58b02f45` `probe/w1-mutant-uncancelled-timer` | `w1-s2b-mutant-uncancelled-timer-a1` | KILLED: B5 tenure-end (continuation 20) "the released record left no continuation armed" `1 !== 0` (`:566`, the assertion at the leadership-loss edge). NOTE: W8 retirement (9), the planned killer, stays GREEN: there the retirement follows a qualified read, and `satisfyRetainedRepairRevalidation` cancels the continuation before `settleRetainedRepairDecision` retires; W8 retirement therefore witnesses "nothing fires after retirement", not "retirement itself cancels". The retirement-without-read case is B5. |
+
+### 16.6 Witness added for the surviving stale-custody mutant
+
+`W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the
+obligation to the sender` (continuation, commit `6517e3c17`). Schedule: the receiver's first read
+fails, so it answers UNAVAILABLE and attests custody of the exact entry (sender: `custody.state ===
+'delegated'`, no sender timer); the sender's later caller re-presents the entry; the receiver's own
+decision holds its read while the same replica moves to a later term (with the participant
+release); the decision then answers the typed disclaim without custody and releases its ended
+record. Assertions: no proposal; the sender's custody is `self` ("a reply without attested custody
+leaves no custody"); the sender owns an armed continuation; the receiver map is empty with no timer;
+advancing the sender's clock completes the original entry exactly once and retires the sender with
+no timer left. Under the mutant the sender stays `delegated` and owns no continuation. Results in
+16.5 (row "stale custody (re-run)") and 16.7.
+
+**[lab]** `w1-s2b-run2-6517e3c17`: the new witness failed at its FIRST assertion on the correct
+code ("the receiver attested custody of the exact entry", `'self'` vs `'delegated'`). Cause
+**[read]**: custody WAS attested, then voided by the sender's own initial route-row notifications
+(the deferred cache listener delivers the PARTITIONS/SERVICES rows `remoteSender` admitted once the
+record exists): they run a HANDOFF with an UNCHANGED binding, `bindRetainedRepairDecision` voided
+custody on every HANDOFF, and `retryRetainedRepairDecision` then returned early without
+re-presenting (`mode === HANDOFF && !changed && kinds === ROUTE`). So in these fixtures a remote
+sender's custody never survived its first publication hint, which is also why the stale-custody
+mutant survived everything. This contradicts ruling Q2 (tenure end = disclaim, route change, or a
+published incarnation change of the bound endpoint; the binding carries route + both incarnation
+members) and left a sender with neither custody nor a continuation after any no-op ledger row
+publication. Product defect of stage 2, fixed in the next commit: custody ends only when the binding
+differs from the one it was attested under (`bindRetainedRepairDecision`, the `mode` parameter
+removed). The table-10.5 cell "route change -> custody is not trusted across a publication" is
+superseded by Q2 for an unchanged binding; a changed binding still voids custody and re-presents.
+
+**[lab]** `w1-s2b-run3-f5184f08b` (custody fix): the new disclaim witness passes; W5 disclaim
+(continuation 1) turned red at `:88` "a later caller finds no receiver tenure: custody is not trusted
+and the sender itself owns the owed reconsideration" (`false`). Cause **[read]**: with custody now
+genuinely held, the later caller is a JOIN that re-presents directly; the demoted receiver answers
+`NOT_LEADER` from `requestPlacementRepair`'s leadership check (W1b's file) before its repository, and
+`retainUncommittedRepairAnswer` recorded `LEADERSHIP_START` (`PLACEMENT_CLEARING_TRIGGER`, W1b's
+row) with no continuation. Before the custody fix W5 disclaim passed by accident: the voided custody
+made the caller a RETRY whose sender read was refused UNQUALIFIED_LEADERSHIP (transient), which armed
+the timer. Product defect of stage 2 (same fact, receiver without tenure, handled two ways depending
+on the caller's mode). Fix (next commit): at a REMOTE binding, an uncommitted refusal whose trigger is
+LEADERSHIP_START is the receiver's disclaim (table 10.2 "disclaim"): custody SELF (already done for
+REMOTE uncommitted answers), `owed |= CLEARING | ROUTE`, continuation armed with reason
+`receiver_without_ledger_tenure`, the recorded blocker trigger NOT rewritten. A LOCAL binding keeps the
+table's LEADERSHIP_START (woken by `observeRetainedLedgerLeadershipStart`).
+
+Mutation table, continued (16.5):
+
+| Mechanism | Mutant | Commit (local ref) | Lab run | Killed by |
+| --- | --- | --- | --- | --- |
+| stale custody (re-run on the final head) | same patch as above, built on `551c574ec` | `308a8e348` `probe/w1-mutant-stale-custody-r3` | `w1-s2b-mutant-stale-custody-r3-a1` | KILLED: new W5 disclaim-mid-decision witness (continuation 3, `:176`) "a reply without attested custody leaves no custody: the disclaim is not trusted as custody" `'delegated'` vs `'self'`. (An intermediate build `9ffb31e3c` `probe/w1-mutant-stale-custody-r2` on `6517e3c17` was not run: on that sha the witness itself failed its first assertion, see 16.6.) |
+
+The other five mutants were built on `d427d14ff`; the commits after it (`6517e3c17` witness,
+`f5184f08b` custody/binding, `551c574ec` remote disclaim) do not touch the five mutated sites
+(`routePublication`, `retryRetainedRepairDecision` scope line, `completeIncomingRetainedRepair`,
+`oweRetainedRepair`, `retireRetainedRepair`) and change no witness those kills rely on **[read]**;
+they were not re-run on the final head.
+
+### 16.7 Commits of stage 2b and the final focused lab table
+
+Pushed to `work/retained-ledger-observation-repair-20261121` (each through `heavy.sh`, normal hook):
+
+| Commit | Content |
+| --- | --- |
+| `d427d14ff` | C(ii) leadership-loss release (+ settle-time release), placement owner's optional workflowOwner honoured + typed refusal, C(i) receiver-attested birth, W7 ingress participant release, W7 post-resolution re-staged, B5 loss-edge assertions, row-repair 41 accessor, S11 canonical route rows, repair-ledger node's own registration row (first attempt refused by the hook: file-size 808 > 800 and one literal; fixed before this commit) |
+| `6517e3c17` | new witness: disclaim without custody mid-decision (16.6) |
+| `f5184f08b` | custody ends with its binding, not with every route publication (16.6) |
+| `551c574ec` | a remote receiver's leadership refusal is its disclaim (16.6) |
+
+Final focused run **[lab]** `w1-s2b-run4-551c574ec` (sha `551c574ecb24a5d956567057b5c99c314d0e674f`, tv-dator):
+
+| File | Pass / total |
+| --- | --- |
+| `test/partition/placement-retained-publication.test.js` | 6/6 |
+| `test/partition/placement-retained-continuation.test.js` | 22/22 |
+| `test/partition/placement-retained-leadership.test.js` | 5/5 |
+| `test/partition/placement-retained-row-repair.test.js` | 45/45 |
+| `test/partition/placement-retained-real-publication.test.js` | 1/1 |
+| `test/partition/placement-retained-post-copy.test.js` | 2/2 |
+| `test/partition/placement-growth-dispatch-identity.test.js` | 13/13 |
+| `test/rebalancer/replace-real-group-native-ledger-recovery.test.js` | 2/3 (raw-bypass-negative: not this owner, 16.4) |
+| `test/rebalancer/replica-placement-owner-core.test.js` | 19/20 (test 20 "Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE ...": "ReplicaOperationRepository requires a control-plane mutation ingress"; identical on `0993265e5` **[lab]** `w1-s2b-attr-0993265e5-placement-owner-core`: pre-existing, not this change) |
+
+Earlier runs of this stage: `w1-s2b-run1-d427d14ff` (continuation 21/21, row-repair 45/45, S11 2/3,
+owner-core 19/20, rest green), `w1-s2b-run2-6517e3c17` (new witness red on its first assertion,
+16.6), `w1-s2b-run3-f5184f08b` (W5 disclaim red, 16.6).
+The 16 stage-1 red witnesses: all green on `551c574ec` (W3, W5 x2, row-repair 15, W6 permanent,
+W7 x3, W9, row-repair 40, C1 x8). The 7 guards: green (W1, W2 x3, W4, W6 transient, W8 x2 — W8
+counted as two). Q8 x2, Q9, B5, real-publication: green.
+
+### 16.8 Residuals, findings and what is not done
+
+Residuals (ruling C):
+- C(i) closed with a stated limit: the receiver attests its own `created_at` from its own node's
+  SERVICES row for its replica (not the sender's copy), together with its boot incarnation; the
+  sender compares both with its binding. Limit **[read]**: the value comes from the receiver's own
+  projection, not from the registration evidence (not retained by the partition service) nor an
+  authoritative SERVICES read (`observeAuthoritativeReplicaLifecycle`, a replica-state-machine
+  owner not composed into the coordinator). In the repair-ledger fixtures both boot incarnations
+  are `null` (the test coordinator has no router boot incarnation and the sender cache no NODES
+  row): the pair matches by `null === null`, so the boot member is not discriminated by any witness.
+- C(ii) closed: release at the leadership-loss drive (16.2); witness B5 (loss-edge assertions) and
+  the new disclaim witness (release after a decision in flight settles).
+
+Findings outside this owner (reported, not changed):
+- S11 raw-bypass-negative red (16.4): REMOVE safety guard, pre-existing on `0993265e5`.
+- `replica-placement-owner-core` test 20 red on `0993265e5` and here ("ReplicaOperationRepository
+  requires a control-plane mutation ingress"): the test builds a repository without the mutation
+  ingress; not touched by this owner's changes.
+- `requestPlacementRepair` (`src/partition/partition-placement-admission.js:185-186`, W1b) refuses a
+  non-leader with NOT_LEADER before the repository, so the repository's own typed disclaim
+  (`acceptRetainedPlacementRepairRequest`, `!service.isLeader`) is unreachable from a remote
+  sender; this owner now treats that refusal at a REMOTE binding as the disclaim (16.6). The
+  `PLACEMENT_CLEARING_TRIGGER` row NOT_LEADER -> LEADERSHIP_START (W1b's table) is unchanged.
+- No partition-service event exists for leadership loss; the leadership-sink drive is the only
+  channel (16.2). If W2/W3 add one, the retained owner should bind it in
+  `bindRetainedPlacementRepairWake` instead of the placement owner forwarding.
+
+Witness findings from the mutation table:
+- W7 consume does not exercise the sender's own owe path (its sender holds receiver custody at the
+  UNAVAILABLE observation); the overwritten-trigger mechanism is killed by W7 ingress and W7
+  post-resolution instead. Not re-staged (the mechanism is killed; noted for the verifier).
+- W8 retirement witnesses "nothing fires after retirement" only after a qualified read already
+  cancelled the timer; retirement-without-read cancellation is witnessed by B5 (killed the
+  uncancelled-timer mutant).
+- The stale-custody mechanism was invisible to every witness because custody never survived a
+  sender's first publication hint (16.6); fixed in product, killed by the new witness.
+
+Not done: the corpus selection implied by `9d241bd89` (the lead schedules it); the mutants other
+than stale custody were not re-run on the final head (16.5 note); 16.9 (change cone) below.
+
+### 16.10 Interaction with W1b: definite refusals (coordinator input)
+
+W1b's `38708b6fa` (branch `work/placement-outcome-format-20261121`, not merged here) gives
+`BYTES`, `ORIGIN`, `TARGET`, `REMOVE_INTENT_UNSCOPED` and `RESULT` a null row ("definite answer,
+nothing to wait for") in `PLACEMENT_CLEARING_TRIGGER` (`git show 38708b6fa:src/rebalancer/replica-placement-owner-constants.js`
+`:181-185`). **[read]** on `551c574ec`: `retainUncommittedRepairAnswer` did NOT set the trigger to
+null (the record state is named); for a null row it logged `AUTHORITY_REFUSED` and returned, leaving
+the record in the map with its dead entry pinned, no continuation and no owned wake (only the generic
+LEDGER_COMMIT wake at a local ledger, which would re-present the refused entry on every ledger
+commit; nothing at a remote sender). Before the merge `BYTES` has no row on this branch and is
+treated as an unknown outcome (bounded continuation re-presenting the refused entry for up to 300 s).
+Both lack a definite consequence.
+
+Fix `fd1cf0489`: a null-row refusal retires the record (cancelling its continuation) and logs
+`Retained placement repair entry definitely refused` with `{reason, operationId, entryId}`; the
+origin's workflow owner keeps the operation obligation (zero-row update arm / dispatch gate) and its
+next arrival starts a fresh record with a fresh entry id, never the refused one. This mirrors the
+committed permanent refusal (table 10.2). Applies already to this branch's existing null rows
+(HOLD_NOT_HELD, TARGET_CLAIM_TAKEN, ALREADY_FOUNDED, SYSTEM_PARTITION_SEED_FOUNDED,
+LEDGER_PARTITION_REQUIRED, when answered uncommitted) and to W1b's five after the merge.
+
+Witness (continuation, last test): another command is committed under the pinned entry's key
+through the real native admission (`requestPlacementAdmission` with the retained payload's entry id)
+before the record's presentation, so the native replay refuses the presentation definitely. Asserts:
+the answer's code is a null row of the clearing table; record map empty; no timer; the refused entry
+presented exactly once; no repair proposal; the ERROR carries reason, operation and refused entry; a
+later caller presents a fresh entry id. It can be green only after W1b's rows are merged: on this
+branch the first assertion fails by design and names the missing row (expected red until the merge;
+it is NOT counted in 16.7).
+
+### 16.9 Change cone versus `0993265e5` **[lab]**
+
+Run: `scripts/lab.js test changed --lane all --sha 551c574ecb24a5d956567057b5c99c314d0e674f
+--base-sha 0993265e53601cba4a6a41baa08158725cfcea7f --on tv-dator`, log
+`lab/w1-cone-551c574ec-try2.log` (the first attempt `w1-cone-551c574ec.log` was a planner refusal:
+the local import graph was not the one the committed seal binds after the mutant builds; refreshed
+with `generate-global-owner-debt-inventory.js --refresh-import-graph-only` through heavy.sh).
+Result: 1419 files, 1350 pass, 69 fail.
+
+Attribution: the 69 failing files were rerun on `0993265e5` in one focused run
+(`lab/w1-s2b-cone-attr-0993265e5-try2`, try1 a runner refusal). 64 fail there too
+(ALREADY FAILING ON THE BASE, not this change): 
+- `test/control-plane/replica-dispatch-reservation-identity.test.js`
+- `test/node/fresh-create-resumed-syncing-claim.test.js`
+- `test/partition/placement-create-bootstrap-binding.test.js`
+- `test/partition/placement-creation-terminal-replay.test.js`
+- `test/partition/placement-founding-and-runtime-service-admission.test.js`
+- `test/raft/raft-rs-backend/committed-membership-census.test.js`
+- `test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js`
+- `test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js`
+- `test/rebalancer/message-group-membership-operation-lane.test.js`
+- `test/rebalancer/operation-record-step-shape.test.js`
+- `test/rebalancer/replace-named-handoff-attempt.test.js`
+- `test/convergence/dt-formation-declared-size-latch.test.js`
+- `test/rebalancer/replace-real-group-native-ledger-recovery.test.js`
+- `test/rebalancer/replace-owner-lease-verdict-property.test.js`
+- `test/rebalancer/replace-real-group-scheduling.test.js`
+- `test/rebalancer/replica-placement-owner-clearing-triggers.test.js`
+- `test/rebalancer/reservation-file-backed-restart.test.js`
+- `test/rebalancer/replica-placement-owner-core.test.js`
+- `test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js`
+- `test/scripts/check-guideline-navigability.test.js`
+- `test/scripts/check-operation-dispatch-completion-owner.test.js`
+- `test/rebalancer/strict-operation-outcomes.test.js`
+- `test/scripts/repository-legacy-fallback-closure.test.js`
+- `test/rebalancer/admission-real-size-estimates.test.js`
+- `test/rebalancer/executor-bypasses-workflow-owner.test.js`
+- `test/scripts/select-change-tests.test.js`
+- `test/rebalancer/replica-operation-repository.test.js`
+- `test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js`
+- `test/rebalancer/duplicate-operation-prevention.property.test.js`
+- `test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js`
+- `test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+- `test/rebalancer/quorum-conditioned-remove-safety.test.js`
+- `test/rebalancer/rebalance-coordinator-topology-guard.test.js`
+- `test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js`
+- `test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js`
+- `test/rebalancer/replace-replica-workflow.test.js`
+- `test/rebalancer/rebalance-coordinator-operation-ownership.test.js`
+- `test/rebalancer/replica-operation-membership-epoch-binding.test.js`
+- `test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js`
+- `test/raft/snapshot-dispatcher-wiring.test.js`
+- `test/rebalancer/reservation-fail-closed-dispatch-gate.test.js`
+- `test/rebalancer/operation-workflow-remove-safety-concurrent-down-target.test.js`
+- `test/rebalancer/reservation-expiry-operation-aware.test.js`
+- `test/rebalancer/reservation-reconcile-premature-orphan-release.test.js`
+- `test/rebalancer/coordinator-created-operation-progress.test.js`
+- `test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js`
+- `test/query/sql-query-engine-create-table-quorum.test.js`
+- `test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js`
+- `test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js`
+- `test/rebalancer/rebalancer-entity-interaction-contract.test.js`
+- `test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js`
+- `test/rebalancer/replica-operation-retained-owner-turn.test.js`
+- `test/rebalancer/replica-status-completeness.property.test.js`
+- `test/rebalancer/terminal-status-constants.test.js`
+- `test/rebalancer/replica-operation-insert-retry-idempotency.test.js`
+- `test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js`
+- `test/convergence/dt-formation-joint-admission-release-liveness.test.js`
+- `test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js`
+- `test/convergence/dt-placement-owner-formation-drain.test.js`
+- `test/integration/message-group-learner-join.integration.test.js`
+- `test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js`
+- `test/rebalancer/message-group-operation-routing.integration.test.js`
+- `test/integration/control-plane-rebalance.integration.test.js`
+- `test/integration/lagrange-server-npm-package.integration.test.js`
+
+5 pass on the base and fail in the cone (candidates for this change):
+- `test/bootstrap/boot-incarnation-reservation-census.test.js`: MINE (stage 2): "no unclassified
+  incarnation-default site", `+ "src/rebalancer/replica-operation-retained-repair-ingress.js#dropped_field"`:
+  the custody literal `holds ? {..., nodeBootIncarnation} : null` matched the census's dropped-field
+  shape. Fixed in the next commit (explicit no-custody return; attestation unchanged).
+- `test/rebalancer/coordinator-dedup-gap.test.js`, `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`,
+  `test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js`,
+  `test/partition/placement-create-dispatch-execution-mirror.test.js`: classified by a focused run of
+  the head (below).
+
+Focused classification on the head **[lab]** `w1-s2b-run5-1ede7a19d` (sha `1ede7a19d`):
+- `boot-incarnation-reservation-census`: 44/44 green after the fix (`1ede7a19d`). RESOLVED.
+- STILL RED on the head and GREEN on `0993265e5` => REGRESSIONS OF THIS BRANCH, NOT YET ATTRIBUTED
+  to a commit (stage 2 `95ee6ee4a` or stage 2b): `rebalance-coordinator-outcome-routing` (tests 2, 3
+  "priority recovery in-progress create dispatch ...", first inner failure "create rearm should still
+  issue one dispatch request"), `coordinator-dedup-gap` (test 1, inner "Partition nodes-p1 already has
+  a different create intent"), `operation-workflow-delivered-create-progress-retention` (test 8 "a
+  terminal CREATE response consumes retention before owner return"),
+  `placement-create-dispatch-execution-mirror` (test 2 "a SENDING placement CREATE re-entered by
+  ledger CDC advances through real acknowledgement", `0 !== 1`). Common theme: CREATE dispatch is not
+  issued. Next step for a successor: focused runs of these four files on `9d241bd89` (stage-2 tip)
+  and `d427d14ff` (first 2b commit) to bisect, then read the dispatch path against
+  `operation-workflow-gate-operation-row-repair.js` (probe removed in stage 2) and the repository
+  constructor/port changes of `95ee6ee4a`.
+- Continuation 22/23: only the W1b-dependent witness is red, at its first assertion as designed:
+  "the native answer placement_admission_bytes_invalid is a definite refusal row of the clearing
+  table (W1b 38708b6fa)" (BYTES really produced through native admission; no row before the merge).
+
+Stopping point (2026-11-21, finishing writer out of context): head `1ede7a19d` pushed. Open: the
+four regressions above; the W1b witness (green only after merging 38708b6fa); the corpus selection
+of `9d241bd89` (lead). No local test was executed; every result above is from tv-dator.

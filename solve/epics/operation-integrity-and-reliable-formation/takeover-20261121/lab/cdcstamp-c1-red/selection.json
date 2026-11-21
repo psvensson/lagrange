@@ -1,0 +1,17 @@
+{
+  "sha": "f150ae13fe4981d944105093e0f02ddf9608b2d5",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-cdc-currentness-stamp-witness.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -1,0 +1,702 @@
+lab test: adams-gamla: ordinary, bootstrap (17 files) cores=4 mem=15.6GiB speed x2.06
+[adams-gamla] placement-shell=1906636
+[adams-gamla] placement-head=aa0f6f1cc4446a26960b2fe5819178505b4d3de5
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1907093
+[adams-gamla] # test-files planned=17
+[adams-gamla] classified lane ordinary: 15 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/control-plane/formation-transition-settled-replay.test.js (2 assertions, 6499ms)
+[adams-gamla] ok test/partition/committed-outcome-identity-boundary.test.js (2 assertions, 6709ms)
+[adams-gamla] ok test/partition/coordinator-settlement-exact-settlement.test.js (2 assertions, 2029ms)
+[adams-gamla] ok test/partition/partition-coordinator-settlement.test.js (4 assertions, 2103ms)
+[adams-gamla] ok test/partition/committed-statement-outcome.test.js (20 assertions, 8869ms)
+[adams-gamla] ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 6644ms)
+[adams-gamla] ok test/partition/placement-outcome-format.test.js (5 assertions, 6903ms)
+[adams-gamla] ok test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js (68 assertions, 3105ms)
+[adams-gamla] ok test/partition/placement-admission-apply.test.js (9 assertions, 10584ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (2 assertions, 1853ms)
+[adams-gamla] ok test/partition/settled-replay-preserves-result.test.js (6 assertions, 7837ms)
+[adams-gamla] not ok test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions, 7209ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role
+[adams-gamla]     ok 1 - projected SERVICES follower rows must never complete an incomplete GROWTH_PROMOTE
+[adams-gamla]     ok 2 - provenance check rejects mismatched partitionId
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - provenance check rejects partial promotedReplicaIds
+[adams-gamla]     ok 6 - provenance check rejects voterReplicaIds missing a promoted learner
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..14
+[adams-gamla] ok 1 - D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role # time=96.144ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - expected to reject
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..13
+[adams-gamla] ok 2 - Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED) # time=9.188ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equivalent
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..14
+[adams-gamla] ok 3 - D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId # time=8.685ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-growth-promote-1',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-growth-promote-terminal-failed',
+[adams-gamla]   workflowStep: 'FAILED',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla]     ok 15 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..15
+[adams-gamla] ok 4 - D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED) # time=16.712ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation
+[adams-gamla]     ok 1 - unconfirmed active terminal handoff must report WAITING
+[adams-gamla]     ok 2 - unapplied REPLACE active progress must report WAITING
+[adams-gamla]     ok 3 - re-armed dispatch that does not advance workflowStep must report WAITING
+[adams-gamla]     ok 4 - skipped EXECUTE_ACTIVE_REPLACE must report WAITING
+[adams-gamla]     ok 5 - skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING
+[adams-gamla]     ok 6 - reconcileOperationLifecycle reports WAITING when dispatch is skipped
+[adams-gamla]     ok 7 - WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should match pattern
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..9
+[adams-gamla] ok 5 - D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation # time=7.8ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equivalent
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..6
+[adams-gamla] ok 6 - D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner # time=4.762ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery
+[adams-gamla]     ok 1 - seed op-real-repo-updated into real SQLite repository
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] Operation completed {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   type: 'GROWTH_PROMOTE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   targetNodeId: 'node-leader-1'
+[adams-gamla] }
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla]     ok 15 - should be equal
+[adams-gamla]     ok 16 - should be equal
+[adams-gamla]     ok 17 - should be equal
+[adams-gamla]     ok 18 - should be equal
+[adams-gamla]     ok 19 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 20 - should be equal
+[adams-gamla]     ok 21 - should be equal
+[adams-gamla]     ok 22 - should be equal
+[adams-gamla]     ok 23 - should be equal
+[adams-gamla]     ok 24 - seed op-real-repo-terminal-adopted into real SQLite repository
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-terminal-adopted',
+[adams-gamla]   workflowStep: 'FAILED',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 25 - should be equal
+[adams-gamla]     ok 26 - should be equal
+[adams-gamla]     ok 27 - should be equal
+[adams-gamla]     ok 28 - should be equal
+[adams-gamla]     ok 29 - should be equal
+[adams-gamla]     ok 30 - should be equal
+[adams-gamla]     ok 31 - should be equal
+[adams-gamla]     ok 32 - should be equal
+[adams-gamla]     ok 33 - should be equivalent
+[adams-gamla]     ok 34 - should be equivalent
+[adams-gamla]     ok 35 - should be equal
+[adams-gamla]     ok 36 - should be equal
+[adams-gamla]     ok 37 - should be equal
+[adams-gamla]     ok 38 - seed op-real-repo-reinserted into real SQLite repository
+[adams-gamla]     ok 39 - should be equal
+[adams-gamla]     not ok 40 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adams-gamla]         lineNumber: 904
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:904:9)
+[adams-gamla]       source: >2
+[adams-gamla]               );
+[adams-gamla]               t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+[adams-gamla]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(reinsertedSettlement.committed, false);
+[adams-gamla]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -waiting
+[adams-gamla]         +refused
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 41 - should be equal
+[adams-gamla]     not ok 42 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adams-gamla]         lineNumber: 906
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:906:9)
+[adams-gamla]       source: >2
+[adams-gamla]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[adams-gamla]               t.equal(reinsertedSettlement.committed, false);
+[adams-gamla]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[adams-gamla]         --------^
+[adams-gamla]               t.same(releasedReservationIds, []);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -reinserted
+[adams-gamla]         +refused
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 43 - should be equivalent
+[adams-gamla]     ok 44 - seed op-real-repo-refused into real SQLite repository
+[adams-gamla]     ok 45 - should be equal
+[adams-gamla]     ok 46 - should be equal
+[adams-gamla]     ok 47 - should be equal
+[adams-gamla]     ok 48 - should be equal
+[adams-gamla]     ok 49 - should be equivalent
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 50 - should be equal
+[adams-gamla]     ok 51 - should be equal
+[adams-gamla]     ok 52 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-terminal-adopted',
+[adams-gamla]   workflowStep: 'FAILED',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 53 - should be equal
+[adams-gamla]     ok 54 - should be equal
+[adams-gamla]     ok 55 - should be equal
+[adams-gamla]     ok 56 - seed op-real-repo-lost-reply into real SQLite repository
+[adams-gamla]     ok 57 - expected to reject
+[adams-gamla]     ok 58 - should be equal
+[adams-gamla]     ok 59 - should be equal
+[adams-gamla]     ok 60 - should be equal
+[adams-gamla]     ok 61 - should be equal
+[adams-gamla]     ok 62 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..62
+[adams-gamla] not ok 7 - Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery # time=66.132ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adams-gamla]     lineNumber: 737
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: |
+[adams-gamla]     );
+[adams-gamla]   
+[adams-gamla]     test(
+[adams-gamla]     ^
+[adams-gamla]       'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+[adams-gamla]         '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla]     ok 15 - should be equal
+[adams-gamla]     ok 16 - should be equal
+[adams-gamla]     ok 17 - should be equal
+[adams-gamla]     ok 18 - should be equal
+[adams-gamla]     ok 19 - should be equal
+[adams-gamla]     ok 20 - should be equal
+[adams-gamla]     ok 21 - should be equal
+[adams-gamla]     ok 22 - should be equal
+[adams-gamla]     ok 23 - expected to reject
+[adams-gamla]     ok 24 - should be equal
+[adams-gamla]     ok 25 - should be equal
+[adams-gamla]     ok 26 - should be equal
+[adams-gamla]     ok 27 - should be equal
+[adams-gamla]     ok 28 - should be equal
+[adams-gamla]     1..28
+[adams-gamla] ok 8 - Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget # time=4789.613ms
+[adams-gamla] 
+[adams-gamla] # Subtest: Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equivalent
+[adams-gamla]     ok 6 - ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion
+[adams-gamla]     ok 7 - should be equivalent
+[adams-gamla]     1..7
+[adams-gamla] ok 9 - Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner # time=11.152ms
+[adams-gamla] 
+[adams-gamla] 1..9
+[adams-gamla] # { total: 168, pass: 166, fail: 2 }
+[adams-gamla] # time=5027.361ms
+[adams-gamla] Wait bound spent {
+[adams-gamla]   event: 'wait_bound_spent',
+[adams-gamla]   wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+[adams-gamla]   awaited: 'replica operation progressed past its current workflow step',
+[adams-gamla]   boundMs: 30000,
+[adams-gamla]   elapsedMs: 120000,
+[adams-gamla]   lastObserved: {
+[adams-gamla]     type: 'REMOVE',
+[adams-gamla]     workflowStep: 'PENDING',
+[adams-gamla]     status: 'pending',
+[adams-gamla]     targetNodeId: 'node-leader-1',
+[adams-gamla]     stepExceeded: true,
+[adams-gamla]     budgetExhausted: false,
+[adams-gamla]     timeoutClassification: {
+[adams-gamla]       classification: 'rebalance_operation_timeout',
+[adams-gamla]       configuredBudgetMs: 300000,
+[adams-gamla]       remainingBudgetMs: 180000,
+[adams-gamla]       boundaryHit: false,
+[adams-gamla]       nestedOperation: 'rebalance:pending',
+[adams-gamla]       operationName: 'rebalance',
+[adams-gamla]       originalClassification: null
+[adams-gamla]     }
+[adams-gamla]   },
+[adams-gamla]   scope: {
+[adams-gamla]     nodeId: 'node-leader-1',
+[adams-gamla]     partitionId: 'user_orders-p1',
+[adams-gamla]     operationId: 'op-remove-stuck-dispatch'
+[adams-gamla]   },
+[adams-gamla]   repeats: 0
+[adams-gamla] }
+[adams-gamla] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[adams-gamla]   operationId: 'op-real-repo-reinserted',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   expectedWorkflowStep: null
+[adams-gamla] }
+[adams-gamla] Terminal transition persist not committed; retry ownership kept and repair armed {
+[adams-gamla]   operationId: 'op-real-repo-reinserted',
+[adams-gamla]   disposition: 'refused',
+[adams-gamla]   step: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1'
+[adams-gamla] }
+[adams-gamla] Committed terminal transition not authoritatively visible; repair scheduled {
+[adams-gamla]   operationId: 'op-real-repo-reinserted',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'persist_not_committed',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[adams-gamla]   operationId: 'op-real-repo-refused',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   expectedWorkflowStep: null
+[adams-gamla] }
+[adams-gamla] Terminal transition persist not committed; retry ownership kept and repair armed {
+[adams-gamla]   operationId: 'op-real-repo-refused',
+[adams-gamla]   disposition: 'refused',
+[adams-gamla]   step: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1'
+[adams-gamla] }
+[adams-gamla] Committed terminal transition not authoritatively visible; repair scheduled {
+[adams-gamla]   operationId: 'op-real-repo-refused',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'persist_not_committed',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] Committed terminal transition not authoritatively visible; repair scheduled {
+[adams-gamla]   operationId: 'op-real-repo-lost-reply',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'persist_not_committed',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] ok test/rebalancer/replica-placement-owner-blocked-attempt.test.js (1 assertions, 6292ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 6387ms)
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 6026ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: class order: the ledger, the priority control plane, nodes-p1, system, user
+[adams-gamla] ok 1 - class order: the ledger, the priority control plane, nodes-p1, system, user
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.9113
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[adams-gamla] ok 2 - formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.31911
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[adams-gamla] ok 3 - within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.439552
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[adams-gamla] ok 4 - HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3.325718
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[adams-gamla] ok 5 - per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.642787
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[adams-gamla] ok 6 - inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.081346
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[adams-gamla] ok 7 - UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.901887
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[adams-gamla] ok 8 - the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.654902
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the canonical statement refuses what its kind cannot carry
+[adams-gamla] ok 9 - the canonical statement refuses what its kind cannot carry
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.678768
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[adams-gamla] ok 10 - the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.672465
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[adams-gamla] ok 11 - real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 33.040163
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[adams-gamla] ok 12 - ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 7.393123
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[adams-gamla] ok 13 - P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.276872
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T16:26:56.246Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adams-gamla] {"level":50,"time":"2026-11-21T16:26:56.307Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REBALANCE_OPERATION_STEP_TIMEOUT","awaited":"replica operation progressed past its current workflow step","boundMs":60000,"elapsedMs":120000,"lastObserved":{"type":"GROWTH_PROMOTE","workflowStep":"SYNCING","status":"syncing","targetNodeId":"n1","stepExceeded":true,"budgetExhausted":false,"timeoutClassification":{"classification":"rebalance_operation_timeout","configuredBudgetMs":300000,"remainingBudgetMs":180000,"boundaryHit":false,"nestedOperation":"rebalance:syncing","operationName":"rebalance","originalClassification":null}},"scope":{"nodeId":"n2","partitionId":"replica_operations-p1","operationId":"pl-promote-3to5-timeout"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[adams-gamla] # Subtest: control-plane attachment admits a scoped voter removal only with its workflow owner
+[adams-gamla] ok 14 - control-plane attachment admits a scoped voter removal only with its workflow owner
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3354.206213
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[adams-gamla] ok 15 - P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 76.031086
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[adams-gamla] ok 16 - WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.34806
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[adams-gamla] ok 17 - WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 50.060124
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[adams-gamla] ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 101.796418
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[adams-gamla] ok 19 - Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 76.28694
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[adams-gamla] not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 61.10766
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/test/rebalancer/replica-placement-owner-core.test.js:1399:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'ReplicaOperationRepository requires a control-plane mutation ingress'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:438:21)
+[adams-gamla]     ReplicaOperationRepository.resolveFailedOperationUpdateResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/src/rebalancer/replica-operation-repository-mutation-update-methods.js:504:35)
+[adams-gamla]     async OperationWorkflowOwner.runAtomicTransitionUnderLane (file:///home/peter/projects/lagrange/test-output/placement-worktrees/aa0f6f1cc444-mwqmdnuk-1544156/src/rebalancer/operation-workflow-transition-orchestration.js:113:29)
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T16:26:56.311Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","error":"ReplicaOperationRepository requires a control-plane mutation ingress","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to persist operation"}
+[adams-gamla] {"level":50,"time":"2026-11-21T16:26:56.556Z","nodeId":"test-node","pid":1907265,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","tableName":"services","cacheOperation":"UPSERT","error":"Cannot read properties of null (reading 'prepare')","nodeId":"test-node","msg":"Observed replica progress transition failed"}
+[adams-gamla] 1..20
+[adams-gamla] # tests 20
+[adams-gamla] # suites 0
+[adams-gamla] # pass 19
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 4030.302504
+[adams-gamla] # time=6026ms
+[adams-gamla] # test-files total=15 pass=13 fail=2 assertions=324
+[adams-gamla] classified lane bootstrap: 2 file(s), jobs=2
+[adams-gamla] thermal: ok cpu 59C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/bootstrap/removed-formation-barrier-and-handoff-census.test.js (4 assertions, 2893ms)
+[adams-gamla] ok test/bootstrap/seed-retained-effects.test.js (169 assertions, 4756ms)
+[adams-gamla] # test-files total=2 pass=2 fail=0 assertions=173
+lab test: adams-gamla: # test-files total=17 pass=15 fail=2 assertions=497
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=17 pass=15 fail=2 assertions=497

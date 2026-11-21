@@ -1,0 +1,176 @@
+placement-shell=3496584
+placement-head=0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3497618
+# test-files planned=79
+classified lane ordinary: 57 file(s), jobs=4
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (8 assertions, 881ms)
+ok test/control-plane/heartbeat-liveness-at-commit.test.js (7 assertions, 1171ms)
+ok test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js (53 assertions, 2030ms)
+ok test/control-plane/heartbeat-storage-budget-preservation.test.js (40 assertions, 1610ms)
+ok test/control-plane/heartbeat-periodic-writes.property.test.js (41 assertions, 1970ms)
+ok test/control-plane/membership-count-neutral-steady-trim.test.js (35 assertions, 1466ms)
+ok test/control-plane/heartbeat-memory-trend.test.js (144 assertions, 5059ms)
+ok test/control-plane/membership-publication-first-epoch-members.test.js (11 assertions, 2339ms)
+ok test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js (24 assertions, 2358ms)
+ok test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (6 assertions, 1855ms)
+ok test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (61 assertions, 2576ms)
+ok test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js (38 assertions, 2344ms)
+ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js (54 assertions, 2526ms)
+ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js (37 assertions, 2673ms)
+ok test/control-plane/service-instance-selection-admission.test.js (23 assertions, 1571ms)
+ok test/control-plane/runtime-access-settled-replay-projection.test.js (1 assertions, 2023ms)
+ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 2009ms)
+ok test/control-plane/replica-dispatch-routing.property.test.js (41 assertions, 2724ms)
+ok test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js (94 assertions, 3500ms)
+ok test/node/fresh-create-resumed-syncing-claim.test.js (3 assertions, 3737ms)
+ok test/node/node-reintegration-service.test.js (82 assertions, 3715ms)
+ok test/raft/raft-rs-backend/committed-membership-census.test.js (9 assertions, 1619ms)
+ok test/partition/durable-voter-visibility-role-write.test.js (24 assertions, 3015ms)
+ok test/query/sql-query-engine-create-table-quorum.test.js (2 assertions, 2714ms)
+ok test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js (67 assertions, 1896ms)
+ok test/rebalancer/admission-real-size-estimates.test.js (27 assertions, 3690ms)
+ok test/rebalancer/coordinator-created-operation-progress.test.js (41 assertions, 3234ms)
+ok test/raft/snapshot-dispatcher-wiring.test.js (18 assertions, 5342ms)
+ok test/rebalancer/duplicate-operation-prevention.property.test.js (45 assertions, 8730ms)
+ok test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js (20 assertions, 10234ms)
+ok test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js (85 assertions, 2734ms)
+ok test/rebalancer/message-group-membership-operation-lane.test.js (8 assertions, 2263ms)
+ok test/rebalancer/operation-record-step-shape.test.js (5 assertions, 1513ms)
+ok test/rebalancer/executor-bypasses-workflow-owner.test.js (7 assertions, 12783ms)
+ok test/rebalancer/node-storage-budget-service.test.js (22 assertions, 2792ms)
+ok test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js (15 assertions, 2848ms)
+ok test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js (20 assertions, 3159ms)
+ok test/rebalancer/rebalancer-entity-interaction-contract.test.js (34 assertions, 3077ms)
+ok test/rebalancer/quorum-conditioned-remove-safety.test.js (176 assertions, 5483ms)
+ok test/rebalancer/rebalance-coordinator-topology-guard.test.js (113 assertions, 4544ms)
+ok test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js (29 assertions, 3086ms)
+ok test/rebalancer/replace-in-flight-blocks-planning.test.js (235 assertions, 3712ms)
+ok test/rebalancer/replace-named-handoff-attempt.test.js (46 assertions, 4055ms)
+ok test/rebalancer/replica-operation-insert-retry-idempotency.test.js (10 assertions, 1799ms)
+ok test/rebalancer/replica-operation-retained-owner-turn.test.js (15 assertions, 2968ms)
+ok test/rebalancer/replica-operation-membership-epoch-binding.test.js (110 assertions, 4300ms)
+ok test/rebalancer/replica-status-completeness.property.test.js (118 assertions, 1506ms)
+ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 3172ms)
+ok test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (9 assertions, 3048ms)
+ok test/rebalancer/terminal-status-constants.test.js (25 assertions, 1131ms)
+ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (100 assertions, 4855ms)
+ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 3459ms)
+ok test/rebalancer/replace-owner-lease-verdict-property.test.js (38 assertions, 24844ms)
+ok test/scripts/check-operation-dispatch-completion-owner.test.js (30 assertions, 12884ms)
+ok test/scripts/check-guideline-navigability.test.js (12 assertions, 18435ms)
+ok test/scripts/select-change-tests.test.js (31 assertions, 117914ms)
+ok test/convergence/dt-formation-joint-admission-release-liveness.test.js (6 assertions, 223142ms)
+# test-files total=57 pass=57 fail=0 assertions=2412
+classified lane bootstrap: 8 file(s), jobs=2
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/bootstrap-api.test.js (185 assertions, 4892ms)
+ok test/bootstrap/move-replica-assignment-token.test.js (27 assertions, 6872ms)
+ok test/bootstrap/node-joining-lease-registration.test.js (5 assertions, 2027ms)
+ok test/bootstrap/node-registration-idempotency.test.js (6 assertions, 3080ms)
+ok test/bootstrap/node-joining-service-message-group-activation.test.js (54 assertions, 4174ms)
+ok test/bootstrap/register-service-move-handoff-refused.test.js (16 assertions, 1900ms)
+ok test/bootstrap/register-node-in-cluster.test.js (85 assertions, 3494ms)
+ok test/bootstrap/storage-budget-bootstrap.test.js (21 assertions, 2439ms)
+# test-files total=8 pass=8 fail=0 assertions=399
+classified lane exclusive: 14 file(s), jobs=1
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/integration/control-plane-log-marker.integration.test.js (50 assertions, 1347ms)
+ok test/integration/control-plane-node-terminal-removal.integration.test.js (45 assertions, 924ms)
+ok test/integration/control-plane-postgres-wire-scale.integration.test.js (27 assertions, 1569ms)
+ok test/integration/control-plane-rebalance.integration.test.js (18 assertions, 30726ms)
+ok test/integration/lagrange-server-npm-package.integration.test.js (3 assertions, 32776ms)
+ok test/integration/membership-consistency.integration.test.js (112 assertions, 207279ms)
+ok test/integration/message-group-learner-join.integration.test.js (46 assertions, 23822ms)
+ok test/integration/node-join-replica-activation.integration.test.js (53 assertions, 148252ms)
+ok test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js (6 assertions, 2125ms)
+ok test/rebalancer/message-group-operation-routing.integration.test.js (22 assertions, 11884ms)
+ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2408ms)
+ok test/wasm-service/bound-creation-physical-custody.integration.test.js (20 assertions, 5466ms)
+ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 13633ms)
+ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 2607ms)
+# test-files total=14 pass=14 fail=0 assertions=448
+placement-results={"file":"test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":881,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-liveness-at-commit.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1171,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":2030,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-storage-budget-preservation.test.js","attempt":1,"ok":true,"assertions":40,"durationMs":1610,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-periodic-writes.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1970,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/membership-count-neutral-steady-trim.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1466,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-memory-trend.test.js","attempt":1,"ok":true,"assertions":144,"durationMs":5059,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/membership-publication-first-epoch-members.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":2339,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":2358,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1855,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":2576,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":2344,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":2526,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":2673,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/service-instance-selection-admission.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":1571,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/runtime-access-settled-replay-projection.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2023,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/service-instance-creation-cas.test.js","attempt":1,"ok":true,"assertions":31,"durationMs":2009,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-routing.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":2724,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js","attempt":1,"ok":true,"assertions":94,"durationMs":3500,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/node/fresh-create-resumed-syncing-claim.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3737,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/node/node-reintegration-service.test.js","attempt":1,"ok":true,"assertions":82,"durationMs":3715,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/committed-membership-census.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1619,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/durable-voter-visibility-role-write.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":3015,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/sql-query-engine-create-table-quorum.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2714,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js","attempt":1,"ok":true,"assertions":67,"durationMs":1896,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/admission-real-size-estimates.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":3690,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/coordinator-created-operation-progress.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":3234,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":5342,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/duplicate-operation-prevention.property.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":8730,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":10234,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js","attempt":1,"ok":true,"assertions":85,"durationMs":2734,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/message-group-membership-operation-lane.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":2263,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-record-step-shape.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1513,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/executor-bypasses-workflow-owner.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":12783,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/node-storage-budget-service.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":2792,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":2848,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":3159,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":3077,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/quorum-conditioned-remove-safety.test.js","attempt":1,"ok":true,"assertions":176,"durationMs":5483,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-topology-guard.test.js","attempt":1,"ok":true,"assertions":113,"durationMs":4544,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js","attempt":1,"ok":true,"assertions":29,"durationMs":3086,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replace-in-flight-blocks-planning.test.js","attempt":1,"ok":true,"assertions":235,"durationMs":3712,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":46,"durationMs":4055,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-insert-retry-idempotency.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1799,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-retained-owner-turn.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":2968,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-membership-epoch-binding.test.js","attempt":1,"ok":true,"assertions":110,"durationMs":4300,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-status-completeness.property.test.js","attempt":1,"ok":true,"assertions":118,"durationMs":1506,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":3172,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":3048,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/terminal-status-constants.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1131,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":4855,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/runtime/service-runtime-consensus-publication.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":3459,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replace-owner-lease-verdict-property.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":24844,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-operation-dispatch-completion-owner.test.js","attempt":1,"ok":true,"assertions":30,"durationMs":12884,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-guideline-navigability.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":18435,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/select-change-tests.test.js","attempt":1,"ok":true,"assertions":31,"durationMs":117914,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/convergence/dt-formation-joint-admission-release-liveness.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":223142,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-api.test.js","attempt":1,"ok":true,"assertions":185,"durationMs":4892,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/move-replica-assignment-token.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":6872,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-lease-registration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2027,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-registration-idempotency.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":3080,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-service-message-group-activation.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":4174,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/register-service-move-handoff-refused.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1900,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/register-node-in-cluster.test.js","attempt":1,"ok":true,"assertions":85,"durationMs":3494,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/storage-budget-bootstrap.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2439,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/control-plane-log-marker.integration.test.js","attempt":1,"ok":true,"assertions":50,"durationMs":1347,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/control-plane-node-terminal-removal.integration.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":924,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/control-plane-postgres-wire-scale.integration.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":1569,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/control-plane-rebalance.integration.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":30726,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/lagrange-server-npm-package.integration.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":32776,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/membership-consistency.integration.test.js","attempt":1,"ok":true,"assertions":112,"durationMs":207279,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/message-group-learner-join.integration.test.js","attempt":1,"ok":true,"assertions":46,"durationMs":23822,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/node-join-replica-activation.integration.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":148252,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":2125,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":11884,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-handler-embedding.integration.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2408,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-physical-custody.integration.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":5466,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-restart.integration.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":13633,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2607,"retriedOnce":false,"firstFailureLine":null}

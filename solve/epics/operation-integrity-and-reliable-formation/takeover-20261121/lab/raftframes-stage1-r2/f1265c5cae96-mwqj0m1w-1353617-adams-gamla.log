@@ -1,0 +1,249 @@
+placement-shell=1866481
+placement-head=f1265c5cae96e6cc05ffc3626f6ab48b2daf74b5
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1867429
+# test-files planned=4
+classified lane ordinary: 2 file(s), jobs=3
+thermal: ok cpu 46C (coretemp/Package id 0) nvme unmeasured
+not ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 1877ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (e) a raft envelope is one frame with nothing back: no ACK, no SERVICE_RESPONSE, no orphan, no per-message deadline timer
+not ok 1 - (e) a raft envelope is one frame with nothing back: no ACK, no SERVICE_RESPONSE, no orphan, no per-message deadline timer
+  ---
+  duration_ms: 277.424075
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-unacknowledged-delivery.test.js:72:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    raft envelopes carry no transport answer and no delivery lifetime: measured {"raftEnvelopesSent":50,"raftEnvelopesReceived":50,"framesAtoB":50,"framesBtoA":100,"framesBtoAByType":{"ack":50,"service_response":50},"orphanedResponsesAtA":50,"routerTimersArmedAtA":50}
+    + actual - expected
+    
+      {
+    +   framesBtoA: 100,
+    +   orphanedResponsesAtA: 50,
+    +   routerTimersArmedAtA: 50,
+    +   totalFramesWithinEnvelopes: false
+    -   framesBtoA: 0,
+    -   orphanedResponsesAtA: 0,
+    -   routerTimersArmedAtA: 0,
+    -   totalFramesWithinEnvelopes: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    totalFramesWithinEnvelopes: true
+    framesBtoA: 0
+    orphanedResponsesAtA: 0
+    routerTimersArmedAtA: 0
+  actual:
+    totalFramesWithinEnvelopes: false
+    framesBtoA: 100
+    orphanedResponsesAtA: 50
+    routerTimersArmedAtA: 50
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-unacknowledged-delivery.test.js:113:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: (e) anchor: an ordinary request on the same link still gets its ACK and its SERVICE_RESPONSE and settles with the answer
+ok 2 - (e) anchor: an ordinary request on the same link still gets its ACK and its SERVICE_RESPONSE and settles with the answer
+  ---
+  duration_ms: 144.214628
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 427.435947
+# time=1877ms
+not ok test/raft/raft-rs-quiet-ready-cost.test.js (3 assertions, 1935ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (h)(i) a follower stepping heartbeats that change nothing opens no transaction and reads no status
+not ok 1 - (h)(i) a follower stepping heartbeats that change nothing opens no transaction and reads no status
+  ---
+  duration_ms: 272.941572
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:240:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a Ready with nothing to persist and nothing to announce costs neither: measured over 100 heartbeats {"transactions":100,"prepares":0,"pragmas":0,"applications":0,"responses":100,"entries":{"step":100,"has_ready":200,"take_ready":100,"persist_ready":100,"advance_append":100,"advance_apply":100,"status":100,"conf_state":100}}
+    + actual - expected
+    
+      {
+    +   conf_state: 100,
+    -   conf_state: 0,
+        pragmas: 0,
+        prepares: 0,
+    +   status: 100,
+    +   transactions: 100
+    -   status: 0,
+    -   transactions: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    transactions: 0
+    prepares: 0
+    pragmas: 0
+    status: 0
+    conf_state: 0
+  actual:
+    transactions: 100
+    prepares: 0
+    pragmas: 0
+    status: 100
+    conf_state: 100
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:263:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: (h) a quiet follower tick reads no status
+not ok 2 - (h) a quiet follower tick reads no status
+  ---
+  duration_ms: 178.602697
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:275:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a tick without a Ready announces nothing: measured over 100 ticks {"transactions":0,"prepares":0,"pragmas":0,"applications":0,"responses":0,"entries":{"tick":100,"has_ready":100,"status":100,"conf_state":100}}
+    + actual - expected
+    
+      {
+    +   conf_state: 100,
+    +   status: 100,
+    -   conf_state: 0,
+    -   status: 0,
+        transactions: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    transactions: 0
+    status: 0
+    conf_state: 0
+  actual:
+    transactions: 0
+    status: 100
+    conf_state: 100
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-quiet-ready-cost.test.js:292:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: (h)(i) anchor: a heartbeat that advances the commit index persists once and announces once
+ok 3 - (h)(i) anchor: a heartbeat that advances the commit index persists once and announces once
+  ---
+  duration_ms: 86.544302
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 1
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 543.535344
+# time=1935ms
+# test-files total=2 pass=0 fail=2 assertions=5
+classified lane exclusive: 2 file(s), jobs=1
+thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+not ok test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js (1 assertions, 6539ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (b) a node arms drain wakes independent of its idle groups, and every delivered envelope is stepped once, in order, fairly
+not ok 1 - (b) a node arms drain wakes independent of its idle groups, and every delivered envelope is stepped once, in order, fairly
+  ---
+  duration_ms: 5286.270708
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js:249:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    drain wakes per second do not grow with the idle groups a node hosts: measured per 1000 virtual ms [{"groupCount":8,"zeroDelayAtMeasuredNode":272,"zeroDelayAllNodes":816,"envelopesToMeasuredNode":272,"deliveredKeys":24,"mismatchedKeys":0},{"groupCount":16,"zeroDelayAtMeasuredNode":544,"zeroDelayAllNodes":1632,"envelopesToMeasuredNode":544,"deliveredKeys":48,"mismatchedKeys":0},{"groupCount":32,"zeroDelayAtMeasuredNode":1088,"zeroDelayAllNodes":3264,"envelopesToMeasuredNode":1088,"deliveredKeys":96,"mismatchedKeys":0}] fairness {"burstStepped":100,"singlesStepped":7,"burstStepsBeforeLastSingle":32,"singles":7}
+    + actual - expected
+    
+      {
+    +   allNodes: false,
+    +   measuredNode: false
+    -   allNodes: true,
+    -   measuredNode: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    measuredNode: true
+    allNodes: true
+  actual:
+    measuredNode: false
+    allNodes: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js:282:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5292.451764
+# time=6539ms
+not ok test/transport/raft-frame-pair-coalescing.integration.test.js (1 assertions, 4993ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (c1) frames per node pair per second do not grow with the raft groups the pair shares
+not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares
+  ---
+  duration_ms: 3700.816193
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-pair-coalescing.integration.test.js:98:1'
+  failureType: 'testCodeFailure'
+  error: 'frames per pair grew {"rfc-a>rfc-b":4,"rfc-a>rfc-c":0,"rfc-b>rfc-a":4,"rfc-b>rfc-c":4,"rfc-c>rfc-a":0,"rfc-c>rfc-b":4} from 4 to 16 groups (allowed 1.5): measured per 1000 virtual ms [{"groupCount":4,"pairs":{"rfc-a>rfc-b":396,"rfc-a>rfc-c":0,"rfc-b>rfc-a":396,"rfc-b>rfc-c":396,"rfc-c>rfc-a":0,"rfc-c>rfc-b":396},"raftEnvelopesReceived":528,"leadershipStable":true},{"groupCount":8,"pairs":{"rfc-a>rfc-b":792,"rfc-a>rfc-c":0,"rfc-b>rfc-a":792,"rfc-b>rfc-c":792,"rfc-c>rfc-a":0,"rfc-c>rfc-b":792},"raftEnvelopesReceived":1056,"leadershipStable":true},{"groupCount":16,"pairs":{"rfc-a>rfc-b":1584,"rfc-a>rfc-c":0,"rfc-b>rfc-a":1584,"rfc-b>rfc-c":1584,"rfc-c>rfc-a":0,"rfc-c>rfc-b":1584},"raftEnvelopesReceived":2112,"leadershipStable":true}]'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f1265c5cae96-mwqj0m1w-1353617/test/transport/raft-frame-pair-coalescing.integration.test.js:116:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3707.008807
+# time=4993ms
+# test-files total=2 pass=0 fail=2 assertions=2
+placement-results={"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":1877,"retriedOnce":false,"firstFailureLine":"not ok 1 - (e) a raft envelope is one frame with nothing back: no ACK, no SERVICE_RESPONSE, no orphan, no per-message deadline timer"}
+placement-results={"file":"test/raft/raft-rs-quiet-ready-cost.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1935,"retriedOnce":false,"firstFailureLine":"not ok 1 - (h)(i) a follower stepping heartbeats that change nothing opens no transaction and reads no status"}
+placement-results={"file":"test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":6539,"retriedOnce":false,"firstFailureLine":"not ok 1 - (b) a node arms drain wakes independent of its idle groups, and every delivered envelope is stepped once, in order, fairly"}
+placement-results={"file":"test/transport/raft-frame-pair-coalescing.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4993,"retriedOnce":false,"firstFailureLine":"not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares"}

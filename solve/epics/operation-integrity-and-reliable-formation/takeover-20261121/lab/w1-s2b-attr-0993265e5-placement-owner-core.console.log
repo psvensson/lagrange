@@ -1,0 +1,164 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.47
+[tv-dator] placement-shell=2976544
+[tv-dator] placement-head=0993265e53601cba4a6a41baa08158725cfcea7f
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2976986
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 3144ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: class order: the ledger, the priority control plane, nodes-p1, system, user
+[tv-dator] ok 1 - class order: the ledger, the priority control plane, nodes-p1, system, user
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.949158
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[tv-dator] ok 2 - formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.22366
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[tv-dator] ok 3 - within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.299065
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[tv-dator] ok 4 - HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.097478
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[tv-dator] ok 5 - per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.085634
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[tv-dator] ok 6 - inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.772432
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[tv-dator] ok 7 - UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.672023
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[tv-dator] ok 8 - the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.127894
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the canonical statement refuses what its kind cannot carry
+[tv-dator] ok 9 - the canonical statement refuses what its kind cannot carry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.174577
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[tv-dator] ok 10 - the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.485514
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[tv-dator] ok 11 - real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.91635
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[tv-dator] ok 12 - ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6.139452
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[tv-dator] ok 13 - P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.720242
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T14:11:39.581Z","nodeId":"test-node","pid":2977001,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[tv-dator] {"level":50,"time":"2026-11-21T14:11:39.623Z","nodeId":"test-node","pid":2977001,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REBALANCE_OPERATION_STEP_TIMEOUT","awaited":"replica operation progressed past its current workflow step","boundMs":60000,"elapsedMs":120000,"lastObserved":{"type":"GROWTH_PROMOTE","workflowStep":"SYNCING","status":"syncing","targetNodeId":"n1","stepExceeded":true,"budgetExhausted":false,"timeoutClassification":{"classification":"rebalance_operation_timeout","configuredBudgetMs":300000,"remainingBudgetMs":180000,"boundaryHit":false,"nestedOperation":"rebalance:syncing","operationName":"rebalance","originalClassification":null}},"scope":{"nodeId":"n2","partitionId":"replica_operations-p1","operationId":"pl-promote-3to5-timeout"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: control-plane attachment admits a scoped voter removal only with its workflow owner
+[tv-dator] ok 14 - control-plane attachment admits a scoped voter removal only with its workflow owner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1588.193863
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[tv-dator] ok 15 - P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[tv-dator]   ---
+[tv-dator]   duration_ms: 53.311576
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[tv-dator] ok 16 - WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.027409
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[tv-dator] ok 17 - WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[tv-dator]   ---
+[tv-dator]   duration_ms: 35.230453
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[tv-dator] ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[tv-dator]   ---
+[tv-dator]   duration_ms: 74.707153
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[tv-dator] ok 19 - Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[tv-dator]   ---
+[tv-dator]   duration_ms: 52.697762
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[tv-dator] not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.930754
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqhkkot-1232418/test/rebalancer/replica-placement-owner-core.test.js:1399:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'ReplicaOperationRepository requires a control-plane mutation ingress'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqhkkot-1232418/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:438:21)
+[tv-dator]     ReplicaOperationRepository.resolveFailedOperationUpdateResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqhkkot-1232418/src/rebalancer/replica-operation-repository-mutation-update-methods.js:504:35)
+[tv-dator]     async OperationWorkflowOwner.runAtomicTransitionUnderLane (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0993265e5360-mwqhkkot-1232418/src/rebalancer/operation-workflow-transition-orchestration.js:113:29)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T14:11:39.626Z","nodeId":"test-node","pid":2977001,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","error":"ReplicaOperationRepository requires a control-plane mutation ingress","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to persist operation"}
+[tv-dator] {"level":50,"time":"2026-11-21T14:11:39.877Z","nodeId":"test-node","pid":2977001,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","tableName":"services","cacheOperation":"UPSERT","error":"Cannot read properties of null (reading 'prepare')","nodeId":"test-node","msg":"Observed replica progress transition failed"}
+[tv-dator] 1..20
+[tv-dator] # tests 20
+[tv-dator] # suites 0
+[tv-dator] # pass 19
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2147.944016
+[tv-dator] # time=3144ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=20
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=20
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=20

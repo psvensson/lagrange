@@ -1,0 +1,149 @@
+placement-shell=3148510
+placement-head=c22d786d5fb1ddf13416b1f27835e286e7bb8076
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3148978
+# test-files planned=4
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 58C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (61 assertions, 1380ms)
+ok test/control-plane/replica-dispatch-routing.property.test.js (41 assertions, 1397ms)
+not ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 1505ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'expiry-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+# Subtest: reconcileReservations - a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, not expired
+    ok 1 - no expiry while the backing operation is still live
+    ok 2 - live operation keeps its reservation active past expires_at
+    1..2
+ok 1 - reconcileReservations - a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, not expired # time=54.763ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'expiry-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+# Subtest: reconcileReservations - a TTL-expired reservation for a TERMINAL operation is expired
+    not ok 1 - terminal operation lets its expired reservation expire
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/reservation-expiry-operation-aware.test.js
+        lineNumber: 239
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-expiry-operation-aware.test.js:239:5)
+      source: |2
+          const result = await coordinator.reconcileReservations();
+      
+          t.equal(result.expired, 1,
+        ----^
+            'terminal operation lets its expired reservation expire');
+          t.equal(
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - reservation transitions to EXPIRED once the operation is terminal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/reservation-expiry-operation-aware.test.js
+        lineNumber: 241
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-expiry-operation-aware.test.js:241:5)
+      source: |2
+          t.equal(result.expired, 1,
+            'terminal operation lets its expired reservation expire');
+          t.equal(
+        ----^
+            store.reservations.get(TERMINAL_RESERVATION_ID).status,
+            RESERVATION_STATUS.EXPIRED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -expired
+        +active
+      ...
+    
+    1..2
+not ok 2 - reconcileReservations - a TTL-expired reservation for a TERMINAL operation is expired # time=41.255ms
+  ---
+  at:
+    fileName: test/rebalancer/reservation-expiry-operation-aware.test.js
+    lineNumber: 228
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('reconcileReservations - a TTL-expired reservation for a TERMINAL ' +
+    ^
+      'operation is expired', async (t) => {
+      initializeConfig();
+  ...
+
+# Subtest: getCapacitySnapshots - an expired reservation for a LIVE operation keeps its reserved bytes counted
+    ok 1 - live operation keeps its expired reservation counted
+    1..1
+ok 3 - getCapacitySnapshots - an expired reservation for a LIVE operation keeps its reserved bytes counted # time=25.567ms
+
+# Subtest: getCapacitySnapshots - an expired reservation for a TERMINAL operation is excluded from reserved bytes
+    ok 1 - terminal operation lets its expired reservation stop counting
+    1..1
+ok 4 - getCapacitySnapshots - an expired reservation for a TERMINAL operation is excluded from reserved bytes # time=24.154ms
+
+1..4
+# { total: 6, pass: 4, fail: 2 }
+# time=156.393ms
+# test-files total=3 pass=2 fail=1 assertions=112
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 1168ms)
+# test-files total=1 pass=1 fail=0 assertions=21
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1380,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-routing.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1397,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":1505,"retriedOnce":false,"firstFailureLine":"not ok 1 - terminal operation lets its expired reservation expire"}
+placement-results={"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1168,"retriedOnce":false,"firstFailureLine":null}

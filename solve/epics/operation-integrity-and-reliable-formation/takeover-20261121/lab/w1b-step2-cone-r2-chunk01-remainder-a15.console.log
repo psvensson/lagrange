@@ -1,0 +1,5 @@
+lab test: adams-gamla: exclusive (36 files) cores=4 mem=15.6GiB speed x2.07
+[adams-gamla] placement-shell=1864068
+lab test: adams-gamla: # test-files total=36 pass=0 fail=36 assertions=0
+lab test: adams-gamla: 36 file(s) reported no result: exit 97
+# test-files total=36 pass=0 fail=36 assertions=0

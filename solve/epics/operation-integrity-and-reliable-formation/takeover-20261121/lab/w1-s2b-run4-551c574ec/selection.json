@@ -1,0 +1,33 @@
+{
+  "sha": "551c574ecb24a5d956567057b5c99c314d0e674f",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-retained-publication.test.js",
+    "test/partition/placement-retained-continuation.test.js",
+    "test/partition/placement-retained-leadership.test.js",
+    "test/partition/placement-retained-row-repair.test.js",
+    "test/partition/placement-retained-real-publication.test.js",
+    "test/rebalancer/replace-real-group-native-ledger-recovery.test.js",
+    "test/partition/placement-retained-post-copy.test.js",
+    "test/rebalancer/replica-placement-owner-core.test.js",
+    "test/partition/placement-growth-dispatch-identity.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-growth-dispatch-identity.test.js",
+        "test/partition/placement-retained-continuation.test.js",
+        "test/partition/placement-retained-leadership.test.js",
+        "test/partition/placement-retained-post-copy.test.js",
+        "test/partition/placement-retained-publication.test.js",
+        "test/partition/placement-retained-real-publication.test.js",
+        "test/partition/placement-retained-row-repair.test.js",
+        "test/rebalancer/replace-real-group-native-ledger-recovery.test.js",
+        "test/rebalancer/replica-placement-owner-core.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

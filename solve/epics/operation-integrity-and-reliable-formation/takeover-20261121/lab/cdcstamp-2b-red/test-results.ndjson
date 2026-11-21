@@ -1,0 +1,2 @@
+{"file":"test/cache/system-table-cache-mutation-version-survives-clear.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":514,"retriedOnce":false,"firstFailureLine":"not ok 1 - SystemTableCache table mutation version never repeats across clear()"}
+{"file":"test/partition/partition-cdc-currentness-stamp-witness.test.js","attempt":1,"ok":false,"assertions":59,"durationMs":7591,"retriedOnce":false,"firstFailureLine":"not ok 1 - one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once"}

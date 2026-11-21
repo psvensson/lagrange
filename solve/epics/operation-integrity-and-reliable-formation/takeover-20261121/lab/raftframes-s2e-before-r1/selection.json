@@ -1,0 +1,21 @@
+{
+  "sha": "d6cfa14ab21b57f9ed51b32671549d0fe48da405",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/raft-frame-liveness-residual.integration.test.js",
+    "test/transport/raft-frame-reconnect-owner.integration.test.js",
+    "test/transport/raft-frame-turn-not-held.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/raft-frame-liveness-residual.integration.test.js",
+        "test/transport/raft-frame-reconnect-owner.integration.test.js",
+        "test/transport/raft-frame-turn-not-held.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}
