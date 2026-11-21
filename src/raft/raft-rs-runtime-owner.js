@@ -34,6 +34,7 @@ import {
 import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
 import {observeCurrentAuthority} from './raft-rs-current-authority.js';
+import {PROPOSE_COMMAND, proposeUnderSubmittedTerm, withSubmittedTerm} from './raft-rs-proposal-term.js';
 import {
   confChangeSettlement,
   evaluateTenureCatchUpOnDrain,
@@ -373,9 +374,7 @@ function refusedExecution(group, expectedGeneration) {
 
 function invokeCoreAt(group, expectedGeneration, operation, ...args) {
   const refused = refusedExecution(group, expectedGeneration);
-  if (refused !== null) {
-    return {ok: false, result: refused};
-  }
+  if (refused !== null) return {ok: false, result: refused};
   return invokeCore(group, operation, ...args);
 }
 
@@ -1744,7 +1743,6 @@ const COMMAND_OPERATION = Object.freeze({
       }),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
-const PROPOSE_COMMAND = 'propose';
 const TICK_COMMAND = 'tick';
 const PROPOSAL_COMMANDS = new Set([PROPOSE_COMMAND, PROPOSE_CONF_CHANGE]);
 
@@ -1787,6 +1785,14 @@ function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) 
     invoked.result);
 }
 
+// A proposal enters the core only under its submitted term (raft-rs-proposal-term.js).
+function invokePrimitive(group, expectedGeneration, command, [operation, args]) {
+  const core = (name, ...values) => invokeCoreAt(group, expectedGeneration, name, ...values);
+  if (command.type !== PROPOSE_COMMAND) return core(operation, ...args);
+  return proposeUnderSubmittedTerm(core,
+    (error) => coreCallFailure(group, operation, args, error), command);
+}
+
 function performCommand(group, command, expectedGeneration) {
   if (!group.identityRecorded &&
       !COMMANDS_BEFORE_IDENTITY_RECORD.has(command.type)) {
@@ -1827,15 +1833,14 @@ function performCommand(group, command, expectedGeneration) {
   if (refused !== null) {
     return answerGroupConfChangeRefusal(group, expectedGeneration, refused);
   }
-  const invoked = invokeCoreAt(
-    group, expectedGeneration, primitive[0], ...primitive[1]);
+  const invoked = invokePrimitive(group, expectedGeneration, command, primitive);
   return settlePrimitiveInvocation(group, command, expectedGeneration, invoked);
 }
 
 function finishBatchedPropose(group, expectedGeneration, firstInvoked, extraBatch) {
   let anyAccepted = firstInvoked.ok;
   const extraResults = extraBatch.map((item) => {
-    const res = invokeCoreAt(group, expectedGeneration, 'propose', item.bytes);
+    const res = invokePrimitive(group, expectedGeneration, item, [PROPOSE_COMMAND, [item.bytes]]);
     if (res.ok) anyAccepted = true;
     return res;
   });
@@ -2118,15 +2123,9 @@ function drainQueuedProposalBatch(group) {
   if (batch.length === 0) return settledTurn(null);
   const [first, ...rest] = batch;
   if (!persistenceAdmitted(group) || group.closed) {
-    const res = perform(group, {type: PROPOSE_COMMAND, bytes: first.bytes});
-    return continueTurn(res, (val) => {
-      first.deferred.resolve(val);
-      for (const item of rest) item.deferred.resolve(val);
-      return settledTurn(val);
-    });
+    return settleBatchTurn(rest, first.deferred, perform(group, first));
   }
-  return settleBatchTurn(rest, first.deferred,
-    perform(group, {type: PROPOSE_COMMAND, bytes: first.bytes, extraBatch: rest}));
+  return settleBatchTurn(rest, first.deferred, perform(group, {...first, extraBatch: rest}));
 }
 
 // A status read and the committed-membership read answer from the recorded
@@ -2141,13 +2140,13 @@ function executeCommand(group, command) {
   }
   if (command?.type === PROPOSE_COMMAND && group.tail !== null) {
     const deferred = Promise.withResolvers();
-    group.queuedProposals.push({bytes: command.bytes, deferred});
+    group.queuedProposals.push({...withSubmittedTerm(group, command), deferred});
     if (group.queuedProposals.length === 1) {
       enqueue(group, () => drainQueuedProposalBatch(group));
     }
     return pendingTurn(deferred.promise);
   }
-  return enqueue(group, () => perform(group, command));
+  return enqueue(group, () => perform(group, withSubmittedTerm(group, command)));
 }
 
 function snapshotEnvelope(envelope) {
