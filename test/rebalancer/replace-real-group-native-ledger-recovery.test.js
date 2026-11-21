@@ -101,23 +101,30 @@ async function settleRetainedOwner(ledger, holder) {
   await settleTurns();
 }
 
-function orderAfterWinner(ledger, delayedType) {
+function holdPlacementProposals(ledger) {
   const port = ledger.leader.controllablePort;
   const forward = port.proposeHandler;
-  const release = Promise.withResolvers();
-  const pending = [];
+  const gates = new Map(['PLACEMENT_ADMIT', 'PLACEMENT_REPAIR'].map((type) =>
+    [type, {release: Promise.withResolvers(), pending: []}]));
   port.setProposeHandler((command) => {
-    if (command.type !== delayedType) return forward(command);
-    const delivery = release.promise.then(() => forward(command));
-    pending.push({command, delivery});
+    const gate = gates.get(command.type);
+    if (!gate) return forward(command);
+    const delivery = gate.release.promise.then(() => forward(command));
+    gate.pending.push({command, delivery});
     return delivery;
   });
   return {
-    pending,
+    pending: (type) => gates.get(type)?.pending ?? [],
+    async release(type) {
+      const gate = gates.get(type);
+      if (!gate) return;
+      gates.delete(type);
+      gate.release.resolve();
+      await Promise.all(gate.pending.map(({delivery}) => delivery));
+    },
     async close() {
       port.setProposeHandler(forward);
-      release.resolve();
-      await Promise.all(pending.map(({delivery}) => delivery));
+      await Promise.all([...gates.keys()].map((type) => this.release(type)));
     },
   };
 }
@@ -168,24 +175,59 @@ function assertDebtIdentity(debt, retained, leader) {
   assert.deepEqual(debt.expectedOwner, {nodeId: leader.nodeId, replicaId: leader.replicaId});
 }
 
-async function assertRenewedDebt(context, row) {
+function assertBoundDebt(context, row, {delegationAllowed}) {
   const {ledger, holder, retained} = context;
-  const before = committedRepairCount(ledger);
   const repositories = [holder.repository, ledger.coordinator.repository];
   const blocker = {operationId: row.operation_id, createdAt: row.created_at,
     workflowStep: row.workflow_step, completedAt: row.completed_at};
   for (const repository of repositories) {
     const debt = repository.retainedPlacementRepairs.get(retained.operationId);
-    assert.ok(debt, 'each repository retains its own obligation after native BUSY');
+    assert.ok(debt, 'each repository retains a bound obligation');
     assertDebtIdentity(debt, retained, ledger.leader);
     assert.deepEqual(debt.blockers, [blocker]);
     assert.equal(debt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT);
-    assert.equal(debt.delegated, undefined);
-    repository.observeRetainedPlacementRepairCommit('replica_operations', row);
+    if (debt.delegated) {
+      assert.ok(delegationAllowed && repository === holder.repository);
+      const receiver = ledger.coordinator.repository.retainedPlacementRepairs
+        .get(retained.operationId);
+      assert.equal(debt.delegated.entryId, receiver.entryId);
+      assert.equal(debt.delegated.bodyText, JSON.stringify(receiver.body));
+      assert.equal(debt.delegated.operationId, retained.operationId);
+      assert.equal(debt.delegated.createdAt, retained.createdAt);
+    }
   }
+}
+
+async function assertRenewedDebt(context, row) {
+  const {ledger, holder} = context;
+  const before = committedRepairCount(ledger);
+  assertBoundDebt(context, row, {delegationAllowed: false});
+  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', row);
+  ledger.coordinator.repository.observeRetainedPlacementRepairCommit('replica_operations', row);
   await settleRetainedOwner(ledger, holder);
   assert.equal(committedRepairCount(ledger), before,
     'an unchanged commit for the new blocker preserves the release wake');
+}
+
+function confirmFreshObservation(context, incumbent) {
+  const {ledger, observation, repairAnswers, retained} = context;
+  assert.equal(committedRepairCount(ledger), 0);
+  assert.equal(repairAnswers.length, 1, 'fresh sender crosses the real wire exactly once');
+  const [{payload, answer}] = repairAnswers;
+  const observed = answer.retainedRepairObservation;
+  assert.equal(answer.committed, undefined);
+  assert.equal(answer.placementResult, undefined);
+  assert.equal(observed.state, 'contended');
+  assert.equal(observed.entryId, payload.entryId);
+  assert.equal(observed.bodyText, JSON.stringify(payload.body));
+  assert.equal(observed.operationId, retained.operationId);
+  assert.equal(observed.createdAt, retained.createdAt);
+  assert.equal(observed.nodeId, ledger.leader.nodeId);
+  assert.equal(observed.replicaId, ledger.leader.replicaId);
+  assert.equal(observed.result.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+  assert.deepEqual(observed.result.operationIds, [incumbent.operation_id]);
+  assert.notEqual(observation.readPlacementOutcome(payload).state, 'settled');
+  assertBoundDebt(context, incumbent, {delegationAllowed: true});
 }
 
 async function confirmOrdinaryFirst(context, postRelease, ordinary, answer, diagnostic) {
@@ -255,7 +297,7 @@ async function confirmRetainedFirst(context, ordinary, gate) {
   assert.equal(restored?.replica_id, retained.replicaId);
   assert.equal(restored?.created_at, retained.createdAt);
   await confirmRestoredDebt(context, restored);
-  await gate.close();
+  await gate.release('PLACEMENT_ADMIT');
   const answer = await ordinary.release();
   const refused = committedOrdinaryResult(observation, ledger.commands, ordinary.request, answer);
   assert.equal(refused.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
@@ -266,8 +308,9 @@ async function confirmRetainedRecovery(context, order, diagnostic) {
   const {world, ledger, observation, holder, retained} = context;
   const incumbent = observation.readCommitted(world.operation.operationId);
   assert.equal(incumbent.completed_at, null, 'the incumbent still owns its committed lane');
+  await settleRetainedOwner(ledger, holder);
+  confirmFreshObservation(context, incumbent);
   const before = committedRepairCount(ledger);
-  assert.equal(before, 1, 'the first refusal traversed the committed repair boundary once');
   holder.repository.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
   holder.repository.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
   await settleRetainedOwner(ledger, holder);
@@ -276,15 +319,23 @@ async function confirmRetainedRecovery(context, order, diagnostic) {
   const firstReleaseCommand = ledger.commands.length;
   const retainedFirst = order === 'retained-first';
   const ordinary = stageOrdinaryAdmission(context);
-  const gate = orderAfterWinner(ledger, retainedFirst ? 'PLACEMENT_ADMIT' : 'PLACEMENT_REPAIR');
+  const gate = holdPlacementProposals(ledger);
   try {
     const released = await stepRetainedLedgerRow(
       ledger, incumbent.operation_id, WORKFLOW_STEP.FAILED);
     assert.equal(observation.readCommitted(incumbent.operation_id)?.completed_at,
       released.completed_at);
-    const ordinaryAnswer = retainedFirst ? null : await ordinary.release();
     holder.repository.observeRetainedPlacementRepairCommit('replica_operations', released);
-    if (!retainedFirst) await gate.close();
+    await settleTurns();
+    const pendingRepair = gate.pending('PLACEMENT_REPAIR');
+    assert.equal(pendingRepair.length, 1, 'release engages one real native repair before either applies');
+    assert.notEqual(observation.readPlacementOutcome(pendingRepair[0].command).state, 'settled');
+    let ordinaryAnswer = null;
+    if (!retainedFirst) {
+      await gate.release('PLACEMENT_ADMIT');
+      ordinaryAnswer = await ordinary.release();
+    }
+    await gate.release('PLACEMENT_REPAIR');
     await settleRetainedOwner(ledger, holder);
     assert.equal(committedRepairCount(ledger), before + 1, 'release owns one new native repair');
     if (retainedFirst) {
