@@ -1,3 +1,4 @@
+import {captureElapsedWorkflowPreimage} from './operation-workflow-elapsed-preimage.js';
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {isPriorityRecoverySupersessionCurrent} from
   './operation-workflow-priority-recovery-errors.js';
@@ -137,8 +138,10 @@ function buildElapsedOperationFailureGuard(operation) {
   // the CREATE owns the next effect. Promotion and removal have distinct owners.
   const replaceBuildingTarget = isPartitionReplace(operation) &&
     !isReplaceExemptFromTimeBudget(operation) && !isReplacePromotionInLog(operation);
-  return isPartitionAdd(operation) || replaceBuildingTarget ?
-    ELAPSED_CREATE_FAILURE_GUARD : null;
+  return {
+    ...(isPartitionAdd(operation) || replaceBuildingTarget ? ELAPSED_CREATE_FAILURE_GUARD : {}),
+    elapsedWorkflowPreimage: captureElapsedWorkflowPreimage(operation),
+  };
 }
 
 /**

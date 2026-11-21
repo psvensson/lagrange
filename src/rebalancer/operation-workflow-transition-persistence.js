@@ -1,3 +1,4 @@
+import {elapsedWorkflowPreimageMatches} from './operation-workflow-elapsed-preimage.js';
 import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {REPLICA_OPERATION_SUPERSEDED_STATUS} from './replica-operation-progress.js';
 import {releaseCompletedLearnerRetirementCleanup} from
@@ -37,6 +38,10 @@ import {
 } from './replica-operation-update-disposition.js';
 import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
+
+const TERMINAL_RELEASE_REQUIRES_DURABLE = 'Terminal release requires a validated durable terminal outcome';
+const TERMINAL_RELEASE_OWNER_STOPPED = 'Terminal release owner is shutting down';
+const CREATE_FAILURE_TARGET_UNAVAILABLE = 'Create failure deferred while target lifecycle is unavailable';
 
 const {
   ControlPlaneReadinessService,
@@ -119,6 +124,15 @@ async function observeConcurrentCreateAdmissionWinner(
   assertOperationUpdateRecord(authoritativeOperation);
   assertOperationUpdateSubject(operation, authoritativeOperation);
   return authoritativeOperation;
+}
+
+const ELAPSED_WORKFLOW_PREIMAGE_MOVED = buildOperationTransitionOutcome({
+  persisted: false, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null,
+});
+
+function reportConcurrentCreateAdmissionWinner(outcome, authoritativeOperation) {
+  return Object.freeze({...outcome, createAdmissionWon: true,
+    createAdmissionOperation: authoritativeOperation});
 }
 
 class OperationWorkflowTransitionPersistence
@@ -360,7 +374,7 @@ class OperationWorkflowTransitionPersistence
 
   async releaseDurableTerminalOperation(operation, outcome) {
     if (!shouldReleaseReservationForTerminalOutcome(outcome)) {
-      throw new Error('Terminal release requires a validated durable terminal outcome');
+      throw new Error(TERMINAL_RELEASE_REQUIRES_DURABLE);
     }
     Object.assign(operation, structuredClone(outcome.operation));
     // Register exact durable debt before attempting effects. Replay and reconstruction
@@ -368,10 +382,18 @@ class OperationWorkflowTransitionPersistence
     armTerminalTransitionRepair(this, outcome.operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
     const releaseState = this.terminalTransitionRepairStateByOperationId.get(operation.operationId);
-    if (!releaseState) throw new Error('Terminal release owner is shutting down');
-    if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
-      if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
-      else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) {
+    if (!releaseState) throw new Error(TERMINAL_RELEASE_OWNER_STOPPED);
+    const committedHere = outcome.committed === true;
+    const awaitingCommitCredit = releaseState.pendingCommitCredit === true;
+    if ((committedHere || awaitingCommitCredit) && !releaseState.commitCounted) {
+      if (operation.workflowStep === WORKFLOW_STEP.FAILED) {
+        this.stats.operationsFailed++;
+        const exactCommittedFailure =
+          outcome.disposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED;
+        if (exactCommittedFailure && Number.isFinite(operation.stepsHistory.at(-1)?.timedOutAtMs)) {
+          this.stats.operationsTimedOut++;
+        }
+      } else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) {
         this.stats.operationsCompleted++;
       }
       releaseState.commitCounted = true;
@@ -580,7 +602,7 @@ class OperationWorkflowTransitionPersistence
       return Object.freeze({refused: true, supersessionChanged: true});
     }
     if (admission.unavailable) {
-      this.logger.warn('Create failure deferred while target lifecycle is unavailable', {
+      this.logger.warn(CREATE_FAILURE_TARGET_UNAVAILABLE, {
         operationId: operation.operationId,
         partitionId: operation.partitionId,
         targetNodeId: operation.targetNodeId,
@@ -623,6 +645,14 @@ class OperationWorkflowTransitionPersistence
     if (replay) {
       await this.releaseDurableTerminalOperation(operation, replay);
       return replay;
+    }
+    const elapsedPreimage = options.elapsedWorkflowPreimage;
+    if (elapsedPreimage && !elapsedWorkflowPreimageMatches(operation, elapsedPreimage)) {
+      if (options.deferWhenCreateAdmissionWins === true &&
+          operationCarriesReplicaCreateAdmission(operation)) {
+        return reportConcurrentCreateAdmissionWinner(ELAPSED_WORKFLOW_PREIMAGE_MOVED, operation);
+      }
+      return ELAPSED_WORKFLOW_PREIMAGE_MOVED;
     }
     const failureAdmission =
       await this.admitOperationFailure(operation, errorMessage, options);
@@ -683,6 +713,10 @@ class OperationWorkflowTransitionPersistence
       ...(options.requireCreateAdmissionAbsent === true ?
         {requireCreateAdmissionAbsent: true} :
         {}),
+      ...(elapsedPreimage ? {
+        elapsedWorkflowPreimage: elapsedPreimage,
+        expectedWorkflowStep: elapsedPreimage.workflow_step,
+      } : {}),
     };
     const transitionOutcome = await this.persistTerminalOperation(operation,
       projectedOperation, transitionReason, {
@@ -694,8 +728,7 @@ class OperationWorkflowTransitionPersistence
       const createAdmissionWinner = await observeConcurrentCreateAdmissionWinner(
         this, operation, transitionOutcome, options);
       if (createAdmissionWinner) {
-        return Object.freeze({...transitionOutcome, createAdmissionWon: true,
-          createAdmissionOperation: createAdmissionWinner});
+        return reportConcurrentCreateAdmissionWinner(transitionOutcome, createAdmissionWinner);
       }
       return transitionOutcome;
     }

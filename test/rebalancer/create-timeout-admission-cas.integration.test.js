@@ -184,6 +184,14 @@ async function withExpiredStep(measure, {
           return owner.reconcilePriorityRecoveryOperationDrain(current, snapshot);
         },
         expire: (candidate = operation()) => owner.reconcileTimeoutOperation(candidate, now),
+        async expireWithoutPointAuthority() {
+          exactPointReadUnavailable = true;
+          try {
+            return await owner.reconcileTimeoutOperation(operation(), now);
+          } finally {
+            exactPointReadUnavailable = false;
+          }
+        },
         sweepWithDeferredVisibility(interleave) {
           const probe = owner.repository.getOperationByIdVisibilityObservation
             .bind(owner.repository);
@@ -352,6 +360,33 @@ test('an observed claimed target failure still settles through ordinary failure 
       assert.equal(claim?.created_at, failed.replicaCreatedAt);
     });
   });
+
+test('unknown timeout authority cannot establish a terminal write', async () => {
+  await withExpiredStep(async (run) => {
+    const original = run.row();
+    const before = run.owner.stats.operationsTimedOut;
+    await assert.rejects(run.expireWithoutPointAuthority());
+    assert.deepEqual(run.row(), original);
+    assert.equal(run.reservation().released_at, null);
+    assert.deepEqual(run.failures, []);
+    assert.equal(run.failWrites.length, 0);
+    assert.equal(run.owner.stats.operationsTimedOut, before);
+  }, {step: WORKFLOW_STEP.PENDING});
+});
+
+test('repair of the same timeout preimage earns credit only after a committed failure', async () => {
+  await withExpiredStep(async (run) => {
+    const before = run.owner.stats.operationsTimedOut;
+    run.interceptFailureWrite(async () => ({success: false, error: 'injected refused write'}));
+    await assert.rejects(run.expire(), /injected refused write/u);
+    assert.equal(run.owner.stats.operationsTimedOut, before);
+    await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
+    assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED);
+    assert.equal(run.owner.stats.operationsTimedOut, before + 1);
+    assert.deepEqual(run.failWrites[0].whereClause, run.failWrites[1].whereClause,
+      'the repair uses the identical workflow, payload and absence preimage');
+  });
+});
 
 test('an elapsed PENDING timer cannot re-anchor itself to a fresh SENDING preimage', async () => {
   await withExpiredStep(async (run) => {

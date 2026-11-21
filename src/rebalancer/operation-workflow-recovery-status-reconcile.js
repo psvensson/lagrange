@@ -659,7 +659,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation)) {
       return OPERATION_RECONCILE_OUTCOME.WAITING;
     }
-    this.stats.operationsTimedOut++;
+    assertOperationTransitionOutcome(outcome);
+    return outcome.reconcileOutcome;
   }
 
   async reconcileTimeoutOperation(operation, now) {
