@@ -1,0 +1,29 @@
+{
+  "sha": "6003683136eb8fb3818a63e7a6b63cbf0eee051f",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/test-helpers/committed-write-answer.test.js",
+    "test/bootstrap/register-node-in-cluster.test.js",
+    "test/rebalancer/node-storage-budget-service.test.js",
+    "test/bootstrap/move-replica-assignment-token.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/test-helpers/committed-write-answer.test.js",
+        "test/rebalancer/node-storage-budget-service.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/move-replica-assignment-token.test.js",
+        "test/bootstrap/register-node-in-cluster.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

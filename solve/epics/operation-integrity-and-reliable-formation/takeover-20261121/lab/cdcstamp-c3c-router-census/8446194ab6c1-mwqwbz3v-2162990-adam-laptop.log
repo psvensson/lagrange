@@ -1,0 +1,692 @@
+placement-shell=3738093
+placement-head=8446194ab6c10d12e8e845882b30ddb74b8df479
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3738544
+# test-files planned=22
+classified lane ordinary: 8 file(s), jobs=4
+thermal: ok cpu 73C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/cdc/cdc-authoritative-catchup-terminal.test.js (2 assertions, 939ms)
+ok test/cdc/cdc-terminal-gate-inflight.test.js (8 assertions, 952ms)
+ok test/control-plane/pressure-governor.test.js (95 assertions, 1082ms)
+ok test/cdc/cdc-shutdown-terminal-owner-write.test.js (24 assertions, 1869ms)
+ok test/rebalancer/user-table-leader-placement-cure.test.js (77 assertions, 1802ms)
+ok test/rebalancer/rebalance-coordinator-outcome-routing.test.js (102 assertions, 2775ms)
+ok test/partition/partition-service-role-metadata-publication.test.js (91 assertions, 5819ms)
+not ok test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions, 5977ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role
+    ok 1 - projected SERVICES follower rows must never complete an incomplete GROWTH_PROMOTE
+    ok 2 - provenance check rejects mismatched partitionId
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - provenance check rejects partial promotedReplicaIds
+    ok 6 - provenance check rejects voterReplicaIds missing a promoted learner
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..14
+ok 1 - D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role # time=109.472ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - expected to reject
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..13
+ok 2 - Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED) # time=25.486ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equivalent
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..14
+ok 3 - D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId # time=5.602ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-growth-promote-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 11 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-growth-promote-terminal-failed',
+  workflowStep: 'FAILED',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - should be equal
+    ok 15 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..15
+ok 4 - D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED) # time=22.9ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation
+    ok 1 - unconfirmed active terminal handoff must report WAITING
+    ok 2 - unapplied REPLACE active progress must report WAITING
+    ok 3 - re-armed dispatch that does not advance workflowStep must report WAITING
+    ok 4 - skipped EXECUTE_ACTIVE_REPLACE must report WAITING
+    ok 5 - skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING
+    ok 6 - reconcileOperationLifecycle reports WAITING when dispatch is skipped
+    ok 7 - WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation
+    ok 8 - should be equal
+    ok 9 - should match pattern
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..9
+ok 5 - D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation # time=7.065ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equivalent
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..6
+ok 6 - D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner # time=6.596ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-leader-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery
+    ok 1 - seed op-real-repo-updated into real SQLite repository
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Operation completed {
+  operationId: 'op-real-repo-updated',
+  type: 'GROWTH_PROMOTE',
+  partitionId: 'user_orders-p1',
+  targetNodeId: 'node-leader-1'
+}
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 14 - should be equal
+    ok 15 - should be equal
+    ok 16 - should be equal
+    ok 17 - should be equal
+    ok 18 - should be equal
+    ok 19 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 20 - should be equal
+    ok 21 - should be equal
+    ok 22 - should be equal
+    ok 23 - should be equal
+    ok 24 - seed op-real-repo-terminal-adopted into real SQLite repository
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-terminal-adopted',
+  workflowStep: 'FAILED',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 25 - should be equal
+    ok 26 - should be equal
+    ok 27 - should be equal
+    ok 28 - should be equal
+    ok 29 - should be equal
+    ok 30 - should be equal
+    ok 31 - should be equal
+    ok 32 - should be equal
+    ok 33 - should be equivalent
+    ok 34 - should be equivalent
+    ok 35 - should be equal
+    ok 36 - should be equal
+    ok 37 - should be equal
+    ok 38 - seed op-real-repo-reinserted into real SQLite repository
+    ok 39 - should be equal
+    not ok 40 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+        lineNumber: 904
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:904:9)
+      source: >2
+              );
+              t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+              t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+        --------^
+              t.equal(reinsertedSettlement.committed, false);
+              t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -waiting
+        +refused
+      ...
+    
+    ok 41 - should be equal
+    not ok 42 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+        lineNumber: 906
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:906:9)
+      source: >2
+              t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+              t.equal(reinsertedSettlement.committed, false);
+              t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+        --------^
+              t.same(releasedReservationIds, []);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -reinserted
+        +refused
+      ...
+    
+    ok 43 - should be equivalent
+    ok 44 - seed op-real-repo-refused into real SQLite repository
+    ok 45 - should be equal
+    ok 46 - should be equal
+    ok 47 - should be equal
+    ok 48 - should be equal
+    ok 49 - should be equivalent
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-updated',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 50 - should be equal
+    ok 51 - should be equal
+    ok 52 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-real-repo-terminal-adopted',
+  workflowStep: 'FAILED',
+  partitionId: 'user_orders-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+    ok 53 - should be equal
+    ok 54 - should be equal
+    ok 55 - should be equal
+    ok 56 - seed op-real-repo-lost-reply into real SQLite repository
+    ok 57 - expected to reject
+    ok 58 - should be equal
+    ok 59 - should be equal
+    ok 60 - should be equal
+    ok 61 - should be equal
+    ok 62 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+    1..62
+not ok 7 - Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery # time=72.144ms
+  ---
+  at:
+    fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+    lineNumber: 737
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    );
+  
+    test(
+    ^
+      'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+        '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+  ...
+
+# Subtest: Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - should be equal
+    ok 15 - should be equal
+    ok 16 - should be equal
+    ok 17 - should be equal
+    ok 18 - should be equal
+    ok 19 - should be equal
+    ok 20 - should be equal
+    ok 21 - should be equal
+    ok 22 - should be equal
+    ok 23 - expected to reject
+    ok 24 - should be equal
+    ok 25 - should be equal
+    ok 26 - should be equal
+    ok 27 - should be equal
+    ok 28 - should be equal
+    1..28
+ok 8 - Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget # time=3253.477ms
+
+# Subtest: Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equivalent
+    ok 6 - ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion
+    ok 7 - should be equivalent
+    1..7
+ok 9 - Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner # time=8.625ms
+
+1..9
+# { total: 168, pass: 166, fail: 2 }
+# time=3534.259ms
+# test-files total=8 pass=7 fail=1 assertions=576
+classified lane bootstrap: 14 file(s), jobs=2
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/bootstrap-api-readiness-gating.test.js (119 assertions, 2426ms)
+ok test/bootstrap/bootstrap-cleanup.property.test.js (17 assertions, 2558ms)
+ok test/bootstrap/bootstrap-service-ready-signal.test.js (34 assertions, 2970ms)
+ok test/bootstrap/dynamic-partition-cdc-subscription.test.js (38 assertions, 3205ms)
+ok test/bootstrap/join-cleanup.property.test.js (18 assertions, 3705ms)
+ok test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js (12 assertions, 4002ms)
+ok test/bootstrap/node-joining-control-plane-heartbeat.test.js (32 assertions, 3843ms)
+ok test/bootstrap/node-joining-ready-signal-retry.test.js (55 assertions, 3645ms)
+ok test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js (12 assertions, 3409ms)
+ok test/bootstrap/node-joining-service-canonical-readiness.test.js (70 assertions, 4214ms)
+ok test/bootstrap/node-joining-service-mesh-reconciliation.test.js (56 assertions, 4209ms)
+not ok test/bootstrap/node-joining-service-message-group-activation.test.js (50 assertions, 4563ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: NodeJoiningService - blocking authoritative backfill uses critical delivery priority
+    ok 1 - blocking backfill should route the authoritative SQL read with critical delivery priority
+    ok 2 - blocking backfill should use the join leadership timeout budget for authoritative reads
+    ok 3 - blocking backfill replica fanout should use critical delivery priority
+    1..3
+ok 1 - NodeJoiningService - blocking authoritative backfill uses critical delivery priority # time=109.224ms
+
+# Subtest: NodeJoiningService - pressure-degraded backfill skips replica fanout
+    ok 1 - pressure-degraded blocking backfill should keep the routed read on the critical lane
+    ok 2 - pressure-degraded authoritative backfill should avoid full replica fanout
+    1..2
+ok 2 - NodeJoiningService - pressure-degraded backfill skips replica fanout # time=63.466ms
+
+{"level":50,"time":"2026-11-21T21:05:06.773Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"join-cache-seed-node","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T21:05:06.978Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"join-cache-seed-node","msg":"Failed to register node in cluster"}
+# Subtest: NodeJoiningService - registerNodeInCluster seeds local discovery-critical cache rows
+    not ok 1 - Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent
+      ---
+      stack: >
+        wrapNodeRegistrationError
+        (src/bootstrap/shared/node-registration-owner.js:106:24)
+      
+        NodeRegistrationOwner.registerNodeInCluster
+        (src/bootstrap/shared/node-registration-owner.js:282:28)
+      
+        async QuerySystemStatePhase.registerNodeInCluster
+        (src/bootstrap/phases/query-system-state-phase.js:607:16)
+      
+        async Test.<anonymous>
+        (test/bootstrap/node-joining-service-message-group-activation.test.js:335:7)
+      at:
+        fileName: src/bootstrap/shared/node-registration-owner.js
+        lineNumber: 106
+        columnNumber: 24
+        functionName: wrapNodeRegistrationError
+      deferRetry: true
+      tapCaught: returnedPromiseRejection
+      source: |
+        // diagnostics the joiner needs to classify it.
+        function wrapNodeRegistrationError(error) {
+          const wrappedError = new Error(
+        -----------------------^
+            `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
+          );
+      cause:
+        stack: |
+          failedResultError (src/control-plane/owners/node-registration-incarnation-write.js:422:17)
+          attempt (src/control-plane/owners/node-registration-incarnation-write.js:396:7)
+          async writeNodeRegistrationAtIncarnation (src/control-plane/owners/node-registration-incarnation-write.js:594:24)
+          async NodeRegistrationOwner.registerJoinNodeRow (src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js:413:9)
+          async NodeRegistrationOwner.registerNodeInCluster (src/bootstrap/shared/node-registration-owner.js:195:34)
+          async QuerySystemStatePhase.registerNodeInCluster (src/bootstrap/phases/query-system-state-phase.js:607:16)
+          async Test.<anonymous> (test/bootstrap/node-joining-service-message-group-activation.test.js:335:7)
+        at:
+          fileName: src/control-plane/owners/node-registration-incarnation-write.js
+          lineNumber: 422
+          columnNumber: 17
+          functionName: failedResultError
+        deferRetry: true
+        failureCode: partition_write_outcome_unknown
+        source: >
+      
+          function failedResultError(result) {
+            const error = new Error(typeof result.error === 'string' ?
+          ----------------^
+              result.error : result.error?.message || NODE_REGISTRATION_NOT_APPLIED, {cause: result});
+            for (const field of FAILED_RESULT_ERROR_FIELDS) {
+        cause:
+          success: false
+          partitionResult:
+            affectedRows: 1
+          requestKey: '{"data":null,"deliveryPriority":"critical","ignoreExisting":false,"kind":"control-plane-mutation","operation":"insert","routingReadinessDimension":"controlPlaneRecoveryEligible","row":{"boot_incarnation":1,"capabilities":"[\"partition_replica\",\"message_group_replica\"]","connection_state":"connected","cpu_cores":8,"cpu_usage_percent":0,"created_at":1795295106974,"disk_gb":100,"disk_usage_percent":0,"host_id":"adam-Aspire-A515-52G","last_heartbeat":1795295106974,"memory_mb":16606,"memory_usage_percent":0,"node_address":"ws://localhost:9090","node_id":"join-cache-seed-node","status":"joining","storage_budget_bytes":1024,"storage_budget_source":"test"},"tableName":"nodes","whereClause":null,"workClass":null}'
+          idempotencyKey: cpw-c21254cdaf04e82cb6259f892600ccde
+          outcome: applied
+          completionState: applied
+          contractState: ready
+          nextAction: proceed
+          deferRetry: true
+          error: The proposal was accepted into consensus and its outcome is not known to
+            this replica; a retry with the same entryId is idempotent
+          failureCode: partition_write_outcome_unknown
+          entryId: null
+          pendingInstance:
+            writeIdentity: '["nodes","join-cache-seed-node",1,"birth"]'
+            instance: 4496de98-9b56-4d9c-84a2-1c8165e0519b
+            idempotencyKey: cpw-c21254cdaf04e82cb6259f892600ccde
+            entryId: null
+            outcome: unknown
+        message: The proposal was accepted into consensus and its outcome is not known
+          to this replica; a retry with the same entryId is idempotent
+      ...
+    
+    1..1
+not ok 3 - NodeJoiningService - registerNodeInCluster seeds local discovery-critical cache rows # time=312.546ms
+  ---
+  at:
+    fileName: test/bootstrap/node-joining-service-message-group-activation.test.js
+    lineNumber: 282
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('NodeJoiningService - registerNodeInCluster seeds local
+    discovery-critical cache rows',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+{"level":50,"time":"2026-11-21T21:05:07.185Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","state":"discovering","phase":"waiting_leadership","subPhase":null,"duration":0,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/test/bootstrap/node-joining-service-message-group-activation.test.js:577:13)\n    at Object.waitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/owners/join-phase-owners.js:66:33)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/pipeline/join-startup-plan.js:82:40\n    at Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/node-joining-admission-readiness.js:812:15)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/runtime/work-class-scheduler.js:213:25\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)","joinReadiness":null,"seedContactFailureKind":null,"bootstrapResponseCode":null,"bootstrapResponsePhase":null,"bootstrapResponseState":null,"bootstrapResponseReasons":[],"bootstrapResponseRetryAfterMs":null,"seedContact":null,"contextNodeId":"550e8400-e29b-41d4-a716-446655440011","msg":"Joining phase failed"}
+# Subtest: NodeJoiningService - full join hosts its own message group; mg-1 stays on the seed
+    ok 1 - join fails with mock peers
+    ok 2 - error should mention leadership
+    ok 3 - should have bootstrap response
+    ok 4 - the joiner hosts its own message group
+    ok 5 - mg-1 is not spread to the joiner
+    ok 6 - no mg-1 replica is moved
+    ok 7 - mg-1's replicas all stay on the seed
+    1..7
+ok 4 - NodeJoiningService - full join hosts its own message group; mg-1 stays on the seed # time=184.663ms
+
+# Subtest: NodeJoiningService - hasOperationalMessageGroup
+    ok 1 - should be equal
+    1..1
+ok 5 - NodeJoiningService - hasOperationalMessageGroup # time=42.624ms
+
+# Subtest: NodeJoiningService - cleanup on failure
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should have cleaned up services
+    ok 4 - should have cleaned up transport
+    1..4
+ok 6 - NodeJoiningService - cleanup on failure # time=76.72ms
+
+{"level":50,"time":"2026-11-21T21:05:07.186Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","phase":"waiting_leadership","duration":59,"preserveForResume":false,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/test/bootstrap/node-joining-service-message-group-activation.test.js:577:13)\n    at Object.waitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/owners/join-phase-owners.js:66:33)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/pipeline/join-startup-plan.js:82:40\n    at Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/node-joining-admission-readiness.js:812:15)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/runtime/work-class-scheduler.js:213:25\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)","contextNodeId":"550e8400-e29b-41d4-a716-446655440011","msg":"Node joining failed"}
+{"level":50,"time":"2026-11-21T21:05:07.314Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:99999/bootstrap","error":"Failed to parse URL from http://localhost:99999/bootstrap","contextNodeId":"test-node-1","msg":"Failed to contact seed node"}
+{"level":50,"time":"2026-11-21T21:05:07.314Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","state":"connecting","phase":"contacting_seed","subPhase":null,"duration":28,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at SeedContactFailureOwner.throwParsedOrGenericFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/seed-contact-failure-owner.js:161:11)\n    at SeedContactFailureOwner.throwTerminalFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/seed-contact-failure-owner.js:110:10)\n    at SeedContactFailureOwner.throwFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/seed-contact-failure-owner.js:40:10)\n    at ContactSeedPhase.phaseContactSeed (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/contact-seed-phase.js:150:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/node-joining-admission-readiness.js:812:9)","joinReadiness":null,"seedContactFailureKind":null,"bootstrapResponseCode":null,"bootstrapResponsePhase":null,"bootstrapResponseState":null,"bootstrapResponseReasons":[],"bootstrapResponseRetryAfterMs":null,"seedContact":null,"contextNodeId":"test-node-1","msg":"Joining phase failed"}
+{"level":50,"time":"2026-11-21T21:05:07.315Z","nodeId":"test-node","pid":3739356,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":30,"preserveForResume":false,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at SeedContactFailureOwner.throwParsedOrGenericFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/seed-contact-failure-owner.js:161:11)\n    at SeedContactFailureOwner.throwTerminalFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/seed-contact-failure-owner.js:110:10)\n    at SeedContactFailureOwner.throwFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/seed-contact-failure-owner.js:40:10)\n    at ContactSeedPhase.phaseContactSeed (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/phases/contact-seed-phase.js:150:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8446194ab6c1-mwqwbz3v-2162990/src/bootstrap/node-joining-admission-readiness.js:812:9)","contextNodeId":"test-node-1","msg":"Node joining failed"}
+# Subtest: NodeJoiningService - emits events
+    ok 1 - should emit events
+    ok 2 - should emit phaseStart
+    ok 3 - should emit phaseComplete
+    ok 4 - should emit complete
+    1..4
+ok 7 - NodeJoiningService - emits events # time=83.342ms
+
+# Subtest: NodeJoiningService - replica factory should preserve join mode from replica handler
+    ok 1 - should build a replica partition factory
+    ok 2 - post-join partition creation should honor replica-handler join mode
+    1..2
+ok 8 - NodeJoiningService - replica factory should preserve join mode from replica handler # time=83.049ms
+
+# Subtest: NodeJoiningService - replica factory subscribes exactly the propagated cache tables
+    ok 1 - join-time replica factory should subscribe every propagated cache table once
+    ok 2 - join-time replica factory should register one CDC handshake per propagated cache table
+    ok 3 - non-propagated tables must not join the default cache-sync subscriptions
+    1..3
+ok 9 - NodeJoiningService - replica factory subscribes exactly the propagated cache tables # time=56.308ms
+
+# Subtest: NodeJoiningService - CDC propagation reuses captured ingress when operational selection churns
+    ok 1 - join CDC propagation should reuse the captured ingress when operational selection temporarily loses the service
+    ok 2 - join CDC propagation should forward the original vector through the captured ingress
+    1..2
+ok 10 - NodeJoiningService - CDC propagation reuses captured ingress when operational selection churns # time=46.039ms
+
+# Subtest: NodeJoiningService - partial message-group service row activation retains remaining deferred replicas and retries via timer until empty
+    ok 1 - mg-r2 should remain deferred after initial partial activation
+    ok 2 - subset activation of mg-r1 must retain unactivated mg-r2 in deferred set
+    ok 3 - bounded retry timer should remain armed while deferred set is non-empty
+    ok 4 - timer-driven retry should clear deferredMessageGroupServiceReplicaIds once mg-r2 activates
+    ok 5 - timer-driven retry should mark mg-r2 ACTIVE in durable services table
+    1..5
+ok 11 - NodeJoiningService - partial message-group service row activation retains remaining deferred replicas and retries via timer until empty # time=111.085ms
+
+# Subtest: NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth
+    ok 1 - activation should proceed once local service_endpoints rows are visible in cache
+    ok 2 - activation should transition the staged row without registration
+    ok 3 - activation should mark the exact durable replica row active
+    ok 4 - successful exact CAS needs no availability-dependent reread
+    1..4
+ok 12 - NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth # time=51.412ms
+
+1..12
+# { total: 38, pass: 37, fail: 1 }
+# time=1241.67ms
+ok test/bootstrap/node-joining-service-node-state-update-ingress.test.js (67 assertions, 4505ms)
+ok test/bootstrap/seed-participant-release-failure-projection.test.js (9 assertions, 5799ms)
+# test-files total=14 pass=13 fail=1 assertions=589
+placement-results={"file":"test/cdc/cdc-authoritative-catchup-terminal.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":939,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-terminal-gate-inflight.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":952,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/pressure-governor.test.js","attempt":1,"ok":true,"assertions":95,"durationMs":1082,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":1869,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/user-table-leader-placement-cure.test.js","attempt":1,"ok":true,"assertions":77,"durationMs":1802,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":true,"assertions":102,"durationMs":2775,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-service-role-metadata-publication.test.js","attempt":1,"ok":true,"assertions":91,"durationMs":5819,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":5977,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+placement-results={"file":"test/bootstrap/bootstrap-api-readiness-gating.test.js","attempt":1,"ok":true,"assertions":119,"durationMs":2426,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-cleanup.property.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":2558,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-service-ready-signal.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":2970,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/dynamic-partition-cdc-subscription.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":3205,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/join-cleanup.property.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":3705,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":4002,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-control-plane-heartbeat.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":3843,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-ready-signal-retry.test.js","attempt":1,"ok":true,"assertions":55,"durationMs":3645,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":3409,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-service-canonical-readiness.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":4214,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-service-mesh-reconciliation.test.js","attempt":1,"ok":true,"assertions":56,"durationMs":4209,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-service-message-group-activation.test.js","attempt":1,"ok":false,"assertions":50,"durationMs":4563,"retriedOnce":false,"firstFailureLine":"not ok 1 - Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent"}
+placement-results={"file":"test/bootstrap/node-joining-service-node-state-update-ingress.test.js","attempt":1,"ok":true,"assertions":67,"durationMs":4505,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/seed-participant-release-failure-projection.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":5799,"retriedOnce":false,"firstFailureLine":null}

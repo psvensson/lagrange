@@ -1,0 +1,3 @@
+{"file":"test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1914,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1908,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-turn-integrity.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2438,"retriedOnce":false,"firstFailureLine":null}

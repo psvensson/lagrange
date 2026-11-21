@@ -1,0 +1,1 @@
+{"file":"test/partition/partition-write-kernel-tenure-fence.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":4831,"retriedOnce":false,"firstFailureLine":"not ok 6 - kernel tenure fence (join): a write delivered again under the current tenure does not join the pending write of an earlier tenure, which is released once; nothing is inherited"}

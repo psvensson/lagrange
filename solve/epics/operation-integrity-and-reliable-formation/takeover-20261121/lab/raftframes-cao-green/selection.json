@@ -1,6 +1,6 @@
 {
   "sha": "97ba4431b5fb0f4825910363144ec79a3cc13e80",
-  "host": "adams-gamla",
+  "host": "adam-laptop",
   "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
   "files": [
     "test/raft/raft-rs-current-authority-observation.test.js",

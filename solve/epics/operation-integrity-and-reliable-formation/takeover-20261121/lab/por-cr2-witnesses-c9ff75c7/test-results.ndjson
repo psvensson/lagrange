@@ -1,0 +1,7 @@
+{"file":"test/partition/placement-creation-terminal-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":3938,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-founder-origin.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":4071,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/schema-provisioning-native-admission.test.js","attempt":1,"ok":true,"assertions":158,"durationMs":4617,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-founding-and-runtime-service-admission.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":6453,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-barrier.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":9459,"retriedOnce":false,"firstFailureLine":"not ok 2 - barrier and the production definition: a custody that begins while the last applied ledger entry is the leader's configuration change on a quiet ledger must still start its first planning pass"}
+{"file":"test/rebalancer/placement-owner-authority-tenure.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":17577,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-wakes.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":69585,"retriedOnce":false,"firstFailureLine":"not ok 9 - item 2 (b): admitted, then a local step throws: the admission is recorded as admitted, the local failure apart, and the pass aborts with no further proposal"}

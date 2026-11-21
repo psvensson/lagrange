@@ -1,0 +1,37 @@
+placement-shell=3294859
+placement-head=d6fa64092506fc2cb9fa6b650fe494a41f1e8893
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3295352
+# test-files planned=11
+classified lane ordinary: 11 file(s), jobs=4
+thermal: ok cpu 52C (coretemp/Package id 0) nvme 44C (nvme/Sensor 1)
+ok test/raft/raft-rs-backend/admission-redrive.test.js (1 assertions, 1982ms)
+ok test/raft/raft-rs-backend/committed-membership-stamp.test.js (1 assertions, 1450ms)
+ok test/raft/raft-rs-backend/admission-redrive-chain.test.js (4 assertions, 3972ms)
+ok test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js (5 assertions, 1494ms)
+ok test/raft/raft-rs-backend/bootstrap-committed-membership.test.js (4 assertions, 5479ms)
+ok test/raft/raft-rs-backend/committed-membership-target-validation.test.js (5 assertions, 2142ms)
+ok test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js (6 assertions, 3835ms)
+ok test/rebalancer/services-inventory-owner-fact-siblings.test.js (34 assertions, 4304ms)
+ok test/rebalancer/rebalance-coordinator-operation-ownership.test.js (233 assertions, 1334ms)
+ok test/raft/raft-rs-backend/evidence-o1-real-chain.test.js (7 assertions, 14266ms)
+ok test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js (6 assertions, 41587ms)
+# test-files total=11 pass=11 fail=0 assertions=306
+placement-results={"file":"test/raft/raft-rs-backend/admission-redrive.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1982,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/committed-membership-stamp.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1450,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/admission-redrive-chain.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3972,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1494,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/bootstrap-committed-membership.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":5479,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/committed-membership-target-validation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2142,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":3835,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/services-inventory-owner-fact-siblings.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":4304,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-operation-ownership.test.js","attempt":1,"ok":true,"assertions":233,"durationMs":1334,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/evidence-o1-real-chain.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":14266,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":41587,"retriedOnce":false,"firstFailureLine":null}

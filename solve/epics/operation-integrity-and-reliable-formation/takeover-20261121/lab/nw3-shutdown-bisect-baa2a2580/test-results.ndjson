@@ -1,0 +1,1 @@
+{"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":1187,"retriedOnce":false,"firstFailureLine":"not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN"}

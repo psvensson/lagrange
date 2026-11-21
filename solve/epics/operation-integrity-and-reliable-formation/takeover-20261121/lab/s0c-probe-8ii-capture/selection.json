@@ -1,0 +1,17 @@
+{
+  "sha": "546b5158d18c211107e1306b3106623aafe2230b",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/readiness-owner-authority-contract.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/readiness-owner-authority-contract.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

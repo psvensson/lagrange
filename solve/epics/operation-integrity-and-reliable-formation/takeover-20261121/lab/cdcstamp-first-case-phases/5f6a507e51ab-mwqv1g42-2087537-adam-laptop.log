@@ -1,0 +1,42 @@
+placement-shell=3717140
+placement-head=5f6a507e51abaad8f8536089b6dba649e7b4b4bf
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3717662
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/topology/cdc-first-case-cost-probe.test.js (1 assertions, 4522ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: probe: wall and CPU time of the first leader start, by phase
+not ok 1 - probe: wall and CPU time of the first leader start, by phase
+  ---
+  duration_ms: 3199.001812
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5f6a507e51ab-mwqv1g42-2087537/test/topology/cdc-first-case-cost-probe.test.js:28:1'
+  failureType: 'testCodeFailure'
+  error: 'probe timings: {"constructInitialize1":{"wallMs":12,"cpuMs":17},"shutdown1":{"wallMs":1,"cpuMs":1},"fullStart2":{"wallMs":3116,"cpuMs":4417},"shutdown2":{"wallMs":1,"cpuMs":1},"fullStart3":{"wallMs":14,"cpuMs":14},"shutdown3":{"wallMs":0,"cpuMs":0}}'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5f6a507e51ab-mwqv1g42-2087537/test/topology/cdc-first-case-cost-probe.test.js:41:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3206.695739
+# time=4522ms
+# test-files total=1 pass=0 fail=1 assertions=1
+placement-results={"file":"test/topology/cdc-first-case-cost-probe.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4522,"retriedOnce":false,"firstFailureLine":"not ok 1 - probe: wall and CPU time of the first leader start, by phase"}

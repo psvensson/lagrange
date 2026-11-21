@@ -1,0 +1,29 @@
+{
+  "sha": "c9ff75c7fd43ec923afbb56c9452bb58f8aad29c",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/placement-owner-authority-wakes.test.js",
+    "test/rebalancer/placement-owner-authority-tenure.test.js",
+    "test/rebalancer/placement-owner-authority-barrier.test.js",
+    "test/partition/placement-founding-and-runtime-service-admission.test.js",
+    "test/partition/placement-creation-terminal-replay.test.js",
+    "test/partition/placement-founder-origin.test.js",
+    "test/query/schema-provisioning-native-admission.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-creation-terminal-replay.test.js",
+        "test/partition/placement-founder-origin.test.js",
+        "test/query/schema-provisioning-native-admission.test.js",
+        "test/rebalancer/placement-owner-authority-barrier.test.js",
+        "test/rebalancer/placement-owner-authority-tenure.test.js",
+        "test/rebalancer/placement-owner-authority-wakes.test.js",
+        "test/partition/placement-founding-and-runtime-service-admission.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.48
+[tv-dator] placement-shell=3406142
+[tv-dator] placement-head=6200cb482255ffad57609d2bbfa865aaff0edb3e
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3406597
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/move-skip-log-typed-refusal-reason.test.js (6 assertions, 1025ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: the skipped-move log line names the typed reason of an unavailable SERVICES read
+[tv-dator]     # OBSERVATION move-skipped {"outcome":{"success":false,"skipped":true,"reason":"services_inventory_unavailable","operation":"add","nodeId":"node-2","replicaId":null},"fields":{"entityId":"partition-1","entityType":"partition","moveType":"add","movePartitionId":"partition-1","moveTargetNodeId":"node-2","replicaId":null,"reason":"services_inventory_unavailable","error":null,"admissionDecisionType":null,"admissionReason":null,"admissionBlockingReasonCodes":[],"admissionTopologySnapshot":null}}
+[tv-dator]     ok 1 - the move is skipped, not failed
+[tv-dator]     ok 2 - the skip names the unavailable SERVICES inventory
+[tv-dator]     ok 3 - the planner logged the skipped move
+[tv-dator]     ok 4 - the log line carries the skip reason
+[tv-dator]     not ok 5 - the log line carries the read's own typed reason
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/move-skip-log-typed-refusal-reason.test.js
+[tv-dator]         lineNumber: 70
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/move-skip-log-typed-refusal-reason.test.js:70:7)
+[tv-dator]       source: >2
+[tv-dator]             t.equal(skipped?.fields?.reason, REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE,
+[tv-dator]               'the log line carries the skip reason');
+[tv-dator]             t.equal(skipped?.fields?.error?.reasonCode, READ_REASON,
+[tv-dator]         ------^
+[tv-dator]               'the log line carries the read\'s own typed reason');
+[tv-dator]           },
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -owner_fact_not_leader
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..5
+[tv-dator] not ok 1 - the skipped-move log line names the typed reason of an unavailable SERVICES read # time=55.631ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/move-skip-log-typed-refusal-reason.test.js
+[tv-dator]     lineNumber: 28
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     const READ_REASON = 'owner_fact_not_leader';
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('the skipped-move log line names the typed reason of an unavailable
+[tv-dator]     SERVICES read',
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         ConfigurationManager.resetInstance();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 5, pass: 4, fail: 1 }
+[tv-dator] # time=65.981ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=6
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=6
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=6

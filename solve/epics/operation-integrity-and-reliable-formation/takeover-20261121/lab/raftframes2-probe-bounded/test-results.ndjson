@@ -1,0 +1,2 @@
+{"file":"test/transport/router-adopted-connection-reconnect-schedule.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":954,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-reconnect-owner.integration.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":1778,"retriedOnce":false,"firstFailureLine":"not ok 2 - C13: after an outage that outlasts the bounded reconnect schedule, both ends keep dialing at the capped cadence and raft alone resumes after the heal"}

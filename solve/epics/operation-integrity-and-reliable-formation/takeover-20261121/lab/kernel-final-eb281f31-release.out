@@ -1,0 +1,29 @@
+lab test: adam-laptop: ordinary (13 files) cores=8 mem=15.5GiB speed x2.00
+[adam-laptop] placement-shell=3788406
+[adam-laptop] placement-head=eb281f314565d4eb3c7e53798aa34e585c7fbcbf
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3788857
+[adam-laptop] # test-files planned=13
+[adam-laptop] classified lane ordinary: 13 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 75C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/partition/participant-release-control-three-member.test.js (1 assertions, 7111ms)
+[adam-laptop] ok test/partition/participant-release-applied-position.test.js (8 assertions, 7204ms)
+[adam-laptop] ok test/partition/participant-release-caller-lifetimes.test.js (4 assertions, 7339ms)
+[adam-laptop] ok test/partition/participant-release-build-provenance.test.js (3 assertions, 7445ms)
+[adam-laptop] ok test/partition/participant-release-delivery-recorder.test.js (4 assertions, 334ms)
+[adam-laptop] ok test/partition/participant-release-current-control-replay.test.js (2 assertions, 10115ms)
+[adam-laptop] ok test/partition/participant-release-deadline-recovery.test.js (2 assertions, 10290ms)
+[adam-laptop] ok test/partition/participant-release-first-prepare-native.test.js (1 assertions, 10569ms)
+[adam-laptop] ok test/partition/participant-release-native-application-order.test.js (1 assertions, 10793ms)
+[adam-laptop] ok test/partition/participant-release-prepare-identity-native.test.js (1 assertions, 10827ms)
+[adam-laptop] ok test/partition/participant-release-prepared-settlement-native.test.js (1 assertions, 11200ms)
+[adam-laptop] ok test/partition/participant-release-retention-native.test.js (1 assertions, 10661ms)
+[adam-laptop] ok test/partition/participant-release-protocol.test.js (19 assertions, 12476ms)
+[adam-laptop] # test-files total=13 pass=13 fail=0 assertions=48
+lab test: adam-laptop: # test-files total=13 pass=13 fail=0 assertions=48
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=13 pass=13 fail=0 assertions=48

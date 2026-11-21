@@ -1,0 +1,16 @@
+{"file":"test/cache/system-table-cache-observation.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":2412,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-hosted-replica.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3271,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":3767,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-leader-required-fresh-leader-absence.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":8412,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":2137,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-redirect-deadline.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":7266,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":true,"assertions":153,"durationMs":808,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":9480,"retriedOnce":false,"firstFailureLine":"not ok 4 - in process: refused, no rows"}
+{"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":true,"assertions":107,"durationMs":3098,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/readiness-owner-authority-contract.test.js","attempt":1,"ok":false,"assertions":15,"durationMs":1919,"retriedOnce":false,"firstFailureLine":"not ok 11 - a live follower cannot replace missing canonical leader authority"}
+{"file":"test/control-plane/control-plane-read-authority-token.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":2592,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":86,"durationMs":11290,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/parallel-query-coordinator.test.js","attempt":1,"ok":true,"assertions":121,"durationMs":4731,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-authority-observation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3866,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/system-table-ingress-boundary-adversarial.test.js","attempt":1,"ok":true,"assertions":3074,"durationMs":5062,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-recovery-read-lifetime.test.js","attempt":1,"ok":true,"assertions":122,"durationMs":11151,"retriedOnce":false,"firstFailureLine":null}

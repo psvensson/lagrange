@@ -1191,3 +1191,240 @@ Mutant tooling (kept, not in the repo): `/mnt/data/peter/projects/lagrange/.git/
 | 5: duplicate role check; `commit === applied` | Analysed (18.3); `commit === applied` kept, unwitnessed: its only protection is a leader whose commit index is ahead of its applied index within its own term, which this runtime makes visible only inside a pending turn (where F1 applies); no witness schedule found, so per the ruling it is a candidate for removal pending the uncached observation. |
 | 6: red finding into a counted census with a one-way bound | NOT DONE. Plan: keep read-point case 1 as the green property; replace the red file by a census of leader-REQUIRED call sites not on `readOwnerFact` (37 per 16.7) in the form of the existing one-way ratchets (`scripts/checks/no-legacy-consensus-reference-ratchet.js`, which refuses an increase in its baseline's history). |
 | Deadline and routing class as required, declared parameters (coordinator addition) | NOT DONE. The coordinator's reads pass `CONTROL_PLANE_QUERY_OPTIONS` = `{timeoutMs, routingReadinessDimension: CONTROL_PLANE_RECOVERY_ELIGIBLE}` (`src/rebalancer/rebalance-coordinator-shared.js:168-172`); the gateway reads both (`control-plane-system-table-gateway-options.js:17-39`). Proposed signature: `readOwnerFact(readLeaderRows, {tableName, sql, params, floor: {partitionId, index, term}, deadline: {timeoutMs}, routingReadinessDimension, expectedReplica?})`, with `deadline` and `routingReadinessDimension` required (typed `OwnerFactRequestRefusal` otherwise) and both placed in the frozen read options. |
+
+### 18.5 Change cone at fb1d4c11b against b638284d1 [X]
+`lab/s0-cone-fb1d4c11b.log`: 2171 files, 2057 pass, 114 fail. The 113 failing files that exist at the base were
+run at b638284d1 (`lab/s0-cone-fails-at-base-b638284d1`); per-file attribution in
+`lab/s0-cone-fb1d4c11b.attribution.tsv` (file, class, first failure at head, first failure at base):
+- 76 pre-existing at base with the same first failure;
+- 33 red at base too but with a different first failure (not attributed further; none mentions this slice's
+  symbols: readOwnRaftStatus, leaderRead, owner_fact, hostedReplica, redirect);
+- 1 new file: the recorded finding (`cdc-leader-required-fresh-leader-absence.test.js`, to be converted, 18.4 item 6);
+- 4 PASS AT BASE = regressions of this branch:
+  - `test/cache/system-table-cache-observation.test.js`, `test/query/parallel-query-coordinator.test.js`,
+    `test/query/system-table-ingress-boundary-adversarial.test.js`: "this.readOwnRaftStatus is not a function".
+    They call `buildRemoteReadAuthorityWitness` on hand-built fakes without `readOwnRaftStatus` and assert the
+    old contract (role from the service's `this.role`, no election-log field). Cause: c3fb8cc2b (role and
+    indices from the core observation). Repair: the fakes supply `readOwnRaftStatus` (CORE_OK status with role,
+    group and replica identity) and expect `role` from it and `electionLogApplied`; `test/cache` is outside the
+    stage-1 writable set.
+  - `test/control-plane/readiness-owner-authority-contract.test.js`: "a live follower cannot replace missing
+    canonical leader authority" and "leader-required routing never sends the owner read to the follower". With
+    the published leader naming a node that has no service, Q1(B) (075a413d8,
+    `query-executor-partition-routing-candidates.js:177-194`) widens to every routable replica, and the test's
+    follower stub answered success. Needs (a) a lead decision whether "published but unusable" widens
+    (ruling Q1 says it does; the pinned contract says it must not), and (b) a check of why the caller-side
+    predicate accepted the stub's answer (if the stub supplies a leader-role witness, the test's hostile token
+    path, `hostileReadAuthority`, must be read). Not resolved in this run.
+
+## 19. Corrective round after independent verification (appended 2026-11-21, night; sections 1-18 unchanged)
+
+**Final signature (for `work/topology-guard-owner-fact-20261121`).**
+`readOwnerFact(readLeaderRows, {tableName, sql, params, floor: {partitionId, index, term}, deadline: {timeoutMs},
+routingReadinessDimension, expectedReplica?})`. Migration from 16.8/16.11: (1) replace `minimumIndex, minimumTerm`
+by `floor: {partitionId: <the partition read, e.g. INITIAL_PARTITION_IDS[SERVICES]>, index, term}` (0/0 = no prior
+knowledge; a floor of another group is refused `owner_fact_floor_other_partition`); (2) add `deadline: {timeoutMs}`
+and `routingReadinessDimension` (the coordinator passes `CONTROL_PLANE_QUERY_OPTIONS.timeoutMs` and
+`CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE`), both required (typed `OwnerFactRequestRefusal`
+`owner_fact_deadline_required` / `owner_fact_routing_class_required`); `timeoutBudget` is gone; (3) new UNAVAILABLE
+reasons: `owner_fact_floor_other_partition`, `owner_fact_foreign_transaction`, `owner_fact_answer_for_another_request`;
+`owner_fact_read_point_moved` no longer exists. Every UNAVAILABLE is still "keep the turn scheduled", never data.
+
+Session: writer of this round (fresh context), worktree `/mnt/data/peter/projects/.worktrees/owner-fact-read-20261121`,
+branch `work/owner-fact-read-20261121`, start head fb1d4c11b (clean). Inputs: `reports/verify-owner-fact-read.md`,
+this record 16-18, `briefs/s0-stage2-rulings.md`, `docs/steering/rules.md`, `test/guidelines/INDEX.md`. Marking as
+before: [X] executed on the lab (directory under `lab/` named), [V] read in code, [I] inferred.
+
+### 19.1 Item 8(ii): what the follower stub of `readiness-owner-authority-contract.test.js` answered [X]
+
+Probe: test-file-only capture, sealed commit-tree child `546b5158d` of fb1d4c11b (local ref `probe/s0-8ii-capture`,
+never on the branch), `lab/s0c-probe-8ii-capture` (adam-laptop). For the "missing canonical leader" read (published
+leader `missing-leader`, which has no service; the `services-owner` row now says follower):
+- routing asked ONE replica, `services-owner/partition/services-p1` (Q1(B) widening, own node first, then row order);
+  the request carried `leaderRead: {kind: 'leader_required'}`; the effective contract was READINESS_INTERNAL /
+  OWNER_RPC_REQUIRED / leader REQUIRED / no SQL fallback (the `hostileReadAuthority` option did not weaken it);
+- the stub answered `success: true`, 3 rows, witness `{state: 'observed', partitionId: 'services-p1', servingNodeId:
+  'services-owner', servingReplicaId: 'services-owner-replica', term: 1, role: 'leader', observedAtMs}` (its static
+  answer: the same leader witness it gave while it was the published leader);
+- the caller ACCEPTED it: result `success: true`, 3 rows, `source: owner_rpc_lane`, through
+  `enforceRequiredLeaderReadAuthority` -> `leaderReadWitnessRefusal(witness, LEADER_REQUIRED_READ)` ->
+  `isValidLeaderReadAuthorityWitness` (true; refusal null).
+
+Classification: **C** for this file. The accepted witness was leader-qualified and named exactly the replica it was
+delivered to (so not A); routing sent a leader-qualified request (allowed discovery under B); the stub claims a
+leadership the test's premise denies, i.e. it forges a leader witness, which no caller-side check can tell from an
+honest leader that the projection has not published (the receiver's own claim is the authority the read consumes).
+Stopped on this file: unchanged, still red on its two assertions ("a live follower cannot replace missing canonical
+leader authority", "leader-required routing never sends the owner read to the follower"). Ruling needed: either the
+stub answers as an honest follower would (typed `owner_fact_not_leader` with its known leader; then the
+acceptance-level property holds and the "never sends" assertion is restated per B), or the test keeps a forged
+leader and is outside the read's fault model.
+
+"Published but unusable" today [V]: `query-executor-partition-routing-candidates.js:177-194` logs
+`LEADER_GAP_REASON_SERVICE_MISSING` (vs `OWNER_MISSING` when none is published) and asks every routable replica with
+the leader-qualified request; each receiver decides; an honest non-leader refuses `owner_fact_not_leader` with the
+leader it knows (redirect), so the read ends READY at the real leader or typed `owner_fact_not_leader` /
+`owner_fact_read_failed`. The gap reason is only logged: a named UNAVAILABLE reason distinct from "no leader
+published" needs the delivery owner (`query-executor-partition-delivery.js`, not in this round's writable set) to
+carry the routing snapshot's gap reason into its failure answer; not done (the probe did not require a routing
+change). Recorded for the lead.
+
+### 19.2 Witnesses committed first: 4a22aa6b4, red [X] `lab/s0c-red-4a22aa6b4` (adams-gamla)
+
+`cdc-owner-fact-receiver-read-point.test.js` and `control-plane-owner-fact-read.test.js` (fixture additions: raft
+sends left pending until released, transit records the request's `leaderRead`, the surface's query executor, a
+transfer request without waiting on the old leader's status, the final-shape draft):
+- 1(a) "an apply landing between the receiver's observation and its statement, or after it, is READY at the position
+  the rows reflect, in process and remote": RED in process (both placements refused `owner_fact_read_point_moved`)
+  and remote afterRead (READY from the delivery loop's retry, naming a later read than the held statement);
+- 1(b) "a leader whose core has stepped its successor's term while its own turn is pending refuses typed": setup
+  green (the old leader's core emitted a message of the successor's term, held pending; its `readStatus()` still
+  says leader), then RED: in process it answered success with rows ("its core no longer leads, so it refuses",
+  "no rows" failed); over the transport the same answer;
+- 2 "an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided
+  answer": RED (it waited on the plain read's flight; no owner-fact request reached the leader; no echo);
+- 4 "a read on a connection inside a transaction the receiver did not open is refused typed": RED in process and
+  remote (READY with the staged DELETE's absence);
+- 3 receiver refuses a floor of another group, 5 deadline/routing class required and carried: RED by request shape
+  (`leader_read_request_malformed`, `owner_fact_unknown_field: floor`): specifications, not product evidence;
+- unit final request shape: RED (`owner_fact_unknown_field: floor`).
+
+### 19.3 Repairs (commit after 4a22aa6b4; sha in 19.6) [V]
+
+- **1(a)** `partition-service-write-metrics-base.js` `executeReadAtAppliedPosition`: for an owner fact
+  (`options.appliedPositionRead`, set by the receiver for the owner-fact kind only) the statement and the raft store's
+  applied index, through the partition's existing reader of the store owner (`readPartitionAppliedIndex`,
+  `partition-committed-log.js` -> `RaftRsDurableStore.readAppliedIndexIn`; no second query), run in ONE
+  `db.transaction(...)`; the receiver's witness `appliedIndex` is that value (`witnessAtReadPosition`).
+  `owner_fact_read_point_moved` and its re-check are deleted; the post-read check keeps only "still leader, same
+  term, same runtime". The applied-state row carries no term (`SELECT_APPLIED_STATE`,
+  `raft-rs-durable-store-constants.js:190-196`); the entry term at that index has no store reader
+  (`SELECT_LOG_ENTRY_AT` is unused; a reader would be a `src/raft` change), so the witness's `term` stays the
+  leader's current term from its core observation, and the term floor is compared with it. Consequence for the apply
+  condition: the position is now read after the status, so `commitIndex` (observed) can be below `appliedIndex`
+  (read); the condition is `commitIndex > appliedIndex` -> `owner_fact_apply_behind_commit` (see item 7).
+- **2** key (`control-plane-system-table-gateway-query-execution.js` `buildLeaderReadContract`): every
+  leader-REQUIRED read's key carries its decided `leaderRead` (kind; for an owner fact the typed floor) and an owner
+  fact's key its relative `timeoutMs`. Joiner deadline: a joiner shares only a flight with its own relative timeout
+  that started no later than its call, so the flight's deadline is no later than the joiner's own; this holds as far
+  as the flight honours its own deadline (a hard race against the joiner's own timer would sit in `runSingleFlight`,
+  `control-plane-system-table-gateway-request-coalescing.js`, outside this round's set). Echo: the receiver's witness
+  carries `leaderRead` (the read it decided) for every leader-qualified read; the CALLER verifies it for owner facts
+  only (`ownerFactPointRefusal` -> `owner_fact_answer_for_another_request`). Not for plain leader-required reads: with
+  the kind in the key a plain read can only join a plain read, and verifying the echo there would refuse every
+  hand-built leader witness of the 37 consumers' test doubles (about 40 files hand-build witnesses) for no added
+  safety. Rows are copied and frozen per answer (F7).
+- **3** floor `{partitionId, index, term}` (`ownerFactReadOf`, exact fields); the predicate refuses a floor of another
+  group (`owner_fact_floor_other_partition`) before reading, at the receiver and again at the caller.
+- **4** established [V, grep-level]: no path holds a SQLite transaction open across requests on a partition
+  connection today: participant staging validates in one synchronous `db.transaction(fn)()` that always rolls back
+  (`partition-participant-transaction-staging.js:1-10, :170-200`); the connection stamp's `servedLegacy` is only ever
+  written `false` (`partition-participant-transaction-connection.js:22-25`; only a never-stamped connection reads
+  `true`); no `src` code issues `BEGIN` on a partition's connection (`BEGIN` sites: a split snapshot's own DB
+  `partition-service-split-accessor-base.js:375`, the data-directory lock DB, the application database and migration
+  coordinator). The comments that still describe a legacy session holding `BEGIN` (`partition-statement-admission.js:
+  26-30, 278-283`, `raft-rs-persistence-admission.js:3-12`) and the run-23 zombie (`partition-service-durability-fitness.js:
+  10-24`) are the reason the one synchronous check was added anyway: `foreignTransactionRefusal`
+  (`service.db.inTransaction === true` -> `owner_fact_foreign_transaction`), owner facts only, after the leader
+  predicate; witnessed on the real connection (a staged DELETE).
+- **5** final signature (top of this section); `readOptionsOf` passes `timeoutMs` and `routingReadinessDimension` as
+  the gateway's own options (the token is built from them, `buildControlPlaneReadAuthority`), and the floor as
+  `ownerFactFloor`.
+- **6** `test/cdc/cdc-leader-required-fresh-leader-absence.test.js`: green property (readOwnerFact UNAVAILABLE
+  `owner_fact_election_log_not_applied`, no rows, at the fixture's fresh-leader state; the plain read's answer only
+  as a comment) + census test. `scripts/checks/leader-required-read-census-ratchet.js` (baseline
+  `scripts/checks/leader-required-read-census-baseline.json`, 37): counts `leaderMode:
+  CONTROL_PLANE_READ_LEADER_MODE.REQUIRED` in `src` outside `control-plane-owner-fact-read.js` (37 today, the 16.7
+  list minus nothing plus the gateway's COMPLETE_TABLE site, which 16.7 names in prose); one-way history check reuses
+  the model's exported `findBaselineIncrease`. Not yet wired into `npm run test:static` (package.json is outside this
+  round's set): the corpus test enforces the bound; wiring is a one-line follow-up for the lead.
+- **8(i)** old -> new: the three fakes now carry `readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus`
+  over a CORE_OK `raft.readStatus()` of their group and replica. `system-table-cache-observation.test.js`: expected
+  `role: 'LEADER'` (the service's event-derived role) -> `role: RAFT_ROLE.LEADER` (the core status's role), and
+  `electionLogApplied: true` added (the producer's field); no assertion removed. The other two assert nothing about
+  role.
+- **8(ii)** unchanged (19.1, C).
+
+### 19.4 Repairs 3d017a2b5 [X] `lab/s0c-green-3d017a2b5` (tv-dator): 12/15 files green
+
+Green: read-point file except witness 1(b)(i) (1(a) in process and remote both placements READY at the store
+position; 2 the owner fact gets its own decided, echoed answer while the plain read is held; 3 receiver and
+readOwnerFact refuse a floor of another group; 4 refused typed in process and remote, READY again after ROLLBACK; 5
+routing class `controlPlanePublished` and the deadline reach the query owner, a call without a deadline refused and
+issues no read; fresh leader, receiver contract, leadership moving, caller verification unchanged and green); unit
+file (153); witness 3 file with typed floors (32); hosted-replica; redirect/deadline; stale published leader;
+fresh-leader property + census (7); first routing file (107); pinned lifetime test (122); read-authority-token
+coalescing tests (41); the three 8(i) fakes (cache observation 14, parallel query coordinator 121, ingress
+adversarial 3074).
+Red, all expected: (a) read-point "a leader whose core has stepped its successor's term while its own turn is
+pending refuses typed" (1(b)(i): needs the raft owner's current observation, 19.5); (b)
+`cdc-owner-fact-queued-successor-acceptance.test.js`, the B-1 acceptance witness, red on purpose (setup green: a
+successor leads a newer term, its envelope was delivered to the old leader, whose turn pends at a held send and whose
+status still says leader; then "in process: refused, no rows" and "over the transport: refused, no rows" fail);
+(c) `readiness-owner-authority-contract.test.js` on its two 8(ii) assertions (19.1, C, unchanged file).
+
+### 19.5 Item 1(b): the raft owner's current observation (coordinator instruction of this round)
+
+State at the time of writing: `work/raft-owner-authority-20261121` is NOT on origin (`git ls-remote` empty); the
+branch exists only in its writer's worktree at `a0617f2e0` (items A and B done, item C at its red witnesses, not
+repaired). Per the instruction ("merge it when it exists with items A, B and C") it is not merged; the receiver is
+unchanged on this point and still decides on `readOwnRaftStatus()` (cached while a turn pends).
+
+Witnesses written (both executed red, 19.2/19.4):
+- (i) the core has already STEPPED the successor's message: read-point file, "a leader whose core has stepped its
+  successor's term while its own turn is pending refuses typed". Expected green with the observation as it is (the
+  core is a follower at T+1).
+- (ii) the successor's envelope is DELIVERED BUT STILL QUEUED behind the old leader's pending turn:
+  `test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js`, labelled in its header as the acceptance witness of
+  the raft owner's correction B-1, red on purpose; nothing else is excluded. With the observation as it is the old
+  leader reports LEADER with its term applied, so it stays red until B-1 lands.
+
+Receiver decision prepared for the merge (read from `a0617f2e0`, `src/raft/raft-rs-current-authority.js`; the port
+answers synchronously, `raft-rs-operation-port.js:459-460`): `this.raft.observeCurrentAuthority()`, usable only when
+`outcome === CORE_OK` and `groupId`/`replicaIdentity` are this replica's; leader only when `role === LEADER`
+(`NOT_SETTLED` refuses); the own-term fact is `currentTermApplied === true` (exactly; a missing field refuses);
+the post-read check compares `term`, `lifecycleIncarnation`, `runtimeGeneration` of a second observation. The
+witness's position stays the store's (1(a)); the observation's `appliedIndex` is the runtime's mirror and is not
+used as the position. Which own-term condition: `currentTermApplied` replaces `!confChangePending`; they are not the
+same decision (the old form is true for a fresh leader whose prior log is applied before its own entry applies, and
+false while its own configuration change is in flight), both are sufficient for "every entry an earlier leader
+committed is applied", and the observation exposes only the former; one condition, the raft owner's fact (R03).
+"Settled": the receiver does NOT gate on `settled`/`turnPending` (the raft-owner verification shows `settled` is
+false most of the time on a busy leader, so that gate would starve owner facts); it refuses on every role signal
+the observation exposes (`NOT_SETTLED`, any non-LEADER role, a missing field) and will refuse on B-1's signal when
+the raft owner adds it.
+
+### 19.6 Mutants of this round [X] (commit-tree children of 3d017a2b5 with a regenerated seal, never on a branch; tooling `s0c-mutants.py`, `s0c-seal-mutants.sh`, `s0c-mutant-queue.sh` in the worktree's git dir)
+
+| Mutant (sha) | Mechanism removed | Result | Killing witness (read-point file case, assertion) | Lab directory |
+| --- | --- | --- | --- | --- |
+| c1a f3582aef0 | 1(a): witness position from the status, not the store read in the statement's transaction | killed | "an apply landing ...", "in process, beforeRead: the witness names the applied position the statement read at" (and remote, beforeRead) | `s0c-mutant-c1a-position-from-status` (tv-dator) |
+| c2 b28563ceb | 2: the decided leader read (kind, floor, owner-fact deadline) left out of the single-flight key | killed | "an owner fact arriving while a plain strict read ...", "it does not wait on the plain read's flight" (+3) | `s0c-mutant-c2-key-without-leader-read` (tv-dator) |
+| c3 2c24df8a4 | 3: a floor of another raft group not refused | killed | "a floor is a position of one raft group ...", "the receiver refuses it typed" (+3) | `s0c-mutant-c3-floor-any-partition` (tv-dator) |
+
+In each mutant run the only other red was the 1(b)(i) witness, red at 3d017a2b5 as well (19.4). The role-decision
+mutant (receiver deciding on the cached status) and an echo mutant belong to the 1(b) head (19.7).
+
+### 19.7 Item 1(b) done: merge 0a9fa6d50 (TRUE merge of `origin/work/raft-owner-authority-20261121` 692336b45, items A, B, C; no conflict) and d358ab712 [X] `lab/s0c-final-d358ab712` (adam-laptop): 14/16 green
+
+d358ab712: `observeOwnAuthority` in `partition-service-remote-query-methods.js` (the port's `observeCurrentAuthority()`,
+synchronous, usable only as CORE_OK of this group and replica) decides before the read and again after it; the plain
+(non-leader-qualified) QUERY witness stays on `readOwnRaftStatus()` (its role is not an authority decision; moving it
+would break every hand-built status fake of that path). Witness field `electionLogApplied` -> `currentTermApplied`
+(from the observation for leader-qualified reads, from the status for the plain path: since item A both mean "the
+leader applied an entry of its own term"); the reason value `owner_fact_election_log_not_applied` is kept (its
+comment now names the own-term fact) so the consumer branch's reason list does not change.
+Settledness (coordinator, this round): the receiver accepts only `role === LEADER` (`NOT_SETTLED`, any other role, or
+a missing role refuses `owner_fact_not_leader`) and `currentTermApplied === true` (missing refuses); it does not gate
+on `settled`/`turnPending` (19.5). If B-1 reports a queued higher-term envelope or backed-up ticks through `role` /
+`leaderPeerId` `NOT_SETTLED`, this code needs no change and only the acceptance witness turns green; if B-1 adds a
+separate flag instead, the receiver needs one condition on it (to be checked when the lead says to merge again).
+
+Results at d358ab712: read-point file 86/86 green, including (i) "a leader whose core has stepped its successor's
+term while its own turn is pending refuses typed" (red at 4a22aa6b4 and 3d017a2b5) and the added caller-side echo
+witness "an answer decided for another floor is not this read's answer" (added with 1(b), not red-first: the echo
+check landed in 3d017a2b5; its mutant is in 19.8); unit 153, witness 3 (32), hosted-replica, redirect/deadline,
+stale published leader, fresh-leader property + census (7), first routing file (107), pinned lifetime test (122),
+read-authority-token (41), the three 8(i) fakes, and the raft owner's `raft-rs-current-authority-observation.test.js`
+(4): green. Red as expected: the B-1 acceptance witness (ii) ("in process: refused, no rows", "over the transport:
+refused, no rows") and the 8(ii) file (C).

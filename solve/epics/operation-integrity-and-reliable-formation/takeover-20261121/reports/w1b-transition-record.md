@@ -881,17 +881,19 @@ Commits on `work/placement-outcome-format-20261121`, pushed:
 - When: all attempts at leadership start (`reconcilePlacementAttempts`), and
   the RELEASE attempts on every pass (`reconcileReleaseAttempts`), because a
   release is re-driven only while its hold is engaged.
-- Transient absence: none found. A hold, once lifted, is never re-engaged
-  under the same operation id: set only on insert at admission (fresh id per
-  log index), cleared only by release; no owner deletes a ledger row, so a
-  retained repair (`decideRetainedPlacementRepair`, which inserts only an ABSENT
-  row) cannot re-create the row with a retained hold inside one ledger lineage.
-  Not traced exhaustively: a writer that rewrites `steps_history` from a stale
-  copy of a held, never-dispatched operation (the expected-step CAS would not
-  stop it). Even then retirement is safe: the release obligation is re-derived
-  from the census on every pass (`submitReleaseIfCopyIdle` mints a fresh
-  attempt for an engaged hold), and a late commit of the retired entry is a
-  release of the same hold (idempotent).
+- Transient absence: none found in one ledger lineage, but "a lifted hold is
+  never re-engaged under the same operation id" is OVERSTATED (corrected after
+  verify-w1b-round3.md R4). Two routes exist in principle: (1) a retained-repair
+  insert of an ABSENT row (`decideRetainedPlacementRepair`) carries the
+  retained history, which may hold the hold; no `DELETE` on `replica_operations`
+  exists in `src`, so "absent" means another ledger lineage or a recreated
+  store; (2) a writer that rewrites `steps_history` from a stale copy of a held,
+  never-dispatched operation: untraced. Safety does NOT rest on that sentence:
+  the apply re-validates every release (`decideHoldRelease`: engaged hold and
+  idle copies, by operation id), and the owner re-derives the release
+  obligation from the census on every pass (`submitReleaseIfCopyIdle` mints a
+  fresh attempt for an engaged hold); a late commit of a retired entry answers
+  HOLD_NOT_HELD or releases the same hold (idempotent).
 - Witness `blocked-release` #3 (real partition: leader a's lost release under
   `...:lost` persisted, leader b releases, a regains leadership): red at R1
   (attempt kept); green at R2 (attempt row gone, `supersededAttempts` lists it
@@ -989,6 +991,33 @@ and `blocked-release` #2 (reads `lastPassSnapshot.blockedAttempts`).
      PLACEMENT_CLEARING_TRIGGER), ...this.blockedAttempts.snapshot()})`, or add
      it inside `placementPassSnapshot`. Without it F6/N1 visibility is lost
      silently (the witnesses read `lastPassSnapshot.blockedAttempts`).
+- Three placement facts for the hand re-application (verify-w1b-round3.md),
+  read at the repair branch tip 3b182f42f or later:
+  - R2, item 5: on the repair branch the tenure guard ("only while the pass is
+    current": `isPassCurrent(pass)`, and the `BEFORE_HOLD_RELEASE` checkpoint)
+    must PRECEDE `redrivenReleaseAttempt`, because that function writes (memory,
+    the durable attempt row, the history), not only the second submit. At my
+    tip there is no pass object: only the partition's leadership prelude fences
+    the second submit, and a deposed leader may replace its local attempt row
+    (reconciled at its next leadership start; no ledger effect).
+  - R3, item 7: at my tip the leadership-start reconcile and retirement run
+    before any term-start barrier (none exists on this branch; the ledger sink
+    is driven by `Boolean(this.isLeader && !this.isShutdown)`,
+    `partition-service-leader-activation-methods.js` ~:72-78). On the repair
+    branch put the per-pass `reconcileReleaseAttempts` in `readPassCensus`
+    (~:686-693, between ~:691 and ~:692) BEHIND `passTermStartBarrier`. A stale
+    local read is safe (the obligation is re-derived from the census on every
+    pass) but must not be the normal path.
+  - R6, item 5: there is no cap on re-drives across passes and none is needed;
+    do not add a loop. The bound that holds: at most one re-drive per
+    `submitHoldRelease` call (the fresh attempt is submitted through
+    `submitPlacementAttempt`, never back through the re-drive), and a pass
+    calls `submitHoldRelease` for one held operation at most once
+    (`shouldStopPlacementPass`). A recurrence on a later pass needs a foreign
+    record under a just-minted uuid entry id (a writer that predicts it); each
+    recurrence costs one upsert of the same attempt row, one info line and one
+    bounded history entry, and a BYTES answer writes no log entry and no
+    outcome row.
 - Constants: the repair branch's `LEADER_UNKNOWN` row (`SERVICES_CHANGED` ->
   `PARTITIONS_CHANGED`) belongs in `PLACEMENT_WAITING_CLEARING_TRIGGER` with
   trigger `PARTITIONS_CHANGED` and must never join
@@ -1002,3 +1031,49 @@ and `blocked-release` #2 (reads `lastPassSnapshot.blockedAttempts`).
 | `w1b-r3-red-a1` | `ce2d8e18f` (R1) | blocked-release, F11 | blocked-release #1 green (idempotence), #2 red ("admitted []"), #3 red (attempt kept); F11 green (pin equals the declaration) |
 | `w1b-r3-green-a1` | `ec1b2f77c85c39940aa856bba0ad2a7548a75b98` (R2, branch tip) | 12 files: blocked-release, F11, attempts-exact-settlement, blocked-attempt, owner core, copy-occupancy, apply, outcome format, boundary, growth-promote, found, retained-row-repair | 9/12 green: all round-3 witnesses (blocked-release 3/3, F11, attempts 3/3, blocked-attempt). Red, identical at base `0993265e5`: owner core #20; growth-promote #7 subtests 40/42; `placement-retained-row-repair` #15, #33-#36, #44 (same six subtests red in `w1b-base-attribution-step1-fails-r2-a1`) |
 | `w1b-mutant-blocked-invisible-a1` | `8b1cd678654c937d1c4ccc46516ca62af6bad6f9` (mutant of R2, local ref `probe/w1b-mutant-blocked-invisible`) | blocked-attempt, blocked-release, attempts-exact-settlement | KILLED: 0/3 files. blocked-attempt #1 "the blocked attempt is a typed, named state"; blocked-release #2 at the snapshot read (the REDRIVEN entry is absent; its behaviour assertions, the release and the other partition's admission, pass); attempts #1/#2 at the blocked-work assertions. F4 residue #3 passes (not visibility-dependent) |
+| `w1b-mutant-definite-moved-a43` | `58d1b07f65700e1aa6490e90f54ef5a4427838c4` (mutant of R2, local ref `probe/w1b-mutant-definite-moved`: BACKPRESSURE moved into `PLACEMENT_DEFINITE_ANSWER_CODES`, out of the waiting map) | F11 | KILLED by the literal pin: "the owner's DEFINITE declaration equals this test's pinned list" (attempts 1-42 of the helper: host not ready, no test result) |
+
+Not run for round 3: the change cone of R2 vs `0993265e5`, the pair commit's
+corpus selection, and any merged tree (integration + retained-repair + this
+branch, or the placement-owner repair branch): the lead schedules these.
+
+### Closing round (verify-w1b-round3.md): R1 witness, R2/R3/R6 merger facts, R4/R5/R7 follow-ups
+
+- R1 [exec]: `blocked-release` #4 witnesses the per-pass
+  `reconcileReleaseAttempts` (an uncertain release whose proposals are lost;
+  its hold is lifted under another entry DURING the tenure; the next pass, not a
+  leadership start, retires it SUPERSEDED_BY_LEDGER). Mutant
+  `probe/w1b-mutant-no-per-pass-release` (the per-pass call sees an empty map):
+  see the runs below.
+- R2, R3, R6: recorded in hand-off (b) above.
+- R4: the "never re-engaged" sentence is corrected above; safety does not rest
+  on it.
+- R5 (follow-up, no change): `blockedAttempts` holds current blocked work and
+  in-memory history together, told apart by `state`:
+  `BLOCKED_ON_KEY_COLLISION` is current (an ADMIT kept under its colliding
+  entry), `REDRIVEN_UNDER_FRESH_ENTRY` is history (a RELEASE already re-driven,
+  naming `redrivenEntryId`). Not split: the round-3 ruling asked for the
+  re-driven release to stay visible in `lastPassSnapshot.blockedAttempts`, and
+  the N1 witness reads it there; a split moves that field. The history is
+  volatile (lost on restart) and bounded (32).
+- R7 [exec]: `blocked-release` #5 witnesses a crash between the re-drive's
+  durable replacement and its proposal: the attempt row names the fresh entry;
+  a second owner on the same store proposes only the fresh entry and releases
+  the hold; the dead entry keeps only the foreign record. A crash BEFORE the
+  upsert (old id left) is not witnessed: the old id meets OTHER_RECORD again
+  and is re-driven under another fresh id (read).
+
+Closing-round commit and runs [exec, adams-gamla]:
+
+| Run dir | Sha | Files | Result |
+| --- | --- | --- | --- |
+| `w1b-r4-green-a1` | `dc7f80b7faaa1950ff8e82c55f53b1c922e79c8e` (branch tip: witnesses #4 and #5) | blocked-release, attempts-exact-settlement, blocked-attempt, F11 | 4/4 green; blocked-release 5/5 |
+| `w1b-mutant-no-per-pass-release-a1` | `5002e7ec32f29836ac37b582085c8c895db8b586` (mutant of the tip, local ref `probe/w1b-mutant-no-per-pass-release`: the per-pass call reconciles an empty map) | blocked-release | KILLED only by #4 ("the release obligation is reached: the attempt retires on the next pass"); #1, #2, #3 (leadership-start retirement) and #5 pass, which confirms R1: before #4 no test saw the per-pass call |
+
+Incident (no effect on any result): the shared scratchpad's `lab-retry.sh` was
+overwritten by another agent with a different argument order. Two of my
+launches with it ran focused.mjs with host names `r4-green` and
+`mutant-no-per-pass-release` (every placement refused, no test ran) and wrote an
+untracked `0993265e5...` directory and two console files into
+`/mnt/data/peter/projects/lagrange`. I stopped both and removed exactly those
+three paths. The two runs above used my own `w1b-lab-retry.sh`.

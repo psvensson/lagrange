@@ -1,0 +1,17 @@
+{
+  "sha": "aaba000fb1cd3ab39403e43033a9494fdea0d222",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/message-router-endpoint-address-change-redial.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/message-router-endpoint-address-change-redial.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

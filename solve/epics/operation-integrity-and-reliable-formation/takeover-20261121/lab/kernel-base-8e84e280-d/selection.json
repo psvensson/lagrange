@@ -1,0 +1,63 @@
+{
+  "sha": "8e84e2801987b162359de39ef35e54aaf8462261",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-participant-transaction-apply.test.js",
+    "test/partition/partition-participant-transaction-topology.test.js",
+    "test/partition/placement-retained-leadership.test.js",
+    "test/partition/write-path-epoch-fencing.test.js",
+    "test/partition/settled-replay-preserves-result.test.js",
+    "test/partition/partition-cdc-delivery-progress.test.js",
+    "test/partition/proposal-queue-capacity.property.test.js",
+    "test/partition/proposal-queue-size-invariant.property.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js",
+    "test/partition/participant-release-applied-position.test.js",
+    "test/partition/participant-release-build-provenance.test.js",
+    "test/partition/participant-release-caller-lifetimes.test.js",
+    "test/partition/participant-release-control-three-member.test.js",
+    "test/partition/participant-release-current-control-replay.test.js",
+    "test/partition/participant-release-deadline-recovery.test.js",
+    "test/partition/participant-release-delivery-recorder.test.js",
+    "test/partition/participant-release-first-prepare-native.test.js",
+    "test/partition/participant-release-native-application-order.test.js",
+    "test/partition/participant-release-prepared-settlement-native.test.js",
+    "test/partition/participant-release-prepare-identity-native.test.js",
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/participant-release-retention-native.test.js",
+    "test/partition/partition-runtime-reconstruction-leadership.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/participant-release-caller-lifetimes.test.js",
+        "test/partition/participant-release-current-control-replay.test.js",
+        "test/partition/placement-retained-leadership.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/participant-release-protocol.test.js",
+        "test/partition/partition-cdc-delivery-progress.test.js",
+        "test/partition/participant-release-prepared-settlement-native.test.js",
+        "test/partition/participant-release-retention-native.test.js",
+        "test/partition/settled-replay-preserves-result.test.js",
+        "test/partition/partition-participant-transaction-topology.test.js",
+        "test/partition/participant-release-prepare-identity-native.test.js",
+        "test/partition/participant-release-build-provenance.test.js",
+        "test/partition/participant-release-first-prepare-native.test.js",
+        "test/partition/participant-release-applied-position.test.js",
+        "test/partition/participant-release-deadline-recovery.test.js",
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/participant-release-control-three-member.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js",
+        "test/partition/write-path-epoch-fencing.test.js",
+        "test/partition/participant-release-delivery-recorder.test.js",
+        "test/partition/proposal-queue-size-invariant.property.test.js",
+        "test/partition/proposal-queue-capacity.property.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

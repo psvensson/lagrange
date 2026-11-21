@@ -1,0 +1,32 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: b3c84c85a2ddd491cfe9d535b3712ac07387931d
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 2 JavaScript files
+Found 0 new literal-guideline violations
+Matched 2 inherited literal-guideline baseline violations
+Scanned 2 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 2 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 2 JavaScript files
+Found 0 silent catch violations
+Matched 1 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 2 JavaScript files
+Found 1 navigability violations
+Top files:
+- src/cdc/cdc-routed-write-uncertainty.js: 1
+src/cdc/cdc-routed-write-uncertainty.js:44 failure two_source_fallback_reads: one fact read from two sources; read the one authority for that fact
+Matched 10 inherited navigability baseline violations
+pre-commit: FAIL - navigability patterns (staged files)
+Scoped complexity ratchet: 3 violation(s) in 2 target(s) (threshold: 12).
+src/cdc/cdc-routed-mutation-readiness.js:160:3 Async method 'tryExecuteLocalSystemTableWrite' has a complexity of 23. Maximum allowed is 12.
+src/cdc/cdc-routed-mutation-readiness.js:356:3 Async method 'executeSQLViaQueryEngine' has a complexity of 70. Maximum allowed is 12.
+src/cdc/cdc-routed-mutation-readiness.js:697:3 Method 'isTransientCdcError' has a complexity of 16. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)

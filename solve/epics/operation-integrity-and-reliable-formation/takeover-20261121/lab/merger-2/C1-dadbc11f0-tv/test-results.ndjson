@@ -1,0 +1,1 @@
+{"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":false,"assertions":12,"durationMs":2706,"retriedOnce":false,"firstFailureLine":"not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row"}

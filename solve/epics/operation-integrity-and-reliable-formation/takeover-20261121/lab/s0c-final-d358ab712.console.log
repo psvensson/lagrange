@@ -1,0 +1,228 @@
+lab test: adam-laptop: ordinary (16 files) cores=8 mem=15.5GiB speed x1.96
+[adam-laptop] placement-shell=3842181
+[adam-laptop] placement-head=d358ab712f3c09f1d5d45ea627ca76d8f225d824
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3842750
+[adam-laptop] # test-files planned=16
+[adam-laptop] classified lane ordinary: 16 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/cache/system-table-cache-observation.test.js (14 assertions, 2412ms)
+[adam-laptop] ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 3271ms)
+[adam-laptop] ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 3767ms)
+[adam-laptop] ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (7 assertions, 8412ms)
+[adam-laptop] ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2137ms)
+[adam-laptop] ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 7266ms)
+[adam-laptop] ok test/control-plane/control-plane-owner-fact-read.test.js (153 assertions, 808ms)
+[adam-laptop] not ok test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js (7 assertions, 9480ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: B-1 ACCEPTANCE (red until the raft owner's correction): a leader whose successor's envelope is delivered but still queued behind its own pending turn refuses an owner fact
+[adam-laptop]     ok 1 - setup: a successor leads a newer term and its envelope was delivered to the old leader
+[adam-laptop]     ok 2 - setup: the old leader's turn is pending at a held send
+[adam-laptop]     ok 3 - setup: the old leader has not stepped the newer term
+[adam-laptop]     not ok 4 - in process: refused, no rows
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+[adam-laptop]         lineNumber: 57
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js:57:5)
+[adam-laptop]       source: >2
+[adam-laptop]           const local = await old.handleRemoteQuery(structuredClone(request));
+[adam-laptop]           const remote = await group.deliverOverTransport(second.nodeId, old, structuredClone(request));
+[adam-laptop]           t.ok(refusedWithoutRows(local), 'in process: refused, no rows');
+[adam-laptop]         ----^
+[adam-laptop]           t.ok(refusedWithoutRows(remote), 'over the transport: refused, no rows');
+[adam-laptop]           t.not(local?.failureCode, REASON.ELECTION_LOG_NOT_APPLIED,
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 5 - over the transport: refused, no rows
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+[adam-laptop]         lineNumber: 58
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js:58:5)
+[adam-laptop]       source: >2
+[adam-laptop]           const remote = await group.deliverOverTransport(second.nodeId, old,
+[adam-laptop]         structuredClone(request));
+[adam-laptop]           t.ok(refusedWithoutRows(local), 'in process: refused, no rows');
+[adam-laptop]           t.ok(refusedWithoutRows(remote), 'over the transport: refused, no rows');
+[adam-laptop]         ----^
+[adam-laptop]           t.not(local?.failureCode, REASON.ELECTION_LOG_NOT_APPLIED,
+[adam-laptop]             'the refusal is about leadership, not the election log');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 6 - the refusal is about leadership, not the election log
+[adam-laptop]     1..6
+[adam-laptop] not ok 1 - B-1 ACCEPTANCE (red until the raft owner's correction): a leader whose successor's envelope is delivered but still queued behind its own pending turn refuses an owner fact # time=6959.883ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+[adam-laptop]     lineNumber: 35
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('B-1 ACCEPTANCE (red until the raft owner\'s correction): a leader whose
+[adam-laptop]     successor\'s ' +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'envelope is delivered but still queued behind its own pending turn refuses an owner fact',
+[adam-laptop]     {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..1
+[adam-laptop] # { total: 6, pass: 4, fail: 2 }
+[adam-laptop] # time=6991.051ms
+[adam-laptop] ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 3098ms)
+[adam-laptop] not ok test/control-plane/readiness-owner-authority-contract.test.js (15 assertions, 1919ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop] # Subtest: the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated
+[adam-laptop]     ok 1 - the named API reaches the pre-ready canonical services owner
+[adam-laptop]     ok 2 - the named API returns only the witnessed owner answer
+[adam-laptop]     ok 3 - the named API preserves readiness-owner purpose through the view and CDC
+[adam-laptop]     ok 4 - the readiness-owned read does not re-enter readiness adjudication
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 5 - the named readiness-owner API cannot be weakened by caller options
+[adam-laptop]     ok 6 - the named API owns the complete authority and fallback contract
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 7 - an ordinary read routes on the same structural route during recovery
+[adam-laptop]     ok 8 - ordinary system-table routing does not consult readiness
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 9 - an old follower session pin cannot displace the canonical leader
+[adam-laptop]     ok 10 - leader-required routing ignores follower session affinity
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     not ok 11 - a live follower cannot replace missing canonical leader authority
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]         lineNumber: 294
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/readiness-owner-authority-contract.test.js:294:5)
+[adam-laptop]       source: |2
+[adam-laptop]             {readAuthority: hostileReadAuthority},
+[adam-laptop]           );
+[adam-laptop]           t.equal(missingLeaderResult.success, false,
+[adam-laptop]         ----^
+[adam-laptop]             'a live follower cannot replace missing canonical leader authority');
+[adam-laptop]           t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -false
+[adam-laptop]         +true
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 12 - leader-required routing never sends the owner read to the follower
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]         lineNumber: 296
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/readiness-owner-authority-contract.test.js:296:5)
+[adam-laptop]       source: |2
+[adam-laptop]           t.equal(missingLeaderResult.success, false,
+[adam-laptop]             'a live follower cannot replace missing canonical leader authority');
+[adam-laptop]           t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+[adam-laptop]         ----^
+[adam-laptop]             'leader-required routing never sends the owner read to the follower');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -4
+[adam-laptop]         +5
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 13 - an ACK without a current Raft leader witness cannot release formation
+[adam-laptop]     ok 14 - unwitnessed owner rows are discarded instead of becoming evidence
+[adam-laptop]     1..14
+[adam-laptop] not ok 1 - the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated # time=220.408ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]     lineNumber: 45
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('the readiness-owner API carries non-downgradable authority across ' +
+[adam-laptop]     ^
+[adam-laptop]       'owner RPC while ordinary recovery reads remain readiness-gated',
+[adam-laptop]     async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..1
+[adam-laptop] # { total: 14, pass: 12, fail: 2 }
+[adam-laptop] # time=243.633ms
+[adam-laptop] Canonical partition leader service missing {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   leaderNodeId: 'missing-leader',
+[adam-laptop]   routableNodeIds: [ 'services-owner', 'services-follower' ],
+[adam-laptop]   staleLeaderNodeIds: [],
+[adam-laptop]   routingSnapshot: {
+[adam-laptop]     reasonCode: 'ok',
+[adam-laptop]     routingReadinessDimension: 'controlPlaneRecoveryEligible',
+[adam-laptop]     serviceRowCount: 2,
+[adam-laptop]     activeAddressedServiceCount: 2,
+[adam-laptop]     routableServiceCount: 2,
+[adam-laptop]     canonicalLeaderServiceCount: 0,
+[adam-laptop]     leaderKnown: true,
+[adam-laptop]     canonicalLeaderNodeId: 'missing-leader',
+[adam-laptop]     deniedByNodeId: {}
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] ok test/control-plane/control-plane-read-authority-token.test.js (41 assertions, 2592ms)
+[adam-laptop] ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (86 assertions, 11290ms)
+[adam-laptop] ok test/query/parallel-query-coordinator.test.js (121 assertions, 4731ms)
+[adam-laptop] ok test/raft/raft-rs-current-authority-observation.test.js (4 assertions, 3866ms)
+[adam-laptop] ok test/query/system-table-ingress-boundary-adversarial.test.js (3074 assertions, 5062ms)
+[adam-laptop] ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 11151ms)
+[adam-laptop] # test-files total=16 pass=14 fail=2 assertions=3823
+lab test: adam-laptop: # test-files total=16 pass=14 fail=2 assertions=3823
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=16 pass=14 fail=2 assertions=3823

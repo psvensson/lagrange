@@ -1,0 +1,960 @@
+lab test: adams-gamla: ordinary (2 files) cores=4 mem=15.6GiB speed x2.07
+[adams-gamla] placement-shell=2086868
+[adams-gamla] placement-head=4a22aa6b4f3c9a99fa51342d4eb1da24f9d55cc1
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=2087324
+[adams-gamla] # test-files planned=2
+[adams-gamla] classified lane ordinary: 2 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/control-plane/control-plane-owner-fact-read.test.js (122 assertions, 765ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: a request that names no mode reaches the reader leader-required
+[adams-gamla]     ok 1 - one read
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equivalent
+[adams-gamla]     ok 5 - never a weaker default mode
+[adams-gamla]     ok 6 - never a weaker default leader mode
+[adams-gamla]     ok 7 - the caller's floors travel with the read
+[adams-gamla]     ok 8 - the token cannot be weakened downstream
+[adams-gamla]     ok 9 - a failed read is typed unavailability, with no rows field
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     1..10
+[adams-gamla] ok 1 - readOwnerFact: a request that names no mode reaches the reader leader-required # time=9.416ms
+[adams-gamla] 
+[adams-gamla] # Subtest: buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction
+[adams-gamla]     ok 1 - authoritativeReadMode=owner_local_only: typed refusal
+[adams-gamla]     ok 2 - authoritativeReadMode=owner_local_only: refusal code
+[adams-gamla]     ok 3 - authoritativeReadMode=owner_local_only: the refused field is named
+[adams-gamla]     ok 4 - authoritativeReadMode=owner_local_only: no read was issued
+[adams-gamla]     ok 5 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: typed refusal
+[adams-gamla]     ok 6 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: refusal code
+[adams-gamla]     ok 7 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: the refused field is named
+[adams-gamla]     ok 8 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: no read was issued
+[adams-gamla]     ok 9 - authoritativeReadMode=owner_rpc_required: typed refusal
+[adams-gamla]     ok 10 - authoritativeReadMode=owner_rpc_required: refusal code
+[adams-gamla]     ok 11 - authoritativeReadMode=owner_rpc_required: the refused field is named
+[adams-gamla]     ok 12 - authoritativeReadMode=owner_rpc_required: no read was issued
+[adams-gamla]     ok 13 - authoritativeReadMode=no_such_mode: typed refusal
+[adams-gamla]     ok 14 - authoritativeReadMode=no_such_mode: refusal code
+[adams-gamla]     ok 15 - authoritativeReadMode=no_such_mode: the refused field is named
+[adams-gamla]     ok 16 - authoritativeReadMode=no_such_mode: no read was issued
+[adams-gamla]     ok 17 - authoritativeReadMode=undefined: typed refusal
+[adams-gamla]     ok 18 - authoritativeReadMode=undefined: refusal code
+[adams-gamla]     ok 19 - authoritativeReadMode=undefined: the refused field is named
+[adams-gamla]     ok 20 - authoritativeReadMode=undefined: no read was issued
+[adams-gamla]     ok 21 - leaderMode=any: typed refusal
+[adams-gamla]     ok 22 - leaderMode=any: refusal code
+[adams-gamla]     ok 23 - leaderMode=any: the refused field is named
+[adams-gamla]     ok 24 - leaderMode=any: no read was issued
+[adams-gamla]     ok 25 - leaderMode=preferred: typed refusal
+[adams-gamla]     ok 26 - leaderMode=preferred: refusal code
+[adams-gamla]     ok 27 - leaderMode=preferred: the refused field is named
+[adams-gamla]     ok 28 - leaderMode=preferred: no read was issued
+[adams-gamla]     ok 29 - leaderMode=required: typed refusal
+[adams-gamla]     ok 30 - leaderMode=required: refusal code
+[adams-gamla]     ok 31 - leaderMode=required: the refused field is named
+[adams-gamla]     ok 32 - leaderMode=required: no read was issued
+[adams-gamla]     ok 33 - leaderMode=no_such_leader_mode: typed refusal
+[adams-gamla]     ok 34 - leaderMode=no_such_leader_mode: refusal code
+[adams-gamla]     ok 35 - leaderMode=no_such_leader_mode: the refused field is named
+[adams-gamla]     ok 36 - leaderMode=no_such_leader_mode: no read was issued
+[adams-gamla]     ok 37 - leaderMode=undefined: typed refusal
+[adams-gamla]     ok 38 - leaderMode=undefined: refusal code
+[adams-gamla]     ok 39 - leaderMode=undefined: the refused field is named
+[adams-gamla]     ok 40 - leaderMode=undefined: no read was issued
+[adams-gamla]     ok 41 - strategy=cache: typed refusal
+[adams-gamla]     ok 42 - strategy=cache: refusal code
+[adams-gamla]     ok 43 - strategy=cache: the refused field is named
+[adams-gamla]     ok 44 - strategy=cache: no read was issued
+[adams-gamla]     ok 45 - readProfile=planning: typed refusal
+[adams-gamla]     ok 46 - readProfile=planning: refusal code
+[adams-gamla]     ok 47 - readProfile=planning: the refused field is named
+[adams-gamla]     ok 48 - readProfile=planning: no read was issued
+[adams-gamla]     ok 49 - localReadConsistency=any_replica: typed refusal
+[adams-gamla]     ok 50 - localReadConsistency=any_replica: refusal code
+[adams-gamla]     ok 51 - localReadConsistency=any_replica: the refused field is named
+[adams-gamla]     ok 52 - localReadConsistency=any_replica: no read was issued
+[adams-gamla]     ok 53 - replicaFallbackConsistency=any_replica: typed refusal
+[adams-gamla]     ok 54 - replicaFallbackConsistency=any_replica: refusal code
+[adams-gamla]     ok 55 - replicaFallbackConsistency=any_replica: the refused field is named
+[adams-gamla]     ok 56 - replicaFallbackConsistency=any_replica: no read was issued
+[adams-gamla]     ok 57 - preferLeader=false: typed refusal
+[adams-gamla]     ok 58 - preferLeader=false: refusal code
+[adams-gamla]     ok 59 - preferLeader=false: the refused field is named
+[adams-gamla]     ok 60 - preferLeader=false: no read was issued
+[adams-gamla]     1..60
+[adams-gamla] ok 2 - buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction # time=6.687ms
+[adams-gamla] 
+[adams-gamla] # Subtest: buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted
+[adams-gamla]     ok 1 - no index floor: typed refusal
+[adams-gamla]     ok 2 - no index floor: refusal code
+[adams-gamla]     ok 3 - no index floor: the refused field is named
+[adams-gamla]     ok 4 - no index floor: no read was issued
+[adams-gamla]     ok 5 - no term floor: typed refusal
+[adams-gamla]     ok 6 - no term floor: refusal code
+[adams-gamla]     ok 7 - no term floor: the refused field is named
+[adams-gamla]     ok 8 - no term floor: no read was issued
+[adams-gamla]     ok 9 - negative index floor: typed refusal
+[adams-gamla]     ok 10 - negative index floor: refusal code
+[adams-gamla]     ok 11 - negative index floor: the refused field is named
+[adams-gamla]     ok 12 - negative index floor: no read was issued
+[adams-gamla]     ok 13 - fractional term floor: typed refusal
+[adams-gamla]     ok 14 - fractional term floor: refusal code
+[adams-gamla]     ok 15 - fractional term floor: the refused field is named
+[adams-gamla]     ok 16 - fractional term floor: no read was issued
+[adams-gamla]     ok 17 - text index floor: typed refusal
+[adams-gamla]     ok 18 - text index floor: refusal code
+[adams-gamla]     ok 19 - text index floor: the refused field is named
+[adams-gamla]     ok 20 - text index floor: no read was issued
+[adams-gamla]     ok 21 - no statement: typed refusal
+[adams-gamla]     ok 22 - no statement: refusal code
+[adams-gamla]     ok 23 - no statement: the refused field is named
+[adams-gamla]     ok 24 - no statement: no read was issued
+[adams-gamla]     ok 25 - params not a list: typed refusal
+[adams-gamla]     ok 26 - params not a list: refusal code
+[adams-gamla]     ok 27 - params not a list: the refused field is named
+[adams-gamla]     ok 28 - params not a list: no read was issued
+[adams-gamla]     ok 29 - a table with no owner partition: typed refusal
+[adams-gamla]     ok 30 - a table with no owner partition: refusal code
+[adams-gamla]     ok 31 - a table with no owner partition: the refused field is named
+[adams-gamla]     ok 32 - a table with no owner partition: no read was issued
+[adams-gamla]     ok 33 - half an expected replica: typed refusal
+[adams-gamla]     ok 34 - half an expected replica: refusal code
+[adams-gamla]     ok 35 - half an expected replica: the refused field is named
+[adams-gamla]     ok 36 - half an expected replica: no read was issued
+[adams-gamla]     ok 37 - a missing reader port: typed refusal
+[adams-gamla]     ok 38 - should be equal
+[adams-gamla]     1..38
+[adams-gamla] ok 3 - buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted # time=4.083ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: the floor is a typed partition position, and the deadline and the routing class are required and travel with the read
+[adams-gamla]     not ok 1 - owner_fact_unknown_field: floor
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         refuseUnknownFields
+[adams-gamla]         (src/control-plane/control-plane-owner-fact-read.js:100:13)
+[adams-gamla]       
+[adams-gamla]         buildOwnerFactRequest
+[adams-gamla]         (src/control-plane/control-plane-owner-fact-read.js:153:3)
+[adams-gamla]       
+[adams-gamla]         readOwnerFact (src/control-plane/control-plane-owner-fact-read.js:242:19)
+[adams-gamla]       
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:152:9)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/control-plane/control-plane-owner-fact-read.js
+[adams-gamla]         lineNumber: 100
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         functionName: refuseUnknownFields
+[adams-gamla]       type: OwnerFactRequestRefusal
+[adams-gamla]       code: owner_fact_unknown_field
+[adams-gamla]       field: floor
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]           for (const key of Object.keys(draft ?? {})) {
+[adams-gamla]             if (!allowed.has(key)) {
+[adams-gamla]               throw new OwnerFactRequestRefusal(OWNER_FACT_REQUEST_REFUSAL.UNKNOWN_FIELD, key);
+[adams-gamla]         ------------^
+[adams-gamla]             }
+[adams-gamla]           }
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 4 - readOwnerFact: the floor is a typed partition position, and the deadline and the routing class are required and travel with the read # time=31.574ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]     lineNumber: 149
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: the floor is a typed partition position, and the deadline
+[adams-gamla]     and the routing ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'class are required and travel with the read', async (t) => {
+[adams-gamla]       const reader = recordingReader();
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readHint: a hint is not an owner fact and cannot be read as one
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equivalent
+[adams-gamla]     ok 3 - a hint carries no owner-fact identity
+[adams-gamla]     ok 4 - a hint cannot be passed where an owner fact is required
+[adams-gamla]     ok 5 - a shape-compatible object is not an owner fact
+[adams-gamla]     ok 6 - only an answer readOwnerFact issued yields rows
+[adams-gamla]     ok 7 - a failed hint read is typed, never []
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     1..8
+[adams-gamla] ok 5 - readHint: a hint is not an owner fact and cannot be read as one # time=1.738ms
+[adams-gamla] 
+[adams-gamla] 1..5
+[adams-gamla] # { total: 117, pass: 116, fail: 1 }
+[adams-gamla] # time=82.844ms
+[adams-gamla] not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (73 assertions, 9749ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+[adams-gamla]     ok 1 - in process: never READY without the row
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - routed: never READY without the row
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - the fresh leader ships no rows
+[adams-gamla]     1..6
+[adams-gamla] ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=3818.048ms
+[adams-gamla] 
+[adams-gamla] # Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+[adams-gamla]     ok 1 - leader: same typed answer
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - follower: same typed answer
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - names the leader it knows
+[adams-gamla]     ok 8 - insufficiently applied leader: same typed answer
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - deposed leader: same typed answer
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - names the leader that replaced it
+[adams-gamla]     1..14
+[adams-gamla] ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=445.612ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+[adams-gamla]     ok 1 - the read reaches the replica that leads now
+[adams-gamla]     ok 2 - never the replica that stopped leading during its read
+[adams-gamla]     ok 3 - should be equivalent
+[adams-gamla]     ok 4 - the old leader refused after its read, shipping no rows
+[adams-gamla]     1..4
+[adams-gamla] ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=343.466ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote
+[adams-gamla]     not ok 1 - in process, beforeRead: READY, the position is read, not inferred
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 197
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:197:9)
+[adams-gamla]       source: >2
+[adams-gamla]               held.release();
+[adams-gamla]               const answer = await pending;
+[adams-gamla]               t.equal(answer.state, STATE.READY, `${label}: READY, the position is read, not inferred`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(answer.witness?.appliedIndex, held.readAt(),
+[adams-gamla]                 `${label}: the witness names the applied position the statement read at`);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -ready
+[adams-gamla]         +unavailable
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 2 - in process, beforeRead: the witness names the applied position the statement read at
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 198
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:198:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const answer = await pending;
+[adams-gamla]               t.equal(answer.state, STATE.READY, `${label}: READY, the position is read, not inferred`);
+[adams-gamla]               t.equal(answer.witness?.appliedIndex, held.readAt(),
+[adams-gamla]         --------^
+[adams-gamla]                 `${label}: the witness names the applied position the statement read at`);
+[adams-gamla]               const when = placement === 'beforeRead' ? 'before' : 'after';
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -5
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 3 - in process, beforeRead: the write applied before that position
+[adams-gamla]     not ok 4 - in process, beforeRead: the rows are those of that position
+[adams-gamla]       ---
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,6 +1,1 @@
+[adams-gamla]         -Array [
+[adams-gamla]         -  Object {
+[adams-gamla]         -    "operation_id": "read-point-operation-in-process-beforeRead",
+[adams-gamla]         -    "workflow_step": "replica_operations-p1-r1",
+[adams-gamla]         -  },
+[adams-gamla]         -]
+[adams-gamla]         +null
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 203
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:203:9)
+[adams-gamla]       source: |2
+[adams-gamla]               t.equal(held.readAt() >= writtenAt, placement === 'beforeRead',
+[adams-gamla]                 `${label}: the write applied ${when} that position`);
+[adams-gamla]               t.same(answer.state === STATE.READY ? ownerFactRows(answer) : null,
+[adams-gamla]         --------^
+[adams-gamla]                 placement === 'beforeRead' ?
+[adams-gamla]                   [{operation_id: operationId, workflow_step: leader.replicaId}] : [],
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 5 - in process, afterRead: READY, the position is read, not inferred
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 197
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:197:9)
+[adams-gamla]       source: >2
+[adams-gamla]               held.release();
+[adams-gamla]               const answer = await pending;
+[adams-gamla]               t.equal(answer.state, STATE.READY, `${label}: READY, the position is read, not inferred`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(answer.witness?.appliedIndex, held.readAt(),
+[adams-gamla]                 `${label}: the witness names the applied position the statement read at`);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -ready
+[adams-gamla]         +unavailable
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 6 - in process, afterRead: the witness names the applied position the statement read at
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 198
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:198:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const answer = await pending;
+[adams-gamla]               t.equal(answer.state, STATE.READY, `${label}: READY, the position is read, not inferred`);
+[adams-gamla]               t.equal(answer.witness?.appliedIndex, held.readAt(),
+[adams-gamla]         --------^
+[adams-gamla]                 `${label}: the witness names the applied position the statement read at`);
+[adams-gamla]               const when = placement === 'beforeRead' ? 'before' : 'after';
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -5
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 7 - in process, afterRead: the write applied after that position
+[adams-gamla]     not ok 8 - in process, afterRead: the rows are those of that position
+[adams-gamla]       ---
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -Array []
+[adams-gamla]         +null
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 203
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:203:9)
+[adams-gamla]       source: |2
+[adams-gamla]               t.equal(held.readAt() >= writtenAt, placement === 'beforeRead',
+[adams-gamla]                 `${label}: the write applied ${when} that position`);
+[adams-gamla]               t.same(answer.state === STATE.READY ? ownerFactRows(answer) : null,
+[adams-gamla]         --------^
+[adams-gamla]                 placement === 'beforeRead' ?
+[adams-gamla]                   [{operation_id: operationId, workflow_step: leader.replicaId}] : [],
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 9 - remote, beforeRead: READY, the position is read, not inferred
+[adams-gamla]     ok 10 - remote, beforeRead: the witness names the applied position the statement read at
+[adams-gamla]     ok 11 - remote, beforeRead: the write applied before that position
+[adams-gamla]     ok 12 - remote, beforeRead: the rows are those of that position
+[adams-gamla]     ok 13 - remote, afterRead: READY, the position is read, not inferred
+[adams-gamla]     not ok 14 - remote, afterRead: the witness names the applied position the statement read at
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 198
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:198:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const answer = await pending;
+[adams-gamla]               t.equal(answer.state, STATE.READY, `${label}: READY, the position is read, not inferred`);
+[adams-gamla]               t.equal(answer.witness?.appliedIndex, held.readAt(),
+[adams-gamla]         --------^
+[adams-gamla]                 `${label}: the witness names the applied position the statement read at`);
+[adams-gamla]               const when = placement === 'beforeRead' ? 'before' : 'after';
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -7
+[adams-gamla]         +8
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 15 - remote, afterRead: the write applied after that position
+[adams-gamla]     not ok 16 - remote, afterRead: the rows are those of that position
+[adams-gamla]       ---
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,6 @@
+[adams-gamla]         -Array []
+[adams-gamla]         +Array [
+[adams-gamla]         +  Object {
+[adams-gamla]         +    "operation_id": "read-point-operation-remote-afterRead",
+[adams-gamla]         +    "workflow_step": "replica_operations-p1-r1",
+[adams-gamla]         +  },
+[adams-gamla]         +]
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 203
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:203:9)
+[adams-gamla]       source: |2
+[adams-gamla]               t.equal(held.readAt() >= writtenAt, placement === 'beforeRead',
+[adams-gamla]                 `${label}: the write applied ${when} that position`);
+[adams-gamla]               t.same(answer.state === STATE.READY ? ownerFactRows(answer) : null,
+[adams-gamla]         --------^
+[adams-gamla]                 placement === 'beforeRead' ?
+[adams-gamla]                   [{operation_id: operationId, workflow_step: leader.replicaId}] : [],
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..16
+[adams-gamla] not ok 4 - readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote # time=551.974ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 174
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: an apply landing between the receiver\'s observation and
+[adams-gamla]     its statement, ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'or after the statement, is READY at the position the rows reflect, in process and remote',
+[adams-gamla]     {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport
+[adams-gamla]     ok 1 - setup: the old leader's core answered the successor's term, and that send is pending
+[adams-gamla]     ok 2 - setup: the status the old leader reports is still its last announced observation
+[adams-gamla]     not ok 3 - in process: its core no longer leads, so it refuses
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 233
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:233:5)
+[adams-gamla]       source: >2
+[adams-gamla]           const remote = decisionOf(
+[adams-gamla]             await group.deliverOverTransport(other.nodeId, old, structuredClone(request)));
+[adams-gamla]           t.equal(local.failureCode, REASON.NOT_LEADER, 'in process: its core no longer leads, so it refuses');
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(local.shipsRows, false, 'in process: no rows');
+[adams-gamla]           t.same(remote, local, 'over the transport: the same typed answer');
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact_not_leader
+[adams-gamla]         +null
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 4 - in process: no rows
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 234
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:234:5)
+[adams-gamla]       source: >2
+[adams-gamla]             await group.deliverOverTransport(other.nodeId, old, structuredClone(request)));
+[adams-gamla]           t.equal(local.failureCode, REASON.NOT_LEADER, 'in process: its core no longer leads, so it refuses');
+[adams-gamla]           t.equal(local.shipsRows, false, 'in process: no rows');
+[adams-gamla]         ----^
+[adams-gamla]           t.same(remote, local, 'over the transport: the same typed answer');
+[adams-gamla]           held.release();
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -false
+[adams-gamla]         +true
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 5 - over the transport: the same typed answer
+[adams-gamla]     1..5
+[adams-gamla] not ok 5 - readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport # time=284.003ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 211
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: a leader whose core has stepped its successor\'s term
+[adams-gamla]     while its own turn ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'is pending refuses typed, in process and over the transport',
+[adams-gamla]     {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer
+[adams-gamla]     not ok 1 - it does not wait on the plain read's flight
+[adams-gamla]       ---
+[adams-gamla]       found: null
+[adams-gamla]       doNotWant: null
+[adams-gamla]       compare: "!=="
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 256
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:256:5)
+[adams-gamla]       source: >2
+[adams-gamla]           await plain;
+[adams-gamla]           await ownerFact;
+[adams-gamla]           t.not(answer, null, 'it does not wait on the plain read\'s flight');
+[adams-gamla]         ----^
+[adams-gamla]           const decided = group.transit.slice(sentBefore).filter(({targetNodeId, leaderRead}) =>
+[adams-gamla]             targetNodeId === leader.nodeId && leaderRead?.kind === 'owner_fact');
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 2 - the leader received the owner-fact request and decided it
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 259
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:259:5)
+[adams-gamla]       source: >2
+[adams-gamla]           const decided = group.transit.slice(sentBefore).filter(({targetNodeId,
+[adams-gamla]         leaderRead}) =>
+[adams-gamla]             targetNodeId === leader.nodeId && leaderRead?.kind === 'owner_fact');
+[adams-gamla]           t.equal(decided.length, 1, 'the leader received the owner-fact request and decided it');
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(answer?.state, STATE.READY);
+[adams-gamla]           t.equal(answer?.witness?.leaderRead?.kind, 'owner_fact',
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -1
+[adams-gamla]         +0
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 3 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 260
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:260:5)
+[adams-gamla]       source: >2
+[adams-gamla]             targetNodeId === leader.nodeId && leaderRead?.kind === 'owner_fact');
+[adams-gamla]           t.equal(decided.length, 1, 'the leader received the owner-fact request and decided it');
+[adams-gamla]           t.equal(answer?.state, STATE.READY);
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(answer?.witness?.leaderRead?.kind, 'owner_fact',
+[adams-gamla]             'the answer echoes an owner-fact decision');
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -ready
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 4 - the answer echoes an owner-fact decision
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 261
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:261:5)
+[adams-gamla]       source: >2
+[adams-gamla]           t.equal(decided.length, 1, 'the leader received the owner-fact request and
+[adams-gamla]         decided it');
+[adams-gamla]           t.equal(answer?.state, STATE.READY);
+[adams-gamla]           t.equal(answer?.witness?.leaderRead?.kind, 'owner_fact',
+[adams-gamla]         ----^
+[adams-gamla]             'the answer echoes an owner-fact decision');
+[adams-gamla]           t.same(answer?.witness?.leaderRead, decided[0]?.leaderRead,
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 5 - the answer echoes exactly the request its receiver decided
+[adams-gamla]     1..5
+[adams-gamla] not ok 6 - readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer # time=1332.35ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 239
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: an owner fact arriving while a plain strict read of the
+[adams-gamla]     same statement is ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'in flight gets its own decided answer', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows
+[adams-gamla]     not ok 1 - in process: never the staged absence
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 284
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:284:9)
+[adams-gamla]       source: >2
+[adams-gamla]             for (const [path, surface] of Object.entries(surfaces)) {
+[adams-gamla]               const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+[adams-gamla]               t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+[adams-gamla]               t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -unavailable
+[adams-gamla]         +ready
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 2 - in process: typed
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 285
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:285:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+[adams-gamla]               t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+[adams-gamla]               t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+[adams-gamla]             }
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact_foreign_transaction
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 3 - in process: no rows
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 286
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:286:9)
+[adams-gamla]       source: >2
+[adams-gamla]               t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+[adams-gamla]               t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+[adams-gamla]               t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+[adams-gamla]         --------^
+[adams-gamla]             }
+[adams-gamla]           } finally {
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -false
+[adams-gamla]         +true
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 4 - remote: never the staged absence
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 284
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:284:9)
+[adams-gamla]       source: >2
+[adams-gamla]             for (const [path, surface] of Object.entries(surfaces)) {
+[adams-gamla]               const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+[adams-gamla]               t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+[adams-gamla]               t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -unavailable
+[adams-gamla]         +ready
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 5 - remote: typed
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 285
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:285:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+[adams-gamla]               t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+[adams-gamla]               t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+[adams-gamla]             }
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact_foreign_transaction
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 6 - remote: no rows
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 286
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:286:9)
+[adams-gamla]       source: >2
+[adams-gamla]               t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+[adams-gamla]               t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+[adams-gamla]               t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+[adams-gamla]         --------^
+[adams-gamla]             }
+[adams-gamla]           } finally {
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -false
+[adams-gamla]         +true
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 7 - with the transaction gone the leader answers
+[adams-gamla]     ok 8 - should be equivalent
+[adams-gamla]     1..8
+[adams-gamla] not ok 7 - readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows # time=357.619ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 267
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: a read on a connection inside a transaction the receiver
+[adams-gamla]     did not open is ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'refused typed, never answered with the staged rows', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group
+[adams-gamla]     not ok 1 - leader_read_request_malformed
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         leaderReadRequestOf
+[adams-gamla]         (src/control-plane/control-plane-owner-fact-read-contract.js:103:11)
+[adams-gamla]       
+[adams-gamla]         leaderReadFieldOf
+[adams-gamla]         (src/query/query-executor-partition-request-builders.js:123:35)
+[adams-gamla]       
+[adams-gamla]         createDefaultPartitionRequestBuilder
+[adams-gamla]         (src/query/query-executor-partition-request-builders.js:135:27)
+[adams-gamla]       
+[adams-gamla]         ownerFactRequestTo (test/cdc/cdc-owner-fact-group-fixture.js:130:10)
+[adams-gamla]       
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:307:5)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/control-plane/control-plane-owner-fact-read-contract.js
+[adams-gamla]         lineNumber: 103
+[adams-gamla]         columnNumber: 11
+[adams-gamla]         functionName: leaderReadRequestOf
+[adams-gamla]       type: TypeError
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]           const read = ownerFactReadOf(ownerFactFloor);
+[adams-gamla]           if (read === null) {
+[adams-gamla]             throw new TypeError(LEADER_READ_REQUEST_MALFORMED);
+[adams-gamla]         ----------^
+[adams-gamla]           }
+[adams-gamla]           return read;
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 8 - readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group # time=275.932ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 298
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: a floor is a position of one raft group; the receiver
+[adams-gamla]     refuses a floor of ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'another group', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: the deadline and the routing class are required and travel to the query owner
+[adams-gamla]     not ok 1 - owner_fact_unknown_field: floor
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         refuseUnknownFields
+[adams-gamla]         (src/control-plane/control-plane-owner-fact-read.js:100:13)
+[adams-gamla]       
+[adams-gamla]         buildOwnerFactRequest
+[adams-gamla]         (src/control-plane/control-plane-owner-fact-read.js:153:3)
+[adams-gamla]       
+[adams-gamla]         readOwnerFact (src/control-plane/control-plane-owner-fact-read.js:242:19)
+[adams-gamla]       
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:333:24)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/control-plane/control-plane-owner-fact-read.js
+[adams-gamla]         lineNumber: 100
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         functionName: refuseUnknownFields
+[adams-gamla]       type: OwnerFactRequestRefusal
+[adams-gamla]       code: owner_fact_unknown_field
+[adams-gamla]       field: floor
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]           for (const key of Object.keys(draft ?? {})) {
+[adams-gamla]             if (!allowed.has(key)) {
+[adams-gamla]               throw new OwnerFactRequestRefusal(OWNER_FACT_REQUEST_REFUSAL.UNKNOWN_FIELD, key);
+[adams-gamla]         ------------^
+[adams-gamla]             }
+[adams-gamla]           }
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 9 - readOwnerFact: the deadline and the routing class are required and travel to the query owner # time=236.715ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 319
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: the deadline and the routing class are required and
+[adams-gamla]     travel to the ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'query owner', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+[adams-gamla]     ok 1 - never READY with no rows
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     1..3
+[adams-gamla] ok 10 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=282.443ms
+[adams-gamla] 
+[adams-gamla] 1..10
+[adams-gamla] # { total: 63, pass: 41, fail: 22 }
+[adams-gamla] # time=7953.861ms
+[adams-gamla] # test-files total=2 pass=0 fail=2 assertions=195
+lab test: adams-gamla: # test-files total=2 pass=0 fail=2 assertions=195
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=2 pass=0 fail=2 assertions=195

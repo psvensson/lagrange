@@ -1,0 +1,1 @@
+{"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":1261,"retriedOnce":false,"firstFailureLine":"not ok 2 - (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued"}

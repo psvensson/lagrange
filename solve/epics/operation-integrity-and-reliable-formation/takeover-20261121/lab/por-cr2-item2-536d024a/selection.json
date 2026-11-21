@@ -1,0 +1,55 @@
+{
+  "sha": "536d024ac698926edb7b1758cad7c8f1673b152e",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-owner-construction-orders.test.js",
+    "test/rebalancer/placement-owner-authority-tenure.test.js",
+    "test/rebalancer/placement-owner-authority-await-points.test.js",
+    "test/rebalancer/placement-owner-authority-wakes.test.js",
+    "test/rebalancer/placement-owner-authority-barrier.test.js",
+    "test/rebalancer/placement-owner-authority-negatives.test.js",
+    "test/rebalancer/placement-owner-authority-disruptions.test.js",
+    "test/rebalancer/placement-owner-authority-five-nodes.test.js",
+    "test/rebalancer/placement-owner-authority-write-kernel.test.js",
+    "test/rebalancer/placement-owner-authority-provisioner.test.js",
+    "test/rebalancer/replica-placement-owner-core.test.js",
+    "test/rebalancer/replica-placement-owner-clearing-triggers.test.js",
+    "test/convergence/dt-placement-owner-formation-drain.test.js",
+    "test/partition/placement-growth-dispatch-identity.test.js",
+    "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js",
+    "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js",
+    "test/raft/raft-rs-backend/formation-placement-lease-authority.test.js",
+    "test/raft/raft-rs-backend/formation-placement-native-retirement.test.js",
+    "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js",
+    "test/partition/placement-founding-and-runtime-service-admission.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-growth-dispatch-identity.test.js",
+        "test/partition/placement-owner-construction-orders.test.js",
+        "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js",
+        "test/raft/raft-rs-backend/formation-placement-lease-authority.test.js",
+        "test/raft/raft-rs-backend/formation-placement-native-retirement.test.js",
+        "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js",
+        "test/rebalancer/placement-owner-authority-await-points.test.js",
+        "test/rebalancer/placement-owner-authority-barrier.test.js",
+        "test/rebalancer/placement-owner-authority-disruptions.test.js",
+        "test/rebalancer/placement-owner-authority-five-nodes.test.js",
+        "test/rebalancer/placement-owner-authority-negatives.test.js",
+        "test/rebalancer/placement-owner-authority-provisioner.test.js",
+        "test/rebalancer/placement-owner-authority-tenure.test.js",
+        "test/rebalancer/placement-owner-authority-wakes.test.js",
+        "test/rebalancer/placement-owner-authority-write-kernel.test.js",
+        "test/convergence/dt-placement-owner-formation-drain.test.js",
+        "test/rebalancer/replica-placement-owner-core.test.js",
+        "test/rebalancer/replica-placement-owner-clearing-triggers.test.js",
+        "test/partition/placement-founding-and-runtime-service-admission.test.js",
+        "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

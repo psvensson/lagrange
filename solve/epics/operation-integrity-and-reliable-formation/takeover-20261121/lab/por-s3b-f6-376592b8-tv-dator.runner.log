@@ -1,0 +1,246 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=3394619
+[tv-dator] placement-head=376592b8bb2d1d296d47207a30d0f51319ecfabe
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3395140
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 65C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js (11 assertions, 1163ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: hysteresis — active rebalancer leader is RETAINED across a transient (non-draining) readiness dip while raft leadership holds
+[tv-dator]     not ok 1 - rebalancer created
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]         lineNumber: 146
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:146:5)
+[tv-dator]         test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:142:1
+[tv-dator]       source: |
+[tv-dator]         async (t) => {
+[tv-dator]           const ps = createActiveLeaderPartition();
+[tv-dator]           t.ok(ps.rebalancer, 'rebalancer created');
+[tv-dator]         ----^
+[tv-dator]           t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - Cannot read properties of null (reading 'isLeader')
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:147:25)
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]         lineNumber: 147
+[tv-dator]         columnNumber: 25
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]           const ps = createActiveLeaderPartition();
+[tv-dator]           t.ok(ps.rebalancer, 'rebalancer created');
+[tv-dator]           t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+[tv-dator]         ------------------------^
+[tv-dator]       
+[tv-dator]           // Node-wide readiness dips (recovery re-entry), raft leadership unchanged.
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 1 - hysteresis — active rebalancer leader is RETAINED across a transient (non-draining) readiness dip while raft leadership holds # time=28.899ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]     lineNumber: 142
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // ── Retention: the core falsifier ──────────────────────────────────
+[tv-dator]   
+[tv-dator]     test('hysteresis — active rebalancer leader is RETAINED across a ' +
+[tv-dator]     ^
+[tv-dator]       'transient (non-draining) readiness dip while raft leadership holds',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: hysteresis — repeated readiness oscillation does NOT flap an active rebalancer leader (no lockstep churn)
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'setLeader')
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:172:39)
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]         lineNumber: 172
+[tv-dator]         columnNumber: 39
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]           const ps = createActiveLeaderPartition();
+[tv-dator]           let flapStops = 0;
+[tv-dator]           const realSetLeader = ps.rebalancer.setLeader.bind(ps.rebalancer);
+[tv-dator]         --------------------------------------^
+[tv-dator]           ps.rebalancer.setLeader = (next) => {
+[tv-dator]             if (ps.rebalancer.isLeader === true && next === false) {
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 2 - hysteresis — repeated readiness oscillation does NOT flap an active rebalancer leader (no lockstep churn) # time=3.447ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]     lineNumber: 168
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('hysteresis — repeated readiness oscillation does NOT flap an active ' +
+[tv-dator]     ^
+[tv-dator]       'rebalancer leader (no lockstep churn)', async (t) => {
+[tv-dator]       const ps = createActiveLeaderPartition();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: demotion preserved — draining readiness demotes even an active rebalancer leader
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'isLeader')
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:200:25)
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]         lineNumber: 200
+[tv-dator]         columnNumber: 25
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]           'rebalancer leader', async (t) => {
+[tv-dator]           const ps = createActiveLeaderPartition();
+[tv-dator]           t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+[tv-dator]         ------------------------^
+[tv-dator]       
+[tv-dator]           ps.metadataPublicationReadinessState = readinessStateFor(DRAINING_SNAPSHOT);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 3 - demotion preserved — draining readiness demotes even an active rebalancer leader # time=3.465ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]     lineNumber: 197
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // ── Demotion paths that MUST still demote ──────────────────────────
+[tv-dator]   
+[tv-dator]     test('demotion preserved — draining readiness demotes even an active ' +
+[tv-dator]     ^
+[tv-dator]       'rebalancer leader', async (t) => {
+[tv-dator]       const ps = createActiveLeaderPartition();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: demotion preserved — loss of raft leadership demotes the rebalancer regardless of readiness
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'isLeader')
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:214:25)
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]         lineNumber: 214
+[tv-dator]         columnNumber: 25
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]           'regardless of readiness', async (t) => {
+[tv-dator]           const ps = createActiveLeaderPartition();
+[tv-dator]           t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+[tv-dator]         ------------------------^
+[tv-dator]       
+[tv-dator]           ps.isLeader = false;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 4 - demotion preserved — loss of raft leadership demotes the rebalancer regardless of readiness # time=2.912ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]     lineNumber: 211
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('demotion preserved — loss of raft leadership demotes the rebalancer ' +
+[tv-dator]     ^
+[tv-dator]       'regardless of readiness', async (t) => {
+[tv-dator]       const ps = createActiveLeaderPartition();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: acquisition gate preserved — a non-active rebalancer does NOT acquire leadership while background work is not ready
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'isLeader')
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:234:25)
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]         lineNumber: 234
+[tv-dator]         columnNumber: 25
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]           ps.isLeader = false;
+[tv-dator]           ps.updateRebalancerLeadership();
+[tv-dator]           t.equal(ps.rebalancer.isLeader, false, 'demoted (non-active)');
+[tv-dator]         ------------------------^
+[tv-dator]       
+[tv-dator]           ps.isLeader = true;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 5 - acquisition gate preserved — a non-active rebalancer does NOT acquire leadership while background work is not ready # time=3.073ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+[tv-dator]     lineNumber: 227
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     // ── Acquisition gate is unchanged ──────────────────────────────────
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('acquisition gate preserved — a non-active rebalancer does NOT acquire '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'leadership while background work is not ready', async (t) => {
+[tv-dator]       const ps = createActiveLeaderPartition();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..5
+[tv-dator] # { total: 6, pass: 0, fail: 6 }
+[tv-dator] # time=176.886ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=11
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=11
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=11

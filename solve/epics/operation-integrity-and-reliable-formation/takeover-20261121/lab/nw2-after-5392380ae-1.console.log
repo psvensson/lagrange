@@ -1,0 +1,17 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.02
+[adam-laptop] placement-shell=3703851
+[adam-laptop] placement-head=5392380aefb180e4d56b4e5c1026c4271a8ba0e4
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3704802
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] ok test/query/provisioning-deadline-error-message.test.js (4 assertions, 1215ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=4
+lab test: adam-laptop: # test-files total=1 pass=1 fail=0 assertions=4
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=1 fail=0 assertions=4

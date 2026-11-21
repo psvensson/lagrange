@@ -1,0 +1,1672 @@
+placement-shell=3407184
+placement-head=487d12c91388b51e00427aef9e58460b39bb6096
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3407633
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js (313 assertions, 1316ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: retry-scheduled rebalancer handoff progress contracts expose bounded owner re-entry
+    ok 1 - accepted retry-scheduled handoff progress should name bounded owner re-entry
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..1
+ok 1 - retry-scheduled rebalancer handoff progress contracts expose bounded owner re-entry # time=73.544ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: retry-scheduled handoff owner snapshots re-enter during normalization
+    ok 1 - retry-scheduled handoff snapshots should wake the remote owner when no bounded retry is active
+    ok 2 - retry-scheduled handoff re-entry should use the canonical dispatch ingress
+    ok 3 - retry-scheduled handoff re-entry should arm bounded handoff verification
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..3
+ok 2 - retry-scheduled handoff owner snapshots re-enter during normalization # time=12.244ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: priority transition retries stay armed while the workflow owner is uninitialized
+    ok 1 - initial retryable transition pressure should arm one transition retry
+    ok 2 - initial retryable transition pressure should arm one transition retry
+    ok 3 - uninitialized workflow owners should re-arm protected priority transition retries
+    ok 4 - one protected transition retry timer should remain armed while initialization recovers
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+    1..4
+ok 3 - priority transition retries stay armed while the workflow owner is uninitialized # time=5.061ms
+
+# Subtest: topology operator witness maps dispatch-pending owner progress
+    ok 1 - topology operator witness should expose the required owner contract fields
+    ok 2 - dispatch-pending owner progress should produce a step witness
+    ok 3 - dispatch-pending owner progress should produce a step witness
+    ok 4 - dispatch-pending owner progress should produce a step witness
+    ok 5 - dispatch-pending owner progress should produce a step witness
+    ok 6 - dispatch-pending owner progress should produce a step witness
+    ok 7 - dispatch-pending owner progress should produce a step witness
+    ok 8 - dispatch-pending owner progress should produce a step witness
+    ok 9 - dispatch-pending owner progress should produce a step witness
+    ok 10 - dispatch-pending owner progress should produce a step witness
+    ok 11 - topology operator witness should expose exactly one current step
+    ok 12 - topology operator witness should expose one scalar next action
+    ok 13 - decision snapshots should expose the live topology witness at the summary boundary
+    ok 14 - topology operator witness should expose the required owner contract fields
+    ok 15 - dispatch-pending owner progress should produce a step witness
+    ok 16 - dispatch-pending owner progress should produce a step witness
+    ok 17 - dispatch-pending owner progress should produce a step witness
+    ok 18 - dispatch-pending owner progress should produce a step witness
+    ok 19 - dispatch-pending owner progress should produce a step witness
+    ok 20 - dispatch-pending owner progress should produce a step witness
+    ok 21 - dispatch-pending owner progress should produce a step witness
+    ok 22 - dispatch-pending owner progress should produce a step witness
+    ok 23 - dispatch-pending owner progress should produce a step witness
+    ok 24 - topology operator witness should expose exactly one current step
+    ok 25 - topology operator witness should expose one scalar next action
+    ok 26 - topology operator witness should expose the required owner contract fields
+    ok 27 - dispatch-pending owner progress should produce a step witness
+    ok 28 - dispatch-pending owner progress should produce a step witness
+    ok 29 - dispatch-pending owner progress should produce a step witness
+    ok 30 - dispatch-pending owner progress should produce a step witness
+    ok 31 - dispatch-pending owner progress should produce a step witness
+    ok 32 - dispatch-pending owner progress should produce a step witness
+    ok 33 - dispatch-pending owner progress should produce a step witness
+    ok 34 - dispatch-pending owner progress should produce a step witness
+    ok 35 - dispatch-pending owner progress should produce a step witness
+    ok 36 - topology operator witness should expose exactly one current step
+    ok 37 - topology operator witness should expose one scalar next action
+    1..37
+ok 4 - topology operator witness maps dispatch-pending owner progress # time=10.902ms
+
+# Subtest: topology operator witness maps owner retry progress
+    ok 1 - topology operator witness should expose the required owner contract fields
+    ok 2 - owner retry progress should produce a retry step witness
+    ok 3 - owner retry progress should produce a retry step witness
+    ok 4 - owner retry progress should produce a retry step witness
+    ok 5 - owner retry progress should produce a retry step witness
+    ok 6 - owner retry progress should produce a retry step witness
+    ok 7 - owner retry progress should produce a retry step witness
+    ok 8 - owner retry progress should produce a retry step witness
+    ok 9 - owner retry progress should produce a retry step witness
+    ok 10 - owner retry progress should produce a retry step witness
+    ok 11 - topology operator witness should expose exactly one current step
+    ok 12 - topology operator witness should expose one scalar next action
+    1..12
+ok 5 - topology operator witness maps owner retry progress # time=1.486ms
+
+# Subtest: topology operator witness maps publication ACK progress
+    ok 1 - topology operator witness should expose the required owner contract fields
+    ok 2 - publication ACK progress should produce a step witness
+    ok 3 - publication ACK progress should produce a step witness
+    ok 4 - publication ACK progress should produce a step witness
+    ok 5 - publication ACK progress should produce a step witness
+    ok 6 - publication ACK progress should produce a step witness
+    ok 7 - publication ACK progress should produce a step witness
+    ok 8 - publication ACK progress should produce a step witness
+    ok 9 - publication ACK progress should produce a step witness
+    ok 10 - publication ACK progress should produce a step witness
+    ok 11 - topology operator witness should expose exactly one current step
+    ok 12 - topology operator witness should expose one scalar next action
+    1..12
+ok 6 - topology operator witness maps publication ACK progress # time=1.53ms
+
+# Subtest: topology operator witness maps active-gate reconcile progress
+    ok 1 - topology operator witness should expose the required owner contract fields
+    ok 2 - active-gate reconcile progress should produce a step witness
+    ok 3 - active-gate reconcile progress should produce a step witness
+    ok 4 - active-gate reconcile progress should produce a step witness
+    ok 5 - active-gate reconcile progress should produce a step witness
+    ok 6 - active-gate reconcile progress should produce a step witness
+    ok 7 - active-gate reconcile progress should produce a step witness
+    ok 8 - active-gate reconcile progress should produce a step witness
+    ok 9 - active-gate reconcile progress should produce a step witness
+    ok 10 - active-gate reconcile progress should produce a step witness
+    ok 11 - topology operator witness should expose exactly one current step
+    ok 12 - topology operator witness should expose one scalar next action
+    1..12
+ok 7 - topology operator witness maps active-gate reconcile progress # time=1.348ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: coordinator-created dispatch-pending transition retries preserve the operation snapshot for deferred visibility re-entry
+    ok 1 - retryable coordinator-created claim failures should persist the owner progress outcome
+    ok 2 - retryable coordinator-created claim failures should keep the local dispatch command as the deferred effect
+    ok 3 - the retryable claim failure should arm one transition retry
+    ok 4 - the transition retry should retain the adapter operation snapshot
+    ok 5 - deferred visibility should re-enter dispatch from the retained snapshot
+    ok 6 - deferred retry dispatch should use the original operation id
+    ok 7 - deferred retry dispatch should preserve the dispatch-pending workflow step
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+    1..7
+ok 8 - coordinator-created dispatch-pending transition retries preserve the operation snapshot for deferred visibility re-entry # time=3.869ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: dispatch transition retries preserve priority owner context after the step timeout
+    ok 1 - retryable transition pressure should defer the dispatch path
+    ok 2 - the transition failure should arm one retry timer
+    ok 3 - priority control-plane dispatch retries should keep operation-budget grace after the step timeout
+    ok 4 - deferred transition retry should re-enter dispatch instead of timeout reconcile
+    ok 5 - deferred retry dispatch should preserve the priority partition context
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+    1..5
+ok 9 - dispatch transition retries preserve priority owner context after the step timeout # time=4.301ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-source',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+# Subtest: checkTimeouts re-wakes restart-discovered remote-owned priority dispatch-pending PENDING rows while the operation budget is still active
+    ok 1 - the timeout witness should normalize the cached replica_operations row into one operation contract
+    ok 2 - the timeout witness should stay remote-owned on the observing source node
+    ok 3 - the timeout witness should be eligible for dispatch re-arm while its operation budget remains active
+    ok 4 - stale remote-owned timeout witnesses should use the explicit remote drain re-arm owner state
+    ok 5 - stale remote-owned timeout witnesses should route through remote-owner wake instead of staying transition-deferred
+    ok 6 - timeout reconciliation should wake the remote owner once while the retry timer remains armed
+    ok 7 - timeout reconciliation should target the canonical remote replica-dispatch ingress
+    ok 8 - timeout reconciliation should arm one remote handoff follow-up timer for the stale PENDING row
+    ok 9 - the remote handoff retry lane should stay armed after timeout reconciliation
+    ok 10 - timeout reconciliation should keep the durable row in PENDING while the remote owner is being re-woken
+    ok 11 - timeout reconciliation should not fail or mutate the remote-owned row while the operation budget is still active
+    ok 12 - timeout reconciliation should not record a timeout failure while the remote owner retry lane is active
+    ok 13 - timeout reconciliation should not persist step updates for the remote-owned row before remote progress is observed
+    ok 14 - the deferred remote handoff retry should still wake the remote owner while the source owner is transiently uninitialized
+    ok 15 - the successful remote handoff wake should leave the bounded verification lane armed while source initialization recovers
+    ok 16 - the verification retry should continue re-entering the owner wake path after source initialization recovers
+    ok 17 - deferred remote handoff retry should use the same canonical replica-dispatch ingress
+    ok 18 - successful retry wake should leave the bounded verification lane armed
+    ok 19 - deferred remote handoff retry should not mutate the remote-owned row before owner progress is observed
+Shutting down RebalanceCoordinator { nodeId: 'node-source', inFlightOperations: 1 }
+    1..19
+ok 10 - checkTimeouts re-wakes restart-discovered remote-owned priority dispatch-pending PENDING rows while the operation budget is still active # time=7.583ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-source',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: checkTimeouts re-wakes stale remote-owned priority handoff retries even while transition grace remains active
+    ok 1 - the stale witness should arm the remote handoff retry lane first
+    ok 2 - the longer transition grace should still be active after the handoff retry is overdue
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+    ok 3 - timeout reconciliation should re-wake the remote owner when the armed handoff retry is overdue
+    ok 4 - stale handoff retry reconciliation should use the canonical remote dispatch ingress
+    ok 5 - the fresh remote owner wake should replace the stale retry with a new verification timer
+    ok 6 - exactly one remote handoff retry timer should remain armed after stale retry reconciliation
+Shutting down RebalanceCoordinator { nodeId: 'node-source', inFlightOperations: 1 }
+    1..6
+ok 11 - checkTimeouts re-wakes stale remote-owned priority handoff retries even while transition grace remains active # time=2.854ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: checkTimeouts re-dispatches restart-discovered locally owned priority dispatch-pending PENDING rows while the operation budget is still active
+    ok 1 - the timeout witness should be locally owned by the replacement target node
+    ok 2 - the local timeout witness should be eligible for dispatch re-arm while its operation budget remains active
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Operation step changed {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'control_plane_publications-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'control_plane_publications-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'control_plane_publications-p1'
+}
+    ok 3 - timeout reconciliation should dispatch the existing local-owner operation once
+    ok 4 - local-owner re-dispatch should target the canonical replica handler
+    ok 5 - local-owner re-dispatch should advance durable workflow progress out of PENDING
+    ok 6 - local-owner re-dispatch should persist the creating status after dispatch acknowledgement
+    ok 7 - local-owner re-dispatch should not record a timeout failure while operation budget remains active
+    ok 8 - local-owner re-dispatch should persist the SENDING and CREATING transitions
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..8
+ok 12 - checkTimeouts re-dispatches restart-discovered locally owned priority dispatch-pending PENDING rows while the operation budget is still active # time=12.62ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: checkTimeouts re-dispatches locally owned priority SQL PENDING rows while the operation budget is still active
+    ok 1 - priority SQL timeout witness should be locally owned by the replacement target node
+    ok 2 - priority SQL PENDING rows should be eligible for dispatch re-arm while the operation budget remains active
+    ok 3 - visible CREATING target progress should not replay duplicate create dispatch
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_write_operations-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_write_operations-p1'
+}
+    ok 4 - priority SQL timeout reconciliation should dispatch the local-owner operation once
+    ok 5 - priority SQL re-dispatch should target the canonical replica handler
+    ok 6 - priority SQL replica dispatch should carry the owner delivery deadline
+    ok 7 - priority SQL replica dispatch should identify the owner delivery source
+    ok 8 - priority SQL re-dispatch should advance durable workflow progress out of PENDING
+    ok 9 - priority SQL re-dispatch should persist the creating status after dispatch acknowledgement
+    ok 10 - priority SQL re-dispatch should persist the SENDING and CREATING transitions
+    ok 11 - priority SQL dispatch claim should bypass the routed system write session
+    ok 12 - priority SQL dispatch claim should not create a routed session id
+    ok 13 - priority SQL dispatch claim should preserve the PENDING compare-and-set guard
+    ok 14 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+    ok 15 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+    ok 16 - priority SQL dispatch progress should use a bounded per-attempt mutation budget
+    ok 17 - priority SQL dispatch progress should use a bounded per-attempt mutation budget
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..17
+ok 13 - checkTimeouts re-dispatches locally owned priority SQL PENDING rows while the operation budget is still active # time=6.524ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 30000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: critical SQL CREATING dispatch retry remains rearm-eligible until the operation budget closes
+    ok 1 - stale CREATING progress should still time out before dispatch retry is armed
+    ok 2 - retryable CREATING dispatch pressure should arm dispatch retry
+    ok 3 - dispatch retry should arm exactly one timer
+    ok 4 - active dispatch retry should protect CREATING within the operation budget
+    ok 5 - active dispatch retry should keep CREATING rearm-eligible within the operation budget
+    ok 6 - CREATING dispatch retry should stop protecting once the operation budget closes
+    ok 7 - expired operation budget should block further CREATING dispatch rearm
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+    1..7
+ok 14 - critical SQL CREATING dispatch retry remains rearm-eligible until the operation budget closes # time=4.082ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Sending replica operation {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+# Subtest: critical SQL CREATING reconnect delivery arms bounded dispatch retry
+    ok 1 - reconnecting delivery should keep critical create dispatch retryable
+    ok 2 - critical create dispatch should attempt delivery once
+    ok 3 - reconnecting delivery should arm one dispatch retry
+    ok 4 - dispatch retry should preserve the router reconnect retry-after
+    ok 5 - authoritative terminal settlement refuses a stale SENDING retry
+    ok 6 - terminal-first authority reaches no second physical CREATE
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+    1..6
+ok 15 - critical SQL CREATING reconnect delivery arms bounded dispatch retry # time=5.67ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_write_operations-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_write_operations-p1'
+}
+# Subtest: local-owner priority SQL dispatch proceeds when the SENDING claim is retryably deferred
+    ok 1 - retryable priority claim pressure should not block local target dispatch
+    ok 2 - the next durable priority transition should advance directly to CREATING
+    ok 3 - deferred local priority claims should preserve the original PENDING CAS
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..3
+ok 16 - local-owner priority SQL dispatch proceeds when the SENDING claim is retryably deferred # time=17.845ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_write_operations-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_write_operations-p1'
+}
+# Subtest: local-owner priority SQL dispatch publishes deferred CREATING progress after target delivery
+    ok 1 - priority SQL timeout reconciliation should dispatch the local-owner operation once
+    not ok 2 - priority SQL re-dispatch should persist the SENDING and CREATING transitions
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+        lineNumber: 897
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:897:9)
+      source: |2
+                TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+              );
+              t.equal(
+        --------^
+                updateCount,
+                2,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -2
+        +3
+      ...
+    
+    not ok 3 - retryable priority progress pressure should leave the durable row stale
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+        lineNumber: 902
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:902:9)
+      source: |2
+                TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+              );
+              t.equal(
+        --------^
+                operationRow.workflow_step,
+                TEST_STEP_SENDING,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -SENDING
+        +CREATING
+      ...
+    
+    ok 4 - priority SQL dispatch progress should use a bounded per-attempt mutation budget
+    not ok 5 - a rejected CREATING write cannot replace the last committed operation step
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+        lineNumber: 912
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:912:9)
+      source: |2
+                TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+              );
+              t.equal(
+        --------^
+                snapshot?.coordinator?.operation?.workflowStep,
+                TEST_STEP_SENDING,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -SENDING
+        +CREATING
+      ...
+    
+    not ok 6 - retryable priority progress pressure should arm one durable retry
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+        lineNumber: 917
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:917:9)
+      source: >2
+                'a rejected CREATING write cannot replace the last committed operation step',
+              );
+              t.equal(
+        --------^
+                deferredTimers.length,
+                1,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 7 - the rejected write retains the same operation’s retry
+      ---
+      at:
+        fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+        lineNumber: 923
+        columnNumber: 9
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:923:9)
+      source: >2
+              );
+      
+              t.ok(coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+        --------^
+                operationRow.operation_id), 'the rejected write retains the same operation’s retry');
+              await deferredTimers[0].fn();
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    not ok 8 - Cannot read properties of undefined (reading 'fn')
+      ---
+      stack: |
+        Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:925:31)
+      at:
+        fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+        lineNumber: 925
+        columnNumber: 31
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+              t.ok(coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+                operationRow.operation_id), 'the rejected write retains the same operation’s retry');
+              await deferredTimers[0].fn();
+        ------------------------------^
+      
+              t.equal(
+      ...
+    
+    1..8
+not ok 17 - local-owner priority SQL dispatch publishes deferred CREATING progress after target delivery # time=50.895ms
+  ---
+  at:
+    fileName: test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+    lineNumber: 6
+    columnNumber: 3
+    isToplevel: true
+  source: >
+  
+    for (const {name, fn} of
+    priorityRecoveryDispatchPendingTimeoutReentryTestCases) {
+      test(name, fn);
+    --^
+  
+    }
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'ACTIVE',
+  reason: 'dispatch_already_exists',
+  status: 'active',
+  partitionId: 'control_plane_publications-p1'
+}
+# Subtest: local-owner priority SQL dispatch wake reconciles PENDING rows from active target evidence
+    ok 1 - dispatch wake reconciliation should report owner progress
+    ok 2 - active target evidence should preempt duplicate create dispatch
+    ok 3 - dispatch wake should reconcile the stale PENDING row to ACTIVE
+    ok 4 - dispatch wake should persist the active status from target evidence
+    ok 5 - dispatch wake should reconcile the stale PENDING row to ACTIVE
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..5
+ok 18 - local-owner priority SQL dispatch wake reconciles PENDING rows from active target evidence # time=3.564ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'control_plane_publications-p1'
+}
+# Subtest: local-owner priority SQL dispatch wake reconciles PENDING rows from accepted target evidence
+    ok 1 - dispatch wake reconciliation should report owner progress
+    ok 2 - active target evidence should preempt duplicate create dispatch
+    ok 3 - dispatch wake should reconcile accepted target evidence to CREATING
+    ok 4 - dispatch wake should persist the creating status from accepted target evidence
+    ok 5 - dispatch wake should reconcile accepted target evidence to CREATING
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..5
+ok 19 - local-owner priority SQL dispatch wake reconciles PENDING rows from accepted target evidence # time=3.135ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Operation step changed {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_write_operations-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+# Subtest: local-owner priority SQL dispatch publishes deferred transition visibility while authoritative reads lag
+    ok 1 - priority SQL timeout reconciliation should dispatch the local-owner operation once
+    ok 2 - priority SQL re-dispatch should persist the SENDING and CREATING transitions
+    ok 3 - the test must keep the authoritative SQL row stale to model lagging visibility
+    ok 4 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+    ok 5 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+    ok 6 - SQLite confirms that the hidden CREATING update actually committed
+    ok 7 - a stale authority result cannot publish the hidden step as observed
+    ok 8 - priority snapshot should consume the owner-persisted transition instead of reclassifying stale PENDING as dispatch-pending
+    ok 9 - the recovered step belongs to the dispatch already sent
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..9
+ok 20 - local-owner priority SQL dispatch publishes deferred transition visibility while authoritative reads lag # time=13.488ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Operation step changed {
+  operationId: 'priority-authoritative-only-timeout-operation',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'replica_operations-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'priority-authoritative-only-timeout-operation',
+  target: 'node-target/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'replica_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'priority-authoritative-only-timeout-operation',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'replica_operations-p1'
+}
+# Subtest: checkTimeouts supplements cache-visible priority scans with authoritative no-step rows
+    ok 1 - priority timeout scans should supplement partial cache visibility with one authoritative owner read
+    ok 2 - authoritative-only no-step priority rows should re-enter local dispatch
+    ok 3 - authoritative-only no-step priority rows should persist dispatch progress
+    ok 4 - authoritative-only priority rows should dispatch through the replica handler
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..4
+ok 21 - checkTimeouts supplements cache-visible priority scans with authoritative no-step rows # time=5.04ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Bypassing re-entrant priority recovery dispatch scheduling {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1'
+}
+# Subtest: priority recovery snapshots re-enter stale SENDING pending dispatch-pending workflow-timeout operations through the workflow owner
+    ok 1 - the snapshot should return stale SENDING timeout rows to owner advancement
+    ok 2 - snapshot re-entry should not leave the stale SENDING row transition-deferred
+    ok 3 - snapshot re-entry should wake the remote operation owner and keep bounded verification
+    ok 4 - snapshot re-entry should use the canonical remote replica-dispatch ingress
+    ok 5 - snapshot re-entry should arm one verification retry for the stale SENDING row
+    ok 6 - snapshot re-entry should preserve the remote-owned durable pending status
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..6
+ok 22 - priority recovery snapshots re-enter stale SENDING pending dispatch-pending workflow-timeout operations through the workflow owner # time=4.361ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: priority recovery snapshots defer dispatch-pending re-entry when the operation owner lane is already held
+    ok 1 - the snapshot should return stale SENDING timeout rows to owner advancement
+    ok 2 - owner-lane-held snapshots should not wake the remote owner inline
+    ok 3 - owner-lane-held snapshots should defer dispatch-pending re-entry
+    ok 4 - deferred owner-lane re-entry should wake the remote owner after the lane releases
+    ok 5 - snapshot re-entry should use the canonical remote replica-dispatch ingress
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..5
+ok 23 - priority recovery snapshots defer dispatch-pending re-entry when the operation owner lane is already held # time=3.239ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: priority recovery snapshots surface retry-scheduled rebalancer handoff progress while a remote handoff retry is already active
+    ok 1 - active handoff retry snapshots should preserve the existing bounded retry
+    ok 2 - active handoff retry should surface bounded rebalancer-handoff progress
+    ok 3 - active handoff retry should surface bounded rebalancer-handoff progress
+    ok 4 - active handoff retry should surface bounded rebalancer-handoff progress
+    ok 5 - active handoff retry should surface bounded rebalancer-handoff progress
+    ok 6 - active handoff retry should surface bounded rebalancer-handoff progress
+    ok 7 - active handoff retry snapshots should not wake the remote owner inline
+    ok 8 - active handoff retry snapshots should preserve the existing bounded retry
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..8
+ok 24 - priority recovery snapshots surface retry-scheduled rebalancer handoff progress while a remote handoff retry is already active # time=3.675ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending owner progress
+    ok 1 - retry-scheduled handoff snapshots should wake the remote owner when no bounded retry is active
+    ok 2 - retry-scheduled handoff snapshots should wake the remote owner when no bounded retry is active
+    ok 3 - retry-scheduled handoff re-entry should use the canonical dispatch ingress
+    ok 4 - retry-scheduled handoff re-entry should arm bounded handoff verification
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..4
+ok 25 - retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending owner progress # time=7.477ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: dispatch-pending owner observation effects wake remote handoff using snapshot captured time
+    ok 1 - unexecuted advance-owner effects should wake the remote owner before drain
+    ok 2 - unexecuted advance-owner effects should wake the remote owner before drain
+    ok 3 - advance-owner effect re-entry should use the canonical dispatch ingress
+    ok 4 - advance-owner effect re-entry should arm bounded handoff verification
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..4
+ok 26 - dispatch-pending owner observation effects wake remote handoff using snapshot captured time # time=4.356ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: representative control-plane publication retry-scheduled handoff residual preserves one bounded remote retry for duplicate witnesses
+    ok 1 - representative publication handoff retry should stay bounded
+    ok 2 - duplicate representative handoff witnesses should not duplicate remote wake
+    ok 3 - duplicate representative handoff witnesses should not duplicate remote wake
+    ok 4 - duplicate representative handoff witnesses should preserve one retry timer
+    ok 5 - duplicate representative handoff witnesses should preserve one retry timer
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..5
+ok 27 - representative control-plane publication retry-scheduled handoff residual preserves one bounded remote retry for duplicate witnesses # time=3.413ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: publication count-only retry-scheduled handoff residual preserves one bounded remote retry per unique operation
+    ok 1 - count-only publication residual should normalize duplicate witnesses to unique retries
+    ok 2 - count-only publication residual should normalize duplicate witnesses to unique retries
+    ok 3 - count-only publication residual should normalize duplicate witnesses to unique retries
+    ok 4 - count-only publication residual should normalize duplicate witnesses to unique retries
+    ok 5 - count-only publication residual should not duplicate remote wake state
+    ok 6 - count-only publication residual should not duplicate remote wake state
+    ok 7 - count-only publication residual should not duplicate remote wake state
+    ok 8 - count-only publication residual should not duplicate remote wake state
+    ok 9 - count-only publication residual should not duplicate remote wake state
+    ok 10 - count-only publication residual should preserve one retry timer per unique operation
+    ok 11 - count-only publication residual should preserve one retry timer per unique operation
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..11
+ok 28 - publication count-only retry-scheduled handoff residual preserves one bounded remote retry per unique operation # time=4.574ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: representative retry-deferred PENDING handoff residuals stay bounded across priority partitions
+    ok 1 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+    ok 2 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+    ok 3 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+    ok 4 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+    ok 5 - retry-deferred handoff snapshots should not duplicate remote wakes inline
+    ok 6 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+    ok 7 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+    ok 8 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+    ok 9 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+    ok 10 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+    ok 11 - timer-fired retry-deferred handoff should use the refreshed operation row
+    ok 12 - timer-fired retry-deferred handoff should use the refreshed operation row
+    ok 13 - timer-fired retry-deferred handoff should use the refreshed operation row
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..13
+ok 29 - representative retry-deferred PENDING handoff residuals stay bounded across priority partitions # time=12.238ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-observer',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Bypassing re-entrant priority recovery dispatch scheduling {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1'
+}
+# Subtest: priority recovery snapshots re-enter serial-wait PENDING rows through the workflow owner
+    ok 1 - serial-wait PENDING rows with durable operation evidence should clear the stale serial blocker
+    ok 2 - serial-wait PENDING rows should be classified as in-flight workflow progress
+    ok 3 - serial-wait PENDING rows should enter the dispatch-pending workflow phase
+    ok 4 - serial-wait PENDING rows should surface owner advancement
+    ok 5 - serial-wait PENDING rows should retain the source operation witness
+    ok 6 - serial-wait PENDING rows should retain the source partition witness
+    ok 7 - serial-wait PENDING rows should wake the remote owner and keep bounded verification
+    ok 8 - serial-wait re-entry should use the canonical remote dispatch ingress
+    ok 9 - serial-wait re-entry should arm one verification retry
+Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+    1..9
+ok 30 - priority recovery snapshots re-enter serial-wait PENDING rows through the workflow owner # time=8.165ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: local-owner coordinator-created transition retries do not arm remote handoff retries
+    ok 1 - local-owner retryable pressure should stay consumed by transition retry
+    ok 2 - local-owner transition retry should not schedule remote handoff timers
+    ok 3 - local-owner transition retry should not schedule remote handoff timers
+    ok 4 - local-owner operations should reject direct remote handoff scheduling
+    ok 5 - local-owner transition retry grace should remain active
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+    1..5
+ok 31 - local-owner coordinator-created transition retries do not arm remote handoff retries # time=1.567ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-source',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: coordinator-created remote handoff uses bounded priority delivery for dispatch-pending PENDING rows
+    ok 1 - remote-owned dispatch-pending priority rows should wake the target owner immediately
+    ok 2 - remote handoff should target the canonical target-owner replica-dispatch ingress
+    ok 3 - remote handoff should carry a bounded timeout so transport cannot strand PENDING workflow progress
+    ok 4 - remote handoff should identify the coordinator-created handoff boundary to transport
+    ok 5 - retryable bounded handoff failure should arm a prompt verification retry
+    ok 6 - remote handoff retry should honor the bounded delivery retry-after value
+Shutting down RebalanceCoordinator { nodeId: 'node-source', inFlightOperations: 1 }
+    1..6
+ok 32 - coordinator-created remote handoff uses bounded priority delivery for dispatch-pending PENDING rows # time=2.092ms
+
+# Subtest: priority recovery snapshot builder reclassifies stale dispatch-pending PENDING rows to owner advancement
+    ok 1 - stale dispatch-pending rows should remain in-flight, not operation-stalled
+    ok 2 - stale dispatch-pending timeout blocker reasons should be cleared
+    ok 3 - stale dispatch-pending rows should preserve persisted-not-dispatched actuation
+    ok 4 - stale dispatch-pending rows should ask the owner to advance the existing operation
+    ok 5 - stale dispatch-pending rows should not remain on workflow_timeout
+    ok 6 - stale dispatch-pending rows should return to event-driven owner progress
+    1..6
+ok 33 - priority recovery snapshot builder reclassifies stale dispatch-pending PENDING rows to owner advancement # time=0.83ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: a stalled not-voter-ready REPLACE remove-dispatch op is un-masked and surfaced as actionable instead of spread_satisfied_in_flight
+    ok 1 - seeded REPLACE remove-dispatch op is locally owned by node-target
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'ACTIVE',
+  delayMs: 1000,
+  deferReason: 'replace_remove_safety_blocked',
+  errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+}
+    ok 2 - stalled op is no longer masked as spread_satisfied_in_flight (semanticState)
+    ok 3 - stalled op completion no longer accepts drain as spread_satisfied_in_flight
+    ok 4 - stalled op completion reports the honest blocker (drain not accepted)
+    1..4
+ok 34 - a stalled not-voter-ready REPLACE remove-dispatch op is un-masked and surfaced as actionable instead of spread_satisfied_in_flight # time=6.341ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-target',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: a still-progressing not-voter-ready REPLACE remove-dispatch op keeps its optimistic spread_satisfied_in_flight certification
+    ok 1 - seeded REPLACE remove-dispatch op is locally owned by node-target
+Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'ACTIVE',
+  delayMs: 1000,
+  deferReason: 'replace_remove_safety_blocked',
+  errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+}
+    ok 2 - progressing op stays optimistically spread_satisfied_in_flight (not un-masked)
+    1..2
+ok 35 - a still-progressing not-voter-ready REPLACE remove-dispatch op keeps its optimistic spread_satisfied_in_flight certification # time=3.308ms
+
+1..35
+# { total: 278, pass: 272, fail: 6 }
+# time=328.404ms
+not ok test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (97 assertions, 1945ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: CL-029 guard: REPLACE target-completion evidence keeps a retry owner across the dispatch step-walk and stale reads (red on fix revert)
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: GUARD fix piece 1 (re-drive loop): outcomes arriving while the dispatch step-walk holds the owner lane are RE-DRIVEN once the holder finishes — reconcile runs, the ACTIVE evidence applies, source removal resumes (red on revert: the runExclusive coalescing drop orphaned the evidence and wedged the row at SYNCING)
+        ok 1 - reconcileExecutorOutcome RAN (exactly once): the re-drive loop resubmitted the retained payload — the ACTIVE outcome, which superseded SYNCING by workflow-step rank — after the dispatch walk released the lane
+        ok 2 - the outcome was routed (OUTCOME_ROUTED emitted)
+        ok 3 - reconcileReplaceActualActive reported applied=true for the re-driven ACTIVE evidence
+        ok 4 - durable workflow row advanced past SYNCING into the source-removal phase — the target_sync wedge is gone
+        ok 5 - the applied ACTIVE evidence resumed source removal (REMOVE_REPLICA dispatched)
+        ok 6 - the retained payload map is empty (consumed) or an executor-outcome retry timer is armed — the evidence always keeps an owner
+        ok 7 - the ACTIVE payload was cleared AFTER successful application (clearExecutorOutcomeRetryIfNotAhead), not pre-action
+        ok 8 - no outcome-transition-failed error was logged — coalesced lane waits are not attributed to the outcome
+        ok 9 - zero errors logged overall
+        ok 10 - the REPLACE proceeds through source removal — neither completed nor failed at this point
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..10
+    ok 1 - GUARD fix piece 1 (re-drive loop): outcomes arriving while the dispatch step-walk holds the owner lane are RE-DRIVEN once the holder finishes — reconcile runs, the ACTIVE evidence applies, source removal resumes (red on revert: the runExclusive coalescing drop orphaned the evidence and wedged the row at SYNCING) # time=169.76ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: CONTROL: the same outcomes arriving AFTER the lane is released reconcile normally — the ACTIVE CAS commits and source removal resumes (proves the loss is the lane-held arrival window)
+        ok 1 - the exact authoritative SYNCING replay needs no visibility retry
+        ok 2 - both outcome reconciles ran once the lane was free
+        ok 3 - the ACTIVE reconcile reports a committed advance
+        ok 4 - SQLite applied the ACTIVE CAS against the exact SYNCING row
+        ok 5 - durable row advanced beyond SYNCING — no wedge when the reconcile actually runs against consistent views
+        ok 6 - the applied ACTIVE evidence resumed source removal (REMOVE_REPLICA dispatched)
+        ok 7 - the REPLACE durably advanced into the source-removal phase
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..7
+    ok 2 - CONTROL: the same outcomes arriving AFTER the lane is released reconcile normally — the ACTIVE CAS commits and source removal resumes (proves the loss is the lane-held arrival window) # time=126.586ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: GUARD fix pieces 2+3+4 (stale-read exit (a)): the ACTIVE CAS loses to the dispatch walk and the authoritative replay no-ops, but the evidence is NOT erased — reconcileReplaceActualActive reports applied=false, a warned retry timer with exponential backoff owns the retained payload, and once reads heal the timer's re-drive applies it (red on revert: the pre-action clear erased the payload and no retry was ever scheduled)
+        ok 1 - durable workflow row is still at SYNCING while the read path serves the stale snapshot — the retry owner asserted below is what un-wedges it later
+        ok 2 - the newer exact-replica ACTIVE wake displaced the old refused SYNCING wait
+        ok 3 - unresolved ACTIVE owns its own retry
+        ok 4 - a stale SYNCING callback cannot clear the ACTIVE timer
+        ok 5 - reconcileReplaceActualActive attempted exactly one updateStep(operation, ACTIVE) so far
+        ok 6 - the ACTIVE transition did NOT commit (and did not throw): the CAS lost against the dispatch step-walk
+        ok 7 - one durable CAS write was attempted for the ACTIVE step
+        ok 8 - the CAS expected the stale snapshot step (SENDING) ...
+        ok 9 - ... while the true durable row was already at SYNCING — CAS lost, affectedRows=0
+        ok 10 - the uncommitted CAS fell through to replayReplaceActiveSourceRemovalFromAuthoritative, which read the stale (non-ACTIVE) row and found nothing actionable
+        ok 11 - GUARD fix piece 3: reconcileReplaceActualActive reported applied=false (CAS lost AND authoritative replay no-op) — red if it goes back to returning undefined/void
+        ok 12 - exit (b) path (observed-target replay) never ran — updateStep returned REFUSED instead of throwing
+        ok 13 - GUARD fix piece 2: no clearExecutorOutcomeRetry erased the retained ACTIVE payload — the pre-action clear at the top of reconcileExecutorOutcome (which destroyed the evidence before the action could fail) must stay gone
+        ok 14 - the ACTIVE completion evidence is still retained
+        ok 15 - scheduleExecutorOutcomeRetry was called for the unapplied completion evidence
+        ok 16 - an executor-outcome retry timer is armed — the evidence keeps a live driver
+        ok 17 - one "Operation transition retry deferred" warn fired — the run's fully-silent loss is observable now
+        ok 18 - the warn carries the armed retry delay
+        ok 19 - the deferral warns, it does not error — and nothing was misattributed to the outcome
+        ok 20 - source removal has not been dispatched yet (the stale view still hides the true row)
+        ok 21 - GUARD fix piece 4: the retained payload SURVIVES a fired retry that still cannot apply (the old timer path deleted it before the retry ran)
+        ok 22 - the re-arm warned again (one warn per arm)
+        ok 23 - GUARD fix piece 4: the second arm DOUBLED the retry delay (per-operation exponential backoff)
+        ok 24 - a retry timer is armed again — the evidence never loses its owner while unapplied
+        ok 25 - GUARD fix pieces 1+4: the fired retry re-drove the retained evidence against the healed view — ACTIVE committed and the REPLACE advanced into the source-removal phase (the target_sync wedge resolves)
+        ok 26 - source removal was dispatched by the retried application
+        ok 27 - the applied evidence cleared its payload, its timer, and its backoff streak (streak resets on clear)
+        ok 28 - still zero errors across defer/re-arm/apply
+        ok 29 - the operation neither completed nor failed — it is mid source-removal, where the run should have been
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..29
+    ok 3 - GUARD fix pieces 2+3+4 (stale-read exit (a)): the ACTIVE CAS loses to the dispatch walk and the authoritative replay no-ops, but the evidence is NOT erased — reconcileReplaceActualActive reports applied=false, a warned retry timer with exponential backoff owns the retained payload, and once reads heal the timer's re-drive applies it (red on revert: the pre-action clear erased the payload and no retry was ever scheduled) # time=138.849ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: ledger exit (b) superseded: a retryable CAS persist failure at ACTIVE is absorbed by the owner-local deferred-progress lane (quest formation-ledger-self-move-blocks-cluster-ops) — updateStep does not throw, the observed-target replay is not needed, the source is not removed from a provisional ACTIVE row, the transition retains an exact retry owner, and the persist error is still LOGGED (the 145024Z-run3 discriminator holds: that run had none)
+        ok 1 - updateStep(operation, ACTIVE) absorbed the retryable control-plane persist error via the owner-local deferred-progress lane instead of throwing
+        ok 2 - the observed-target replay was not needed — the workflow keeps the owner-local ACTIVE projection and its persistence retry
+        not ok 3 - a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)
+          ---
+          at:
+            fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+            lineNumber: 874
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:874:13)
+          source: >2
+                        'keeps the owner-local ACTIVE projection and its persistence retry',
+                      );
+                      t.ok(
+            ------------^
+                        countLiveOwnerRetryState(owner).transitionRetryTimers >= 1,
+                        'a durable transition retry owner is retained until the ' +
+          ...
+        
+        not ok 4 - the durable row is still SYNCING during the refused ACTIVE write
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+            lineNumber: 880
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:880:13)
+          source: |2
+                        'route)',
+                      );
+                      t.equal(
+            ------------^
+                        store.state.authoritative.workflowStep,
+                        WORKFLOW_STEP.SYNCING,
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -SYNCING
+            +STOPPING
+          ...
+        
+        not ok 5 - provisional ACTIVE cannot authorize source removal
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+            lineNumber: 885
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:885:13)
+          source: >2
+                        'the durable row is still SYNCING during the refused ACTIVE write',
+                      );
+                      t.equal(removeDeliveries(harness).length, 0,
+            ------------^
+                        'provisional ACTIVE cannot authorize source removal');
+                      const retained = owner.executorOutcomeRetryPayloadByOperationId.get(TEST_OPERATION_ID);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -0
+            +1
+          ...
+        
+        not ok 6 - the unapplied ACTIVE notification is retained
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+            lineNumber: 889
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:889:13)
+          source: >2
+                      const retained = owner.executorOutcomeRetryPayloadByOperationId.get(TEST_OPERATION_ID);
+                      const retryTimer = owner.executorOutcomeRetryTimerByOperationId.get(TEST_OPERATION_ID);
+                      t.equal(retained?.workflowStep, WORKFLOW_STEP.ACTIVE,
+            ------------^
+                        'the unapplied ACTIVE notification is retained');
+                      t.ok(retryTimer, 'unapplied completion retains its own scheduled reconciliation');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -ACTIVE
+            +undefined
+          ...
+        
+        not ok 7 - unapplied completion retains its own scheduled reconciliation
+          ---
+          at:
+            fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+            lineNumber: 891
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:891:13)
+          source: >2
+                      t.equal(retained?.workflowStep, WORKFLOW_STEP.ACTIVE,
+                        'the unapplied ACTIVE notification is retained');
+                      t.ok(retryTimer, 'unapplied completion retains its own scheduled reconciliation');
+            ------------^
+                      await retryTimer?.callback();
+                      await waitForCondition(() => removeDeliveries(harness).length === 1,
+          ...
+        
+        ok 8 - the applied ACTIVE notification writes STOPPING before removal
+        ok 9 - the exact ACTIVE notification clears only once consumed
+        ok 10 - the committed transition clears its owned persistence retry
+        not ok 11 - exit (b) logs "Failed to persist operation" — run 145024Z-run3 had ZERO errors, so the run did NOT take exit (b)
+          ---
+          at:
+            fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+            lineNumber: 902
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:902:13)
+          source: |2
+                        'the committed transition clears its owned persistence retry');
+                      // The discriminating observable vs the real run:
+                      t.ok(
+            ------------^
+                        errorsMatching(
+                          harness.logs,
+          ...
+        
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        # exit(b): removeDeliveries=1; liveRetryState={"executorOutcomeRetryPayloads":0,"executorOutcomeRetryTimers":0,"transitionRetryTimers":0,"priorityActiveReplaceRetryTimers":0,"observedProgressRetryTimers":0,"dispatchRetryTimers":0}
+        1..11
+    not ok 4 - ledger exit (b) superseded: a retryable CAS persist failure at ACTIVE is absorbed by the owner-local deferred-progress lane (quest formation-ledger-self-move-blocks-cluster-ops) — updateStep does not throw, the observed-target replay is not needed, the source is not removed from a provisional ACTIVE row, the transition retains an exact retry owner, and the persist error is still LOGGED (the 145024Z-run3 discriminator holds: that run had none) # time=214.713ms
+      ---
+      at:
+        fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+        lineNumber: 824
+        columnNumber: 13
+        typeName: Test
+      source: |2
+            );
+      
+            await t.test(
+        ------------^
+              'ledger exit (b) superseded: a retryable CAS persist failure at ' +
+              'ACTIVE is absorbed by the owner-local deferred-progress lane ' +
+      ...
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: GUARD amendment 5 (success supersedes retained failure): an incoming SUCCESS outcome replaces a retained FAILURE payload in retainExecutorOutcomeRetryPayload even though FAILED holds the top workflow-step rank (red on revert: the pure rank contest keeps FAILED and masks all later success evidence)
+        ok 1 - isFailureExecutorOutcome classifies REPLICA_CREATE_FAILED (action FAIL) as a failure outcome
+        ok 2 - isFailureExecutorOutcome classifies REPLICA_CREATE_ACTIVE (action COMPLETE) as a non-failure outcome
+        ok 3 - baseline: the FAILED payload (workflowStep FAILED, top step-rank) is retained
+        ok 4 - GUARD amendment 5: the incoming ACTIVE success outcome SUPERSEDED the retained FAILED payload — red on revert to the pure rank contest (ACTIVE rank 5 loses to FAILED rank 7)
+        ok 5 - success-vs-success stays rank-governed: a SYNCING arrival does not displace the retained ACTIVE payload
+        ok 6 - GUARD amendment 5: a SYNCING success outcome (rank 4) also supersedes the retained FAILED payload (rank 7) — the rule is failure-vs-success, not rank
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..6
+    ok 5 - GUARD amendment 5 (success supersedes retained failure): an incoming SUCCESS outcome replaces a retained FAILURE payload in retainExecutorOutcomeRetryPayload even though FAILED holds the top workflow-step rank (red on revert: the pure rank contest keeps FAILED and masks all later success evidence) # time=2.164ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: GUARD amendment 6 (DEFER_RETRY hands the evidence to the transition retry): when the FAIL branch defers a retryable control-plane failure to deferTransitionRetry, the retained FAILED payload is CLEARED before the early return (red on revert: a driverless FAILED payload survives into the transition-retry-owned phase and masks the recreated replica's success outcomes)
+        ok 1 - the failure evidence (retryable control-plane error + critical partition + dispatch-retryable CREATING step) matched DEFER_RETRY and called deferTransitionRetry once
+        ok 2 - deferTransitionRetry received the operation id
+        ok 3 - the deferral context carries the durable row's CREATING step
+        ok 4 - the reconcile reported handled=true via the deferred early return
+        ok 5 - the operation was NOT failed — the transition retry owns it
+        ok 6 - the deferred branch returns before OUTCOME_ROUTED
+        ok 7 - GUARD amendment 6: the retained FAILED payload was CLEARED when deferTransitionRetry accepted ownership — red if the clearExecutorOutcomeRetry before the early return is reverted
+        ok 8 - the clear ran while the FAILED payload was still retained (it erased exactly the masking evidence)
+        ok 9 - no executor-outcome retry timer was armed — the transition retry is the sole owner
+        ok 10 - the deferral path logs no errors
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..10
+    ok 6 - GUARD amendment 6 (DEFER_RETRY hands the evidence to the transition retry): when the FAIL branch defers a retryable control-plane failure to deferTransitionRetry, the retained FAILED payload is CLEARED before the early return (red on revert: a driverless FAILED payload survives into the transition-retry-owned phase and masks the recreated replica's success outcomes) # time=112.294ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: GUARD amendment 7 (not-locally-owned clears the retained payload): an outcome reconciled against an operation owned by a REMOTE node clears the locally retained evidence (red on revert: a driverless local payload lingers and masks later outcomes)
+        ok 1 - the reconcile consulted repository.isOperationLocallyOwned
+        ok 2 - the not-locally-owned reconcile reported false (no local action)
+        ok 3 - GUARD amendment 7: the retained ACTIVE payload was CLEARED on the not-locally-owned path — red if that clear is reverted (the payload would linger with no timer and no re-drive consumer)
+        ok 4 - the clear ran while the ACTIVE payload was still retained
+        ok 5 - no executor-outcome retry timer was armed for the remotely-owned operation
+        ok 6 - no local actuation (source removal) was dispatched for the remotely-owned operation
+        ok 7 - the durable row was left untouched for the remote owner
+        ok 8 - the not-local path logs no errors
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..8
+    ok 7 - GUARD amendment 7 (not-locally-owned clears the retained payload): an outcome reconciled against an operation owned by a REMOTE node clears the locally retained evidence (red on revert: a driverless local payload lingers and masks later outcomes) # time=112.017ms
+    
+RebalanceCoordinator initialized {
+  nodeId: 'node-target-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    # Subtest: POST-ACTION TWIN (quest terminal-write-refusal-retry-ownership): a completeOperation whose terminal persist is REFUSED must NOT have erased the armed executor-outcome retry timer/payload (red on revert: the pre-write clearTerminalOperationRetryState kills the armed visibility retry mid-backoff, then the refusal leaves the operation with no owner at all)
+        ok 1 - the terminal persist was refused and the typed outcome reports it
+        ok 2 - the retained executor-outcome payload SURVIVED the refused termination
+        ok 3 - the armed executor-outcome retry timer SURVIVED the refused termination
+        ok 4 - clearExecutorOutcomeRetry never fired for the refused terminal (clearing is a consequence of a proven terminal)
+        ok 5 - the EXISTING terminal-transition repair was armed for the refusal
+        ok 6 - exactly one typed warn names the refused terminal persist
+        ok 7 - the durable row is still non-terminal (the refusal was real)
+Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+        1..7
+    ok 8 - POST-ACTION TWIN (quest terminal-write-refusal-retry-ownership): a completeOperation whose terminal persist is REFUSED must NOT have erased the armed executor-outcome retry timer/payload (red on revert: the pre-write clearTerminalOperationRetryState kills the armed visibility retry mid-backoff, then the refusal leaves the operation with no owner at all) # time=3.814ms
+    
+    1..8
+not ok 1 - CL-029 guard: REPLACE target-completion evidence keeps a retry owner across the dispatch step-walk and stale reads (red on fix revert) # time=900.542ms
+  ---
+  at:
+    fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+    lineNumber: 350
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test(
+    ^
+      'CL-029 guard: REPLACE target-completion evidence keeps a retry owner ' +
+      'across the dispatch step-walk and stale reads (red on fix revert)',
+  ...
+
+1..1
+# { total: 88, pass: 82, fail: 6 }
+# time=908.332ms
+# test-files total=2 pass=0 fail=2 assertions=410
+placement-results={"file":"test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js","attempt":1,"ok":false,"assertions":313,"durationMs":1316,"retriedOnce":false,"firstFailureLine":"not ok 2 - priority SQL re-dispatch should persist the SENDING and CREATING transitions"}
+placement-results={"file":"test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js","attempt":1,"ok":false,"assertions":97,"durationMs":1945,"retriedOnce":false,"firstFailureLine":"not ok 3 - a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)"}

@@ -1,0 +1,19 @@
+{
+  "sha": "487d12c91388b51e00427aef9e58460b39bb6096",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js",
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js",
+        "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

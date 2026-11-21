@@ -1,0 +1,273 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.50
+[tv-dator] placement-shell=3285676
+[tv-dator] placement-head=0296664210e4d8573264660d131f2fb77c31e09b
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3286130
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 59C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/placement-retained-continuation.test.js (26 assertions, 4139ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+[tv-dator] ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1807.848579
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+[tv-dator] ok 2 - W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 70.789803
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender
+[tv-dator] ok 3 - W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 54.261357
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W6 one real release and one transient read failure complete the original repair exactly once
+[tv-dator] ok 4 - W6 one real release and one transient read failure complete the original repair exactly once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 56.495429
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.165Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS","awaited":"a qualified retained placement repair authority read","boundMs":300000,"elapsedMs":300000,"lastObserved":{"reason":"owner_read_failed","attempts":300},"scope":{"operationId":"retained-continuation-remove"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+[tv-dator] ok 5 - W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 111.405406
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+[tv-dator] ok 6 - W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 63.725953
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+[tv-dator] ok 7 - W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 50.144558
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+[tv-dator] ok 8 - W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 54.232099
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W8 shutdown with an armed continuation leaves nothing to fire
+[tv-dator] ok 9 - W8 shutdown with an armed continuation leaves nothing to fire
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.577862
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W8 retirement with an armed continuation leaves nothing to fire
+[tv-dator] ok 10 - W8 retirement with an armed continuation leaves nothing to fire
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.807834
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.469Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.469Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.525Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: partial authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 11 - partial authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 55.463857
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.527Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.527Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: partial authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 12 - partial authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 52.970977
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: failed authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 13 - failed authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 49.152828
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: failed authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 14 - failed authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.958448
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stale authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 15 - stale authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 45.863516
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stale authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 16 - stale authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 43.975012
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.758Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.759Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.798Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 17 - wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 44.958863
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.804Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:36.804Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 18 - wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.381715
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+[tv-dator] ok 19 - Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 50.433143
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+[tv-dator] ok 20 - Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 37.438632
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: B5 a custodian record released at its tenure end, without a read, cancels its continuation
+[tv-dator] ok 21 - B5 a custodian record released at its tenure end, without a read, cancels its continuation
+[tv-dator]   ---
+[tv-dator]   duration_ms: 39.117658
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Q9 an event storm during an outage reads once in flight plus once owed
+[tv-dator] ok 22 - Q9 an event storm during an outage reads once in flight plus once owed
+[tv-dator]   ---
+[tv-dator]   duration_ms: 40.775198
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+[tv-dator] not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+[tv-dator]   ---
+[tv-dator]   duration_ms: 39.841836
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:668:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the native answer placement_admission_bytes_invalid is a definite refusal row of the clearing table (W1b 38708b6fa)'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:700:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: F2 a presentation that keeps failing after qualified reads is bounded: one window, one report, zero proposals, obligation kept
+[tv-dator] not ok 24 - F2 a presentation that keeps failing after qualified reads is bounded: one window, one report, zero proposals, obligation kept
+[tv-dator]   ---
+[tv-dator]   duration_ms: 200.231398
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:728:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     a presentation that keeps failing after qualified reads reaches the bounded stop (still armed after 720 continuation turns, 721 qualified reads and 721 presentations)
+[tv-dator]     
+[tv-dator]     1 !== 0
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 0
+[tv-dator]   actual: 1
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:751:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:37.265Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-21T20:19:37.267Z","nodeId":"test-node","pid":3286145,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS","awaited":"a qualified retained placement repair authority read","boundMs":300000,"elapsedMs":721000,"lastObserved":{"reason":"owner_read_failed","attempts":1},"scope":{"operationId":"retained-continuation-remove"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: F4 a window left by an earlier episode does not spend a later independent failure: it gets its own bounded retries
+[tv-dator] not ok 25 - F4 a window left by an earlier episode does not spend a later independent failure: it gets its own bounded retries
+[tv-dator]   ---
+[tv-dator]   duration_ms: 51.147238
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:776:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     a later independent transient failure is not spent at once by an earlier window
+[tv-dator]     
+[tv-dator]     1 !== 0
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 0
+[tv-dator]   actual: 1
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:802:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 one obligation has one continuation owner: an uncommitted answer carrying custody arms only the custodian
+[tv-dator] not ok 26 - T1 one obligation has one continuation owner: an uncommitted answer carrying custody arms only the custodian
+[tv-dator]   ---
+[tv-dator]   duration_ms: 40.963989
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:817:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     exactly one continuation owns the obligation (receiver 1, sender 1)
+[tv-dator]     
+[tv-dator]     2 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-continuation.test.js:845:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0296664210e4-mwquppgg-2069501/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..26
+[tv-dator] # tests 26
+[tv-dator] # suites 0
+[tv-dator] # pass 22
+[tv-dator] # fail 4
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 3245.543687
+[tv-dator] # time=4139ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=26
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=26
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=26

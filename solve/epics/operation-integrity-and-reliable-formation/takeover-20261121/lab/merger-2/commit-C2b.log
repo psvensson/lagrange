@@ -1,0 +1,35 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: dadbc11f0126d4a60dab619ff8379a84493c543f
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 8 JavaScript files
+Found 0 new literal-guideline violations
+Matched 2 inherited literal-guideline baseline violations
+Scanned 8 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 1 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 8 JavaScript files
+Found 0 silent catch violations
+Matched 2 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 8 JavaScript files
+Found 0 navigability violations
+Matched 31 inherited navigability baseline violations
+Scoped complexity ratchet: 5 violation(s) in 8 target(s) (threshold: 12).
+src/rebalancer/operation-workflow-transition-persistence.js:168:16 Async arrow function has a complexity of 16. Maximum allowed is 12.
+src/rebalancer/operation-workflow-transition-persistence.js:381:3 Async method 'releaseDurableTerminalOperation' has a complexity of 15. Maximum allowed is 12.
+src/rebalancer/operation-workflow-transition-persistence.js:654:3 Async method 'failOperation' has a complexity of 31. Maximum allowed is 12.
+src/rebalancer/rebalance-coordinator-lifecycle.js:140:3 Method 'initializeCoordinatorState' has a complexity of 35. Maximum allowed is 12.
+src/rebalancer/rebalance-coordinator-lifecycle.js:460:3 Method 'syncOwnerDependencies' has a complexity of 19. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/integration-candidate-20261121 cd177cba8] rebalancer: re-drive a gate-withheld dispatch once on the retained owner's verdict
+ 12 files changed, 164 insertions(+), 32 deletions(-)
+ create mode 100644 src/rebalancer/operation-workflow-withheld-dispatch.js
+rc=0

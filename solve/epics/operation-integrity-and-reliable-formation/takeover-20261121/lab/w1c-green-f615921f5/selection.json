@@ -1,0 +1,41 @@
+{
+  "sha": "f615921f54eff7ea5f0cdf0729dbf4034abdfb0a",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+    "test/rebalancer/coordinator-dedup-gap.test.js",
+    "test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js",
+    "test/partition/placement-create-dispatch-execution-mirror.test.js",
+    "test/partition/placement-retained-publication.test.js",
+    "test/partition/placement-retained-continuation.test.js",
+    "test/partition/placement-retained-leadership.test.js",
+    "test/partition/placement-retained-row-repair.test.js",
+    "test/partition/placement-retained-real-publication.test.js",
+    "test/partition/placement-retained-post-copy.test.js",
+    "test/partition/placement-growth-dispatch-identity.test.js",
+    "test/rebalancer/replace-real-group-native-ledger-recovery.test.js",
+    "test/rebalancer/replica-placement-owner-core.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-create-dispatch-execution-mirror.test.js",
+        "test/partition/placement-growth-dispatch-identity.test.js",
+        "test/partition/placement-retained-continuation.test.js",
+        "test/partition/placement-retained-leadership.test.js",
+        "test/partition/placement-retained-post-copy.test.js",
+        "test/partition/placement-retained-publication.test.js",
+        "test/partition/placement-retained-real-publication.test.js",
+        "test/partition/placement-retained-row-repair.test.js",
+        "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+        "test/rebalancer/replace-real-group-native-ledger-recovery.test.js",
+        "test/rebalancer/replica-placement-owner-core.test.js",
+        "test/rebalancer/coordinator-dedup-gap.test.js",
+        "test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

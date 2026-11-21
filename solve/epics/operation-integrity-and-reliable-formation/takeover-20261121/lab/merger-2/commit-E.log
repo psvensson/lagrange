@@ -1,0 +1,415 @@
+node:internal/child_process:1120
+    result.error = new ErrnoException(result.error, 'spawnSync ' + options.file);
+                   ^
+
+<ref *1> Error: spawnSync git ENOBUFS
+    at Object.spawnSync (node:internal/child_process:1120:20)
+    at spawnSync (node:child_process:902:24)
+    at execFileSync (node:child_process:945:15)
+    at file:///mnt/data/peter/projects/lagrange-takeover-20261121/lab/merger-2/nav-guard.mjs:23:25
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  errno: -105,
+  code: 'ENOBUFS',
+  syscall: 'spawnSync git',
+  path: 'git',
+  spawnargs: [
+    'show',
+    'HEAD:scripts/check-guideline-navigability-baseline-legacy_term_identifiers.json'
+  ],
+  error: [Circular *1],
+  status: null,
+  signal: 'SIGTERM',
+  output: [
+    null,
+    '{\n' +
+      '  "version": 1,\n' +
+      '  "generatedAt": "2026-11-18T06:01:34.719Z",\n' +
+      '  "rawViolationCount": 2835,\n' +
+      '  "violations": [\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 25,\n' +
+      '      "column": 6,\n' +
+      '      "functionName": "<anonymous>",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 109,\n' +
+      '      "column": 18,\n' +
+      '      "functionName": "validateFields",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 128,\n' +
+      '      "column": 15,\n' +
+      '      "functionName": "validateIncomingMessage",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 135,\n' +
+      '      "column": 15,\n' +
+      '      "functionName": "validateIncomingMessage",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 151,\n' +
+      '      "column": 15,\n' +
+      '      "functionName": "validateOutgoingMessage",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 158,\n' +
+      '      "column": 15,\n' +
+      '      "functionName": "validateOutgoingMessage",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+      '      "line": 165,\n' +
+      '      "column": 2,\n' +
+      '      "functionName": "<anonymous>",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+      '      "line": 32,\n' +
+      '      "column": 2,\n' +
+      '      "functionName": "<anonymous>",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+      '      "line": 45,\n' +
+      '      "column": 6,\n' +
+      '      "functionName": "reportBoundedSnapshotProbeSpent",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+      '      "line": 308,\n' +
+      '      "column": 12,\n' +
+      '      "functionName": "buildLocalCdcTelemetry",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+      '      "line": 354,\n' +
+      '      "column": 8,\n' +
+      '      "functionName": "buildLocalCdcTelemetry",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 251,\n' +
+      '      "column": 9,\n' +
+      '      "functionName": "enqueueMembershipPublicationReconcileFallback",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 353,\n' +
+      '      "column": 29,\n' +
+      '      "functionName": "maybeReconcileAuthoritativeMembershipPublication",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 409,\n' +
+      '      "column": 8,\n' +
+      '      "functionName": "maybeReconcileAuthoritativeMembershipPublication",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 441,\n' +
+      '      "column": 25,\n' +
+      '      "functionName": "maybeReconcileAuthoritativeMembershipPublication",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 713,\n' +
+      '      "column": 4,\n' +
+      '      "functionName": "ensurePublishedMembershipObservation",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 717,\n' +
+      '      "column": 6,\n' +
+      '      "functionName": "ensurePublishedMembershipObservation",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 718,\n' +
+      '      "column": 13,\n' +
+      '      "functionName": "ensurePublishedMembershipObservation",\n' +
+      '      "kind": "legacy_term_identifiers",\n' +
+      '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+      '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+      '    },\n' +
+      '    {\n' +
+      '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+      '      "line": 720,\n' +
+      '      "column": 13,\n' +
+      '      "functionName": "ensurePublis'... 1071344 more characters,
+    ''
+  ],
+  pid: 2381990,
+  stdout: '{\n' +
+    '  "version": 1,\n' +
+    '  "generatedAt": "2026-11-18T06:01:34.719Z",\n' +
+    '  "rawViolationCount": 2835,\n' +
+    '  "violations": [\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 25,\n' +
+    '      "column": 6,\n' +
+    '      "functionName": "<anonymous>",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 109,\n' +
+    '      "column": 18,\n' +
+    '      "functionName": "validateFields",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 128,\n' +
+    '      "column": 15,\n' +
+    '      "functionName": "validateIncomingMessage",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 135,\n' +
+    '      "column": 15,\n' +
+    '      "functionName": "validateIncomingMessage",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 151,\n' +
+    '      "column": 15,\n' +
+    '      "functionName": "validateOutgoingMessage",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 158,\n' +
+    '      "column": 15,\n' +
+    '      "functionName": "validateOutgoingMessage",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-cli-compat.js",\n' +
+    '      "line": 165,\n' +
+    '      "column": 2,\n' +
+    '      "functionName": "<anonymous>",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+    '      "line": 32,\n' +
+    '      "column": 2,\n' +
+    '      "functionName": "<anonymous>",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+    '      "line": 45,\n' +
+    '      "column": 6,\n' +
+    '      "functionName": "reportBoundedSnapshotProbeSpent",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+    '      "line": 308,\n' +
+    '      "column": 12,\n' +
+    '      "functionName": "buildLocalCdcTelemetry",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",\n' +
+    '      "line": 354,\n' +
+    '      "column": 8,\n' +
+    '      "functionName": "buildLocalCdcTelemetry",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 251,\n' +
+    '      "column": 9,\n' +
+    '      "functionName": "enqueueMembershipPublicationReconcileFallback",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 353,\n' +
+    '      "column": 29,\n' +
+    '      "functionName": "maybeReconcileAuthoritativeMembershipPublication",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 409,\n' +
+    '      "column": 8,\n' +
+    '      "functionName": "maybeReconcileAuthoritativeMembershipPublication",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 441,\n' +
+    '      "column": 25,\n' +
+    '      "functionName": "maybeReconcileAuthoritativeMembershipPublication",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 713,\n' +
+    '      "column": 4,\n' +
+    '      "functionName": "ensurePublishedMembershipObservation",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 717,\n' +
+    '      "column": 6,\n' +
+    '      "functionName": "ensurePublishedMembershipObservation",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 718,\n' +
+    '      "column": 13,\n' +
+    '      "functionName": "ensurePublishedMembershipObservation",\n' +
+    '      "kind": "legacy_term_identifiers",\n' +
+    '      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",\n' +
+    '      "ruleReference": "docs/development/code-style.md \\"Navigability and fallback patterns\\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"\n' +
+    '    },\n' +
+    '    {\n' +
+    '      "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",\n' +
+    '      "line": 720,\n' +
+    '      "column": 13,\n' +
+    '      "functionName": "ensurePublis'... 1071344 more characters,
+  stderr: ''
+}
+
+Node.js v22.23.2
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: cd177cba81b6eb9b58242a066d973e83ec39e672
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 10 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 10 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 3 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 10 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 10 JavaScript files
+Found 0 navigability violations
+Matched 67 inherited navigability baseline violations
+Scoped complexity ratchet: 10 violation(s) in 10 target(s) (threshold: 12).
+src/cache/system-table-cache.js:275:3 Method 'applySystemTableChange' has a complexity of 41. Maximum allowed is 12.
+src/cdc/cdc-propagation-progress.js:54:1 Function 'transferInvalidLatencyBindings' has a complexity of 19. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:237:1 Function 'collectKnownMessageGroupDomain' has a complexity of 16. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:309:1 Function 'resolveLatencyGroupTargetCandidates' has a complexity of 18. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:363:1 Function 'resolveSourceLatencyGroupId' has a complexity of 18. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:471:1 Function 'isPreActivationLatencyGroup' has a complexity of 18. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:506:1 Function 'collectUnmappedLatencyGroupIds' has a complexity of 20. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:606:1 Function 'resolveGroupedTargetEntry' has a complexity of 24. Maximum allowed is 12.
+src/topology/cdc-group-propagation-routing.js:699:1 Function 'buildGroupedContext' has a complexity of 16. Maximum allowed is 12.
+src/topology/latency-tree-service.js:307:3 Method 'buildAdjacency' has a complexity of 19. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/integration-candidate-20261121 8d897772b] Merge work/cdc-currentness-stamp-20261121 (5c412e839): CDC plan currentness stamp
+E-SHA=8d897772b95e07b7b16862def21c1a7bbf81ae45
+rc=0

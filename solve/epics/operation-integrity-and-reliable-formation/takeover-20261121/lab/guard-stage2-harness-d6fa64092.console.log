@@ -1,0 +1,31 @@
+lab test: tv-dator: ordinary (11 files) cores=12 mem=15.4GiB speed x1.52
+[tv-dator] placement-shell=3294859
+[tv-dator] placement-head=d6fa64092506fc2cb9fa6b650fe494a41f1e8893
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3295352
+[tv-dator] # test-files planned=11
+[tv-dator] classified lane ordinary: 11 file(s), jobs=4
+[tv-dator] thermal: ok cpu 52C (coretemp/Package id 0) nvme 44C (nvme/Sensor 1)
+[tv-dator] ok test/raft/raft-rs-backend/admission-redrive.test.js (1 assertions, 1982ms)
+[tv-dator] ok test/raft/raft-rs-backend/committed-membership-stamp.test.js (1 assertions, 1450ms)
+[tv-dator] ok test/raft/raft-rs-backend/admission-redrive-chain.test.js (4 assertions, 3972ms)
+[tv-dator] ok test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js (5 assertions, 1494ms)
+[tv-dator] ok test/raft/raft-rs-backend/bootstrap-committed-membership.test.js (4 assertions, 5479ms)
+[tv-dator] ok test/raft/raft-rs-backend/committed-membership-target-validation.test.js (5 assertions, 2142ms)
+[tv-dator] ok test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js (6 assertions, 3835ms)
+[tv-dator] ok test/rebalancer/services-inventory-owner-fact-siblings.test.js (34 assertions, 4304ms)
+[tv-dator] ok test/rebalancer/rebalance-coordinator-operation-ownership.test.js (233 assertions, 1334ms)
+[tv-dator] ok test/raft/raft-rs-backend/evidence-o1-real-chain.test.js (7 assertions, 14266ms)
+[tv-dator] ok test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js (6 assertions, 41587ms)
+[tv-dator] # test-files total=11 pass=11 fail=0 assertions=306
+lab test: tv-dator: # test-files total=11 pass=11 fail=0 assertions=306
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=11 pass=11 fail=0 assertions=306
+exit=0

@@ -1,0 +1,1365 @@
+placement-shell=3400250
+placement-head=c7991efa8dee805a66c88cd7592a05c06d9ac345
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3400701
+# test-files planned=23
+classified lane ordinary: 21 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/rebalancer/operation-record-step-shape.test.js (5 assertions, 1005ms)
+ok test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (16 assertions, 1179ms)
+ok test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (6 assertions, 1226ms)
+not ok test/rebalancer/admission-real-size-estimates.test.js (23 assertions, 1801ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: MovePlanner estimates with the real partition size_bytes
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - estimateReplicaBytes called for the partition
+    ok 4 - MovePlanner must pass the real size_bytes, not the zero placeholder
+    ok 5 - estimate grows with the real payload size
+    1..5
+ok 1 - MovePlanner estimates with the real partition size_bytes # time=85.472ms
+
+# Subtest: MovePlanner keeps the zero floor when no size resolver is wired
+    ok 1 - unwired resolver keeps the pre-change floor behavior
+    1..1
+ok 2 - MovePlanner keeps the zero floor when no size resolver is wired # time=45.692ms
+
+# Subtest: admission evaluation sizes on the resolved real size_bytes
+    ok 1 - estimateReplicaBytes called during admission
+    ok 2 - admission must pass the resolved real size_bytes
+    ok 3 - should be equal
+    ok 4 - admission check receives the real-size estimate
+    1..4
+ok 3 - admission evaluation sizes on the resolved real size_bytes # time=32.142ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: operation creation persists the real-size reservation witness
+    not ok 1 - Placement waits for committed formation: p-real-size
+      ---
+      stack: |
+        RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+        RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+        RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+        RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/admission-real-size-estimates.test.js:326:5)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+        lineNumber: 245
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: resolveFormationLatchEpochForPlacement
+        functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+      rebalanceSkipReason: deferred_retry_pending
+      failureCode: FORMATION_NOT_LATCHED
+      tapCaught: returnedPromiseRejection
+      source: >2
+              return formation.latchEpoch;
+            }
+            const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+        ------------------^
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+            error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+      ...
+    
+    1..1
+not ok 4 - operation creation persists the real-size reservation witness # time=63.102ms
+  ---
+  at:
+    fileName: test/rebalancer/admission-real-size-estimates.test.js
+    lineNumber: 320
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    // --- Site C: reservation creation via operation creation ---
+  
+    test('operation creation persists the real-size reservation witness',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: admission and reservation share ONE resolved estimate
+    not ok 1 - Placement waits for committed formation: p-real-size
+      ---
+      stack: |
+        RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+        RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+        RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+        RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/admission-real-size-estimates.test.js:359:5)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+        lineNumber: 245
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: resolveFormationLatchEpochForPlacement
+        functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+      rebalanceSkipReason: deferred_retry_pending
+      failureCode: FORMATION_NOT_LATCHED
+      tapCaught: returnedPromiseRejection
+      source: >2
+              return formation.latchEpoch;
+            }
+            const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+        ------------------^
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+            error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+      ...
+    
+    1..1
+not ok 5 - admission and reservation share ONE resolved estimate # time=29.638ms
+  ---
+  at:
+    fileName: test/rebalancer/admission-real-size-estimates.test.js
+    lineNumber: 351
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('admission and reservation share ONE resolved estimate',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: checkProvisioningAdmission probe sizes on the real size_bytes
+    ok 1 - probe admits with capacity available
+    ok 2 - estimateReplicaBytes called during the probe
+    ok 3 - probe admission must pass the real size_bytes
+    1..3
+ok 6 - checkProvisioningAdmission probe sizes on the real size_bytes # time=32.781ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: operation creation falls back to the floor without a partitions row
+    not ok 1 - Placement waits for committed formation: p-real-size
+      ---
+      stack: |
+        RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+        RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+        RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+        RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/admission-real-size-estimates.test.js:419:5)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+        lineNumber: 245
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: resolveFormationLatchEpochForPlacement
+        functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+      rebalanceSkipReason: deferred_retry_pending
+      failureCode: FORMATION_NOT_LATCHED
+      tapCaught: returnedPromiseRejection
+      source: >2
+              return formation.latchEpoch;
+            }
+            const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+        ------------------^
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+            error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+      ...
+    
+    1..1
+not ok 7 - operation creation falls back to the floor without a partitions row # time=37.546ms
+  ---
+  at:
+    fileName: test/rebalancer/admission-real-size-estimates.test.js
+    lineNumber: 411
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('operation creation falls back to the floor without a partitions row',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+1..7
+# { total: 16, pass: 13, fail: 3 }
+# time=361.883ms
+not ok test/rebalancer/duplicate-operation-prevention.property.test.js (40 assertions, 2084ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: MovePlanner - Duplicate Operation Prevention
+    # Subtest: skips ADD when in-flight operation exists for same node
+        ok 1 - MovePlanner skips ADD when in-flight operation exists
+        1..1
+    ok 1 - skips ADD when in-flight operation exists for same node # time=39.45ms
+    
+    # Subtest: skips moves when pending operations exist
+        ok 1 - MovePlanner returns empty when pending operations exist
+        1..1
+    ok 2 - skips moves when pending operations exist # time=6.821ms
+    
+    # Subtest: skips ADD for nodes with transitional replicas
+        ok 1 - MovePlanner skips ADD for nodes with transitional replicas
+        1..1
+    ok 3 - skips ADD for nodes with transitional replicas # time=3.604ms
+    
+    1..3
+ok 1 - MovePlanner - Duplicate Operation Prevention # time=124.691ms
+
+# Subtest: RebalanceCoordinator - Concurrent Operation Deduplication
+    # Subtest: in-memory guard prevents duplicate concurrent creates
+        not ok 1 - Placement waits for committed formation: partition-1
+          ---
+          stack: |
+            RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+            RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+            RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+            RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+            async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+            lineNumber: 245
+            columnNumber: 19
+            typeName: RebalanceCoordinator
+            methodName: resolveFormationLatchEpochForPlacement
+            functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+          rebalanceSkipReason: deferred_retry_pending
+          failureCode: FORMATION_NOT_LATCHED
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  return formation.latchEpoch;
+                }
+                const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+            ------------------^
+                error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+                error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+          ...
+        
+        1..1
+    not ok 1 - in-memory guard prevents duplicate concurrent creates # time=57.924ms
+      ---
+      at:
+        fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+        lineNumber: 316
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          initializeTestEnvironment();
+      
+          await t.test('in-memory guard prevents duplicate concurrent creates', async (t) => {
+        ----------^
+            // Property: When multiple createOperation calls happen concurrently
+            // for the same partition/node, only one operation should be created
+      ...
+    
+    # Subtest: database deduplication prevents duplicate operations
+        ok 1 - Should return existing operation
+        1..1
+    ok 2 - database deduplication prevents duplicate operations # time=4.321ms
+    
+    1..2
+not ok 2 - RebalanceCoordinator - Concurrent Operation Deduplication # time=109.42ms
+  ---
+  at:
+    fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+    lineNumber: 313
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) =>
+    {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: Multiple Partition Rebalancers - Cross-Partition Deduplication
+    # Subtest: different partitions can create operations to same node
+        not ok 1 - Placement waits for committed formation: partition-1
+          ---
+          stack: |
+            RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+            RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+            RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+            RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+            async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+            async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+            async Promise.all (index 0)
+            async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:412:32)
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+            lineNumber: 245
+            columnNumber: 19
+            typeName: RebalanceCoordinator
+            methodName: resolveFormationLatchEpochForPlacement
+            functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+          rebalanceSkipReason: deferred_retry_pending
+          failureCode: FORMATION_NOT_LATCHED
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  return formation.latchEpoch;
+                }
+                const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+            ------------------^
+                error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+                error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+          ...
+        
+        1..1
+    not ok 1 - different partitions can create operations to same node # time=6.685ms
+      ---
+      at:
+        fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+        lineNumber: 389
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          initializeTestEnvironment();
+      
+          await t.test('different partitions can create operations to same node', async (t) => {
+        ----------^
+            // This test documents current behavior: different partitions CAN create
+            // operations to the same target node. This is by design - each partition
+      ...
+    
+    # Subtest: same partition cannot create duplicate operations to same node
+        ok 1 - Same partition cannot create duplicate operations
+        1..1
+    ok 2 - same partition cannot create duplicate operations to same node # time=0.631ms
+    
+    1..2
+not ok 3 - Multiple Partition Rebalancers - Cross-Partition Deduplication # time=35.718ms
+  ---
+  at:
+    fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+    lineNumber: 386
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async
+    (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: Rapid Rebalance Cycles - Race Condition Prevention
+    # Subtest: sequential rebalance cycles do not create duplicates
+        not ok 1 - Placement waits for committed formation: indices-p1
+          ---
+          stack: |
+            RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+            RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+            RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+            RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+            async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+            async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+            async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:488:21)
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+            lineNumber: 245
+            columnNumber: 19
+            typeName: RebalanceCoordinator
+            methodName: resolveFormationLatchEpochForPlacement
+            functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+          rebalanceSkipReason: deferred_retry_pending
+          failureCode: FORMATION_NOT_LATCHED
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  return formation.latchEpoch;
+                }
+                const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+            ------------------^
+                error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+                error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+          ...
+        
+        1..1
+    not ok 1 - sequential rebalance cycles do not create duplicates # time=6.327ms
+      ---
+      at:
+        fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+        lineNumber: 476
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          initializeTestEnvironment();
+      
+          await t.test('sequential rebalance cycles do not create duplicates', async (t) => {
+        ----------^
+            // This test simulates the scenario from the logs where multiple
+            // rebalance cycles happen in rapid succession, potentially before
+      ...
+    
+    # Subtest: MovePlanner checks in-flight before generating moves
+        ok 1 - MovePlanner always checks in-flight operations
+        1..1
+    ok 2 - MovePlanner checks in-flight before generating moves # time=1.863ms
+    
+    1..2
+not ok 4 - Rapid Rebalance Cycles - Race Condition Prevention # time=39.115ms
+  ---
+  at:
+    fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+    lineNumber: 473
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: Oscillation Prevention - Stabilization Period
+    # Subtest: MovePlanner returns empty when operations in-flight
+        ok 1 - MovePlanner prevents oscillation by checking in-flight operations
+        1..1
+    ok 1 - MovePlanner returns empty when operations in-flight # time=3.602ms
+    
+    # Subtest: completed operations do not block new moves
+        ok 1 - Completed operations do not block new moves
+        1..1
+    ok 2 - completed operations do not block new moves # time=1.31ms
+    
+    1..2
+ok 5 - Oscillation Prevention - Stabilization Period # time=30.099ms
+
+# Subtest: System Cache Consistency - In-Flight Operation Visibility
+    # Subtest: getInFlightOperations must see recently created operations
+        ok 1 - Stale cache returns no in-flight operations (potential bug)
+        ok 2 - Test documents the CDC propagation timing issue
+        1..2
+    ok 1 - getInFlightOperations must see recently created operations # time=0.48ms
+    
+    # Subtest: coordinator in-memory guard provides immediate visibility
+        not ok 1 - Placement waits for committed formation: partition-1
+          ---
+          stack: |
+            RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+            RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+            RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+            RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+            async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+            async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+            async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:758:5)
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+            lineNumber: 245
+            columnNumber: 19
+            typeName: RebalanceCoordinator
+            methodName: resolveFormationLatchEpochForPlacement
+            functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+          rebalanceSkipReason: deferred_retry_pending
+          failureCode: FORMATION_NOT_LATCHED
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  return formation.latchEpoch;
+                }
+                const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+            ------------------^
+                error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+                error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+          ...
+        
+        1..1
+    not ok 2 - coordinator in-memory guard provides immediate visibility # time=4.608ms
+      ---
+      at:
+        fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+        lineNumber: 738
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('coordinator in-memory guard provides immediate visibility', async (t) => {
+        ----------^
+            // The RebalanceCoordinator has an in-memory guard (operationsInCreation Set)
+            // that provides immediate visibility of operations being created.
+      ...
+    
+    1..2
+not ok 6 - System Cache Consistency - In-Flight Operation Visibility # time=34.223ms
+  ---
+  at:
+    fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+    lineNumber: 695
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('System Cache Consistency - In-Flight Operation Visibility', async (t) =>
+    {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: Cross-Rebalancer Coordination - Multiple Partition Leaders
+    # Subtest: each partition leader has independent coordinator
+        ok 1 - Each coordinator has independent in-memory guard
+        ok 2 - Independent coordinators documented
+        1..2
+    ok 1 - each partition leader has independent coordinator # time=2.22ms
+    
+    # Subtest: database query provides cross-partition visibility
+        not ok 1 - Placement waits for committed formation: partition-1
+          ---
+          stack: |
+            RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+            RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+            RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+            RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+            async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+            async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+            async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:818:5)
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+            lineNumber: 245
+            columnNumber: 19
+            typeName: RebalanceCoordinator
+            methodName: resolveFormationLatchEpochForPlacement
+            functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+          rebalanceSkipReason: deferred_retry_pending
+          failureCode: FORMATION_NOT_LATCHED
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  return formation.latchEpoch;
+                }
+                const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+            ------------------^
+                error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+                error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+          ...
+        
+        1..1
+    not ok 2 - database query provides cross-partition visibility # time=6.708ms
+      ---
+      at:
+        fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+        lineNumber: 803
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('database query provides cross-partition visibility', async (t) => {
+        ----------^
+            // The database query in queryExistingInFlightOperation() provides
+            // cross-partition visibility because it queries the shared database.
+      ...
+    
+    1..2
+not ok 7 - Cross-Rebalancer Coordination - Multiple Partition Leaders # time=34.424ms
+  ---
+  at:
+    fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+    lineNumber: 768
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t)
+    => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+not ok 8 - Property failed after 1 tests { seed: 867131578, path: "0:0", endOnFailure: true } Counterexample: [2] Shrunk 1 time(s) Got error: Placement waits for committed formation: partition-1     at RebalanceCoordinator.resolveFormationLatchEpochForPlacement (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)     at RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)     at RebalanceCoordinator.createOperationViaPlacementAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)     at RebalanceCoordinator.createOperationInternal (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)     at async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+  ---
+  stack: |
+    buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+    asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+  at:
+    fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+    lineNumber: 126
+    columnNumber: 15
+    functionName: buildError
+  tapCaught: unhandledRejection
+  test: TAP
+  source: |
+    function buildError(errorMessage, out) {
+        if (!out.runConfiguration.errorWithCause) {
+            throw new Error(errorMessage);
+    --------------^
+        }
+        const ErrorWithCause = Error;
+  ...
+
+1..8
+# { total: 18, pass: 12, fail: 6 }
+# time=475.772ms
+not ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (87 assertions, 2428ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+# Subtest: lost reservation INSERT answer adopts one exact durable capacity hold
+    not ok 1 - Placement waits for committed formation: partition-lost-reservation-answer
+      ---
+      stack: |
+        RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+        RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+        RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+        RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:473:25)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+        lineNumber: 245
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: resolveFormationLatchEpochForPlacement
+        functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+      rebalanceSkipReason: deferred_retry_pending
+      failureCode: FORMATION_NOT_LATCHED
+      tapCaught: returnedPromiseRejection
+      source: >2
+              return formation.latchEpoch;
+            }
+            const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+        ------------------^
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+            error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+      ...
+    
+    1..1
+not ok 1 - lost reservation INSERT answer adopts one exact durable capacity hold # time=76.993ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 460
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('lost reservation INSERT answer adopts one exact durable capacity hold',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: exact ACTIVE reservation adoption keeps its durable estimate past TTL
+    ok 1 - the exact live operation adopts its durable ACTIVE hold past TTL
+    ok 2 - adoption retains exactly one capacity hold
+    ok 3 - the admission-time estimate is retained without recomputation
+    ok 4 - an exact authoritative hold does not reissue INSERT
+    ok 5 - adoption does not count as local creation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..5
+ok 2 - exact ACTIVE reservation adoption keeps its durable estimate past TTL # time=40.754ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: concurrent lost-outcome repair callers share one durable capacity hold
+    ok 1 - both callers converge on the same already-applied hold
+    ok 2 - concurrent repair leaves one durable capacity hold
+    ok 3 - ambiguous concurrent adoption does not duplicate creation stats
+    ok 4 - ambiguous concurrent adoption does not duplicate creation events
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..4
+ok 3 - concurrent lost-outcome repair callers share one durable capacity hold # time=27.927ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: terminal and absent operation authority cannot adopt a reservation
+    ok 1 - confirmed absent operation fails closed
+    ok 2 - absence is distinguished from reservation conflict
+    ok 3 - absence cannot drive another capacity mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 4 - terminal operation fails closed
+    ok 5 - terminal authority is classified explicitly
+    ok 6 - terminal authority cannot drive another capacity mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..6
+ok 4 - terminal and absent operation authority cannot adopt a reservation # time=34.568ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: owner unavailability is distinct from confirmed absence
+    ok 1 - unavailable operation owner fails closed
+    ok 2 - operation owner unavailability is named
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 3 - unavailable reservation owner fails closed
+    ok 4 - the reservation owner failure remains observable
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..4
+ok 5 - owner unavailability is distinct from confirmed absence # time=39.428ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: terminalization during reservation read cannot authorize adoption
+    ok 1 - the adoption is refused after concurrent terminalization
+    ok 2 - the final operation observation owns the refusal
+    ok 3 - terminalization does not drive another reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..3
+ok 6 - terminalization during reservation read cannot authorize adoption # time=38.22ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: terminalization after a fresh insert cannot strand an ACTIVE hold
+    ok 1 - the terminal operation wins the post-insert authority check
+    ok 2 - the exact terminal authority owns the refusal
+    ok 3 - the just-inserted hold is released instead of stranded ACTIVE
+    ok 4 - cleanup transitions the exact row without allocating another hold
+    ok 5 - the losing insertion is not counted as a created hold
+    ok 6 - the losing insertion emits no observational creation event
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..6
+ok 7 - terminalization after a fresh insert cannot strand an ACTIVE hold # time=28.953ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: every immutable operation identity conflict refuses reservation adoption
+    ok 1 - type conflict is not adopted
+    ok 2 - type conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 3 - partitionId conflict is not adopted
+    ok 4 - partitionId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 5 - replicaId conflict is not adopted
+    ok 6 - replicaId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 7 - targetClaimKey conflict is not adopted
+    ok 8 - targetClaimKey conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 9 - sourceNodeId conflict is not adopted
+    ok 10 - sourceNodeId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 11 - targetNodeId conflict is not adopted
+    ok 12 - targetNodeId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 13 - entityType conflict is not adopted
+    ok 14 - entityType conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 15 - entityId conflict is not adopted
+    ok 16 - entityId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 17 - membershipPublicationEpoch conflict is not adopted
+    ok 18 - membershipPublicationEpoch conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..18
+ok 8 - every immutable operation identity conflict refuses reservation adoption # time=252.681ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: reservation identity, state, estimate, and timestamps all fail closed
+    ok 1 - reservation_id conflict fails closed
+    ok 2 - reservation_id conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 3 - entity_type conflict fails closed
+    ok 4 - entity_type conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 5 - entity_id conflict fails closed
+    ok 6 - entity_id conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 7 - partition_id conflict fails closed
+    ok 8 - partition_id conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 9 - target_node_id conflict fails closed
+    ok 10 - target_node_id conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 11 - reason_code conflict fails closed
+    ok 12 - reason_code conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 13 - amplification_factor conflict fails closed
+    ok 14 - amplification_factor conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 15 - estimated_bytes conflict fails closed
+    ok 16 - estimated_bytes conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 17 - released_at conflict fails closed
+    ok 18 - released_at conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 19 - created_at conflict fails closed
+    ok 20 - created_at conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 21 - updated_at conflict fails closed
+    ok 22 - updated_at conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 23 - expires_at conflict fails closed
+    ok 24 - expires_at conflict returns a reservation authority error
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..24
+ok 9 - reservation identity, state, estimate, and timestamps all fail closed # time=315.513ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RELEASED and EXPIRED reservation generations never reactivate
+    ok 1 - released generation is refused
+    ok 2 - released generation is never reactivated
+    ok 3 - released keeps one historical row, not a second hold
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 4 - expired generation is refused
+    ok 5 - expired generation is never reactivated
+    ok 6 - expired keeps one historical row, not a second hold
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..6
+ok 10 - RELEASED and EXPIRED reservation generations never reactivate # time=47.478ms
+
+1..10
+# { total: 77, pass: 76, fail: 1 }
+# time=918.779ms
+ok test/partition/placement-create-bootstrap-binding.test.js (14 assertions, 3879ms)
+ok test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (61 assertions, 1699ms)
+ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js (37 assertions, 1681ms)
+ok test/partition/partition-service-learner-promotion.test.js (47 assertions, 2015ms)
+ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js (54 assertions, 1639ms)
+ok test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js (38 assertions, 1360ms)
+ok test/control-plane/cl-036-local-leader-row-seed.test.js (50 assertions, 1573ms)
+ok test/control-plane/replica-dispatch-routing.property.test.js (41 assertions, 1855ms)
+ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 1485ms)
+ok test/raft/snapshot-dispatcher-wiring.test.js (21 assertions, 2678ms)
+ok test/partition/split-rebalance-trigger.test.js (12 assertions, 430ms)
+ok test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (9 assertions, 1360ms)
+ok test/rebalancer/rebalancer-entity-interaction-contract.test.js (35 assertions, 1476ms)
+ok test/control-plane/membership-count-neutral-steady-trim.test.js (35 assertions, 1140ms)
+ok test/rebalancer/replica-operation-insert-retry-idempotency.test.js (10 assertions, 1044ms)
+# test-files total=21 pass=18 fail=3 assertions=651
+classified lane exclusive: 2 file(s), jobs=1
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+ok test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js (6 assertions, 1486ms)
+ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 1160ms)
+# test-files total=2 pass=2 fail=0 assertions=27
+placement-results={"file":"test/rebalancer/operation-record-step-shape.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1005,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1179,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1226,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/admission-real-size-estimates.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":1801,"retriedOnce":false,"firstFailureLine":"not ok 1 - Placement waits for committed formation: p-real-size"}
+placement-results={"file":"test/rebalancer/duplicate-operation-prevention.property.test.js","attempt":1,"ok":false,"assertions":40,"durationMs":2084,"retriedOnce":false,"firstFailureLine":"not ok 1 - Placement waits for committed formation: partition-1"}
+placement-results={"file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","attempt":1,"ok":false,"assertions":87,"durationMs":2428,"retriedOnce":false,"firstFailureLine":"not ok 1 - Placement waits for committed formation: partition-lost-reservation-answer"}
+placement-results={"file":"test/partition/placement-create-bootstrap-binding.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":3879,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1699,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":1681,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-service-learner-promotion.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":2015,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":1639,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":1360,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/cl-036-local-leader-row-seed.test.js","attempt":1,"ok":true,"assertions":50,"durationMs":1573,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-routing.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1855,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1485,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2678,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/split-rebalance-trigger.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":430,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1360,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1476,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/membership-count-neutral-steady-trim.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1140,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-insert-retry-idempotency.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1044,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1486,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1160,"retriedOnce":false,"firstFailureLine":null}

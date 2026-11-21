@@ -1,0 +1,317 @@
+placement-shell=3361639
+placement-head=692336b456f32a78a0e45fee3c5e7e11c46a7534
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3362609
+# test-files planned=25
+classified lane ordinary: 21 file(s), jobs=4
+thermal: ok cpu 63C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/raft/raft-rs-backend/follower-proposal-refusal.test.js (1 assertions, 1471ms)
+ok test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js (7 assertions, 2191ms)
+ok test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js (1 assertions, 2201ms)
+ok test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js (1 assertions, 1294ms)
+ok test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js (6 assertions, 4120ms)
+not ok test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js (4 assertions, 1912ms)
+# TAP assertions failed; test process exited 1
+{"subsystem":"raft-rs","report":"core-trapped","groupId":"w07-replacement-trigger","replicaIdentity":"w07-replacement-trigger","peerId":"8679879525687509139","operation":"tick","reason":"W07 declared shared runtime replacement","runtimeGeneration":1,"level":"error","message":"raft-rs core trapped"}
+{"subsystem":"raft-rs","report":"runtime-replaced","groupId":"w07-replacement-trigger","replicaIdentity":"w07-replacement-trigger","peerId":"8679879525687509139","runtimeGeneration":2,"groupsRestored":4,"failure":null,"level":"error","message":"raft-rs runtime replaced"}
+TAP version 13
+# Subtest: W07 quiet input: existing queued proposal completes
+not ok 1 - W07 quiet input: existing queued proposal completes
+  ---
+  duration_ms: 209.070017
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:289:1'
+  failureType: 'testCodeFailure'
+  error: 'seam guard: predecessor native forwarding is held'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:49:10)
+    async serviceCase (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:230:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# {"w07":"w07-service-0","events":[{"kind":"core-entry","sequence":585,"operation":"status","groupId":"w07-service-0","runtimeGeneration":1},{"kind":"core-entry","sequence":586,"operation":"status","groupId":"w07-service-0","runtimeGeneration":1},{"kind":"core-entry","sequence":587,"operation":"conf_state","groupId":"w07-service-0","runtimeGeneration":1}]}
+# {"w07Cleanup":"w07-service-0","settled":true,"retainedDirectory":null,"error":null}
+# Subtest: W07 replacement: suspended invocation cannot enter the replacement generation
+ok 2 - W07 replacement: suspended invocation cannot enter the replacement generation
+  ---
+  duration_ms: 228.783348
+  type: 'test'
+  ...
+# {"w07":"w07-generation","events":[{"kind":"inbound-stage","groupId":"w07-generation","replicaIdentity":"w07-b","stage":"accepted","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-generation","replicaIdentity":"w07-b","stage":"request","queued":1,"scheduled":false},{"kind":"delivery","ordinal":1,"provenance":"captured-native-heartbeat","envelopeHash":"8a2a0506b1d981bd87c6658636116640d7fc6e8a570b011fa648afc5d608bd78","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"}},{"kind":"core-entry","sequence":1219,"operation":"step","groupId":"w07-generation","runtimeGeneration":1},{"kind":"core-step","sequence":1219,"operation":"step","groupId":"w07-generation","runtimeGeneration":1,"hash":"56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea","message":{"from":"1786932791954462116","to":"9071491718745019934","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1220,"operation":"has_ready","groupId":"w07-generation","runtimeGeneration":1},{"kind":"core-entry","sequence":1221,"operation":"take_ready","groupId":"w07-generation","runtimeGeneration":1},{"kind":"core-entry","sequence":1222,"operation":"persist_ready","groupId":"w07-generation","runtimeGeneration":1},{"kind":"native-send","hash":"238b6964ce94d37f3e7500c0ba4443ddf847f28a385af5d1e75bd1abf78d38c9","message":{"from":"9071491718745019934","to":"1786932791954462116","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"native-send-held","ordinal":1,"hash":"238b6964ce94d37f3e7500c0ba4443ddf847f28a385af5d1e75bd1abf78d38c9","message":{"from":"9071491718745019934","to":"1786932791954462116","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"inbound-stage","groupId":"w07-generation","replicaIdentity":"w07-b","stage":"accepted","queued":1,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-generation","replicaIdentity":"w07-b","stage":"coalesced","queued":1,"scheduled":true},{"kind":"delivery","ordinal":2,"provenance":"deliberate-exact-duplicate","envelopeHash":"8a2a0506b1d981bd87c6658636116640d7fc6e8a570b011fa648afc5d608bd78","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"}},{"kind":"measurement-cut","originalGeneration":1,"ownedRemainder":"8a2a0506b1d981bd87c6658636116640d7fc6e8a570b011fa648afc5d608bd78","pending":{"w07":"must-not-enter-after-replacement"}},{"kind":"core-entry","sequence":1223,"operation":"tick","groupId":"w07-replacement-trigger","runtimeGeneration":1},{"kind":"declared-one-shot-native-trap"},{"kind":"core-entry","sequence":1224,"operation":"create_node","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1225,"operation":"create_node","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1226,"operation":"create_node","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1227,"operation":"create_node","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1228,"operation":"has_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1229,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1230,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1231,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1232,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1233,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1234,"operation":"has_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1235,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1236,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1237,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1238,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1239,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1240,"operation":"has_ready","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1241,"operation":"status","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1242,"operation":"conf_state","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1243,"operation":"conf_state","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1244,"operation":"status","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1245,"operation":"conf_state","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1246,"operation":"campaign","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1247,"operation":"has_ready","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1248,"operation":"take_ready","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1249,"operation":"persist_ready","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1250,"operation":"advance_append","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1251,"operation":"persist_commit_index","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1252,"operation":"conf_state","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1253,"operation":"advance_apply","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1254,"operation":"has_ready","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1255,"operation":"status","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1256,"operation":"conf_state","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1257,"operation":"tick","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1258,"operation":"has_ready","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1259,"operation":"status","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"core-entry","sequence":1260,"operation":"conf_state","groupId":"w07-replacement-trigger","runtimeGeneration":2},{"kind":"native-send-released","ordinal":1},{"kind":"old-invocation-result","result":{"outcome":"HOST_FAILURE","reason":"execution generation changed while host work was pending","phase":"runtime-generation-changed","retryable":true,"recoveryRequired":true}},{"kind":"inbound-stage","groupId":"w07-generation","replicaIdentity":"w07-b","stage":"callback","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-generation","replicaIdentity":"w07-b","stage":"turn-request","queued":1,"scheduled":false},{"kind":"core-entry","sequence":1261,"operation":"has_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1262,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1263,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1264,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1265,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1266,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1267,"operation":"step","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-step","sequence":1267,"operation":"step","groupId":"w07-generation","runtimeGeneration":2,"hash":"56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea","message":{"from":"1786932791954462116","to":"9071491718745019934","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1268,"operation":"has_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1269,"operation":"take_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1270,"operation":"persist_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"native-send","hash":"238b6964ce94d37f3e7500c0ba4443ddf847f28a385af5d1e75bd1abf78d38c9","message":{"from":"9071491718745019934","to":"1786932791954462116","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1271,"operation":"advance_append","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1272,"operation":"advance_apply","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1273,"operation":"has_ready","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1274,"operation":"status","groupId":"w07-generation","runtimeGeneration":2},{"kind":"core-entry","sequence":1275,"operation":"conf_state","groupId":"w07-generation","runtimeGeneration":2},{"kind":"measurement-end","preservedRemainder":true}]}
+# {"w07Cleanup":"w07-generation","settled":true,"retainedDirectory":null,"error":null}
+# Subtest: W07 refusal: a native per-message refusal preserves the preaccepted tail
+not ok 3 - W07 refusal: a native per-message refusal preserves the preaccepted tail
+  ---
+  duration_ms: 198.046098
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:359:1'
+  failureType: 'testCodeFailure'
+  error: 'setup: actual follower proposal'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:380:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"w07":"w07-refusal","events":[]}
+# {"w07Cleanup":"w07-refusal","settled":true,"retainedDirectory":null,"error":null}
+# Subtest: W07 finite recurring inbound: preserve all bytes and service captured round
+not ok 4 - W07 finite recurring inbound: preserve all bytes and service captured round
+  ---
+  duration_ms: 186.76142
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:423:1'
+  failureType: 'testCodeFailure'
+  error: 'seam guard: predecessor native forwarding is held'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:49:10)
+    async serviceCase (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js:230:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"w07":"w07-service-4","events":[{"kind":"core-entry","sequence":2458,"operation":"status","groupId":"w07-service-4","runtimeGeneration":2},{"kind":"core-entry","sequence":2459,"operation":"status","groupId":"w07-service-4","runtimeGeneration":2},{"kind":"core-entry","sequence":2460,"operation":"conf_state","groupId":"w07-service-4","runtimeGeneration":2}]}
+# {"w07Cleanup":"w07-service-4","settled":true,"retainedDirectory":null,"error":null}
+1..4
+# tests 4
+# suites 0
+# pass 1
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 846.224618
+# time=1912ms
+not ok test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js (4 assertions, 1954ms)
+# TAP assertions failed; test process exited 1
+{"subsystem":"raft-rs","report":"core-trapped","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","peerId":"5993373093139411192","operation":"status","reason":"intentional final Ready announcement trap","runtimeGeneration":1,"level":"error","message":"raft-rs core trapped"}
+{"subsystem":"raft-rs","report":"runtime-replaced","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","peerId":"5993373093139411192","runtimeGeneration":2,"groupsRestored":3,"failure":null,"level":"error","message":"raft-rs runtime replaced"}
+TAP version 13
+# Subtest: runtime owner captures all preaccepted input when the queued turn is admitted
+not ok 1 - runtime owner captures all preaccepted input when the queued turn is admitted
+  ---
+  duration_ms: 232.676747
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:240:1'
+  failureType: 'testCodeFailure'
+  error: 'seam guard: real predecessor forwarding held'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js:41:10)
+    async queueBehindHeldForward (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:35:3)
+    async queuedCapture (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:55:27)
+    async runCase (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:23:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# {"w07Companion":"w07-companion-queued-capture","events":[{"kind":"core-entry","sequence":591,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":592,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":593,"operation":"conf_state","groupId":"w07-companion-queued-capture","runtimeGeneration":1}]}
+# {"w07CompanionCleanup":"w07-companion-queued-capture","settled":true,"retainedDirectory":null,"error":null}
+# Subtest: runtime owner preserves remainder service after the owned wake already fired
+not ok 2 - runtime owner preserves remainder service after the owned wake already fired
+  ---
+  duration_ms: 166.581864
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:243:1'
+  failureType: 'testCodeFailure'
+  error: 'seam guard: real predecessor forwarding held'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js:41:10)
+    async queueBehindHeldForward (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:35:3)
+    async consumedWakeRemainder (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:77:27)
+    async runCase (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:23:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"w07Companion":"w07-companion-consumed-wake","events":[{"kind":"core-entry","sequence":1267,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1268,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1269,"operation":"conf_state","groupId":"w07-companion-consumed-wake","runtimeGeneration":1}]}
+# {"w07CompanionCleanup":"w07-companion-consumed-wake","settled":true,"retainedDirectory":null,"error":null}
+# Subtest: runtime owner guards the generation before removing the next captured envelope
+ok 3 - runtime owner guards the generation before removing the next captured envelope
+  ---
+  duration_ms: 180.68547
+  type: 'test'
+  ...
+# {"w07Companion":"w07-companion-pre-dequeue-guard","events":[{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"request","queued":1,"scheduled":false},{"kind":"delivery","ordinal":1,"envelopeHash":"f34bbb34362650be7c58dfe9a9b4470ec6e7ad333fe3d54e2fb66e5ab470472c","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"captured-native-heartbeat"},{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"accepted","queued":2,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"coalesced","queued":2,"scheduled":true},{"kind":"delivery","ordinal":2,"envelopeHash":"f34bbb34362650be7c58dfe9a9b4470ec6e7ad333fe3d54e2fb66e5ab470472c","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"exact-duplicate"},{"kind":"core-entry","sequence":1993,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-step","sequence":1993,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1994,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":1995,"operation":"take_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":1996,"operation":"persist_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"native-send","hash":"ee3c0300d9c3dc7f10f2139c2d75cc74007011db65e7df68125296a16986f20c","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1997,"operation":"advance_append","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":1998,"operation":"advance_apply","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":1999,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":2000,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"host-injected-final-announcement-trap"},{"kind":"recovery-phase-cut","initial":{"outcome":"HOST_FAILURE","reason":"execution generation changed while host work was pending","phase":"runtime-generation-changed","retryable":true,"recoveryRequired":true},"driver":"one explicit canonical B tick; this is preservation, not autonomous service"},{"kind":"core-entry","sequence":2001,"operation":"create_node","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2002,"operation":"create_node","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2003,"operation":"create_node","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2004,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2005,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2006,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2007,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2008,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2009,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2010,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2011,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2012,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2013,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2014,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2015,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2016,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2017,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2018,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2019,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2020,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2021,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2022,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-step","sequence":2022,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2023,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2024,"operation":"take_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2025,"operation":"persist_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"native-send","hash":"ee3c0300d9c3dc7f10f2139c2d75cc74007011db65e7df68125296a16986f20c","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2026,"operation":"advance_append","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2027,"operation":"advance_apply","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2028,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2029,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2030,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2031,"operation":"tick","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2032,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2033,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2034,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2}]}
+# {"w07CompanionCleanup":"w07-companion-pre-dequeue-guard","settled":true,"retainedDirectory":null,"error":null}
+# Subtest: runtime owner captures input after native ensureExecution reconstruction waits
+not ok 4 - runtime owner captures input after native ensureExecution reconstruction waits
+  ---
+  duration_ms: 220.251783
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:249:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'CORE_REFUSED'
+    - 'CORE_OK'
+            ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'CORE_OK'
+  actual: 'CORE_REFUSED'
+  operator: 'strictEqual'
+  stack: |-
+    reconstructedCapture (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:187:10)
+    async runCase (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:23:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"w07Companion":"w07-companion-reconstruction-capture","events":[{"kind":"setup-application-failure","result":{"outcome":"HOST_FAILURE","reason":"intentional one-shot committed application host fault","phase":"application","retryable":true,"recoveryRequired":true},"progress":{"applied":2,"committed":3}},{"kind":"core-entry","sequence":2820,"operation":"free","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2821,"operation":"create_node","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2822,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2823,"operation":"take_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2824,"operation":"persist_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"host-transaction-opened-during-reconstruction"},{"kind":"ensure-execution-still-awaiting-persistence"},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"coalesced","queued":1,"scheduled":true},{"kind":"delivery","ordinal":1,"envelopeHash":"86d180ba421fd5a4efeaa8dccf7f8487ea6731e2603730143f075aafa49bbb76","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"captured-native-heartbeat"},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"callback","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"turn-request","queued":1,"scheduled":false},{"kind":"core-entry","sequence":2825,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2826,"operation":"advance_append","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2827,"operation":"advance_apply","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2828,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2829,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2830,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2831,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2832,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2833,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2834,"operation":"step","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-step","sequence":2834,"operation":"step","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2835,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2836,"operation":"take_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2837,"operation":"persist_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"native-send","hash":"1757788e9159c7ae5c64ba04ba65b3bbe8fcdc7b3b88fc18809c70103118791b","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2838,"operation":"advance_append","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2839,"operation":"advance_apply","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2840,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2841,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2842,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2843,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2844,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":2845,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"selected-reconstruction-result","result":{"outcome":"CORE_REFUSED","reason":"propose: raft: proposal dropped","phase":"propose","retryable":false,"recoveryRequired":false},"progress":{"applied":3,"committed":3},"markerCount":1}]}
+# {"w07CompanionCleanup":"w07-companion-reconstruction-capture","settled":true,"retainedDirectory":null,"error":null}
+1..4
+# tests 4
+# suites 0
+# pass 1
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 815.779684
+# time=1954ms
+not ok test/raft/raft-rs-backend/runtime-turn-integrity.test.js (5 assertions, 2686ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: CA1: a pending response the core refuses (peer not found) never answers a named transfer; the transfer is decided on the drained state
+ok 1 - CA1: a pending response the core refuses (peer not found) never answers a named transfer; the transfer is decided on the drained state
+  ---
+  duration_ms: 388.669687
+  type: 'test'
+  ...
+# Subtest: CA1: a pending response the core refuses never answers a proposal
+ok 2 - CA1: a pending response the core refuses never answers a proposal
+  ---
+  duration_ms: 367.142452
+  type: 'test'
+  ...
+# Subtest: CA1: a forwarded proposal the transferring leader drops never answers the leader's own proposal, which is the retryable in-progress outcome
+not ok 3 - CA1: a forwarded proposal the transferring leader drops never answers the leader's own proposal, which is the retryable in-progress outcome
+  ---
+  duration_ms: 156.116083
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:211:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: B forwards its proposal to its leader
+    + actual - expected
+    
+    + 'CORE_REFUSED'
+    - 'CORE_OK'
+            ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'CORE_OK'
+  actual: 'CORE_REFUSED'
+  operator: 'strictEqual'
+  stack: |-
+    Object.pending (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:225:14)
+    async pendingAgainstProcessed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:128:25)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:215:19)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CA1 / M9: the envelopes after a refused one are stepped in the same turn, not stranded until the next tick
+not ok 4 - CA1 / M9: the envelopes after a refused one are stepped in the same turn, not stranded until the next tick
+  ---
+  duration_ms: 178.496435
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:254:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: B's forwarded proposal
+    
+    undefined !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/692336b456f3-mwqzpgnx-2374440/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:267:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CA5: with [MsgRequestVote, MsgAppend] pending, the event stream after the turn matches the core, even when role listeners read status
+ok 5 - CA5: with [MsgRequestVote, MsgAppend] pending, the event stream after the turn matches the core, even when role listeners read status
+  ---
+  duration_ms: 165.793892
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 3
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1265.542602
+# time=2686ms
+ok test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js (3 assertions, 2964ms)
+ok test/raft/raft-rs-backend/status-read-never-waits.test.js (1 assertions, 1172ms)
+ok test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js (4 assertions, 1781ms)
+ok test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js (3 assertions, 4620ms)
+ok test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js (3 assertions, 1132ms)
+ok test/raft/raft-rs-current-authority-observation.test.js (4 assertions, 1709ms)
+ok test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js (7 assertions, 2507ms)
+ok test/raft/raft-rs-current-term-applied.test.js (1 assertions, 1212ms)
+ok test/raft/raft-rs-backend/operation-port-status-observation.test.js (1 assertions, 1283ms)
+ok test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js (5 assertions, 1908ms)
+ok test/raft/raft-rs-backend/runtime-trap-and-restore.test.js (1 assertions, 607ms)
+ok test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js (2 assertions, 11300ms)
+ok test/raft/raft-rs-backend/operation-port-boundary.test.js (8 assertions, 19135ms)
+# test-files total=21 pass=18 fail=3 assertions=72
+classified lane exclusive: 4 file(s), jobs=1
+thermal: ok cpu 60C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+ok test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js (4 assertions, 2491ms)
+ok test/raft/raft-rs-backend/runtime-opening-history.integration.test.js (16 assertions, 4459ms)
+ok test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js (27 assertions, 3353ms)
+ok test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js (8 assertions, 5272ms)
+# test-files total=4 pass=4 fail=0 assertions=55
+placement-results={"file":"test/raft/raft-rs-backend/follower-proposal-refusal.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1471,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2191,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2201,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1294,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4120,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":1912,"retriedOnce":false,"firstFailureLine":"not ok 1 - W07 quiet input: existing queued proposal completes"}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":1954,"retriedOnce":false,"firstFailureLine":"not ok 1 - runtime owner captures all preaccepted input when the queued turn is admitted"}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-turn-integrity.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":2686,"retriedOnce":false,"firstFailureLine":"not ok 3 - CA1: a forwarded proposal the transferring leader drops never answers the leader's own proposal, which is the retryable in-progress outcome"}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2964,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/status-read-never-waits.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1172,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1781,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":4620,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1132,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-current-authority-observation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1709,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2507,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1212,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/operation-port-status-observation.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1283,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1908,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-trap-and-restore.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":607,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":11300,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/operation-port-boundary.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":19135,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2491,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-opening-history.integration.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":4459,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":3353,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":5272,"retriedOnce":false,"firstFailureLine":null}

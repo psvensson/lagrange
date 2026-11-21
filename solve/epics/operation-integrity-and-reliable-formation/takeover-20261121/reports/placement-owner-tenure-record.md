@@ -747,7 +747,7 @@ PartitionService `maybeInitializeRebalancer` / `ensureReplicaPlacementOwnerAttac
 | Census row | Change |
 |---|---|
 | C1 | `maybeInitializeRebalancer` no longer calls `initializeRebalancer` (the R1 flag guard and the build went with it). Nothing in src calls `initializeRebalancer` now; the existing-rebalancer branch is unreachable from production (no src writer of a partition `rebalancer` other than `initializeRebalancer`); both are left for 3b. |
-| C2 | Preconditions: ledger, not shut down, not attached, `db` (initialized), `systemTableCache`, `rebalanceCoordinator`. Probe (`attachLedgerReplicaPlacementOwner` exists) and the skip on any leadership sink removed. Owned retries: `db` by initialize's own call (`raft-init-base.js:438`), cache by `setSystemTableCache`, coordinator by `setRebalanceCoordinator`/`rebindCoordinator`, factory by the binding (C4). |
+| C2 | Preconditions: ledger, not shut down, not attached, `raft` (the replica opened: initialize opens its database at `raft-init-base.js:237`, then its consensus port at `:305`; the port, not `db`, is read so the precondition set does not mix a cache and a database read, the static decision-boundary rule), `systemTableCache`, `rebalanceCoordinator`. Probe (`attachLedgerReplicaPlacementOwner` exists) and the skip on any leadership sink removed. Owned retries: opened by initialize's own call (`raft-init-base.js:438`), cache by `setSystemTableCache`, coordinator by `setRebalanceCoordinator`/`rebindCoordinator`, factory by the binding (C4). |
 | C3 | One path: non-ledger -> typed `REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID` (collaborator `ledgerPartitionService`); registers; factory null -> null (the ledger waits registered); bound -> the factory. The node-authority/cache precondition and the factory-less fallback constructor (no resync timer) are removed; the `instanceof Set` probes are removed (the constructor creates the set, `rebalance-coordinator-lifecycle.js:338`). |
 | C4 | Non-function -> typed refusal (collaborator `replicaPlacementOwnerFactory`); after binding, `ensureReplicaPlacementOwnerAttached()` on every registered ledger (the owned retry of a ledger that met the coordinator before the binding). |
 | C5 | `create` binds unconditionally (no `?.`) the factory `ControlPlaneSetup.createReplicaPlacementOwnerFactory({nodeId, controlPlaneReadinessService, rebalanceCoordinator, systemTableCache, storageAccountingService})`; at attach time it hands `nodeAuthority = controlPlaneReadinessService.getServeEligibilityOwner()` (the owning getter creates it: it exists whenever the attach runs), `workflowOwner = rebalanceCoordinator.workflowOwner`, the ledger's `timeSource` interval pair. The static `attachReplicaPlacementOwner` takes the owner's collaborators directly, requires the timer pair (`requireResyncTimerCollaborators`, typed, collaborator `resyncTimer`) and no longer registers (C3 does). |
@@ -763,7 +763,7 @@ cleared without a detach. Skipping was wrong: it left the ledger silently withou
 answer. Replaced by required wiring: `attachReplicaPlacementOwner` (`replica-placement-owner.js`) refuses typed
 (collaborator `ledgerPartitionService`) when the ledger's sink slot is occupied, i.e. a second scheduler on one ledger.
 
-Why no order is left unattached or attached twice: an owner is constructed at the first moment all of {ledger db,
+Why no order is left unattached or attached twice: an owner is constructed at the first moment all of {ledger opened,
 cache, coordinator, bound factory} hold; each becomes true only through an event that re-runs the attach (initialize,
 cache setter, coordinator setter/rebind, binding). The attachment field guards a second attach until quiesce clears it.
 
@@ -773,7 +773,7 @@ arms nothing that fires, stated as substituted: those witnesses ran with no resy
 (`formation-placement-drain-scenario.js`) binds the production factory on the sim host's coordinator (the sim hosts build
 the coordinator without the setup) and gives its ledger stub the host's virtual-time interval pair (sim hosts now export
 `setIntervalFn`/`clearIntervalFn`); the census fake ledger (`placement-removed-mechanism-and-caller-census.test.js`)
-carries `db` (an initialized replica).
+carries `raft` (an opened replica).
 
 ### 29.2 Teardown witness (census C7)
 `placement-owner-construction-orders.test.js` "P0 teardown": seed order, one owner placing; `SeedCleanupHandler
@@ -783,3 +783,304 @@ leadership edge (follower, new term, leader) and a readiness transition fan-out 
 handed out by the coordinator after the quiesce, no attachment field, no sink, the old owner stays ended, the ledger
 not registered again. Predicted RED at 3a (C2's preconditions all hold after the quiesce; the coordinator still has its
 factory).
+
+### 29.3 Executed: stage 3a (`5a1f66105`; tv-dator, check base 0dbed1718), `lab/por-s3a-5a1f6610` (24 files)
+- Construction orders: all ten GREEN (file level: 10 assertions = 10 cases): 1 seed, 2 join, 3 late ledger, 4 existing
+  coordinator user/priority first, 5 existing coordinator ledger first, 6 late binding with no rebind, 7 leadership
+  lost/regained, 8 ledger restart, 9 formation in progress, and the teardown witness. 4, 5, 6 were RED at
+  `lab/por-s3-witnesses-500a9851` and `lab/por-cr2-item1-3b182f42`.
+- Teardown witness GREEN at 3a: the census hazard (C7) is NOT reproducible, so no repair (seed-cleanup-handler
+  unchanged). Cause, read after the run: `quiesceRebalancing` ends with `this.rebalanceCoordinator = null`
+  (`partition-service-lifecycle-methods.js:134`), and for a ledger that does not own its coordinator (every
+  production ledger: the coordinator comes from the setup) the whole quiesce is synchronous, so after it C2's
+  coordinator precondition fails and every later entry attaches nothing. Only a partition that OWNS its coordinator
+  awaits between the detach and that null (not a production construction).
+- Owner files: red set identical to `lab/por-cr2-item1-3b182f42` minus construction 4, 5, 6: drain [4, 10, 11],
+  growth-promote 7 (asserts 40, 42), barrier 2 (production definition), provisioner 1, write-kernel 1,
+  clearing-triggers F11, core [18]; same test names as before (all attributed earlier: other writers or base).
+- Added to this run (not in earlier sets), RED at 3a:
+  - `placement-founding-and-runtime-service-admission` (10 cases): all one fixture gap, `TypeError reading 'add'` in
+    `registerLedgerPartitionService`: `placement-create-with-ledger-fixture.js` builds the coordinator with
+    `Object.create(RebalanceCoordinator.prototype)`, so it lacked the constructor's `ledgerPartitionServices` set that
+    the removed `instanceof Set` probe papered over. Fixture now sets the constructor's state (set, null factory).
+    Same fixture serves `placement-creation-terminal-replay`, `placement-founder-origin`,
+    `schema-provisioning-native-admission` (to re-run).
+  - `partition-rebalancer-dependency-wiring-characterization` (many), `partition-rebalancer-readiness-edge-gate`
+    (1-3), `partition-service-role-metadata-publication` 8, 9, 16, 17: each pins the per-partition
+    `UnifiedRebalancer` construction or its existing-rebalancer branch (stage 3b's subject; listed there). 9 builds a
+    UnifiedRebalancer on the LEDGER partition with a fake coordinator that has no attach (now a TypeError: required
+    wiring).
+  - GREEN: `placement-removed-mechanism-and-caller-census`, `control-plane-setup.test`.
+
+## 30. Corrective round 2, items 2-5 (this writer)
+
+### 30.1 Witnesses, red-first run (`c9ff75c7f`, src = `5a1f66105`; tv-dator, check base 0dbed1718), `lab/por-cr2-witnesses-c9ff75c7`
+| Item | Witness (file) | At `c9ff75c7f` (before any item 2-5 source change) |
+|---|---|---|
+| 2 (b) | wakes "admitted, then a local step throws" (the durable attempt-record delete after an ADMITTED answer fails; substituted fault on the ledger db's `prepare`) | RED for the intended reason: no aborted pass; pass 1 proposed both deficits (`attempts: [sql_transactions-p1 pass 1, tbl-second-p1 pass 1]`); premise held (the faulted admission committed) |
+| 2 (c) | wakes "handed over with no answer" (the submitter throws after the port accepted the proposal) | RED for the intended reason: no aborted pass, pass 1 proposed the second deficit; premises held (attempt retained in memory and durably) |
+| 4 | tenure "A4' retained-REFUSED re-admission across a transfer" (verifier N5 schedule: E dropped, A->B->A, held at A3, competing admission through `requestPlacementAdmission` on A's ledger, E re-proposed and REFUSED, fresh F proposed and dropped, transfer A->B) | GREEN (file level): the schedule is reachable in the fixture; the pass stops at `A4R_AFTER_READMISSION`; one admission per replica |
+| 5 | barrier "barrier re-check" (a sink re-drive false->true inside the barrier's status read, fixture hook `statusHookAtNextPass`) | GREEN (file level): stale at `TERM_START_BARRIER`, no census read and no reconciliation by the obsolete pass |
+Also green there: the `placement-create-with-ledger-fixture` users (`placement-founding-and-runtime-service-admission`,
+`placement-creation-terminal-replay`, `placement-founder-origin`, `schema-provisioning-native-admission`) after the
+fixture now carries the constructor's registry state (section 29.3). Barrier 2 (production definition) red as before.
+
+### 30.2 Item 4: no source change (owner rule: a repair only where an executed witness shows the defect)
+The witness executes the verifier's schedule and is green before any change: the A4' checkpoint's discarded result is
+behaviour-neutral, because `proposeOrderedCandidate` returns null for a pass that is not current
+(`replica-placement-owner.js`, the `isPassCurrent` check after `submitCandidateAdmission`) before any use of the fresh
+answer. Making the check decide (`return null`) would change no observable outcome on the pass path; on the direct path
+(`submitAdmission`, test-only caller) it would hide the committed answer of a proposal F that was made under a current
+tenure. Left unchanged; the lead decides. Record correction (section 22, row 2c): "none" is wrong; the schedule above
+reaches A4' across a transfer (fixture-level, the ledger log is the fixture's). Kill power of the witness: removing the
+A4' checkpoint changes the stale label to `CANDIDATE` (INFERRED from the code; no mutation run).
+
+### 30.3 Item 5
+Witness green with the re-check in place. Without it (INFERRED from the code, no mutation run): the obsolete pass would
+call `readPassCensus`, request the leadership-start CDC drive (joined) and run `reconcilePlacementAttempts` under the
+ended custody (`reconciled = true` on it), then stop at `AFTER_CENSUS`; the witness asserts none of these and the stale
+label `TERM_START_BARRIER`, so it fails. The schedule (a sink re-drive inside a status read) is constructed; production
+reachability stays near-unreachable (verifier, section 5 of the re-verification).
+
+### 30.4 Item 3: not reproducible; nothing changed (bounded reading)
+No PARTITIONS or SERVICES row the cache can hold makes the per-partition evaluation throw. The cache does NOT refuse
+malformed rows at admission (it validates table name, operation, mutation mode and key presence only,
+`system-table-cache.js:275-291`), so that is not the reason; the reason is that every reader of the per-row body is
+type-guarded: `readLowerStateField` (`state-field-read.js:21-38`, non-strings -> STATE_ABSENT),
+`resolveDesiredReplicationFactor` (`replication-target-authority.js:93-113`, non-object -> UNDECLARED, strict own data
+property), `buildPartitionReplicaRows` / `classifyServiceRow` (`replica-placement-owner-deficits.js:148-208`, typeof
+checks, `durableRowVersion` Number.isFinite, `isFailedCreateCleanupToken` typeof), the leader id (`typeof === string`),
+and the orderings (`compareText`, `<` on any values: no throw). Not read in full: `evaluatePartitionDeficit`'s body
+(`deficits.js:250-480`), which works on the already-typed replica rows (arithmetic on Map lookups yields NaN, not a
+throw). INFERRED; no witness written. The verifier's other example (a failing capacity read,
+`readStorageExcludedTargets`) is a node-level read and stays pass-aborting by design (27.3).
+
+### 30.5 Item 2 repair (`replica-placement-owner-proposal-knowledge.js`, owner, pass observation)
+As in the commit message: per-candidate proposal progress (handed over immediately before the submission, answered on
+return); NOT_PROPOSED or REFUSED -> `CANDIDATE_FAILED`, pass goes on; ADMITTED then a local throw -> recorded admitted
+(`snapshot.admitted`), `localFailures[partition] = {operationId, failure}`, typed abort `REPLICA_PLACEMENT_PASS_ABORTED`;
+UNCERTAIN (handed over, no answer, or outcome unknown) -> `uncertainCandidates[partition]`, attempt retained (never
+deleted without a committed answer), typed abort. The drain's existing abort path keeps the triggers. A5 (the admitted
+ledger move's hold release) stays outside the isolation: its throw aborts the pass as before, and the admitted
+operation is now recorded on the pass before it.
+
+## 31. Stage 3b (lead ruling: delete R1 and R2's selections and the partition-side construction; R3-R14 untouched)
+
+### 31.1 Deleted (source), with the necessity proof (grep of every caller, src at the 3b commit)
+| What | Where | Why unreachable / why it may go |
+|---|---|---|
+| R1 guard (`placementAdmissionEnabled` read before the build) and the `initializeRebalancer` call | `partition-service-rebalancer-methods.js` (3a, `5a1f66105`) | the build itself is retired |
+| `initializeRebalancer` (the per-partition `new UnifiedRebalancer`) | same file | no src caller after 3a (`grep -rn initializeRebalancer src`: only message-group's own method of that name, a different class) |
+| existing-rebalancer branch of `maybeInitializeRebalancer` (and its `readinessTransitionOnly` edge gate) | same file | `initializeRebalancer` was the only src writer of a partition's `rebalancer` field other than `= null` (`partition-service-core-base.js:240`, `partition-service-lifecycle-methods.js:119`) |
+| `applyRebalancerDependencies` | same file | only caller was the existing-rebalancer branch |
+| optional-factory branch (`bindReplicaPlacementOwnerFactory?.`) and the factory-less fallback constructor | `control-plane-setup.js`, `rebalance-coordinator-operation-creation-support.js` | removed in 3a: binding required; the attach has one path |
+| R2's selection (`placementAdmissionEnabled === true &&` before `isPlacementAdmissionManagedEntityType`) | `rebalance-coordinator-operation-creation.js:495` (the ruling named `...-creation-support.js`; the site is in `...-creation.js`) | FALSE arm only on an unbound coordinator; the only production `new RebalanceCoordinator` is in `ControlPlaneSetup.create`, which binds before returning (census 26.1). Managed types (PARTITION, RUNTIME_SERVICE) now always go through placement admission; the record path stays for the others (message groups). |
+Kept: `buildRebalancerDependencyBundle` (caller `setSqlQueryEngine`, `partition-service-split-accessor-base.js`).
+
+Unreachable after 3b but in files outside this writer's scope (listed, NOT changed; R16): every read of a partition's
+`rebalancer` field, which is now always null: `partition-service-core-base.js:320-321, :345-346` (setters),
+`partition-service-split-accessor-base.js:214` (`this.rebalancer?.controlPlaneSystemTableGateway`), `:675, :687, :709`
+(setters), `:745-750` (rebind), `partition-service-lifecycle-methods.js:110-120` (quiesce),
+`partition-service-metadata-delivery-methods.js:474-475` (`recordStateChange`),
+`partition-service-leader-activation-methods.js:39, :81-88` (`updateRebalancerLeadership`'s rebalancer arm), the
+`{readinessTransitionOnly: true}` argument at `partition-service-core-base.js:466` (now ignored), and
+`PARTITION_SERVICE_SHARED.UnifiedRebalancer`/`EntityType` exports if no other partition module uses them (not
+censused). The record path of operation creation (`createOperationRecordInternal`, the concurrent-create budget turn)
+still serves message groups; whether partition-specific branches inside it became unreachable was NOT censused.
+
+### 31.2 R3-R14: the FALSE branch in the pre-bind window (a decision for later; nothing changed)
+"Pre-bind window": a partition service or replica handler on a joining node before
+`StartupRuntimeSurfaceOwner.bindControlPlaneServices` hands it the coordinator (it has none, so `?.placementAdmissionEnabled`
+reads undefined); on the coordinator itself the flag is false only between its construction and the binding inside
+`ControlPlaneSetup.create` (synchronous: no event in between).
+| # | Site | FALSE branch does (pre-bind) | Executed in production construction by a witness? |
+|---|---|---|---|
+| R3 | `sql-query-engine-initial-partition-provisioning.js:357` | no founding-target provisioning: the non-founding path (the engine has no coordinator before `startup-sql-runtime-handoff.js:155`) | no witness; reachability of provisioning before the handoff not traced |
+| R4, R5 | `replica-handler-voter-readiness-methods.js:641, :652` | an ADD's voter-readiness wait does not use learner-first semantics unless the row's `steps_history` names a placement admission (`:642-645`) or a local service has `learnerFirstAdmission` | no witness; reachable on a joiner whose handler and local services have no coordinator yet; placement-owner ADDs carry the admission in `steps_history`, so they take TRUE regardless |
+| R6 | `partition-replica-admission.js:272` | conf-change peers = voters only (learners excluded) | no witness; reachable before binding |
+| R7 | `:310` | an ADD is admitted as a voter, not as learner growth (unless `as_learner` or `learnerFirstAdmission`) | no witness; reachable before binding |
+| R8 | `:404` | no committed conf-change state read for an ADD (null) | no witness; reachable before binding |
+| R9 | `partition-service-raft-lifecycle-wiring.js:154` | a promoted learner's voter observation is not owned by growth-promote | no witness; reachable before binding |
+| R10 | `partition-service-learner-promotion-methods.js:459` | odd-voter promotion is done locally, not deferred to the placement owner | no witness; reachable before binding |
+| R11 | `operation-workflow-recovery-observation.js:180-181` | only ADDs with learner/placement markers are learner-target ADDs | no witness; the workflow owner exists only with a coordinator, whose flag is true after setup: FALSE not reachable in production (INFERRED) |
+| R12 | `operation-workflow-replace-terminal-admission.js:170-171` | an ADD target's liveness does not accept an active learner | as R11 |
+| R13 | `operation-workflow-dispatch-wake-preemption.js:208-209` | same as R12 at dispatch | as R11 |
+| R14 | `rebalance-coordinator-lifecycle.js:499-500` | propagation of the coordinator's flag to the workflow owner (false at construction) | as R11 |
+None of the construction-order witnesses exercises an admission, a learner promotion or a provisioning in the pre-bind
+window, so no witness shows any FALSE branch executing in production construction.
+
+### 30.6 Executed: item 2 repair (`536d024ac`; tv-dator, check base 0dbed1718), `lab/por-cr2-item2-536d024a` (20 files)
+Wakes GREEN (10 assertions = 10 cases, including item 2 (b) and (c), red at `c9ff75c7f`); tenure GREEN (15, item 4);
+barrier: only 2 (production definition) red, item 5 green; construction orders GREEN (10). Red set identical to
+`lab/por-s3a-5a1f6610`'s owner files: drain [4, 10, 11], growth-promote 7 (40, 42), barrier 2, provisioner 1,
+write-kernel 1, clearing-triggers F11, core [18]. `placement-founding-and-runtime-service-admission` and
+`placement-removed-mechanism-and-caller-census` green.
+
+### 31.3 Executed: 3b (`376592b8b`), before/after on the same files (tv-dator, check base 0dbed1718)
+Before: `lab/por-s3b-before-536d024a` (144 files: every `*.test.js` outside integration/distributed/e2e that calls
+`createOperation(`, `new UnifiedRebalancer(` or `createTestRebalancer(`, plus the three partition construction files):
+22 red. After: `lab/por-s3b-376592b8` (the same 144 plus the 20-file owner set): 70 red.
+- Owner set at 3b: same red cases as at `536d024ac` (drain 4, 10, 11; growth-promote 7; barrier 2; write-kernel 1;
+  clearing-triggers F11; core 18; provisioner 1); construction orders, wakes, tenure GREEN. Nothing the deletion touched
+  is used by the placement owner's path.
+- Fixed by 3b: none. Still red, red before 3b too: the 22 (19 not attributable to this branch's stage-3 work by file
+  name: `membership-publication-first-epoch-members`, `dt6-priority-surplus-remove-authoritative-placement-fence`,
+  `admission-real-size-estimates`, `coordinator-created-operation-progress`,
+  `duplicate-operation-prevention.property`, `formation-runtime-service-create-lane-budget-starvation`,
+  `message-group-membership-operation-lane`, `message-group-operation-routing.integration`,
+  `placement-admission-cross-coordinator-target-census`, `placement-owner-authority-provisioner`,
+  `quorum-conditioned-remove-safety`, `rebalance-coordinator-topology-guard`, `rebalancer-entity-interaction-contract`,
+  `rebalancer-own-create-memory-duplicate-replace`, `replace-in-flight-blocks-planning`, `replace-named-handoff-attempt`,
+  `replica-operation-membership-epoch-binding`, `storage-reservation-lost-outcome-idempotency`, `strict-operation-outcomes`;
+  NOT attributed here, no base run of these files exists in this record; plus the 3 partition files red since 3a).
+- Newly red at 3b: 42 files, every first failure from R2 (the unbound test coordinator now creates PARTITION /
+  RUNTIME_SERVICE operations through placement admission): `Cannot route PLACEMENT_ADMIT: ledger leader unreachable`,
+  `Placement waits for committed formation`, `placement_remove_intent_unscoped`, `placement_admission_bytes_invalid`,
+  or a reservation-insert expectation of the record path.
+
+### 31.4 Tests: NOT migrated (well over ten files; the ruling says stop and list)
+Category D (delete: they pin only the retired per-partition construction): `partition-rebalancer-readiness-edge-gate`
+(whole file); `partition-service-role-metadata-publication` cases 8, 9, 16, 17;
+`partition-rebalancer-dependency-wiring-characterization` (most of its 49 cases; the bundle-builder, setter
+propagation into the coordinator and rebindCoordinator ownership/shutdown cases assert still-live behaviour and need
+case-by-case rewriting onto a service without a rebalancer).
+Category M (migrate, assertions intact: the record path for a managed type was only the fixture's way to seed an
+operation for another owner's property; seed it through placement admission on a ledger fixture, or the repository):
+REPLACE owner: `replace-owner-recovery-equivalence`, `replace-owner-wake`, `replace-real-group-d2`,
+`replace-real-group-scheduling`, `replace-source-removal-owner`, `replace-replica-workflow`,
+`recent-completed-replace-target-visibility`; convergence: `dt6-formation-ledger-quorum-spread-first`,
+`dt6-operation-ledger-terminal-hold`, `dt6-priority-recovery-add-dispatch-cadence`,
+`dt6-rebalancer-formation-self-move-interlock`, `dt6-rebalancer-timeout-failure-virtual-clock`,
+`dt6-voter-surplus-promotion-drain-livelock`, `dt-formation-priority-placement-before-active`,
+`dt-ledger-completion-continuity-discriminator`; workflow/properties: `add-workflow-step-progression.property`,
+`remove-workflow-step-progression.property`, `operation-log-persistence.property`,
+`operation-record-completeness.property`, `timeout-triggers-failure.property`; others: `assignment-epoch-fencing`,
+`existing-group-add-topology-guard`, `readiness-snapshot-persistence`, `rebalance-coordinator-operation-ownership`,
+`critical-spread-terminal-stall-repro`, `spread-cure-at-target-minting-gap`, `spread-cure-transition-authorization-row`,
+`spread-cure-transition-authorization-production-path`, `ledger-quorum-spread-hold-cure-drain-admission`,
+`formation-ledger-spread-voter-ready-readiness`, `partition-policy-remove-retry`,
+`replica-removal-deferral-dispatch-reconcile`, `replica-retirement-terminal-actuals-coherence`,
+`terminal-failed-add-target-cleanup`, `runtime-service-replace-canonical-target-handoff`, `runtime-service-target-claim`.
+Category R (decide per test: they assert the record path's creation-time behaviour for a managed type: reservation
+INSERT, dedupe, fail-closed reservation; migrate if placement admission must hold the same property, else delete):
+`coordinator-dedup-gap`, `coordinator-reservation-lifecycle`, `reservation-fail-closed-dispatch-gate`,
+`reservation-file-backed-restart`, `formation-cure-reservation-progress-obligation`,
+`formation-cure-reservation-progress-successor`.
+Categories are INFERRED from each file's first failure line and name, not from reading every case. Not run: integration,
+distributed and e2e files (9 match the grep; full nodes bind through the setup, so R2's FALSE arm never ran there).
+Decision for the lead: R2's deletion turns 42 files red that were green; the alternative is to keep R2's deletion and
+migrate (M) in a follow-up, or to land 3b without R2 until M is done.
+
+## 32. State of the branch at this writer's stop (head 376592b8b, pushed)
+`5a1f66105` stage 3a (construction; teardown witness, green: no repair); `c9ff75c7f` corrective-round-2 witnesses
+(items 2, 4, 5) and the 3a fixture follow-up; `536d024ac` item 2 repair; `376592b8b` stage 3b source deletion. Done: A;
+C items 2 (red -> green), 3 (not reproducible, nothing changed), 4 (witnessed, green, no source change: decision for the
+lead), 5 (witnessed, green); B source deletion with the necessity proof and the R3-R14 table. Remaining: the 3b test
+handling (31.4: D delete, M migrate, R decide), the out-of-scope unreachable reads of a partition's `rebalancer` field
+(31.1), and the attribution of the 19 pre-existing reds of 31.3.
+
+## 33. Stage 3b test migration (writer: stage-3b migration writer, from head 376592b8b; rule set and owners as loaded from CLAUDE.md, docs/steering/rules.md, test/guidelines/INDEX.md + fixtures.md; lead brief "stage 3b test migration"; coordinator amendment after `reports/verify-placement-stage3.md`)
+
+Standing statement (verifier condition 6, F8): this branch carries the 49 files 3b turned red (42 newly red + 7 of
+the 19 "red before" that now fail earlier on R2) until the migration and the proof transfers are done. Count after
+each commit is kept in 33.9.
+
+### 33.1 Merge of the fixture producers
+True merge of `origin/work/line-regression-fixtures-b-20261121` (cfd056019). That line stands on 23344cddc, which
+this line did not contain, so the merge also brings 23344cddc's five commits (the leader-role dead-arms deletion
+`4adfe1a42`, its witnesses `65ca4c2c3`, `e1e239d30`, `df7be8270`, and the merge): src files
+`bootstrap-topology-snapshot-owner-{contract,published-views}.js`, `group-retirement-redrive.js`,
+`partition-service-row-owner.js`, `operation-workflow-remove-safety-evaluator.js`,
+`priority-publication-{leader-safety,safety-shared,safety-topology}.js` and three scripts. Conflicts: none in any source
+or test file; changed on both sides only the four generated files (inventory.json, src/partition/INDEX.md,
+impact-graph-seal.json, subsystem-classes.json), kept ours by the repository's merge driver and regenerated by the
+pre-commit hook.
+
+### 33.2 F6 (verifier): the leadership-sink readiness hysteresis is not a dead read. Red-first
+Witness `test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js` (five cases), tv-dator, check
+base 0dbed1718, one file each:
+| sha | dir | result |
+|---|---|---|
+| 8e84e2801 (before stage 3) | `lab/por-s3b-f6-8e84e280-tv-dator` | GREEN, 18 assertions |
+| 23344cddc (base of the other lines) | `lab/por-s3b-f6-23344cdd-tv-dator` | GREEN, 18 assertions |
+| 376592b8b (3b head) | `lab/por-s3b-f6-376592b8-tv-dator` | RED, `not ok 1 - rebalancer created` |
+Why green before stage 3: the witness's coordinator (`createReadinessHoldingCoordinator`) is unbound, so the R1 guard
+let the per-partition `UnifiedRebalancer` be built and its `isLeader` carried the retention. In production the
+build was skipped since `ab901b40f` (2026-11-19 19:14, "resolve es6-owner-safety P1-P5 review findings (durable
+generation history, placement replay, and real drain wiring)": guard `placementAdmissionEnabled === true &&
+classifySystemPartition(...).systemTable === true` before the build, i.e. every system-table partition, which
+includes both sink hosts `service_definitions-p1` and `service_installations-p1`), widened to all partitions by
+`4ef9423c0` (2026-11-19 20:41, Review 2 "user partition placement cutover"). So on a bound production node every
+non-draining readiness dip has demoted and re-promoted the runtime-service owner and the service-installation
+reconciler since `ab901b40f`; the witness turned red only at `5a1f66105` (3a), when the unbound fixture lost the
+build too. `git log -S 'rebalancer.isLeader !== true'`: the hysteresis itself came from `e9f1c8bb4` (2026-06-21,
+"readiness gates rebalancer-leadership acquisition, raft gates retention").
+
+### 33.3 Seal classification of the 49 red files (coordinator amendment item 1)
+Method: each file name grepped in `solve/quests/**` (quest.json fields and log entries, evidence receipts),
+`architecture/contracts/invariants.json`, `docs/specs/decision-tables/`; every quest's `doneWhen.requiredReceipts`
+matched against each file's text (case titles). invariants.json: no hit. Mentions only inside verifier entries'
+reviewed-file manifests (sha lists, file lists) or in finding/attempt entries are NOT counted as proof (listed as O
+with the note "manifest only").
+(S) sealed, NOT migrated, restated or deleted (24): proof-transfer plans in 33.4.
+(O) ordinary (25): `readiness-snapshot-persistence` (manifest only), `dt-ledger-completion-continuity-discriminator`
+(manifest only), `dt6-rebalancer-timeout-failure-virtual-clock`, `add-workflow-step-progression.property`,
+`remove-workflow-step-progression.property`, `operation-log-persistence.property` (manifest only),
+`operation-record-completeness.property`, `timeout-triggers-failure.property`, `coordinator-dedup-gap`,
+`critical-spread-terminal-stall-repro` (manifest only), `formation-cure-reservation-progress-obligation`,
+`formation-cure-reservation-progress-successor`, `partition-policy-remove-retry` (cited as passing in a
+`partition-placement-declared-target` attempt verification, not in its receipts), `recent-completed-replace-target-
+visibility` (manifest only), `replace-owner-recovery-equivalence`, `replace-owner-wake` (manifest only),
+`replace-real-group-scheduling`, `replace-source-removal-owner` (fixture-custody verification only),
+`replica-removal-deferral-dispatch-reconcile`, `reservation-file-backed-restart`, `runtime-service-target-claim`
+(manifest only), `coordinator-created-operation-progress` (manifest only), `quorum-conditioned-remove-safety`
+(manifest only), `replace-in-flight-blocks-planning`, `replace-named-handoff-attempt`.
+
+### 33.4 The 24 sealed (S) files: quest, sealed sentence, what the old path staged, proof-transfer plan
+Placement-owner path vocabulary (what replaces the record path's creation-time mechanisms; all in the real ledger
+applier, `partition-placement-admission-decision.js`, and the owner `replica-placement-owner*.js`): PARTITION_BUSY
+(one incomplete row per entity), LEDGER_TRANSITION_UNRESOLVED (the ledger entity admits only into an idle ledger,
+unless its statement carries `dispatchHold LEDGER_AWAITING_COPY_IDLE`), PLACEMENT_RELEASE_HOLD / COPY_PHASE_NOT_IDLE
+(the held ledger move's release), SOURCE/TARGET_AT_CAPACITY (K_SRC 3, K_TGT 2 copy occupancy), TARGET_CLAIM_TAKEN
+(runtime target claim), the owner's candidate order (system-first rank, formation-gated classes waiting
+FORMATION_NOT_LATCHED), REMOVE scoped by `voterRetirement`/`learnerRetirement`, observation on `lastPassSnapshot`
+(admitted/refused/waiting by reason). Transfer hosts: `placement-owner-authority-fixture.js` (real owner, real
+applier, controllable ledger log), `formation-placement-drain-scenario.js` (sim hosts, virtual time), or the bound
+coordinator harness (33.6) when the sealed property lives after creation.
+
+Group L, the ledger self-move interlock / hold / create budget (the old path staged the ledger self-move and its
+siblings through `coordinator.createOperation`, whose creation-time interlock `ensureOperationLedgerSelfMoveSerialized`
+and budget turn were the subject; on a bound coordinator the interlock still runs before admission, but the
+admission's ledger rule now decides first):
+| File | Quest(s) | Sealed sentence (abridged) | Transfer plan |
+|---|---|---|---|
+| dt6-priority-recovery-add-dispatch-cadence | priority-recovery-add-dispatch-cadence (statement, constraint `deterministic-first`, 8 receipts by case title) | "siblings woken by the self-move terminal ... are admitted instead of being refused as operation_ledger_self_move_in_flight; every sibling still excluded while the self-move is in flight" | owner pass on the drain host: self-move admitted with the hold, sibling priority deficits refused LEDGER_TRANSITION_UNRESOLVED while it is incomplete (exclusion), admitted on the pass after its terminal (no spurious refusal), counted on lastPassSnapshot; budget-lane receipts become K_SRC/K_TGT occupancy receipts (supersession: the create-budget turn no longer exists for managed types) |
+| dt6-rebalancer-formation-self-move-interlock | operation-ledger-self-move-hold-engagement, -hold-fairness, formation-ledger-quorum-spread-first, lone-seed-formation-admission-livelock-closure, formation-grace-parallel-start-hardening (constraints: "must pass verbatim") | IDLE_ONLY and quorum_concentrated deferral "byte-for-byte preserved"; hold engaged only when dispatch-admissible | IDLE_ONLY = LEDGER_TRANSITION_UNRESOLVED; fairness/engagement = the held ledger move admitted with dispatchHold and released by PLACEMENT_RELEASE_HOLD when copy-idle; "verbatim" constraints need an R09 supersession (the interlock is not the admission authority any more) |
+| dt6-formation-ledger-quorum-spread-first | rebalancer-owner-clock-dt6-regression (statement), formation-grace-parallel-start-hardening, formation-ledger-leader-local-persistence-wedge (constraints), formation-ledger-quorum-spread-first | "formation never leaves the operation ledger's quorum concentrated on the seed while dependent control-plane moves proceed" | owner order on the drain host: ledger spread deficit ranked first, dependents refused LEDGER_TRANSITION_UNRESOLVED until the ledger move's terminal; same event trace as the DT6 witness at the owner |
+| dt6-voter-surplus-promotion-drain-livelock | rebalancer-owner-clock-dt6-regression (statement), formation-replace-dispatch-deferred-retry-hold (constraint) | "the two DT6 formation falsifiers are green on the owner clock" | surplus REMOVE scoped by voterRetirement through the owner's remove path (`replica-placement-owner-remove.js`), promotion drain on the virtual clock of the drain host |
+| dt6-operation-ledger-terminal-hold | movielens-operation-ledger-terminal-hold (quest-identity, repro in its log; doneWhen is a scenario harness) | "a locally created operation-ledger REPLACE keeps the serialized self-move hold engaged until authoritative terminal" | ledger REPLACE admitted with the hold; dependents refused until its committed terminal; step-age timeout alone releases nothing (the applier reads committed steps) |
+| dt-formation-priority-placement-before-active | formation-barrier-release-snapshot-coherence (statement: guard cases :680, :715, :752 stay green) | barrier/latch guards keep exact semantics | the creation in this file only stages a ledger move; restage it as an admitted owner move, guard cases unchanged |
+| ledger-quorum-spread-hold-cure-drain-admission | v1, v2 (doneWhen), decision table `operation-ledger-hold-engagement.json`, red-main-multi-join receipt, replica-placement-admission-owner (constraint) | "the operation-ledger quorum-spread hold cannot defer its own documented cure" | the fenced surplus REMOVE as an owner candidate with voterRetirement while the hold is engaged; decision-table rows restated on the applier's refusals |
+| formation-ledger-spread-voter-ready-readiness | formation-ledger-spread-voter-ready-readiness-closure (quest), committed-node-remove-safety-wake, replica-retirement-terminal-actuals-coherence (constraints) | "cold-formation operation-ledger spread converges under readiness-gated voter-readiness" | ledger REPLACE/REMOVE admitted by the owner (scoped), the voter-readiness wait unchanged in the workflow owner |
+
+Group C, coordinator creation-time properties of managed types (the property itself was decided in the record
+path, which managed types no longer take):
+| File | Quest | Sealed sentence (abridged) | Transfer plan |
+|---|---|---|---|
+| assignment-epoch-fencing | assignment-epoch-fencing (receipts unreadable-epoch-defers, executor-rejects-stale-epoch) | an unreadable membership epoch defers creation; the executor rejects a stale epoch | admission statement carries `membershipPublicationEpoch`; `assertCreationRequestEpoch` still runs before admission on the coordinator path (bound harness), executor receipt unchanged |
+| replica-operation-membership-epoch-binding | membership-epoch-null-rehydration (receipts E1-E8) | one decoder of the durable epoch column | rows from the admission applier (bound harness); decoder receipts unchanged |
+| existing-group-add-topology-guard | existing-group-add-topology-guard (receipts self-only-cohort-add-deferred, cohort-stamp-authoritative-read) | a self-only cohort ADD is deferred | the guard (`ensureCreateTopologyGuardAllowed`) still runs before admission on the bound coordinator; restage through the bound harness |
+| reservation-fail-closed-dispatch-gate | reservation-fail-closed-dispatch-gate (3 receipts) | creation fails closed when the reservation insert fails; dispatch gate repairs | does creation-time reservation exist for managed types at all on the admission path? (none found in `createPartitionOperationViaPlacementAdmission`): if not, supersession (capacity moved to K_SRC/K_TGT at admission) |
+| coordinator-reservation-lifecycle | formation-reservation-reconcile-premature-orphan-release (statement) | the reconcile never releases an active reservation without an authority read | as above: transfer if reservations still exist for managed types, else supersession |
+| rebalancer-own-create-memory-duplicate-replace | rebalancer-own-create-memory-duplicate-replace (doneWhen) | "a planned move is executed by at most one creator cluster-wide" | PARTITION_BUSY + single owner per ledger tenure (the tenure witnesses) |
+| formation-runtime-service-create-lane-budget-starvation | formation-runtime-service-create-lane-budget-starvation (doneWhen), wasi receipt | runtime-service ADDs create replicas post-formation | runtime-service admission (TARGET_CLAIM_TAKEN, formation latch) through the bound harness |
+| terminal-failed-add-target-cleanup | fresh-create-failure-after-committed-admission v1/v2 (receipt failed-create-without-owner-not-protected), failed-create-cleanup-settlement-separation, failed-create-target-authoritative-cleanup (receipts) | a failed create never leaves an orphaned configured member | workflow-after-creation: rows from the admission applier (bound harness), same assertions |
+
+Group W, the sealed property lives after creation (the old path only produced the row):
+| File | Quest | Transfer plan |
+|---|---|---|
+| replica-retirement-terminal-actuals-coherence | replica-retirement-terminal-actuals-coherence (doneWhen) | REMOVE/REPLACE rows from the admission applier (scoped), same assertions |
+| runtime-service-replace-canonical-target-handoff | runtime-service-replace-canonical-target-handoff and -integrity-reseal (doneWhen) | runtime REPLACE row from runtime-service admission (claim key), same assertions |
+| spread-cure-at-target-minting-gap | spread-cure-at-target-minting-gap (doneWhen) | the cure ADD as an owner candidate; check whether the cure's authorization is carried by the admission statement (gap to check before transfer) |
+| spread-cure-transition-authorization-row, -production-path | critical-spread-transition-authority-carry (receipt "authorization-rides-the-operation-row") | the authorization must ride the ADMISSION row: `operationOf` builds the first step from the statement only; if the statement cannot carry the authorization this is a product gap on the owner path, not a fixture question: report before transfer |
+| rebalance-coordinator-operation-ownership, replace-real-group-d2, replace-replica-workflow | failed-create-cleanup-settlement-separation (receipt) | rows from the admission applier (bound harness), same assertions |

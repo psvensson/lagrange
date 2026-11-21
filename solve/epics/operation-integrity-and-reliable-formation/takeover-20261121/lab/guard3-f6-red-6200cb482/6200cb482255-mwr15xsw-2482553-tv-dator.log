@@ -1,0 +1,74 @@
+placement-shell=3406142
+placement-head=6200cb482255ffad57609d2bbfa865aaff0edb3e
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3406597
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+not ok test/rebalancer/move-skip-log-typed-refusal-reason.test.js (6 assertions, 1025ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: the skipped-move log line names the typed reason of an unavailable SERVICES read
+    # OBSERVATION move-skipped {"outcome":{"success":false,"skipped":true,"reason":"services_inventory_unavailable","operation":"add","nodeId":"node-2","replicaId":null},"fields":{"entityId":"partition-1","entityType":"partition","moveType":"add","movePartitionId":"partition-1","moveTargetNodeId":"node-2","replicaId":null,"reason":"services_inventory_unavailable","error":null,"admissionDecisionType":null,"admissionReason":null,"admissionBlockingReasonCodes":[],"admissionTopologySnapshot":null}}
+    ok 1 - the move is skipped, not failed
+    ok 2 - the skip names the unavailable SERVICES inventory
+    ok 3 - the planner logged the skipped move
+    ok 4 - the log line carries the skip reason
+    not ok 5 - the log line carries the read's own typed reason
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/move-skip-log-typed-refusal-reason.test.js
+        lineNumber: 70
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/move-skip-log-typed-refusal-reason.test.js:70:7)
+      source: >2
+            t.equal(skipped?.fields?.reason, REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE,
+              'the log line carries the skip reason');
+            t.equal(skipped?.fields?.error?.reasonCode, READ_REASON,
+        ------^
+              'the log line carries the read\'s own typed reason');
+          },
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_not_leader
+        +undefined
+      ...
+    
+    1..5
+not ok 1 - the skipped-move log line names the typed reason of an unavailable SERVICES read # time=55.631ms
+  ---
+  at:
+    fileName: test/rebalancer/move-skip-log-typed-refusal-reason.test.js
+    lineNumber: 28
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    const READ_REASON = 'owner_fact_not_leader';
+  
+  
+    test('the skipped-move log line names the typed reason of an unavailable
+    SERVICES read',
+  
+    ^
+      async (t) => {
+        ConfigurationManager.resetInstance();
+  ...
+
+1..1
+# { total: 5, pass: 4, fail: 1 }
+# time=65.981ms
+# test-files total=1 pass=0 fail=1 assertions=6
+placement-results={"file":"test/rebalancer/move-skip-log-typed-refusal-reason.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":1025,"retriedOnce":false,"firstFailureLine":"not ok 5 - the log line carries the read's own typed reason"}

@@ -1,0 +1,96 @@
+lab test: tv-dator: ordinary, exclusive (15 files) cores=12 mem=15.4GiB speed x1.42
+[tv-dator] placement-shell=3397879
+[tv-dator] placement-head=f792423fff38d1f5cad23ce126cf20b9e4b77b24
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3398341
+[tv-dator] # test-files planned=15
+[tv-dator] classified lane ordinary: 12 file(s), jobs=4
+[tv-dator] thermal: ok cpu 58C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] ok test/transport/message-router-ping-wait-bound-spent.test.js (28 assertions, 816ms)
+[tv-dator] ok test/transport/message-router-cold-reconnect-delivery-grant.test.js (25 assertions, 1163ms)
+[tv-dator] ok test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js (8 assertions, 1433ms)
+[tv-dator] ok test/transport/message-router-delivery-deadline-liveness.test.js (25 assertions, 1584ms)
+[tv-dator] ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 1609ms)
+[tv-dator] ok test/transport/router-adopted-connection-reconnect-schedule.test.js (1 assertions, 1333ms)
+[tv-dator] ok test/transport/message-router-transport-cleanup.test.js (16 assertions, 923ms)
+[tv-dator] ok test/transport/message-router-quarantine-liveness-guard.test.js (27 assertions, 1486ms)
+[tv-dator] ok test/transport/node-incarnation-websocket-fence.test.js (88 assertions, 945ms)
+[tv-dator] not ok test/transport/message-router-endpoint-address-change-redial.test.js (4 assertions, 3283ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T23:11:13.445Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","event":"wait_bound_spent","wait":"PING_TIMEOUT_MS x pingMaxMissed (keepalive)","awaited":"keepalive PONG from the connected node","boundMs":200,"elapsedMs":"unmeasured","lastObserved":{"missedPings":2,"answeredAliveByRecentInbound":false,"severed":true},"scope":{"nodeId":"node-b","targetNodeId":"node-b","connectionId":"b25e076a-491e-49c7-a3d9-649880932e98"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:11:13.446Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","nodeId":"node-a","connectionId":"b25e076a-491e-49c7-a3d9-649880932e98","contextNodeId":"node-b","msg":"Self-connection lost - fatal error"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:11:13.450Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","event":"wait_bound_spent","wait":"PING_TIMEOUT_MS x pingMaxMissed (keepalive)","awaited":"keepalive PONG from the connected node","boundMs":200,"elapsedMs":"unmeasured","lastObserved":{"missedPings":2,"answeredAliveByRecentInbound":false,"severed":true},"scope":{"nodeId":"node-b","targetNodeId":"node-a","connectionId":"700ba0c6-d9a7-40c8-a814-75e91d5c2d62"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: MessageRouter same-nodeId new-address recovery
+[tv-dator]     # Subtest: severs a stale-but-open connection whose peer stopped answering pings
+[tv-dator]     ok 1 - severs a stale-but-open connection whose peer stopped answering pings
+[tv-dator]       ---
+[tv-dator]       duration_ms: 394.603982
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] {"level":50,"time":"2026-11-21T23:11:13.825Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","nodeId":"node-a","connectionId":"dd7887e9-e2b2-40db-a3e9-87d0ba948e54","contextNodeId":"node-b","msg":"Self-connection lost - fatal error"}
+[tv-dator]     # Subtest: recovers connectivity to a peer that restarted on a new address
+[tv-dator]     not ok 2 - recovers connectivity to a peer that restarted on a new address
+[tv-dator]       ---
+[tv-dator]       duration_ms: 2069.573895
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f792423fff38-mwr0ue4k-2460072/test/transport/message-router-endpoint-address-change-redial.test.js:121:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: 'node-a must re-establish connectivity to node-b at its NEW address (got address=ws://localhost:19821, state=reconnecting)'
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: true
+[tv-dator]       actual: false
+[tv-dator]       operator: '=='
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f792423fff38-mwr0ue4k-2460072/test/transport/message-router-endpoint-address-change-redial.test.js:167:14)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator] {"level":50,"time":"2026-11-21T23:11:15.868Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","nodeId":"node-a","connectionId":"3d951542-ca7a-4f30-a0fc-e01dacf716a8","msg":"Self-connection lost - fatal error"}
+[tv-dator]     # Subtest: severs a stale-but-open INBOUND connection whose peer went silent
+[tv-dator]     ok 3 - severs a stale-but-open INBOUND connection whose peer went silent
+[tv-dator]       ---
+[tv-dator]       duration_ms: 340.340827
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..3
+[tv-dator] not ok 1 - MessageRouter same-nodeId new-address recovery
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2806.202979
+[tv-dator]   type: 'suite'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f792423fff38-mwr0ue4k-2460072/test/transport/message-router-endpoint-address-change-redial.test.js:35:1'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '1 subtest failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] 1..1
+[tv-dator] # tests 3
+[tv-dator] # suites 1
+[tv-dator] # pass 2
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2811.952658
+[tv-dator] # time=3283ms
+[tv-dator] ok test/partition/raft-rs-transport-demux.test.js (16 assertions, 1263ms)
+[tv-dator] ok test/transport/message-router.test.js (499 assertions, 4822ms)
+[tv-dator] # test-files total=12 pass=11 fail=1 assertions=739
+[tv-dator] classified lane exclusive: 3 file(s), jobs=1
+[tv-dator] thermal: ok cpu 56C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/transport/raft-frame-liveness-residual.integration.test.js (1 assertions, 1041ms)
+[tv-dator] ok test/transport/raft-frame-reconnect-owner.integration.test.js (2 assertions, 1746ms)
+[tv-dator] ok test/transport/raft-frame-turn-not-held.integration.test.js (1 assertions, 1051ms)
+[tv-dator] # test-files total=3 pass=3 fail=0 assertions=4
+lab test: tv-dator: # test-files total=15 pass=14 fail=1 assertions=743
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=15 pass=14 fail=1 assertions=743
+exit 1

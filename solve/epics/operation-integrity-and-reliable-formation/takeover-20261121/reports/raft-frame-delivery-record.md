@@ -646,3 +646,230 @@ position (in-memory, may be ahead of applied), and need not use `settled` (a lea
 authoritative mid-turn). The redirect (`resolveLeaderAddress`) can stay on `readStatus()`: it needs addresses, and a
 stale address only misroutes a retry. Residual that no read closes: a deposed leader whose core has not yet received
 the newer term (the documented stale-leader class).
+
+## 16. Raft-owner item C: a proposal enters the core only under the leadership it was submitted under (lead, 2026-11-21; own red-first pair)
+
+Source: the write-kernel tenure-fence line (`work/write-kernel-tenure-fence-20261121`, head `a5bf01004`, record
+`reports/write-kernel-tenure-fence-record.md` section 7; executed red `lab/kernel-green-a5bf0100`, witness c).
+Mechanism (verified by read here): `executeCommand` queues a PROPOSE behind a busy turn (`group.queuedProposals`,
+bytes only); `drainQueuedProposalBatch` later runs `perform(PROPOSE)`, whose `drainInbound` steps the successor's
+envelopes first; nothing compared the leadership of submission with the core's at the propose step, and raft-rs 0.7
+`step_follower` forwards a MsgPropose to the leader it knows (`raft.rs` ~2312-2322; the binding has no switch,
+`lib.rs:457-465`), whose ingress admits a forwarded port proposal (`raft-rs-ingress.js:44-49`, `:168-198`). The entry
+committed under the successor's term after its term-start entry. The same holds for an immediate propose whose own
+turn's inbound drain deposes the core, and for any propose at a follower.
+
+**Is follower forwarding relied on? No production caller.** Census of `port.propose` callers in `src`:
+`partition-service-raft-write-commit.js:88` (the write kernel: leader-gated, now tenure-fenced on its side);
+`message-group/message-group-proposal-routing.js:121` (proposes "while it leads", forwards to the leader over its
+own application forward otherwise, and already types a CORE_REFUSED from a non-leader as a retryable routing miss,
+`:72-88`); `wasm-service/wasm-service-replica.js:490` via `proposeEntry` (writes leader-only, `_handleWrite :433`;
+timers and writer completion run on the leader). Conf changes and typed membership operations are refused on a
+non-leader by the admission (`raft-rs-conf-change-admission.js:66, :343, :761`), and the ingress refuses a forwarded
+non-NORMAL entry anyway. Transfer-leader forwarding (MsgTransferLeader) is a different message and is untouched;
+read-index is not exported by the binding. Tests: the local-log guard's W4
+(`local-log-guard-correct-followers.test.js`) proposed at a follower precisely to produce a forwarded MsgPropose
+for the guard to see; that case now asserts the refusal (contract change, same commit). The randomized election
+safety test proposes at random replicas but asserts only safety, not that a follower's proposal commits.
+Now unreachable from this system's own senders (not removed here; for the raft owner): the ingress admission of a
+forwarded MsgPropose and the local-log guard's "a forwarded proposal with entries is legitimate" branch.
+
+**The rule (stated once, `src/raft/raft-rs-proposal-term.js`, new).** `withSubmittedTerm`: every proposal, queued
+or immediate, records the core's term as last announced (`group.lastStatus.term`, the status every consumer's
+leadership tenure derives from; none before the first announcement). `proposeUnderSubmittedTerm`: at the propose
+step itself - after the turn's inbound drain, and for each member of a queued batch - one `status` core read; a core
+that does not lead, or leads a term other than the submitted one, never proposes: the proposal is answered with the
+core's own dropped-proposal refusal (`CORE_REFUSED`, reason `propose: raft: proposal dropped`, phase `propose`,
+built by the runtime's one core-refusal answer `coreCallFailure`, then `answerRefusedProposal` as for any refused
+proposal) and nothing enters the log or is forwarded. Note: the core's own refusal is `retryable: false`; I kept
+that shape exactly rather than inventing a retryable variant - the write kernel types it as "not proposed" and the
+message group as a routing miss. Cost: one `status` core entry per proposal (per batch member).
+
+Runtime owner: `invokePrimitive` routes the one `propose` primitive through the rule (`performCommand`,
+`finishBatchedPropose`); `PROPOSE_COMMAND` now comes from the new module; the deferred-batch path uses
+`settleBatchTurn` like the admitted one (same answers for a settled turn; a pending rejection now rejects the
+batch's deferreds instead of leaving them unsettled). No growth (file-size ratchet).
+
+**Item C runs.** Red `lab/raftframes-pf-red` (adam-laptop, `adfbbed6a`): witness c RED exactly as on the kernel
+branch (the proposal submitted while queued-fence-a led at term 1 answered `CORE_OK/drained` and committed at index
+3, term 2 on the successor queued-fence-c; a ended as c's follower at term 2); the follower witness RED (the
+follower's propose answered `CORE_OK/drained`, 1 MsgPropose forwarded, committed at index 2, term 1 on all three
+replicas); W4 green (still the forwarding variant at that head).
+
+## 17. Lab runs for items A and B (recap; check base `0dbed1718c2d...`)
+
+| Run | Host | Head | Result |
+| --- | --- | --- | --- |
+| `lab/raftframes-cta-red` | adams-gamla | `1d4125c7b` | A red as recorded in 14 |
+| `lab/raftframes-cta-green` | adams-gamla | `bc949308f` | A: 12 / 12 green |
+| `lab/raftframes-cao-red` | adams-gamla | `90021de24` | B: 4 / 4 red (the port has no current authority observation; every case reached its observation point, so the scenarios themselves ran) |
+| `lab/raftframes-cao-green` | adam-laptop | `97ba4431b` | B: **18 / 18 green**: the B witness (a)-(e), A's witness, the port boundary and lifecycle audits, construction seam, committed-membership read, leadership-transfer single path, admission redrive, runtime opening refusal, the nine controllable-double consumers (message-group x8, WASM replica) |
+
+**Item C, the fix and its consequences.** Fix `f94291812` (pushed). Its focused lab run
+`lab/raftframes-pf-green` (adam-laptop, 29 files) was 26 / 3: both C witnesses, W4, the local-log guard refusals
+and sender admissibility, randomized election safety, O1 proposal ingress, transfer-leadership anchors and write
+path, conf-change self-removal and deferral, power loss, durable ready loop, the port audits, A's and B's witnesses,
+message-group replication and service, WASM replica: green. Three red, all green at `adfbbed6a`
+(`lab/raftframes-pf-red-consumers`): `inbound-drain-owned-timer` case 7 (held follower B's turn on the send of a
+proposal B forwarded - setup only), `transfer-leadership-drain-order` case 7 and
+`runtime-ordering-native-companion` D3 V-before-proposal (both asserted that a deposed core's proposal reaches
+native propose; the answers they assert are unchanged). Updated in their own commit (`d3edaa08c`, see 18);
+its lab run `lab/raftframes-pf-tests` (adam-laptop, `d3edaa08c`): 6 / 6 green (the three updated witnesses, both C witnesses, W4).
+
+## 18. HANDOVER (2026-11-21; the frame steps go to a successor)
+
+**Where.** Worktree `/mnt/data/peter/projects/.worktrees/raft-frame-delivery-20261121`, branch
+`work/raft-frame-delivery-20261121`, head `d3edaa08c`, everything pushed. Lab: `tools/focused.mjs <sha40>
+<host> 0dbed1718c2d07c1fcb8bbe56b87ac41763c262c <out> <files>`; before each run pick a READY and FREE host among
+tv-dator, adam-laptop, adams-gamla; "not a ready lab machine" is a runner failure: switch host. Commits go through
+`tools/heavy.sh`; the pre-commit hook regenerates `solve/changes/global-owner-debt-inventory/inventory.json`,
+`test/shards/*.json`, `src/raft/INDEX.md` into each commit (an extraction should regenerate them, not cherry-pick
+them blindly). `src/raft/raft-rs-runtime-owner.js` is an oversized file under a no-growth ratchet: put new logic in
+its own module (as `raft-rs-current-authority.js`, `raft-rs-proposal-term.js`).
+
+**Commits of this line, in order.** Stage 1 witnesses up to `f1265c5ca`; step 1 (e): witnesses `d6cfa14ab`,
+`f0892b478`, repair `5e5f5ffa8`, W-HID-1 supersession `8a8b08f79`, follow-ups `393ece640`; item A `1d4125c7b` (red)
++ `bc949308f`; item B `90021de24` (red) + `97ba4431b`; item C `adfbbed6a` (red) + `f94291812` + `d3edaa08c`
+(witness updates). A and B are being extracted by another agent onto `work/raft-owner-authority-20261121`; C's three
+commits touch only `src/raft/**`, `test/raft/raft-rs-backend/**` and generated metadata.
+
+**Done and executed.** Step 1 (e) (section 13; `lab/raftframes-s2e-*`), items A (14), B (15, 17), C (16, this
+section). Not yet reported to the lead in a hand-back: step 1 and items A, B, C go in this agent's final report.
+
+**Step 2 - (h) status announced only on change (NOT STARTED).** Ruling: a leader re-reads status after EVERY step;
+a follower announces only when the Ready changed term, leader, commit, applied or configuration; no reused
+observation object that can leave `SHAPED_STATUS` holding stale delivery/refusal/health fields. Red witness
+`test/raft/raft-rs-quiet-ready-cost.test.js` (stage 1 `lab/raftframes-stage1-r2`: 100 quiet heartbeats -> status 100,
+conf_state 100 core entries on the follower; 100 quiet ticks -> status 100, conf_state 100; the commit-advancing
+anchor green). Required greens: quiet-heartbeat and quiet-tick announces 0 on a follower; learner catch-up
+acknowledgement and the promotion proof still see leader progress at once (the message-group learner promotion
+integration tests, `message-group-fresh-learner-promotion.test.js`); the anchor stays at exactly one. Watch: the first
+(h)(i) case asserts `transactions: 0` and the status entries in ONE `deepEqual` (`:263-269`); (i) is excluded (O-1),
+so that case stays red after (h) unless the assertion is split in its own witness commit with the reason. Items B and
+C add core reads of their own (B only when called; C one `status` per proposal on the leader) - the follower-side
+witness does not see them.
+
+**Step 3 - (b) one node-level inbound drain per event-loop turn (NOT STARTED).** Ruling and invariants: section 5.1
+(per-group lifecycle admission, turn queue and FIFO, <= 32 envelopes per group per pass, a held group waits alone,
+shared-runtime wake debt, one owned wake per admitted envelope, a per-pass budget). Red witness
+`test/raft/raft-rs-node-inbound-drain-scaling.integration.test.js` (stage 1: zero-delay timers on the measured node
+272 / 544 / 1088 for G = 8 / 16 / 32, all nodes 816 / 1632 / 3264, mismatched 0, fairness 32). Required: the scaling
+case, fairness, the held-group case; `inbound-drain-owned-timer.test.js` is the custody witness to keep green (its
+case 7 now holds B's turn on a heartbeat reply, `d3edaa08c`).
+
+**Kept red, excluded.** (i) empty Ready (O-1); (c1) `raft-frame-pair-coalescing.integration.test.js` (O-4;
+132 / 264 / 528 frames per pair after (e)); heartbeat cadence, synthesised heartbeats, quiescence, node-level tick
+driver, CDC currentness.
+
+**Unverified / open.** F-2 (adopted-connection NaN reconnect, transport owner) and the C13 residual tied to it; F-3
+(inbound overflow holds the group); F-5 (formation-sim partitions composition red at base); F-6 (persistence
+deferral mid-drain, code read only); the no-growth folds in the runtime owner are formatting only but were not
+separately witnessed; no full corpus or cone run on this branch (focused sets only); the ingress admission of a
+forwarded MsgPropose and the local-log guard's forwarded-proposal branch are now unreachable from this system's own
+senders (removal is the raft owner's call); `test/test-helpers/controllable-consensus-port.js` is changed here (B)
+and on `work/write-kernel-tenure-fence-20261121` (+34 lines): expect a merge conflict.
+
+**Waiting on the owner.** (1) The empty-Ready transaction, (i): superseding the `durable-commit-sync.test.js`
+clause for the empty Ready shape (section 4.3, O-1). (2) The slow-peer policy for coalescing, (c1): write regardless
+versus refuse a batch above a buffered-amount bound (section 5.2, O-4). (3) The W-HID-1 supersession: done on the
+lead's ruling in its own commit `8a8b08f79` (section 13.2); the owner-review witness clause it supersedes
+(`OWNER-REVIEW-2026-10-26.md:55-57`) still needs the owner's acknowledgement.
+
+**What each consumer should call.**
+- Item A (`currentTermApplied` = leader whose last applied entry is of its current term): the placement owner's
+  `isTermStartApplied` (`replica-placement-owner-tenure.js:52-55` on `work/placement-owner-repair-20261121`) reads
+  `observeCurrentAuthority().currentTermApplied` and `.term === tenure.term`; the owner-fact read's
+  `electionLogApplied` (`partition-service-remote-query-methods.js:219` on `work/owner-fact-read-20261121`) is
+  `currentTermApplied === true`, not `confChangePending === false`; the promotion consumer's second branch
+  (`replica-operation-message-group-promotion.js:221-231`) is now redundant; the conf-change admission's
+  `hasAppliedOwnTermEntry` fallback is not provably the same decision (left; for its owner).
+- Item B (`port.observeCurrentAuthority()`): `answerLeaderQualifiedRead` decides and re-checks on it; it relies on
+  `outcome`, `role === LEADER` (`NOT_SETTLED` refuses), `currentTermApplied`, `term`, `appliedIndex` (the rows'
+  position), `lifecycleIncarnation`, `runtimeGeneration`; not on `commitIndex` as a position; the redirect can stay
+  on `readStatus()`.
+- Item C: nothing new to call. A proposal answered `CORE_REFUSED`, reason `propose: raft: proposal dropped`, phase
+  `propose`, `retryable: false` was not proposed and nothing was forwarded: the write kernel already types it so;
+  message groups treat it as a routing miss when the replica does not lead. A follower never forwards a proposal.
+
+## 19. F-2 and the reconnect owner (successor writer, 2026-11-21; lead brief + verifier conditions)
+
+Successor writer on the same worktree; start head `d3edaa08c` (clean). Rule set: `docs/steering/rules.md`
+(last_reviewed 2026-11-13), `test/guidelines/INDEX.md`, this record 1-18, `idle-raft-cpu-cost.md`, `lead-rulings.md`
+(raft frame entries), `verify-consensus-delivery-class.md` (findings 1-2, received mid-task through the lead).
+
+### 19.1 The defect (VERIFIED by read at `d3edaa08c`)
+
+- Path. `message-router-server-lifecycle.js:240-251` creates the inbound record with no `reconnectAttempts` (nor
+  `reconnectTimeout`, `reconnectDueAt`, `ackTimeoutStreak`, `lastAckAt`, `lastAckTimeoutAt`, `observedAddress`,
+  `isSelfConnection`, `pingInterval`, `missedPings`). IDENTIFY binds its address (`inbound-dispatch.js`
+  `bindIncomingConnectionAddress`, `:204-209`) and adoption re-keys it to the peer (`:237-253`, `:394-419`). On close,
+  `resolveConnectionCloseDisposition` (`close-reconnect.js:172-196`) gives any non-self record with an address the
+  RECONNECT disposition, `:161-169` turns the inbound record into an outbound reconnect owner, and `scheduleReconnect`
+  (`:224-231`) computes `undefined + 1 = NaN`: the bound `reconnectAttempts >= reconnectMaxAttempts` (`:292`) never
+  holds and the delay `1000 x 1.5^NaN = NaN` runs at once (host `setTimeout(NaN)` = 1 ms; virtual clock: next step).
+  Each failure logs `Reconnection failed` at ERROR and re-schedules (`:258-267`).
+- Sibling entry to the same NaN: the ACK-timeout quarantine replacement record copies
+  `reconnectAttempts: activeConnection.reconnectAttempts` (`reconnect-behaviors.js:689-711`); quarantining an adopted
+  inbound connection arms a NaN owner too.
+- Siblings masked, not live: every other reader of the missing fields defends itself (`|| 0` / `?? 0`:
+  `lifecycle-methods.js:48`, `:365`; `reconnect-behaviors.js:609-610`, `:640`; `close-reconnect.js:377`;
+  `delivery-behaviors.js:565-568`; `stats-shutdown.js:96`; `admin/admin-preflight-snapshot.js:567`). Only
+  `scheduleReconnect`'s increment did not.
+- Which schedule triggers it on a real cluster: one end of every node pair holds the adopted inbound record (the
+  end that did not dial first, or the larger node id of a simultaneous dial, `connection-authority.js:304-349`).
+  When that peer's process dies while its host stays up (crash, kill, rolling restart, container restart), dials are
+  refused at once and the survivor re-dials about every millisecond with one ERROR line each, until the peer
+  returns. A blackholed peer costs one dial per connect timeout instead.
+- Predates this line: introduced by `a662f2b10` (2026-06-07, "Fix 1: a closed connection with a remembered dial
+  address now schedules a reconnect even when isIncoming"); the inbound record had no `reconnectAttempts` then
+  either (`message-router-segment-1.js:427-435` at that commit). Step 1 did not expose it (rate and trigger
+  unchanged) but made the system depend on it (19.2). `router-server-manager.js:248-256` is a second, older copy of
+  the inbound record creation with the same gap; it has no production importer (its own test and
+  `check-current-capabilities.js` only): routed, not edited (R17).
+- Real-cluster count (GCP run 1 of `f580579a5`, full node logs
+  `.playback/report/.full-logs/fresh-formation-user-table-routability/*.log.gz`): during formation 0 occurrences
+  on all three nodes (no peer connection closed before teardown). At teardown, node `fab780c9` (which had adopted
+  `868fba57`'s inbound connection at 12:15:04.657, `Re-keyed incoming connection`) logged **51 `Reconnection
+  failed` for `868fba57` in 517 ms** (12:24:39.718 - 12:24:40.235, about 99 per second) until its own process
+  exited; its outbound record for `751f5575` failed once (the normal schedule). `868fba57`: 0; `751f5575`: 0 (its
+  process stopped first). So F-2 cost the formation measurement nothing; it burns CPU and log on any node loss.
+
+### 19.2 Why bounding F-2 alone is wrong (verifier finding 1, lead ruling)
+
+After step 1 a raft envelope to a node without an open connection fails `no_connection` and never dials. The
+router's own schedule is then the only owner that re-joins two live members after an outage: the dialing end stops
+after `reconnectMaxAttempts` (10 attempts, about 113 s), and the adopted end kept going only through F-2. With F-2
+merely bounded, two live members that exchange only raft are disconnected for good after an outage longer than
+113 s. Hence the repair: one record initializer (F-2) together with an owned, unending reconnect for members.
+
+### 19.3 The reconnect owner (design)
+
+- Membership: the existing node address resolution owner, `router.resolveNodeAddress` (production:
+  `createNodeWebSocketAddressResolver`, `bootstrap/shared/message-router-setup.js:63-85`: the NODES row and the ACTIVE
+  WebSocket endpoint of the node's current incarnation, `node-address-resolution.js:375-403`, `:475-482`). The same
+  answer every delivery and reconnect address already resolves through (`resolveCanonicalReconnectAddress`). No second
+  membership notion: `connectionAuthorityOwner.isConnectionMember(nodeId)` is that answer being non-null. A router
+  without a resolver knows no member.
+- Schedule: attempt n waits `reconnectIntervalMs x reconnectBackoffMultiplier^(n-1)` for the first
+  `reconnectMaxAttempts` attempts (unchanged); later attempts wait as long as the last of those, the cap:
+  `1000 x 1.5^9 = 38443 ms` with the defaults (no new configuration). A member is dialed past
+  `reconnectMaxAttempts` at the cap, for as long as it is a member; a non-member stops after `reconnectMaxAttempts`
+  with the existing `wait_bound_spent` report. Stops also on shutdown, when the record is retired or superseded, and
+  when a connection is established (the count resets).
+- Which end: both ends of a closed connection own a schedule (as since `a662f2b10`); the existing simultaneous-dial
+  resolution keeps one connection (`resolveIncomingConnectionAdoption`'s deterministic tie-break and newer-boot rule;
+  `establishConnection`'s live-wins check).
+- Counted and visible: `reconnectAttempts` per record (in `getStats().connections` and the delivery diagnostics),
+  `reconnectDueAt`, one `Reconnection failed` ERROR per failed attempt (at most one per peer per 38 s at the cap).
+- Reference systems (INFERRED: from their designs as I know them, not re-read for this record): etcd's rafthttp keeps a stream reader per member that re-dials until the member is removed
+  (retry every 100 ms); CockroachDB re-dials on the next raft message through a per-node circuit breaker; TiKV
+  reconnects lazily on send with backoff. None abandons a member after a fixed number of attempts. Lagrange's raft
+  traffic no longer dials (step 1), so the member rule belongs to the scheduled owner.
+
+### 19.4 Commits and runs (item 1)
+
+| Commit | What | Run | Result |
+| --- | --- | --- | --- |
+| `ca6071d4d` | F-2 witness `test/transport/router-adopted-connection-reconnect-schedule.test.js` (two routers, A dials B, B adopts; sever plus dial blackout; 30 virtual s; policy-agnostic: the adopted end follows the same declared schedule as the dialing end, no re-dial within `reconnectIntervalMs`, a finite attempt count) | `lab/raftframes2-f2-red` (adams-gamla) | **red**: dialing end 6 dials at 1005 / 2505 / 4755 / 8130 / 13192 / 20788 ms (the declared schedule), attempts 7; adopted end **5999 dials** (one per 5 ms drive step), shortest gap 5 ms, attempts NaN |
+| `aaba000fb` | C13 long-outage clause restored (verifier finding 1, lead (c)): outage of 20 min, longer than the bounded schedule by more than one capped delay; both ends dial until the heal (last dial within one cap of it), never more often than the capped schedule permits; the link returns within one cap of the heal; raft alone resumes both ways; numbers printed with `t.diagnostic` | `lab/raftframes2-c13-red` (adams-gamla) | short case green; long case **red**: schedule interval 1000, 10 attempts, bounded span 113330 ms, cap 38443 ms, permitted 39 dials in the outage; dialing end `rfr-a` **10 dials, CLOSED at the heal, last dial 1086672 ms before it**; adopted end `rfr-b` **240001 dials** (NaN, last 5 ms before the heal); the link came back 5 ms after the heal only through the NaN dialer; raft 4 / 4 after |
+| `9c3604ed9` (local ref `probe/f2-bounded-only`, NOT for merge, never pushed) | F-2 bounded alone: the one record initializer, no reconnect owner | `lab/raftframes2-probe-bounded` (tv-dator; adams-gamla and adam-laptop "not ready": runner failures) | F-2 witness **green**; C13 short green; C13 long **red, the hazard**: both ends 10 dials, both CLOSED at the heal, last dial 1086672 ms before it, **the link never came back (`restoredAfterMs` null) and raft received 0 / 0 after the heal**: two live members permanently disconnected (the reason the reconnect owner exists) |

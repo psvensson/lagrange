@@ -1,0 +1,4 @@
+{"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1875,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-blocked-attempt.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6663,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-blocked-release.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6910,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6238,"retriedOnce":false,"firstFailureLine":null}

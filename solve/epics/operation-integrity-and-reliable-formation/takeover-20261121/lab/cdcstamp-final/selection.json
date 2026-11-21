@@ -1,0 +1,27 @@
+{
+  "sha": "5c412e83931fc871ae9a3f4e0afbfdb77a26ca2c",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js",
+    "test/bootstrap/create-self-hosted-registration.test.js",
+    "test/bootstrap/cache-hydration-strictness.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-cdc-currentness-stamp-witness.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/create-self-hosted-registration.test.js",
+        "test/bootstrap/cache-hydration-strictness.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

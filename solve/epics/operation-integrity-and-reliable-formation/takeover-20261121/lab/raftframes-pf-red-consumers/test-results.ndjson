@@ -1,0 +1,3 @@
+{"file":"test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2299,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2634,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2780,"retriedOnce":false,"firstFailureLine":null}

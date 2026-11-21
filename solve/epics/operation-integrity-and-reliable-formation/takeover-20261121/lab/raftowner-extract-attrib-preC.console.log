@@ -1,0 +1,24 @@
+attempt 1 host tv-dator 22:41:07
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.52
+[tv-dator] placement-shell=3365671
+[tv-dator] placement-head=ea85ea499cc4b69b6d781feba949ce059d287923
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3367685
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: hold cpu 79C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+[tv-dator] thermal: ok cpu 48C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js (4 assertions, 1914ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js (4 assertions, 1908ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-turn-integrity.test.js (5 assertions, 2438ms)
+[tv-dator] # test-files total=3 pass=3 fail=0 assertions=13
+lab test: tv-dator: # test-files total=3 pass=3 fail=0 assertions=13
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=3 fail=0 assertions=13

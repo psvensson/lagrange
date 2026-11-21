@@ -1,0 +1,2 @@
+{"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":4987,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+{"file":"test/bootstrap/node-joining-service-message-group-activation.test.js","attempt":1,"ok":false,"assertions":50,"durationMs":3033,"retriedOnce":false,"firstFailureLine":"not ok 1 - Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent"}

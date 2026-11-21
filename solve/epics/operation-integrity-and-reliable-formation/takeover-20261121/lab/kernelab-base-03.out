@@ -1,0 +1,17 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.07
+[adam-laptop] placement-shell=3809861
+[adam-laptop] placement-head=8e84e2801987b162359de39ef35e54aaf8462261
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3810423
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 25C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+[adam-laptop] ok test/partition/partition-runtime-reconstruction-leadership.test.js (20 assertions, 30191ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=20
+lab test: adam-laptop: # test-files total=1 pass=1 fail=0 assertions=20
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=1 fail=0 assertions=20

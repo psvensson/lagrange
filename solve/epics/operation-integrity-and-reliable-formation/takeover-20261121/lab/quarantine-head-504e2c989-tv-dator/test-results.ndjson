@@ -1,0 +1,12 @@
+{"file":"test/query/query-executor-serve-eligibility-routing.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":901,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-no-handler-quarantine-clock.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":993,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/cache-based-routing.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":1118,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/routing-overlay-complete-state-retirement.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1171,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/readiness-routing-denial-observability.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1074,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-executeonpartition-no-handler-repair.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":1123,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-session-binding-and-build-sql.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":1263,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/cache-based-routing.property.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":1560,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-recovery-owned-routing.test.js","attempt":1,"ok":true,"assertions":43,"durationMs":1133,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-read-authority-token.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1113,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/service-read-locality-routing.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":1253,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/sql-query-engine-routing-overlay-state.test.js","attempt":1,"ok":true,"assertions":80,"durationMs":1157,"retriedOnce":false,"firstFailureLine":null}

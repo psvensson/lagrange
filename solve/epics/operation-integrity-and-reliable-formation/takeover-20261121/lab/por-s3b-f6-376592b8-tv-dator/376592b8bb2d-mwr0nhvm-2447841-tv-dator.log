@@ -1,0 +1,243 @@
+placement-shell=3394619
+placement-head=376592b8bb2d1d296d47207a30d0f51319ecfabe
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3395140
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 65C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+not ok test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js (11 assertions, 1163ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: hysteresis — active rebalancer leader is RETAINED across a transient (non-draining) readiness dip while raft leadership holds
+    not ok 1 - rebalancer created
+      ---
+      at:
+        fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+        lineNumber: 146
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:146:5)
+        test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:142:1
+      source: |
+        async (t) => {
+          const ps = createActiveLeaderPartition();
+          t.ok(ps.rebalancer, 'rebalancer created');
+        ----^
+          t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+      ...
+    
+    not ok 2 - Cannot read properties of null (reading 'isLeader')
+      ---
+      stack: |
+        Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:147:25)
+      at:
+        fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+        lineNumber: 147
+        columnNumber: 25
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          const ps = createActiveLeaderPartition();
+          t.ok(ps.rebalancer, 'rebalancer created');
+          t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+        ------------------------^
+      
+          // Node-wide readiness dips (recovery re-entry), raft leadership unchanged.
+      ...
+    
+    1..2
+not ok 1 - hysteresis — active rebalancer leader is RETAINED across a transient (non-draining) readiness dip while raft leadership holds # time=28.899ms
+  ---
+  at:
+    fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+    lineNumber: 142
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    // ── Retention: the core falsifier ──────────────────────────────────
+  
+    test('hysteresis — active rebalancer leader is RETAINED across a ' +
+    ^
+      'transient (non-draining) readiness dip while raft leadership holds',
+    async (t) => {
+  ...
+
+# Subtest: hysteresis — repeated readiness oscillation does NOT flap an active rebalancer leader (no lockstep churn)
+    not ok 1 - Cannot read properties of null (reading 'setLeader')
+      ---
+      stack: |
+        Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:172:39)
+      at:
+        fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+        lineNumber: 172
+        columnNumber: 39
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          const ps = createActiveLeaderPartition();
+          let flapStops = 0;
+          const realSetLeader = ps.rebalancer.setLeader.bind(ps.rebalancer);
+        --------------------------------------^
+          ps.rebalancer.setLeader = (next) => {
+            if (ps.rebalancer.isLeader === true && next === false) {
+      ...
+    
+    1..1
+not ok 2 - hysteresis — repeated readiness oscillation does NOT flap an active rebalancer leader (no lockstep churn) # time=3.447ms
+  ---
+  at:
+    fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+    lineNumber: 168
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('hysteresis — repeated readiness oscillation does NOT flap an active ' +
+    ^
+      'rebalancer leader (no lockstep churn)', async (t) => {
+      const ps = createActiveLeaderPartition();
+  ...
+
+# Subtest: demotion preserved — draining readiness demotes even an active rebalancer leader
+    not ok 1 - Cannot read properties of null (reading 'isLeader')
+      ---
+      stack: |
+        Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:200:25)
+      at:
+        fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+        lineNumber: 200
+        columnNumber: 25
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          'rebalancer leader', async (t) => {
+          const ps = createActiveLeaderPartition();
+          t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+        ------------------------^
+      
+          ps.metadataPublicationReadinessState = readinessStateFor(DRAINING_SNAPSHOT);
+      ...
+    
+    1..1
+not ok 3 - demotion preserved — draining readiness demotes even an active rebalancer leader # time=3.465ms
+  ---
+  at:
+    fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+    lineNumber: 197
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    // ── Demotion paths that MUST still demote ──────────────────────────
+  
+    test('demotion preserved — draining readiness demotes even an active ' +
+    ^
+      'rebalancer leader', async (t) => {
+      const ps = createActiveLeaderPartition();
+  ...
+
+# Subtest: demotion preserved — loss of raft leadership demotes the rebalancer regardless of readiness
+    not ok 1 - Cannot read properties of null (reading 'isLeader')
+      ---
+      stack: |
+        Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:214:25)
+      at:
+        fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+        lineNumber: 214
+        columnNumber: 25
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          'regardless of readiness', async (t) => {
+          const ps = createActiveLeaderPartition();
+          t.equal(ps.rebalancer.isLeader, true, 'acquired leadership while ready');
+        ------------------------^
+      
+          ps.isLeader = false;
+      ...
+    
+    1..1
+not ok 4 - demotion preserved — loss of raft leadership demotes the rebalancer regardless of readiness # time=2.912ms
+  ---
+  at:
+    fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+    lineNumber: 211
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('demotion preserved — loss of raft leadership demotes the rebalancer ' +
+    ^
+      'regardless of readiness', async (t) => {
+      const ps = createActiveLeaderPartition();
+  ...
+
+# Subtest: acquisition gate preserved — a non-active rebalancer does NOT acquire leadership while background work is not ready
+    not ok 1 - Cannot read properties of null (reading 'isLeader')
+      ---
+      stack: |
+        Test.<anonymous> (test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js:234:25)
+      at:
+        fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+        lineNumber: 234
+        columnNumber: 25
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          ps.isLeader = false;
+          ps.updateRebalancerLeadership();
+          t.equal(ps.rebalancer.isLeader, false, 'demoted (non-active)');
+        ------------------------^
+      
+          ps.isLeader = true;
+      ...
+    
+    1..1
+not ok 5 - acquisition gate preserved — a non-active rebalancer does NOT acquire leadership while background work is not ready # time=3.073ms
+  ---
+  at:
+    fileName: test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js
+    lineNumber: 227
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    // ── Acquisition gate is unchanged ──────────────────────────────────
+  
+  
+    test('acquisition gate preserved — a non-active rebalancer does NOT acquire '
+    +
+  
+    ^
+      'leadership while background work is not ready', async (t) => {
+      const ps = createActiveLeaderPartition();
+  ...
+
+1..5
+# { total: 6, pass: 0, fail: 6 }
+# time=176.886ms
+# test-files total=1 pass=0 fail=1 assertions=11
+placement-results={"file":"test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js","attempt":1,"ok":false,"assertions":11,"durationMs":1163,"retriedOnce":false,"firstFailureLine":"not ok 1 - rebalancer created"}

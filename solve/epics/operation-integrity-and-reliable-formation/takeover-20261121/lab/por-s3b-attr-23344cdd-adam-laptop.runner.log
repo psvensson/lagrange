@@ -1,0 +1,11 @@
+file:///mnt/data/peter/projects/lagrange/scripts/run-classified-test-files.js:356
+    throw new Error(`unclassified or missing test file: ${file}`);
+          ^
+
+Error: unclassified or missing test file: test/rebalancer/placement-owner-authority-provisioner.test.js
+    at classifySingleFileLane (file:///mnt/data/peter/projects/lagrange/scripts/run-classified-test-files.js:356:11)
+    at classifyFilesIntoLanes (file:///mnt/data/peter/projects/lagrange/scripts/run-classified-test-files.js:380:23)
+    at planClassifiedTestFiles (file:///mnt/data/peter/projects/lagrange/scripts/run-classified-test-files.js:413:17)
+    at file:///mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs:19:16
+
+Node.js v22.23.2

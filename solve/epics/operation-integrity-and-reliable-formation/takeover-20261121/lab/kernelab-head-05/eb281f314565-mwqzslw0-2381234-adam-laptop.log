@@ -1,0 +1,14 @@
+placement-shell=3816356
+placement-head=eb281f314565d4eb3c7e53798aa34e585c7fbcbf
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3818304
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 78C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 78C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/partition/partition-runtime-reconstruction-leadership.test.js (20 assertions, 29853ms)
+# test-files total=1 pass=1 fail=0 assertions=20
+placement-results={"file":"test/partition/partition-runtime-reconstruction-leadership.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":29853,"retriedOnce":false,"firstFailureLine":null}

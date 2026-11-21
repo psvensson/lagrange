@@ -1,0 +1,22 @@
+placement-shell=3365671
+placement-head=ea85ea499cc4b69b6d781feba949ce059d287923
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3367685
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: hold cpu 79C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 48C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+ok test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js (4 assertions, 1914ms)
+ok test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js (4 assertions, 1908ms)
+ok test/raft/raft-rs-backend/runtime-turn-integrity.test.js (5 assertions, 2438ms)
+# test-files total=3 pass=3 fail=0 assertions=13
+placement-results={"file":"test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1914,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1908,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-turn-integrity.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2438,"retriedOnce":false,"firstFailureLine":null}

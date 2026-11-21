@@ -1,0 +1,28 @@
+placement-shell=3343858
+placement-head=48a1254a3533c2ad69746aeb8e390d3eb66c1ea0
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3344308
+# test-files planned=5
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/cdc/bootstrap-direct-write-raft-routing.test.js (17 assertions, 839ms)
+ok test/cdc/bootstrap-mode-routing.property.test.js (11 assertions, 1706ms)
+ok test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js (54 assertions, 2238ms)
+ok test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js (130 assertions, 2250ms)
+# test-files total=4 pass=4 fail=0 assertions=212
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/bootstrap/bootstrap-mode.test.js (54 assertions, 1504ms)
+# test-files total=1 pass=1 fail=0 assertions=54
+placement-results={"file":"test/cdc/bootstrap-direct-write-raft-routing.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":839,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/bootstrap-mode-routing.property.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1706,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":2238,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js","attempt":1,"ok":true,"assertions":130,"durationMs":2250,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-mode.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":1504,"retriedOnce":false,"firstFailureLine":null}

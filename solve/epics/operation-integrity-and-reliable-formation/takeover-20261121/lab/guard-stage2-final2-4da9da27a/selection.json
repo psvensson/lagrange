@@ -1,0 +1,33 @@
+{
+  "sha": "4da9da27a9fcaa69c2075c9a406da06016f2a4eb",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/topology-guard-inventory-authority.test.js",
+    "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
+    "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
+    "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+    "test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js",
+    "test/control-plane/readiness-snapshot-persistence.test.js",
+    "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+    "test/rebalancer/required-entity-operation-observation.test.js",
+    "test/raft/raft-rs-backend/committed-membership-stamp.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+        "test/rebalancer/topology-guard-inventory-authority.test.js",
+        "test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js",
+        "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
+        "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
+        "test/control-plane/readiness-snapshot-persistence.test.js",
+        "test/raft/raft-rs-backend/committed-membership-stamp.test.js",
+        "test/rebalancer/required-entity-operation-observation.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

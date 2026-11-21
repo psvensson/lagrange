@@ -1,0 +1,88 @@
+lab test: tv-dator: ordinary, exclusive (2 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=3379943
+[tv-dator] placement-head=9c3604ed90f800b3f07b33a5e9620b3cc932ee5c
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3380394
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 65C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+[tv-dator] ok test/transport/router-adopted-connection-reconnect-schedule.test.js (1 assertions, 954ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=1
+[tv-dator] classified lane exclusive: 1 file(s), jobs=1
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] not ok test/transport/raft-frame-reconnect-owner.integration.test.js (2 assertions, 1778ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.028Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.028Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.031Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.031Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] # Subtest: C13: a short outage is repaired by the routers' own reconnect schedule, without a raft frame
+[tv-dator] ok 1 - C13: a short outage is repaired by the routers' own reconnect schedule, without a raft frame
+[tv-dator]   ---
+[tv-dator]   duration_ms: 71.910389
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.078Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.078Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.080Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.080Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.083Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.083Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.086Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.086Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.091Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.091Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.099Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.099Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.106Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.106Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.119Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.119Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.137Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.137Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.164Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19961","contextNodeId":"rfr-b","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.164Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","event":"wait_bound_spent","wait":"RECONNECT_MAX_ATTEMPTS","awaited":"outbound connection to the node re-established","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":10,"maxAttempts":10,"state":"closed","address":"ws://127.0.0.1:19961"},"scope":{"nodeId":"rfr-a","targetNodeId":"rfr-b","connectionId":"018b4b91-e895-44d8-b141-ab7bba7c11cd"},"repeats":0,"nodeId":"rfr-a","msg":"Wait bound spent"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.164Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","nodeId":"rfr-a","error":"connect ECONNREFUSED ws://127.0.0.1:19960","msg":"Reconnection failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T22:48:20.165Z","nodeId":"rfr-a","pid":3380430,"subsystem":"message-router","event":"wait_bound_spent","wait":"RECONNECT_MAX_ATTEMPTS","awaited":"outbound connection to the node re-established","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":10,"maxAttempts":10,"state":"closed","address":"ws://127.0.0.1:19960"},"scope":{"nodeId":"rfr-b","targetNodeId":"rfr-a","connectionId":"702d7e9e-9193-465a-a879-0c1a47328852"},"repeats":0,"nodeId":"rfr-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: C13: after an outage that outlasts the bounded reconnect schedule, both ends keep dialing at the capped cadence and raft alone resumes after the heal
+[tv-dator] not ok 2 - C13: after an outage that outlasts the bounded reconnect schedule, both ends keep dialing at the capped cadence and raft alone resumes after the heal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 883.471178
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9c3604ed90f8-mwr00zdk-2402810/test/transport/raft-frame-reconnect-owner.integration.test.js:184:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'both ends kept dialing until the heal: schedule {"intervalMs":1000,"attempts":10,"boundedSpanMs":113330.078125,"capMs":38443.359375,"permitted":39} measured {"afterSever":{"rfr-a":{"state":"reconnecting","scheduled":true,"attempts":1},"rfr-b":{"state":"reconnecting","scheduled":true,"attempts":1}},"atHeal":{"rfr-a":{"state":"closed","scheduled":false,"attempts":10},"rfr-b":{"state":"closed","scheduled":false,"attempts":10}},"outageLastedMs":1200010,"refusedDialsByTarget":{"rfr-b":10,"rfr-a":10},"dialsByEnd":{"rfr-a":{"count":10,"first":[1005,2505,4755,8130,13192,20788,32180,49265,74893,113338],"lastBeforeHealAgoMs":1086672},"rfr-b":{"count":10,"first":[1005,2505,4755,8130,13192,20788,32180,49265,74893,113338],"lastBeforeHealAgoMs":1086672}},"restoredAfterMs":null,"dialsAfterHeal":[],"raftReceivedAfterHeal":{"rfr-a":0,"rfr-b":0}} sendErrors 0'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9c3604ed90f8-mwr00zdk-2402810/test/transport/raft-frame-reconnect-owner.integration.test.js:201:12)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # schedule {"intervalMs":1000,"attempts":10,"boundedSpanMs":113330.078125,"capMs":38443.359375,"permitted":39} measured {"afterSever":{"rfr-a":{"state":"reconnecting","scheduled":true,"attempts":1},"rfr-b":{"state":"reconnecting","scheduled":true,"attempts":1}},"atHeal":{"rfr-a":{"state":"closed","scheduled":false,"attempts":10},"rfr-b":{"state":"closed","scheduled":false,"attempts":10}},"outageLastedMs":1200010,"refusedDialsByTarget":{"rfr-b":10,"rfr-a":10},"dialsByEnd":{"rfr-a":{"count":10,"first":[1005,2505,4755,8130,13192,20788,32180,49265,74893,113338],"lastBeforeHealAgoMs":1086672},"rfr-b":{"count":10,"first":[1005,2505,4755,8130,13192,20788,32180,49265,74893,113338],"lastBeforeHealAgoMs":1086672}},"restoredAfterMs":null,"dialsAfterHeal":[],"raftReceivedAfterHeal":{"rfr-a":0,"rfr-b":0}} sendErrors 0
+[tv-dator] 1..2
+[tv-dator] # tests 2
+[tv-dator] # suites 0
+[tv-dator] # pass 1
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 959.456495
+[tv-dator] # time=1778ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=2
+lab test: tv-dator: # test-files total=2 pass=1 fail=1 assertions=3
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=1 fail=1 assertions=3
+exit 1

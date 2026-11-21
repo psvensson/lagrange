@@ -1,0 +1,22 @@
+lab test: adam-laptop: ordinary (6 files) cores=8 mem=15.5GiB speed x1.95
+[adam-laptop] placement-shell=3732324
+[adam-laptop] placement-head=d3edaa08ca13dbe8039b1c92352fe79e91ec8690
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3733348
+[adam-laptop] # test-files planned=6
+[adam-laptop] classified lane ordinary: 6 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] ok test/raft/raft-rs-backend/follower-proposal-refusal.test.js (1 assertions, 2050ms)
+[adam-laptop] ok test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js (1 assertions, 2039ms)
+[adam-laptop] ok test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js (7 assertions, 2529ms)
+[adam-laptop] ok test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js (1 assertions, 2543ms)
+[adam-laptop] ok test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js (3 assertions, 2616ms)
+[adam-laptop] ok test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js (7 assertions, 2631ms)
+[adam-laptop] # test-files total=6 pass=6 fail=0 assertions=20
+lab test: adam-laptop: # test-files total=6 pass=6 fail=0 assertions=20
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=6 pass=6 fail=0 assertions=20

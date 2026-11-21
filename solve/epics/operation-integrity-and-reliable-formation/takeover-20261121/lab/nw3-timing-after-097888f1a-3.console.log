@@ -1,0 +1,17 @@
+lab test: adam-laptop: bootstrap (1 files) cores=8 mem=15.5GiB speed x2.05
+[adam-laptop] placement-shell=3778199
+[adam-laptop] placement-head=097888f1a6be9cc38dc48de14a07d5504bd99950
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3779259
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: hold cpu 82C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 82C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 43C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 26371ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=1
+lab test: adam-laptop: # test-files total=1 pass=1 fail=0 assertions=1
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=1 fail=0 assertions=1

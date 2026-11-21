@@ -1,0 +1,37 @@
+{
+  "sha": "d6fa64092506fc2cb9fa6b650fe494a41f1e8893",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+    "test/raft/raft-rs-backend/admission-redrive.test.js",
+    "test/raft/raft-rs-backend/committed-membership-stamp.test.js",
+    "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
+    "test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js",
+    "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+    "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+    "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+    "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+    "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+    "test/rebalancer/rebalance-coordinator-operation-ownership.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/admission-stamp-reread-real-port.test.js",
+        "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+        "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+        "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+        "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+        "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+        "test/raft/raft-rs-backend/admission-redrive.test.js",
+        "test/raft/raft-rs-backend/committed-membership-stamp.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

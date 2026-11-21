@@ -1,0 +1,71 @@
+{
+  "sha": "692336b456f32a78a0e45fee3c5e7e11c46a7534",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-current-term-applied.test.js",
+    "test/raft/raft-rs-current-authority-observation.test.js",
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+    "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+    "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+    "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js",
+    "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+    "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js",
+    "test/raft/raft-rs-backend/operation-port-status-observation.test.js",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+    "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js",
+    "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+    "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+    "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js",
+    "test/raft/raft-rs-backend/status-read-never-waits.test.js",
+    "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+        "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+        "test/raft/raft-rs-current-authority-observation.test.js",
+        "test/raft/raft-rs-current-term-applied.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+        "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+        "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+        "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+        "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js",
+        "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js",
+        "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+        "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js",
+        "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js",
+        "test/raft/raft-rs-backend/operation-port-status-observation.test.js",
+        "test/raft/raft-rs-backend/status-read-never-waits.test.js",
+        "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

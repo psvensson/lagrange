@@ -1,0 +1,734 @@
+lab test: adam-laptop: ordinary, bootstrap (2 files) cores=8 mem=15.5GiB speed x1.98
+[adam-laptop] placement-shell=3739920
+[adam-laptop] placement-head=23344cddc5f07a597b93f8cd0f4f69a69be937c3
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3740979
+[adam-laptop] # test-files planned=2
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 83C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 83C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 43C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions, 4987ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role
+[adam-laptop]     ok 1 - projected SERVICES follower rows must never complete an incomplete GROWTH_PROMOTE
+[adam-laptop]     ok 2 - provenance check rejects mismatched partitionId
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - provenance check rejects partial promotedReplicaIds
+[adam-laptop]     ok 6 - provenance check rejects voterReplicaIds missing a promoted learner
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should be equal
+[adam-laptop]     ok 10 - should be equal
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - should be equal
+[adam-laptop]     ok 14 - durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..14
+[adam-laptop] ok 1 - D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role # time=69.927ms
+[adam-laptop] 
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - expected to reject
+[adam-laptop]     ok 10 - should be equal
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - should be equal
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..13
+[adam-laptop] ok 2 - Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED) # time=6.884ms
+[adam-laptop] 
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should be equal
+[adam-laptop]     ok 10 - should be equivalent
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - should be equal
+[adam-laptop]     ok 14 - should be equal
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..14
+[adam-laptop] ok 3 - D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId # time=3.238ms
+[adam-laptop] 
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should be equal
+[adam-laptop]     ok 10 - should be equal
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-growth-promote-1',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-growth-promote-terminal-failed',
+[adam-laptop]   workflowStep: 'FAILED',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - should be equal
+[adam-laptop]     ok 14 - should be equal
+[adam-laptop]     ok 15 - should be equal
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..15
+[adam-laptop] ok 4 - D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED) # time=14.044ms
+[adam-laptop] 
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation
+[adam-laptop]     ok 1 - unconfirmed active terminal handoff must report WAITING
+[adam-laptop]     ok 2 - unapplied REPLACE active progress must report WAITING
+[adam-laptop]     ok 3 - re-armed dispatch that does not advance workflowStep must report WAITING
+[adam-laptop]     ok 4 - skipped EXECUTE_ACTIVE_REPLACE must report WAITING
+[adam-laptop]     ok 5 - skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING
+[adam-laptop]     ok 6 - reconcileOperationLifecycle reports WAITING when dispatch is skipped
+[adam-laptop]     ok 7 - WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should match pattern
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..9
+[adam-laptop] ok 5 - D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation # time=6.351ms
+[adam-laptop] 
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equivalent
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..6
+[adam-laptop] ok 6 - D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner # time=4.111ms
+[adam-laptop] 
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-leader-1',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] # Subtest: Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery
+[adam-laptop]     ok 1 - seed op-real-repo-updated into real SQLite repository
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-real-repo-updated',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop] Operation completed {
+[adam-laptop]   operationId: 'op-real-repo-updated',
+[adam-laptop]   type: 'GROWTH_PROMOTE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   targetNodeId: 'node-leader-1'
+[adam-laptop] }
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should be equal
+[adam-laptop]     ok 10 - should be equal
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - should be equal
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-real-repo-updated',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 14 - should be equal
+[adam-laptop]     ok 15 - should be equal
+[adam-laptop]     ok 16 - should be equal
+[adam-laptop]     ok 17 - should be equal
+[adam-laptop]     ok 18 - should be equal
+[adam-laptop]     ok 19 - should be equal
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-real-repo-updated',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 20 - should be equal
+[adam-laptop]     ok 21 - should be equal
+[adam-laptop]     ok 22 - should be equal
+[adam-laptop]     ok 23 - should be equal
+[adam-laptop]     ok 24 - seed op-real-repo-terminal-adopted into real SQLite repository
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-real-repo-terminal-adopted',
+[adam-laptop]   workflowStep: 'FAILED',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 25 - should be equal
+[adam-laptop]     ok 26 - should be equal
+[adam-laptop]     ok 27 - should be equal
+[adam-laptop]     ok 28 - should be equal
+[adam-laptop]     ok 29 - should be equal
+[adam-laptop]     ok 30 - should be equal
+[adam-laptop]     ok 31 - should be equal
+[adam-laptop]     ok 32 - should be equal
+[adam-laptop]     ok 33 - should be equivalent
+[adam-laptop]     ok 34 - should be equivalent
+[adam-laptop]     ok 35 - should be equal
+[adam-laptop]     ok 36 - should be equal
+[adam-laptop]     ok 37 - should be equal
+[adam-laptop]     ok 38 - seed op-real-repo-reinserted into real SQLite repository
+[adam-laptop]     ok 39 - should be equal
+[adam-laptop]     not ok 40 - should be equal
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adam-laptop]         lineNumber: 904
+[adam-laptop]         columnNumber: 9
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:904:9)
+[adam-laptop]       source: >2
+[adam-laptop]               );
+[adam-laptop]               t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+[adam-laptop]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[adam-laptop]         --------^
+[adam-laptop]               t.equal(reinsertedSettlement.committed, false);
+[adam-laptop]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -waiting
+[adam-laptop]         +refused
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 41 - should be equal
+[adam-laptop]     not ok 42 - should be equal
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adam-laptop]         lineNumber: 906
+[adam-laptop]         columnNumber: 9
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:906:9)
+[adam-laptop]       source: >2
+[adam-laptop]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[adam-laptop]               t.equal(reinsertedSettlement.committed, false);
+[adam-laptop]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[adam-laptop]         --------^
+[adam-laptop]               t.same(releasedReservationIds, []);
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -reinserted
+[adam-laptop]         +refused
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 43 - should be equivalent
+[adam-laptop]     ok 44 - seed op-real-repo-refused into real SQLite repository
+[adam-laptop]     ok 45 - should be equal
+[adam-laptop]     ok 46 - should be equal
+[adam-laptop]     ok 47 - should be equal
+[adam-laptop]     ok 48 - should be equal
+[adam-laptop]     ok 49 - should be equivalent
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-real-repo-updated',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 50 - should be equal
+[adam-laptop]     ok 51 - should be equal
+[adam-laptop]     ok 52 - should be equal
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'op-real-repo-terminal-adopted',
+[adam-laptop]   workflowStep: 'FAILED',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop]     ok 53 - should be equal
+[adam-laptop]     ok 54 - should be equal
+[adam-laptop]     ok 55 - should be equal
+[adam-laptop]     ok 56 - seed op-real-repo-lost-reply into real SQLite repository
+[adam-laptop]     ok 57 - expected to reject
+[adam-laptop]     ok 58 - should be equal
+[adam-laptop]     ok 59 - should be equal
+[adam-laptop]     ok 60 - should be equal
+[adam-laptop]     ok 61 - should be equal
+[adam-laptop]     ok 62 - should be equal
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adam-laptop]     1..62
+[adam-laptop] not ok 7 - Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery # time=55ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adam-laptop]     lineNumber: 737
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     );
+[adam-laptop]   
+[adam-laptop]     test(
+[adam-laptop]     ^
+[adam-laptop]       'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+[adam-laptop]         '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should be equal
+[adam-laptop]     ok 10 - should be equal
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - should be equal
+[adam-laptop]     ok 14 - should be equal
+[adam-laptop]     ok 15 - should be equal
+[adam-laptop]     ok 16 - should be equal
+[adam-laptop]     ok 17 - should be equal
+[adam-laptop]     ok 18 - should be equal
+[adam-laptop]     ok 19 - should be equal
+[adam-laptop]     ok 20 - should be equal
+[adam-laptop]     ok 21 - should be equal
+[adam-laptop]     ok 22 - should be equal
+[adam-laptop]     ok 23 - expected to reject
+[adam-laptop]     ok 24 - should be equal
+[adam-laptop]     ok 25 - should be equal
+[adam-laptop]     ok 26 - should be equal
+[adam-laptop]     ok 27 - should be equal
+[adam-laptop]     ok 28 - should be equal
+[adam-laptop]     1..28
+[adam-laptop] ok 8 - Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget # time=3287.581ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equivalent
+[adam-laptop]     ok 6 - ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion
+[adam-laptop]     ok 7 - should be equivalent
+[adam-laptop]     1..7
+[adam-laptop] ok 9 - Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner # time=8.758ms
+[adam-laptop] 
+[adam-laptop] 1..9
+[adam-laptop] # { total: 168, pass: 166, fail: 2 }
+[adam-laptop] # time=3469.846ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=177
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 55C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] Wait bound spent {
+[adam-laptop]   event: 'wait_bound_spent',
+[adam-laptop]   wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+[adam-laptop]   awaited: 'replica operation progressed past its current workflow step',
+[adam-laptop]   boundMs: 30000,
+[adam-laptop]   elapsedMs: 120000,
+[adam-laptop]   lastObserved: {
+[adam-laptop]     type: 'REMOVE',
+[adam-laptop]     workflowStep: 'PENDING',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     targetNodeId: 'node-leader-1',
+[adam-laptop]     stepExceeded: true,
+[adam-laptop]     budgetExhausted: false,
+[adam-laptop]     timeoutClassification: {
+[adam-laptop]       classification: 'rebalance_operation_timeout',
+[adam-laptop]       configuredBudgetMs: 300000,
+[adam-laptop]       remainingBudgetMs: 180000,
+[adam-laptop]       boundaryHit: false,
+[adam-laptop]       nestedOperation: 'rebalance:pending',
+[adam-laptop]       operationName: 'rebalance',
+[adam-laptop]       originalClassification: null
+[adam-laptop]     }
+[adam-laptop]   },
+[adam-laptop]   scope: {
+[adam-laptop]     nodeId: 'node-leader-1',
+[adam-laptop]     partitionId: 'user_orders-p1',
+[adam-laptop]     operationId: 'op-remove-stuck-dispatch'
+[adam-laptop]   },
+[adam-laptop]   repeats: 0
+[adam-laptop] }
+[adam-laptop] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[adam-laptop]   operationId: 'op-real-repo-reinserted',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   expectedWorkflowStep: null
+[adam-laptop] }
+[adam-laptop] Terminal transition persist not committed; retry ownership kept and repair armed {
+[adam-laptop]   operationId: 'op-real-repo-reinserted',
+[adam-laptop]   disposition: 'refused',
+[adam-laptop]   step: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1'
+[adam-laptop] }
+[adam-laptop] Committed terminal transition not authoritatively visible; repair scheduled {
+[adam-laptop]   operationId: 'op-real-repo-reinserted',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'persist_not_committed',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[adam-laptop]   operationId: 'op-real-repo-refused',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   expectedWorkflowStep: null
+[adam-laptop] }
+[adam-laptop] Terminal transition persist not committed; retry ownership kept and repair armed {
+[adam-laptop]   operationId: 'op-real-repo-refused',
+[adam-laptop]   disposition: 'refused',
+[adam-laptop]   step: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1'
+[adam-laptop] }
+[adam-laptop] Committed terminal transition not authoritatively visible; repair scheduled {
+[adam-laptop]   operationId: 'op-real-repo-refused',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'persist_not_committed',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop] Committed terminal transition not authoritatively visible; repair scheduled {
+[adam-laptop]   operationId: 'op-real-repo-lost-reply',
+[adam-laptop]   workflowStep: 'ACTIVE',
+[adam-laptop]   partitionId: 'user_orders-p1',
+[adam-laptop]   cause: 'persist_not_committed',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop] not ok test/bootstrap/node-joining-service-message-group-activation.test.js (50 assertions, 3033ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: NodeJoiningService - blocking authoritative backfill uses critical delivery priority
+[adam-laptop]     ok 1 - blocking backfill should route the authoritative SQL read with critical delivery priority
+[adam-laptop]     ok 2 - blocking backfill should use the join leadership timeout budget for authoritative reads
+[adam-laptop]     ok 3 - blocking backfill replica fanout should use critical delivery priority
+[adam-laptop]     1..3
+[adam-laptop] ok 1 - NodeJoiningService - blocking authoritative backfill uses critical delivery priority # time=68.578ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - pressure-degraded backfill skips replica fanout
+[adam-laptop]     ok 1 - pressure-degraded blocking backfill should keep the routed read on the critical lane
+[adam-laptop]     ok 2 - pressure-degraded authoritative backfill should avoid full replica fanout
+[adam-laptop]     1..2
+[adam-laptop] ok 2 - NodeJoiningService - pressure-degraded backfill skips replica fanout # time=39.846ms
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:36.964Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"join-cache-seed-node","msg":"Failed to register node in cluster"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:37.171Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"join-cache-seed-node","msg":"Failed to register node in cluster"}
+[adam-laptop] # Subtest: NodeJoiningService - registerNodeInCluster seeds local discovery-critical cache rows
+[adam-laptop]     not ok 1 - Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         wrapNodeRegistrationError
+[adam-laptop]         (src/bootstrap/shared/node-registration-owner.js:106:24)
+[adam-laptop]       
+[adam-laptop]         NodeRegistrationOwner.registerNodeInCluster
+[adam-laptop]         (src/bootstrap/shared/node-registration-owner.js:282:28)
+[adam-laptop]       
+[adam-laptop]         async QuerySystemStatePhase.registerNodeInCluster
+[adam-laptop]         (src/bootstrap/phases/query-system-state-phase.js:607:16)
+[adam-laptop]       
+[adam-laptop]         async Test.<anonymous>
+[adam-laptop]         (test/bootstrap/node-joining-service-message-group-activation.test.js:335:7)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/bootstrap/shared/node-registration-owner.js
+[adam-laptop]         lineNumber: 106
+[adam-laptop]         columnNumber: 24
+[adam-laptop]         functionName: wrapNodeRegistrationError
+[adam-laptop]       deferRetry: true
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |
+[adam-laptop]         // diagnostics the joiner needs to classify it.
+[adam-laptop]         function wrapNodeRegistrationError(error) {
+[adam-laptop]           const wrappedError = new Error(
+[adam-laptop]         -----------------------^
+[adam-laptop]             `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
+[adam-laptop]           );
+[adam-laptop]       cause:
+[adam-laptop]         stack: |
+[adam-laptop]           failedResultError (src/control-plane/owners/node-registration-incarnation-write.js:422:17)
+[adam-laptop]           attempt (src/control-plane/owners/node-registration-incarnation-write.js:396:7)
+[adam-laptop]           async writeNodeRegistrationAtIncarnation (src/control-plane/owners/node-registration-incarnation-write.js:594:24)
+[adam-laptop]           async NodeRegistrationOwner.registerJoinNodeRow (src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js:413:9)
+[adam-laptop]           async NodeRegistrationOwner.registerNodeInCluster (src/bootstrap/shared/node-registration-owner.js:195:34)
+[adam-laptop]           async QuerySystemStatePhase.registerNodeInCluster (src/bootstrap/phases/query-system-state-phase.js:607:16)
+[adam-laptop]           async Test.<anonymous> (test/bootstrap/node-joining-service-message-group-activation.test.js:335:7)
+[adam-laptop]         at:
+[adam-laptop]           fileName: src/control-plane/owners/node-registration-incarnation-write.js
+[adam-laptop]           lineNumber: 422
+[adam-laptop]           columnNumber: 17
+[adam-laptop]           functionName: failedResultError
+[adam-laptop]         deferRetry: true
+[adam-laptop]         failureCode: partition_write_outcome_unknown
+[adam-laptop]         source: >
+[adam-laptop]       
+[adam-laptop]           function failedResultError(result) {
+[adam-laptop]             const error = new Error(typeof result.error === 'string' ?
+[adam-laptop]           ----------------^
+[adam-laptop]               result.error : result.error?.message || NODE_REGISTRATION_NOT_APPLIED, {cause: result});
+[adam-laptop]             for (const field of FAILED_RESULT_ERROR_FIELDS) {
+[adam-laptop]         cause:
+[adam-laptop]           success: false
+[adam-laptop]           partitionResult:
+[adam-laptop]             affectedRows: 1
+[adam-laptop]           requestKey: '{"data":null,"deliveryPriority":"critical","ignoreExisting":false,"kind":"control-plane-mutation","operation":"insert","routingReadinessDimension":"controlPlaneRecoveryEligible","row":{"boot_incarnation":1,"capabilities":"[\"partition_replica\",\"message_group_replica\"]","connection_state":"connected","cpu_cores":8,"cpu_usage_percent":0,"created_at":1795295197166,"disk_gb":100,"disk_usage_percent":0,"host_id":"adam-Aspire-A515-52G","last_heartbeat":1795295197166,"memory_mb":16606,"memory_usage_percent":0,"node_address":"ws://localhost:9090","node_id":"join-cache-seed-node","status":"joining","storage_budget_bytes":1024,"storage_budget_source":"test"},"tableName":"nodes","whereClause":null,"workClass":null}'
+[adam-laptop]           idempotencyKey: cpw-5fde9d8177c5579cf5f85028bbd96864
+[adam-laptop]           outcome: applied
+[adam-laptop]           completionState: applied
+[adam-laptop]           contractState: ready
+[adam-laptop]           nextAction: proceed
+[adam-laptop]           deferRetry: true
+[adam-laptop]           error: The proposal was accepted into consensus and its outcome is not known to
+[adam-laptop]             this replica; a retry with the same entryId is idempotent
+[adam-laptop]           failureCode: partition_write_outcome_unknown
+[adam-laptop]           entryId: null
+[adam-laptop]           pendingInstance:
+[adam-laptop]             writeIdentity: '["nodes","join-cache-seed-node",1,"birth"]'
+[adam-laptop]             instance: d34395f8-64bb-4148-a2a9-95944f14bfe6
+[adam-laptop]             idempotencyKey: cpw-5fde9d8177c5579cf5f85028bbd96864
+[adam-laptop]             entryId: null
+[adam-laptop]             outcome: unknown
+[adam-laptop]         message: The proposal was accepted into consensus and its outcome is not known
+[adam-laptop]           to this replica; a retry with the same entryId is idempotent
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 3 - NodeJoiningService - registerNodeInCluster seeds local discovery-critical cache rows # time=300.384ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/node-joining-service-message-group-activation.test.js
+[adam-laptop]     lineNumber: 282
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('NodeJoiningService - registerNodeInCluster seeds local
+[adam-laptop]     discovery-critical cache rows',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         initializeTestEnvironment();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:37.340Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","state":"discovering","phase":"waiting_leadership","subPhase":null,"duration":0,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/test/bootstrap/node-joining-service-message-group-activation.test.js:577:13)\n    at Object.waitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/owners/join-phase-owners.js:66:33)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/pipeline/join-startup-plan.js:82:40\n    at Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/node-joining-admission-readiness.js:812:15)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/runtime/work-class-scheduler.js:213:25\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)","joinReadiness":null,"seedContactFailureKind":null,"bootstrapResponseCode":null,"bootstrapResponsePhase":null,"bootstrapResponseState":null,"bootstrapResponseReasons":[],"bootstrapResponseRetryAfterMs":null,"seedContact":null,"contextNodeId":"550e8400-e29b-41d4-a716-446655440011","msg":"Joining phase failed"}
+[adam-laptop] # Subtest: NodeJoiningService - full join hosts its own message group; mg-1 stays on the seed
+[adam-laptop]     ok 1 - join fails with mock peers
+[adam-laptop]     ok 2 - error should mention leadership
+[adam-laptop]     ok 3 - should have bootstrap response
+[adam-laptop]     ok 4 - the joiner hosts its own message group
+[adam-laptop]     ok 5 - mg-1 is not spread to the joiner
+[adam-laptop]     ok 6 - no mg-1 replica is moved
+[adam-laptop]     ok 7 - mg-1's replicas all stay on the seed
+[adam-laptop]     1..7
+[adam-laptop] ok 4 - NodeJoiningService - full join hosts its own message group; mg-1 stays on the seed # time=128.258ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - hasOperationalMessageGroup
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     1..1
+[adam-laptop] ok 5 - NodeJoiningService - hasOperationalMessageGroup # time=32.698ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - cleanup on failure
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should have cleaned up services
+[adam-laptop]     ok 4 - should have cleaned up transport
+[adam-laptop]     1..4
+[adam-laptop] ok 6 - NodeJoiningService - cleanup on failure # time=54.776ms
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:37.341Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","phase":"waiting_leadership","duration":44,"preserveForResume":false,"error":"leadership timeout (test)","stack":"Error: leadership timeout (test)\n    at service.phaseWaitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/test/bootstrap/node-joining-service-message-group-activation.test.js:577:13)\n    at Object.waitForLeadership (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/owners/join-phase-owners.js:66:33)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/pipeline/join-startup-plan.js:82:40\n    at Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/node-joining-admission-readiness.js:812:15)\n    at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/runtime/work-class-scheduler.js:213:25\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)","contextNodeId":"550e8400-e29b-41d4-a716-446655440011","msg":"Node joining failed"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:37.435Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","bootstrapUrl":"http://localhost:99999/bootstrap","error":"Failed to parse URL from http://localhost:99999/bootstrap","contextNodeId":"test-node-1","msg":"Failed to contact seed node"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:37.435Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","state":"connecting","phase":"contacting_seed","subPhase":null,"duration":21,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at SeedContactFailureOwner.throwParsedOrGenericFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/seed-contact-failure-owner.js:161:11)\n    at SeedContactFailureOwner.throwTerminalFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/seed-contact-failure-owner.js:110:10)\n    at SeedContactFailureOwner.throwFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/seed-contact-failure-owner.js:40:10)\n    at ContactSeedPhase.phaseContactSeed (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/contact-seed-phase.js:150:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/node-joining-admission-readiness.js:812:9)","joinReadiness":null,"seedContactFailureKind":null,"bootstrapResponseCode":null,"bootstrapResponsePhase":null,"bootstrapResponseState":null,"bootstrapResponseReasons":[],"bootstrapResponseRetryAfterMs":null,"seedContact":null,"contextNodeId":"test-node-1","msg":"Joining phase failed"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:06:37.435Z","nodeId":"test-node","pid":3741515,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":22,"preserveForResume":false,"error":"Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap","stack":"Error: Failed to contact seed node: Failed to parse URL from http://localhost:99999/bootstrap\n    at SeedContactFailureOwner.throwParsedOrGenericFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/seed-contact-failure-owner.js:161:11)\n    at SeedContactFailureOwner.throwTerminalFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/seed-contact-failure-owner.js:110:10)\n    at SeedContactFailureOwner.throwFailure (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/seed-contact-failure-owner.js:40:10)\n    at ContactSeedPhase.phaseContactSeed (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/phases/contact-seed-phase.js:150:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/23344cddc5f0-mwqwdar9-2166987/src/bootstrap/node-joining-admission-readiness.js:812:9)","contextNodeId":"test-node-1","msg":"Node joining failed"}
+[adam-laptop] # Subtest: NodeJoiningService - emits events
+[adam-laptop]     ok 1 - should emit events
+[adam-laptop]     ok 2 - should emit phaseStart
+[adam-laptop]     ok 3 - should emit phaseComplete
+[adam-laptop]     ok 4 - should emit complete
+[adam-laptop]     1..4
+[adam-laptop] ok 7 - NodeJoiningService - emits events # time=56.305ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - replica factory should preserve join mode from replica handler
+[adam-laptop]     ok 1 - should build a replica partition factory
+[adam-laptop]     ok 2 - post-join partition creation should honor replica-handler join mode
+[adam-laptop]     1..2
+[adam-laptop] ok 8 - NodeJoiningService - replica factory should preserve join mode from replica handler # time=47.857ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - replica factory subscribes exactly the propagated cache tables
+[adam-laptop]     ok 1 - join-time replica factory should subscribe every propagated cache table once
+[adam-laptop]     ok 2 - join-time replica factory should register one CDC handshake per propagated cache table
+[adam-laptop]     ok 3 - non-propagated tables must not join the default cache-sync subscriptions
+[adam-laptop]     1..3
+[adam-laptop] ok 9 - NodeJoiningService - replica factory subscribes exactly the propagated cache tables # time=40.759ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - CDC propagation reuses captured ingress when operational selection churns
+[adam-laptop]     ok 1 - join CDC propagation should reuse the captured ingress when operational selection temporarily loses the service
+[adam-laptop]     ok 2 - join CDC propagation should forward the original vector through the captured ingress
+[adam-laptop]     1..2
+[adam-laptop] ok 10 - NodeJoiningService - CDC propagation reuses captured ingress when operational selection churns # time=30.196ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - partial message-group service row activation retains remaining deferred replicas and retries via timer until empty
+[adam-laptop]     ok 1 - mg-r2 should remain deferred after initial partial activation
+[adam-laptop]     ok 2 - subset activation of mg-r1 must retain unactivated mg-r2 in deferred set
+[adam-laptop]     ok 3 - bounded retry timer should remain armed while deferred set is non-empty
+[adam-laptop]     ok 4 - timer-driven retry should clear deferredMessageGroupServiceReplicaIds once mg-r2 activates
+[adam-laptop]     ok 5 - timer-driven retry should mark mg-r2 ACTIVE in durable services table
+[adam-laptop]     1..5
+[adam-laptop] ok 11 - NodeJoiningService - partial message-group service row activation retains remaining deferred replicas and retries via timer until empty # time=80.248ms
+[adam-laptop] 
+[adam-laptop] # Subtest: NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth
+[adam-laptop]     ok 1 - activation should proceed once local service_endpoints rows are visible in cache
+[adam-laptop]     ok 2 - activation should transition the staged row without registration
+[adam-laptop]     ok 3 - activation should mark the exact durable replica row active
+[adam-laptop]     ok 4 - successful exact CAS needs no availability-dependent reread
+[adam-laptop]     1..4
+[adam-laptop] ok 12 - NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth # time=32.638ms
+[adam-laptop] 
+[adam-laptop] 1..12
+[adam-laptop] # { total: 38, pass: 37, fail: 1 }
+[adam-laptop] # time=928.027ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=50
+lab test: adam-laptop: # test-files total=2 pass=0 fail=2 assertions=227
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=2 pass=0 fail=2 assertions=227
+exit 1

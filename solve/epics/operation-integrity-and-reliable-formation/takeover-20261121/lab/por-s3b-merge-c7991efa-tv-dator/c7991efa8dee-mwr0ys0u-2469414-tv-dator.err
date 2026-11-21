@@ -1,0 +1,145 @@
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation is absent for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation is terminal for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'reservation owner unavailable'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation is terminal for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation is terminal for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative replica operation identity mismatches reservation request'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation is absent for adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'Authoritative ACTIVE storage reservation is absent for adoption'
+}

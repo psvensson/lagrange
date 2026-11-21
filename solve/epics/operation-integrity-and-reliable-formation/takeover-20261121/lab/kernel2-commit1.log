@@ -1,0 +1,27 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: eb281f314565d4eb3c7e53798aa34e585c7fbcbf
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 0 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 0 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 0 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 0 JavaScript files
+Found 0 navigability violations
+Matched 0 inherited navigability baseline violations
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/write-kernel-tenure-fence-20261121 0a88745f6] test: measure how long a write of an ended tenure holds the release pause
+ 3 files changed, 191 insertions(+), 18 deletions(-)
+rc=0

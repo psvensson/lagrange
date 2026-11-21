@@ -1,0 +1,1167 @@
+placement-shell=3383742
+placement-head=8d897772b95e07b7b16862def21c1a7bbf81ae45
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3384578
+# test-files planned=57
+classified lane ordinary: 52 file(s), jobs=4
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 51C (nvme/Sensor 1)
+ok test/config/configuration-manager-revision.test.js (2 assertions, 364ms)
+ok test/cache/system-table-cache-mutation-version-survives-clear.test.js (1 assertions, 463ms)
+ok test/cache/system-table-cache-row-preview.test.js (10 assertions, 624ms)
+ok test/cache/system-table-cache-observation.test.js (14 assertions, 1345ms)
+ok test/node/group-retirement-redrive.test.js (117 assertions, 3457ms)
+ok test/message-group/message-group-cdc-receiver-admission.test.js (21 assertions, 6884ms)
+ok test/message-group/message-group-native-provisional-route.test.js (1 assertions, 6833ms)
+ok test/message-group/message-group-native-custody-handoff.test.js (2 assertions, 9657ms)
+not ok test/partition/partition-cdc-currentness-stamp-witness.test.js (75 assertions, 5911ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+ok 1 - one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+  ---
+  duration_ms: 1857.289595
+  type: 'test'
+  ...
+# measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+# Subtest: one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+  ---
+  duration_ms: 93.039912
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/partition-cdc-currentness-stamp-witness.test.js:358:3'
+  failureType: 'testCodeFailure'
+  error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/partition-cdc-currentness-stamp-witness.test.js:361:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+# Subtest: one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+ok 3 - one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+  ---
+  duration_ms: 51.820913
+  type: 'test'
+  ...
+# measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+# Subtest: one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+not ok 4 - one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+  ---
+  duration_ms: 45.862534
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/partition-cdc-currentness-stamp-witness.test.js:358:3'
+  failureType: 'testCodeFailure'
+  error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/partition-cdc-currentness-stamp-witness.test.js:361:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+# Subtest: the currentness input list is one complete, well-formed enumeration
+ok 5 - the currentness input list is one complete, well-formed enumeration
+  ---
+  duration_ms: 29.332165
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+ok 6 - the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+  ---
+  duration_ms: 43.977509
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+ok 7 - the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+  ---
+  duration_ms: 39.421938
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+ok 8 - the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+  ---
+  duration_ms: 53.291563
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+ok 9 - the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+  ---
+  duration_ms: 30.530016
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+ok 10 - the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+  ---
+  duration_ms: 35.757192
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+ok 11 - the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+  ---
+  duration_ms: 38.40823
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+ok 12 - the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+  ---
+  duration_ms: 34.863798
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+ok 13 - the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+  ---
+  duration_ms: 36.621989
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+ok 14 - the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+  ---
+  duration_ms: 30.892446
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+ok 15 - the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+  ---
+  duration_ms: 35.558473
+  type: 'test'
+  ...
+# Subtest: the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+ok 16 - the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+  ---
+  duration_ms: 33.401521
+  type: 'test'
+  ...
+# Subtest: the next currentness check after invocation.retired changes answers per the new fact (not-current)
+ok 17 - the next currentness check after invocation.retired changes answers per the new fact (not-current)
+  ---
+  duration_ms: 38.868595
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+ok 18 - the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+  ---
+  duration_ms: 46.818887
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.stopped changes answers per the new fact (not-current)
+ok 19 - the next currentness check after topology.stopped changes answers per the new fact (not-current)
+  ---
+  duration_ms: 27.75636
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+ok 20 - the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+  ---
+  duration_ms: 29.721009
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+ok 21 - the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+  ---
+  duration_ms: 30.962251
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+ok 22 - the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+  ---
+  duration_ms: 28.531102
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:23.666Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-renamed"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+ok 23 - the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 33.38423
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:23.703Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+ok 24 - the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 36.745566
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+ok 25 - the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+  ---
+  duration_ms: 31.221512
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.initialized changes answers per the new fact (not-current)
+ok 26 - the next currentness check after source.initialized changes answers per the new fact (not-current)
+  ---
+  duration_ms: 31.354456
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.raft changes answers per the new fact (not-current)
+ok 27 - the next currentness check after source.raft changes answers per the new fact (not-current)
+  ---
+  duration_ms: 45.218618
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+ok 28 - the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+  ---
+  duration_ms: 48.397893
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.group-id changes answers per the new fact (not-current)
+ok 29 - the next currentness check after source.group-id changes answers per the new fact (not-current)
+  ---
+  duration_ms: 48.568909
+  type: 'test'
+  ...
+# Subtest: the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+ok 30 - the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+  ---
+  duration_ms: 30.223397
+  type: 'test'
+  ...
+# Subtest: the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+ok 31 - the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+  ---
+  duration_ms: 37.193962
+  type: 'test'
+  ...
+# Subtest: the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+ok 32 - the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+  ---
+  duration_ms: 44.42482
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.address changes answers per the new fact (reobserved)
+ok 33 - the next currentness check after services.address changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 51.236407
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.node-id changes answers per the new fact (reobserved)
+ok 34 - the next currentness check after services.node-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 38.780618
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.service-id changes answers per the new fact (reobserved)
+ok 35 - the next currentness check after services.service-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 44.485778
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.created-at changes answers per the new fact (reobserved)
+ok 36 - the next currentness check after services.created-at changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 36.830108
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+ok 37 - the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 38.819893
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+ok 38 - the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 60.780287
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+ok 39 - the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 40.727739
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.385Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after services.status changes answers per the new fact (reobserved)
+ok 40 - the next currentness check after services.status changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 53.176231
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.454Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after services.service-type changes answers per the new fact (reobserved)
+ok 41 - the next currentness check after services.service-type changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 67.001547
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.482Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after services.group-id changes answers per the new fact (reobserved)
+ok 42 - the next currentness check after services.group-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 31.014911
+  type: 'test'
+  ...
+# Subtest: the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+ok 43 - the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 50.061232
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.575Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+ok 44 - the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 43.149382
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.609Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after nodes.status changes answers per the new fact (reobserved)
+ok 45 - the next currentness check after nodes.status changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 33.430082
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.640Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+ok 46 - the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 30.418586
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.670Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+ok 47 - the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 30.803858
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.701Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+ok 48 - the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 30.763825
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.733Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+ok 49 - the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 31.4343
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.768Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+ok 50 - the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 35.564266
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.802Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+ok 51 - the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 33.009487
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.831Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+ok 52 - the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 29.484363
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.862Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+ok 53 - the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 31.314324
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:24.907Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+ok 54 - the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 42.065516
+  type: 'test'
+  ...
+# Subtest: the currentness check evaluates the response deadline on every read with nothing else changing
+ok 55 - the currentness check evaluates the response deadline on every read with nothing else changing
+  ---
+  duration_ms: 48.738549
+  type: 'test'
+  ...
+# Subtest: checks of one delivery with no plan input changed reuse the owner-held plan
+ok 56 - checks of one delivery with no plan input changed reuse the owner-held plan
+  ---
+  duration_ms: 42.037704
+  type: 'test'
+  ...
+# Subtest: an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+ok 57 - an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+  ---
+  duration_ms: 32.094792
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:25.062Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: a plan input changed between two drives (different turns) is seen by the next read
+ok 58 - a plan input changed between two drives (different turns) is seen by the next read
+  ---
+  duration_ms: 38.435719
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a system table cache without table versions
+ok 59 - CDCGroupPropagationService refuses wiring a system table cache without table versions
+  ---
+  duration_ms: 39.76547
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+ok 60 - CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+  ---
+  duration_ms: 39.976174
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a configuration without a revision
+ok 61 - CDCGroupPropagationService refuses wiring a configuration without a revision
+  ---
+  duration_ms: 29.005925
+  type: 'test'
+  ...
+# Subtest: the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+ok 62 - the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+  ---
+  duration_ms: 26.571182
+  type: 'test'
+  ...
+# Subtest: a plan input moved during a plan observation is not held: the next read observes anew
+ok 63 - a plan input moved during a plan observation is not held: the next read observes anew
+  ---
+  duration_ms: 26.907563
+  type: 'test'
+  ...
+# Subtest: stamp component: the tree routing generation (a recompute alone reorders the plan)
+ok 64 - stamp component: the tree routing generation (a recompute alone reorders the plan)
+  ---
+  duration_ms: 50.299137
+  type: 'test'
+  ...
+# Subtest: stamp component: the tree identity (a tree re-wired at an equal generation)
+ok 65 - stamp component: the tree identity (a tree re-wired at an equal generation)
+  ---
+  duration_ms: 56.33582
+  type: 'test'
+  ...
+# Subtest: stamp component: the cache identity (a cache re-wired at equal table versions)
+ok 66 - stamp component: the cache identity (a cache re-wired at equal table versions)
+  ---
+  duration_ms: 42.689214
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:25.412Z","nodeId":"node-a","pid":3384668,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: stamp component: the router identity (a router wired late makes grouped targets routable)
+ok 67 - stamp component: the router identity (a router wired late makes grouped targets routable)
+  ---
+  duration_ms: 36.457159
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a message router that cannot deliver
+ok 68 - CDCGroupPropagationService refuses wiring a message router that cannot deliver
+  ---
+  duration_ms: 27.222591
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a systemTableCache whose getTableMutationVersion() answers no version
+ok 69 - CDCGroupPropagationService refuses wiring a systemTableCache whose getTableMutationVersion() answers no version
+  ---
+  duration_ms: 38.107492
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a latencyTreeService whose getRoutingGeneration() answers no version
+ok 70 - CDCGroupPropagationService refuses wiring a latencyTreeService whose getRoutingGeneration() answers no version
+  ---
+  duration_ms: 20.205724
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a config whose getRevision() answers no version
+ok 71 - CDCGroupPropagationService refuses wiring a config whose getRevision() answers no version
+  ---
+  duration_ms: 21.637169
+  type: 'test'
+  ...
+# Subtest: a version source answering no version at read time holds no plan: each read observes anew
+ok 72 - a version source answering no version at read time holds no plan: each read observes anew
+  ---
+  duration_ms: 30.864167
+  type: 'test'
+  ...
+# Subtest: a never-initialized CDCGroupPropagationService cannot start or propagate, also after a stop: a typed refusal
+ok 73 - a never-initialized CDCGroupPropagationService cannot start or propagate, also after a stop: a typed refusal
+  ---
+  duration_ms: 22.79117
+  type: 'test'
+  ...
+# Subtest: the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates
+ok 74 - the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates
+  ---
+  duration_ms: 35.895648
+  type: 'test'
+  ...
+# Subtest: production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+ok 75 - production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+  ---
+  duration_ms: 27.873605
+  type: 'test'
+  ...
+1..75
+# tests 75
+# suites 0
+# pass 73
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4711.973475
+# time=5911ms
+ok test/partition/partition-cdc-lane-typed-backpressure.test.js (6 assertions, 3748ms)
+ok test/partition/partition-cdc-lane-wave-isolation.test.js (4 assertions, 3714ms)
+ok test/partition/partition-cdc-topology-progress-currentness.test.js (14 assertions, 5850ms)
+ok test/partition/placement-create-dispatch-execution-mirror.test.js (12 assertions, 5925ms)
+ok test/partition/placement-growth-dispatch-identity.test.js (13 assertions, 6008ms)
+not ok test/partition/placement-retained-continuation.test.js (23 assertions, 8336ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+  ---
+  duration_ms: 3444.781505
+  type: 'test'
+  ...
+# Subtest: W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+ok 2 - W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+  ---
+  duration_ms: 140.066687
+  type: 'test'
+  ...
+# Subtest: W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender
+ok 3 - W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender
+  ---
+  duration_ms: 99.299443
+  type: 'test'
+  ...
+# Subtest: W6 one real release and one transient read failure complete the original repair exactly once
+ok 4 - W6 one real release and one transient read failure complete the original repair exactly once
+  ---
+  duration_ms: 122.855718
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:32.566Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS","awaited":"a qualified retained placement repair authority read","boundMs":300000,"elapsedMs":300000,"lastObserved":{"reason":"owner_read_failed","attempts":300},"scope":{"operationId":"retained-continuation-remove"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+ok 5 - W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+  ---
+  duration_ms: 318.334637
+  type: 'test'
+  ...
+# Subtest: W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+ok 6 - W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+  ---
+  duration_ms: 165.755983
+  type: 'test'
+  ...
+# Subtest: W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+ok 7 - W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+  ---
+  duration_ms: 99.87315
+  type: 'test'
+  ...
+# Subtest: W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+ok 8 - W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+  ---
+  duration_ms: 123.105495
+  type: 'test'
+  ...
+# Subtest: W8 shutdown with an armed continuation leaves nothing to fire
+ok 9 - W8 shutdown with an armed continuation leaves nothing to fire
+  ---
+  duration_ms: 109.915505
+  type: 'test'
+  ...
+# Subtest: W8 retirement with an armed continuation leaves nothing to fire
+ok 10 - W8 retirement with an armed continuation leaves nothing to fire
+  ---
+  duration_ms: 101.579907
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:33.292Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T22:51:33.292Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T22:51:33.409Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: partial authority, overlapping arrivals: one owned decision and one qualified read
+ok 11 - partial authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 125.375094
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:33.412Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T22:51:33.412Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: partial authority, sequential arrivals: a bounded later decision with a fresh read
+ok 12 - partial authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 103.403216
+  type: 'test'
+  ...
+# Subtest: failed authority, overlapping arrivals: one owned decision and one qualified read
+ok 13 - failed authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 91.004537
+  type: 'test'
+  ...
+# Subtest: failed authority, sequential arrivals: a bounded later decision with a fresh read
+ok 14 - failed authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 103.179184
+  type: 'test'
+  ...
+# Subtest: stale authority, overlapping arrivals: one owned decision and one qualified read
+ok 15 - stale authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 96.62375
+  type: 'test'
+  ...
+# Subtest: stale authority, sequential arrivals: a bounded later decision with a fresh read
+ok 16 - stale authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 93.45533
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:33.899Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T22:51:33.899Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T22:51:33.979Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+ok 17 - wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 101.357868
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:33.991Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+{"level":50,"time":"2026-11-21T22:51:33.991Z","nodeId":"test-node","pid":3384734,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+# Subtest: wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+ok 18 - wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 101.585186
+  type: 'test'
+  ...
+# Subtest: Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+ok 19 - Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+  ---
+  duration_ms: 84.141546
+  type: 'test'
+  ...
+# Subtest: Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+ok 20 - Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+  ---
+  duration_ms: 77.201478
+  type: 'test'
+  ...
+# Subtest: B5 a custodian record released at its tenure end, without a read, cancels its continuation
+ok 21 - B5 a custodian record released at its tenure end, without a read, cancels its continuation
+  ---
+  duration_ms: 88.653091
+  type: 'test'
+  ...
+# Subtest: Q9 an event storm during an outage reads once in flight plus once owed
+ok 22 - Q9 an event storm during an outage reads once in flight plus once owed
+  ---
+  duration_ms: 91.148002
+  type: 'test'
+  ...
+# Subtest: a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+  ---
+  duration_ms: 92.571794
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/placement-retained-continuation.test.js:668:1'
+  failureType: 'testCodeFailure'
+  error: 'the native answer placement_admission_bytes_invalid is a definite refusal row of the clearing table (W1b 38708b6fa)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/placement-retained-continuation.test.js:700:14
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 22
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5993.957719
+# time=8336ms
+ok test/partition/placement-retained-leadership.test.js (5 assertions, 6330ms)
+ok test/partition/placement-retained-post-copy.test.js (2 assertions, 5987ms)
+ok test/partition/placement-retained-publication.test.js (6 assertions, 7171ms)
+ok test/partition/placement-retained-real-publication.test.js (1 assertions, 6332ms)
+ok test/rebalancer/replace-named-handoff-attempt.test.js (52 assertions, 2730ms)
+ok test/rebalancer/application-write-formation-authority.test.js (84 assertions, 4953ms)
+ok test/partition/placement-retained-row-repair.test.js (45 assertions, 9732ms)
+not ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 5552ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: class order: the ledger, the priority control plane, nodes-p1, system, user
+ok 1 - class order: the ledger, the priority control plane, nodes-p1, system, user
+  ---
+  duration_ms: 4.162177
+  type: 'test'
+  ...
+# Subtest: formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+ok 2 - formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+  ---
+  duration_ms: 0.434475
+  type: 'test'
+  ...
+# Subtest: within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+ok 3 - within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+  ---
+  duration_ms: 0.552029
+  type: 'test'
+  ...
+# Subtest: HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+ok 4 - HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+  ---
+  duration_ms: 3.667815
+  type: 'test'
+  ...
+# Subtest: per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+ok 5 - per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+  ---
+  duration_ms: 1.811877
+  type: 'test'
+  ...
+# Subtest: inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+ok 6 - inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+  ---
+  duration_ms: 1.335357
+  type: 'test'
+  ...
+# Subtest: UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+ok 7 - UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+  ---
+  duration_ms: 1.152937
+  type: 'test'
+  ...
+# Subtest: the repair reservation is level-triggered and travels in the statement as kSrcForClass
+ok 8 - the repair reservation is level-triggered and travels in the statement as kSrcForClass
+  ---
+  duration_ms: 1.884185
+  type: 'test'
+  ...
+# Subtest: the canonical statement refuses what its kind cannot carry
+ok 9 - the canonical statement refuses what its kind cannot carry
+  ---
+  duration_ms: 1.964181
+  type: 'test'
+  ...
+# Subtest: the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+ok 10 - the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+  ---
+  duration_ms: 0.846636
+  type: 'test'
+  ...
+# Subtest: real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+ok 11 - real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+  ---
+  duration_ms: 41.03268
+  type: 'test'
+  ...
+# Subtest: ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+ok 12 - ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+  ---
+  duration_ms: 10.914164
+  type: 'test'
+  ...
+# Subtest: P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+ok 13 - P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+  ---
+  duration_ms: 2.771511
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:49.541Z","nodeId":"test-node","pid":3385423,"subsystem":"rebalance-coordinator","operationId":"pl-replica_operations-p1-7-0","error":"cdcIntegrationService.updateSystemTableRow is not a function","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-11-21T22:51:49.625Z","nodeId":"test-node","pid":3385423,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+{"level":50,"time":"2026-11-21T22:51:49.718Z","nodeId":"test-node","pid":3385423,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REBALANCE_OPERATION_STEP_TIMEOUT","awaited":"replica operation progressed past its current workflow step","boundMs":60000,"elapsedMs":120000,"lastObserved":{"type":"GROWTH_PROMOTE","workflowStep":"SYNCING","status":"syncing","targetNodeId":"n1","stepExceeded":true,"budgetExhausted":false,"timeoutClassification":{"classification":"rebalance_operation_timeout","configuredBudgetMs":300000,"remainingBudgetMs":180000,"boundaryHit":false,"nestedOperation":"rebalance:syncing","operationName":"rebalance","originalClassification":null}},"scope":{"nodeId":"n2","partitionId":"replica_operations-p1","operationId":"pl-promote-3to5-timeout"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: control-plane attachment admits a scoped voter removal only with its workflow owner
+ok 14 - control-plane attachment admits a scoped voter removal only with its workflow owner
+  ---
+  duration_ms: 3150.262423
+  type: 'test'
+  ...
+# Subtest: P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+ok 15 - P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+  ---
+  duration_ms: 92.380807
+  type: 'test'
+  ...
+# Subtest: WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+ok 16 - WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+  ---
+  duration_ms: 1.54849
+  type: 'test'
+  ...
+# Subtest: WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+ok 17 - WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+  ---
+  duration_ms: 65.481709
+  type: 'test'
+  ...
+# Subtest: Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+  ---
+  duration_ms: 108.845691
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/test/rebalancer/replica-placement-owner-core.test.js:1373:1'
+  failureType: 'testCodeFailure'
+  error: 'cdcIntegrationService.updateSystemTableRow is not a function'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:355:21)
+    ReplicaOperationRepository.resolveFailedOperationUpdateResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/src/rebalancer/replica-operation-repository-mutation-update-methods.js:488:35)
+    async repository.runReplicaOperationTransitionExclusive.operation.operation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8d897772b95e-mwr04gzt-2409743/src/rebalancer/operation-workflow-transition-persistence.js:253:29)
+  ...
+# Subtest: Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+ok 19 - Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+  ---
+  duration_ms: 86.946735
+  type: 'test'
+  ...
+# Subtest: Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+  ---
+  duration_ms: 96.43464
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T22:51:49.726Z","nodeId":"test-node","pid":3385423,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","type":"GROWTH_PROMOTE","partitionId":"replica_operations-p1","targetNodeId":"n1","errorMessage":"Timeout in SYNCING step after 120000ms","nodeId":"test-node","msg":"Operation failed"}
+1..20
+# tests 20
+# suites 0
+# pass 19
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3687.96424
+# time=5552ms
+ok test/topology/cdc-group-propagation-foreground-boundary.test.js (7 assertions, 4624ms)
+ok test/topology/cdc-group-propagation-proposal-cost.test.js (2 assertions, 1967ms)
+ok test/rebalancer/replace-real-group-native-ledger-recovery.test.js (10 assertions, 8630ms)
+ok test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js (25 assertions, 1113ms)
+ok test/topology/cdc-group-propagation-stop-arms-nothing.test.js (11 assertions, 1249ms)
+ok test/topology/cdc-group-propagation-wave-isolation.test.js (5 assertions, 851ms)
+ok test/topology/latency-tree-routing-generation.test.js (1 assertions, 553ms)
+ok test/topology/cdc-recipient-domain-and-retained-debt.test.js (6 assertions, 862ms)
+ok test/topology/cdc-group-propagation-wave-lifecycle.test.js (25 assertions, 1763ms)
+ok test/rebalancer/spread-cure-transition-authorization-row.test.js (1 assertions, 1764ms)
+ok test/cache/system-table-cache.test.js (310 assertions, 2953ms)
+ok test/topology/cdc-group-propagation-service.test.js (13 assertions, 946ms)
+ok test/query/replica-operation-structured-mutation-native.test.js (2 assertions, 20998ms)
+ok test/config/configuration-manager.test.js (95 assertions, 1392ms)
+ok test/rebalancer/coordinator-dedup-gap.test.js (69 assertions, 2205ms)
+ok test/cache/read-only-system-table-cache.test.js (58 assertions, 1477ms)
+ok test/convergence/dt-ledger-completion-continuity-discriminator.test.js (64 assertions, 2879ms)
+not ok test/rebalancer/replica-operation-membership-epoch-binding.test.js (122 assertions, 3174ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: E1-null-round-trip: a durable SQL NULL epoch rehydrates as unbound, never as epoch 0, through the SQL and cache read routes
+    ok 1 - the unbound create persists membership_publication_epoch as SQL NULL
+    ok 2 - the SQL route rehydrates the operation
+    ok 3 - SQL NULL rehydrates with no bound epoch (field absent)
+    ok 4 - SQL NULL never rehydrates as epoch 0
+    ok 5 - the canonical decode of the rehydrated field is UNBOUND
+    ok 6 - the cache route rehydrates the operation
+    ok 7 - the cache route rehydrates NULL as unbound too
+    1..7
+ok 1 - E1-null-round-trip: a durable SQL NULL epoch rehydrates as unbound, never as epoch 0, through the SQL and cache read routes # time=227.763ms
+
+# Subtest: E2-epoch-zero-preserved: a durable epoch 0 rehydrates as bound epoch 0, not as an unbound sentinel
+    ok 1 - the bound-zero create persists integer 0
+    ok 2 - SQL 0 rehydrates as in-memory 0
+    ok 3 - the canonical decode is BOUND 0
+    1..3
+ok 2 - E2-epoch-zero-preserved: a durable epoch 0 rehydrates as bound epoch 0, not as an unbound sentinel # time=66.695ms
+
+# Subtest: E3-positive-epoch-preserved: a durable epoch 2 rehydrates as bound epoch 2
+    ok 1 - the bound create persists integer 2
+    ok 2 - SQL 2 rehydrates as in-memory 2
+    1..2
+ok 3 - E3-positive-epoch-preserved: a durable epoch 2 rehydrates as bound epoch 2 # time=58.017ms
+
+# Subtest: E4-unbound-dispatch-follows-unbound-rule: a rehydrated NULL-epoch ADD dispatches under the unbound rule when the current epoch is 2
+    ok 1 - the unbound operation is not failed as a stale epoch-0 dispatch
+    ok 2 - no stale-dispatch failure is recorded for an unbound operation
+    ok 3 - the unbound ADD reaches the executor (existing unbound rule)
+    ok 4 - the executor request carries no fabricated epoch
+    1..4
+ok 4 - E4-unbound-dispatch-follows-unbound-rule: a rehydrated NULL-epoch ADD dispatches under the unbound rule when the current epoch is 2 # time=80.002ms
+
+# Subtest: E5-stale-bound-still-rejected: a rehydrated epoch-1 ADD is rejected as stale when the current epoch is 2
+    ok 1 - the bound epoch rehydrates as 1
+    ok 2 - the stale bound ADD does not dispatch
+    ok 3 - the executor never receives the stale request
+    ok 4 - the stale operation is failed closed
+    ok 5 - the failure names the real bound epoch and the current epoch
+    1..5
+ok 5 - E5-stale-bound-still-rejected: a rehydrated epoch-1 ADD is rejected as stale when the current epoch is 2 # time=74.618ms
+
+# Subtest: E6-current-bound-accepted: a rehydrated epoch-2 ADD dispatches when the current epoch is 2 and carries its epoch to the executor
+    ok 1 - a current bound ADD is not failed
+    ok 2 - a current bound ADD dispatches
+    ok 3 - the executor request carries the bound epoch 2
+    1..3
+ok 6 - E6-current-bound-accepted: a rehydrated epoch-2 ADD dispatches when the current epoch is 2 and carries its epoch to the executor # time=66.159ms
+
+# Subtest: E7-malformed-durable-fails-closed: malformed durable epoch values throw a typed error instead of becoming a legitimate epoch
+    ok 1 - durable text: rehydration fails closed with the typed binding error
+    ok 2 - durable negative: rehydration fails closed with the typed binding error
+    ok 3 - durable fractional: rehydration fails closed with the typed binding error
+    ok 4 - durable empty text: rehydration fails closed with the typed binding error
+    ok 5 - numeric text is stored as integer 2 by SQLite column affinity
+    ok 6 - cache string epoch: rehydration fails closed with the typed binding error
+    ok 7 - decode(undefined:undefined) is unbound
+    ok 8 - decode(object:null) is unbound
+    ok 9 - decode(number:0) is bound
+    ok 10 - decode(number:2) is bound
+    ok 11 - decode(string:) is invalid
+    ok 12 - decode(string:0) is invalid
+    ok 13 - decode(string:2) is invalid
+    ok 14 - decode(number:NaN) is invalid
+    ok 15 - decode(number:Infinity) is invalid
+    ok 16 - decode(number:-1) is invalid
+    ok 17 - decode(number:1.5) is invalid
+    ok 18 - decode(boolean:true) is invalid
+    ok 19 - decode(object:[object Object]) is invalid
+    ok 20 - decode(object:2) is invalid
+    ok 21 - decode(object:2) is invalid
+    ok 22 - decode(bigint:2) is invalid
+    1..22
+ok 7 - E7-malformed-durable-fails-closed: malformed durable epoch values throw a typed error instead of becoming a legitimate epoch # time=43.986ms
+
+# Subtest: E8-single-decoder-inventory: every src reader of the membership epoch is classified and behaviour-changing readers consume the one decoder
+    ok 1 - src/bootstrap/system-table-runtime-schema-definitions.js: no local numeric reinterpretation of the field
+    ok 2 - src/bootstrap/system-table-runtime-schema-definitions.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 3 - src/partition/partition-placement-admission-decision.js: no local numeric reinterpretation of the field
+    ok 4 - src/partition/partition-placement-admission-decision.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 5 - src/partition/partition-placement-retained-repair.js: no local numeric reinterpretation of the field
+    not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+      ---
+      at:
+        fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+        lineNumber: 713
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/replica-operation-membership-epoch-binding.test.js:713:7)
+      source: >2
+              continue;
+            }
+            t.ok(
+        ------^
+              passthrough.has(relative),
+              `${relative}: an unclassified reader of the membership epoch appeared; ` +
+      ...
+    
+    ok 7 - src/partition/partition-service-constants.js: no local numeric reinterpretation of the field
+    ok 8 - src/partition/partition-service-constants.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 9 - src/partition/partition-service-entry-apply-base.js: no local numeric reinterpretation of the field
+    ok 10 - src/partition/partition-service-entry-apply-base.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 11 - src/rebalancer/move-planner-move-calculation-methods.js: no local numeric reinterpretation of the field
+    ok 12 - src/rebalancer/move-planner-move-calculation-methods.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 13 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: no local numeric reinterpretation of the field
+    ok 14 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: behaviour-changing reader imports the decode owner
+    ok 15 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: no local numeric reinterpretation of the field
+    ok 16 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: behaviour-changing reader imports the decode owner
+    ok 17 - src/rebalancer/operation-workflow-reentry-authority.js: no local numeric reinterpretation of the field
+    ok 18 - src/rebalancer/operation-workflow-reentry-authority.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 19 - src/rebalancer/operation-workflow-replace-target-binding.js: no local numeric reinterpretation of the field
+    ok 20 - src/rebalancer/operation-workflow-replace-target-binding.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 21 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: no local numeric reinterpretation of the field
+    ok 22 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: behaviour-changing reader imports the decode owner
+    ok 23 - src/rebalancer/rebalance-coordinator-operation-creation-support.js: no local numeric reinterpretation of the field
+    ok 24 - src/rebalancer/rebalance-coordinator-operation-creation-support.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 25 - src/rebalancer/rebalance-coordinator-operation-creation.js: no local numeric reinterpretation of the field
+    ok 26 - src/rebalancer/rebalance-coordinator-operation-creation.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 27 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: no local numeric reinterpretation of the field
+    ok 28 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: behaviour-changing reader imports the decode owner
+    ok 29 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: no local numeric reinterpretation of the field
+    ok 30 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: behaviour-changing reader imports the decode owner
+    ok 31 - src/rebalancer/replica-operation-constants.js: no local numeric reinterpretation of the field
+    ok 32 - src/rebalancer/replica-operation-constants.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 33 - src/rebalancer/replica-operation-creation-request.js: no local numeric reinterpretation of the field
+    ok 34 - src/rebalancer/replica-operation-creation-request.js: behaviour-changing reader imports the decode owner
+    ok 35 - src/rebalancer/replica-operation-repository-mutation-row-methods.js: no local numeric reinterpretation of the field
+    ok 36 - src/rebalancer/replica-operation-repository-mutation-row-methods.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 37 - src/rebalancer/replica-operation-repository-row-methods.js: no local numeric reinterpretation of the field
+    ok 38 - src/rebalancer/replica-operation-repository-row-methods.js: behaviour-changing reader imports the decode owner
+    ok 39 - src/rebalancer/replica-placement-owner-admission-statement.js: no local numeric reinterpretation of the field
+    ok 40 - src/rebalancer/replica-placement-owner-admission-statement.js: behaviour-changing reader imports the decode owner
+    ok 41 - src/rebalancer/replica-placement-owner-retained-repair-statement.js: no local numeric reinterpretation of the field
+    not ok 42 - src/rebalancer/replica-placement-owner-retained-repair-statement.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+      ---
+      at:
+        fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+        lineNumber: 713
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/replica-operation-membership-epoch-binding.test.js:713:7)
+      source: >2
+              continue;
+            }
+            t.ok(
+        ------^
+              passthrough.has(relative),
+              `${relative}: an unclassified reader of the membership epoch appeared; ` +
+      ...
+    
+    ok 43 - src/rebalancer/replica-placement-owner.js: no local numeric reinterpretation of the field
+    ok 44 - src/rebalancer/replica-placement-owner.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 45 - src/rebalancer/replica-status.js: no local numeric reinterpretation of the field
+    ok 46 - src/rebalancer/replica-status.js: behaviour-changing reader imports the decode owner
+    ok 47 - src/rebalancer/storage-reservation-authority.js: no local numeric reinterpretation of the field
+    ok 48 - src/rebalancer/storage-reservation-authority.js: behaviour-changing reader imports the decode owner
+    ok 49 - src/rebalancer/unified-rebalancer-move-execution.js: no local numeric reinterpretation of the field
+    ok 50 - src/rebalancer/unified-rebalancer-move-execution.js: behaviour-changing reader imports the decode owner
+    ok 51 - src/rebalancer/unified-rebalancer-rebalance-loop.js: no local numeric reinterpretation of the field
+    ok 52 - src/rebalancer/unified-rebalancer-rebalance-loop.js: behaviour-changing reader imports the decode owner
+    ok 53 - src/rebalancer/replica-operation-repository-row-methods.js: still reads the field (vacuity)
+    ok 54 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: still reads the field (vacuity)
+    ok 55 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: still reads the field (vacuity)
+    ok 56 - src/rebalancer/replica-status.js: still reads the field (vacuity)
+    ok 57 - src/rebalancer/unified-rebalancer-move-execution.js: still reads the field (vacuity)
+    ok 58 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: still reads the field (vacuity)
+    ok 59 - src/rebalancer/unified-rebalancer-rebalance-loop.js: still reads the field (vacuity)
+    ok 60 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: still reads the field (vacuity)
+    ok 61 - src/rebalancer/storage-reservation-authority.js: still reads the field (vacuity)
+    ok 62 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: still reads the field (vacuity)
+    ok 63 - src/rebalancer/replica-operation-creation-request.js: still reads the field (vacuity)
+    ok 64 - src/rebalancer/replica-placement-owner-admission-statement.js: still reads the field (vacuity)
+    ok 65 - the decode owner exists (vacuity)
+    ok 66 - zero local Number(...) reinterpretations
+    ok 67 - 12 behaviour-changing readers, one canonical decode
+    1..67
+not ok 8 - E8-single-decoder-inventory: every src reader of the membership epoch is classified and behaviour-changing readers consume the one decoder # time=172.841ms
+  ---
+  at:
+    fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+    lineNumber: 682
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('E8-single-decoder-inventory: every src reader of the membership epoch '
+    +
+  
+    ^
+      'is classified and behaviour-changing readers consume the one decoder',
+    async (t) => {
+  ...
+
+# Subtest: shutdown: release the shared durable replica_operations partition
+    1..0
+ok 9 - shutdown: release the shared durable replica_operations partition # time=9.88ms
+
+1..9
+# { total: 114, pass: 112, fail: 2 }
+# time=858.213ms
+ok test/rebalancer/surplus-drain-prefers-non-leader-source.test.js (33 assertions, 2953ms)
+ok test/rebalancer/rebalance-coordinator-outcome-routing.test.js (102 assertions, 2698ms)
+ok test/config/latency-topology-ownership-guardrails.test.js (14 assertions, 921ms)
+ok test/rebalancer/operation-ownership-lease-fencing.test.js (231 assertions, 5640ms)
+ok test/topology/latency-tree-service.test.js (3 assertions, 1120ms)
+ok test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js (35 assertions, 2280ms)
+ok test/scripts/check-runtime-grammar-contracts.test.js (70 assertions, 752ms)
+ok test/rebalancer/remove-active-dispatch-redrive.test.js (181 assertions, 2200ms)
+ok test/rebalancer/replica-operation-terminal-cas.test.js (61 assertions, 1826ms)
+ok test/partition/partition-service-row-owner.test.js (212 assertions, 785ms)
+ok test/rebalancer/replica-operation-repository.test.js (466 assertions, 27589ms)
+# test-files total=52 pass=48 fail=4 assertions=2764
+classified lane bootstrap: 5 file(s), jobs=2
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+ok test/bootstrap/seed-teardown-pending-cdc-delivery.test.js (1 assertions, 3007ms)
+ok test/bootstrap/create-self-hosted-registration.test.js (19 assertions, 1458ms)
+ok test/bootstrap/bootstrap-topology-snapshot-owner.test.js (65 assertions, 563ms)
+ok test/bootstrap/cache-hydration-strictness.test.js (7 assertions, 1423ms)
+ok test/bootstrap/cdc-source-occurrence-delivery.integration.test.js (5 assertions, 8775ms)
+# test-files total=5 pass=5 fail=0 assertions=97
+placement-results={"file":"test/config/configuration-manager-revision.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":364,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cache/system-table-cache-mutation-version-survives-clear.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":463,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cache/system-table-cache-row-preview.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":624,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cache/system-table-cache-observation.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":1345,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":3457,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-cdc-receiver-admission.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":6884,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-native-provisional-route.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6833,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-native-custody-handoff.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":9657,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-currentness-stamp-witness.test.js","attempt":1,"ok":false,"assertions":75,"durationMs":5911,"retriedOnce":false,"firstFailureLine":"not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once"}
+placement-results={"file":"test/partition/partition-cdc-lane-typed-backpressure.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":3748,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-lane-wave-isolation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3714,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-topology-progress-currentness.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":5850,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":5925,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-growth-dispatch-identity.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":6008,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":8336,"retriedOnce":false,"firstFailureLine":"not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed"}
+placement-results={"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6330,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-post-copy.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":5987,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":7171,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-real-publication.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6332,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":2730,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/application-write-formation-authority.test.js","attempt":1,"ok":true,"assertions":84,"durationMs":4953,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":9732,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":5552,"retriedOnce":false,"firstFailureLine":"not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed vo"}
+placement-results={"file":"test/topology/cdc-group-propagation-foreground-boundary.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":4624,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-group-propagation-proposal-cost.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1967,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replace-real-group-native-ledger-recovery.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":8630,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1113,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-group-propagation-stop-arms-nothing.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1249,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-group-propagation-wave-isolation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":851,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/latency-tree-routing-generation.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":553,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-recipient-domain-and-retained-debt.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":862,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-group-propagation-wave-lifecycle.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1763,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/spread-cure-transition-authorization-row.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1764,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cache/system-table-cache.test.js","attempt":1,"ok":true,"assertions":310,"durationMs":2953,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-group-propagation-service.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":946,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/replica-operation-structured-mutation-native.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":20998,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/config/configuration-manager.test.js","attempt":1,"ok":true,"assertions":95,"durationMs":1392,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":2205,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cache/read-only-system-table-cache.test.js","attempt":1,"ok":true,"assertions":58,"durationMs":1477,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":2879,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-membership-epoch-binding.test.js","attempt":1,"ok":false,"assertions":122,"durationMs":3174,"retriedOnce":false,"firstFailureLine":"not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"}
+placement-results={"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":2953,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":true,"assertions":102,"durationMs":2698,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/config/latency-topology-ownership-guardrails.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":921,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-ownership-lease-fencing.test.js","attempt":1,"ok":true,"assertions":231,"durationMs":5640,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/latency-tree-service.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1120,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":2280,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-runtime-grammar-contracts.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":752,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/remove-active-dispatch-redrive.test.js","attempt":1,"ok":true,"assertions":181,"durationMs":2200,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-terminal-cas.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1826,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":785,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-repository.test.js","attempt":1,"ok":true,"assertions":466,"durationMs":27589,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/seed-teardown-pending-cdc-delivery.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":3007,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/create-self-hosted-registration.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":1458,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":563,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/cache-hydration-strictness.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1423,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/cdc-source-occurrence-delivery.integration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":8775,"retriedOnce":false,"firstFailureLine":null}

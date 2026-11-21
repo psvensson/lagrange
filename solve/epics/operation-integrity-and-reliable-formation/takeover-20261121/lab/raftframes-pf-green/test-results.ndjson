@@ -1,0 +1,29 @@
+{"file":"test/raft/raft-rs-backend/committed-membership-read.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2451,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/conf-change-leader-self-removal.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3081,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-service.test.js","attempt":1,"ok":true,"assertions":83,"durationMs":3436,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-service-raft-replication-and-cdc.test.js","attempt":1,"ok":true,"assertions":110,"durationMs":3489,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/durable-ready-loop.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1191,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/conf-change-pending-deferral.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2690,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/evidence-o1-static.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":1389,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/follower-proposal-refusal.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1935,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4512,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":2248,"retriedOnce":false,"firstFailureLine":"not ok 7 - scheduled inbound drain bounds batches to 32 entries per turn and avoids 0ms spin when an attempt does not succeed with CORE_OK"}
+{"file":"test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2371,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/local-log-guard-refusals.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3280,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":3387,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":4345,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3322,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-ready-recovery.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":2993,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-status-observation.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2746,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-throw-containment.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2975,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-turn-answers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2529,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2654,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":3977,"retriedOnce":false,"firstFailureLine":"not ok 3 - mid-turn-D3: actual runtime ordering and complete native observations"}
+{"file":"test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":3703,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":3589,"retriedOnce":false,"firstFailureLine":"not ok 7 - drain order: an acknowledgement pending at a proposal commits the leader's own removal first, and the drop stays non-retryable"}
+{"file":"test/raft/raft-rs-backend/transfer-leadership-write-path.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2747,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-authority-observation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3081,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2651,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/native-election-randomized.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":22845,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/durable-commit-power-loss.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":33784,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/wasm-service-replica.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":21949,"retriedOnce":false,"firstFailureLine":null}

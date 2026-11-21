@@ -1,0 +1,168 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.99
+[adam-laptop] placement-shell=3720066
+[adam-laptop] placement-head=546b5158d18c211107e1306b3106623aafe2230b
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3720600
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/control-plane/readiness-owner-authority-contract.test.js (16 assertions, 917ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop] # Subtest: the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated
+[adam-laptop]     ok 1 - the named API reaches the pre-ready canonical services owner
+[adam-laptop]     ok 2 - the named API returns only the witnessed owner answer
+[adam-laptop]     ok 3 - the named API preserves readiness-owner purpose through the view and CDC
+[adam-laptop]     ok 4 - the readiness-owned read does not re-enter readiness adjudication
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 5 - the named readiness-owner API cannot be weakened by caller options
+[adam-laptop]     ok 6 - the named API owns the complete authority and fallback contract
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 7 - an ordinary read routes on the same structural route during recovery
+[adam-laptop]     ok 8 - ordinary system-table routing does not consult readiness
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 9 - an old follower session pin cannot displace the canonical leader
+[adam-laptop]     ok 10 - leader-required routing ignores follower session affinity
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     # PROBE-8ii asked=[{"address":"services-owner/partition/services-p1","leaderRead":{"kind":"leader_required"},"partitionId":null,"answeredSuccess":true,"answeredRowCount":3,"answeredWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"services-owner","servingReplicaId":"services-owner-replica","term":1,"role":"leader","observedAtMs":1795293321598}}]
+[adam-laptop]     # PROBE-8ii contract={"purpose":"readiness_internal","mode":"owner_rpc_required","allowSqlFallback":false,"leaderMode":"required","requireOwnerRpcRead":true}
+[adam-laptop]     # PROBE-8ii result={"success":true,"rowCount":3,"witness":{"state":"observed","partitionId":"services-p1","servingNodeId":"services-owner","servingReplicaId":"services-owner-replica","term":1,"role":"leader","observedAtMs":1795293321598},"failureCode":null,"authorityFailureReason":null,"source":"owner_rpc_lane","routedToNode":null}
+[adam-laptop]     # PROBE-8ii predicateOnAnsweredWitness=[null]
+[adam-laptop]     # PROBE-8ii witnessValidity=[true]
+[adam-laptop]     not ok 11 - PROBE-8ii-CAPTURE {"asked":[{"address":"services-owner/partition/services-p1","leaderRead":{"kind":"leader_required"},"partitionId":null,"answeredSuccess":true,"answeredRowCount":3,"answeredWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"services-owner","servingReplicaId":"services-owner-replica","term":1,"role":"leader","observedAtMs":1795293321598}}],"contract":{"purpose":"readiness_internal","mode":"owner_rpc_required","allowSqlFallback":false,"leaderMode":"required","requireOwnerRpcRead":true},"result":{"success":true,"rowCount":3,"witness":{"state":"observed","partitionId":"services-p1","servingNodeId":"services-owner","servingReplicaId":"services-owner-replica","term":1,"role":"leader","observedAtMs":1795293321598},"failureCode":null,"authorityFailureReason":null,"source":"owner_rpc_lane","routedToNode":null},"predicateOnAnsweredWitness":[null],"witnessValidity":[true]}
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]         lineNumber: 332
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/readiness-owner-authority-contract.test.js:332:5)
+[adam-laptop]       source: |2
+[adam-laptop]             t.comment(`PROBE-8ii ${key}=${JSON.stringify(value)}`);
+[adam-laptop]           }
+[adam-laptop]           t.fail(`PROBE-8ii-CAPTURE ${JSON.stringify(probeCapture)}`);
+[adam-laptop]         ----^
+[adam-laptop]           t.equal(missingLeaderResult.success, false,
+[adam-laptop]             'a live follower cannot replace missing canonical leader authority');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 12 - a live follower cannot replace missing canonical leader authority
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]         lineNumber: 333
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/readiness-owner-authority-contract.test.js:333:5)
+[adam-laptop]       source: |2
+[adam-laptop]           }
+[adam-laptop]           t.fail(`PROBE-8ii-CAPTURE ${JSON.stringify(probeCapture)}`);
+[adam-laptop]           t.equal(missingLeaderResult.success, false,
+[adam-laptop]         ----^
+[adam-laptop]             'a live follower cannot replace missing canonical leader authority');
+[adam-laptop]           t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -false
+[adam-laptop]         +true
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 13 - leader-required routing never sends the owner read to the follower
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]         lineNumber: 335
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/readiness-owner-authority-contract.test.js:335:5)
+[adam-laptop]       source: |2
+[adam-laptop]           t.equal(missingLeaderResult.success, false,
+[adam-laptop]             'a live follower cannot replace missing canonical leader authority');
+[adam-laptop]           t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+[adam-laptop]         ----^
+[adam-laptop]             'leader-required routing never sends the owner read to the follower');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -4
+[adam-laptop]         +5
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop] Routing query to partition service {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   address: 'services-owner/partition/services-p1'
+[adam-laptop] }
+[adam-laptop]     ok 14 - an ACK without a current Raft leader witness cannot release formation
+[adam-laptop]     ok 15 - unwitnessed owner rows are discarded instead of becoming evidence
+[adam-laptop]     1..15
+[adam-laptop] not ok 1 - the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated # time=120.157ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[adam-laptop]     lineNumber: 51
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('the readiness-owner API carries non-downgradable authority across ' +
+[adam-laptop]     ^
+[adam-laptop]       'owner RPC while ordinary recovery reads remain readiness-gated',
+[adam-laptop]     async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..1
+[adam-laptop] # { total: 15, pass: 12, fail: 3 }
+[adam-laptop] # time=142.703ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=16
+[adam-laptop] Canonical partition leader service missing {
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   leaderNodeId: 'missing-leader',
+[adam-laptop]   routableNodeIds: [ 'services-owner', 'services-follower' ],
+[adam-laptop]   staleLeaderNodeIds: [],
+[adam-laptop]   routingSnapshot: {
+[adam-laptop]     reasonCode: 'ok',
+[adam-laptop]     routingReadinessDimension: 'controlPlaneRecoveryEligible',
+[adam-laptop]     serviceRowCount: 2,
+[adam-laptop]     activeAddressedServiceCount: 2,
+[adam-laptop]     routableServiceCount: 2,
+[adam-laptop]     canonicalLeaderServiceCount: 0,
+[adam-laptop]     leaderKnown: true,
+[adam-laptop]     canonicalLeaderNodeId: 'missing-leader',
+[adam-laptop]     deniedByNodeId: {}
+[adam-laptop]   }
+[adam-laptop] }
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=16
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=16

@@ -1,0 +1,310 @@
+selected 139 results 139
+ok   FAIL ok   test/control-plane/readiness-snapshot-persistence.test.js | a=57/49/57
+FAIL FAIL FAIL test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js | a=24/24/24
+      same   the deferred dispatch-service pass must traverse the canonical owner delivery sink instead of simulating a successful duplicate
+      same   the second target delivery must be the same CREATE request class
+      same   the deterministic seam should preserve the immutable live ordering
+      same coordinator-first CREATE delivery retains owner progress across a stale dispatch-service retry and lost target handoff
+FAIL FAIL FAIL test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js | a=94/94/94
+      same   should be equal
+      same   one bounded owner read fences commit
+      same   should be equal
+      same   should be equal
+      same leader handoff cannot persist REMOVE r1 from a stale four-row superset after owner placement has settled at three spread voters
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same   the proven surplus operation is persisted
+      same a genuine four-voter monotonic surplus REMOVE is persisted
+      same   should be equal
+      same   should be equal
+      same an unavailable policy target fails closed before the owner read
+      same   should be equal
+      same   should be equal
+      same owner unavailable evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same owner read throws evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same non-owner fallback evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same incomplete owner row set evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same partial owner row set evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same follower witness on owner read evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same source absent evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same source node changed evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same malformed replica identity evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same duplicate identical replica identity evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same duplicate conflicting replica identity evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same diversity-reducing surplus source evidence fails closed without persistence
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same failed priority cleanup preserves the no-new-authority-read path
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same non-priority standalone remove preserves the no-new-authority-read path
+FAIL FAIL FAIL test/partition/placement-create-bootstrap-binding.test.js | a=14/14/14
+      same ledger self-move dispatch waits for unstamped native ADD in PENDING
+      same ledger self-move dispatch waits for unstamped native ADD in SENDING
+      same all removal phases distinguish complete entity reads from unavailable ownership
+FAIL FAIL FAIL test/partition/placement-retained-row-repair.test.js | a=45/45/45
+      same remote-only current copy preparation succeeds and changed target boot stays debt
+      same remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+      same different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+      same remote E2 joins active E1 and retains renewed BUSY without spending its entry
+      same remote E2 owns one authoritative own-row observation: CDC-before-answer
+      same remote E2 owns one authoritative own-row observation: answer-before-CDC
+      same an in-flight stale own-row observation reads absence once; genuine successor still confirms
+      same remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+      same remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+      same still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+      same still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+      same remote ordinary source capacity release crosses entities: CDC-before-answer
+      same remote ordinary source capacity release crosses entities: answer-before-CDC
+      same remote ordinary target capacity release crosses entities: CDC-before-answer
+      same remote ordinary target capacity release crosses entities: answer-before-CDC
+      same impossible source capacity answer preserves original entry until genuine same-pin outcome
+      same impossible target capacity answer preserves original entry until genuine same-pin outcome
+      same partial capacity census cannot spend or retire remote repair debt
+      same failed capacity census cannot spend or retire remote repair debt
+      same stale capacity census cannot spend or retire remote repair debt
+      same wrong-partition capacity census cannot spend or retire remote repair debt
+      same incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+      same mutation shares serial repair decision when clearing is sender-first
+      same mutation shares serial repair decision when clearing is receiver-first
+      same ACTIVE-reservation shares serial repair decision when clearing is sender-first
+      same ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+      same queued real E2 joins E1 winner and confirms exact authority without relabeling
+      same queued real E2 joins E1 winner and confirms changed authority without relabeling
+      same queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+      same real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+FAIL FAIL FAIL test/query/durable-provisioning-job-owner-directed.test.js | a=49/49/49
+      same   timeout!
+      same directed real-owner chain: capacity pending -> owner recreation -> one terminal job with deterministic duplicate-free replica operations
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same retry after an attempt died with every child hold released: the reused unheld rows are claimed and dispatched once by the owner lanes, never
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same retry after an attempt died before releasing the child holds: the retry releases each held row once and every row is dispatched once
+      same   should be equal
+      same   Cannot read properties of undefined (reading 'replica_id')
+      same concurrent hold releases of one held row: exactly one applies
+      same   should be equal
+      same   should be equal
+      same fresh provisioning beside a live dispatch lane: the durable hold is the one dispatch authority and every row is dispatched once
+FAIL FAIL FAIL test/rebalancer/admission-real-size-estimates.test.js | a=23/23/23
+      same   Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)
+      same operation creation persists the real-size reservation witness
+      same   Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)
+      same admission and reservation share ONE resolved estimate
+      same   Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)
+      same operation creation falls back to the floor without a partitions row
+FAIL FAIL FAIL test/rebalancer/coordinator-created-operation-progress.test.js | a=41/41/41
+      same   the resumed owner path should continue into dispatch after claiming the operation
+      same createOperation defers retryable participant-pressure failures and resumes owner-lane priming
+FAIL FAIL FAIL test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js | a=20/20/20
+      same   the deferred dispatch retry registered by the ACK-swallowed wake actually fires a re-wake, or the planner rearm is not suppressed (deliverie
+      same run-26 root cause: ACK-swallowed wake + read-starved op row — the silent 1s verification retry self-cancels without ever re-waking the remot
+      same   the degenerate-snapshot stop is loud
+      same control: a degenerate snapshot (no timestamps) stops LOUDLY instead of looping unboundedly
+FAIL FAIL FAIL test/rebalancer/duplicate-operation-prevention.property.test.js | a=40/40/40
+      same     Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+      same   in-memory guard prevents duplicate concurrent creates
+      same     Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+      same   database deduplication prevents duplicate operations
+      same RebalanceCoordinator - Concurrent Operation Deduplication
+      same     Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+      same   different partitions can create operations to same node
+      same Multiple Partition Rebalancers - Cross-Partition Deduplication
+      same     Authoritative operation visibility deferred for partition:indices-p1 (entity_operation_observation_incomplete)
+      same   sequential rebalance cycles do not create duplicates
+      same Rapid Rebalance Cycles - Race Condition Prevention
+      same     Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+      same   coordinator in-memory guard provides immediate visibility
+      same System Cache Consistency - In-Flight Operation Visibility
+      same     Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+      same   database query provides cross-partition visibility
+      same Cross-Rebalancer Coordination - Multiple Partition Leaders
+      NEW  Property failed after 1 tests { seed: 1439362905, path: "0:0", endOnFailure: true } Counterexample: [2] Shrunk 1 time(s) Got error: Authorit
+      gone Property failed after 1 tests { seed: 588554979, path: "0", endOnFailure: true } Counterexample: [2] Shrunk 0 time(s) Got error: Authoritati
+FAIL FAIL FAIL test/rebalancer/executor-bypasses-workflow-owner.test.js | a=7/7/7
+      same   coordinator should advance to CREATING after dispatch
+      same   coordinator operation should be stuck at CREATING — executor bypassed the owner path
+      same   coordinator status should remain CREATING — not updated by executor-side write
+      same executor-side replica creation succeeds but owner-side replica_operations workflow remains stuck (uses RebalanceCoordinator as canonical wor
+FAIL FAIL FAIL test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js | a=47/47/47
+      same   public coordinator dispatch accepts the runtime create
+      same   timeout!
+      same formation runtime-service create lane survives sustained REPLACE churn and reaches the authoritative replica read model
+      same   public coordinator dispatch accepts the runtime create
+      same   the actual workflow owner retains its transition retry
+      same   required retained transition retry missing
+      same the retained coordinator callback resumes runtime placement after finite authority refusal
+FAIL FAIL FAIL test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js | a=177/177/177
+      same   should be equal
+      same   should be equal
+      same Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPO
+FAIL FAIL FAIL test/rebalancer/message-group-membership-operation-lane.test.js | a=8/8/8
+      same canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps
+FAIL FAIL FAIL test/rebalancer/message-group-operation-routing.integration.test.js | a=20/12/17
+      same     Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      same   dispatch preserves message-group entity identity for coordinator
+      same     message-group operation should route to message-group handler
+      same   coordinator routes message-group operation to message-group handler
+      same Message-group operation routing integration
+FAIL FAIL FAIL test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js | a=20/20/20
+      same   target-sync active target progress should expose owner progress
+      same   target-sync active target progress should expose owner progress
+      same   target-sync active target progress should enter observed progress
+      same target-sync active target wait snapshots expose local owner progress
+      same   remote target-sync active target progress should wake the owner
+      same   remote target-sync active target progress should wake the owner
+      same   remote target-sync active target progress should wake the owner
+      same   remote target-sync active target progress should wake the owner
+      same remote target-sync active target wait snapshots wake the owner
+      same   target-sync active target progress should expose owner progress
+      same   target-sync active target progress should enter observed progress
+      same normalized target-sync owner advance snapshots still re-enter progress
+      same   source-removal owner advance progress should enter observed progress
+      same normalized source-removal owner advance snapshots still re-enter progress
+FAIL FAIL FAIL test/rebalancer/quorum-conditioned-remove-safety.test.js | a=179/179/179
+      same   remove should dispatch once replacement becomes voter-ready
+      same RebalanceCoordinator - defers REPLACE remove until replacement is voter-ready
+      same   internal source removal should use recovery owner-read readiness instead of external serve admission
+      same RebalanceCoordinator - dispatches priority REPLACE source removal while external serve eligibility is closed
+      same   authoritative follower evidence should allow source-removal dispatch when cache observation lags
+      same RebalanceCoordinator - dispatches REPLACE source removal when authoritative follower evidence outruns cache lag
+      same   priority source removal should dispatch once the shared completion contract reports spread-satisfied in flight
+      same RebalanceCoordinator - dispatches priority REPLACE source removal when recovery completion is spread-satisfied in flight and source is not l
+      same   replica operation source removal should dispatch after replacement leader ownership is visible
+      same RebalanceCoordinator - requests leader handoff before removing replica_operations source leader during REPLACE
+      same   control-plane publication leader source removal should dispatch once replacement leader ownership is visible
+      same RebalanceCoordinator - keeps control-plane publication leader source removal deferred while publication is ACK_PENDING
+      same   source removal should dispatch after replacement leader ownership is visible
+      same RebalanceCoordinator - requests leader handoff before removing sql_transaction_participants source leader during REPLACE
+      same   source removal should dispatch once successor leadership is visible
+      same RebalanceCoordinator - nudges sql_transactions replacement election when source follower evidence outruns partition leader ownership
+      same   source removal should dispatch once successor leadership is visible
+      same RebalanceCoordinator - authoritative service rows with missing raft_role preserve cached follower evidence while waiting for leader ownershi
+ok   FAIL ok   test/rebalancer/rebalance-coordinator-operation-ownership.test.js | a=233/221/233
+FAIL FAIL FAIL test/rebalancer/rebalance-coordinator-topology-guard.test.js | a=105/85/85
+      same   createOperation should fail closed when the target node already hosts the partition
+      same   same-node duplicate adds should surface the occupied-target reason
+      same RebalanceCoordinator blocks same-node duplicate topology creation
+      same   create-time occupancy and target census share one canonical capture
+      same RebalanceCoordinator topology guard invokes the injected inventory owner
+      same   cache presence cannot turn unavailable owner evidence into empty
+      NEW    no decision: a deferral, retried on the caller's scheduled turn
+      same RebalanceCoordinator fails topology increase closed when service owner rows are unavailable
+      same   createOperation should fail closed when authoritative topology already satisfies the target replica count
+      same   stale planner adds should surface the target-satisfied reason
+      same   topology guard should preserve the canonical distinct-node count in diagnostics
+      same RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target
+      same   createOperation should fail closed when REPLACE targets an occupied partition node
+      same   duplicate replacement target rows should surface the occupied-target reason
+      same RebalanceCoordinator blocks REPLACE when target node already has partition topology
+      same   message-group ADD should use the shared topology occupancy guard
+      same   message-group duplicate topology should surface the occupied-target reason
+      same RebalanceCoordinator applies topology occupancy guard to message-group creates
+      same   Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      same count-keyed lane consumes canonical identity deduplication
+      same   Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      same count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (
+      same   Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      same count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_r
+      same   Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      same s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th n
+      same   Cannot read properties of undefined (reading 'blockingReasons')
+      same ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard
+      gone the count-neutral ledger spread cure breaks the owner-read circularity
+      gone the exception never permits two replicas on one node
+      gone the first ready unoccupied target remains a valid cure
+      gone RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable
+FAIL FAIL FAIL test/rebalancer/rebalancer-entity-interaction-contract.test.js | a=31/31/31
+      same   context.buildDeferredRemoveSafetyEvaluation is not a function
+      same non-partition remove safety serializes and evaluates its actual entity
+      same   Cannot read properties of undefined (reading 'isReplaceRemoveDispatchPhase')
+      same move preflight preserves canonical entity identity at the safety owner
+      same   context.buildDeferredRemoveSafetyEvaluation is not a function
+      same message-group and runtime-service floors remain entity-owned
+      same   direct replay rejects an untyped operation instead of inventing identity
+      same untyped operation rows are outside canonical entity reads
+FAIL FAIL FAIL test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js | a=52/52/52
+      same   Storage reservation creation failed for operation replace-op-28ef8f4bf921b28d8d8bd3eccb05c2a9: reservation insert rejected
+      same one critical lane serializes concurrent subjects and replays the exact winner
+      same   Storage reservation creation failed for operation replace-op-28ef8f4bf921b28d8d8bd3eccb05c2a9: reservation insert rejected
+      same a remembered operation requires exact live owner evidence before replay
+      same   the distinct caller runs its own admission after the original rejection
+      same   only the independently admitted request committed
+      same the critical follower can acquire its own subject after a pre-insert failure
+      same   Storage reservation creation failed for operation replace-op-28ef8f4bf921b28d8d8bd3eccb05c2a9: reservation insert rejected
+      same persistent collision retains the winner and only its physical subject can recover
+      same   Storage reservation creation failed for operation sqlite-terminal-original-create: reservation insert rejected
+      same deterministic SQLite collision preserves terminal FAILED without another effect
+      same   Storage reservation creation failed for operation sqlite-terminal-original-create: reservation insert rejected
+      same deterministic SQLite collision preserves terminal ACTIVE without another effect
+FAIL FAIL FAIL test/rebalancer/replace-in-flight-blocks-planning.test.js | a=235/235/235
+      same   the STOPPING owner waits while the witness counts the source
+      same W2: owner-driven REPLACE whose target the census already counts ({A:3,B:1}, A->B) - no second operation from creation to terminal
+      same   the STOPPING owner waits while the witness counts the source
+      same W3: owner-driven REPLACE with a not-yet-counted target (the grace) - no second operation from creation to terminal
+FAIL FAIL FAIL test/rebalancer/replace-owner-lease-verdict-property.test.js | a=25/25/25
+FAIL FAIL FAIL test/rebalancer/replica-operation-retained-owner-turn.test.js | a=15/15/15
+      same   the exact command owns the next turn
+      same   the schema child dispatches once
+      same   the durable child leaves PENDING
+      same retained schema inline execute owns a turn after a concurrent wake
+      same   the retained command still owns a later turn
+      same   the retained command dispatches exactly once
+      same   the retained command leaves PENDING after holder failure
+      same retained schema execute does not inherit the holder rejection
+ok   FAIL ok   test/rebalancer/required-entity-operation-observation.test.js | a=177/174/177
+FAIL FAIL FAIL test/rebalancer/reservation-expiry-operation-aware.test.js | a=8/8/8
+      same   Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      same reconcileReservations - a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, not expired
+      same   Invalid replica operation persistence outcome: persisted operation history is not JSON text
+      same reconcileReservations - a TTL-expired reservation for a TERMINAL operation is expired
+FAIL FAIL FAIL test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js | a=7/7/7
+      same   Unsupported rebalancer entity type: undefined
+      same remote-owned coordinator-created handoff still delivers through the remote replica-dispatch transport ingress
+FAIL ok   ok   test/rebalancer/services-inventory-owner-fact-siblings.test.js | a=34/34/35
+FAIL FAIL FAIL test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js | a=87/87/87
+      same   Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)
+      same lost reservation INSERT answer adopts one exact durable capacity hold
+FAIL FAIL FAIL test/rebalancer/strict-operation-outcomes.test.js | a=627/627/627
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same   should be equal
+      same strict outcomes real SQLite refusal and reinsertion retain obligations
+NA   FAIL ok   test/rebalancer/topology-guard-inventory-authority.test.js | a=None/57/57
+NA   FAIL ok   test/rebalancer/topology-guard-owner-fact-inventory.test.js | a=None/25/25
+NA   FAIL ok   test/rebalancer/topology-guard-owner-fact-read-point.test.js | a=None/11/11
+NA   NA   FAIL test/raft/raft-rs-backend/committed-membership-census.test.js | a=None/None/9
+      NEW  T7: the stamp origins - the leader's COMMITTED answer at creation, and the GENESIS founding sets of the provisioner and the seed
+      NEW  T7: the stamp is carried, never re-derived: the set of files that touch it is the declared carrier set

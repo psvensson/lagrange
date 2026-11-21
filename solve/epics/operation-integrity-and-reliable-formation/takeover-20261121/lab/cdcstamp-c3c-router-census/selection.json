@@ -1,0 +1,65 @@
+{
+  "sha": "8446194ab6c10d12e8e845882b30ddb74b8df479",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-terminal-gate-inflight.test.js",
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+    "test/cdc/cdc-authoritative-catchup-terminal.test.js",
+    "test/control-plane/pressure-governor.test.js",
+    "test/partition/partition-service-role-metadata-publication.test.js",
+    "test/bootstrap/bootstrap-service-ready-signal.test.js",
+    "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+    "test/bootstrap/node-joining-service-node-state-update-ingress.test.js",
+    "test/bootstrap/node-joining-service-canonical-readiness.test.js",
+    "test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js",
+    "test/bootstrap/node-joining-control-plane-heartbeat.test.js",
+    "test/bootstrap/node-joining-service-message-group-activation.test.js",
+    "test/bootstrap/seed-participant-release-failure-projection.test.js",
+    "test/bootstrap/bootstrap-api-readiness-gating.test.js",
+    "test/bootstrap/node-joining-ready-signal-retry.test.js",
+    "test/bootstrap/bootstrap-cleanup.property.test.js",
+    "test/bootstrap/join-cleanup.property.test.js",
+    "test/bootstrap/node-joining-service-mesh-reconciliation.test.js",
+    "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js",
+    "test/rebalancer/user-table-leader-placement-cure.test.js",
+    "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+    "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js",
+        "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+        "test/partition/partition-service-role-metadata-publication.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/cdc/cdc-authoritative-catchup-terminal.test.js",
+        "test/cdc/cdc-terminal-gate-inflight.test.js",
+        "test/control-plane/pressure-governor.test.js",
+        "test/rebalancer/user-table-leader-placement-cure.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/bootstrap/bootstrap-api-readiness-gating.test.js",
+        "test/bootstrap/node-joining-service-message-group-activation.test.js",
+        "test/bootstrap/node-joining-service-node-state-update-ingress.test.js",
+        "test/bootstrap/node-joining-service-mesh-reconciliation.test.js",
+        "test/bootstrap/node-joining-service-canonical-readiness.test.js",
+        "test/bootstrap/bootstrap-service-ready-signal.test.js",
+        "test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js",
+        "test/bootstrap/node-joining-control-plane-heartbeat.test.js",
+        "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+        "test/bootstrap/node-joining-ready-signal-retry.test.js",
+        "test/bootstrap/bootstrap-cleanup.property.test.js",
+        "test/bootstrap/join-cleanup.property.test.js",
+        "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

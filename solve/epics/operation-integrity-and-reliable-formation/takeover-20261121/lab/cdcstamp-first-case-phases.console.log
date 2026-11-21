@@ -1,0 +1,46 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.10
+[adam-laptop] placement-shell=3717140
+[adam-laptop] placement-head=5f6a507e51abaad8f8536089b6dba649e7b4b4bf
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3717662
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/topology/cdc-first-case-cost-probe.test.js (1 assertions, 4522ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: probe: wall and CPU time of the first leader start, by phase
+[adam-laptop] not ok 1 - probe: wall and CPU time of the first leader start, by phase
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3199.001812
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5f6a507e51ab-mwqv1g42-2087537/test/topology/cdc-first-case-cost-probe.test.js:28:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'probe timings: {"constructInitialize1":{"wallMs":12,"cpuMs":17},"shutdown1":{"wallMs":1,"cpuMs":1},"fullStart2":{"wallMs":3116,"cpuMs":4417},"shutdown2":{"wallMs":1,"cpuMs":1},"fullStart3":{"wallMs":14,"cpuMs":14},"shutdown3":{"wallMs":0,"cpuMs":0}}'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5f6a507e51ab-mwqv1g42-2087537/test/topology/cdc-first-case-cost-probe.test.js:41:10)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3206.695739
+[adam-laptop] # time=4522ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=1
+exit 1

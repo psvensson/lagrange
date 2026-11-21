@@ -1126,3 +1126,222 @@ identity), so the mutant drops the router identity instead.
 
 (Table row above belongs to 20.8's table.) To finish: rerun
 `focused.mjs 0dcbc4d361ff0f4acb1aec038b0b679494134be4 adam-laptop … lab/cdcstamp-mutant-table-outside-list test/partition/partition-cdc-currentness-stamp-witness.test.js`.
+
+## 21. Closing items (after the independent re-check approved 873570c54)
+
+Commits (pushed): C3a red-first witnesses `ac0ed01932dca583e436f320de00a3798bccc219`,
+C3b repair `4a1f3f11dc792cf295cd6be2943e84be355f9454`.
+
+### 21.1 Third mutant (routing reads a table outside the list): killed
+
+`probe/cdc-mutant-table-outside-list` `0dcbc4d361ff0f4acb1aec038b0b679494134be4`,
+stage witness file alone, `lab/cdcstamp-mutant-table-outside-list/` (adam-laptop):
+69 tests, 66 pass, 3 fail. The only failure besides the two ruled selection
+bounds is the structural case: "the safe plan read inter_group_latencies
+(getAll) outside CDC_PROPAGATION_PLAN_TABLE, so outside its stamp".
+
+### 21.2 Dead collaborator probes deleted (C3b)
+
+Line numbers are those at `873570c54`. Every site now calls the validated
+collaborator directly.
+
+`src/topology/cdc-group-propagation-routing.js`:
+
+| Line(s) | Function | Deleted probe |
+| --- | --- | --- |
+| 46 | `resolveActiveMessageGroupServices` | `typeof options.predicate === 'function' ? … : null` → `options.predicate ?? null` (an internal parameter, not a collaborator; converted with the rest) |
+| 47-49 | `resolveActiveMessageGroupServices` | `typeof options.systemTableCache?.filter !== 'function'` → `[]` |
+| 147 | `observedServiceRoute` | `systemTableCache?.get?.(NODES, …)` |
+| 198 | `collectActiveLatencyGroups` | `systemTableCache?.getAll?.(LATENCY_GROUPS) \|\| []` |
+| 203 | `collectDrainingLatencyGroupIds` | `systemTableCache?.getAll?.(LATENCY_GROUPS) \|\| []` |
+| 225 | `collectActiveMessageGroups` | `systemTableCache?.getAll?.(MESSAGE_GROUPS) \|\| []` |
+| 237-240 | `collectActiveServiceRows` | `typeof systemTableCache?.filter !== 'function'` → `[]`; `filter(…) \|\| []` |
+| 278-279 | `collectKnownMessageGroupDomain` | `nodeId && options.systemTableCache` (cache presence) and `.get?.(NODES, …)` |
+| 304 | `resolveLatencyGroupRow` | `systemTableCache?.get?.(LATENCY_GROUPS, …)` |
+| 319 | `resolveLatencyGroupTargetCandidates` | `options?.systemTableCache` |
+| 340 | `resolveLatencyGroupTargetCandidates` | `domain.groupIdsByLatencyGroupId?.get?.(…)` (the domain is always built by `collectKnownMessageGroupDomain` with its Map) |
+| 372-374 | `resolveSourceLatencyGroupId` | `if (!cache) return null` |
+| 376, 380, 383, 396, 405 | `resolveSourceLatencyGroupId` | `cache.get?.(…)` ×5 |
+| 388-392 | `resolveSourceLatencyGroupId` | `cache.filter?.(SERVICES, …) \|\| []` |
+| 420-421 | `readRawRoutingOrder` | `options.latencyTreeService?.getRoutingOrder?.(…)` and `Array.isArray(rawOrder) ? rawOrder : []` |
+| 483-485 | `isPreActivationLatencyGroup` | `if (!systemTableCache) return false` |
+| 500 | `isPreActivationLatencyGroup` | `systemTableCache.get?.(NODES, …)` |
+| 505-511 | `isPreActivationLatencyGroup` | `systemTableCache.filter?.(SERVICES, …) \|\| []` |
+| 524 | `collectUnmappedLatencyGroupIds` | `options.systemTableCache?.get?.(NODES, …)` (the row's own `?.[…]` stays: a row may be absent) |
+| 584 | `buildSafeTargets` | `options.systemTableCache?.get?.(NODES, …)` (row `?.[…]` stays) |
+| 622-623 | `resolveGroupedTargetEntry` | `&& options.systemTableCache`; `domain.groupIdsByLatencyGroupId?.entries?.() \|\| []` |
+| 632, 635 | `resolveGroupedTargetEntry` | `options.systemTableCache.get?.(…)` ×2 |
+| 645-646 | `resolveGroupedTargetEntry` | `&& options.systemTableCache`; `.get?.(MESSAGE_GROUPS, …)` |
+| 688-693 | `isMessageRouterDeliverable` (deleted) | `Boolean(messageRouter && typeof messageRouter.deliver === 'function')`. A wired router is now validated to deliver at wiring, so deliverability is `options.messageRouter !== null` |
+| 717 | `buildGroupedContext` | `options.systemTableCache?.get?.(NODES, …)` |
+
+`src/cdc/cdc-propagation-progress.js` (siblings, the latency transfer):
+
+| Line | Deleted probe |
+| --- | --- |
+| 57 | `!systemTableCache \|\|`: `progress.cache` is the owner's validated cache, taken when the progress is created (:146) |
+| 66-67 | `owner?.nodeId ?? null` → `owner.nodeId`; `owner?.messageGroupReplicaSuffix` → `owner.messageGroupReplicaSuffix` |
+
+Kept, because these are row values and not collaborators: `row?.[…]`,
+`serviceRow?.[…]`, and `s?.[COLUMN.SERVICE_ID]?.startsWith?.(…)` at
+routing.js:391 (a row field that may be absent or not a string).
+
+**Reachable before `initialize` validated the wiring?** No routing read is.
+The routing functions are reached only through two paths:
+- `captureDurablePropagationPlan` ← `propagationPlanAtStamp` ←
+  (`cdcPropagationProgressCurrent`, the wave's admission and post-success
+  captures);
+- the progress latency transfer ← route refresh.
+
+Both run only inside a wave of `propagateCDCEvent`, which calls
+`ensureInitialized()` first (`cdc-group-propagation-service.js:181` at C2). A
+refused `initialize` leaves the state unchanged (CREATED for a new service).
+
+The one gap is the coordinator's K-gap. `stop()` on a never-initialized
+service set STOPPED, which let `start()` (and then `propagateCDCEvent`)
+through unwired, ending in a TypeError. It is fixed in 21.4.
+
+Two direct test callers of `buildSafeTargets` passed no tree and relied on the
+probe answering `[]`: `message-group-native-provisional-route.test.js:106` and
+`message-group-native-w7-multi-target-route.integration.test.js:155,333`. They
+now state that empty order through `createStatedRoutingTree([])`, which gives
+the same answer as before.
+
+### 21.3 K1: versions are answered, not only exposed
+
+- **Wiring** (`cdc-group-propagation-collaborators.js`): each version source is
+  called once and must answer a version: `Number.isSafeInteger(value) &&
+  value >= 0` (`isOwnerVersion`, the one definition). The sources are the
+  cache's `getTableMutationVersion` for every table of
+  `CDC_PROPAGATION_PLAN_TABLE`, the tree's `getRoutingGeneration`, and the
+  configuration's `getRevision`. Otherwise the wiring gets the typed refusal
+  `cdc_group_propagation_collaborator_invalid`, whose message names
+  `collaborator.capability()`.
+- **Read time** (`cdc-group-propagation-durable-plan.js`): if any version
+  answer is not a version, `planStampOf` answers `UNHOLDABLE`, and
+  `sameStamp` is false whenever either side is `UNHOLDABLE`. That plan is
+  returned, not held, and never compared equal.
+- A **constant** integer answer cannot be told apart from an unchanged version
+  by one call. Whether each version moves is what the per-component cases
+  and mutants of 20.3/20.8 witness for the production owners.
+
+### 21.4 K-gap: a never-initialized service cannot start
+
+- `stop()` on a CREATED service now returns: there is nothing to stop, and
+  the service stays unwired.
+- `ensureInitialized()` throws an `Error` with `code:
+  'cdc_group_propagation_not_initialized'` (and the existing message) in
+  place of the untyped `assertCritical`. Both `start()` and
+  `propagateCDCEvent()` refuse a never-initialized service, also after a
+  `stop()`.
+
+### 21.5 Red-first and green evidence
+
+- C3a red (`lab/cdcstamp-c3a-red/`, **tv-dator**; adam-laptop was twice held
+  by another agent, both runner failures): 75 tests, 67 pass, 8 fail. The 8
+  are the two ruled selection bounds and all six new witnesses:
+  - wired router without `deliver` ("Missing expected exception");
+  - cache, tree and configuration version answering `undefined` (each
+    "Missing expected exception");
+  - read-time unanswered version ("2 !== 3": the second read reused a plan
+    held under `undefined`);
+  - unwired start after `stop()` ("Missing expected exception").
+
+### 21.6 Item 3: what the foreground-boundary first case spends its time on
+
+**Product work, done once per process: the release owner's boot build
+measurement.** It is not a wall-clock wait in the test or the fixture, and not
+the topology or the delivery. The budget is not raised; this is a finding about
+cost.
+
+- **Reading the path.** The case's fixture runs on a `VirtualTimeSource`
+  (`test/test-helpers/cdc-topology-progress-fixture.js:160`). Its settles are
+  `setImmediate` turns (`participant-transaction-fixture.js:147,927-931`), and
+  `maxAttempts` 1 arms no retry sleep. The lab per-case durations show a cost
+  paid once per process:
+  - this file: case 1 6.1–7.0 s, while case 4 (the same fixture and the same
+    drive) takes 58–121 ms;
+  - the stage witness file: its first case takes 6402 ms and its twin 121 ms.
+- **Probe 1** (`probe/cdc-first-case-cost` `b04d1f84b183ee48cc1e2e028769b50f9ecc934a`,
+  solo, `lab/cdcstamp-first-case-probe/`), cold then warm, in ms: SQL parse 9
+  then 1; first bare `startLeader` + shutdown **3195** then 14; topology fixture
+  16 then 7; drive 15 then 3.
+- **Probe 2** (`probe/cdc-first-case-cost-phases` `5f6a507e51abaad8f8536089b6dba649e7b4b4bf`,
+  solo, `lab/cdcstamp-first-case-phases/`):
+  - leader construct + `initialize` cold: 12 ms wall, 17 ms CPU;
+  - the first full leader start (generation origin + participant admission):
+    **3116 ms wall, 4417 ms CPU**;
+  - the same again warm: 14 ms.
+  CPU exceeds wall, so this is CPU work across threads, not waiting.
+- **The work.** `startLeader` → `resumeFixtureParticipantAdmission`
+  (`participant-transaction-fixture.js:466`) → `readParticipantReleaseFacts`
+  (:546) → `runtimeBuildProvenance()`
+  (`src/partition/partition-participant-transaction-pause.js:138`). That is a
+  process-wide memo (`src/diagnostics/runtime-build-provenance.js:88-91`,
+  `bootMeasurement ??= measureBoot()`) whose first call runs `measureBoot`
+  (:66-86). It:
+  - verifies the raft-rs binding;
+  - fingerprints the whole `src/` tree plus every file of every production
+    dependency in the lock (`runtime-content-fingerprint.js:68-83`,
+    `productionDependencyRecords` :42-);
+  - sha256-hashes the SQLite addon and the node executable (124,836,408 bytes
+    on this host).
+  In production it is paid once per node boot. In the test suites it is paid
+  by whichever test of a process first reads the participant release facts.
+  About 3.1 s solo on adam-laptop becomes more than 6 s under four-way
+  parallel load (the 6 s budget is `scaleByMachineFactor(3000)`,
+  `cdc-group-propagation-foreground-boundary.test.js:20-22,117-118`).
+
+### 21.7 The base-only `message-group-native-provisional-route` failure (not chased)
+
+At 8abec5e92 "SERVICES scan releases provisional relay to the real native
+leader" failed at the redrive (test :408): the answer was
+`held_by_subscriber` (B held, `retryDelayMs` 50), where `drained` was
+expected. It is green at head in both head runs.
+
+My stamp change did not fix a stale held plan there: 8abec5e92 is before the
+stamp and **holds no plan at all**; every currentness check observes the plan
+anew. So no stale plan exists at base to be held by a subscriber.
+
+The fixture runs on virtual time, but its pump hands cache notifications a
+real next-turn hop and races a real 2 ms idle timer
+(`message-group-native-provisional-route-fixture.js:120-140,215-235`). The
+redrive's outcome therefore depends on how real turns interleave with the
+pump under load. The most likely reading is an independent load-sensitive
+flake of that interleaving. Base's per-read cost (the defect this repair
+removes: hundreds of plan rebuilds per delivery) may make that interleaving
+more likely, but one sample cannot tell, and it is not chased.
+
+### 21.8 Green after, and the router doubles the new wiring contract surfaced
+
+- **C3b `4a1f3f11d`** (`lab/cdcstamp-c3b/`, 32 files): 29 pass, 3 fail.
+  - The stage witness passes 73 of 75; the 2 failures are the ruled
+    selection bounds. All six C3a witnesses are green.
+  - The foreground-boundary first case timed out (21.6).
+  - `cache-hydration-strictness` failed: its BootstrapService test wired
+    `service.messageRouter = {}`, and the router validation refused it ("messageRouter must expose
+    deliver()"). That router is incidental and never reached, so it now has a
+    `deliver` that throws. **C3c `8446194ab`**.
+- **C3c** (`lab/cdcstamp-c3c/`, 43 files: the 32 plus every bootstrap and
+  query file that can build the topology owners): 40 pass, 3 fail.
+  - The same two known failures as above.
+  - `create-self-hosted-registration`: also a `service.messageRouter = {}`
+    double, reached by `NodeJoiningService.phaseQuerySystemState`. It got the
+    same fix in **C3d `5c412e839`**.
+- **Router-double census** (`lab/cdcstamp-c3c-router-census/`). I ran every
+  remaining test file that assigns a router double without `deliver` (22
+  files). None is refused at wiring.
+  - Two fail: `growth-promote-authoritative-completion-and-progress` (assertions
+    40/42) and `node-joining-service-message-group-activation` ("Failed to
+    register node: … outcome is not known").
+  - Both fail identically at the pre-work base `23344cddc`
+    (`lab/cdcstamp-census-base/`), so they predate this work and are not
+    caused by it.
+- **Final head `5c412e839`**: see the confirmation run below.
+- **Final head `5c412e83931fc871ae9a3f4e0afbfdb77a26ca2c`** (`lab/cdcstamp-final/`):
+  - the stage witness passes 73 of 75; the 2 failures are the ruled selection
+    bounds (raft status reads 243 and 685);
+  - `cache-hydration-strictness` and `create-self-hosted-registration` pass.
+
+  Between C3c and the final head only one test file changed, so the 43-file
+  C3c run stands for the rest.

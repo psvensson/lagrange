@@ -1,0 +1,61 @@
+{
+  "sha": "adfbbed6a2fa19fc2c492ac94b57a92229fd14d9",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+    "test/raft/raft-rs-current-authority-observation.test.js",
+    "test/raft/raft-rs-current-term-applied.test.js",
+    "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+    "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+    "test/raft/raft-rs-backend/committed-membership-read.test.js",
+    "test/raft/leadership-transfer-single-path.test.js",
+    "test/raft/raft-rs-backend/admission-redrive.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+    "test/message-group/cdc-non-leader-propagation.test.js",
+    "test/message-group/message-group-failover-cdc-continuity.test.js",
+    "test/message-group/message-group-service-leader-cdc.test.js",
+    "test/message-group/message-group-service-lifecycle-and-ledger.test.js",
+    "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+    "test/message-group/message-group-service-strict-cdc-forward-routing.test.js",
+    "test/message-group/message-group-service-strict-cdc-join-convergence.test.js",
+    "test/message-group/message-group-service.test.js",
+    "test/wasm-service/wasm-service-replica.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+        "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+        "test/raft/raft-rs-current-authority-observation.test.js",
+        "test/raft/raft-rs-current-term-applied.test.js",
+        "test/wasm-service/wasm-service-replica.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/message-group/cdc-non-leader-propagation.test.js",
+        "test/raft/raft-rs-backend/admission-redrive.test.js",
+        "test/message-group/message-group-service.test.js",
+        "test/raft/raft-rs-backend/committed-membership-read.test.js",
+        "test/raft/leadership-transfer-single-path.test.js",
+        "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+        "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+        "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+        "test/message-group/message-group-service-lifecycle-and-ledger.test.js",
+        "test/message-group/message-group-service-strict-cdc-join-convergence.test.js",
+        "test/message-group/message-group-service-strict-cdc-forward-routing.test.js",
+        "test/message-group/message-group-failover-cdc-continuity.test.js",
+        "test/message-group/message-group-service-leader-cdc.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

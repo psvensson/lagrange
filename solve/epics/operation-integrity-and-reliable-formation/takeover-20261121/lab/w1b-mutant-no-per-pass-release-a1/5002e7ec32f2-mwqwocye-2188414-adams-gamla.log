@@ -1,0 +1,77 @@
+placement-shell=2090099
+placement-head=5002e7ec32f29836ac37b582085c8c895db8b586
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=2090555
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+not ok test/rebalancer/replica-placement-owner-blocked-release.test.js (5 assertions, 4929ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: PLACEMENT_RELEASE_HOLD is idempotent by operation identity: two entry ids, one effect, a definite second answer
+ok 1 - PLACEMENT_RELEASE_HOLD is idempotent by operation identity: two entry ids, one effect, a definite second answer
+  ---
+  duration_ms: 3251.377567
+  type: 'test'
+  ...
+# Subtest: N1: a release attempt blocked on an entry-key collision is re-driven under a fresh entry; other partitions proceed; both blocked attempts are in the pass snapshot
+ok 2 - N1: a release attempt blocked on an entry-key collision is re-driven under a fresh entry; other partitions proceed; both blocked attempts are in the pass snapshot
+  ---
+  duration_ms: 102.568323
+  type: 'test'
+  ...
+# Subtest: F4 residue: an uncertain release whose hold another leader released retires as superseded by ledger state, never as its own settlement, listed once
+ok 3 - F4 residue: an uncertain release whose hold another leader released retires as superseded by ledger state, never as its own settlement, listed once
+  ---
+  duration_ms: 54.249476
+  type: 'test'
+  ...
+# Subtest: F4 residue within a tenure: an uncertain release whose hold is lifted after leadership start retires on the next pass, with no leadership change
+not ok 4 - F4 residue within a tenure: an uncertain release whose hold is lifted after leadership start retires on the next pass, with no leadership change
+  ---
+  duration_ms: 54.027775
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/5002e7ec32f2-mwqwocye-2188414/test/rebalancer/replica-placement-owner-blocked-release.test.js:312:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the release obligation is reached: the attempt retires on the next pass
+    + actual - expected
+    
+    + {
+    +   entry_id: 'placement-owner:n1:release:pl-replica_operations-p1-3-0:000fbe54-82be-403e-909a-4213edfbff36'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    entry_id: 'placement-owner:n1:release:pl-replica_operations-p1-3-0:000fbe54-82be-403e-909a-4213edfbff36'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/5002e7ec32f2-mwqwocye-2188414/test/rebalancer/replica-placement-owner-blocked-release.test.js:347:14
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5002e7ec32f2-mwqwocye-2188414/test/partition/placement-admission-fixture.js:40:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a re-drive survives a crash between its durable replacement and its proposal: the restarted owner re-drives the fresh entry, never the dead one
+ok 5 - a re-drive survives a crash between its durable replacement and its proposal: the restarted owner re-drives the fresh entry, never the dead one
+  ---
+  duration_ms: 65.65552
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 4
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3535.720372
+# time=4929ms
+# test-files total=1 pass=0 fail=1 assertions=5
+placement-results={"file":"test/rebalancer/replica-placement-owner-blocked-release.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":4929,"retriedOnce":false,"firstFailureLine":"not ok 4 - F4 residue within a tenure: an uncertain release whose hold is lifted after leadership start retires on the next pass, with no leadership change"}

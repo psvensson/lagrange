@@ -1,0 +1,31 @@
+{
+  "sha": "a203b2c361d7928859942ee91852a72eb11b15aa",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js",
+    "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js",
+    "test/raft/authoritative-row-mutation-outcome-classifier.test.js",
+    "test/constants/message-table-census.test.js",
+    "test/transport/router-in-process-address-in-use.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/constants/message-table-census.test.js",
+        "test/transport/router-in-process-address-in-use.test.js",
+        "test/raft/authoritative-row-mutation-outcome-classifier.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js",
+        "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

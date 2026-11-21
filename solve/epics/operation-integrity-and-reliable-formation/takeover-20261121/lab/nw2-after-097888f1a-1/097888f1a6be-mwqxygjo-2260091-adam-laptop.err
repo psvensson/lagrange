@@ -1,0 +1,90 @@
+Failed to insert system table row {
+  tableName: 'nodes',
+  id: 'node-1',
+  error: 'partitionService.executeQuery is not a function',
+  nodeId: 'test-seed-node',
+  causeId: null,
+  operation: 'INSERT',
+  primaryKey: { node_id: 'node-1' },
+  code: null,
+  retryAfterMs: 0,
+  writeMode: 'bootstrap-direct',
+  bootstrapMode: true,
+  attempt: null,
+  cacheWaitTimedOut: false
+}
+Failed to insert system table row {
+  tableName: 'nodes',
+  id: 'node-1',
+  error: 'partitionService.executeQuery is not a function',
+  nodeId: 'test-seed-node',
+  causeId: null,
+  operation: 'INSERT',
+  primaryKey: { node_id: 'node-1' },
+  code: null,
+  retryAfterMs: 0,
+  writeMode: 'bootstrap-direct',
+  bootstrapMode: true,
+  attempt: null,
+  cacheWaitTimedOut: false
+}
+Transient CDC SQL exception, retrying {
+  nodeId: 'test-seed-node',
+  attempt: 1,
+  maxAttempts: 6,
+  error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+  retryAfterMs: 100
+}
+Transient CDC SQL exception, retrying {
+  nodeId: 'test-seed-node',
+  attempt: 2,
+  maxAttempts: 6,
+  error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+  retryAfterMs: 100
+}
+Transient CDC SQL exception, retrying {
+  nodeId: 'test-seed-node',
+  attempt: 3,
+  maxAttempts: 6,
+  error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+  retryAfterMs: 100
+}
+Transient CDC SQL exception, retrying {
+  nodeId: 'test-seed-node',
+  attempt: 4,
+  maxAttempts: 6,
+  error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+  retryAfterMs: 100
+}
+Transient CDC SQL exception, retrying {
+  nodeId: 'test-seed-node',
+  attempt: 5,
+  maxAttempts: 6,
+  error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+  retryAfterMs: 100
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'CDC_DEFAULTS.RETRY_MAX_ATTEMPTS',
+  awaited: 'routed system-table mutation accepted by the engine',
+  boundMs: null,
+  elapsedMs: 'unmeasured',
+  lastObserved: { attempts: 6, maxAttempts: 6, errorCode: null, retryAfterMs: 100 },
+  scope: { nodeId: 'test-seed-node', tableName: 'nodes' },
+  repeats: 0
+}
+Failed to insert system table row {
+  tableName: 'nodes',
+  id: 'node-1',
+  error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+  nodeId: 'test-seed-node',
+  causeId: null,
+  operation: 'INSERT',
+  primaryKey: { node_id: 'node-1' },
+  code: null,
+  retryAfterMs: 100,
+  writeMode: 'sql-routed',
+  bootstrapMode: false,
+  attempt: 6,
+  cacheWaitTimedOut: false
+}

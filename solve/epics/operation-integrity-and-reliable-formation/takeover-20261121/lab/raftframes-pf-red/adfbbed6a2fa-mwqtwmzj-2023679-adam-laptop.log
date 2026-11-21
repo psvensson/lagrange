@@ -1,0 +1,109 @@
+placement-shell=3699081
+placement-head=adfbbed6a2fa19fc2c492ac94b57a92229fd14d9
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3699539
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/raft/raft-rs-backend/follower-proposal-refusal.test.js (1 assertions, 1694ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: port: a follower refuses a proposal and forwards nothing
+not ok 1 - port: a follower refuses a proposal and forwards nothing
+  ---
+  duration_ms: 164.395863
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/follower-proposal-refusal.test.js:31:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a follower's proposal is refused and never forwarded: {"leader":"follower-propose-a","follower":"follower-propose-b","answer":{"outcome":"CORE_OK","reason":"drained","phase":null},"forwarded":1,"commits":[{"replicaId":"follower-propose-a","command":"proposed-at-a-follower","index":2,"term":1},{"replicaId":"follower-propose-b","command":"proposed-at-a-follower","index":2,"term":1},{"replicaId":"follower-propose-c","command":"proposed-at-a-follower","index":2,"term":1}]}
+    + actual - expected
+    
+      {
+    +   commits: 3,
+    +   dropped: false,
+    +   forwarded: 1,
+    +   outcome: 'CORE_OK'
+    -   commits: 0,
+    -   dropped: true,
+    -   forwarded: 0,
+    -   outcome: 'CORE_REFUSED'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'CORE_REFUSED'
+    dropped: true
+    forwarded: 0
+    commits: 0
+  actual:
+    outcome: 'CORE_OK'
+    dropped: false
+    forwarded: 1
+    commits: 3
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/follower-proposal-refusal.test.js:62:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 191.786449
+# time=1694ms
+not ok test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js (1 assertions, 1714ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: port: a proposal queued behind a busy turn does not enter consensus under the leadership that succeeded the one it was submitted under
+not ok 1 - port: a proposal queued behind a busy turn does not enter consensus under the leadership that succeeded the one it was submitted under
+  ---
+  duration_ms: 184.868852
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js:42:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the proposal submitted while queued-fence-a led at term 1 entered consensus under another leadership; {"leader":"queued-fence-a","successor":"queued-fence-c","submittedTerm":1,"successorTerm":2,"queuedAnswer":{"outcome":"CORE_OK","reason":"drained"},"leaderAfter":{"role":"follower","term":2,"leaderId":"queued-fence-c"},"witnessCommits":[{"replicaId":"queued-fence-c","command":"proposal-submitted-under-the-previous-leadership","index":3,"term":2}]}
+    + actual - expected
+    
+    + [
+    +   'queued-fence-c@2'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'queued-fence-c@2'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js:109:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 208.463525
+# time=1714ms
+ok test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js (1 assertions, 2292ms)
+# test-files total=3 pass=1 fail=2 assertions=3
+placement-results={"file":"test/raft/raft-rs-backend/follower-proposal-refusal.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":1694,"retriedOnce":false,"firstFailureLine":"not ok 1 - port: a follower refuses a proposal and forwards nothing"}
+placement-results={"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":1714,"retriedOnce":false,"firstFailureLine":"not ok 1 - port: a proposal queued behind a busy turn does not enter consensus under the leadership that succeeded the one it was submitted under"}
+placement-results={"file":"test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2292,"retriedOnce":false,"firstFailureLine":null}

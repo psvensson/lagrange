@@ -1,0 +1,164 @@
+lab test: adam-laptop: ordinary (2 files) cores=8 mem=15.5GiB speed x2.09
+[adam-laptop] placement-shell=3706221
+[adam-laptop] placement-head=f36abd2084fd47bb2a3d64834e73d8d82be39a88
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3706788
+[adam-laptop] # test-files planned=2
+[adam-laptop] classified lane ordinary: 2 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/partition/partition-write-kernel-tenure-fence.test.js (7 assertions, 5350ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+[adam-laptop] ok 1 - kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3554.382777
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+[adam-laptop] ok 2 - kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 81.997252
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+[adam-laptop] ok 3 - kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 48.237153
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+[adam-laptop] ok 4 - kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 44.40603
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (read scope): a write submitted before the replica led is refused NOT_LEADER when the replica becomes leader inside the kernel's leadership read; asked again under that tenure, it proceeds
+[adam-laptop] ok 5 - kernel tenure fence (read scope): a write submitted before the replica led is refused NOT_LEADER when the replica becomes leader inside the kernel's leadership read; asked again under that tenure, it proceeds
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.901489
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (join, ownership): a write delivered again under the current tenure does not join the pending write of an earlier tenure; the stale hand-off, waking, touches nothing of the new registration
+[adam-laptop] not ok 6 - kernel tenure fence (join, ownership): a write delivered again under the current tenure does not join the pending write of an earlier tenure; the stale hand-off, waking, touches nothing of the new registration
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 39.971488
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/partition/partition-write-kernel-tenure-fence.test.js:362:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'fixture participant release refused: release_drain_pending'
+[adam-laptop]   code: 'ERR_TEST_FAILURE'
+[adam-laptop]   stack: |-
+[adam-laptop]     resumeFixtureParticipantAdmission (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/test-helpers/participant-transaction-fixture.js:554:11)
+[adam-laptop]     async file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/partition/partition-write-kernel-tenure-fence.test.js:374:3
+[adam-laptop]     async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/test-helpers/participant-transaction-fixture.js:834:14)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (null tenure): a write parked with no tenure and readmitted while the replica holds no tenure is not proposed (answered NOT_LEADER)
+[adam-laptop] not ok 7 - kernel tenure fence (null tenure): a write parked with no tenure and readmitted while the replica holds no tenure is not proposed (answered NOT_LEADER)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 37.892545
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/partition/partition-write-kernel-tenure-fence.test.js:408:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     premise: parked with no tenure, not proposed
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]         handed: 0,
+[adam-laptop]     +   settled: true,
+[adam-laptop]     -   settled: false,
+[adam-laptop]         tenure: null
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     tenure: ~
+[adam-laptop]     handed: 0
+[adam-laptop]     settled: false
+[adam-laptop]   actual:
+[adam-laptop]     tenure: ~
+[adam-laptop]     handed: 0
+[adam-laptop]     settled: true
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/partition/partition-write-kernel-tenure-fence.test.js:427:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..7
+[adam-laptop] # tests 7
+[adam-laptop] # suites 0
+[adam-laptop] # pass 5
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3849.511971
+[adam-laptop] # time=5350ms
+[adam-laptop] not ok test/rebalancer/placement-owner-authority-write-kernel.test.js (3 assertions, 11977ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:39.083Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:39.106Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:39.112Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:39.787Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: kernel: a placement write the port deferred is not proposed under a tenure renewed without a role edge (released as on leadership loss, or refused typed)
+[adam-laptop] ok 1 - kernel: a placement write the port deferred is not proposed under a tenure renewed without a role edge (released as on leadership loss, or refused typed)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4128.602711
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"deferredAt":{"entryId":"placement-owner:n1:admit:sql_transactions-p1:f648e035-c34d-4c3d-b1e4-e6128d625fae","portTerm":2},"renewedTerm":3,"attemptOutcome":"partition_write_not_leader","proposals":[],"transfer":{"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t3","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t3":1},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t3":1},"candidateChecks":{"n1\#2@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:625fae","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#2@t2","boundaryCore":"leader@t2","outcome":"partition_write_not_leader"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:39.798Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:39.801Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:40.360Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: kernel: a placement write is not proposed under a tenure renewed inside the kernel's own leadership read, between the owner's fence and the propose (refused, nothing proposed)
+[adam-laptop] ok 2 - kernel: a placement write is not proposed under a tenure renewed inside the kernel's own leadership read, between the owner's fence and the propose (refused, nothing proposed)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 590.131267
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"decidedUnderTerm":2,"renewedTerm":3,"attemptOutcome":"partition_write_not_leader","proposals":[],"transfer":{"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t3","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t3":1},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t3":1},"candidateChecks":{"n1\#2@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:2b07b7","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#2@t2","boundaryCore":"leader@t2","outcome":"partition_write_not_leader"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:40.369Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-21T20:07:40.371Z","nodeId":"test-node","pid":3706811,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: kernel: a placement admission under the current tenure that would join a pending write of an earlier tenure gets its own proposal in its own turn; the old write's caller is released LEADERSHIP_LOST once
+[adam-laptop] not ok 3 - kernel: a placement admission under the current tenure that would join a pending write of an earlier tenure gets its own proposal in its own turn; the old write's caller is released LEADERSHIP_LOST once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 5500.923317
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/rebalancer/placement-owner-authority-write-kernel.test.js:180:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'fixture wait expired after 5000 ms: premise: the deferred write waits on its held kernel retry'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     waitUntil (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/rebalancer/placement-owner-authority-fixture.js:160:10)
+[adam-laptop]     async file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/rebalancer/placement-owner-authority-write-kernel.test.js:191:3
+[adam-laptop]     async withPlacementWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f36abd2084fd-mwqu9f21-2045197/test/rebalancer/placement-owner-authority-fixture.js:1047:14)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 2
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 10233.230815
+[adam-laptop] # time=11977ms
+[adam-laptop] # test-files total=2 pass=0 fail=2 assertions=10
+[adam-laptop] placement-owner-authority-fixture: active resources after the last world: ["Immediate"]
+lab test: adam-laptop: # test-files total=2 pass=0 fail=2 assertions=10
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=2 pass=0 fail=2 assertions=10

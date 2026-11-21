@@ -1371,3 +1371,167 @@ Head `f42102c84` pushed; worktree clean. Open:
   cache-subscription probe that silently drops the retained owner's wakes.
 - Carried from 16: W1b-dependent continuation witness; S11 raw-bypass-negative; owner-core test 20.
 No local test was executed; every result in this section is from the lab.
+
+## 18. Corrective round after independent verification (opus writer, 2026-11-21)
+
+Subject: the verifier's findings F1-F5, the table finding (T1 = verifier F6), visibility (V1 =
+verifier 3(c)/(d)) and the term-only tenure end (T2 = verifier F7) on head `f42102c84`
+(`reports/verify-w1-retained-repair-owner.md`). Rule: a behavioural repair only where an EXECUTED
+witness shows the defect; a witness that passes is kept as evidence the finding was wrong.
+Labels: **[lab]** executed (directory under `lab/`, console `<dir>.console.log`); **[read]** source
+only. No test was executed on the desktop.
+
+Fixture: every leadership change in the new publication witnesses goes through the REAL publishers
+(`applyReplicaLeadership` -> `queueRoleUpdate`/`queueLeaderNodeUpdate`) into both coordinator caches
+by CDC (`attachRealPublication`, moved from the real-publication test into the pair fixture, with a
+held delivery that models the deferred CDC channel). No partition SERVICES row with raft_role
+leader; no route row written by hand in any new witness. Owner timers on `VirtualTimeSource`.
+
+### 18.1 Witnesses (commits `c1169112a`, `029666421`; red-first)
+
+Red run **[lab]** `lab/w1c-red-c1169112a` (tv-dator, sha `c1169112a`, the 13-file retained list
+`lab/w1-s2c-list-witness.txt`): every new witness red; every earlier witness unchanged (the four known
+reds only: mirror 8 re-drive by design, continuation 23 W1b-dependent, S11 raw-bypass-negative,
+owner-core 20).
+
+| Item | Witness (file, test) | Schedule | Red on `c1169112a` (first failing assertion) |
+| --- | --- | --- | --- |
+| F1 | publication 7 | pinned paused entry at origin A; A -> B by the real publishers; every read bound to B fails while the publication flows, then the provider recovers; nothing but A's continuation clock | "the owed reconsideration reaches B and restores the row with no other event" (preconditions passed: B-bound read failed, binding B, one timer, zero proposals). The timer fired and the decision returned at the pure-hint guard |
+| F2 | continuation 24 | ledger leader, every presentation answered uncommitted BACKPRESSURE after a qualified read; 720 one-second continuation turns | "reaches the bounded stop (still armed after 720 continuation turns, 723 qualified reads and 723 presentations)" `1 !== 0` |
+| F3 | publication 8 | origin B delegated to A with BUSY; B's ledger wins the next term with its leader activation held on its holdoff clock and the publishers' CDC held; a caller arrives | "the node that would propose evaluates the unchanged blocker first: zero native proposals" `1 !== 0` (preconditions passed: B local leader, activation not run, no hint queued, custody delegated) |
+| F4 | continuation 25 | BUSY at the leader; read 1 fails, the continuation's read 2 is incomplete (typed refusal); 720 s later the real blocker release; its read fails | "a later independent transient failure is not spent at once by an earlier window" `1 !== 0` |
+| F5 failed read | publication 9 | A unbound by the real publishers (B leads, B's endpoint never published); present row; first read fails | reason `'route_unavailable'` vs `'owner_read_failed'` |
+| F5 invalid row | publication 10 | same; the served row lacks a canonical column | reason `'route_unavailable'` vs `'invalid_operation_row'` |
+| V1 | publication 11 | pinned entry at A; A unbound as above; three later callers; then A leads again | "the record names what it waits for: the next ledger route publication" (no named state) |
+| T1 | continuation 26 | receiver answers the sender's entry uncommitted BACKPRESSURE while holding custody | on `c1169112a`: TypeError, the sender record was gone. Attribution **[read]**: the delegated sender still owed CLEARING, so its own deferred route-row notifications (delivered once the record exists) drove a second decision that re-presented and completed the entry while the custodian also held it: the duplicate owner, seen through its effect. Re-staged in `029666421` (setup notifications drain first; a missing record fails with a message): red **[lab]** `lab/w1c-red-t1-029666421`: "exactly one continuation owns the obligation (receiver 1, sender 1)" `2 !== 1` |
+| T2 | publication 12 | sender B delegated to paused A; A demoted and re-elected at a later term (same node, incarnation, replica, address); admission released; no caller | "the delegated sender resumes after a term-only tenure end ... (sender custody delegated, term 1)" |
+
+### 18.2 The window model (F2, F4)
+
+- What a window measures: ONE episode of one record's obligation: the consecutive
+  continuation-owned failures since its last progress. Continuation-owned reasons:
+  `owner_read_failed`, `unqualified_leadership`, `unqualified_position`, the receiver disclaim,
+  `outcome_unknown` (lost, malformed or uncommitted LEDGER_COMMIT answer), `owner_unavailable`.
+- Progress (owner-defined): the decision ends with the obligation owned by someone other than the
+  continuation: a settlement (EXACT/CHANGED retire, definite or permanent refusal), a durable
+  outcome of the entry (committed ADMITTED or committed refusal), a judged contention (CONTENDED:
+  blocker + trigger), a named clearing trigger of an uncommitted refusal (WRITE_PATH_RELEASED,
+  LEADERSHIP_START, ...), or an attested custodian. A qualified read alone is NOT progress.
+- Opens: at the first continuation-owned failure with no open window (continuation IDLE or SPENT).
+- Kept: by every later continuation-owned failure (ARMED keeps its timer; OPEN re-arms with the
+  doubled delay), whatever reads succeeded in between.
+- Closes: at the end of any decision that does not end continuation-owned: progress, or a
+  hand-over to an event owner (route publication: `unqualified_binding`, `route_unavailable`;
+  row or binding change: `invalid_operation_row`, `unqualified_shape`). Nothing leaves it OPEN:
+  the end of every decision (sender and receiver) applies this rule
+  (`endRetainedRepairDecision`).
+- Bound: `REBALANCE_OPERATION_BUDGET_MS` from opening; delays `REPLICA_OPERATION_READ_RETRY_DELAY_MS`
+  doubling to `REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS`. A continuation-owned failure at or after
+  the deadline spends it: continuation SPENT, waiting `bound_spent`, exactly one
+  `wait_bound_spent` report, no timer, obligation kept, zero proposals. Any later legitimate
+  trigger decides afresh; a new failure opens a new window (Q1).
+
+### 18.3 Repairs (commit `f615921f5`)
+
+Files: `replica-operation-repository-retained-placement-repair.js` (owner), `-read-retry.js`
+(continuation, window, visible wait, decision begin/end), `-record.js` (`waiting`), `-ingress.js`
+(receiver decision begin/end). No file outside the owner's changed in `src/`.
+
+| Item | Cause shown by the witness | Repair |
+| --- | --- | --- |
+| F1 | `retryRetainedRepairDecision` returned before any read for every HANDOFF with an unchanged binding whose kinds were ROUTE, including the timer-driven decision of an owed ROUTE | the no-op applies only to a pure hint: `kinds === ROUTE` AND nothing owed AND binding unchanged. An owed revalidation always reaches a read |
+| F2, F4 | the window was discarded by every qualified read (`satisfyRetainedRepairRevalidation` cancelled the continuation) and kept OPEN by decisions that ended on an event-owned reason | the window model of 18.2: a qualified read only clears `owed`; `beginRetainedRepairDecision` / `endRetainedRepairDecision` bracket every decision (sender `runRetainedRepairDecision`, receiver `completeIncomingRetainedRepair`), and the end arms or closes the continuation from the wait the decision ended with. `oweRetainedRepair` no longer arms: it names the wait |
+| F3 | `joinRetainedRepairDecision` presented UNFENCED with no read when the rebind found the local ledger leader | a join whose binding is LOCAL decides as RETRY (the node that would propose evaluates contention first) |
+| F5 | `confirmUnboundRetainedRepair` relabelled every non-present outcome `route_unavailable` (no log, no timer) | each read outcome keeps its own reason and owner; ROUTE is owed in every case |
+| T1 | an uncommitted answer carrying custody recorded DELEGATED and then still owed CLEARING and armed the sender | custody is recorded from every non-observation answer of a REMOTE binding; a DELEGATED result after an uncommitted or unknown answer returns with nothing owed; and the end of every decision closes the continuation of a delegated record (the invariant) |
+| V1 | no named wait, no log for route-owed waits, an ERROR per evaluation for typed refusals | `waiting` = {state, reason} on the record; one line per transition |
+
+Systemic check (siblings) **[read]**: every decision that may propose reads contention first:
+RETRY and HANDOFF (CURRENT at LOCAL), RECEIVER (its own read), JOIN at LOCAL (now RETRY), JOIN at
+REMOTE (the receiver reads); RESOLVE presents only an entry the local ledger already committed
+(native replay). The only arming site is the end of a decision; the only cancellation sites are
+retirement, shutdown and the end of a decision.
+
+Witness re-staged in the repair commit (before / after): mirror 9 "an absent placement row is
+withheld ... owed to the route publication": `record.lastDecision.reason` `'route_unavailable'` ->
+`'unqualified_binding'` (the read outcome's own name, F5), plus `record.waiting.state ===
+'route_publication'`. Its other assertions are unchanged.
+
+Green run **[lab]** `lab/w1c-green-f615921f5` (tv-dator, sha `f615921f5`, the 13-file list): F1, F2,
+F3, F4, F5 x2, V1, T1 green; every earlier witness green except the same known reds with the same
+first assertions (mirror 8 "re-driven exactly once" `0 !== 1`; continuation 23 "placement_admission_bytes_invalid
+is a definite refusal row" (W1b); S11 raw-bypass-negative `1 !== 0`; owner-core 20 "requires a
+control-plane mutation ingress"); T2 red (stopped, 18.7). Files: publication 11/12, continuation
+25/26, leadership 5/5, row-repair 45/45, real-publication 1/1, post-copy 2/2, growth-dispatch 13/13,
+mirror 9/10, outcome-routing 102/102, dedup-gap 69/69, delivered-create 35/35, S11 2/3, owner-core 19/20.
+
+### 18.4 Corrected table cells (section 10)
+
+A new record field `waiting` = {state, reason} names what a record waits for: `none` (nothing
+owed: its blocker's trigger or its custodian owns it; both already named fields), `continuation`,
+`bound_spent`, `route_publication`, `row_change`. It is set by the decision's exits and settled at
+the end of every decision; one log line per transition into a wait (warn; error for `row_change`;
+`bound_spent` is its single `wait_bound_spent` report). There is no snapshot or diagnostic surface
+of this owner anywhere in `src/` (searched: repository, coordinator, admin); the record in
+`retainedPlacementRepairs` is where the owner already exposes its named state, so the field lives
+there. No endpoint was added.
+
+| Cell | Was | Now |
+| --- | --- | --- |
+| 10.5 G, timer fires | impossible (I-T: the custodian owns the continuation) | was POSSIBLE on `f42102c84` (T1 red: an uncommitted answer carrying custody armed the sender while DELEGATED). Now impossible by construction: a delegated record owes nothing after an uncommitted or unknown answer carrying custody (the custodian owns the entry, its trigger and its continuation), and the end of every decision closes the continuation of a delegated record |
+| 10.5 G, caller arrival / blocker clear / capacity release | JOIN: re-present the exact entry | JOIN re-presents to the current REMOTE binding; when the rebind finds the LOCAL ledger leader (the origin became leader), custody is void and the join decides as RETRY: contention first, unchanged BUSY gives zero proposals (F3) |
+| 10.5 G, route change | custody not trusted across a publication (superseded in 16.6) | a changed binding voids custody and the HANDOFF reads; an unchanged binding with nothing owed is a pure hint |
+| 10.5 G, receiver tenure ends by term only (new row) | not in the table | NOT OBSERVED by the sender: no publication carries the term (T2 open, 18.7) |
+| 10.2 D, read unavailable | O, continuation with the real reason | the reason names the owner: transient (`owner_read_failed`, `unqualified_leadership`, `unqualified_position`), disclaim, `outcome_unknown`, `owner_unavailable` -> O (continuation, same window); `unqualified_binding`, `route_unavailable` -> `route_publication` (no timer, ROUTE owed); `invalid_operation_row`, `unqualified_shape` -> `row_change` (no timer). Also with NO binding (F5: no longer folded into `route_unavailable`) |
+| 10.2 D, read invalid | X, one ERROR | `row_change`, one ERROR per transition into it, not per evaluation (V1) |
+| 10.2 D, a qualified read followed by a failed presentation | (implicit: the read reset the window) | not progress: the window is kept (F2) |
+| 10.3 P / 10.4 B, route unavailable | binding UNAVAILABLE, obligation kept, next publication | the same, and visible: `waiting` = `route_publication` with its reason, one warn line per transition (V1) |
+| 10.6 O, timer fires | decision consuming `owed` | an owed revalidation always reaches a read, also on an unchanged binding (F1); the only no-op is a pure publication hint with nothing owed |
+| 10.6 O, a decision ends on an event-owned wait | (left the continuation OPEN with its window) | the window closes; a later independent failure opens its own (F4) |
+| 10.7 X | SPENT or INVALID_ROW | two named waits: `bound_spent` (continuation SPENT, one report) and `row_change` |
+
+### 18.5 Re-drive of a withheld dispatch: what the owner exposes (specification only)
+
+Ruled post-merge work (integration line); not implemented here. What the retained owner must expose
+so the post-merge writer can implement the re-drive without the owner becoming a scheduler (the
+verifier's section 8, adopted as the specification):
+- One edge-triggered notification, emitted only at the single retirement site
+  `retireRetainedRepair` (`replica-operation-repository-retained-placement-repair.js`), synchronously,
+  once per record, no timer, no retry.
+- Emitted only for a CALLER-origin record that has answered `false` to at least one caller (the
+  record must remember that it refused a caller: a named field, not a sentinel).
+- Payload: the operation identity (`operationId`, `createdAt`) and a named outcome:
+  `CONFIRMED` (settled EXACT) or `UNCONFIRMED` with its reason (`CHANGED`, a definite refusal with
+  its failure code, a permanent committed refusal with its reason).
+- Never on shutdown (`clearRetainedPlacementRepairCustody`), never on a receiver's tenure release of
+  an ingress record, never on SPENT (a spent bound is not a settlement: the record is kept).
+- Consumer: the workflow owner's fenced per-operation entry (after `953d705f8` is on the line)
+  decides whether to dispatch; the retained owner never dispatches.
+
+### 18.6 Mutation table at the corrective head **[lab]**
+
+Pending (built and run in progress; this section is updated as each completes).
+
+### 18.7 Stopped / open
+
+T2 (term-only tenure end), STOPPED as instructed. What exists **[read]**: custody carries the
+receiver's `ledgerTerm` (attested at ingress); the sender's binding (`resolveRetainedPlacementRepairBinding`)
+carries node, replica, address, the node's published boot incarnation and the replica's SERVICES
+`created_at`, but no term. The PARTITIONS leader publication (`createLeaderNodeMutationHelper`,
+`partition-service-metadata-mutation-helpers.js`) writes only `leader_node_id` and `updated_at`; the
+`partitions` schema has no term column (`system-table-core-schema-definitions.js`). SERVICES role
+publications collapse leader to follower and carry no term. The receiver's answers carry the term
+only in reply to a presentation, and with no caller nothing is presented. So nothing published
+carries the term, and the sender cannot learn a term-only end without a timer (forbidden) or a
+caller. What would have to be published: the ledger leader's raft term with its leader identity,
+i.e. a `leader_term` column on the PARTITIONS row written by `queueLeaderNodeUpdate(leaderNodeId,
+raftTerm)` (it already receives the term) in the same CAS as `leader_node_id`; then
+`resolvePlacementLedgerRoute` returns it, the binding carries it, and custody holds only while
+`custody.ledgerTerm === binding.leaderTerm` (a republished term is then a route change, which
+already voids custody and re-presents). Owner of that change: the partition leadership publication
+(outside this writer's files). The witness stays in the suite, red, naming the gap.
+
+Other open items carried: the zero-row update arm's fence (F8) and the capability probes outside the
+owner (post-merge, not started); verifier F11 items not touched by a witness here (the send port's
+`null` for "no route", `lastDecision` not reset at decision start, the second route resolution in the
+send, PENDING without custody owing nothing at the sender).

@@ -1,0 +1,2069 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.47
+[tv-dator] placement-shell=3407184
+[tv-dator] placement-head=487d12c91388b51e00427aef9e58460b39bb6096
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3407633
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 63C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js (313 assertions, 1316ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: retry-scheduled rebalancer handoff progress contracts expose bounded owner re-entry
+[tv-dator]     ok 1 - accepted retry-scheduled handoff progress should name bounded owner re-entry
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..1
+[tv-dator] ok 1 - retry-scheduled rebalancer handoff progress contracts expose bounded owner re-entry # time=73.544ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: retry-scheduled handoff owner snapshots re-enter during normalization
+[tv-dator]     ok 1 - retry-scheduled handoff snapshots should wake the remote owner when no bounded retry is active
+[tv-dator]     ok 2 - retry-scheduled handoff re-entry should use the canonical dispatch ingress
+[tv-dator]     ok 3 - retry-scheduled handoff re-entry should arm bounded handoff verification
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..3
+[tv-dator] ok 2 - retry-scheduled handoff owner snapshots re-enter during normalization # time=12.244ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: priority transition retries stay armed while the workflow owner is uninitialized
+[tv-dator]     ok 1 - initial retryable transition pressure should arm one transition retry
+[tv-dator]     ok 2 - initial retryable transition pressure should arm one transition retry
+[tv-dator]     ok 3 - uninitialized workflow owners should re-arm protected priority transition retries
+[tv-dator]     ok 4 - one protected transition retry timer should remain armed while initialization recovers
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] ok 3 - priority transition retries stay armed while the workflow owner is uninitialized # time=5.061ms
+[tv-dator] 
+[tv-dator] # Subtest: topology operator witness maps dispatch-pending owner progress
+[tv-dator]     ok 1 - topology operator witness should expose the required owner contract fields
+[tv-dator]     ok 2 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 3 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 4 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 5 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 6 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 7 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 8 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 9 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 10 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 11 - topology operator witness should expose exactly one current step
+[tv-dator]     ok 12 - topology operator witness should expose one scalar next action
+[tv-dator]     ok 13 - decision snapshots should expose the live topology witness at the summary boundary
+[tv-dator]     ok 14 - topology operator witness should expose the required owner contract fields
+[tv-dator]     ok 15 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 16 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 17 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 18 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 19 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 20 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 21 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 22 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 23 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 24 - topology operator witness should expose exactly one current step
+[tv-dator]     ok 25 - topology operator witness should expose one scalar next action
+[tv-dator]     ok 26 - topology operator witness should expose the required owner contract fields
+[tv-dator]     ok 27 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 28 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 29 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 30 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 31 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 32 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 33 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 34 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 35 - dispatch-pending owner progress should produce a step witness
+[tv-dator]     ok 36 - topology operator witness should expose exactly one current step
+[tv-dator]     ok 37 - topology operator witness should expose one scalar next action
+[tv-dator]     1..37
+[tv-dator] ok 4 - topology operator witness maps dispatch-pending owner progress # time=10.902ms
+[tv-dator] 
+[tv-dator] # Subtest: topology operator witness maps owner retry progress
+[tv-dator]     ok 1 - topology operator witness should expose the required owner contract fields
+[tv-dator]     ok 2 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 3 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 4 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 5 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 6 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 7 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 8 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 9 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 10 - owner retry progress should produce a retry step witness
+[tv-dator]     ok 11 - topology operator witness should expose exactly one current step
+[tv-dator]     ok 12 - topology operator witness should expose one scalar next action
+[tv-dator]     1..12
+[tv-dator] ok 5 - topology operator witness maps owner retry progress # time=1.486ms
+[tv-dator] 
+[tv-dator] # Subtest: topology operator witness maps publication ACK progress
+[tv-dator]     ok 1 - topology operator witness should expose the required owner contract fields
+[tv-dator]     ok 2 - publication ACK progress should produce a step witness
+[tv-dator]     ok 3 - publication ACK progress should produce a step witness
+[tv-dator]     ok 4 - publication ACK progress should produce a step witness
+[tv-dator]     ok 5 - publication ACK progress should produce a step witness
+[tv-dator]     ok 6 - publication ACK progress should produce a step witness
+[tv-dator]     ok 7 - publication ACK progress should produce a step witness
+[tv-dator]     ok 8 - publication ACK progress should produce a step witness
+[tv-dator]     ok 9 - publication ACK progress should produce a step witness
+[tv-dator]     ok 10 - publication ACK progress should produce a step witness
+[tv-dator]     ok 11 - topology operator witness should expose exactly one current step
+[tv-dator]     ok 12 - topology operator witness should expose one scalar next action
+[tv-dator]     1..12
+[tv-dator] ok 6 - topology operator witness maps publication ACK progress # time=1.53ms
+[tv-dator] 
+[tv-dator] # Subtest: topology operator witness maps active-gate reconcile progress
+[tv-dator]     ok 1 - topology operator witness should expose the required owner contract fields
+[tv-dator]     ok 2 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 3 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 4 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 5 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 6 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 7 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 8 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 9 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 10 - active-gate reconcile progress should produce a step witness
+[tv-dator]     ok 11 - topology operator witness should expose exactly one current step
+[tv-dator]     ok 12 - topology operator witness should expose one scalar next action
+[tv-dator]     1..12
+[tv-dator] ok 7 - topology operator witness maps active-gate reconcile progress # time=1.348ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: coordinator-created dispatch-pending transition retries preserve the operation snapshot for deferred visibility re-entry
+[tv-dator]     ok 1 - retryable coordinator-created claim failures should persist the owner progress outcome
+[tv-dator]     ok 2 - retryable coordinator-created claim failures should keep the local dispatch command as the deferred effect
+[tv-dator]     ok 3 - the retryable claim failure should arm one transition retry
+[tv-dator]     ok 4 - the transition retry should retain the adapter operation snapshot
+[tv-dator]     ok 5 - deferred visibility should re-enter dispatch from the retained snapshot
+[tv-dator]     ok 6 - deferred retry dispatch should use the original operation id
+[tv-dator]     ok 7 - deferred retry dispatch should preserve the dispatch-pending workflow step
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+[tv-dator]     1..7
+[tv-dator] ok 8 - coordinator-created dispatch-pending transition retries preserve the operation snapshot for deferred visibility re-entry # time=3.869ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: dispatch transition retries preserve priority owner context after the step timeout
+[tv-dator]     ok 1 - retryable transition pressure should defer the dispatch path
+[tv-dator]     ok 2 - the transition failure should arm one retry timer
+[tv-dator]     ok 3 - priority control-plane dispatch retries should keep operation-budget grace after the step timeout
+[tv-dator]     ok 4 - deferred transition retry should re-enter dispatch instead of timeout reconcile
+[tv-dator]     ok 5 - deferred retry dispatch should preserve the priority partition context
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+[tv-dator]     1..5
+[tv-dator] ok 9 - dispatch transition retries preserve priority owner context after the step timeout # time=4.301ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-source',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] # Subtest: checkTimeouts re-wakes restart-discovered remote-owned priority dispatch-pending PENDING rows while the operation budget is still active
+[tv-dator]     ok 1 - the timeout witness should normalize the cached replica_operations row into one operation contract
+[tv-dator]     ok 2 - the timeout witness should stay remote-owned on the observing source node
+[tv-dator]     ok 3 - the timeout witness should be eligible for dispatch re-arm while its operation budget remains active
+[tv-dator]     ok 4 - stale remote-owned timeout witnesses should use the explicit remote drain re-arm owner state
+[tv-dator]     ok 5 - stale remote-owned timeout witnesses should route through remote-owner wake instead of staying transition-deferred
+[tv-dator]     ok 6 - timeout reconciliation should wake the remote owner once while the retry timer remains armed
+[tv-dator]     ok 7 - timeout reconciliation should target the canonical remote replica-dispatch ingress
+[tv-dator]     ok 8 - timeout reconciliation should arm one remote handoff follow-up timer for the stale PENDING row
+[tv-dator]     ok 9 - the remote handoff retry lane should stay armed after timeout reconciliation
+[tv-dator]     ok 10 - timeout reconciliation should keep the durable row in PENDING while the remote owner is being re-woken
+[tv-dator]     ok 11 - timeout reconciliation should not fail or mutate the remote-owned row while the operation budget is still active
+[tv-dator]     ok 12 - timeout reconciliation should not record a timeout failure while the remote owner retry lane is active
+[tv-dator]     ok 13 - timeout reconciliation should not persist step updates for the remote-owned row before remote progress is observed
+[tv-dator]     ok 14 - the deferred remote handoff retry should still wake the remote owner while the source owner is transiently uninitialized
+[tv-dator]     ok 15 - the successful remote handoff wake should leave the bounded verification lane armed while source initialization recovers
+[tv-dator]     ok 16 - the verification retry should continue re-entering the owner wake path after source initialization recovers
+[tv-dator]     ok 17 - deferred remote handoff retry should use the same canonical replica-dispatch ingress
+[tv-dator]     ok 18 - successful retry wake should leave the bounded verification lane armed
+[tv-dator]     ok 19 - deferred remote handoff retry should not mutate the remote-owned row before owner progress is observed
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-source', inFlightOperations: 1 }
+[tv-dator]     1..19
+[tv-dator] ok 10 - checkTimeouts re-wakes restart-discovered remote-owned priority dispatch-pending PENDING rows while the operation budget is still active # time=7.583ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-source',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: checkTimeouts re-wakes stale remote-owned priority handoff retries even while transition grace remains active
+[tv-dator]     ok 1 - the stale witness should arm the remote handoff retry lane first
+[tv-dator]     ok 2 - the longer transition grace should still be active after the handoff retry is overdue
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator]     ok 3 - timeout reconciliation should re-wake the remote owner when the armed handoff retry is overdue
+[tv-dator]     ok 4 - stale handoff retry reconciliation should use the canonical remote dispatch ingress
+[tv-dator]     ok 5 - the fresh remote owner wake should replace the stale retry with a new verification timer
+[tv-dator]     ok 6 - exactly one remote handoff retry timer should remain armed after stale retry reconciliation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-source', inFlightOperations: 1 }
+[tv-dator]     1..6
+[tv-dator] ok 11 - checkTimeouts re-wakes stale remote-owned priority handoff retries even while transition grace remains active # time=2.854ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: checkTimeouts re-dispatches restart-discovered locally owned priority dispatch-pending PENDING rows while the operation budget is still active
+[tv-dator]     ok 1 - the timeout witness should be locally owned by the replacement target node
+[tv-dator]     ok 2 - the local timeout witness should be eligible for dispatch re-arm while its operation budget remains active
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'control_plane_publications-p1',
+[tv-dator]   ingress: 'priority_claim_cas'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'control_plane_publications-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'control_plane_publications-p1'
+[tv-dator] }
+[tv-dator]     ok 3 - timeout reconciliation should dispatch the existing local-owner operation once
+[tv-dator]     ok 4 - local-owner re-dispatch should target the canonical replica handler
+[tv-dator]     ok 5 - local-owner re-dispatch should advance durable workflow progress out of PENDING
+[tv-dator]     ok 6 - local-owner re-dispatch should persist the creating status after dispatch acknowledgement
+[tv-dator]     ok 7 - local-owner re-dispatch should not record a timeout failure while operation budget remains active
+[tv-dator]     ok 8 - local-owner re-dispatch should persist the SENDING and CREATING transitions
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..8
+[tv-dator] ok 12 - checkTimeouts re-dispatches restart-discovered locally owned priority dispatch-pending PENDING rows while the operation budget is still active # time=12.62ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: checkTimeouts re-dispatches locally owned priority SQL PENDING rows while the operation budget is still active
+[tv-dator]     ok 1 - priority SQL timeout witness should be locally owned by the replacement target node
+[tv-dator]     ok 2 - priority SQL PENDING rows should be eligible for dispatch re-arm while the operation budget remains active
+[tv-dator]     ok 3 - visible CREATING target progress should not replay duplicate create dispatch
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   ingress: 'priority_claim_cas'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_write_operations-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_write_operations-p1'
+[tv-dator] }
+[tv-dator]     ok 4 - priority SQL timeout reconciliation should dispatch the local-owner operation once
+[tv-dator]     ok 5 - priority SQL re-dispatch should target the canonical replica handler
+[tv-dator]     ok 6 - priority SQL replica dispatch should carry the owner delivery deadline
+[tv-dator]     ok 7 - priority SQL replica dispatch should identify the owner delivery source
+[tv-dator]     ok 8 - priority SQL re-dispatch should advance durable workflow progress out of PENDING
+[tv-dator]     ok 9 - priority SQL re-dispatch should persist the creating status after dispatch acknowledgement
+[tv-dator]     ok 10 - priority SQL re-dispatch should persist the SENDING and CREATING transitions
+[tv-dator]     ok 11 - priority SQL dispatch claim should bypass the routed system write session
+[tv-dator]     ok 12 - priority SQL dispatch claim should not create a routed session id
+[tv-dator]     ok 13 - priority SQL dispatch claim should preserve the PENDING compare-and-set guard
+[tv-dator]     ok 14 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+[tv-dator]     ok 15 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+[tv-dator]     ok 16 - priority SQL dispatch progress should use a bounded per-attempt mutation budget
+[tv-dator]     ok 17 - priority SQL dispatch progress should use a bounded per-attempt mutation budget
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..17
+[tv-dator] ok 13 - checkTimeouts re-dispatches locally owned priority SQL PENDING rows while the operation budget is still active # time=6.524ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 30000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: critical SQL CREATING dispatch retry remains rearm-eligible until the operation budget closes
+[tv-dator]     ok 1 - stale CREATING progress should still time out before dispatch retry is armed
+[tv-dator]     ok 2 - retryable CREATING dispatch pressure should arm dispatch retry
+[tv-dator]     ok 3 - dispatch retry should arm exactly one timer
+[tv-dator]     ok 4 - active dispatch retry should protect CREATING within the operation budget
+[tv-dator]     ok 5 - active dispatch retry should keep CREATING rearm-eligible within the operation budget
+[tv-dator]     ok 6 - CREATING dispatch retry should stop protecting once the operation budget closes
+[tv-dator]     ok 7 - expired operation budget should block further CREATING dispatch rearm
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+[tv-dator]     1..7
+[tv-dator] ok 14 - critical SQL CREATING dispatch retry remains rearm-eligible until the operation budget closes # time=4.082ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_write_operations-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] # Subtest: critical SQL CREATING reconnect delivery arms bounded dispatch retry
+[tv-dator]     ok 1 - reconnecting delivery should keep critical create dispatch retryable
+[tv-dator]     ok 2 - critical create dispatch should attempt delivery once
+[tv-dator]     ok 3 - reconnecting delivery should arm one dispatch retry
+[tv-dator]     ok 4 - dispatch retry should preserve the router reconnect retry-after
+[tv-dator]     ok 5 - authoritative terminal settlement refuses a stale SENDING retry
+[tv-dator]     ok 6 - terminal-first authority reaches no second physical CREATE
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 15 - critical SQL CREATING reconnect delivery arms bounded dispatch retry # time=5.67ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   ingress: 'priority_claim_cas'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_write_operations-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_write_operations-p1'
+[tv-dator] }
+[tv-dator] # Subtest: local-owner priority SQL dispatch proceeds when the SENDING claim is retryably deferred
+[tv-dator]     ok 1 - retryable priority claim pressure should not block local target dispatch
+[tv-dator]     ok 2 - the next durable priority transition should advance directly to CREATING
+[tv-dator]     ok 3 - deferred local priority claims should preserve the original PENDING CAS
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..3
+[tv-dator] ok 16 - local-owner priority SQL dispatch proceeds when the SENDING claim is retryably deferred # time=17.845ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   ingress: 'priority_claim_cas'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_write_operations-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_write_operations-p1'
+[tv-dator] }
+[tv-dator] # Subtest: local-owner priority SQL dispatch publishes deferred CREATING progress after target delivery
+[tv-dator]     ok 1 - priority SQL timeout reconciliation should dispatch the local-owner operation once
+[tv-dator]     not ok 2 - priority SQL re-dispatch should persist the SENDING and CREATING transitions
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+[tv-dator]         lineNumber: 897
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:897:9)
+[tv-dator]       source: |2
+[tv-dator]                 TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+[tv-dator]               );
+[tv-dator]               t.equal(
+[tv-dator]         --------^
+[tv-dator]                 updateCount,
+[tv-dator]                 2,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -2
+[tv-dator]         +3
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - retryable priority progress pressure should leave the durable row stale
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+[tv-dator]         lineNumber: 902
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:902:9)
+[tv-dator]       source: |2
+[tv-dator]                 TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+[tv-dator]               );
+[tv-dator]               t.equal(
+[tv-dator]         --------^
+[tv-dator]                 operationRow.workflow_step,
+[tv-dator]                 TEST_STEP_SENDING,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -SENDING
+[tv-dator]         +CREATING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 4 - priority SQL dispatch progress should use a bounded per-attempt mutation budget
+[tv-dator]     not ok 5 - a rejected CREATING write cannot replace the last committed operation step
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+[tv-dator]         lineNumber: 912
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:912:9)
+[tv-dator]       source: |2
+[tv-dator]                 TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+[tv-dator]               );
+[tv-dator]               t.equal(
+[tv-dator]         --------^
+[tv-dator]                 snapshot?.coordinator?.operation?.workflowStep,
+[tv-dator]                 TEST_STEP_SENDING,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -SENDING
+[tv-dator]         +CREATING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - retryable priority progress pressure should arm one durable retry
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+[tv-dator]         lineNumber: 917
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:917:9)
+[tv-dator]       source: >2
+[tv-dator]                 'a rejected CREATING write cannot replace the last committed operation step',
+[tv-dator]               );
+[tv-dator]               t.equal(
+[tv-dator]         --------^
+[tv-dator]                 deferredTimers.length,
+[tv-dator]                 1,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 7 - the rejected write retains the same operation’s retry
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+[tv-dator]         lineNumber: 923
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:923:9)
+[tv-dator]       source: >2
+[tv-dator]               );
+[tv-dator]       
+[tv-dator]               t.ok(coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+[tv-dator]         --------^
+[tv-dator]                 operationRow.operation_id), 'the rejected write retains the same operation’s retry');
+[tv-dator]               await deferredTimers[0].fn();
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     not ok 8 - Cannot read properties of undefined (reading 'fn')
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js:925:31)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+[tv-dator]         lineNumber: 925
+[tv-dator]         columnNumber: 31
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]               t.ok(coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+[tv-dator]                 operationRow.operation_id), 'the rejected write retains the same operation’s retry');
+[tv-dator]               await deferredTimers[0].fn();
+[tv-dator]         ------------------------------^
+[tv-dator]       
+[tv-dator]               t.equal(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..8
+[tv-dator] not ok 17 - local-owner priority SQL dispatch publishes deferred CREATING progress after target delivery # time=50.895ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+[tv-dator]     lineNumber: 6
+[tv-dator]     columnNumber: 3
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]   
+[tv-dator]     for (const {name, fn} of
+[tv-dator]     priorityRecoveryDispatchPendingTimeoutReentryTestCases) {
+[tv-dator]       test(name, fn);
+[tv-dator]     --^
+[tv-dator]   
+[tv-dator]     }
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'ACTIVE',
+[tv-dator]   reason: 'dispatch_already_exists',
+[tv-dator]   status: 'active',
+[tv-dator]   partitionId: 'control_plane_publications-p1'
+[tv-dator] }
+[tv-dator] # Subtest: local-owner priority SQL dispatch wake reconciles PENDING rows from active target evidence
+[tv-dator]     ok 1 - dispatch wake reconciliation should report owner progress
+[tv-dator]     ok 2 - active target evidence should preempt duplicate create dispatch
+[tv-dator]     ok 3 - dispatch wake should reconcile the stale PENDING row to ACTIVE
+[tv-dator]     ok 4 - dispatch wake should persist the active status from target evidence
+[tv-dator]     ok 5 - dispatch wake should reconcile the stale PENDING row to ACTIVE
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..5
+[tv-dator] ok 18 - local-owner priority SQL dispatch wake reconciles PENDING rows from active target evidence # time=3.564ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'control_plane_publications-p1'
+[tv-dator] }
+[tv-dator] # Subtest: local-owner priority SQL dispatch wake reconciles PENDING rows from accepted target evidence
+[tv-dator]     ok 1 - dispatch wake reconciliation should report owner progress
+[tv-dator]     ok 2 - active target evidence should preempt duplicate create dispatch
+[tv-dator]     ok 3 - dispatch wake should reconcile accepted target evidence to CREATING
+[tv-dator]     ok 4 - dispatch wake should persist the creating status from accepted target evidence
+[tv-dator]     ok 5 - dispatch wake should reconcile accepted target evidence to CREATING
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..5
+[tv-dator] ok 19 - local-owner priority SQL dispatch wake reconciles PENDING rows from accepted target evidence # time=3.135ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   ingress: 'priority_claim_cas'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_write_operations-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] # Subtest: local-owner priority SQL dispatch publishes deferred transition visibility while authoritative reads lag
+[tv-dator]     ok 1 - priority SQL timeout reconciliation should dispatch the local-owner operation once
+[tv-dator]     ok 2 - priority SQL re-dispatch should persist the SENDING and CREATING transitions
+[tv-dator]     ok 3 - the test must keep the authoritative SQL row stale to model lagging visibility
+[tv-dator]     ok 4 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+[tv-dator]     ok 5 - priority SQL dispatch claim should use a bounded per-attempt mutation budget
+[tv-dator]     ok 6 - SQLite confirms that the hidden CREATING update actually committed
+[tv-dator]     ok 7 - a stale authority result cannot publish the hidden step as observed
+[tv-dator]     ok 8 - priority snapshot should consume the owner-persisted transition instead of reclassifying stale PENDING as dispatch-pending
+[tv-dator]     ok 9 - the recovered step belongs to the dispatch already sent
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..9
+[tv-dator] ok 20 - local-owner priority SQL dispatch publishes deferred transition visibility while authoritative reads lag # time=13.488ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-authoritative-only-timeout-operation',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   ingress: 'priority_claim_cas'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'priority-authoritative-only-timeout-operation',
+[tv-dator]   target: 'node-target/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'replica_operations-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'priority-authoritative-only-timeout-operation',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] # Subtest: checkTimeouts supplements cache-visible priority scans with authoritative no-step rows
+[tv-dator]     ok 1 - priority timeout scans should supplement partial cache visibility with one authoritative owner read
+[tv-dator]     ok 2 - authoritative-only no-step priority rows should re-enter local dispatch
+[tv-dator]     ok 3 - authoritative-only no-step priority rows should persist dispatch progress
+[tv-dator]     ok 4 - authoritative-only priority rows should dispatch through the replica handler
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..4
+[tv-dator] ok 21 - checkTimeouts supplements cache-visible priority scans with authoritative no-step rows # time=5.04ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Bypassing re-entrant priority recovery dispatch scheduling {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1'
+[tv-dator] }
+[tv-dator] # Subtest: priority recovery snapshots re-enter stale SENDING pending dispatch-pending workflow-timeout operations through the workflow owner
+[tv-dator]     ok 1 - the snapshot should return stale SENDING timeout rows to owner advancement
+[tv-dator]     ok 2 - snapshot re-entry should not leave the stale SENDING row transition-deferred
+[tv-dator]     ok 3 - snapshot re-entry should wake the remote operation owner and keep bounded verification
+[tv-dator]     ok 4 - snapshot re-entry should use the canonical remote replica-dispatch ingress
+[tv-dator]     ok 5 - snapshot re-entry should arm one verification retry for the stale SENDING row
+[tv-dator]     ok 6 - snapshot re-entry should preserve the remote-owned durable pending status
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 22 - priority recovery snapshots re-enter stale SENDING pending dispatch-pending workflow-timeout operations through the workflow owner # time=4.361ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: priority recovery snapshots defer dispatch-pending re-entry when the operation owner lane is already held
+[tv-dator]     ok 1 - the snapshot should return stale SENDING timeout rows to owner advancement
+[tv-dator]     ok 2 - owner-lane-held snapshots should not wake the remote owner inline
+[tv-dator]     ok 3 - owner-lane-held snapshots should defer dispatch-pending re-entry
+[tv-dator]     ok 4 - deferred owner-lane re-entry should wake the remote owner after the lane releases
+[tv-dator]     ok 5 - snapshot re-entry should use the canonical remote replica-dispatch ingress
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..5
+[tv-dator] ok 23 - priority recovery snapshots defer dispatch-pending re-entry when the operation owner lane is already held # time=3.239ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: priority recovery snapshots surface retry-scheduled rebalancer handoff progress while a remote handoff retry is already active
+[tv-dator]     ok 1 - active handoff retry snapshots should preserve the existing bounded retry
+[tv-dator]     ok 2 - active handoff retry should surface bounded rebalancer-handoff progress
+[tv-dator]     ok 3 - active handoff retry should surface bounded rebalancer-handoff progress
+[tv-dator]     ok 4 - active handoff retry should surface bounded rebalancer-handoff progress
+[tv-dator]     ok 5 - active handoff retry should surface bounded rebalancer-handoff progress
+[tv-dator]     ok 6 - active handoff retry should surface bounded rebalancer-handoff progress
+[tv-dator]     ok 7 - active handoff retry snapshots should not wake the remote owner inline
+[tv-dator]     ok 8 - active handoff retry snapshots should preserve the existing bounded retry
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..8
+[tv-dator] ok 24 - priority recovery snapshots surface retry-scheduled rebalancer handoff progress while a remote handoff retry is already active # time=3.675ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending owner progress
+[tv-dator]     ok 1 - retry-scheduled handoff snapshots should wake the remote owner when no bounded retry is active
+[tv-dator]     ok 2 - retry-scheduled handoff snapshots should wake the remote owner when no bounded retry is active
+[tv-dator]     ok 3 - retry-scheduled handoff re-entry should use the canonical dispatch ingress
+[tv-dator]     ok 4 - retry-scheduled handoff re-entry should arm bounded handoff verification
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] ok 25 - retry-scheduled rebalancer handoff snapshots re-enter dispatch-pending owner progress # time=7.477ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: dispatch-pending owner observation effects wake remote handoff using snapshot captured time
+[tv-dator]     ok 1 - unexecuted advance-owner effects should wake the remote owner before drain
+[tv-dator]     ok 2 - unexecuted advance-owner effects should wake the remote owner before drain
+[tv-dator]     ok 3 - advance-owner effect re-entry should use the canonical dispatch ingress
+[tv-dator]     ok 4 - advance-owner effect re-entry should arm bounded handoff verification
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] ok 26 - dispatch-pending owner observation effects wake remote handoff using snapshot captured time # time=4.356ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: representative control-plane publication retry-scheduled handoff residual preserves one bounded remote retry for duplicate witnesses
+[tv-dator]     ok 1 - representative publication handoff retry should stay bounded
+[tv-dator]     ok 2 - duplicate representative handoff witnesses should not duplicate remote wake
+[tv-dator]     ok 3 - duplicate representative handoff witnesses should not duplicate remote wake
+[tv-dator]     ok 4 - duplicate representative handoff witnesses should preserve one retry timer
+[tv-dator]     ok 5 - duplicate representative handoff witnesses should preserve one retry timer
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..5
+[tv-dator] ok 27 - representative control-plane publication retry-scheduled handoff residual preserves one bounded remote retry for duplicate witnesses # time=3.413ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: publication count-only retry-scheduled handoff residual preserves one bounded remote retry per unique operation
+[tv-dator]     ok 1 - count-only publication residual should normalize duplicate witnesses to unique retries
+[tv-dator]     ok 2 - count-only publication residual should normalize duplicate witnesses to unique retries
+[tv-dator]     ok 3 - count-only publication residual should normalize duplicate witnesses to unique retries
+[tv-dator]     ok 4 - count-only publication residual should normalize duplicate witnesses to unique retries
+[tv-dator]     ok 5 - count-only publication residual should not duplicate remote wake state
+[tv-dator]     ok 6 - count-only publication residual should not duplicate remote wake state
+[tv-dator]     ok 7 - count-only publication residual should not duplicate remote wake state
+[tv-dator]     ok 8 - count-only publication residual should not duplicate remote wake state
+[tv-dator]     ok 9 - count-only publication residual should not duplicate remote wake state
+[tv-dator]     ok 10 - count-only publication residual should preserve one retry timer per unique operation
+[tv-dator]     ok 11 - count-only publication residual should preserve one retry timer per unique operation
+[tv-dator] Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..11
+[tv-dator] ok 28 - publication count-only retry-scheduled handoff residual preserves one bounded remote retry per unique operation # time=4.574ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: representative retry-deferred PENDING handoff residuals stay bounded across priority partitions
+[tv-dator]     ok 1 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+[tv-dator]     ok 2 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+[tv-dator]     ok 3 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+[tv-dator]     ok 4 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+[tv-dator]     ok 5 - retry-deferred handoff snapshots should not duplicate remote wakes inline
+[tv-dator]     ok 6 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+[tv-dator]     ok 7 - retry-deferred handoff snapshots should preserve one bounded retry per representative partition
+[tv-dator]     ok 8 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+[tv-dator]     ok 9 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+[tv-dator]     ok 10 - retry-deferred handoff snapshots should preserve the representative PENDING retry shape
+[tv-dator]     ok 11 - timer-fired retry-deferred handoff should use the refreshed operation row
+[tv-dator]     ok 12 - timer-fired retry-deferred handoff should use the refreshed operation row
+[tv-dator]     ok 13 - timer-fired retry-deferred handoff should use the refreshed operation row
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..13
+[tv-dator] ok 29 - representative retry-deferred PENDING handoff residuals stay bounded across priority partitions # time=12.238ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Bypassing re-entrant priority recovery dispatch scheduling {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1'
+[tv-dator] }
+[tv-dator] # Subtest: priority recovery snapshots re-enter serial-wait PENDING rows through the workflow owner
+[tv-dator]     ok 1 - serial-wait PENDING rows with durable operation evidence should clear the stale serial blocker
+[tv-dator]     ok 2 - serial-wait PENDING rows should be classified as in-flight workflow progress
+[tv-dator]     ok 3 - serial-wait PENDING rows should enter the dispatch-pending workflow phase
+[tv-dator]     ok 4 - serial-wait PENDING rows should surface owner advancement
+[tv-dator]     ok 5 - serial-wait PENDING rows should retain the source operation witness
+[tv-dator]     ok 6 - serial-wait PENDING rows should retain the source partition witness
+[tv-dator]     ok 7 - serial-wait PENDING rows should wake the remote owner and keep bounded verification
+[tv-dator]     ok 8 - serial-wait re-entry should use the canonical remote dispatch ingress
+[tv-dator]     ok 9 - serial-wait re-entry should arm one verification retry
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-observer', inFlightOperations: 0 }
+[tv-dator]     1..9
+[tv-dator] ok 30 - priority recovery snapshots re-enter serial-wait PENDING rows through the workflow owner # time=8.165ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: local-owner coordinator-created transition retries do not arm remote handoff retries
+[tv-dator]     ok 1 - local-owner retryable pressure should stay consumed by transition retry
+[tv-dator]     ok 2 - local-owner transition retry should not schedule remote handoff timers
+[tv-dator]     ok 3 - local-owner transition retry should not schedule remote handoff timers
+[tv-dator]     ok 4 - local-owner operations should reject direct remote handoff scheduling
+[tv-dator]     ok 5 - local-owner transition retry grace should remain active
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator]     1..5
+[tv-dator] ok 31 - local-owner coordinator-created transition retries do not arm remote handoff retries # time=1.567ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-source',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: coordinator-created remote handoff uses bounded priority delivery for dispatch-pending PENDING rows
+[tv-dator]     ok 1 - remote-owned dispatch-pending priority rows should wake the target owner immediately
+[tv-dator]     ok 2 - remote handoff should target the canonical target-owner replica-dispatch ingress
+[tv-dator]     ok 3 - remote handoff should carry a bounded timeout so transport cannot strand PENDING workflow progress
+[tv-dator]     ok 4 - remote handoff should identify the coordinator-created handoff boundary to transport
+[tv-dator]     ok 5 - retryable bounded handoff failure should arm a prompt verification retry
+[tv-dator]     ok 6 - remote handoff retry should honor the bounded delivery retry-after value
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-source', inFlightOperations: 1 }
+[tv-dator]     1..6
+[tv-dator] ok 32 - coordinator-created remote handoff uses bounded priority delivery for dispatch-pending PENDING rows # time=2.092ms
+[tv-dator] 
+[tv-dator] # Subtest: priority recovery snapshot builder reclassifies stale dispatch-pending PENDING rows to owner advancement
+[tv-dator]     ok 1 - stale dispatch-pending rows should remain in-flight, not operation-stalled
+[tv-dator]     ok 2 - stale dispatch-pending timeout blocker reasons should be cleared
+[tv-dator]     ok 3 - stale dispatch-pending rows should preserve persisted-not-dispatched actuation
+[tv-dator]     ok 4 - stale dispatch-pending rows should ask the owner to advance the existing operation
+[tv-dator]     ok 5 - stale dispatch-pending rows should not remain on workflow_timeout
+[tv-dator]     ok 6 - stale dispatch-pending rows should return to event-driven owner progress
+[tv-dator]     1..6
+[tv-dator] ok 33 - priority recovery snapshot builder reclassifies stale dispatch-pending PENDING rows to owner advancement # time=0.83ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: a stalled not-voter-ready REPLACE remove-dispatch op is un-masked and surfaced as actionable instead of spread_satisfied_in_flight
+[tv-dator]     ok 1 - seeded REPLACE remove-dispatch op is locally owned by node-target
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   deferReason: 'replace_remove_safety_blocked',
+[tv-dator]   errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+[tv-dator] }
+[tv-dator]     ok 2 - stalled op is no longer masked as spread_satisfied_in_flight (semanticState)
+[tv-dator]     ok 3 - stalled op completion no longer accepts drain as spread_satisfied_in_flight
+[tv-dator]     ok 4 - stalled op completion reports the honest blocker (drain not accepted)
+[tv-dator]     1..4
+[tv-dator] ok 34 - a stalled not-voter-ready REPLACE remove-dispatch op is un-masked and surfaced as actionable instead of spread_satisfied_in_flight # time=6.341ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: a still-progressing not-voter-ready REPLACE remove-dispatch op keeps its optimistic spread_satisfied_in_flight certification
+[tv-dator]     ok 1 - seeded REPLACE remove-dispatch op is locally owned by node-target
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target', inFlightOperations: 1 }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   deferReason: 'replace_remove_safety_blocked',
+[tv-dator]   errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+[tv-dator] }
+[tv-dator]     ok 2 - progressing op stays optimistically spread_satisfied_in_flight (not un-masked)
+[tv-dator]     1..2
+[tv-dator] ok 35 - a still-progressing not-voter-ready REPLACE remove-dispatch op keeps its optimistic spread_satisfied_in_flight certification # time=3.308ms
+[tv-dator] 
+[tv-dator] 1..35
+[tv-dator] # { total: 278, pass: 272, fail: 6 }
+[tv-dator] # time=328.404ms
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'control_plane_publications-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Wait bound spent {
+[tv-dator]   event: 'wait_bound_spent',
+[tv-dator]   wait: 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT',
+[tv-dator]   awaited: 'coordinator-created operation handed off to its remote owner',
+[tv-dator]   boundMs: 30000,
+[tv-dator]   elapsedMs: 1795302244536,
+[tv-dator]   lastObserved: {
+[tv-dator]     workflowStep: 'SENDING',
+[tv-dator]     stepTimedOut: true,
+[tv-dator]     operationBudgetActive: false,
+[tv-dator]     operationBudgetDeadlineMs: 1300000,
+[tv-dator]     type: 'REPLACE',
+[tv-dator]     status: 'pending',
+[tv-dator]     outcome: 'handoff_retry_cleared'
+[tv-dator]   },
+[tv-dator]   scope: {
+[tv-dator]     nodeId: 'node-observer',
+[tv-dator]     partitionId: 'control_plane_publications-p1',
+[tv-dator]     operationId: 'priority-dispatch-pending-timeout-operation'
+[tv-dator]   },
+[tv-dator]   repeats: 0
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff',
+[tv-dator]   partitionId: 'sql_transaction_participants-p1',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'retryable transition claim failure'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff',
+[tv-dator]   partitionId: 'sql_transaction_participants-p1',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Retryable control-plane transition failure'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   boundary: 'dispatch_local_owner_command',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'retryable transition claim failure'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   boundary: 'dispatch',
+[tv-dator]   partitionId: 'control_plane_publications-p1',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'retryable transition claim failure'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff',
+[tv-dator]   transportDeliveryState: 'deferred',
+[tv-dator]   transportReasonCode: 'transport_deferred'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'CREATING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'Message not acknowledged'
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-target',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'CREATING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'Connection to node node-target closed',
+[tv-dator]   transportDeliveryState: 'deferred',
+[tv-dator]   transportReasonCode: 'ROUTER_CONNECTION_CLOSED'
+[tv-dator] }
+[tv-dator] Wait bound spent {
+[tv-dator]   event: 'wait_bound_spent',
+[tv-dator]   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+[tv-dator]   awaited: 'persisted replica operation authoritatively visible',
+[tv-dator]   boundMs: 0,
+[tv-dator]   elapsedMs: 0,
+[tv-dator]   lastObserved: {
+[tv-dator]     expectedWorkflowStep: 'CREATING',
+[tv-dator]     expectedStatus: 'creating',
+[tv-dator]     polls: 1,
+[tv-dator]     sawVisibilityMismatch: true,
+[tv-dator]     deferredOutcome: false
+[tv-dator]   },
+[tv-dator]   scope: {
+[tv-dator]     nodeId: 'node-target',
+[tv-dator]     partitionId: 'sql_write_operations-p1',
+[tv-dator]     operationId: 'priority-sql-dispatch-pending-timeout-operation'
+[tv-dator]   },
+[tv-dator]   repeats: 0
+[tv-dator] }
+[tv-dator] Failed to query operations from system table {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   error: 'Authoritative replica operation not confirmed: priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   nodeId: 'node-target'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'priority-authoritative-only-timeout-operation',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'priority-authoritative-only-timeout-operation',
+[tv-dator]     replica_id: 'replica_operations-p1-r4',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795303244715,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795303244715
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'priority-authoritative-only-timeout-operation',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'priority-authoritative-only-timeout-operation',
+[tv-dator]     replica_id: 'replica_operations-p1-r4',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795303244716,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795303244717
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Wait bound spent {
+[tv-dator]   event: 'wait_bound_spent',
+[tv-dator]   wait: 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT',
+[tv-dator]   awaited: 'coordinator-created operation handed off to its remote owner',
+[tv-dator]   boundMs: 30000,
+[tv-dator]   elapsedMs: 1795302344730,
+[tv-dator]   lastObserved: {
+[tv-dator]     workflowStep: 'SENDING',
+[tv-dator]     stepTimedOut: true,
+[tv-dator]     operationBudgetActive: false,
+[tv-dator]     operationBudgetDeadlineMs: 1200000,
+[tv-dator]     type: 'REPLACE',
+[tv-dator]     status: 'pending',
+[tv-dator]     outcome: 'handoff_retry_cleared'
+[tv-dator]   },
+[tv-dator]   scope: {
+[tv-dator]     nodeId: 'node-observer',
+[tv-dator]     partitionId: 'sql_write_operations-p1',
+[tv-dator]     operationId: 'priority-dispatch-pending-timeout-operation'
+[tv-dator]   },
+[tv-dator]   repeats: 0
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '96c522ac-95c7-4713-96da-a98010d295d9',
+[tv-dator]   partitionId: 'control_plane_publications-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] ControlPlaneReadinessService missing CDC publication owner {
+[tv-dator]   nodeId: 'node-observer',
+[tv-dator]   owner: 'CDCGroupPropagationService',
+[tv-dator]   strictOwnerDependencies: false
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '4c6da3d9-3dc9-4288-81d8-d0730df1657d',
+[tv-dator]   partitionId: 'control_plane_publications-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '84f3d14d-b26a-4702-b7c4-4821eaf7acac',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'c56129f4-fbc9-4ccc-8e72-c625ae9259a4',
+[tv-dator]   partitionId: 'sql_transaction_participants-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '36b42a1f-bba3-487d-a7f4-c7cbc06c0c3e',
+[tv-dator]   partitionId: 'sql_transactions-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'SENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '3158736f-68aa-499b-a49e-129a8d14d6ed',
+[tv-dator]   partitionId: 'control_plane_publications-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   errorMessage: 'Message not acknowledged',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '54d4b90f-c738-4428-8747-d8c757464329',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   errorMessage: 'Message not acknowledged',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: '1062b470-3ae7-428f-b0c5-f0eade6230d8',
+[tv-dator]   partitionId: 'sql_transaction_participants-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 1000,
+[tv-dator]   errorMessage: 'Message not acknowledged',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation dispatch failure {
+[tv-dator]   operationId: 'priority-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 11,
+[tv-dator]   errorMessage: 'handoff retryable timeout',
+[tv-dator]   boundary: 'coordinator_created_remote_handoff',
+[tv-dator]   transportDeliveryState: 'deferred',
+[tv-dator]   transportReasonCode: 'transport_deferred'
+[tv-dator] }
+[tv-dator] Operation deferred by safety policy {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   sourceNodeId: 'node-source',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   reason: 'replace_remove_safety_blocked',
+[tv-dator]   errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+[tv-dator] }
+[tv-dator] REPLACE source removal waiting {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   phase: 'ACTIVE',
+[tv-dator]   sourceReplicaId: null,
+[tv-dator]   targetReplicaId: 'sql_write_operations-p1-r4',
+[tv-dator]   reason: 'replace_remove_safety_blocked',
+[tv-dator]   waitingSinceMs: 1795303244782,
+[tv-dator]   waitedMs: 0,
+[tv-dator]   lastAttemptSeq: null,
+[tv-dator]   lastAttemptUncertain: false,
+[tv-dator]   attemptRebuiltAfter: 'not_rebuilt',
+[tv-dator]   ownerPhase: 'active_deferring',
+[tv-dator]   stalenessClass: 'never_stale_by_age',
+[tv-dator]   retirementAdmissible: false,
+[tv-dator]   leaderReplicaId: null,
+[tv-dator]   sourceMembership: null,
+[tv-dator]   authorityWaitReason: null,
+[tv-dator]   severity: 'elevated'
+[tv-dator] }
+[tv-dator] Operation deferred by safety policy {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   partitionId: 'sql_write_operations-p1',
+[tv-dator]   sourceNodeId: 'node-source',
+[tv-dator]   targetNodeId: 'node-target',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   reason: 'replace_remove_safety_blocked',
+[tv-dator]   errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+[tv-dator] }
+[tv-dator] REPLACE source removal waiting {
+[tv-dator]   operationId: 'priority-sql-dispatch-pending-timeout-operation',
+[tv-dator]   phase: 'ACTIVE',
+[tv-dator]   sourceReplicaId: null,
+[tv-dator]   targetReplicaId: 'sql_write_operations-p1-r4',
+[tv-dator]   reason: 'replace_remove_safety_blocked',
+[tv-dator]   waitingSinceMs: 1795303244786,
+[tv-dator]   waitedMs: 0,
+[tv-dator]   lastAttemptSeq: null,
+[tv-dator]   lastAttemptUncertain: false,
+[tv-dator]   attemptRebuiltAfter: 'not_rebuilt',
+[tv-dator]   ownerPhase: 'active_deferring',
+[tv-dator]   stalenessClass: 'never_stale_by_age',
+[tv-dator]   retirementAdmissible: false,
+[tv-dator]   leaderReplicaId: null,
+[tv-dator]   sourceMembership: null,
+[tv-dator]   authorityWaitReason: null,
+[tv-dator]   severity: 'elevated'
+[tv-dator] }
+[tv-dator] not ok test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (97 assertions, 1945ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: CL-029 guard: REPLACE target-completion evidence keeps a retry owner across the dispatch step-walk and stale reads (red on fix revert)
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: GUARD fix piece 1 (re-drive loop): outcomes arriving while the dispatch step-walk holds the owner lane are RE-DRIVEN once the holder finishes — reconcile runs, the ACTIVE evidence applies, source removal resumes (red on revert: the runExclusive coalescing drop orphaned the evidence and wedged the row at SYNCING)
+[tv-dator]         ok 1 - reconcileExecutorOutcome RAN (exactly once): the re-drive loop resubmitted the retained payload — the ACTIVE outcome, which superseded SYNCING by workflow-step rank — after the dispatch walk released the lane
+[tv-dator]         ok 2 - the outcome was routed (OUTCOME_ROUTED emitted)
+[tv-dator]         ok 3 - reconcileReplaceActualActive reported applied=true for the re-driven ACTIVE evidence
+[tv-dator]         ok 4 - durable workflow row advanced past SYNCING into the source-removal phase — the target_sync wedge is gone
+[tv-dator]         ok 5 - the applied ACTIVE evidence resumed source removal (REMOVE_REPLICA dispatched)
+[tv-dator]         ok 6 - the retained payload map is empty (consumed) or an executor-outcome retry timer is armed — the evidence always keeps an owner
+[tv-dator]         ok 7 - the ACTIVE payload was cleared AFTER successful application (clearExecutorOutcomeRetryIfNotAhead), not pre-action
+[tv-dator]         ok 8 - no outcome-transition-failed error was logged — coalesced lane waits are not attributed to the outcome
+[tv-dator]         ok 9 - zero errors logged overall
+[tv-dator]         ok 10 - the REPLACE proceeds through source removal — neither completed nor failed at this point
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..10
+[tv-dator]     ok 1 - GUARD fix piece 1 (re-drive loop): outcomes arriving while the dispatch step-walk holds the owner lane are RE-DRIVEN once the holder finishes — reconcile runs, the ACTIVE evidence applies, source removal resumes (red on revert: the runExclusive coalescing drop orphaned the evidence and wedged the row at SYNCING) # time=169.76ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: CONTROL: the same outcomes arriving AFTER the lane is released reconcile normally — the ACTIVE CAS commits and source removal resumes (proves the loss is the lane-held arrival window)
+[tv-dator]         ok 1 - the exact authoritative SYNCING replay needs no visibility retry
+[tv-dator]         ok 2 - both outcome reconciles ran once the lane was free
+[tv-dator]         ok 3 - the ACTIVE reconcile reports a committed advance
+[tv-dator]         ok 4 - SQLite applied the ACTIVE CAS against the exact SYNCING row
+[tv-dator]         ok 5 - durable row advanced beyond SYNCING — no wedge when the reconcile actually runs against consistent views
+[tv-dator]         ok 6 - the applied ACTIVE evidence resumed source removal (REMOVE_REPLICA dispatched)
+[tv-dator]         ok 7 - the REPLACE durably advanced into the source-removal phase
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..7
+[tv-dator]     ok 2 - CONTROL: the same outcomes arriving AFTER the lane is released reconcile normally — the ACTIVE CAS commits and source removal resumes (proves the loss is the lane-held arrival window) # time=126.586ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: GUARD fix pieces 2+3+4 (stale-read exit (a)): the ACTIVE CAS loses to the dispatch walk and the authoritative replay no-ops, but the evidence is NOT erased — reconcileReplaceActualActive reports applied=false, a warned retry timer with exponential backoff owns the retained payload, and once reads heal the timer's re-drive applies it (red on revert: the pre-action clear erased the payload and no retry was ever scheduled)
+[tv-dator]         ok 1 - durable workflow row is still at SYNCING while the read path serves the stale snapshot — the retry owner asserted below is what un-wedges it later
+[tv-dator]         ok 2 - the newer exact-replica ACTIVE wake displaced the old refused SYNCING wait
+[tv-dator]         ok 3 - unresolved ACTIVE owns its own retry
+[tv-dator]         ok 4 - a stale SYNCING callback cannot clear the ACTIVE timer
+[tv-dator]         ok 5 - reconcileReplaceActualActive attempted exactly one updateStep(operation, ACTIVE) so far
+[tv-dator]         ok 6 - the ACTIVE transition did NOT commit (and did not throw): the CAS lost against the dispatch step-walk
+[tv-dator]         ok 7 - one durable CAS write was attempted for the ACTIVE step
+[tv-dator]         ok 8 - the CAS expected the stale snapshot step (SENDING) ...
+[tv-dator]         ok 9 - ... while the true durable row was already at SYNCING — CAS lost, affectedRows=0
+[tv-dator]         ok 10 - the uncommitted CAS fell through to replayReplaceActiveSourceRemovalFromAuthoritative, which read the stale (non-ACTIVE) row and found nothing actionable
+[tv-dator]         ok 11 - GUARD fix piece 3: reconcileReplaceActualActive reported applied=false (CAS lost AND authoritative replay no-op) — red if it goes back to returning undefined/void
+[tv-dator]         ok 12 - exit (b) path (observed-target replay) never ran — updateStep returned REFUSED instead of throwing
+[tv-dator]         ok 13 - GUARD fix piece 2: no clearExecutorOutcomeRetry erased the retained ACTIVE payload — the pre-action clear at the top of reconcileExecutorOutcome (which destroyed the evidence before the action could fail) must stay gone
+[tv-dator]         ok 14 - the ACTIVE completion evidence is still retained
+[tv-dator]         ok 15 - scheduleExecutorOutcomeRetry was called for the unapplied completion evidence
+[tv-dator]         ok 16 - an executor-outcome retry timer is armed — the evidence keeps a live driver
+[tv-dator]         ok 17 - one "Operation transition retry deferred" warn fired — the run's fully-silent loss is observable now
+[tv-dator]         ok 18 - the warn carries the armed retry delay
+[tv-dator]         ok 19 - the deferral warns, it does not error — and nothing was misattributed to the outcome
+[tv-dator]         ok 20 - source removal has not been dispatched yet (the stale view still hides the true row)
+[tv-dator]         ok 21 - GUARD fix piece 4: the retained payload SURVIVES a fired retry that still cannot apply (the old timer path deleted it before the retry ran)
+[tv-dator]         ok 22 - the re-arm warned again (one warn per arm)
+[tv-dator]         ok 23 - GUARD fix piece 4: the second arm DOUBLED the retry delay (per-operation exponential backoff)
+[tv-dator]         ok 24 - a retry timer is armed again — the evidence never loses its owner while unapplied
+[tv-dator]         ok 25 - GUARD fix pieces 1+4: the fired retry re-drove the retained evidence against the healed view — ACTIVE committed and the REPLACE advanced into the source-removal phase (the target_sync wedge resolves)
+[tv-dator]         ok 26 - source removal was dispatched by the retried application
+[tv-dator]         ok 27 - the applied evidence cleared its payload, its timer, and its backoff streak (streak resets on clear)
+[tv-dator]         ok 28 - still zero errors across defer/re-arm/apply
+[tv-dator]         ok 29 - the operation neither completed nor failed — it is mid source-removal, where the run should have been
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..29
+[tv-dator]     ok 3 - GUARD fix pieces 2+3+4 (stale-read exit (a)): the ACTIVE CAS loses to the dispatch walk and the authoritative replay no-ops, but the evidence is NOT erased — reconcileReplaceActualActive reports applied=false, a warned retry timer with exponential backoff owns the retained payload, and once reads heal the timer's re-drive applies it (red on revert: the pre-action clear erased the payload and no retry was ever scheduled) # time=138.849ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: ledger exit (b) superseded: a retryable CAS persist failure at ACTIVE is absorbed by the owner-local deferred-progress lane (quest formation-ledger-self-move-blocks-cluster-ops) — updateStep does not throw, the observed-target replay is not needed, the source is not removed from a provisional ACTIVE row, the transition retains an exact retry owner, and the persist error is still LOGGED (the 145024Z-run3 discriminator holds: that run had none)
+[tv-dator]         ok 1 - updateStep(operation, ACTIVE) absorbed the retryable control-plane persist error via the owner-local deferred-progress lane instead of throwing
+[tv-dator]         ok 2 - the observed-target replay was not needed — the workflow keeps the owner-local ACTIVE projection and its persistence retry
+[tv-dator]         not ok 3 - a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]             lineNumber: 874
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:874:13)
+[tv-dator]           source: >2
+[tv-dator]                         'keeps the owner-local ACTIVE projection and its persistence retry',
+[tv-dator]                       );
+[tv-dator]                       t.ok(
+[tv-dator]             ------------^
+[tv-dator]                         countLiveOwnerRetryState(owner).transitionRetryTimers >= 1,
+[tv-dator]                         'a durable transition retry owner is retained until the ' +
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         not ok 4 - the durable row is still SYNCING during the refused ACTIVE write
+[tv-dator]           ---
+[tv-dator]           compare: ===
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]             lineNumber: 880
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:880:13)
+[tv-dator]           source: |2
+[tv-dator]                         'route)',
+[tv-dator]                       );
+[tv-dator]                       t.equal(
+[tv-dator]             ------------^
+[tv-dator]                         store.state.authoritative.workflowStep,
+[tv-dator]                         WORKFLOW_STEP.SYNCING,
+[tv-dator]           diff: |
+[tv-dator]             --- expected
+[tv-dator]             +++ actual
+[tv-dator]             @@ -1,1 +1,1 @@
+[tv-dator]             -SYNCING
+[tv-dator]             +STOPPING
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         not ok 5 - provisional ACTIVE cannot authorize source removal
+[tv-dator]           ---
+[tv-dator]           compare: ===
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]             lineNumber: 885
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:885:13)
+[tv-dator]           source: >2
+[tv-dator]                         'the durable row is still SYNCING during the refused ACTIVE write',
+[tv-dator]                       );
+[tv-dator]                       t.equal(removeDeliveries(harness).length, 0,
+[tv-dator]             ------------^
+[tv-dator]                         'provisional ACTIVE cannot authorize source removal');
+[tv-dator]                       const retained = owner.executorOutcomeRetryPayloadByOperationId.get(TEST_OPERATION_ID);
+[tv-dator]           diff: |
+[tv-dator]             --- expected
+[tv-dator]             +++ actual
+[tv-dator]             @@ -1,1 +1,1 @@
+[tv-dator]             -0
+[tv-dator]             +1
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         not ok 6 - the unapplied ACTIVE notification is retained
+[tv-dator]           ---
+[tv-dator]           compare: ===
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]             lineNumber: 889
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:889:13)
+[tv-dator]           source: >2
+[tv-dator]                       const retained = owner.executorOutcomeRetryPayloadByOperationId.get(TEST_OPERATION_ID);
+[tv-dator]                       const retryTimer = owner.executorOutcomeRetryTimerByOperationId.get(TEST_OPERATION_ID);
+[tv-dator]                       t.equal(retained?.workflowStep, WORKFLOW_STEP.ACTIVE,
+[tv-dator]             ------------^
+[tv-dator]                         'the unapplied ACTIVE notification is retained');
+[tv-dator]                       t.ok(retryTimer, 'unapplied completion retains its own scheduled reconciliation');
+[tv-dator]           diff: |
+[tv-dator]             --- expected
+[tv-dator]             +++ actual
+[tv-dator]             @@ -1,1 +1,1 @@
+[tv-dator]             -ACTIVE
+[tv-dator]             +undefined
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         not ok 7 - unapplied completion retains its own scheduled reconciliation
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]             lineNumber: 891
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:891:13)
+[tv-dator]           source: >2
+[tv-dator]                       t.equal(retained?.workflowStep, WORKFLOW_STEP.ACTIVE,
+[tv-dator]                         'the unapplied ACTIVE notification is retained');
+[tv-dator]                       t.ok(retryTimer, 'unapplied completion retains its own scheduled reconciliation');
+[tv-dator]             ------------^
+[tv-dator]                       await retryTimer?.callback();
+[tv-dator]                       await waitForCondition(() => removeDeliveries(harness).length === 1,
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         ok 8 - the applied ACTIVE notification writes STOPPING before removal
+[tv-dator]         ok 9 - the exact ACTIVE notification clears only once consumed
+[tv-dator]         ok 10 - the committed transition clears its owned persistence retry
+[tv-dator]         not ok 11 - exit (b) logs "Failed to persist operation" — run 145024Z-run3 had ZERO errors, so the run did NOT take exit (b)
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]             lineNumber: 902
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js:902:13)
+[tv-dator]           source: |2
+[tv-dator]                         'the committed transition clears its owned persistence retry');
+[tv-dator]                       // The discriminating observable vs the real run:
+[tv-dator]                       t.ok(
+[tv-dator]             ------------^
+[tv-dator]                         errorsMatching(
+[tv-dator]                           harness.logs,
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         # exit(b): removeDeliveries=1; liveRetryState={"executorOutcomeRetryPayloads":0,"executorOutcomeRetryTimers":0,"transitionRetryTimers":0,"priorityActiveReplaceRetryTimers":0,"observedProgressRetryTimers":0,"dispatchRetryTimers":0}
+[tv-dator]         1..11
+[tv-dator]     not ok 4 - ledger exit (b) superseded: a retryable CAS persist failure at ACTIVE is absorbed by the owner-local deferred-progress lane (quest formation-ledger-self-move-blocks-cluster-ops) — updateStep does not throw, the observed-target replay is not needed, the source is not removed from a provisional ACTIVE row, the transition retains an exact retry owner, and the persist error is still LOGGED (the 145024Z-run3 discriminator holds: that run had none) # time=214.713ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]         lineNumber: 824
+[tv-dator]         columnNumber: 13
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]             );
+[tv-dator]       
+[tv-dator]             await t.test(
+[tv-dator]         ------------^
+[tv-dator]               'ledger exit (b) superseded: a retryable CAS persist failure at ' +
+[tv-dator]               'ACTIVE is absorbed by the owner-local deferred-progress lane ' +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: GUARD amendment 5 (success supersedes retained failure): an incoming SUCCESS outcome replaces a retained FAILURE payload in retainExecutorOutcomeRetryPayload even though FAILED holds the top workflow-step rank (red on revert: the pure rank contest keeps FAILED and masks all later success evidence)
+[tv-dator]         ok 1 - isFailureExecutorOutcome classifies REPLICA_CREATE_FAILED (action FAIL) as a failure outcome
+[tv-dator]         ok 2 - isFailureExecutorOutcome classifies REPLICA_CREATE_ACTIVE (action COMPLETE) as a non-failure outcome
+[tv-dator]         ok 3 - baseline: the FAILED payload (workflowStep FAILED, top step-rank) is retained
+[tv-dator]         ok 4 - GUARD amendment 5: the incoming ACTIVE success outcome SUPERSEDED the retained FAILED payload — red on revert to the pure rank contest (ACTIVE rank 5 loses to FAILED rank 7)
+[tv-dator]         ok 5 - success-vs-success stays rank-governed: a SYNCING arrival does not displace the retained ACTIVE payload
+[tv-dator]         ok 6 - GUARD amendment 5: a SYNCING success outcome (rank 4) also supersedes the retained FAILED payload (rank 7) — the rule is failure-vs-success, not rank
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..6
+[tv-dator]     ok 5 - GUARD amendment 5 (success supersedes retained failure): an incoming SUCCESS outcome replaces a retained FAILURE payload in retainExecutorOutcomeRetryPayload even though FAILED holds the top workflow-step rank (red on revert: the pure rank contest keeps FAILED and masks all later success evidence) # time=2.164ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: GUARD amendment 6 (DEFER_RETRY hands the evidence to the transition retry): when the FAIL branch defers a retryable control-plane failure to deferTransitionRetry, the retained FAILED payload is CLEARED before the early return (red on revert: a driverless FAILED payload survives into the transition-retry-owned phase and masks the recreated replica's success outcomes)
+[tv-dator]         ok 1 - the failure evidence (retryable control-plane error + critical partition + dispatch-retryable CREATING step) matched DEFER_RETRY and called deferTransitionRetry once
+[tv-dator]         ok 2 - deferTransitionRetry received the operation id
+[tv-dator]         ok 3 - the deferral context carries the durable row's CREATING step
+[tv-dator]         ok 4 - the reconcile reported handled=true via the deferred early return
+[tv-dator]         ok 5 - the operation was NOT failed — the transition retry owns it
+[tv-dator]         ok 6 - the deferred branch returns before OUTCOME_ROUTED
+[tv-dator]         ok 7 - GUARD amendment 6: the retained FAILED payload was CLEARED when deferTransitionRetry accepted ownership — red if the clearExecutorOutcomeRetry before the early return is reverted
+[tv-dator]         ok 8 - the clear ran while the FAILED payload was still retained (it erased exactly the masking evidence)
+[tv-dator]         ok 9 - no executor-outcome retry timer was armed — the transition retry is the sole owner
+[tv-dator]         ok 10 - the deferral path logs no errors
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..10
+[tv-dator]     ok 6 - GUARD amendment 6 (DEFER_RETRY hands the evidence to the transition retry): when the FAIL branch defers a retryable control-plane failure to deferTransitionRetry, the retained FAILED payload is CLEARED before the early return (red on revert: a driverless FAILED payload survives into the transition-retry-owned phase and masks the recreated replica's success outcomes) # time=112.294ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: GUARD amendment 7 (not-locally-owned clears the retained payload): an outcome reconciled against an operation owned by a REMOTE node clears the locally retained evidence (red on revert: a driverless local payload lingers and masks later outcomes)
+[tv-dator]         ok 1 - the reconcile consulted repository.isOperationLocallyOwned
+[tv-dator]         ok 2 - the not-locally-owned reconcile reported false (no local action)
+[tv-dator]         ok 3 - GUARD amendment 7: the retained ACTIVE payload was CLEARED on the not-locally-owned path — red if that clear is reverted (the payload would linger with no timer and no re-drive consumer)
+[tv-dator]         ok 4 - the clear ran while the ACTIVE payload was still retained
+[tv-dator]         ok 5 - no executor-outcome retry timer was armed for the remotely-owned operation
+[tv-dator]         ok 6 - no local actuation (source removal) was dispatched for the remotely-owned operation
+[tv-dator]         ok 7 - the durable row was left untouched for the remote owner
+[tv-dator]         ok 8 - the not-local path logs no errors
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..8
+[tv-dator]     ok 7 - GUARD amendment 7 (not-locally-owned clears the retained payload): an outcome reconciled against an operation owned by a REMOTE node clears the locally retained evidence (red on revert: a driverless local payload lingers and masks later outcomes) # time=112.017ms
+[tv-dator]     
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-target-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     # Subtest: POST-ACTION TWIN (quest terminal-write-refusal-retry-ownership): a completeOperation whose terminal persist is REFUSED must NOT have erased the armed executor-outcome retry timer/payload (red on revert: the pre-write clearTerminalOperationRetryState kills the armed visibility retry mid-backoff, then the refusal leaves the operation with no owner at all)
+[tv-dator]         ok 1 - the terminal persist was refused and the typed outcome reports it
+[tv-dator]         ok 2 - the retained executor-outcome payload SURVIVED the refused termination
+[tv-dator]         ok 3 - the armed executor-outcome retry timer SURVIVED the refused termination
+[tv-dator]         ok 4 - clearExecutorOutcomeRetry never fired for the refused terminal (clearing is a consequence of a proven terminal)
+[tv-dator]         ok 5 - the EXISTING terminal-transition repair was armed for the refusal
+[tv-dator]         ok 6 - exactly one typed warn names the refused terminal persist
+[tv-dator]         ok 7 - the durable row is still non-terminal (the refusal was real)
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-target-local', inFlightOperations: 0 }
+[tv-dator]         1..7
+[tv-dator]     ok 8 - POST-ACTION TWIN (quest terminal-write-refusal-retry-ownership): a completeOperation whose terminal persist is REFUSED must NOT have erased the armed executor-outcome retry timer/payload (red on revert: the pre-write clearTerminalOperationRetryState kills the armed visibility retry mid-backoff, then the refusal leaves the operation with no owner at all) # time=3.814ms
+[tv-dator]     
+[tv-dator]     1..8
+[tv-dator] not ok 1 - CL-029 guard: REPLACE target-completion evidence keeps a retry owner across the dispatch step-walk and stale reads (red on fix revert) # time=900.542ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+[tv-dator]     lineNumber: 350
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]     test(
+[tv-dator]     ^
+[tv-dator]       'CL-029 guard: REPLACE target-completion evidence keeps a retry owner ' +
+[tv-dator]       'across the dispatch step-walk and stale reads (red on fix revert)',
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 88, pass: 82, fail: 6 }
+[tv-dator] # time=908.332ms
+[tv-dator] # test-files total=2 pass=0 fail=2 assertions=410
+lab test: tv-dator: # test-files total=2 pass=0 fail=2 assertions=410
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=0 fail=2 assertions=410

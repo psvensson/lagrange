@@ -1,0 +1,1491 @@
+lab test: tv-dator: ordinary, exclusive (23 files) cores=12 mem=15.4GiB speed x1.52
+[tv-dator] placement-shell=3400250
+[tv-dator] placement-head=c7991efa8dee805a66c88cd7592a05c06d9ac345
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3400701
+[tv-dator] # test-files planned=23
+[tv-dator] classified lane ordinary: 21 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/operation-record-step-shape.test.js (5 assertions, 1005ms)
+[tv-dator] ok test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (16 assertions, 1179ms)
+[tv-dator] ok test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (6 assertions, 1226ms)
+[tv-dator] not ok test/rebalancer/admission-real-size-estimates.test.js (23 assertions, 1801ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: MovePlanner estimates with the real partition size_bytes
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - estimateReplicaBytes called for the partition
+[tv-dator]     ok 4 - MovePlanner must pass the real size_bytes, not the zero placeholder
+[tv-dator]     ok 5 - estimate grows with the real payload size
+[tv-dator]     1..5
+[tv-dator] ok 1 - MovePlanner estimates with the real partition size_bytes # time=85.472ms
+[tv-dator] 
+[tv-dator] # Subtest: MovePlanner keeps the zero floor when no size resolver is wired
+[tv-dator]     ok 1 - unwired resolver keeps the pre-change floor behavior
+[tv-dator]     1..1
+[tv-dator] ok 2 - MovePlanner keeps the zero floor when no size resolver is wired # time=45.692ms
+[tv-dator] 
+[tv-dator] # Subtest: admission evaluation sizes on the resolved real size_bytes
+[tv-dator]     ok 1 - estimateReplicaBytes called during admission
+[tv-dator]     ok 2 - admission must pass the resolved real size_bytes
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - admission check receives the real-size estimate
+[tv-dator]     1..4
+[tv-dator] ok 3 - admission evaluation sizes on the resolved real size_bytes # time=32.142ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: operation creation persists the real-size reservation witness
+[tv-dator]     not ok 1 - Placement waits for committed formation: p-real-size
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]         RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]         RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]         RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]         async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/admission-real-size-estimates.test.js:326:5)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]         lineNumber: 245
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: RebalanceCoordinator
+[tv-dator]         methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]         functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       failureCode: FORMATION_NOT_LATCHED
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]               return formation.latchEpoch;
+[tv-dator]             }
+[tv-dator]             const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]         ------------------^
+[tv-dator]             error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]             error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 4 - operation creation persists the real-size reservation witness # time=63.102ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/admission-real-size-estimates.test.js
+[tv-dator]     lineNumber: 320
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // --- Site C: reservation creation via operation creation ---
+[tv-dator]   
+[tv-dator]     test('operation creation persists the real-size reservation witness',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: admission and reservation share ONE resolved estimate
+[tv-dator]     not ok 1 - Placement waits for committed formation: p-real-size
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]         RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]         RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]         RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]         async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/admission-real-size-estimates.test.js:359:5)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]         lineNumber: 245
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: RebalanceCoordinator
+[tv-dator]         methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]         functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       failureCode: FORMATION_NOT_LATCHED
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]               return formation.latchEpoch;
+[tv-dator]             }
+[tv-dator]             const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]         ------------------^
+[tv-dator]             error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]             error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 5 - admission and reservation share ONE resolved estimate # time=29.638ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/admission-real-size-estimates.test.js
+[tv-dator]     lineNumber: 351
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('admission and reservation share ONE resolved estimate',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: checkProvisioningAdmission probe sizes on the real size_bytes
+[tv-dator]     ok 1 - probe admits with capacity available
+[tv-dator]     ok 2 - estimateReplicaBytes called during the probe
+[tv-dator]     ok 3 - probe admission must pass the real size_bytes
+[tv-dator]     1..3
+[tv-dator] ok 6 - checkProvisioningAdmission probe sizes on the real size_bytes # time=32.781ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-local',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: operation creation falls back to the floor without a partitions row
+[tv-dator]     not ok 1 - Placement waits for committed formation: p-real-size
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]         RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]         RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]         RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]         async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/admission-real-size-estimates.test.js:419:5)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]         lineNumber: 245
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: RebalanceCoordinator
+[tv-dator]         methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]         functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       failureCode: FORMATION_NOT_LATCHED
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]               return formation.latchEpoch;
+[tv-dator]             }
+[tv-dator]             const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]         ------------------^
+[tv-dator]             error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]             error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 7 - operation creation falls back to the floor without a partitions row # time=37.546ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/admission-real-size-estimates.test.js
+[tv-dator]     lineNumber: 411
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('operation creation falls back to the floor without a partitions row',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..7
+[tv-dator] # { total: 16, pass: 13, fail: 3 }
+[tv-dator] # time=361.883ms
+[tv-dator] not ok test/rebalancer/duplicate-operation-prevention.property.test.js (40 assertions, 2084ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: MovePlanner - Duplicate Operation Prevention
+[tv-dator]     # Subtest: skips ADD when in-flight operation exists for same node
+[tv-dator]         ok 1 - MovePlanner skips ADD when in-flight operation exists
+[tv-dator]         1..1
+[tv-dator]     ok 1 - skips ADD when in-flight operation exists for same node # time=39.45ms
+[tv-dator]     
+[tv-dator]     # Subtest: skips moves when pending operations exist
+[tv-dator]         ok 1 - MovePlanner returns empty when pending operations exist
+[tv-dator]         1..1
+[tv-dator]     ok 2 - skips moves when pending operations exist # time=6.821ms
+[tv-dator]     
+[tv-dator]     # Subtest: skips ADD for nodes with transitional replicas
+[tv-dator]         ok 1 - MovePlanner skips ADD for nodes with transitional replicas
+[tv-dator]         1..1
+[tv-dator]     ok 3 - skips ADD for nodes with transitional replicas # time=3.604ms
+[tv-dator]     
+[tv-dator]     1..3
+[tv-dator] ok 1 - MovePlanner - Duplicate Operation Prevention # time=124.691ms
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator - Concurrent Operation Deduplication
+[tv-dator]     # Subtest: in-memory guard prevents duplicate concurrent creates
+[tv-dator]         not ok 1 - Placement waits for committed formation: partition-1
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]             RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]             RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]             RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]             async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]             async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]           at:
+[tv-dator]             fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]             lineNumber: 245
+[tv-dator]             columnNumber: 19
+[tv-dator]             typeName: RebalanceCoordinator
+[tv-dator]             methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]             functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]           rebalanceSkipReason: deferred_retry_pending
+[tv-dator]           failureCode: FORMATION_NOT_LATCHED
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: >2
+[tv-dator]                   return formation.latchEpoch;
+[tv-dator]                 }
+[tv-dator]                 const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]             ------------------^
+[tv-dator]                 error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]                 error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 1 - in-memory guard prevents duplicate concurrent creates # time=57.924ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]         lineNumber: 316
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           initializeTestEnvironment();
+[tv-dator]       
+[tv-dator]           await t.test('in-memory guard prevents duplicate concurrent creates', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             // Property: When multiple createOperation calls happen concurrently
+[tv-dator]             // for the same partition/node, only one operation should be created
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: database deduplication prevents duplicate operations
+[tv-dator]         ok 1 - Should return existing operation
+[tv-dator]         1..1
+[tv-dator]     ok 2 - database deduplication prevents duplicate operations # time=4.321ms
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 2 - RebalanceCoordinator - Concurrent Operation Deduplication # time=109.42ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]     lineNumber: 313
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) =>
+[tv-dator]     {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: Multiple Partition Rebalancers - Cross-Partition Deduplication
+[tv-dator]     # Subtest: different partitions can create operations to same node
+[tv-dator]         not ok 1 - Placement waits for committed formation: partition-1
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]             RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]             RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]             RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]             async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]             async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]             async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]             async Promise.all (index 0)
+[tv-dator]             async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:412:32)
+[tv-dator]           at:
+[tv-dator]             fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]             lineNumber: 245
+[tv-dator]             columnNumber: 19
+[tv-dator]             typeName: RebalanceCoordinator
+[tv-dator]             methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]             functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]           rebalanceSkipReason: deferred_retry_pending
+[tv-dator]           failureCode: FORMATION_NOT_LATCHED
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: >2
+[tv-dator]                   return formation.latchEpoch;
+[tv-dator]                 }
+[tv-dator]                 const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]             ------------------^
+[tv-dator]                 error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]                 error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 1 - different partitions can create operations to same node # time=6.685ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]         lineNumber: 389
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           initializeTestEnvironment();
+[tv-dator]       
+[tv-dator]           await t.test('different partitions can create operations to same node', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             // This test documents current behavior: different partitions CAN create
+[tv-dator]             // operations to the same target node. This is by design - each partition
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: same partition cannot create duplicate operations to same node
+[tv-dator]         ok 1 - Same partition cannot create duplicate operations
+[tv-dator]         1..1
+[tv-dator]     ok 2 - same partition cannot create duplicate operations to same node # time=0.631ms
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 3 - Multiple Partition Rebalancers - Cross-Partition Deduplication # time=35.718ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]     lineNumber: 386
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async
+[tv-dator]     (t) => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: Rapid Rebalance Cycles - Race Condition Prevention
+[tv-dator]     # Subtest: sequential rebalance cycles do not create duplicates
+[tv-dator]         not ok 1 - Placement waits for committed formation: indices-p1
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]             RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]             RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]             RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]             async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]             async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]             async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]             async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:488:21)
+[tv-dator]           at:
+[tv-dator]             fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]             lineNumber: 245
+[tv-dator]             columnNumber: 19
+[tv-dator]             typeName: RebalanceCoordinator
+[tv-dator]             methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]             functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]           rebalanceSkipReason: deferred_retry_pending
+[tv-dator]           failureCode: FORMATION_NOT_LATCHED
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: >2
+[tv-dator]                   return formation.latchEpoch;
+[tv-dator]                 }
+[tv-dator]                 const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]             ------------------^
+[tv-dator]                 error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]                 error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 1 - sequential rebalance cycles do not create duplicates # time=6.327ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]         lineNumber: 476
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           initializeTestEnvironment();
+[tv-dator]       
+[tv-dator]           await t.test('sequential rebalance cycles do not create duplicates', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             // This test simulates the scenario from the logs where multiple
+[tv-dator]             // rebalance cycles happen in rapid succession, potentially before
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: MovePlanner checks in-flight before generating moves
+[tv-dator]         ok 1 - MovePlanner always checks in-flight operations
+[tv-dator]         1..1
+[tv-dator]     ok 2 - MovePlanner checks in-flight before generating moves # time=1.863ms
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 4 - Rapid Rebalance Cycles - Race Condition Prevention # time=39.115ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]     lineNumber: 473
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: Oscillation Prevention - Stabilization Period
+[tv-dator]     # Subtest: MovePlanner returns empty when operations in-flight
+[tv-dator]         ok 1 - MovePlanner prevents oscillation by checking in-flight operations
+[tv-dator]         1..1
+[tv-dator]     ok 1 - MovePlanner returns empty when operations in-flight # time=3.602ms
+[tv-dator]     
+[tv-dator]     # Subtest: completed operations do not block new moves
+[tv-dator]         ok 1 - Completed operations do not block new moves
+[tv-dator]         1..1
+[tv-dator]     ok 2 - completed operations do not block new moves # time=1.31ms
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] ok 5 - Oscillation Prevention - Stabilization Period # time=30.099ms
+[tv-dator] 
+[tv-dator] # Subtest: System Cache Consistency - In-Flight Operation Visibility
+[tv-dator]     # Subtest: getInFlightOperations must see recently created operations
+[tv-dator]         ok 1 - Stale cache returns no in-flight operations (potential bug)
+[tv-dator]         ok 2 - Test documents the CDC propagation timing issue
+[tv-dator]         1..2
+[tv-dator]     ok 1 - getInFlightOperations must see recently created operations # time=0.48ms
+[tv-dator]     
+[tv-dator]     # Subtest: coordinator in-memory guard provides immediate visibility
+[tv-dator]         not ok 1 - Placement waits for committed formation: partition-1
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]             RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]             RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]             RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]             async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]             async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]             async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]             async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:758:5)
+[tv-dator]           at:
+[tv-dator]             fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]             lineNumber: 245
+[tv-dator]             columnNumber: 19
+[tv-dator]             typeName: RebalanceCoordinator
+[tv-dator]             methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]             functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]           rebalanceSkipReason: deferred_retry_pending
+[tv-dator]           failureCode: FORMATION_NOT_LATCHED
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: >2
+[tv-dator]                   return formation.latchEpoch;
+[tv-dator]                 }
+[tv-dator]                 const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]             ------------------^
+[tv-dator]                 error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]                 error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 2 - coordinator in-memory guard provides immediate visibility # time=4.608ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]         lineNumber: 738
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           });
+[tv-dator]       
+[tv-dator]           await t.test('coordinator in-memory guard provides immediate visibility', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             // The RebalanceCoordinator has an in-memory guard (operationsInCreation Set)
+[tv-dator]             // that provides immediate visibility of operations being created.
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 6 - System Cache Consistency - In-Flight Operation Visibility # time=34.223ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]     lineNumber: 695
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('System Cache Consistency - In-Flight Operation Visibility', async (t) =>
+[tv-dator]     {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: Cross-Rebalancer Coordination - Multiple Partition Leaders
+[tv-dator]     # Subtest: each partition leader has independent coordinator
+[tv-dator]         ok 1 - Each coordinator has independent in-memory guard
+[tv-dator]         ok 2 - Independent coordinators documented
+[tv-dator]         1..2
+[tv-dator]     ok 1 - each partition leader has independent coordinator # time=2.22ms
+[tv-dator]     
+[tv-dator]     # Subtest: database query provides cross-partition visibility
+[tv-dator]         not ok 1 - Placement waits for committed formation: partition-1
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]             RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]             RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]             RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]             async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]             async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]             async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]             async Test.<anonymous> (test/rebalancer/duplicate-operation-prevention.property.test.js:818:5)
+[tv-dator]           at:
+[tv-dator]             fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]             lineNumber: 245
+[tv-dator]             columnNumber: 19
+[tv-dator]             typeName: RebalanceCoordinator
+[tv-dator]             methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]             functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]           rebalanceSkipReason: deferred_retry_pending
+[tv-dator]           failureCode: FORMATION_NOT_LATCHED
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: >2
+[tv-dator]                   return formation.latchEpoch;
+[tv-dator]                 }
+[tv-dator]                 const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]             ------------------^
+[tv-dator]                 error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]                 error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 2 - database query provides cross-partition visibility # time=6.708ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]         lineNumber: 803
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           });
+[tv-dator]       
+[tv-dator]           await t.test('database query provides cross-partition visibility', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             // The database query in queryExistingInFlightOperation() provides
+[tv-dator]             // cross-partition visibility because it queries the shared database.
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 7 - Cross-Rebalancer Coordination - Multiple Partition Leaders # time=34.424ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/duplicate-operation-prevention.property.test.js
+[tv-dator]     lineNumber: 768
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t)
+[tv-dator]     => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] not ok 8 - Property failed after 1 tests { seed: 867131578, path: "0:0", endOnFailure: true } Counterexample: [2] Shrunk 1 time(s) Got error: Placement waits for committed formation: partition-1     at RebalanceCoordinator.resolveFormationLatchEpochForPlacement (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)     at RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)     at RebalanceCoordinator.createOperationViaPlacementAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)     at RebalanceCoordinator.createOperationInternal (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)     at async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]   ---
+[tv-dator]   stack: |
+[tv-dator]     buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]     asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]   at:
+[tv-dator]     fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]     lineNumber: 126
+[tv-dator]     columnNumber: 15
+[tv-dator]     functionName: buildError
+[tv-dator]   tapCaught: unhandledRejection
+[tv-dator]   test: TAP
+[tv-dator]   source: |
+[tv-dator]     function buildError(errorMessage, out) {
+[tv-dator]         if (!out.runConfiguration.errorWithCause) {
+[tv-dator]             throw new Error(errorMessage);
+[tv-dator]     --------------^
+[tv-dator]         }
+[tv-dator]         const ErrorWithCause = Error;
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..8
+[tv-dator] # { total: 18, pass: 12, fail: 6 }
+[tv-dator] # time=475.772ms
+[tv-dator] not ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (87 assertions, 2428ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] # Subtest: lost reservation INSERT answer adopts one exact durable capacity hold
+[tv-dator]     not ok 1 - Placement waits for committed formation: partition-lost-reservation-answer
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         RebalanceCoordinator.resolveFormationLatchEpochForPlacement (src/rebalancer/rebalance-coordinator-operation-creation-support.js:245:19)
+[tv-dator]         RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:559:16)
+[tv-dator]         RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+[tv-dator]         RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+[tv-dator]         async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/c7991efa8dee-mwr0ys0u-2469414/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:473:25)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+[tv-dator]         lineNumber: 245
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: RebalanceCoordinator
+[tv-dator]         methodName: resolveFormationLatchEpochForPlacement
+[tv-dator]         functionName: RebalanceCoordinator.resolveFormationLatchEpochForPlacement
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       failureCode: FORMATION_NOT_LATCHED
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]               return formation.latchEpoch;
+[tv-dator]             }
+[tv-dator]             const error = new Error(`Placement waits for committed formation: ${partitionId}`);
+[tv-dator]         ------------------^
+[tv-dator]             error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+[tv-dator]             error.failureCode = PLACEMENT_WAITING_REASON.FORMATION_NOT_LATCHED;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 1 - lost reservation INSERT answer adopts one exact durable capacity hold # time=76.993ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+[tv-dator]     lineNumber: 460
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]     test('lost reservation INSERT answer adopts one exact durable capacity hold',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: exact ACTIVE reservation adoption keeps its durable estimate past TTL
+[tv-dator]     ok 1 - the exact live operation adopts its durable ACTIVE hold past TTL
+[tv-dator]     ok 2 - adoption retains exactly one capacity hold
+[tv-dator]     ok 3 - the admission-time estimate is retained without recomputation
+[tv-dator]     ok 4 - an exact authoritative hold does not reissue INSERT
+[tv-dator]     ok 5 - adoption does not count as local creation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..5
+[tv-dator] ok 2 - exact ACTIVE reservation adoption keeps its durable estimate past TTL # time=40.754ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: concurrent lost-outcome repair callers share one durable capacity hold
+[tv-dator]     ok 1 - both callers converge on the same already-applied hold
+[tv-dator]     ok 2 - concurrent repair leaves one durable capacity hold
+[tv-dator]     ok 3 - ambiguous concurrent adoption does not duplicate creation stats
+[tv-dator]     ok 4 - ambiguous concurrent adoption does not duplicate creation events
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] ok 3 - concurrent lost-outcome repair callers share one durable capacity hold # time=27.927ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: terminal and absent operation authority cannot adopt a reservation
+[tv-dator]     ok 1 - confirmed absent operation fails closed
+[tv-dator]     ok 2 - absence is distinguished from reservation conflict
+[tv-dator]     ok 3 - absence cannot drive another capacity mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 4 - terminal operation fails closed
+[tv-dator]     ok 5 - terminal authority is classified explicitly
+[tv-dator]     ok 6 - terminal authority cannot drive another capacity mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 4 - terminal and absent operation authority cannot adopt a reservation # time=34.568ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: owner unavailability is distinct from confirmed absence
+[tv-dator]     ok 1 - unavailable operation owner fails closed
+[tv-dator]     ok 2 - operation owner unavailability is named
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 3 - unavailable reservation owner fails closed
+[tv-dator]     ok 4 - the reservation owner failure remains observable
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] ok 5 - owner unavailability is distinct from confirmed absence # time=39.428ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: terminalization during reservation read cannot authorize adoption
+[tv-dator]     ok 1 - the adoption is refused after concurrent terminalization
+[tv-dator]     ok 2 - the final operation observation owns the refusal
+[tv-dator]     ok 3 - terminalization does not drive another reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..3
+[tv-dator] ok 6 - terminalization during reservation read cannot authorize adoption # time=38.22ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: terminalization after a fresh insert cannot strand an ACTIVE hold
+[tv-dator]     ok 1 - the terminal operation wins the post-insert authority check
+[tv-dator]     ok 2 - the exact terminal authority owns the refusal
+[tv-dator]     ok 3 - the just-inserted hold is released instead of stranded ACTIVE
+[tv-dator]     ok 4 - cleanup transitions the exact row without allocating another hold
+[tv-dator]     ok 5 - the losing insertion is not counted as a created hold
+[tv-dator]     ok 6 - the losing insertion emits no observational creation event
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 7 - terminalization after a fresh insert cannot strand an ACTIVE hold # time=28.953ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: every immutable operation identity conflict refuses reservation adoption
+[tv-dator]     ok 1 - type conflict is not adopted
+[tv-dator]     ok 2 - type conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 3 - partitionId conflict is not adopted
+[tv-dator]     ok 4 - partitionId conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 5 - replicaId conflict is not adopted
+[tv-dator]     ok 6 - replicaId conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 7 - targetClaimKey conflict is not adopted
+[tv-dator]     ok 8 - targetClaimKey conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 9 - sourceNodeId conflict is not adopted
+[tv-dator]     ok 10 - sourceNodeId conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 11 - targetNodeId conflict is not adopted
+[tv-dator]     ok 12 - targetNodeId conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 13 - entityType conflict is not adopted
+[tv-dator]     ok 14 - entityType conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 15 - entityId conflict is not adopted
+[tv-dator]     ok 16 - entityId conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 17 - membershipPublicationEpoch conflict is not adopted
+[tv-dator]     ok 18 - membershipPublicationEpoch conflict issues no reservation mutation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..18
+[tv-dator] ok 8 - every immutable operation identity conflict refuses reservation adoption # time=252.681ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: reservation identity, state, estimate, and timestamps all fail closed
+[tv-dator]     ok 1 - reservation_id conflict fails closed
+[tv-dator]     ok 2 - reservation_id conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 3 - entity_type conflict fails closed
+[tv-dator]     ok 4 - entity_type conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 5 - entity_id conflict fails closed
+[tv-dator]     ok 6 - entity_id conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 7 - partition_id conflict fails closed
+[tv-dator]     ok 8 - partition_id conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 9 - target_node_id conflict fails closed
+[tv-dator]     ok 10 - target_node_id conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 11 - reason_code conflict fails closed
+[tv-dator]     ok 12 - reason_code conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 13 - amplification_factor conflict fails closed
+[tv-dator]     ok 14 - amplification_factor conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 15 - estimated_bytes conflict fails closed
+[tv-dator]     ok 16 - estimated_bytes conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 17 - released_at conflict fails closed
+[tv-dator]     ok 18 - released_at conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 19 - created_at conflict fails closed
+[tv-dator]     ok 20 - created_at conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 21 - updated_at conflict fails closed
+[tv-dator]     ok 22 - updated_at conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 23 - expires_at conflict fails closed
+[tv-dator]     ok 24 - expires_at conflict returns a reservation authority error
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..24
+[tv-dator] ok 9 - reservation identity, state, estimate, and timestamps all fail closed # time=315.513ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: RELEASED and EXPIRED reservation generations never reactivate
+[tv-dator]     ok 1 - released generation is refused
+[tv-dator]     ok 2 - released generation is never reactivated
+[tv-dator]     ok 3 - released keeps one historical row, not a second hold
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-owner-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 4 - expired generation is refused
+[tv-dator]     ok 5 - expired generation is never reactivated
+[tv-dator]     ok 6 - expired keeps one historical row, not a second hold
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 10 - RELEASED and EXPIRED reservation generations never reactivate # time=47.478ms
+[tv-dator] 
+[tv-dator] 1..10
+[tv-dator] # { total: 77, pass: 76, fail: 1 }
+[tv-dator] # time=918.779ms
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation is absent for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation is terminal for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'reservation owner unavailable'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation is terminal for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation is terminal for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative replica operation identity mismatches reservation request'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation mismatches operation identity'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation is absent for adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'operation-reservation-authority',
+[tv-dator]   reservationId: 'res-operation-reservation-authority',
+[tv-dator]   error: 'Authoritative ACTIVE storage reservation is absent for adoption'
+[tv-dator] }
+[tv-dator] ok test/partition/placement-create-bootstrap-binding.test.js (14 assertions, 3879ms)
+[tv-dator] ok test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (61 assertions, 1699ms)
+[tv-dator] ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js (37 assertions, 1681ms)
+[tv-dator] ok test/partition/partition-service-learner-promotion.test.js (47 assertions, 2015ms)
+[tv-dator] ok test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js (54 assertions, 1639ms)
+[tv-dator] ok test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js (38 assertions, 1360ms)
+[tv-dator] ok test/control-plane/cl-036-local-leader-row-seed.test.js (50 assertions, 1573ms)
+[tv-dator] ok test/control-plane/replica-dispatch-routing.property.test.js (41 assertions, 1855ms)
+[tv-dator] ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 1485ms)
+[tv-dator] ok test/raft/snapshot-dispatcher-wiring.test.js (21 assertions, 2678ms)
+[tv-dator] ok test/partition/split-rebalance-trigger.test.js (12 assertions, 430ms)
+[tv-dator] ok test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (9 assertions, 1360ms)
+[tv-dator] ok test/rebalancer/rebalancer-entity-interaction-contract.test.js (35 assertions, 1476ms)
+[tv-dator] ok test/control-plane/membership-count-neutral-steady-trim.test.js (35 assertions, 1140ms)
+[tv-dator] ok test/rebalancer/replica-operation-insert-retry-idempotency.test.js (10 assertions, 1044ms)
+[tv-dator] # test-files total=21 pass=18 fail=3 assertions=651
+[tv-dator] classified lane exclusive: 2 file(s), jobs=1
+[tv-dator] thermal: ok cpu 59C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+[tv-dator] ok test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js (6 assertions, 1486ms)
+[tv-dator] ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 1160ms)
+[tv-dator] # test-files total=2 pass=2 fail=0 assertions=27
+lab test: tv-dator: # test-files total=23 pass=20 fail=3 assertions=678
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=23 pass=20 fail=3 assertions=678

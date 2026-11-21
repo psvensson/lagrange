@@ -806,3 +806,109 @@ partition was asked", proves nothing of the named entry on its declared partitio
 APPLIED; not NOT_PROPOSED either, which is reserved for a typed refusal ON the declared partition).
 Also decided: a refusal that carries a durable commit witness is contradictory evidence -> UNKNOWN (it was
 NOT_PROPOSED and would have released the instance); the judge's CDC recursion is depth-bounded.
+- Corrected witness: 5392380ae2 (`git log`: "test: the managed split deadline witness asserts the timeout
+  owner's typed code", pushed), `lab/nw2-after-5392380ae-1/`: provisioning-deadline-error-message 4/4 green.
+  Its red-before evidence for the managed-split line is the all-src QUERY_ERROR_MSG census row at 70dfcdba8.
+
+## Commits (branch work/line-regression-causes-20261121, all pushed)
+
+| Sha | Content | Lab |
+|---|---|---|
+| 70dfcdba8 | witnesses only (red) | `nw2-red-70dfcdba8-1` (7/8 red as intended; seed lane green) |
+| baa2a2580 | repairs: items 1, 2, 3, 4 | `nw2-after-baa2a2580-1` (21 files) |
+| 5392380ae | witness correction (managed-split case) | `nw2-after-5392380ae-1` |
+
+## Residual findings (recorded, not changed)
+
+- A caller whose own wait ends while its delivery is in flight (WAIT_INTERRUPTED: deadline or cancellation)
+  still gets the caller's thrown error with `pendingInstance.outcome:'unknown'`, not the canonical answer; a
+  caller-owned interruption, left thrown.
+- `pendingInstance` means two things: on the unknown answer its own instance (now always), on a settled
+  answer the EARLIER instance resolved before it was issued (R08; no live hazard found: registration and
+  reservations pass `pendingAppliedSettles`).
+- The gateway's thrown-mutation telemetry still takes `error.outcome` when present, which for a CDC error can
+  be the partition's committed-command outcome (`statement_failed`), another vocabulary (R08).
+- `buildSystemMetadataMutationError` replaces the owner error's cause with `result.cause`, so the owner
+  error's cause chain loses the canonical unknown answer (its `outcome` is still copied).
+- An unnamed write's thrown transport unknown still carries no named outcome from its producer (the CDC);
+  the gateway classifies it by the kernel's typed code.
+- The provisioning-deadline error has `code` on the founding path only (timeout owner sets `errorCode`).
+
+---
+
+# Stage 3 follow-up (coordinator, ~20:00Z): hand-over edits, fallback deletion, bootstrap-window owners
+
+## Hand-over edits: file check and what was made
+
+`git diff --stat 23344cddc origin/work/raft-frame-delivery-20261121 -- <file>` (origin/work/raft-owner-authority-20261121
+does not exist: skipped): only `src/constants/transport.js` is touched (consensus-envelope members, not the
+router members). Made in e5cdc7770: `src/raft/authoritative-row-mutation-vocabulary.js` (UNKNOWN ->
+`outcome-unknown`), `BOOTSTRAP_API_LOG_MSG.LEADERS_READY` (owner `bootstrap-api-constants.js`; the `||` fallback
+and local string removed), `JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED` (owner
+`node-joining-constants.js`; the unconsumed copy in `NODE_JOINING_SERVICE_LITERAL` removed). LEFT, exact text in
+the earlier hand-over list: the three `src/constants/transport.js` members (`ROUTER_ERROR_MSG.addressInUse`,
+`ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE`, `ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND`);
+witness `test/transport/router-in-process-address-in-use.test.js` added (red until that edit).
+
+## Fallback arm: real-cluster log counts [X]
+
+Line: `CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK` ('Bootstrap raft write lane unavailable - falling back
+to direct per-replica write', warn level 40, logged before the arm runs). Node logs are the playback copies
+`.playback/report/fresh-formation-user-table-routability/<nodeId>.log`; the seed is the one node with the
+hydration step `configureCdcIntegrationForNormalMode` (the end of the window).
+
+| Run | Seed log | Window (first line -> CDC normal mode) | warn lines in window | fallback lines | other two nodes |
+|---|---|---|---|---|---|
+| gcp-formation-f580579a5-run1 | 751f5575 (3.6 MB) | 12:14:19.805Z -> 12:14:41.053Z | 2 | **0** | 0, 0 |
+| gcp-formation-f580579a5-run2-profile | 95ce5141 (3.9 MB) | 13:17:02.339Z -> 13:17:26.764Z | 3 | **0** | 0, 0 |
+
+Positive control: both seed logs start at process start and carry warn lines inside the window, so a fallback
+would have been logged. No retained lab formation run has a seed node log (the `w1b-*-core-formation`
+directories are test-run logs only). Plus two lab fresh-seed starts (70dfcdba8, baa2a2580): 0.
+
+## Item 3: owners started before the window closes [R]
+
+The window is CDC bootstrap mode: `systemTableWriter.enable()` (seed-registration-phase.js:126) until CDC normal
+mode in CACHE_HYDRATION (seed-cache-hydration-phase.js:268, swap :278). Seed sub-phases run in order
+INFRASTRUCTURE, MESSAGE_GROUPS, PARTITIONS, REGISTRATION, CACHE_HYDRATION (bootstrap-service-seed-workflow.js:64-72);
+`initializeControlPlaneService()` (:450, after CONTROL_PLANE_READY :422) - which initializes the rebalance
+coordinator (control-plane-setup.js:371) and starts the heartbeat (:711) - runs only after CACHE_HYDRATION.
+A named write exists only through a gateway's `runControlPlaneWrite` with `writeIdentity`; the CDC service and
+`BootstrapSystemTableWriter` never name a write.
+
+| Owner started before the window closes | Where | Writes | Named? |
+|---|---|---|---|
+| StartupServiceLifecycleOwner: bootstrap message-group and partition replicas | seed-infrastructure-phase.js:81, :103, :115 | none of its own | - |
+| MessageGroupService + election; its service-row owner | seed-message-groups-phase.js:151, :233; message-group-service-row-owner.js:257 | services row via `owner.systemTableWriter` (the bootstrap writer in the window) | no |
+| PartitionService replicas, elections, replica progress | seed-partitions-phase.js:220, :229, :321 | partition registration rows via `systemTableWriter` (partition-service-row-owner.js:115-172) | no |
+| StartupRecoveryCoordinator | seed-partitions-phase.js:615 | none (evaluates readiness) | - |
+| Replica state machine transitions (replica handler status) | replica-state-machine-transition.js:549-574 | gateway `submitMutation` with `coalescingKey` only (:741) | no |
+| Registration phase | seed-registration-phase.js:128-135, :295 | via `BootstrapSystemTableWriter`; dynamic config via gateway without `writeIdentity` | no |
+| Latency owners | seed-cache-hydration-phase.js:168 | gateway, unnamed (stage 2 [R]) | no |
+
+Answer: no owner started before the window closes issues a named write in it [R]. The rebalancer
+(reservations, replica_operations), membership publication, registration/endpoint authorities, heartbeat and
+system-metadata owner writes start after it.
+
+## Fallback deletion pair [X]
+
+| Sha | Content | Lab |
+|---|---|---|
+| e5cdc7770 | hand-over edits (raft reason, LEADERS_READY, JOINING member) + addressInUse witness | `nw2-red-a203b2c36-1` (raft guard green; census red only for the 3 transport members; addressInUse witness red: `TypeError: ROUTER_ERROR_MSG.addressInUse is not a function`) |
+| a203b2c36 | fallback witnesses (observer in the real seed child) | `nw2-red-a203b2c36-1`: refusal witness RED - the injected NOT_LEADER on the first window INSERT into `services-p1` was re-executed outside raft (1 direct write) and the seed still failed (`original-allocation-observation-unavailable`, 11.3 s); normal start green (27.0 s, window wrote services through raft, 0 direct writes) |
+| 097888f1a | deletion of the arm (+ its log message; the routing test now pins its absence) | `nw2-after-097888f1a-1`: refusal witness GREEN (no statement outside raft, owned outcome), normal start GREEN (30.3 s), bootstrap-direct-write-raft-routing, bootstrap-sequence, seed-registration-phase green |
+
+- No explicit wait was added: the normal start never took the arm before the deletion (0 direct writes in the
+  witness, 0 fallback lines in GCP/lab), so the code path a normal start executes is unchanged by it; the
+  existing wait is `waitForRequiredPartitionLeadership()` (seed-registration-phase.js:119, inside the bootstrap
+  deadline). Start time (file duration, adam-laptop): before 26.0 / 27.8 / 27.0 s, after 30.3 s (one sample;
+  +3 s with an unchanged path, so load noise by construction, a repeat is advisable).
+- **STOPPED (context budget): fixture debt of the deletion, 5 unit files red at 097888f1a**, all fakes that
+  model the window's write lane as `executeLocalQuery` only or assert the direct fan-out:
+  `test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js` (cases 1, 3: "partitionService.executeQuery
+  is not a function"), `test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js` (cases 28, 32, 33),
+  `test/bootstrap/bootstrap-mode.test.js` ("writes go to local partitions when bootstrap enabled"),
+  `test/cdc/bootstrap-mode-routing.property.test.js` (Property 6), `test/cdc/cdc-shutdown-terminal-owner-write.test.js`
+  ((i), (ii-a): the released write's terminal answer through the bootstrap lane). Migration: each fake's
+  bootstrap write lane becomes `executeQuery` (the raft lane), and assertions of per-replica direct writes
+  become "no statement outside raft". Until then 097888f1a can be reverted on its own.

@@ -1,0 +1,27 @@
+{
+  "sha": "d3edaa08ca13dbe8039b1c92352fe79e91ec8690",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+    "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+    "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+    "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+        "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+        "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+        "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js",
+        "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

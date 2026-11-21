@@ -1,0 +1,17 @@
+placement-shell=3408301
+placement-head=8c2cfb6ad3874d0aad49dce591c83c22d626402c
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3408764
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (86 assertions, 6215ms)
+# test-files total=1 pass=1 fail=0 assertions=86
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":86,"durationMs":6215,"retriedOnce":false,"firstFailureLine":null}

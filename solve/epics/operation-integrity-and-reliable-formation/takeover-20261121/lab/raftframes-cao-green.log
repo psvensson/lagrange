@@ -1,10 +1,37 @@
-file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2689
-    throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
-          ^
-
-Error: adams-gamla is not a ready lab machine this run: ready
-    at placeLabLanes (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2689:11)
-    at runLabTest (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2973:21)
-    at async file:///mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs:22:18
-
-Node.js v22.23.2
+lab test: adam-laptop: ordinary, exclusive (18 files) cores=8 mem=15.5GiB speed x2.03
+[adam-laptop] placement-shell=3697189
+[adam-laptop] placement-head=97ba4431b5fb0f4825910363144ec79a3cc13e80
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3697646
+[adam-laptop] # test-files planned=18
+[adam-laptop] classified lane ordinary: 17 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 44C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] ok test/message-group/message-group-service-leader-cdc.test.js (29 assertions, 2622ms)
+[adam-laptop] ok test/message-group/message-group-failover-cdc-continuity.test.js (25 assertions, 3027ms)
+[adam-laptop] ok test/message-group/message-group-service-lifecycle-and-ledger.test.js (60 assertions, 3511ms)
+[adam-laptop] ok test/message-group/cdc-non-leader-propagation.test.js (111 assertions, 5173ms)
+[adam-laptop] ok test/message-group/message-group-service-strict-cdc-forward-routing.test.js (80 assertions, 3025ms)
+[adam-laptop] ok test/message-group/message-group-service-raft-replication-and-cdc.test.js (110 assertions, 3709ms)
+[adam-laptop] ok test/message-group/message-group-service-strict-cdc-join-convergence.test.js (60 assertions, 2985ms)
+[adam-laptop] ok test/raft/raft-rs-backend/committed-membership-read.test.js (5 assertions, 2300ms)
+[adam-laptop] ok test/message-group/message-group-service.test.js (83 assertions, 3715ms)
+[adam-laptop] ok test/raft/leadership-transfer-single-path.test.js (3 assertions, 2845ms)
+[adam-laptop] ok test/raft/raft-rs-backend/admission-redrive.test.js (1 assertions, 2819ms)
+[adam-laptop] ok test/raft/raft-rs-backend/operation-port-lifecycle.test.js (5 assertions, 2647ms)
+[adam-laptop] ok test/raft/raft-rs-backend/partition-construction-seam.test.js (7 assertions, 3247ms)
+[adam-laptop] ok test/raft/raft-rs-current-authority-observation.test.js (4 assertions, 3200ms)
+[adam-laptop] ok test/raft/raft-rs-current-term-applied.test.js (1 assertions, 2749ms)
+[adam-laptop] ok test/wasm-service/wasm-service-replica.test.js (54 assertions, 18341ms)
+[adam-laptop] ok test/raft/raft-rs-backend/operation-port-boundary.test.js (8 assertions, 35030ms)
+[adam-laptop] # test-files total=17 pass=17 fail=0 assertions=646
+[adam-laptop] classified lane exclusive: 1 file(s), jobs=1
+[adam-laptop] thermal: ok cpu 63C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] ok test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js (27 assertions, 4256ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=27
+lab test: adam-laptop: # test-files total=18 pass=18 fail=0 assertions=673
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=18 pass=18 fail=0 assertions=673

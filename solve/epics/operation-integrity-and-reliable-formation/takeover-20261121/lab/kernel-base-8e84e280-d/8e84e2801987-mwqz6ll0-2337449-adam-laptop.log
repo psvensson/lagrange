@@ -1,0 +1,150 @@
+placement-shell=3796038
+placement-head=8e84e2801987b162359de39ef35e54aaf8462261
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3796986
+# test-files planned=24
+classified lane ordinary: 24 file(s), jobs=4
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/partition/participant-release-control-three-member.test.js (1 assertions, 7384ms)
+ok test/partition/participant-release-caller-lifetimes.test.js (4 assertions, 7505ms)
+ok test/partition/participant-release-applied-position.test.js (8 assertions, 7692ms)
+ok test/partition/participant-release-build-provenance.test.js (3 assertions, 8462ms)
+ok test/partition/participant-release-delivery-recorder.test.js (4 assertions, 777ms)
+ok test/partition/participant-release-current-control-replay.test.js (2 assertions, 11065ms)
+ok test/partition/participant-release-deadline-recovery.test.js (2 assertions, 11004ms)
+ok test/partition/participant-release-first-prepare-native.test.js (1 assertions, 10609ms)
+ok test/partition/participant-release-native-application-order.test.js (1 assertions, 10818ms)
+ok test/partition/participant-release-prepare-identity-native.test.js (1 assertions, 10744ms)
+ok test/partition/participant-release-prepared-settlement-native.test.js (1 assertions, 11127ms)
+ok test/partition/participant-release-retention-native.test.js (1 assertions, 11328ms)
+ok test/partition/participant-release-protocol.test.js (19 assertions, 13350ms)
+ok test/partition/partition-participant-transaction-topology.test.js (12 assertions, 10646ms)
+ok test/partition/partition-participant-transaction-apply.test.js (28 assertions, 11966ms)
+ok test/partition/partition-cdc-delivery-progress.test.js (6 assertions, 13210ms)
+ok test/partition/proposal-queue-capacity.property.test.js (7 assertions, 1215ms)
+ok test/partition/proposal-queue-size-invariant.property.test.js (7 assertions, 1296ms)
+ok test/partition/write-path-epoch-fencing.test.js (5 assertions, 2750ms)
+ok test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js (3 assertions, 2847ms)
+not ok test/partition/placement-retained-leadership.test.js (4 assertions, 9820ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+  ---
+  duration_ms: 6544.193983
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:36:1'
+  failureType: 'testCodeFailure'
+  error: 'A used current B route instead of saved A closure'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:47:12
+    async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:94:7)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: paused pinned A request survives B custody and genuine A recovery unchanged
+not ok 2 - paused pinned A request survives B custody and genuine A recovery unchanged
+  ---
+  duration_ms: 175.236717
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:58:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'entryId')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:69:27
+    async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:94:7)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: a lost committed reply retires from the visible winner without another native proposal
+ok 3 - a lost committed reply retires from the visible winner without another native proposal
+  ---
+  duration_ms: 148.803368
+  type: 'test'
+  ...
+# Subtest: genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+not ok 4 - genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+  ---
+  duration_ms: 156.827495
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:122:1'
+  failureType: 'testCodeFailure'
+  error: 'false == true'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:133:12
+    async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:94:7)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 1
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7036.985218
+# time=9820ms
+ok test/raft/raft-rs-backend/transfer-leadership-write-path.test.js (3 assertions, 2283ms)
+ok test/partition/settled-replay-preserves-result.test.js (6 assertions, 9439ms)
+ok test/partition/partition-runtime-reconstruction-leadership.test.js (20 assertions, 35555ms)
+# test-files total=24 pass=23 fail=1 assertions=149
+placement-results={"file":"test/partition/participant-release-control-three-member.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":7384,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-caller-lifetimes.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":7505,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-applied-position.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":7692,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-build-provenance.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":8462,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-delivery-recorder.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":777,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-current-control-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":11065,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-deadline-recovery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":11004,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-first-prepare-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10609,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10818,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-prepare-identity-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10744,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-prepared-settlement-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":11127,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-retention-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":11328,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":13350,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-participant-transaction-topology.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":10646,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-participant-transaction-apply.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":11966,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-delivery-progress.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":13210,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/proposal-queue-capacity.property.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1215,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/proposal-queue-size-invariant.property.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1296,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/write-path-epoch-fencing.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2750,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2847,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":9820,"retriedOnce":false,"firstFailureLine":"not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B"}
+placement-results={"file":"test/raft/raft-rs-backend/transfer-leadership-write-path.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2283,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/settled-replay-preserves-result.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":9439,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-runtime-reconstruction-leadership.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":35555,"retriedOnce":false,"firstFailureLine":null}

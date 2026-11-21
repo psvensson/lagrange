@@ -1,0 +1,7 @@
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+pre-commit: refreshing generated test metadata
+[work/integration-candidate-20261121 487d12c91] chore(ratchet): tighten the navigability baselines one-way at the merged head
+ 7 files changed, 26 insertions(+), 1466 deletions(-)
+NAV-SHA=487d12c91388b51e00427aef9e58460b39bb6096

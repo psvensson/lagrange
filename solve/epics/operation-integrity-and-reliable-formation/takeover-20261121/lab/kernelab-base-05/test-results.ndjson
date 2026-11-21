@@ -1,0 +1,1 @@
+{"file":"test/partition/partition-runtime-reconstruction-leadership.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":36911,"retriedOnce":false,"firstFailureLine":"not ok 5 - W-B6-3: a leader's persistence failure reconstructs only the leader's group; after the heal exactly one replica leads and every replica observes the leadership its port reports"}

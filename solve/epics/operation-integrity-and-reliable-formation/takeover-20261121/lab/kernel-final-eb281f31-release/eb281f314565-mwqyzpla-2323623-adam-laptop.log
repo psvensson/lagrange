@@ -1,0 +1,38 @@
+placement-shell=3788406
+placement-head=eb281f314565d4eb3c7e53798aa34e585c7fbcbf
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3788857
+# test-files planned=13
+classified lane ordinary: 13 file(s), jobs=4
+thermal: hold cpu 75C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/partition/participant-release-control-three-member.test.js (1 assertions, 7111ms)
+ok test/partition/participant-release-applied-position.test.js (8 assertions, 7204ms)
+ok test/partition/participant-release-caller-lifetimes.test.js (4 assertions, 7339ms)
+ok test/partition/participant-release-build-provenance.test.js (3 assertions, 7445ms)
+ok test/partition/participant-release-delivery-recorder.test.js (4 assertions, 334ms)
+ok test/partition/participant-release-current-control-replay.test.js (2 assertions, 10115ms)
+ok test/partition/participant-release-deadline-recovery.test.js (2 assertions, 10290ms)
+ok test/partition/participant-release-first-prepare-native.test.js (1 assertions, 10569ms)
+ok test/partition/participant-release-native-application-order.test.js (1 assertions, 10793ms)
+ok test/partition/participant-release-prepare-identity-native.test.js (1 assertions, 10827ms)
+ok test/partition/participant-release-prepared-settlement-native.test.js (1 assertions, 11200ms)
+ok test/partition/participant-release-retention-native.test.js (1 assertions, 10661ms)
+ok test/partition/participant-release-protocol.test.js (19 assertions, 12476ms)
+# test-files total=13 pass=13 fail=0 assertions=48
+placement-results={"file":"test/partition/participant-release-control-three-member.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":7111,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-applied-position.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":7204,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-caller-lifetimes.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":7339,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-build-provenance.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":7445,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-delivery-recorder.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":334,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-current-control-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":10115,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-deadline-recovery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":10290,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-first-prepare-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10569,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10793,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-prepare-identity-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10827,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-prepared-settlement-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":11200,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-retention-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":10661,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":12476,"retriedOnce":false,"firstFailureLine":null}

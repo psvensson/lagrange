@@ -1,0 +1,21 @@
+check-guideline-navigability-baseline-alias_exports.json: 38 -> 38
+  ABOVE (not absorbed) src/node/replica-cleanup-tombstone-owner.js | catch_returns_default | observeScopedLearnerCleanup: 0 allowed, 1 present
+  ABOVE (not absorbed) src/node/replica-handler-learner-retirement-authority.js | catch_returns_default | handOffAbsentLearnerCleanup: 0 allowed, 1 present
+  ABOVE (not absorbed) src/rebalancer/operation-workflow-executor-outcome-redrive.js | catch_returns_default | redriveExecutorOutcomeReconcile: 0 allowed, 1 present
+  ABOVE (not absorbed) src/rebalancer/operation-workflow-placement-learner-retirement.js | catch_returns_default | readSupersededDispatchReplay: 0 allowed, 1 present
+  ABOVE (not absorbed) src/rebalancer/operation-workflow-reentry-authority.js | catch_returns_default | matchesRemoteReentryOperation: 0 allowed, 1 present
+  ABOVE (not absorbed) src/rebalancer/operation-workflow-terminal-reservation-release.js | catch_returns_default | isTerminalTransitionOutcomeSettled: 0 allowed, 1 present
+  ABOVE (not absorbed) src/rebalancer/priority-recovery-observation.js | catch_returns_default | selectAuthoritativePartitionOperations: 0 allowed, 1 present
+check-guideline-navigability-baseline-catch_returns_default.json: 374 -> 367
+check-guideline-navigability-baseline-identity_keyed_module_state.json: 82 -> 81
+check-guideline-navigability-baseline-inheritance_depth_over_two.json: 57 -> 57
+  ABOVE (not absorbed) src/bootstrap/node-joining-publication-activation.js | legacy_term_identifiers | ensureDurableRejoinPartitionRuntimes: 0 allowed, 3 present
+check-guideline-navigability-baseline-legacy_term_identifiers.json: 2835 -> 2760
+check-guideline-navigability-baseline-owner_port_feature_detection.json: 2008 -> 1969
+check-guideline-navigability-baseline-prototype_copy_bags.json: 59 -> 59
+check-guideline-navigability-baseline-row_field_alias_reads.json: 682 -> 680
+  ABOVE (not absorbed) src/bootstrap/node-joining-message-group-runtime-delegation.js | two_source_fallback_reads | requireCurrent: 0 allowed, 1 present
+  ABOVE (not absorbed) src/rebalancer/replica-operation-creation-request.js | two_source_fallback_reads | operationMatchesCreationRequest: 0 allowed, 1 present
+check-guideline-navigability-baseline-two_source_fallback_reads.json: 1686 -> 1658
+check-guideline-navigability-baseline-typeof_dual_paths.json: 594 -> 586
+above-baseline sites present and not absorbed: 12

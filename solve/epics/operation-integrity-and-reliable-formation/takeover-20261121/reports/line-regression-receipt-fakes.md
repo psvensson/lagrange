@@ -46,7 +46,7 @@ gateway write (real gateway + real CDC + helper engine) settles in one delivery,
 Gateway doubles (objects standing in for `ControlPlaneSystemTableGateway`) are NOT migrated: the judge runs inside the
 real gateway, which those tests replace.
 
-## Per group (status: commits queued; lab pending)
+## Per group (commits and lab results in the next section)
 
 ### G2 (6)
 | File | Old fake | New source |
@@ -145,11 +145,50 @@ coordinator, CDC) and host variance, not a re-send loop (a 30 s re-send would sh
    and the honest count unchanged); the test-local wrapper of `updateSystemTableRow` now forwards `options` (it dropped
    them, which would lose the write's key). The ReplicaStateMachine CDC stub (payload-building only, no write) unchanged.
    Prepared as a patch; committed after the chain.
-3. Causes branch corrective round: re-merge before the final lab run (not moved as of 18:10Z).
+3. Causes branch corrective round: re-merged **cd78e1d233c476d48103a02f29b308145ba24e2a** (merge of baa2a2580; no
+   conflict; only generated files overlapped). Final run attempts: `lab/lrfake-final-1` = RUNNER FAILURE (adam-laptop
+   "not a ready lab machine this run"); `lab/lrfake-final-2` (tv-dator) = RUNNER FAILURE exit 97 for all 28 files
+   ("the commit's generated metadata is stale; regenerate and commit test/shards/impact-graph-seal.json": the textual
+   merge of generated files). Regeneration commit through heavy.sh, then the final run again.
+
+## Final run (after the corrective re-merge)
+
+Regeneration commit **48a44d1678176ff021b442001d6af513b5b5282f** (derived metadata only, heavy.sh). `lab/lrfake-final-3`
+(adam-laptop, 48a44d167): **26/28 green, 883 assertions** — pin, G2 6/6, G18 2/2, G13 4/4, G1 5/7, G3 4/4, G12 2/2,
+durable-voter, seam conformance. Red: node-storage-budget-service #17 and register-node-in-cluster #9/#13 (below).
+Durations: no file slower by more than ~2 s against `lrfake-g1-1`/main; longest bound-creation-restart 14.4 s (main
+13.6 s); no 30 s re-send loop anywhere.
 
 ## Findings
 
-(none yet)
+- F1 (product-adjacent, recorded): replica-placement-owner-core's growth witness and executor-bypasses were each hiding
+  a SECOND fixture gap behind the receipt (CDC owner without write methods; no authoritative read for the persisted
+  operation). Both closed in the additions commit with production composition (real CDC write methods; the shared
+  SQL-engine seam over the fixture's own store). No product defect found in either.
+- F2: durable-voter's cause was the fixture's partition-service self lacking `nodeId` (the CAS guard has named
+  `node_id` since 1aea11baf), not the store rows.
+- F3 (no product defect): the engine never receives `phaseScope` on the startup SQL path since 7d261f681 (see pin).
+
+## Remaining (not done; plan)
+
+- `rebalancer/node-storage-budget-service` #17 "throws on upsert failure": the mock's bare `{success:false,
+  error:'write failed'}` at the CDC level is the named UNKNOWN under 7d261f681+baa2a2580, so the error reads "...outcome
+  is not known...". A producer-built definite failure (partition `answerSettledStatement` STATEMENT_FAILED, or a
+  leadership refusal from `buildPartitionWriteLeadershipRefusal`, through the real coordinator and the real CDC, which
+  since baa2a2580 throws the mutation error carrying `participantResults`) would be FAILED/NOT_PROPOSED, but its text
+  would be the CDC/engine's ("Distributed operation failed due to participant failures"), not 'write failed'. So the
+  assertion `{message: 'write failed'}` pins the old bare-failure contract: REPORTED FOR A RULING (restate to the
+  producer's failure text/code, or assert the typed FAILED outcome).
+- `bootstrap/register-node-in-cluster` #13: green at f580579a5; red since the judge repair (not my diff): the thrown
+  bare participant failure is now the named UNKNOWN and sits two `cause` levels down. Plan: add failure/refusal modes to
+  `committed-write-answer.js` (`effect.refusal` -> `buildPartitionWriteLeadershipRefusal` with retryAfterMs 250;
+  `effect.statementFailure` -> `answerSettledStatement` STATEMENT_FAILED), let the mock `return
+  cdcCommittedWriteAnswer(...)` so the REAL CDC throws the producer's error, capture that thrown object as
+  `participantFailure`, keep all six assertions; pin both modes in the pin test (judge NOT_PROPOSED / FAILED). Not
+  started (context budget).
+- `bootstrap/register-node-in-cluster` #9 assertion 2: pin, ruling needed (above).
+- Not assigned but touched by a shared fixture: `bootstrap/move-replica-assignment-token` first failure unchanged
+  (-503/+undefined).
 
 ## Pins reported for a ruling
 
@@ -162,3 +201,120 @@ coordinator, CDC) and host variance, not a re-send loop (a 30 s re-send would sh
   src/cdc`: none), so nothing is lost in production. Not migrated, not changed: needs a ruling (e.g. restate as "every
   join write took the startup SQL path of the join-admission gateway", which assertion 1 and 4 already show in part).
 - `heartbeat-storage-budget-preservation`: updated (not a ruling item) as described under G3.
+
+## Closing items (agent `claude:receipt-fakes-2`, 2026-11-21 ~21:00-)
+
+Taken over at 48a44d167 (clean). Instruction sources: CLAUDE.md, `docs/steering/rules.md`, `test/guidelines/INDEX.md`,
+this record, `reports/line-regression-causes.md` (stages 1-3), the lead's closing brief. Tests and test helpers only;
+the hook regenerated derived metadata (inventory, shards, impact-graph seal, `src/query/INDEX.md` importer count).
+Marking: [X] executed on the lab, [R] read from source or git.
+
+### Commits
+
+| Commit | Sha | Content |
+|---|---|---|
+| A | 6003683136eb8fb3818a63e7a6b63cbf0eee051f | items 1-4 (helper failure modes + pin, three subtests, G12 move-replica) |
+| M | 9e534235f0c79d646d11d65db86611a1344ec252 (parents 600368313 + a203b2c36) | item 5: true merge of `work/line-regression-causes-20261121` at a203b2c36 (new since baa2a2580: 5392380ae, e5cdc7770, a203b2c36); no conflict; `--no-commit`, then committed through heavy.sh, so the hook regenerated the seal and shards in the merge commit itself |
+
+### Item 1: the helper's definite-failure modes [R+X]
+
+`test/test-helpers/committed-write-answer.js` (effect fields; all answers built by production code):
+- `notLeader: true` -> the leader's refusal before proposal, `buildPartitionWriteLeadershipRefusal(null, partition)`
+  (`partition_write_not_leader`).
+- `statementFailure: {failureCode, failureMessage}` -> the committed statement's deterministic failure,
+  `answerSettledStatement` over the entry's STATEMENT_FAILED outcome row (committed, entry, logIndex).
+- A failed leader answer reaches the engine as the partition delivery's own failure result
+  (`buildPartitionExecutionFailureResult` over `buildQueryPartitionCandidateFailureDetails`, what
+  `QueryExecutorPartitionDelivery#executeOnPartition` returns for a definite answer). `leaderReconnectIntervalMs` makes
+  the proposer's router report the answering node as reconnecting, so the delivery derives the retry-after from the
+  reconnect interval (`resolveRetryableLeaderFailureRetryAfterMs`), the production origin of a retry-after on a
+  not-leader answer. The real coordinator, the real CDC service (which retries the retryable refusal and throws the
+  definite failure, `buildSystemTableMutationError` + `carryDistributedAnswerIdentity`) are unchanged in the chain.
+- Pin (`committed-write-answer.test.js`, 2 new cases): engine INSERT and UPDATE for both modes are FAILED /
+  NOT_PROPOSED by the real `judgeNamedWriteOutcome` for their own key+partition, UNKNOWN for another partition; the real
+  CDC service throws each, judged the same, carrying the derived retry-after (1 ms) or none; through the real gateway a
+  named write is thrown as `isControlPlaneWriteDefinitivelyUnappliedError` (not `isControlPlaneWriteOutcomeUnknown`), and
+  a second write under the same name delivers only its own content (nothing held).
+
+`register-node-in-cluster` #13 (green at `lrfake2-items-1`):
+- The NODES birth now fails with `{notLeader: true, leaderReconnectIntervalMs: 250}` through the real CDC: the producer
+  throws message 'Distributed operation failed due to participant failures', code DISTRIBUTED_PARTICIPANT_FAILURE,
+  retryAfterMs 250 (assertions 1-3 unchanged and met by the producer's own values).
+- Finding (corrects the previous plan): capturing the CDC's thrown error as `participantFailure` cannot satisfy
+  assertion 4 (`error.cause === participantFailure`) for ANY failure shape. Since 160bf0e6c ("Serialize each retained
+  named write delivery across callers", an ancestor of f580579a5) `rememberWriteReceipt`
+  (`control-plane-write-identity.js:237-246`) hands every caller of a named write its own Error whose `cause` is the
+  producer's error; before it, the receipt was stamped on the thrown object itself. So "green at f580579a5" could not
+  hold by this reading; the earlier runs available here (`lrfake-g1-1`, `lrfake-final-3`) show it red.
+- Resolution without changing an assertion: `participantFailure` is now what the owner path threw: the registration's
+  NODES write through its control-plane gateway (`querySystemStatePhase.nodeRegistrationOwner
+  .getMembershipPublicationRuntimeOwner().getControlPlaneSystemTableGateway().insertSystemTableRow`, observed, rethrown
+  unchanged). Before 160bf0e6c that object and the CDC's thrown error were the same object. All seven assertions
+  unchanged; ONE assertion added: the owner-path failure's cause chain contains the producer's own error
+  (depth-agnostic). With the definite refusal the instance is NOT_PROPOSED and released, so the join's retry issues a
+  fresh birth (no two-level pending-instance wrap any more).
+- If the lead prefers the plan's literal capture point, the equivalent restatement is `error.cause.cause ===
+  <CDC's thrown error>` (one level, the named-write layer's per-caller error); not done, since it pins that depth.
+
+### Item 2 (ruled): `register-node-in-cluster` #9 assertion 2 [X]
+
+| Old | New | Reason |
+|---|---|---|
+| every call the join engine RECEIVED carries `options.phaseScope === 'join'` | the join-admission gateway (the real one the fixture already uses, from `getJoinAdmissionControlPlaneSystemTableGateway()`) RECEIVES every write with `phaseScope === 'join'`, its startup SQL phase (`startupSqlMutationPhase`) is `'join'`, and the number of writes it received equals the number of write statements the engine received (its gate admitted exactly them; the gateway has no CDC, so nothing else could deliver) | 7d261f681 moved the gate: `executesStartupSql` at the gateway (`control-plane-system-table-gateway-mutation-submission.js:250-252`) replaced `executeSqlMutationFallback`, which forwarded the scope to the engine; no engine/CDC code reads it |
+
+One assertion restated (count unchanged); assertions 1, 3, 4 unchanged. Observed by wrapping the gateway's
+`submitMutation` (rethrows/returns unchanged).
+
+### Item 3 (ruled): `node-storage-budget-service` #17 [X]
+
+| Old | New | Reason |
+|---|---|---|
+| mock CDC upsert RETURNS `{success:false, error:'write failed'}`; expects rejection `{message: 'write failed'}` | mock CDC upsert answers through the helper's `statementFailure` (`SQLITE_CONSTRAINT_PRIMARYKEY`, 'UNIQUE constraint failed: nodes.node_id'): the real CDC THROWS the producer's definite failure; expects `{message: 'Distributed operation failed due to participant failures'}` | the real CDC never returns a failed write, it throws `buildSystemTableMutationError` with the coordinator's text; a bare returned failure is the named UNKNOWN since 7d261f681 |
+
+`createMockCdc(result)` -> `createMockCdc(effect)` (only #17 passed an argument). Definite path: the statement failure
+is terminal for the CDC (no retry) and FAILED for the judge (pin), so the registration neither replays nor re-sends; it
+surfaces the gateway's thrown error, whose message is the producer's. No other assertion in the subtest; nothing added.
+
+### Item 4: `move-replica-assignment-token` (G12) [R+X]
+
+- First failure: `move-replica-assignment-token-cache-visibility-test-cases.js:91` (subtest 1, statusCode -503/+undefined;
+  code TIMEOUT instead of SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT); subtest 4 the same way. Subtests 2, 3, 5 green.
+- Frame [R + log]: the retained run log line `wait_bound_spent registerServiceWriteRetryTimeoutMs ... lastError "Named
+  control-plane write wait expired", lastErrorCode TIMEOUT, attempts 1, elapsedMs 70000`. That text has one source,
+  `namedWriteWaitTimeout` (`control-plane-named-write-wait.js:27-37`) via `requireNamedWriteWaitBudget` (:39-44) in
+  `runNamedControlPlaneWrite` (`control-plane-write-identity.js:432`) <- gateway `submitMutation` (`runControlPlaneWrite`
+  with `now: this.now`, default `() => Date.now()`) <- `executeBootstrapControlPlaneMutation` <-
+  `runRetryableControlPlaneWrite` <- `writeRegisteredServiceRowWithRetry` <- `driveMoveHandoffRegistrationVisibility`.
+- Contract change: 160bf0e6c gave a named write its own bounded wait on the caller's clock. Both failing subtests
+  patch `Date.now` to advance 10 s on EVERY reading (meant to spend the cache-visibility wait's 5 s deadline); the
+  write's own wait now reads that clock first and expires before the write is delivered, so the visibility wait the
+  subtests pin is never reached.
+- Classification: fixture debt (the fake clock answers what no real clock answers, now read by a second waiter on the
+  path). Fix: `driveMoveHandoffRegistrationVisibility(api, row, {beforeVisibilityWait})` (hook between the accepted
+  write and the visibility wait); the two subtests install the same 10 s-per-reading clock there
+  (`letVisibilityWaitDeadlinePass`). No assertion changed. Green: 27 assertions (= main's 27).
+
+### Lab
+
+| Run | Sha | Host | Result |
+|---|---|---|---|
+| `lab/lrfake2-items-1` | 600368313 | adam-laptop | **4/4 green, 141 assertions**: pin 6 (1707 ms), node-storage-budget-service 22 (= main 22, 2353 ms), register-node-in-cluster 86 (= main 85 + 1 added, 3079 ms), move-replica-assignment-token 27 (= main 27, 7103 ms) |
+| `lab/lrfake2-final-1` | 9e534235f | adam-laptop | RUNNER FAILURE ("adam-laptop is not a ready lab machine this run"); no result |
+| `lab/lrfake2-final-2` | 9e534235f | adams-gamla | **29/29 green, 912 assertions** (the 28 files of `lrfake-final-3` + move-replica-assignment-token) |
+
+Final run accounting against `lrfake-final-3` (883 assertions, 26/28): +27 move-replica-assignment-token, +2 pin cases,
++1 register-node-in-cluster (added assertion), -1 node-storage-budget-service (its failing assertion no longer
+counted; 22 = main) = 912. No file slower than 20 s; longest bound-creation-restart 14357 ms (13592 at lrfake-shared-1,
+14.4 s at final-3, main 13633); move-replica-assignment-token 7264 ms (7120 at base); register-node-in-cluster 3386 ms
+(4116 at final-3; #13 now spends the real CDC's six retries of 250 ms per join attempt). Host differs from earlier
+runs (adams-gamla, 4 cores) because adam-laptop failed as a runner and was then held by another agent.
+
+### Remaining / for the lead
+
+- Item 1: confirm the capture point of #13 assertion 4 (owner-path failure = the gateway write's thrown error; the
+  producer's error asserted in its cause chain) or rule the one-level restatement instead.
+- The previous record's "#13 green at f580579a5" does not hold by reading (160bf0e6c is an ancestor of f580579a5); not
+  re-executed at f580579a5.
+- Not in this scope: subtests 11 and 12 of `register-node-in-cluster` still throw a bare hand-built participant failure
+  from the mock (green, since the registration retries and then succeeds); under the migration rule they could use the
+  helper's `notLeader` mode too.

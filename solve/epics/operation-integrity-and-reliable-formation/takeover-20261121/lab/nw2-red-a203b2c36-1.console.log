@@ -1,0 +1,153 @@
+lab test: adam-laptop: ordinary, bootstrap (5 files) cores=8 mem=15.5GiB speed x2.01
+[adam-laptop] placement-shell=3747568
+[adam-laptop] placement-head=a203b2c361d7928859942ee91852a72eb11b15aa
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3748025
+[adam-laptop] # test-files planned=5
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/transport/router-in-process-address-in-use.test.js (1 assertions, 396ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: an in-process port clash rejects with the address-in-use error
+[adam-laptop] not ok 1 - an in-process port clash rejects with the address-in-use error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.710004
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/transport/router-in-process-address-in-use.test.js:23:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     not a TypeError: ROUTER_ERROR_MSG.addressInUse is not a function
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + 'TypeError'
+[adam-laptop]     - 'Error'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'Error'
+[adam-laptop]   actual: 'TypeError'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     Object.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/transport/router-in-process-address-in-use.test.js:28:14)
+[adam-laptop]     expectedException (node:assert:576:17)
+[adam-laptop]     expectsError (node:assert:701:21)
+[adam-laptop]     Function.rejects (node:assert:767:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/transport/router-in-process-address-in-use.test.js:27:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 21.66302
+[adam-laptop] # time=396ms
+[adam-laptop] ok test/raft/authoritative-row-mutation-outcome-classifier.test.js (133 assertions, 838ms)
+[adam-laptop] not ok test/constants/message-table-census.test.js (1 assertions, 2868ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: every message-table member referenced under src is defined
+[adam-laptop] not ok 1 - every message-table member referenced under src is defined
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2592.362806
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/constants/message-table-census.test.js:138:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     references to members no message table defines (3164 accesses checked; not checked: 3 computed, 66 on tables bound otherwise)
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE',
+[adam-laptop]     +   'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND',
+[adam-laptop]     +   'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE'
+[adam-laptop]     1: 'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND'
+[adam-laptop]     2: 'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/constants/message-table-census.test.js:161:10)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 2601.37863
+[adam-laptop] # time=2868ms
+[adam-laptop] # test-files total=3 pass=1 fail=2 assertions=135
+[adam-laptop] classified lane bootstrap: 2 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 56C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js (1 assertions, 12804ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # WITNESS seed-bootstrap-lane-refusal {"wallMs":11300,"returnedRuntime":false,"refused":{"partitionId":"services-p1","sql":"INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,"},"directWrites":[{"partitionId":"services-p1","sql":"INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,"}],"startupError":"original-allocation-observation-unavailable"}
+[adam-laptop] # Subtest: a raft-lane refusal in the bootstrap window is not executed outside raft
+[adam-laptop] not ok 1 - a raft-lane refusal in the bootstrap window is not executed outside raft
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 11403.62383
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js:22:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     no statement executed outside raft
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   {
+[adam-laptop]     +     partitionId: 'services-p1',
+[adam-laptop]     +     sql: 'INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,'
+[adam-laptop]     +   }
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       partitionId: 'services-p1'
+[adam-laptop]       sql: 'INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js:32:12)
+[adam-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 11411.144171
+[adam-laptop] # time=12804ms
+[adam-laptop] ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 26979ms)
+[adam-laptop] # test-files total=2 pass=1 fail=1 assertions=2
+lab test: adam-laptop: # test-files total=5 pass=2 fail=3 assertions=137
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=5 pass=2 fail=3 assertions=137

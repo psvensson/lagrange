@@ -1,0 +1,23 @@
+placement-shell=3755060
+placement-head=6003683136eb8fb3818a63e7a6b63cbf0eee051f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3755517
+# test-files planned=4
+classified lane ordinary: 2 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/test-helpers/committed-write-answer.test.js (6 assertions, 1707ms)
+ok test/rebalancer/node-storage-budget-service.test.js (22 assertions, 2353ms)
+# test-files total=2 pass=2 fail=0 assertions=28
+classified lane bootstrap: 2 file(s), jobs=2
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/bootstrap/register-node-in-cluster.test.js (86 assertions, 3079ms)
+ok test/bootstrap/move-replica-assignment-token.test.js (27 assertions, 7103ms)
+# test-files total=2 pass=2 fail=0 assertions=113
+placement-results={"file":"test/test-helpers/committed-write-answer.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1707,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/node-storage-budget-service.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":2353,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/register-node-in-cluster.test.js","attempt":1,"ok":true,"assertions":86,"durationMs":3079,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/move-replica-assignment-token.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":7103,"retriedOnce":false,"firstFailureLine":null}

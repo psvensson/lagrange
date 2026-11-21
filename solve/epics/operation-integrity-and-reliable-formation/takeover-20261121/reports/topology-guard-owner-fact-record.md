@@ -366,3 +366,377 @@ window (between the successor's election and the old leader's step-down) had clo
 on the current core role. The case failed only on a test-API error (`t.notEqual`), fixed in the next commit. Not
 covered by this witness: the verifier's F1 window (a pending core turn returning a cached status), which needs a held
 peer send on the old leader at the moment of the read.
+
+### 9.9 Final runs [X]
+- `lab/guard-stage2-final-6d1237341` (sha 6d1237341, 15 files): GREEN: reproduction (57), guard owner-fact witnesses
+  (25: W1 asks only the leader, admits once; W2 the planner's own turn, 5 typed deferrals `owner_fact_read_failed`, then
+  exactly one proposal after the address quarantine; anti-vacuity holds; W3 stale published leader), read-point
+  witnesses (11: election log, read point), siblings (34), residual (4), required-entity-operation-observation (177),
+  restated escape/fail-open/double tests (critical-spread 23, minting gap 28, verdict 9, visibility 28, dedup 69),
+  owner-fact receiver read point (42). Red: readiness-snapshot-persistence and operation-ownership (doubles: fixed in the
+  next commit), rebalance-coordinator-topology-guard (same first failures as at the predecessor 582d197bc: pre-existing,
+  not attributed here).
+- Red-before for every witness: `lab/guard-stage1-red-625381bd6` (reproduction, W1-W3, siblings C3/C4/C5) and
+  `lab/guard-stage2-red-582d197bc` (election log, read point, retired source, address book).
+
+### 9.10 Open
+1. Owner-fact read corrective round (typed floor, required deadline, routing dimension, echo): re-merge and adapt in
+   `readEntityServiceRowsOwnerFact` only.
+2. Invariant supersession for the over-target hold (9.2 item 2); lead.
+3. Message-group branch of `buildOperationBootstrapTopology`: delete (dead from production callers) - owner decision.
+4. REPLACE target binding: the typed deferral now propagates out of `executeOperation`
+   (`operation-workflow-replace-target-binding.js`, like `buildCreateDispatchRefreshDeferred` thrown in the same turn at
+   `operation-workflow-dispatch-response-reconcile.js:193, 205`); that its caller arms `deferDispatchRetry` is not traced
+   and not witnessed (a navigability rule refuses a catch that returns null there). Stop item: needs the dispatch owner to
+   route a thrown `deferRetry` from `resolveDispatchTargetBinding` (`:422`) to `deferDispatchRetry` as the delivery catch
+   (`:743-783`) does.
+5. Residual (deposed-unaware leader): not demonstrated at this head (step-down preceded the successor's election);
+   the F1 pending-turn window is not exercised.
+6. The ledger effect fence (9.4) belongs to the placement admission and workflow owners.
+7. `rebalance-coordinator-topology-guard.test.js` is red at the predecessor and at this head with the same first
+   failures (cache-only occupancy assertions): pre-existing on the line, not traced here.
+
+### 9.11 Stage-2 commits and final evidence (all pushed; branch tip d6fa64092) [X]
+| Sha | Content |
+| --- | --- |
+| 582d197bc | red witnesses (read point, election log, retired source, address book) + shared raft controls |
+| 807652bae | migration (adapter, guard outcomes, escapes deleted, siblings, hint, typed deferrals, fallback arm removed), test-double migrations, coupled pair `services-inventory-owner-fact-read` registered |
+| 7f85d7f0b | residual witness (deposed services-p1 leader) |
+| 6d1237341 | remaining doubles, quarantine wait, restated anchor (b) and read-point witness |
+| 4da9da27a | hint read through the repository's projection read; persistence store SERVICES table; critical-admission case |
+| d6fa64092 | committed-membership harness projection |
+
+Final: `lab/guard-stage2-final2-4da9da27a` (9 files: all witnesses green, plus the three migrated doubles; only the
+harness consumer red, fixed in d6fa64092) and `lab/guard-stage2-harness-d6fa64092` (11 files, all green: the nine
+harness consumers, siblings, operation ownership). The full 136-file cone was run at 807652bae only
+(`lab/guard-stage2-green-807652bae`); later commits touch tests and the hint port only and were checked on the files
+they affect, not on the whole cone. `npm run audit:impact-contracts` was not run (heavy-queue budget).
+
+---
+
+## 10. Closing items, appended 2026-11-21 (writer guard-2, takeover of the stage-2 worktree)
+
+Writer: guard-2 (opus), single writer, worktree and branch as above, taken over at d6fa64092 (clean).
+Loaded: `CLAUDE.md`, `docs/steering/rules.md`, `test/guidelines/INDEX.md` (+ `harness.md` on real-time
+waits), this record (1-9.11), `reports/pgwire-placement-refusal.md`, `architecture/contracts/invariants.json`
+invariant `failed-authoritative-read-admission-verdict` (lines 435-460, not edited), its evidence test at
+23344cddc and at d6fa64092. Marking as above: [V] read in code, [X] executed on the lab, [I] inferred.
+
+Commits (all pushed): 017921e17 (`fix(rebalancer): keep the sealed fail-open of the over-target hold on the owner fact; drop the dead message-group bootstrap`), on d6fa64092; one commit, pushed. Branch tip 017921e1708b2801c57e299d5d3ea44ed7dee886.
+
+### 10.1 Item 1: the over-target hold keeps its sealed fail-open; the DEFER ruling is withdrawn
+
+**Withdrawn.** Section 9.2 item 2 (the hold DEFERS on an UNAVAILABLE owner fact) is withdrawn by the lead.
+Why: it contradicts the sealed invariant `failed-authoritative-read-admission-verdict`, which names this
+hold as the one count-keyed hold that fails OPEN on a read gap, with a named deadlock witness (G1:
+fail-closing it would strand the surplus drain it exists to release) and a red-on-revert evidence row. No
+proof that deferring is deadlock-free exists (9.2 item 2 said so: "Not witnessed as deadlock-free"). And
+the executed defect was never the fail-open on a real gap. Precisely, at 625381bd6 [V]: on a host holding
+a services-p1 follower, the default-mode read was answered by the local follower (`rowSetComplete:false`,
+branch B4 of the PG-wire report), the coordinator turned that into `available:false, rows:[]`
+(`rebalance-coordinator-operation-read-methods.js:516-547` at 625381bd6) and the hold returned on `[]`.
+So the hold released on every follower-host read even while the leader was reachable: the read mode
+manufactured a permanent gap out of a follower's incomplete answer (stage-1 lab: "the follower host
+releases the hold ... READY or unavailable"). The fix is the read (the owner fact reaches the leader),
+not the verdict.
+
+Code (`rebalance-coordinator-priority-budget-admission.js`, `holdCriticalPartitionCreateLaneIfOverTarget`):
+- reads `readEntityServiceOwnerFact` (the one SERVICES owner-fact adapter);
+- READY: the count is taken from `ownerFactEntityServiceRows(fact, identity)` only (the leader's complete
+  rows); the decision is unchanged (alive-guard, spread-cure exemption, budget-shaped refusal);
+- UNAVAILABLE: no rows, no count, no cache: the hold does not engage and returns, with one info line naming
+  the read reason and the deadlock witness (`...hold open: SERVICES owner fact unavailable (read gap,
+  deadlock witness G1)`);
+- the JSDoc sentence "Fails OPEN if the authoritative row read is unavailable (never blocks on a read
+  gap)." is restored verbatim; two lines added: the rows are the owner fact's, an UNAVAILABLE fact is no
+  rows and no count.
+- `invariants.json` not edited. The file is an inherited oversized source file (930 lines): kept at 930
+  (three line compactions in the same file: one import, the occupancy status set, the target read; no
+  behaviour change).
+
+Evidence test (`test/rebalancer/failed-authoritative-read-admission-verdict.test.js`):
+- RESTORED: the case "fail-open hold with deadlock witness: ... admits on a failed authoritative read
+  (blocking on the gap would strand the surplus drain it exists to release)" and its assertion (returns
+  without throwing; `t.pass` text as at 23344cddc), the header's fail-open/red-on-revert paragraph. Kept from
+  the previous writer only the call-shape adaptation: the double is `readEntityServiceOwnerFact` answering
+  through the production `readOwnerFact` (UNAVAILABLE for the gap, READY with a leader witness for the
+  over-target and at-target rows), since the hold no longer calls `getAuthoritativeEntityServiceRows`.
+- ADDED (the invariant names the guard's denial; the test had no guard row at 23344cddc nor at d6fa64092):
+  "the topology guard decides nothing on an unavailable SERVICES owner fact" (DEFERRED,
+  `replica_inventory_unavailable`, reason named) and "the topology guard denies replica_inventory_unusable
+  when its authoritative operation read fails under a readable SERVICES owner fact" (BLOCKED).
+  Changed expectation vs 23344cddc: none of the old rows changes meaning; the guard's single name
+  `replica_inventory_unusable` was never pinned by the evidence test (it was pinned by
+  `rebalance-coordinator-topology-guard.test.js`, restated in 807652bae). The sentence that permits the
+  split: "admission gates fail closed into a typed defer/deny (... the topology guard's
+  replica_inventory_unusable denial ...)": an unavailable read is a typed DEFER (no admission), a read and
+  unusable inventory the named typed DENY; both fail closed.
+
+Witness for the distinction (siblings file, case rewritten): world where the planner hosts a services-p1
+follower that lacks the leader-only fourth replica (its count, 3, would release); the UNAVAILABLE host's
+projection holds the fourth replica (a cache count, 4, would hold).
+- reference (planner leads): holds; READY from the follower host: holds with the identical message, the
+  planner's follower not asked (local and receiver counts unchanged);
+- UNAVAILABLE (leader unreachable): returns without error (fail-open) although the projection shows four:
+  an unavailable fact is no rows and no count; the follower's local read count unchanged (no row of it read).
+
+Per consumer against the same sealed sentence:
+
+| Consumer | Verdict on a failed authoritative read | Conforms |
+| --- | --- | --- |
+| over-target hold (C4) | fails OPEN, counts nothing (READY decides) | yes: the named fail-open hold, G1 |
+| topology guard (C1) | SERVICES owner fact UNAVAILABLE: DEFERRED `replica_inventory_unavailable` (typed, reason, `nextAction: retry`); operation read failed under a READY fact: BLOCKED `replica_inventory_unusable` | yes: "typed defer/deny"; both rows now in the evidence test |
+| retired REPLACE-source check (C2) | typed refusal `services_inventory_unavailable` (no lease decision) | yes: gate fails closed into a typed defer |
+| allocator (C3) | typed refusal, no replica id | yes: never concludes a free id from a gap |
+| partition address book (C5) | hint (projection), not an authoritative read; membership from the committed stamp | outside the sentence (no safety premise) |
+| surplus REMOVE fence (C6), ledger spread confirmation (C7) | untouched: `git diff 625381bd6 HEAD` shows no change to `priority-surplus-remove-placement-fence.js` or `rebalance-coordinator-ledger-interlock-admission.js`; their helper only lost its default mode (both pass an explicit mode) | unchanged (not in the evidence test, before or now) |
+
+Lab [X] (`lab/guard2-final-017921e17`, tv-dator): evidence test GREEN (18 assertions: the restored fail-open
+row, its red-on-revert row, the at-target boundary, the conflict-lane throw, the two guard rows); siblings
+GREEN (35, the rewritten hold case included); the guard witnesses GREEN (reproduction 57, owner-fact
+inventory 25, read point 11, deposed leader 4).
+
+### 10.2 Item 2: REPLACE target binding and the SQL provisioning caller
+
+REPLACE target binding. Witness first: `test/rebalancer/replace-target-binding-owner-fact-retry.test.js`
+(new; production coordinator from the shared composer, its workflow owner's `dispatchOperation`, owner-action
+lane, retry and resume, the dispatch lane, `executeOperationInternal`, `resolveDispatchTargetBinding`, the
+allocator, `readEntityServiceOwnerFact` and `readOwnerFact`; the SERVICES read answers at the gateway port as
+the services-p1 leader or fails; substituted and named in the header: ownership/phase predicates, the
+binding's durable write, remove safety, delivery and response handling, the reservation gate (disengaged) and
+the wake preemption; the retry timer is captured, no real time). A REPLACE on SENDING whose replica id is still
+the source's. Turn 1 with the owner fact UNAVAILABLE: the dispatch returns `skipped`,
+`deferred_retry_pending`, no throw; the allocator refused with `services_inventory_unavailable`,
+`deferRetry`; no replica id, no binding write, no CREATE, no `failOperation`, the durable row unchanged; the
+owner armed its per-operation retry. The fact becomes READY with nothing told: nothing happens. The retry
+fires: exactly one allocation (`sql_transactions-p1-r4`, from the owner's r1..r3 minus the source), exactly
+one binding write fenced on SENDING, one CREATE carrying r4, no failure.
+Result: **GREEN at the first run** [X] (18 assertions). No routing change in
+`operation-workflow-dispatch-response-reconcile.js` was needed and none was made. The path [V]: the
+typed deferral propagates out of `executeOperationInternal` (:422) and out of the dispatch lane to
+`runOperationOwnerAction` (`operation-workflow-owner-execution-lane.js:371-445`), whose catch hands every
+thrown error to `deferTransitionRetry` (`operation-workflow-transition-retry.js:163-237`): retryable because
+`deferRetry === true` (`control-plane-error-classification.js:246-251`), it records the operation snapshot and
+a grace and arms the operation's timer; the timer resumes through `resumeDeferredTransitionOperation`
+(:103-146), which re-reads the operation and, while it is non-terminal, locally owned, on a dispatch-retryable
+step and inside its grace, re-dispatches it (`OPERATION_OWNER_ACTION.DISPATCH`). That is the workflow owner's
+existing per-operation retry (the transition retry, keyed by operation id), not `deferDispatchRetry`; every
+entry that reaches the binding runs inside it: `dispatchOperation`, `executeOperation` (both through
+`runOperationOwnerAction`), the coordinator-created arm (`operation-workflow-owner-ports.js:720-750`, same
+`deferTransitionRetry`), the transition and dispatch retries' own re-dispatch. Bound [I]: as for every
+retryable dispatch failure, the grace ends at the step timeout (or the rebalance budget for a priority
+partition), after which the resume takes the timeout reconcile. The 9.10 item 4 stop item is closed.
+
+SQL provisioning caller of the allocator [V]. In production it never reaches the allocator: every production
+coordinator binds the placement owner factory (`control-plane-setup.js:415` ->
+`bindReplicaPlacementOwnerFactory`, `rebalance-coordinator-operation-creation-support.js:603-608`, sets
+`placementAdmissionEnabled`), so a partition create goes through `createPartitionOperationViaPlacementAdmission`
+(the replica id is derived at apply; no allocator call), and the provisioning move is always a partition ADD
+(`sql-query-engine-provisioning-admission-methods.js:455-470`). Correction to 9.2 item 4: "every
+provisioning move carries `replicaIntentId`" holds only with a schema job id;
+`buildSchemaProvisioningChildIntent` returns null ids without one (`schema-provisioning-child-intent.js:6-9`),
+as for the managed split/merge provisioning (partition workflow id). So in a composition WITHOUT the
+placement factory (test harnesses), such a move reaches `createOperationRecordInternal`'s allocator call
+(`rebalance-coordinator-operation-creation.js`, ADD without replica id), the typed deferral rejects
+`createOperation`, `createProvisioningOperationWithAdmissionReentry` rethrows it (not a planning-identity
+change) and the target loop rethrows it (no `admissionResult`, `sql-query-engine-provisioning-admission-
+methods.js:38-47`), so `provisionInitialTablePartition` rejects with the typed retryable error; whether each
+of its four callers retries it within its deadline is not traced. Not witnessed: no production path.
+
+### 10.3 Item 3: message-group branch of the bootstrap builder: deleted
+
+Call graph [V, `git grep` over `src/`]: `buildOperationBootstrapTopology` has one caller,
+`createOperationRecordInternal` (`rebalance-coordinator-operation-creation.js`, the bootstrap step after the
+operation record is built). `createOperationRecordInternal` is reached from `createOperationInternal`
+(direct, and through `createOperationWithinConcurrentCreateBudgetTurn`,
+`rebalance-coordinator-concurrent-budget-gate.js:55-64`) and re-entered with the same context by the two
+collision retries (`rebalance-coordinator-operation-persistence-collision.js:61`, the target-claim retry in
+the same file as the builder); `createOperationViaPlacementAdmission` does not reach it.
+`createOperationInternal` is reached only from `RebalanceCoordinator.createOperation`
+(`...-operation-intent-methods.js:286`). Production callers of `createOperation` (`git grep -w
+createOperation src/`): exactly two.
+1. `UnifiedRebalancer.executeMoveViaCoordinator` (`unified-rebalancer-move-execution.js:312`) <- `executeMove`
+   (`unified-rebalancer-follow-up-move.js:709`) <- `executeRebalancingMoves` (`unified-rebalancer-rebalance-loop.js:130,
+   360`) <- `rebalance()` (:490), which returns first on `resolveRebalancePreflightRefusal` (:410 -> :169):
+   a MESSAGE_GROUP planner always returns the typed parked refusal
+   `MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED` (:329-348, owner decision 2026-10-04) and plans nothing;
+   every move is canonicalised to its planner's own entity type (`rebalancer-entity-identity.js:61-69`,
+   a mismatch throws), so no other planner emits a message-group move. No other `src` caller of
+   `executeMoveViaCoordinator` or `executeMove`.
+2. SQL provisioning (`sql-query-engine-provisioning-admission-methods.js:498`): its move is always
+   `entityType: SERVICE_TYPE.PARTITION` (`buildProvisioningCreateOperationMove`, :455-470).
+So the message-group branch had no production caller. **Deleted**: the branch (owner-fact rows ->
+`buildReplicatedServiceBootstrapTopology` -> replica ids/peers, its two "without existing canonical
+topology"/"incomplete" refusals), the now unused `buildReplicatedServiceBootstrapTopology` import/export in
+`rebalance-coordinator-shared.js` (the builder itself stays: `durable-rejoin-partition-restore-planner.js`
+uses it), the destructured `entityId`. The function now builds the partition join's topology (committed
+stamp, unchanged; the T7 census of `committed-membership-census.test.js` reads that branch literally) and
+returns null otherwise. Consequence to state: a message-group ADD/REPLACE that reached the coordinator
+directly would now be created without a bootstrap topology instead of refused; no production path makes
+one (above). Test pins of the deleted branch removed (they exercised it by calling
+`coordinator.createOperation` directly): `replace-replica-workflow-add-topology-test-cases.js` case
+"derives canonical topology for message-group CREATE_REPLICA"; in
+`message-group-operation-routing.integration.test.js` the replica-ids assertion of "persists canonical entity
+fields" and the case "fails closed when message-group topology is unavailable". Note for 9.5's attribution:
+"persists canonical entity fields" was a NEW red at 807652bae hidden behind the file's unchanged first
+failure ("Cannot create message_group operation for mg-1 without existing canonical topology": the mock
+gateway's SERVICES answer read as an empty owner fact); with the branch deleted the case runs as at the base.
+
+### 10.4 Item 4: the address quarantine runs on the host clock (one-clock finding) and costs up to 30 s
+
+(a) Clock [V]. The quarantine owner is `src/query/query-executor-temporary-unroutable-addresses.js`: the
+mark computes `expiresAt = Date.now() + resolveNoHandlerAddressQuarantineMs(partitionId)` (:28-29) and the
+check compares `expiresAt > Date.now()` (:132). Its neighbours in the same executor read the injected node
+clock: the executor takes `options.nowFn` ("the executor orders on the node it runs for",
+`query-executor-base.js:79-84`, also its HLC), partition delivery (`query-executor-partition-delivery.js:73`),
+the attempt budget (`query-executor-partition-attempt-budget.js:96-98`) and the routing snapshot's clock
+(`query-executor-partition-routing-snapshot.js:207-215`); production passes the engine's node clock
+(`sql-query-engine-instance-initializer.js:227-229`, `nowFn: engine.nowFn`). **One-clock finding**: the
+quarantine alone reads the host clock while the executor it belongs to has an injected node clock (also
+host-clock reads, not traced further: `query-executor-partition-routing-snapshot.js:362, 623`,
+`query-executor-partition-service-resolution.js:656`). Consequence for the witness: the fixture cannot make
+the quarantine follow the planner's virtual clock without a product change (handing the fixture's
+`VirtualTimeSource` to the QueryExecutor as `nowFn` would move its HLC and delivery budget, not the
+quarantine). The quarantine owner is not changed here; W2 keeps its explicit 200 ms quarantine and its
+500 ms real wait (`afterAddressQuarantine`, fixture :675-678), the only real-time wait in the guard
+witnesses. Owner of the finding: the query executor (route through `router.md`); the smallest repair is
+the mark and the check reading `this.nowFn ?? Date.now`, after which the fixture passes the turn's clock.
+
+(b) Production consequence [V code, I for which failures produce it].
+- Engagement: only a NO_HANDLER delivery outcome marks an address (`query-executor-partition-delivery.js:
+  581-599` transport reason `NO_HANDLER`; :681-695 a thrown no-handler error), through
+  `handleNoHandlerCandidate` (`query-executor-partition-candidate-state.js:172-186`). A timeout or a
+  connection failure does not quarantine. NO_HANDLER is what a node answers when no handler is
+  registered for the address: the leader's node restarted and has not registered its services-p1
+  replica yet, or the replica moved away [I].
+- Duration: production constructs the executor with no `noHandlerAddressQuarantineMs`
+  (`sql-query-engine-instance-initializer.js:227-238`), so for a system-table partition such as services-p1
+  it is `max(NO_SERVICE_WARN_THROTTLE_MS 5 s, CONTROL_PLANE_NO_HANDLER_ADDRESS_QUARANTINE_MS 30 s)` = **30 s**
+  (`query-executor-temporary-unroutable-addresses.js:150-166`, `query-constants.js:473-475`). The mark is
+  dropped early only when the routing snapshot's row for that address carries a different service
+  fingerprint (:118-131), e.g. a re-registered replica [I: fingerprint fields not traced].
+- Effect on the owner-fact read: the read is leader-REQUIRED; the quarantined leader address is not a
+  candidate and a follower's redirect to it is refused by the same eligibility check
+  (`redirectCandidate`, candidate-state :45-50), so every SERVICES owner-fact read from that node is
+  UNAVAILABLE for up to 30 s after ONE no-handler answer, also after the leader is reachable again (this is
+  what made W2 red at 807652bae, 9.5).
+- Effect on PG-wire placement: the guard defers each turn; the runtime-service planner's priority cadence is
+  5 s (PG-wire report 1.1: 5.04-7.16 s observed), so the turns in that window are spent (about six), each a
+  local refusal without a hop to the leader. Placement follows on the first turn after expiry: up to
+  ~30 s + one cadence (~35 s) after the last no-handler answer. While the leader keeps answering
+  NO_HANDLER, each expiry is followed by a new 30 s mark on the next attempt. Not a liveness loss, a
+  bounded delay of up to ~35 s per no-handler episode on the planner's node.
+
+### 10.5 Item 5: impact-contract audit
+
+`npm run -s audit:impact-contracts` through `heavy.sh` at 017921e17 (clean tree) [X]: `impact-contracts: PASS (100
+contracts, 72 coupled pairs, sha256:0620eeea154a401b5502030b7b4344490b6805add3f11040a077f69d8d78f78b)`.
+Registration changed in the same commit (`test/shards/impact-contracts.json`): the contract
+`services-inventory-owner-fact` description now states the hold's sealed fail-open and drops the deleted
+message-group bootstrap consumer; `test/rebalancer/replace-target-binding-owner-fact-retry.test.js` and
+`test/rebalancer/failed-authoritative-read-admission-verdict.test.js` added to the contract's tests and the
+coupled pair `services-inventory-owner-fact-read`'s witnesses (both primary-classified by the hook's
+regeneration). Nothing reported, nothing else to fix.
+
+### 10.6 Item 6: what the one adapter changes when the owner-fact corrective round lands
+
+Not merged (lead's instruction). Final signature as briefed: `readOwnerFact(readLeaderRows, {tableName,
+sql, params, floor: {partitionId, index, term}, deadline: {timeoutMs}, routingReadinessDimension,
+expectedReplica?})`, an echoed request, the applied position read from the store. At
+`origin/work/owner-fact-read-20261121` 4a22aa6b4 only the round's red witnesses and docs exist, no product
+change yet. The one adapter is `readEntityServiceRowsOwnerFact` (`src/rebalancer/entity-service-row-read.js`);
+it will change in exactly these places:
+1. the draft's floor: `...NO_SERVICES_POSITION` (`{minimumIndex: 0, minimumTerm: 0}`) becomes
+   `floor: {partitionId: INITIAL_PARTITION_IDS[SERVICES] ('services-p1'), index: 0, term: 0}` (still "no
+   prior knowledge", now naming the partition the floor is a position of; the constant and its comment
+   move with it);
+2. `deadline: {timeoutMs}` from the caller's budget enters the draft (today `CONTROL_PLANE_QUERY_OPTIONS.
+   timeoutMs` reaches the gateway only through the reader port's `{...queryOptions, ...o}` merge);
+3. `routingReadinessDimension: CONTROL_PLANE_RECOVERY_ELIGIBLE` enters the draft (same merge today);
+4. the reader port becomes `(t, sql, params, o) => gateway.readAuthoritativeRows(t, sql, params, o)`: the
+   merge of the caller's options under the read's token goes, the read builds deadline and dimension
+   into its own token; the adapter's third parameter (`queryOptions`) is replaced by the two named values
+   (call site: `readEntityServiceOwnerFact`, `rebalance-coordinator-operation-read-methods.js:475-478`);
+5. no consumer changes: READY rows still only through `ownerFactRows` (`ownerFactEntityServiceRows`), and
+   UNAVAILABLE keeps its `reason`/`retryAfterMs`. The echoed request and applied position are available on
+   the answer for the guard's snapshot (optional diagnostics, not a decision input).
+Test doubles that build a draft themselves change with it: `servicesOwnerFact` in
+`failed-authoritative-read-admission-verdict.test.js` (draft with `minimumIndex/minimumTerm`); the
+fixture-based witnesses answer at the gateway port and need no change. Not this adapter:
+`replica-operation-repository-owner-fact-read-methods.js` (the read's own branch, adapted by its owner).
+
+### 10.7 Item 7: evidence at the final head
+
+Run `lab/guard2-final-017921e17` [X] (+ `.console.log`), sha 017921e1708b2801c57e299d5d3ea44ed7dee886, tv-dator, check base 0dbed1718: the 136 files of
+`lab/guard-stage2-green-807652bae` plus `topology-guard-owner-fact-deposed-leader`, the new binding witness
+and `committed-membership-census` (139). **112 pass, 27 fail.** Attribution against
+`lab/guard-cone-base-582d197bc` (119 files, 27 fail) compares per file the set of failing TAP lines
+(`lab/guard2-final-017921e17/attribute.py`, output `attribution.txt` there: nested `not ok` names from the run logs):
+- 26 reds are base reds with the identical set of failing assertions: replica-dispatch-add-creating-owner-
+  rearm, dt6-priority-surplus-remove-authoritative-placement-fence, placement-create-bootstrap-binding,
+  placement-retained-row-repair, durable-provisioning-job-owner-directed, admission-real-size-estimates,
+  coordinator-created-operation-progress, dt6-ledger-spread-follow-up-dispatch-arming,
+  duplicate-operation-prevention.property (the property's line differs only in its random seed and shrink
+  path; same error `entity_operation_observation_incomplete`), executor-bypasses-workflow-owner,
+  formation-runtime-service-create-lane-budget-starvation, growth-promote-authoritative-completion-and-progress,
+  message-group-membership-operation-lane, message-group-operation-routing (back to the base's set: the
+  "persists canonical entity fields" case that 807652bae turned red is green again, 10.3),
+  operation-workflow-target-sync-active-progress-contract, quorum-conditioned-remove-safety,
+  rebalance-coordinator-topology-guard (below), rebalancer-entity-interaction-contract,
+  rebalancer-own-create-memory-duplicate-replace, replace-in-flight-blocks-planning,
+  replace-owner-lease-verdict-property, replica-operation-retained-owner-turn,
+  reservation-expiry-operation-aware, self-owned-coordinator-handoff-dispatches-in-process,
+  storage-reservation-lost-outcome-idempotency, strict-operation-outcomes.
+- 1 red not in the base selection: `committed-membership-census.test.js` T7 #4 (stamp origins: actual adds
+  `operation-workflow-replace-target-binding.js`) and #5 (carrier set differs in six files). Pre-existing on
+  the integration line, not this branch: none of the differing files differs between 23344cddc and this head
+  (`git diff --stat` empty), and `operation-workflow-replace-target-binding.js` calls `committedStampOfAnswer(`
+  at 23344cddc already. The census's T7 "partition branch of the creation stamp reads no rows" (the one this
+  branch's deletion touches) is green.
+- Within `rebalance-coordinator-topology-guard.test.js`: the failing set equals the base's, plus the
+  assertion "no decision: a deferral" that 807652bae added to the unavailable-owner case (red for the same
+  first cause), minus the four assertions of the escape case 807652bae deleted.
+- Greens that were red at 807652bae: readiness-snapshot-persistence, rebalance-coordinator-operation-
+  ownership, required-entity-operation-observation (doubles migrated in 6d1237341/4da9da27a), the three
+  guard witness files (W2, anchor (b), read point: 6d1237341), siblings (red by design at the base).
+- New and closing evidence green: binding witness 18, evidence test 18, siblings 35, deposed leader 4,
+  `replace-replica-workflow` 342 (its message-group REPLACE cases run without a creation topology),
+  `coordinator-created-operation-admission` 47.
+No red is attributable to this branch.
+
+`rebalance-coordinator-topology-guard.test.js`, first failure traced [X + V]. The diagnostic line added to
+its first case printed: `OBSERVATION same-node-add rejection: Authoritative operation visibility deferred for
+partition:partition-1 (entity_operation_observation_incomplete) (reasonCode
+entity_operation_observation_incomplete, skip deferred_retry_pending)`. So the case never reaches the
+topology guard. Cause: the file's SQL double answers the entity operation read (`SELECT * FROM
+replica_operations ... entity_type = ?`, test :108-118) with `{success: true, rows}` and no
+`rowSetComplete`, and its gateway double passes that through (`withServicesLeaderWitness` completes only
+SERVICES answers). The repository's entity observation requires a complete read
+(`getOperationsByEntityAuthoritativeObservation`, `replica-operation-repository-entity-read-methods.js:263-
+300`, `completeRead = success && rowSetComplete === true`, made strict by 11384acd1 on the integration line,
+2026-11-20) and returns a deferred observation with `entity_operation_observation_incomplete`;
+`createOperationInternal` runs `ensureEntityAddLikeCreateLaneAvailable` before
+`ensureCreateTopologyGuardAllowed` (`rebalance-coordinator-operation-creation.js:430, 432`), and that lane
+throws the typed deferred-visibility error (`rebalance-coordinator-priority-budget-admission.js:416-434`,
+message built at `rebalance-coordinator-concurrent-budget-gate.js:217-247`) with no `admissionResult`. A
+fixture gap of the line (the same cause as admission-real-size-estimates, duplicate-operation-prevention,
+storage-reservation-lost-outcome-idempotency and the count-keyed-lane cases of the same file), not a guard
+defect. Repair (not made, outside the item): the double answers replica_operations reads complete with a
+ledger leader witness (as `withAuthoritativeReadDefaults` does); then the file's guard cases actually run
+against the owner-fact guard.
+
+### 10.8 Open
+
+1. Owner-fact corrective round: adapt `readEntityServiceRowsOwnerFact` (10.6) when the lead says it landed;
+   re-run the witnesses and the evidence test.
+2. One-clock finding for the query executor's address quarantine (10.4); the W2 witness keeps a 500 ms real
+   wait until the quarantine reads the executor's clock.
+3. `rebalance-coordinator-topology-guard.test.js` (and the same-cause files): the fixture's
+   replica_operations answers must be complete with a ledger witness (10.7); until then the file does not
+   exercise the guard.
+4. Not changed by this item list: the ledger effect fence (9.4), the deposed-unaware residual (9.10 item 5),
+   the findings for other owners (9.3), the line's pre-existing reds (10.7), the census T7 #4/#5 on the
+   integration line.
+5. The invariant's evidence test still has no row for the surplus REMOVE fence, the ledger quorum-spread
+   confirmation and the ledger self-move serialization hold, all named by the sealed sentence (a gap of the
+   evidence test at 23344cddc already; its holdsWhen says "every enumerated admission predicate").

@@ -1,0 +1,1321 @@
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=3290109
+[tv-dator] placement-head=51b48657c9ca79b8deca224d171e24862de8b7af
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3290560
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 58C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] not ok test/control-plane/replica-dispatch-reservation-identity.test.js (27 assertions, 1322ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'dispatch-projection-owner',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: dispatch projection preserves the exact reservation identity through the canonical dispatch gate
+[tv-dator]     ok 1 - the exact planning epoch was seeded in SQLite
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-dispatch-projection-runtime-create',
+[tv-dator]   operationId: 'dispatch-projection-runtime-create',
+[tv-dator]   targetNodeId: 'dispatch-projection-target',
+[tv-dator]   estimatedBytes: 11,
+[tv-dator]   expiresAt: 1795293371290
+[tv-dator] }
+[tv-dator]     ok 2 - setup creates one exact ACTIVE reservation through the real owner
+[tv-dator]     ok 3 - the coordinator row projection retains the durable target claim
+[tv-dator]     ok 4 - the coordinator row projection retains the durable planning epoch
+[tv-dator]     ok 5 - the dispatch operation retains the exact target claim
+[tv-dator]     ok 6 - the dispatch operation retains the exact planning epoch
+[tv-dator] # GATEPROBE gate-call {"id":1,"nodeId":"dispatch-projection-owner","operationId":"dispatch-projection-runtime-create","type":"ADD","step":"PENDING","route":{"cacheType":"Object","hasOnCacheChange":false,"partitionsRow":null,"ledgerServices":[],"route":{"state":"unavailable"}}}
+[tv-dator] # GATEPROBE read {"sql":"SELECT * FROM replica_operations WHERE operation_id IN (?)","mode":"owner_rpc_required","success":true,"rowSetComplete":true,"rows":1,"witness":null}
+[tv-dator] # GATEPROBE decision {"operationId":"dispatch-projection-runtime-create","scope":"subject","binding":{"state":"unavailable"},"decision":{"state":"unavailable","reason":"unqualified_shape"}}
+[tv-dator] # GATEPROBE owe {"operationId":"dispatch-projection-runtime-create","kinds":6,"reason":"route_unavailable"}
+[tv-dator] # GATEPROBE gate-answer {"id":1,"answer":false,"record":{"origin":"caller","entry":"unpinned","binding":{"state":"unavailable"},"custody":"self","decision":"idle","lastDecision":{"state":"unavailable","reason":"route_unavailable"},"lastAnswer":"unobserved","owed":6,"observations":0,"continuation":{"state":"idle"},"clearingTrigger":"LEDGER_COMMIT","blocker":"none"}}
+[tv-dator]     not ok 7 - the canonical owner dispatches after the strict identity gate
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/control-plane/replica-dispatch-reservation-identity.test.js
+[tv-dator]         lineNumber: 130
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/control-plane/replica-dispatch-reservation-identity.test.js:130:7)
+[tv-dator]       source: |2
+[tv-dator]       
+[tv-dator]             const result = await coordinator.dispatchOperation(projectedOperation);
+[tv-dator]             t.equal(result.success, true,
+[tv-dator]         ------^
+[tv-dator]               'the canonical owner dispatches after the strict identity gate');
+[tv-dator]             t.same(
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -true
+[tv-dator]         +false
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 8 - the canonical dispatch gate adopts the exact existing hold once
+[tv-dator]     not ok 9 - the exact projected operation dispatches once
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "dispatch-projection-runtime-create",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/control-plane/replica-dispatch-reservation-identity.test.js
+[tv-dator]         lineNumber: 137
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/control-plane/replica-dispatch-reservation-identity.test.js:137:7)
+[tv-dator]       source: |2
+[tv-dator]               'the canonical dispatch gate adopts the exact existing hold once',
+[tv-dator]             );
+[tv-dator]             t.same(dispatchCalls, [OPERATION_ID],
+[tv-dator]         ------^
+[tv-dator]               'the exact projected operation dispatches once');
+[tv-dator]           } finally {
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'dispatch-projection-owner', inFlightOperations: 0 }
+[tv-dator]     1..9
+[tv-dator] not ok 1 - dispatch projection preserves the exact reservation identity through the canonical dispatch gate # time=81.978ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/control-plane/replica-dispatch-reservation-identity.test.js
+[tv-dator]     lineNumber: 63
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]     test('dispatch projection preserves the exact reservation identity through ' +
+[tv-dator]     ^
+[tv-dator]       'the canonical dispatch gate', async (t) => {
+[tv-dator]       initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: dispatch projection preserves unbound identity and rejects malformed durable epochs
+[tv-dator]     ok 1 - an absent target claim remains SQL-null in row shape
+[tv-dator]     ok 2 - an unbound planning epoch remains SQL-null in row shape
+[tv-dator]     ok 3 - an absent target claim remains explicitly null after decode
+[tv-dator]     ok 4 - an unbound planning epoch remains omitted after canonical decode
+[tv-dator]     ok 5 - an empty in-memory target claim uses canonical SQL-null writer shape
+[tv-dator]     ok 6 - a malformed durable planning epoch fails closed at dispatch decode
+[tv-dator] Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-0' }
+[tv-dator] Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-1' }
+[tv-dator] Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-2' }
+[tv-dator] Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-3' }
+[tv-dator] Reconcile queue shutdown { queue: 'dispatch-node-ready-reconcile' }
+[tv-dator] Reconcile queue shutdown { queue: 'dispatch-membership-publication-advance-reconcile' }
+[tv-dator] ReplicaDispatchService stopped { nodeId: 'dispatch-projection-owner' }
+[tv-dator]     1..6
+[tv-dator] ok 2 - dispatch projection preserves unbound identity and rejects malformed durable epochs # time=34.09ms
+[tv-dator] 
+[tv-dator] # Subtest: legacy REMOVE dispatch consumer requests strict original-operation observation
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - legacy authority reads the exact original operation
+[tv-dator]     ok 3 - projection or local cache cannot authorize physical deletion
+[tv-dator]     ok 4 - a failed owner read must remain distinct from confirmed absence
+[tv-dator]     ok 5 - owner refuses caller entity mismatch
+[tv-dator]     ok 6 - owner refuses foreign physical host
+[tv-dator]     ok 7 - terminal operation grants no new physical STOP
+[tv-dator]     ok 8 - confirmed owner absence is not permission
+[tv-dator]     ok 9 - temporarily missing owner leaves cleanup retryable
+[tv-dator]     1..9
+[tv-dator] ok 3 - legacy REMOVE dispatch consumer requests strict original-operation observation # time=1.099ms
+[tv-dator] 
+[tv-dator] 1..3
+[tv-dator] # { total: 24, pass: 22, fail: 2 }
+[tv-dator] # time=134.975ms
+[tv-dator] not ok test/rebalancer/reservation-file-backed-restart.test.js (39 assertions, 1433ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: file-backed restart adopts one durable operation/reservation and dispatches once after strict authority returns
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   entityId: 'sys-postgres-wire',
+[tv-dator]   bootstrapTopologyStamped: false,
+[tv-dator]   bootstrapReplicaIdCount: 0
+[tv-dator] }
+[tv-dator]     ok 1 - lost strict-authority answer leaves the durable owner rows fail closed
+[tv-dator]     ok 2 - the first owner reaches the typed strict-authority fault after INSERT
+[tv-dator]     ok 3 - the production repository durably wrote PENDING
+[tv-dator]     ok 4 - the production reservation owner durably wrote the exact ACTIVE hold
+[tv-dator]     ok 5 - one operation generation exists before restart
+[tv-dator]     ok 6 - one capacity hold exists before restart
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     ok 7 - the destroyed owner retains no in-memory retry registry
+[tv-dator]     ok 8 - shutdown leaves no live retry timer owned by the first process
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator]     ok 9 - restart constructs a distinct workflow owner over the reopened file
+[tv-dator]     ok 10 - the fresh coordinator engages canonical storage reservation support
+[tv-dator] Starting recovery process { nodeId: 'reservation-gate-node' }
+[tv-dator] Found incomplete operations during recovery {
+[tv-dator]   count: 1,
+[tv-dator]   incompleteOperationObservationState: 'present',
+[tv-dator]   incompleteOperationRetryAfterMs: null,
+[tv-dator]   nodeId: 'reservation-gate-node'
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Recovery process completed {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   totalIncomplete: 1,
+[tv-dator]   markedFailed: 0,
+[tv-dator]   reconciled: 0,
+[tv-dator]   reservationBackedPendingRedriven: 0,
+[tv-dator]   deferred: [
+[tv-dator]     {
+[tv-dator]       operationId: 'op-gate',
+[tv-dator]       error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator]     }
+[tv-dator]   ],
+[tv-dator]   errors: [],
+[tv-dator]   incompleteOperationObservationState: 'present',
+[tv-dator]   incompleteOperationRetryAfterMs: null,
+[tv-dator]   membershipDebt: {
+[tv-dator]     available: true,
+[tv-dator]     found: 0,
+[tv-dator]     recorded: 0,
+[tv-dator]     settled: 0,
+[tv-dator]     retained: 0,
+[tv-dator]     refused: 0
+[tv-dator]   },
+[tv-dator]   reservationsExpired: 0,
+[tv-dator]   reservationsOrphansReleased: 0
+[tv-dator] }
+[tv-dator]     ok 11 - the fresh owner reaches the typed strict-authority fault during recovery
+[tv-dator]     ok 12 - strict owner-authority loss permits no dispatch after reopen
+[tv-dator]     ok 13 - the fresh owner reconstructs exactly one canonical retry
+[tv-dator]     ok 14 - the durable PENDING obligation is not terminalized
+[tv-dator]     ok 15 - the reopened SQL operation remains PENDING before the retry wake
+[tv-dator]     ok 16 - restart inserts no duplicate operation generation
+[tv-dator]     ok 17 - restart inserts no duplicate capacity hold
+[tv-dator]     ok 18 - restart retains the same exact hold rather than replacing it
+[tv-dator]     ok 19 - the retained hold stays ACTIVE while authority is unavailable
+[tv-dator]     ok 20 - restart recovery emits no fresh operation-created event
+[tv-dator]     ok 21 - restart recovery emits no fresh reservation-created event
+[tv-dator]     ok 22 - restart recovery increments no operation creation statistic
+[tv-dator]     ok 23 - restart recovery increments no reservation creation statistic
+[tv-dator] # GATEPROBE gate-call {"id":1,"nodeId":"reservation-gate-node","operationId":"op-gate","type":"ADD","step":"PENDING","route":{"cacheType":"Object","hasOnCacheChange":false,"partitionsRow":null,"ledgerServices":[],"route":{"state":"unavailable"}}}
+[tv-dator] # GATEPROBE read {"sql":"SELECT * FROM replica_operations WHERE operation_id IN (?)","mode":"owner_rpc_required","success":true,"rowSetComplete":true,"rows":1,"witness":null}
+[tv-dator] # GATEPROBE decision {"operationId":"op-gate","scope":"subject","binding":{"state":"unavailable"},"decision":{"state":"unavailable","reason":"unqualified_shape"}}
+[tv-dator] # GATEPROBE owe {"operationId":"op-gate","kinds":6,"reason":"route_unavailable"}
+[tv-dator] # GATEPROBE gate-answer {"id":1,"answer":false,"record":{"origin":"caller","entry":"unpinned","binding":{"state":"unavailable"},"custody":"self","decision":"idle","lastDecision":{"state":"unavailable","reason":"route_unavailable"},"lastAnswer":"unobserved","owed":6,"observations":0,"continuation":{"state":"idle"},"clearingTrigger":"LEDGER_COMMIT","blocker":"none"}}
+[tv-dator]     ok 24 - the reconstructed retry observes restored strict authority
+[tv-dator]     not ok 25 - the existing reservation gate dispatches exactly once
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "op-gate",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-file-backed-restart.test.js
+[tv-dator]         lineNumber: 296
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-file-backed-restart.test.js:296:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(await restartTimers.runNext(), true,
+[tv-dator]               'the reconstructed retry observes restored strict authority');
+[tv-dator]             t.same(dispatchCalls, [TEST_OPERATION_ID],
+[tv-dator]         ------^
+[tv-dator]               'the existing reservation gate dispatches exactly once');
+[tv-dator]             const recoveryAuthorityFailureIndex = sequence.findIndex((entry) =>
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 26 - recovery-specific no-create check fails closed on typed authority loss
+[tv-dator]     ok 27 - retained recovery obligation reaches the ordinary gate after authority
+[tv-dator]     not ok 28 - physical execution starts only after the ordinary reservation gate
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-file-backed-restart.test.js
+[tv-dator]         lineNumber: 314
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-file-backed-restart.test.js:314:7)
+[tv-dator]       source: >2
+[tv-dator]             t.ok(ordinaryGateObservationIndex > recoveryAuthorityFailureIndex,
+[tv-dator]               'retained recovery obligation reaches the ordinary gate after authority');
+[tv-dator]             t.ok(executeIndex > ordinaryGateObservationIndex,
+[tv-dator]         ------^
+[tv-dator]               'physical execution starts only after the ordinary reservation gate');
+[tv-dator]             t.same(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 29 - the ordinary last-responsible gate adopts the exact hold exactly once
+[tv-dator]     ok 30 - the one dispatch consumes the sole progress owner
+[tv-dator]     ok 31 - dispatch creates no second operation row
+[tv-dator]     ok 32 - dispatch creates no second reservation row
+[tv-dator]     ok 33 - dispatch continues under the original capacity hold
+[tv-dator]     ok 34 - dispatch preserves the original ACTIVE reservation status
+[tv-dator]     ok 35 - dispatch recovery emits no fresh operation-created event
+[tv-dator]     ok 36 - dispatch recovery emits no fresh reservation-created event
+[tv-dator]     ok 37 - dispatch recovery creates no operation statistic
+[tv-dator]     ok 38 - dispatch recovery creates no reservation statistic
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..38
+[tv-dator] not ok 1 - file-backed restart adopts one durable operation/reservation and dispatches once after strict authority returns # time=126.889ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/reservation-file-backed-restart.test.js
+[tv-dator]     lineNumber: 156
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]     test('file-backed restart adopts one durable operation/reservation and ' +
+[tv-dator]     ^
+[tv-dator]       'dispatches once after strict authority returns', async (t) => {
+[tv-dator]       initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 38, pass: 36, fail: 2 }
+[tv-dator] # time=135.766ms
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071422,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071427
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'coordinator_created_operation',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'recovery',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] not ok test/rebalancer/reservation-fail-closed-dispatch-gate.test.js (78 assertions, 1660ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: reservation-failure-blocks-dispatch: reservation insert failure rejects creation with no OPERATION_CREATED and no dispatch
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'p-gate',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'p-gate',
+[tv-dator]   bootstrapTopologyStamped: true,
+[tv-dator]   bootstrapReplicaIdCount: 2
+[tv-dator] }
+[tv-dator]     ok 1 - creation must fail closed when the reservation insert fails
+[tv-dator]     ok 2 - OPERATION_CREATED must not be emitted after a reservation failure
+[tv-dator]     ok 3 - no dispatch may run for an under-reserved operation
+[tv-dator]     ok 4 - no reservation row exists after the failed insert
+[tv-dator]     ok 5 - a confirmed INSERT failure installs no reservation progress retry
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..5
+[tv-dator] ok 1 - reservation-failure-blocks-dispatch: reservation insert failure rejects creation with no OPERATION_CREATED and no dispatch # time=80.669ms
+[tv-dator] 
+[tv-dator] # Subtest: gate row repair refuses a cached operation carrying CREATE admission
+[tv-dator]     ok 1 - row absence cannot resurrect admission-bearing cached state
+[tv-dator]     ok 2 - the alternate reservation repair performs no INSERT
+[tv-dator]     1..2
+[tv-dator] ok 2 - gate row repair refuses a cached operation carrying CREATE admission # time=0.58ms
+[tv-dator] 
+[tv-dator] # Subtest: gate row repair refuses a cached operation carrying message-group membership authority
+[tv-dator]     ok 1 - row absence cannot resurrect membership-bearing cached state
+[tv-dator]     ok 2 - the alternate reservation repair performs no INSERT
+[tv-dator]     1..2
+[tv-dator] ok 3 - gate row repair refuses a cached operation carrying message-group membership authority # time=0.483ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: post-insert authority deferral: zero-change INSERT adoption retains the exact hold and redrives through the same gate
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   entityId: 'sys-postgres-wire',
+[tv-dator]   bootstrapTopologyStamped: false,
+[tv-dator]   bootstrapReplicaIdCount: 0
+[tv-dator] }
+[tv-dator]     ok 1 - ambiguous INSERT adoption remains fail closed while authority is unavailable
+[tv-dator]     ok 2 - the authoritative ACTIVE row remains the sole capacity hold
+[tv-dator]     ok 3 - ambiguous INSERT adoption emits no creation accounting
+[tv-dator] # GATEPROBE gate-call {"id":1,"nodeId":"reservation-gate-node","operationId":"op-gate","type":"ADD","step":"PENDING","route":{"cacheType":"Object","hasOnCacheChange":false,"partitionsRow":null,"ledgerServices":[],"route":{"state":"unavailable"}}}
+[tv-dator] # GATEPROBE read {"sql":"SELECT * FROM replica_operations WHERE operation_id IN (?)","mode":"owner_rpc_required","success":true,"rowSetComplete":true,"rows":1,"witness":null}
+[tv-dator] # GATEPROBE decision {"operationId":"op-gate","scope":"subject","binding":{"state":"unavailable"},"decision":{"state":"unavailable","reason":"unqualified_shape"}}
+[tv-dator] # GATEPROBE owe {"operationId":"op-gate","kinds":6,"reason":"route_unavailable"}
+[tv-dator] # GATEPROBE gate-answer {"id":1,"answer":false,"record":{"origin":"caller","entry":"unpinned","binding":{"state":"unavailable"},"custody":"self","decision":"idle","lastDecision":{"state":"unavailable","reason":"route_unavailable"},"lastAnswer":"unobserved","owed":6,"observations":0,"continuation":{"state":"idle"},"clearingTrigger":"LEDGER_COMMIT","blocker":"none"}}
+[tv-dator]     ok 4 - the canonical retry observes restored operation authority
+[tv-dator]     not ok 5 - restored authority dispatches exactly once through the existing gate
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "op-gate",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]         lineNumber: 192
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:192:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(await timers.runNext(), true,
+[tv-dator]               'the canonical retry observes restored operation authority');
+[tv-dator]             t.same(dispatchCalls, [TEST_OPERATION_ID],
+[tv-dator]         ------^
+[tv-dator]               'restored authority dispatches exactly once through the existing gate');
+[tv-dator]           } finally {
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..5
+[tv-dator] not ok 4 - post-insert authority deferral: zero-change INSERT adoption retains the exact hold and redrives through the same gate # time=49.535ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]     lineNumber: 168
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('post-insert authority deferral: zero-change INSERT adoption retains ' +
+[tv-dator]     ^
+[tv-dator]       'the exact hold and redrives through the same gate', async (t) => {
+[tv-dator]       initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: post-insert authority deferral: terminal settlement wins before rearm and releases the exact hold
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   entityId: 'sys-postgres-wire',
+[tv-dator]   bootstrapTopologyStamped: false,
+[tv-dator]   bootstrapReplicaIdCount: 0
+[tv-dator] }
+[tv-dator]     ok 1 - temporary authority loss leaves one retained retry before terminal settlement
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-gate', releasedCount: 1 }
+[tv-dator] metrics.rebalance.operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   finalState: 'failed',
+[tv-dator]   totalDurationMs: 3
+[tv-dator] }
+[tv-dator]     ok 2 - a queued retry cannot dispatch after terminal settlement
+[tv-dator]     ok 3 - terminal settlement releases the exact retained hold
+[tv-dator]     ok 4 - the durable terminal operation remains authoritative
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] ok 5 - post-insert authority deferral: terminal settlement wins before rearm and releases the exact hold # time=39.734ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: post-insert authority deferral: shutdown cancels the retained retry without dispatch
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   entityId: 'sys-postgres-wire',
+[tv-dator]   bootstrapTopologyStamped: false,
+[tv-dator]   bootstrapReplicaIdCount: 0
+[tv-dator] }
+[tv-dator]     ok 1 - temporary authority loss installs one retry before shutdown
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     ok 2 - shutdown clears the retained owner retry
+[tv-dator]     ok 3 - no physical dispatch runs during or after shutdown
+[tv-dator]     ok 4 - shutdown preserves the durable hold for restart recovery
+[tv-dator]     1..4
+[tv-dator] ok 6 - post-insert authority deferral: shutdown cancels the retained retry without dispatch # time=28.338ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: post-insert authority deferral: runtime-service create keeps its exact ACTIVE hold and re-enters the canonical dispatch gate once authority recovers
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   entityId: 'sys-postgres-wire',
+[tv-dator]   bootstrapTopologyStamped: false,
+[tv-dator]   bootstrapReplicaIdCount: 0
+[tv-dator] }
+[tv-dator]     ok 1 - temporary operation authority loss remains fail closed to the caller
+[tv-dator]     ok 2 - the exact successfully inserted capacity hold remains ACTIVE
+[tv-dator]     ok 3 - ambiguous authority does not publish a reservation creation event
+[tv-dator]     ok 4 - ambiguous authority does not increment reservation creation stats
+[tv-dator]     ok 5 - the coordinator-created dispatch event is not published prematurely
+[tv-dator]     ok 6 - no physical dispatch occurs before authoritative adoption
+[tv-dator]     ok 7 - the operation owner retains one retry obligation for the durable PENDING row
+[tv-dator]     ok 8 - the caller retains the operation without claiming reuse under unavailable authority
+[tv-dator]     ok 9 - a caller retry cannot bypass the live canonical retry owner
+[tv-dator]     ok 10 - a caller retry does not duplicate operation creation accounting
+[tv-dator]     ok 11 - the retained owner retry fires
+[tv-dator]     ok 12 - continued authority loss remains non-dispatching
+[tv-dator]     ok 13 - the same owner retry obligation is re-armed within the existing deadline
+[tv-dator] Reusing in-flight operation for planned move {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   moveTargetNodeId: 'target-node',
+[tv-dator]   type: 'ADD',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   rearmAction: 'skip_live_deferred_retry'
+[tv-dator] }
+[tv-dator]     ok 14 - restored exact authority permits positive replay of the original operation
+[tv-dator]     ok 15 - positive replay preserves the existing timer-owned wake
+[tv-dator] # GATEPROBE gate-call {"id":2,"nodeId":"reservation-gate-node","operationId":"op-gate","type":"ADD","step":"PENDING","route":{"cacheType":"Object","hasOnCacheChange":false,"partitionsRow":null,"ledgerServices":[],"route":{"state":"unavailable"}}}
+[tv-dator] # GATEPROBE read {"sql":"SELECT * FROM replica_operations WHERE operation_id IN (?)","mode":"owner_rpc_required","success":true,"rowSetComplete":true,"rows":1,"witness":null}
+[tv-dator] # GATEPROBE decision {"operationId":"op-gate","scope":"subject","binding":{"state":"unavailable"},"decision":{"state":"unavailable","reason":"unqualified_shape"}}
+[tv-dator] # GATEPROBE owe {"operationId":"op-gate","kinds":6,"reason":"route_unavailable"}
+[tv-dator] # GATEPROBE gate-answer {"id":2,"answer":false,"record":{"origin":"caller","entry":"unpinned","binding":{"state":"unavailable"},"custody":"self","decision":"idle","lastDecision":{"state":"unavailable","reason":"route_unavailable"},"lastAnswer":"unobserved","owed":6,"observations":0,"continuation":{"state":"idle"},"clearingTrigger":"LEDGER_COMMIT","blocker":"none"}}
+[tv-dator]     ok 16 - the re-armed owner retry observes recovered authority
+[tv-dator]     not ok 17 - recovered authority crosses the existing reservation gate exactly once
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "op-gate",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]         lineNumber: 325
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:325:7)
+[tv-dator]       source: >2
+[tv-dator]             t.equal(await timers.runNext(), true,
+[tv-dator]               'the re-armed owner retry observes recovered authority');
+[tv-dator]             t.same(dispatchCalls, [TEST_OPERATION_ID],
+[tv-dator]         ------^
+[tv-dator]               'recovered authority crosses the existing reservation gate exactly once');
+[tv-dator]             t.equal(reservationCreatedCount, 0,
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 18 - adopting the exact existing hold emits no duplicate creation event
+[tv-dator]     ok 19 - adopting the exact existing hold increments no duplicate creation stat
+[tv-dator]     ok 20 - the retry does not account a second operation creation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..20
+[tv-dator] not ok 7 - post-insert authority deferral: runtime-service create keeps its exact ACTIVE hold and re-enters the canonical dispatch gate once authority recovers # time=34.472ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]     lineNumber: 259
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('post-insert authority deferral: runtime-service create keeps its exact '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'ACTIVE hold and re-enters the canonical dispatch gate once authority recovers',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: post-insert authority deferral: restart recovery discovers the durable PENDING runtime-service operation and exact ACTIVE hold
+[tv-dator] Creating operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   entityType: 'runtime_service',
+[tv-dator]   entityId: 'sys-postgres-wire',
+[tv-dator]   bootstrapTopologyStamped: false,
+[tv-dator]   bootstrapReplicaIdCount: 0
+[tv-dator] }
+[tv-dator]     ok 1 - the first owner leaves a durable retryable PENDING operation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     ok 2 - shutdown clears every in-memory progress-owner timer for the old owner
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Starting recovery process { nodeId: 'reservation-gate-node' }
+[tv-dator] Found incomplete operations during recovery {
+[tv-dator]   count: 1,
+[tv-dator]   incompleteOperationObservationState: 'present',
+[tv-dator]   incompleteOperationRetryAfterMs: null,
+[tv-dator]   nodeId: 'reservation-gate-node'
+[tv-dator] }
+[tv-dator] Starting storage reservation reconciliation
+[tv-dator] Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+[tv-dator] Recovery process completed {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   totalIncomplete: 1,
+[tv-dator]   markedFailed: 0,
+[tv-dator]   reconciled: 0,
+[tv-dator]   reservationBackedPendingRedriven: 0,
+[tv-dator]   deferred: [
+[tv-dator]     {
+[tv-dator]       operationId: 'op-gate',
+[tv-dator]       error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator]     }
+[tv-dator]   ],
+[tv-dator]   errors: [],
+[tv-dator]   incompleteOperationObservationState: 'present',
+[tv-dator]   incompleteOperationRetryAfterMs: null,
+[tv-dator]   membershipDebt: {
+[tv-dator]     available: true,
+[tv-dator]     found: 0,
+[tv-dator]     recorded: 0,
+[tv-dator]     settled: 0,
+[tv-dator]     retained: 0,
+[tv-dator]     refused: 0
+[tv-dator]   },
+[tv-dator]   reservationsExpired: 0,
+[tv-dator]   reservationsOrphansReleased: 0
+[tv-dator] }
+[tv-dator]     ok 3 - restart remains fail closed while operation authority is unavailable
+[tv-dator]     ok 4 - startup recovery transfers the durable obligation to the canonical retry owner
+[tv-dator]     ok 5 - the fresh owner has exactly one scheduled canonical progress owner
+[tv-dator]     ok 6 - restart does not report the reservation-backed PENDING row as failed
+[tv-dator] # GATEPROBE gate-call {"id":3,"nodeId":"reservation-gate-node","operationId":"op-gate","type":"ADD","step":"PENDING","route":{"cacheType":"Object","hasOnCacheChange":false,"partitionsRow":null,"ledgerServices":[],"route":{"state":"unavailable"}}}
+[tv-dator] # GATEPROBE read {"sql":"SELECT * FROM replica_operations WHERE operation_id IN (?)","mode":"owner_rpc_required","success":true,"rowSetComplete":true,"rows":1,"witness":null}
+[tv-dator] # GATEPROBE decision {"operationId":"op-gate","scope":"subject","binding":{"state":"unavailable"},"decision":{"state":"unavailable","reason":"unqualified_shape"}}
+[tv-dator] # GATEPROBE owe {"operationId":"op-gate","kinds":6,"reason":"route_unavailable"}
+[tv-dator] # GATEPROBE gate-answer {"id":3,"answer":false,"record":{"origin":"caller","entry":"unpinned","binding":{"state":"unavailable"},"custody":"self","decision":"idle","lastDecision":{"state":"unavailable","reason":"route_unavailable"},"lastAnswer":"unobserved","owed":6,"observations":0,"continuation":{"state":"idle"},"clearingTrigger":"LEDGER_COMMIT","blocker":"none"}}
+[tv-dator]     ok 7 - recovered startup authority wakes the retained owner retry
+[tv-dator]     not ok 8 - startup recovery re-enters the canonical owner dispatch path once
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "op-gate",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]         lineNumber: 425
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:425:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(await restartTimers.runNext(), true,
+[tv-dator]               'recovered startup authority wakes the retained owner retry');
+[tv-dator]             t.same(dispatchCalls, [TEST_OPERATION_ID],
+[tv-dator]         ------^
+[tv-dator]               'startup recovery re-enters the canonical owner dispatch path once');
+[tv-dator]             t.equal(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 9 - the exactly-once dispatch consumes the sole scheduled progress owner
+[tv-dator]     ok 10 - restart does not terminalize the reservation-backed progress obligation
+[tv-dator]     ok 11 - restart adopts the same exact capacity hold
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..11
+[tv-dator] not ok 8 - post-insert authority deferral: restart recovery discovers the durable PENDING runtime-service operation and exact ACTIVE hold # time=36.564ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]     lineNumber: 338
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('post-insert authority deferral: restart recovery discovers the durable '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'PENDING runtime-service operation and exact ACTIVE hold', async (t) => {
+[tv-dator]       initializeConfig();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   estimatedBytes: 15,
+[tv-dator]   expiresAt: 1795293371625
+[tv-dator] }
+[tv-dator] # GATEPROBE gate-call {"id":4,"nodeId":"reservation-gate-node","operationId":"op-gate","type":"ADD","step":"PENDING","route":{"cacheType":"Object","hasOnCacheChange":false,"partitionsRow":null,"ledgerServices":[],"route":{"state":"unavailable"}}}
+[tv-dator] # GATEPROBE read {"sql":"SELECT * FROM replica_operations WHERE operation_id IN (?)","mode":"owner_rpc_required","success":true,"rowSetComplete":true,"rows":1,"witness":null}
+[tv-dator] # GATEPROBE decision {"operationId":"op-gate","scope":"subject","binding":{"state":"unavailable"},"decision":{"state":"unavailable","reason":"unqualified_shape"}}
+[tv-dator] # GATEPROBE owe {"operationId":"op-gate","kinds":6,"reason":"route_unavailable"}
+[tv-dator] # GATEPROBE gate-answer {"id":4,"answer":false,"record":{"origin":"caller","entry":"unpinned","binding":{"state":"unavailable"},"custody":"self","decision":"idle","lastDecision":{"state":"unavailable","reason":"route_unavailable"},"lastAnswer":"unobserved","owed":6,"observations":0,"continuation":{"state":"idle"},"clearingTrigger":"LEDGER_COMMIT","blocker":"none"}}
+[tv-dator] # Subtest: dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with no ACTIVE reservation repairs through ensureReservationForOperation
+[tv-dator]     not ok 1 - dispatch proceeded after repair
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]         lineNumber: 481
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:481:7)
+[tv-dator]       source: |2
+[tv-dator]             const result = await owner.dispatchOperationInternal(operation);
+[tv-dator]       
+[tv-dator]             t.equal(result?.success, true, 'dispatch proceeded after repair');
+[tv-dator]         ------^
+[tv-dator]             const reservation = sqlEngine.reservations.get(TEST_RESERVATION_ID);
+[tv-dator]             t.ok(
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -true
+[tv-dator]         +false
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 2 - the deterministic res-${operationId} reservation was created
+[tv-dator]     ok 3 - the repaired reservation is ACTIVE
+[tv-dator]     ok 4 - the reservation is bound to the dispatching operation
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..4
+[tv-dator] not ok 9 - dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with no ACTIVE reservation repairs through ensureReservationForOperation # time=26.705ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+[tv-dator]     lineNumber: 460
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // --- dispatch-gate-repairs-via-ensure ---
+[tv-dator]   
+[tv-dator]     test('dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with ' +
+[tv-dator]     ^
+[tv-dator]       'no ACTIVE reservation repairs through ensureReservationForOperation',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: dispatch-gate-repairs-via-ensure: a failing reservation repair skips dispatch as OPERATION_NOT_DISPATCHABLE
+[tv-dator]     ok 1 - dispatch did not proceed
+[tv-dator]     ok 2 - dispatch is reported as skipped
+[tv-dator]     ok 3 - skip reason is OPERATION_NOT_DISPATCHABLE
+[tv-dator]     ok 4 - skip result carries the operation id
+[tv-dator]     ok 5 - executeOperationInternal never ran under-reserved
+[tv-dator]     ok 6 - no reservation row after the failed repair insert
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..6
+[tv-dator] ok 10 - dispatch-gate-repairs-via-ensure: a failing reservation repair skips dispatch as OPERATION_NOT_DISPATCHABLE # time=22.232ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] # Subtest: divergence-arm-keeps-reservation: unresolved terminal divergence keeps the reservation ACTIVE
+[tv-dator]     ok 1 - completeOperation keeps the reservation ACTIVE on divergence
+[tv-dator]     ok 2 - failOperation keeps the reservation ACTIVE on divergence
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..2
+[tv-dator] ok 11 - divergence-arm-keeps-reservation: unresolved terminal divergence keeps the reservation ACTIVE # time=25.536ms
+[tv-dator] 
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'reservation-gate-node',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'p-gate',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Storage reservation released { operationId: 'op-gate', releasedCount: 1 }
+[tv-dator] # Subtest: divergence-arm-keeps-reservation: losing to a DIFFERENT durable terminal releases the reservation
+[tv-dator]     ok 1 - completeOperation releases the reservation on TERMINAL_ADOPTED
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+[tv-dator]     1..1
+[tv-dator] ok 12 - divergence-arm-keeps-reservation: losing to a DIFFERENT durable terminal releases the reservation # time=30.929ms
+[tv-dator] 
+[tv-dator] 1..12
+[tv-dator] # { total: 66, pass: 62, fail: 4 }
+[tv-dator] # time=394.035ms
+[tv-dator] # test-files total=3 pass=0 fail=3 assertions=144
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+[tv-dator]     replica_id: 'p-gate-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071393,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071400
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+[tv-dator]   reservationId: 'res-c6a64998-c547-4c76-aaf7-9250104fc8ec',
+[tv-dator]   error: 'injected storage_reservations constraint violation'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071436,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071437
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'coordinator_created_operation',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071488,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071489
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'coordinator_created_operation',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'failed',
+[tv-dator]     workflow_step: 'FAILED',
+[tv-dator]     updated_at: 1795293071491,
+[tv-dator]     completed_at: 1795293071491,
+[tv-dator]     error_message: 'terminal owner won before reservation rearm'
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071496
+[tv-dator] }
+[tv-dator] Operation failed {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   type: 'ADD',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   targetNodeId: 'target-node',
+[tv-dator]   errorMessage: 'terminal owner won before reservation rearm'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071526,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071527
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'coordinator_created_operation',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071553,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071554
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'coordinator_created_operation',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'transition_retry_resume',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'storage reservation unavailable: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'op-gate',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'op-gate',
+[tv-dator]     replica_id: 'sys-postgres-wire-r1',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795293071589,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795293071591
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'coordinator_created_operation',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Deferred retryable replica operation transition failure {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   boundary: 'recovery',
+[tv-dator]   partitionId: 'sys-postgres-wire',
+[tv-dator]   workflowStep: 'PENDING',
+[tv-dator]   delayMs: 250,
+[tv-dator]   errorMessage: 'Authoritative replica operation is unavailable for reservation adoption'
+[tv-dator] }
+[tv-dator] Failed to create storage reservation for operation {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   reservationId: 'res-op-gate',
+[tv-dator]   error: 'injected storage_reservations constraint violation'
+[tv-dator] }
+[tv-dator] Terminal transition persist not committed; retry ownership kept and repair armed {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   disposition: 'refused',
+[tv-dator]   step: 'ACTIVE',
+[tv-dator]   partitionId: 'p-gate'
+[tv-dator] }
+[tv-dator] Committed terminal transition not authoritatively visible; repair scheduled {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   workflowStep: 'ACTIVE',
+[tv-dator]   partitionId: 'p-gate',
+[tv-dator]   cause: 'persist_not_committed',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Terminal transition persist not committed; retry ownership kept and repair armed {
+[tv-dator]   operationId: 'op-gate',
+[tv-dator]   disposition: 'refused',
+[tv-dator]   step: 'FAILED',
+[tv-dator]   partitionId: 'p-gate'
+[tv-dator] }
+lab test: tv-dator: # test-files total=3 pass=0 fail=3 assertions=144
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=0 fail=3 assertions=144
+exit=1

@@ -1,0 +1,41 @@
+2026-11-21T23:29:05+01:00 start kernelab-head-01
+2026-11-21T23:30:35+01:00 done kernelab-head-01 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:30:35+01:00 start kernelab-base-01
+2026-11-21T23:32:07+01:00 done kernelab-base-01 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:32:07+01:00 start kernelab-head-02
+2026-11-21T23:33:39+01:00 done kernelab-head-02 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:33:39+01:00 start kernelab-base-02
+2026-11-21T23:35:09+01:00 done kernelab-base-02 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:35:09+01:00 start kernelab-head-03
+2026-11-21T23:36:40+01:00 done kernelab-head-03 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:36:40+01:00 start kernelab-base-03
+2026-11-21T23:38:11+01:00 done kernelab-base-03 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:38:11+01:00 start kernelab-head-04
+2026-11-21T23:39:44+01:00 done kernelab-head-04 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:39:44+01:00 start kernelab-base-04
+2026-11-21T23:41:21+01:00 done kernelab-base-04 exit=1 # test-files total=1 pass=0 fail=1 assertions=20
+2026-11-21T23:41:21+01:00 start kernelab-head-05
+2026-11-21T23:42:52+01:00 done kernelab-head-05 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:42:52+01:00 start kernelab-base-05
+2026-11-21T23:44:31+01:00 done kernelab-base-05 exit=1 # test-files total=1 pass=0 fail=1 assertions=20
+2026-11-21T23:44:31+01:00 start kernelab-head-06
+2026-11-21T23:46:10+01:00 done kernelab-head-06 exit=1 # test-files total=1 pass=0 fail=1 assertions=20
+2026-11-21T23:46:10+01:00 start kernelab-base-06
+2026-11-21T23:47:42+01:00 done kernelab-base-06 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:47:42+01:00 start kernelab-head-07
+2026-11-21T23:49:14+01:00 done kernelab-head-07 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:49:14+01:00 start kernelab-base-07
+2026-11-21T23:50:46+01:00 done kernelab-base-07 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:50:46+01:00 start kernelab-head-08
+2026-11-21T23:52:17+01:00 done kernelab-head-08 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:52:17+01:00 start kernelab-base-08
+2026-11-21T23:53:48+01:00 done kernelab-base-08 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:53:48+01:00 start kernelab-head-09
+2026-11-21T23:55:21+01:00 done kernelab-head-09 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:55:21+01:00 start kernelab-base-09
+2026-11-21T23:56:52+01:00 done kernelab-base-09 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:56:52+01:00 start kernelab-head-10
+2026-11-21T23:58:23+01:00 done kernelab-head-10 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:58:23+01:00 start kernelab-base-10
+2026-11-21T23:59:54+01:00 done kernelab-base-10 exit=0 # test-files total=1 pass=1 fail=0 assertions=20
+2026-11-21T23:59:54+01:00 batch complete

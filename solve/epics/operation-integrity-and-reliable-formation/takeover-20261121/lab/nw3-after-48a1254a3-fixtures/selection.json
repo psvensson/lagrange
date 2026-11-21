@@ -1,0 +1,31 @@
+{
+  "sha": "48a1254a3533c2ad69746aeb8e390d3eb66c1ea0",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js",
+    "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js",
+    "test/bootstrap/bootstrap-mode.test.js",
+    "test/cdc/bootstrap-mode-routing.property.test.js",
+    "test/cdc/bootstrap-direct-write-raft-routing.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js",
+        "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js",
+        "test/cdc/bootstrap-mode-routing.property.test.js",
+        "test/cdc/bootstrap-direct-write-raft-routing.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/bootstrap-mode.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

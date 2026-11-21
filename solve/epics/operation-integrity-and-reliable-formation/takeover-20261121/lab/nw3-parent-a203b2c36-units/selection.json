@@ -1,0 +1,31 @@
+{
+  "sha": "a203b2c361d7928859942ee91852a72eb11b15aa",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js",
+    "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js",
+    "test/bootstrap/bootstrap-mode.test.js",
+    "test/cdc/bootstrap-mode-routing.property.test.js",
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js",
+        "test/cdc/bootstrap-mode-routing.property.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/bootstrap-mode.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

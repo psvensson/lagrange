@@ -356,3 +356,283 @@ Pending (not done in this run, by instruction):
    the branch's changes there (RETAINED_REPAIR collaborator {observeRetainedLedgerLeadershipStart,
    retireEndedRetainedTenures} required on `workflowOwner.repository`; setLeader drives both leadership edges);
    list those owner hunks one by one for that merge.
+
+## 6. Step 1 (coordinator, after merge acceptance): gate-decision probe for the three integration-green reds
+
+Probe: local ref `probe/merge-w1-gate-decision` = `51b48657c9ca79b8deca224d171e24862de8b7af` (parent 78c40b57b; NOT
+pushed; test-only: `test/test-helpers/merge-w1-gate-probe.js` wraps the repository prototype's
+ensureRetainedOperationRow / readRetainedRepairDecision / executeReplicaOperationsRead / oweRetainedRepair and prints
+`# GATEPROBE` lines; one import line added to each of the three test files). Committed through heavy.sh (first try
+failed eslint max-len on two probe lines; a second queued try was cancelled by me before it ran; third try rc=0).
+Lab: `lab/merger-w1/probe-gate-51b48657c` (tv-dator): 0/3 pass, first failures IDENTICAL to the merge run
+(identity 7, file-backed-restart 25, fail-closed-gate 5): the probe does not change behaviour.
+
+Evidence, every one of the 6 gate calls (identity: 1 call, op `dispatch-projection-runtime-create`, node
+`dispatch-projection-owner`; fail-closed-gate: 4 calls in top-level tests 4, 7, 8, 9, op `op-gate`; file-backed
+restart: 1 call, op `op-gate`):
+- route seen by the owner: cache = plain `Object` double, `onCacheChange` absent, PARTITIONS row for
+  replica_operations-p1 = null, ledger SERVICES endpoints = none, `resolveRetainedPlacementRepairRoute()` =
+  `{state: unavailable}` -> binding UNAVAILABLE (NO_BINDING clause).
+- read: `SELECT * FROM replica_operations WHERE operation_id IN (?)`, mode `owner_rpc_required`, success true,
+  rowSetComplete true, rows 1 (the row IS present), `readAuthorityWitness: null`.
+- decision (scope SUBJECT): `{state: unavailable, reason: unqualified_shape}` (authority.js `witnessRefusal`:
+  `isValidLeaderReadAuthorityWitness` fails on a null witness).
+- owe: kinds 6 (CLEARING|ROUTE), reason `route_unavailable` (`confirmUnboundRetainedRepair`).
+- answer to the gate: false; record retained: origin caller, entry unpinned, custody self, lastDecision
+  unavailable/route_unavailable, owed 6, continuation IDLE, blocker none.
+
+Classification: all three (F) fixture debt.
+- Not (P): the owner's rule with no binding is "a QUALIFIED read settles a present row"; this read has no read
+  authority witness at all, so `unqualified_shape` is the rule applied, not a defect. (The integration line's older
+  draft accepted it: the any-leader / unqualified acceptance the verifier noted.)
+- Not (R): nothing transient; no continuation is armed and the obligation is owed to a route publication the
+  fixture never makes; a re-drive would only repeat the same unqualified read.
+- Migration required (not done in this run; no assertion change): in `test/rebalancer/reservation-dispatch-gate-
+  test-harness.js` (`createCoordinatorWithStorage`, shared by fail-closed-gate and file-backed-restart) and in the
+  identity test's coordinator: (1) answer the replica_operations OWNER_RPC_REQUIRED read with the ledger leader's
+  read-authority witness, as production's owner read does; (2) publish the ledger route through the real
+  publishers (PARTITIONS leader_node_id + one identity-bound ACTIVE SERVICES endpoint for replica_operations-p1)
+  into a real SystemTableCache with the change feed instead of `createMockCache()`. With (1) alone the NO_BINDING
+  clause would confirm; (2) is what production does and lets the BOUND clause decide.
+
+Steps 2 (re-drive) and 3 (cl-029 / pending-timeout-reentry re-staging): NOT started in this run (context budget).
+
+## 7. Task A (second merger, claude:merger-2): true merge of the fixture-migration branch
+
+Writer: claude:merger-2 (took over the worktree at 78c40b57b, clean). Rule-set and test guidelines re-read.
+Inputs: ours `78c40b57b`; theirs `work/line-regression-fixtures-b-20261121` = `cfd05601947ee5b5f283977830ecec502f4a688a`
+(11 commits c22d786d5..cfd056019, tests/test helpers only, plus generated files); merge base `23344cddc` (the branch
+was cut from the integration line, so ours since base = exactly the retained-repair merge).
+
+Overlap since the base: one non-generated file changed on both sides,
+`test/rebalancer/replica-operation-insert-retry-idempotency.test.js`; generated on both sides:
+`solve/changes/global-owner-debt-inventory/inventory.json`, `test/shards/impact-graph-seal.json`,
+`test/shards/subsystem-classes.json` (theirs only: `src/constants/INDEX.md`).
+`git merge --no-ff --no-commit cfd056019`: NO textual conflict. The repository's merge driver kept ours for the
+three generated files; the pre-commit hook regenerated and included them (import graph, inventories, test metadata).
+Composition check of the one shared file: the merged text keeps both intents, verified by diff against both
+parents: the retained branch's `unavailableRetainedRepairPorts` import and spread at the one
+`new ReplicaOperationRepository(` (78c40b57b) AND the fixture branch's record/row production
+(`buildCreatedOperationFixture` / `advanceOperationFixture` / `buildCanonicalReplicaOperationRow`, gateway from
+`createMockControlPlaneSystemTableGateway` with the structured insert port) (b2a4d8796).
+Semantic census: no other `new ReplicaOperationRepository(` in the 20 fixture files; the only fixture files that import a
+module changed by the retained merge are the two control-plane node-state tests (named constants of
+replica-operation-repository.js) and the shared file above. The coordinator-built fixtures carry the retained ports
+through the production composition (rebalance-coordinator-lifecycle).
+
+Commit `7a9f52e64` (parents 78c40b57b, cfd056019), through heavy.sh with the full hook, rc=0; pushed.
+
+Lab `lab/merger-2/A-7a9f52e64-tv` (tv-dator, 7a9f52e64): the fixture branch's 20 files + set (a) 13 + set (c) 15 =
+48 files: 44 pass / 4 fail, 2693 assertions.
+- All 20 fixture files GREEN with exactly the assertion counts of `lab/lrfixc-all-2` (cfd056019 alone).
+- Every green file of (a) and (c) has the assertion count of `merge-w1-witness` / `merge-w1-controls`.
+- The 4 reds, each with the IDENTICAL first failing line on 78c40b57b: mirror `not ok 8` (re-drive witness, by design),
+  retained-continuation `not ok 23` (W1b-dependent), placement-owner-core `not ok 18` (identical on 23344cddc),
+  membership-epoch-binding `not ok 6` (identical on both parents of the first merge).
+NEW reds: none. Cured by the merge in the cone set (b): not re-run here (the fixture files that were red in (b) on
+78c40b57b and are in the 20: admission-real-size-estimates, duplicate-operation-prevention.property,
+storage-reservation-lost-outcome-idempotency, message-group-operation-routing.integration,
+rebalancer-entity-interaction-contract are now green).
+
+## 8. Task B: dispatch-gate fixture migration (commit `ee42a0618`)
+
+Files: `test/rebalancer/reservation-dispatch-gate-test-harness.js` (the shared harness; the identity test builds its
+coordinator through the same `createCoordinatorWithStorage`, so one migration covers all three files) and `await`
+at the harness call sites in reservation-fail-closed-dispatch-gate (13 lines), reservation-file-backed-restart (4),
+replica-dispatch-reservation-identity (1), dispatch-terminal-operation-eviction (1). No assertion changed.
+What the harness now does, as production:
+1. The `replica_operations` OWNER_RPC_REQUIRED read is answered with the ledger leader's read-authority witness built
+   by the production builder: `PARTITION_SERVICE_REMOTE_QUERY_METHODS.buildRemoteReadAuthorityWitness.call(
+   LEDGER_LEADER, false)` (the precedent is test/cache/system-table-cache-observation.test.js); LEDGER_LEADER is the
+   replica the published route names (replica_operations-p1-r1 on `ledger-leader-node`, role leader, raft status
+   term 1 / commit = applied = 1). Other reads are unchanged.
+2. The coordinator's cache is a real `SystemTableCache` (the coordinator subscribes to its change feed). The ledger
+   route is published through the real publishers: the foundation PARTITIONS row from `seedPartitionRow(
+   REPLICA_OPERATIONS_SCHEMA, ...)`, then `PartitionServiceRowOwner.registerReplica` (STOPPED, raft_role collapsed to
+   follower) and `activateReplica` with a real `ReplicaStateMachine` (the ACTIVE CAS) which also publishes
+   PARTITIONS `leader_node_id` (`publishCanonicalLeaderNodeId`). The writer commits each applied write into the cache
+   through `applySystemTableChange` (CDC UPSERT); the activation CAS applies only when its where-clause matches the
+   committed row. No partition SERVICES row with raft_role=leader exists anywhere.
+   Publication is asynchronous, so `createCoordinatorWithStorage` / `createRuntimeServiceDeferralFixture` are async.
+   The unused `options.systemTableCache` of `createCoordinatorWithStorage` was removed (no caller passed it).
+
+Lab `lab/merger-2/B-ee42a0618-adam` (adam-laptop, ee42a0618): 4/4 pass, 167 assertions.
+| File | ee42a0618 | 78c40b57b (merge-w1-cone97-try2) |
+| --- | --- | --- |
+| control-plane/replica-dispatch-reservation-identity | ok 27 | FAIL 27 (not ok 7) |
+| rebalancer/reservation-fail-closed-dispatch-gate | ok 78 | FAIL 78 (not ok 5) |
+| rebalancer/reservation-file-backed-restart | ok 39 | FAIL 39 (not ok 25) |
+| rebalancer/dispatch-terminal-operation-eviction (harness consumer, control) | ok 23 | ok 23 |
+All three fixture-debt files are green with unchanged assertion counts: the probe's classification holds (fixture
+debt, not an owner defect); no further gate-decision capture was needed.
+
+## 9. Task C: re-drive of a withheld dispatch (red `dadbc11f0`, implementation: see 9.4)
+
+### 9.1 Red witnesses (commit `dadbc11f0`, tests + record vocabulary only)
+`test/partition/placement-create-dispatch-execution-mirror.test.js`:
+- positive (unchanged since f42102c84): `not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once
+  after the retained owner confirms the row` (withheld while the bound owner read fails; the retained continuation
+  confirms with no other caller; exactly one CREATE delivery required).
+- negative 1 (new, case 9): `a retained confirmation for an operation whose dispatch was never withheld re-drives
+  nothing`: a CONFIRMED verdict delivered through the coordinator-composed port for an operation the gate never
+  withheld -> 0 deliveries; then the gate confirms the present row at the first ask -> exactly 1 delivery and no verdict
+  emitted (the record answered its caller true).
+- negative 2 (new, case 10): `a retained confirmation after the operation became terminal, or after shutdown,
+  re-drives nothing`: (i) withheld; the workflow owner's terminal release (`clearTerminalOperationRetryState`); the
+  continuation confirms -> exactly one verdict reaches the workflow owner, naming {operationId, createdAt, CONFIRMED},
+  and 0 deliveries; (ii) withheld; `coordinator.shutdown()`; a CONFIRMED verdict through the port -> 0 deliveries.
+- `withPlacementExecution` passes `coordinator` to its measure (needed for (ii)); no assertion of cases 1-8, 11, 12
+  changed. Record vocabulary added in the same commit: `RETAINED_REPAIR_VERDICT {CONFIRMED, UNCONFIRMED}` (record.js).
+Lab red-before `lab/merger-2/C1-dadbc11f0-tv` (tv-dator): 9 pass / 3 fail, 12 assertions: not ok 8 (re-drive, as on
+78c40b57b), not ok 9 (`owner.repository.reportRetainedRepairVerdict is not a function`), not ok 10 (`expected: 1 actual:
+0`: no verdict is emitted); cases 1-7, 11, 12 ok.
+
+### 9.2 Design as implemented
+Producer, retained owner (the record names the caller relation; the single emission point is `retireRetainedRepair`):
+- record fields `callerAnswer: RETAINED_REPAIR_CALLER {NONE, WITHHELD}` and `awaitingCallers` (count). A caller
+  arrival (`repairRetainedOperation`) counts itself while it awaits the decision (`answerRetainedRepairCaller`, the
+  previous body unchanged) and, if the record is still current afterwards, records its answer (true -> NONE,
+  false -> WITHHELD).
+- `retireRetainedRepair(attempt, verdict)` emits `{operationId, createdAt, verdict}` through the required port
+  `reportRetainedRepairVerdict` iff `callerAnswer === WITHHELD && awaitingCallers === 0`, after deleting the record (so
+  once per record). A decision driven by an awaiting caller never emits: that caller hears the answer directly.
+  Shutdown clears records without retiring them (no emission); SPENT does not retire (no emission).
+- verdicts named at each retirement site: EXACT -> `CONFIRMED_VERDICT`; CHANGED -> `unconfirmedVerdict(
+  RETAINED_REPAIR_RETIREMENT.CHANGED)`; definite native refusal -> `unconfirmedVerdict(failureCode)`; permanent
+  committed refusal -> `unconfirmedVerdict(result.reason)`; ingress tenure end (wake.js; never a caller, never emits)
+  -> `unconfirmedVerdict(RETAINED_REPAIR_RETIREMENT.TENURE_ENDED)`.
+- the port is the fourth entry of `RETAINED_REPAIR_PORTS`, validated at construction by
+  `createRetainedPlacementRepairPorts` (typed `retained_placement_repair_port_missing`); no optional subscriber, no probe.
+  Composition: `rebalance-coordinator-lifecycle.js` `reportRetainedRepairVerdict: (verdict) =>
+  this.workflowOwner.observeRetainedRepairVerdict(verdict)`; repositories built outside the coordinator declare it in
+  `test/test-helpers/retained-repair-ports.js` (no workflow owner, nothing to wake).
+Consumer, workflow owner (`src/rebalancer/operation-workflow-withheld-dispatch.js`, new):
+- the gate, on `repaired === false`, registers the withheld attempt: `withheldDispatchByOperationId.set(operationId,
+  {createdAt, fenceEpoch: getOperationOwnershipFenceEpoch(), deadlineMs: createdAt + REBALANCE_OPERATION_BUDGET_MS})`.
+  The map is owned by `OperationWorkflowOwner` (constructor), cleared by its `shutdown()` override and per operation by
+  `clearTerminalOperationRetryState` (terminal).
+- `observeRetainedRepairVerdict({operationId, createdAt, verdict})`: one decision `withheldDispatchState` -> NOT_WITHHELD
+  (no wait, or another attempt's createdAt: nothing), NOT_CURRENT (shut down, not initialized, ownership fence epoch
+  moved, budget deadline passed: wait dropped, nothing), REDRIVEN (CONFIRMED: wait dropped, `dispatchOperation(
+  operationId)` once: the canonical serialized per-operation entry, which re-reads the operation and re-enters the gate),
+  UNCONFIRMED (wait dropped; the gate's typed `OPERATION_NOT_DISPATCHABLE` outcome with the verdict reason, logged).
+- no timer, no polling, no second scheduler: the verdict is the only wake; the dispatch entry is the existing one.
+Why not the observed-progress retry entry itself (953d705f8): every arm of that registry sets a timer
+(`armObservedProgressRetry`), and its runner reconciles observed progress, not dispatch; storing the withheld wait in
+it would either let a timer re-drive the gate (polling) or make the verdict fire an observed-progress reconcile. The
+withheld wait therefore keeps the entry's fence elements (operation key, ownership fence epoch, budget deadline,
+terminal and shutdown release) in its own owner-held map, and the re-entry is the serialized dispatch entry.
+
+### 9.3 Exact lines in the retained owner (for the next merge of work/retained-ledger-observation-repair-20261121)
+`src/rebalancer/replica-operation-repository-retained-placement-repair.js` (vs f42102c84 text):
+1. import block (record import): +2 lines after `SELF_CUSTODY, NATIVE_IDLE, IDLE_DECISION, pinnedEntry, settledEntry,`:
+   `RETAINED_REPAIR_CALLER as CALLER, RETAINED_REPAIR_RETIREMENT as RETIREMENT,` / `CONFIRMED_VERDICT, unconfirmedVerdict,`
+2. `RETAINED_REPAIR_PORTS`: + `'reportRetainedRepairVerdict'` (and a 2-line comment above it).
+3. `repairRetainedOperation`: after `attempt.origin = ORIGIN.CALLER;` the caller count / answer bookkeeping (12 lines);
+   the former remainder of the method body is now `answerRetainedRepairCaller(attempt, operation)` (text unchanged).
+4. `retireRetainedRepair(attempt, verdict)`: body rewritten (emission), 3-line comment.
+5. four call sites gain the verdict argument: definite refusal (`unconfirmedVerdict(failureCode)`), permanent committed
+   refusal (`unconfirmedVerdict(result.reason)`), EXACT (`CONFIRMED_VERDICT`), CHANGED
+   (`unconfirmedVerdict(RETIREMENT.CHANGED)`).
+`src/rebalancer/replica-operation-retained-repair-wake.js`: record import +1 line; the INGRESS tenure-end retirement
+passes `unconfirmedVerdict(RETIREMENT.TENURE_ENDED)`.
+`src/rebalancer/replica-operation-retained-repair-record.js`: + RETAINED_REPAIR_VERDICT (in dadbc11f0),
+RETAINED_REPAIR_CALLER, RETAINED_REPAIR_RETIREMENT, CONFIRMED_VERDICT, unconfirmedVerdict, and the two record fields.
+Port shape: `reportRetainedRepairVerdict({operationId: string, createdAt: number, verdict: {state: 'confirmed'} |
+{state: 'unconfirmed', reason}})`, synchronous; its return value is the consumer's answer (ignored by the owner).
+Known residual: a caller refused by the decision that itself retires the record (CHANGED / definite / permanent while
+that caller awaits) gets `false` directly; the gate registers a wait no verdict will wake; it is released at terminal
+state or shutdown (bounded by the operation lifetime) and a later withholding of the same attempt overwrites it.
+First commit attempt of the implementation refused by the hook (no bypass): retry-registry grew past the 800-line
+source threshold (moved the map to OperationWorkflowOwner) and the decision-boundary audit flagged three independent
+`if`s returning outcome objects in the consumer (one named decision + switch). Both fixed before the commit.
+
+### 9.4 Implementation commit `cd177cba8` and green-after
+Lab green-after `lab/merger-2/C2-final132-tv` (tv-dator, cd177cba8; `lab/merger-2/C2-final132-adam.runner-failure.console`
+= "adam-laptop is not a ready lab machine", a runner failure, not a result). Mirror: 12/12 ok (cases 8, 9, 10 green;
+the only assertion-count change in the whole run is the mirror's 10 -> 12, the two new cases).
+Exactly one delivery in the positive case, zero in both negatives (as asserted).
+
+## 10. Candidate head red set (cd177cba8) versus `lab/merge-w1-cone97-try2` (78c40b57b)
+
+One run, `lab/merger-2/C2-final132-tv`: the union of the 97-file cone, sets (a) and (c), the fixture branch's 20 and
+B's 4 = 132 files: 114 pass / 18 fail, 8160 assertions. Attribution script `lab/merger-2/attr.cjs`.
+Every one of the 18 has the IDENTICAL first failing line on 78c40b57b (cone, witness or control run). NEW reds: none.
+Assertion counts of every other file equal the reference runs.
+Cone97 subset: 24 red on 78c40b57b -> 16 red on cd177cba8. Cured (8): replica-dispatch-reservation-identity,
+reservation-fail-closed-dispatch-gate, reservation-file-backed-restart (task B); storage-reservation-lost-outcome-
+idempotency, admission-real-size-estimates, duplicate-operation-prevention.property, rebalancer-entity-interaction-
+contract, message-group-operation-routing.integration (task A, the fixture branch). Plus the mirror (set a, task C).
+Remaining reds (18): cone (16): growth-promote-authoritative-completion-and-progress 40, message-group-membership-
+operation-lane 5, replace-in-flight-blocks-planning 45, placement-admission-cross-coordinator-target-census 1,
+replace-owner-lease-verdict-property 1, quorum-conditioned-remove-safety 9, rebalance-coordinator-topology-guard 1,
+replica-operation-membership-epoch-binding 6, cl-029 3 (task D, not done), strict-operation-outcomes 7,
+coordinator-created-operation-progress 5, sql-query-engine-create-table-quorum 1, formation-runtime-service-create-lane-
+budget-starvation 20, rebalancer-own-create-memory-duplicate-replace 2, replica-status-completeness.property 8,
+control-plane-rebalance.integration 11; set (a) (2): placement-retained-continuation 23 (W1b-dependent),
+replica-placement-owner-core 18 (identical on 23344cddc).
+
+## 11. Task E (coordinator, added mid-run): true merge of the CDC currentness stamp line (`8d897772b`)
+
+Inputs: ours `cd177cba8`; theirs `work/cdc-currentness-stamp-20261121` = `5c412e83931fc871ae9a3f4e0afbfdb77a26ca2c`
+(9 commits, 36 files; base 23344cddc; verified in verify-cdc-plan-stamp.md, -corrective.md,
+verify-cdc-closing-and-boot-provenance.md). Overlap since the base: generated files only (inventory.json,
+src/partition/INDEX.md, test/shards/{impact-graph-seal,primary-classes,resource-classes,subsystem-classes}.json).
+`git merge --no-ff --no-commit`: NO textual conflict; the merge driver kept ours for the generated files and the hook
+regenerated them. Semantic census: none of the branch's 36 files constructs a ReplicaOperationRepository, calls
+ensureRetainedOperationRow or uses createMockCache; the one shared src module with B's harness is
+`src/cache/system-table-cache.js` (the branch: the per-table mutation version survives clear() and clear bumps it),
+which the harness only writes through applySystemTableChange.
+Commit `8d897772b` (parents cd177cba8, 5c412e839) through heavy.sh with the full hook, rc=0; pushed.
+
+Navigability condition (verifier): in the same heavy slot, before the commit, the whole-domain audit
+(`node scripts/check-guideline-navigability.js`, logs `lab/merger-2/nav-before.log`, `nav-after.log`) on the merged tree
+printed six tightening hints: owner_port_feature_detection 2008 -> 1969, identity_keyed_module_state 82 -> 81,
+row_field_alias_reads 682 -> 680, two_source_fallback_reads 1686 -> 1660, typeof_dual_paths 594 -> 586,
+legacy_term_identifiers 2835 -> 2763; and exit 1 with 12 sites ABOVE their committed allowance (catch_returns_default
+x7, legacy_term_identifiers x3, two_source_fallback_reads x2) in 10 files none of which changed since 23344cddc
+(node-joining-publication-activation, node-joining-message-group-runtime-delegation, replica-cleanup-tombstone-owner,
+replica-handler-learner-retirement-authority, operation-workflow-executor-outcome-redrive, operation-workflow-placement-
+learner-retirement, operation-workflow-reentry-authority, operation-workflow-terminal-reservation-release,
+priority-recovery-observation, replica-operation-creation-request): a pre-existing whole-domain red of the integration
+line that the staged-file hook does not see. Consequence: a plain `--update-baseline` would absorb those 12 (a raise).
+My guard step crashed (ENOBUFS on `git show` of a large baseline) and therefore restored the baselines; the merge commit
+carries NO tightening (its message's sentence about the tightening is superseded by the follow-up commit, 11.1).
+
+Lab `lab/merger-2/E-8d897772b-tv-dator` (tv-dator, 8d897772b; earlier attempts `E-8d897772b-{tv,adam,gamla}.runner-failure*.console`
+= "no lab machine is ready" / "not a ready lab machine": runner failures, not results): the branch's own set
+(`lab/cdcstamp-c2` 28 files + `lab/cdcstamp-final` 3, union 30) + sets (a) 13 and (c) 15 = 57 files: 53 pass / 4 fail,
+2861 assertions; every file's assertion count equals its reference run (cdcstamp-final / cdcstamp-c2 / C2-final132-tv).
+- partition-cdc-currentness-stamp-witness: `not ok 2` and `not ok 4` ("... with nothing changing reads raft status for
+  currentness at most once", 1 and 3 target groups): the two selection-bound cases red BY RULING, IDENTICAL to
+  `lab/cdcstamp-final` (5c412e839).
+- placement-retained-continuation 23, replica-placement-owner-core 18, replica-operation-membership-epoch-binding 6:
+  IDENTICAL to cd177cba8 (section 10) and to 78c40b57b.
+- cdc-group-propagation-foreground-boundary: ok this run (its known first-case timeout under parallel load did not
+  occur).
+NEW reds: none.
+
+### 11.1 Navigability tightening, follow-up commit `487d12c91`
+One heavy slot (logs `lab/merger-2/nav2-*.log`, report `nav2-tighten.txt`, script `nav-tighten.mjs`): `--update-baseline`
+wrote the current sites; `nav-tighten.mjs` then rewrote each baseline as, per checker identity (filePath, kind,
+functionName, the key of `buildNavigabilityViolationIdentity`), min(committed allowance, current count), entries taken
+from the committed baseline: no identity added, no allowance raised; the 12 above-baseline sites are reported, not
+absorbed. Guard before committing: the re-run audit must still find exactly those 12 and print no tightening hint (met).
+Counts before -> after: owner_port_feature_detection 2008 -> 1969 (the 4 `src/topology/cdc-group-propagation-routing.js`
+entries the verifier named are gone: 0 remain), identity_keyed_module_state 82 -> 81, row_field_alias_reads 682 -> 680,
+two_source_fallback_reads 1686 -> 1658, typeof_dual_paths 594 -> 586, legacy_term_identifiers 2835 -> 2760,
+catch_returns_default 374 -> 367; alias_exports 38, inheritance_depth_over_two 57, prototype_copy_bags 59 unchanged.
+(The checker's own hints were the totals including the 12 above-baseline sites: e.g. 1686 -> 1660, 2835 -> 2763.)
+OPEN for the lead: the 12 above-baseline navigability sites listed in section 11 are a whole-domain red of the
+integration line (present at 23344cddc; the staged-file hook does not see them). Not repaired here (out of scope; R17).
+
+## 12. State at hand-back (claude:merger-2)
+Branch `work/integration-candidate-20261121` head `487d12c91`, pushed, worktree clean.
+Commits: A `7a9f52e64` (fixture merge) - B `ee42a0618` (dispatch-gate harness) - C red `dadbc11f0` - C `cd177cba8`
+(re-drive) - E `8d897772b` (CDC currentness merge) - E tightening `487d12c91`.
+NOT done: task D (cl-029 case 3 and priority-recovery-dispatch-pending-timeout-reentry on virtual time; cl-029 3 still red
+with the identical first line; the pending-timeout-reentry file is not in any set run here).
+Still pending from section 5: the zero-row update arm fence (F8), the capability-probe edits outside the retained owner
+(W1 17.3; this run removed `createMockCache` only from the dispatch-gate harness's coordinator), the second merge of the
+retained branch's corrective commits (exact re-drive lines in 9.3), the outcome-format merge (W1b), the placement-owner
+merge.

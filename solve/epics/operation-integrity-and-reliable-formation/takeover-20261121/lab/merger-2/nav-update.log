@@ -1,0 +1,12 @@
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Wrote 1969 navigability owner_port_feature_detection baseline entries
+Wrote 81 navigability identity_keyed_module_state baseline entries
+Wrote 59 navigability prototype_copy_bags baseline entries
+Wrote 57 navigability inheritance_depth_over_two baseline entries
+Wrote 680 navigability row_field_alias_reads baseline entries
+Wrote 1660 navigability two_source_fallback_reads baseline entries
+Wrote 586 navigability typeof_dual_paths baseline entries
+Wrote 374 navigability catch_returns_default baseline entries
+Wrote 38 navigability alias_exports baseline entries
+Wrote 2763 navigability legacy_term_identifiers baseline entries
+update rc=0

@@ -1,0 +1,1904 @@
+placement-shell=3404912
+placement-head=f705ed7afd4fd4ccc8bdd6e21d374fb02000620d
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3405368
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/rebalancer/move-skip-log-typed-refusal-reason.test.js (6 assertions, 1518ms)
+not ok test/rebalancer/critical-spread-terminal-stall-repro.test.js (19 assertions, 1683ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: critical priority partition [A,A,B] with free active nodes gets a spread-restoring operation within one evaluation cycle even while the authoritative services read is unavailable
+    ok 1 - all five active nodes must be available to placement (harness sanity)
+    ok 2 - partition must observe its three ACTIVE replicas (harness sanity)
+    ok 3 - rebalance cycle must complete
+    ok 4 - planner must emit a spread-restoring add-like move for [A,A,B] with free active nodes (planner sanity; failure here would be a harness problem, not the live bug)
+    not ok 5 - the spread-restoring move must be ADMITTED (operation created) within one evaluation cycle — a persistently-unavailable authoritative services read must not permanently block the only cure for a critical spread gap; skipped moves: [{"operation":"add","nodeId":"node-spread-c","reason":"deferred","admissionReason":"replica_inventory_unavailable","admissionDecisionType":"deferred"}]
+      ---
+      at:
+        fileName: test/rebalancer/critical-spread-terminal-stall-repro.test.js
+        lineNumber: 313
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/critical-spread-terminal-stall-repro.test.js:313:7)
+      source: |2
+            // with replica_inventory_unusable because the authoritative services
+            // read is unavailable — the exact live terminal stall.
+            t.ok(
+        ------^
+              admittedAddLikeMoveResults.length >= 1,
+              'the spread-restoring move must be ADMITTED (operation created) ' +
+      ...
+    
+    not ok 6 - a spread-restoring operation row (ADD or count-neutral REPLACE targeting a free node) must be persisted; found: []
+      ---
+      at:
+        fileName: test/rebalancer/critical-spread-terminal-stall-repro.test.js
+        lineNumber: 325
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/critical-spread-terminal-stall-repro.test.js:325:7)
+      source: |2
+              .getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)
+              .filter(isSpreadRestoringOperationRow);
+            t.ok(
+        ------^
+              spreadRestoringOperations.length >= 1,
+              'a spread-restoring operation row (ADD or count-neutral REPLACE ' +
+      ...
+    
+    1..6
+not ok 1 - critical priority partition [A,A,B] with free active nodes gets a spread-restoring operation within one evaluation cycle even while the authoritative services read is unavailable # time=126.859ms
+  ---
+  at:
+    fileName: test/rebalancer/critical-spread-terminal-stall-repro.test.js
+    lineNumber: 232
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('critical priority partition [A,A,B] with free active nodes gets a ' +
+    ^
+    'spread-restoring operation within one evaluation cycle even while the ' +
+    'authoritative services read is unavailable', async (t) => {
+  ...
+
+# Subtest: over-target [A,A,A,B] priority partition (the ec-postfix archived shape: activeCount=4, target=3, 2 of 3 distinct nodes) still gets a spread-restoring add-like move within one evaluation cycle — the over-creation cap retains the open spread cure instead of wiping it
+    ok 1 - all five active nodes must be available to placement (harness sanity)
+    ok 2 - partition must observe its four ACTIVE replicas (harness sanity)
+    ok 3 - rebalance cycle must complete
+    ok 4 - the over-target cap must retain the open spread cure: an add-like move targeting a fresh node must be planned; moves: [{"operation":"add","nodeId":"node-spread-c","reason":"deferred","skipped":true,"admissionReason":"replica_inventory_unavailable"}]
+    not ok 5 - the retained spread cure must be ADMITTED within the same evaluation cycle; moves: [{"operation":"add","nodeId":"node-spread-c","reason":"deferred","skipped":true,"admissionReason":"replica_inventory_unavailable"}]
+      ---
+      at:
+        fileName: test/rebalancer/critical-spread-terminal-stall-repro.test.js
+        lineNumber: 402
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/critical-spread-terminal-stall-repro.test.js:402:7)
+      source: |2
+                moveResult.skipped !== true && moveResult.success !== false,
+            );
+            t.ok(
+        ------^
+              admittedAddLikeMoveResults.length >= 1,
+              'the retained spread cure must be ADMITTED within the same ' +
+      ...
+    
+    not ok 6 - a spread-restoring operation row targeting a free node must be persisted; found: []
+      ---
+      at:
+        fileName: test/rebalancer/critical-spread-terminal-stall-repro.test.js
+        lineNumber: 411
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/critical-spread-terminal-stall-repro.test.js:411:7)
+      source: |2
+              .getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)
+              .filter(isSpreadRestoringOperationRow);
+            t.ok(
+        ------^
+              spreadRestoringOperations.length >= 1,
+              'a spread-restoring operation row targeting a free node must be ' +
+      ...
+    
+    1..6
+not ok 2 - over-target [A,A,A,B] priority partition (the ec-postfix archived shape: activeCount=4, target=3, 2 of 3 distinct nodes) still gets a spread-restoring add-like move within one evaluation cycle — the over-creation cap retains the open spread cure instead of wiping it # time=48.743ms
+  ---
+  at:
+    fileName: test/rebalancer/critical-spread-terminal-stall-repro.test.js
+    lineNumber: 341
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('over-target [A,A,A,B] priority partition (the ec-postfix archived ' +
+    ^
+    'shape: activeCount=4, target=3, 2 of 3 distinct nodes) still gets a ' +
+    'spread-restoring add-like move within one evaluation cycle — the ' +
+  ...
+
+# Subtest: over-target [A,A,A,B] priority partition uses the available authoritative services read and admits the planner-retained spread cure
+    ok 1 - rebalance cycle must complete
+    ok 2 - planner must retain the over-target spread-cure ADD
+    ok 3 - the real over-target hold must admit the retained spread-cure ADD when its authoritative services read returns [A,A,A,B]
+    ok 4 - the admitted spread cure must persist an operation row targeting a free node
+    1..4
+ok 3 - over-target [A,A,A,B] priority partition uses the available authoritative services read and admits the planner-retained spread cure # time=47.277ms
+
+1..3
+# { total: 16, pass: 12, fail: 4 }
+# time=240.074ms
+not ok test/rebalancer/rebalance-coordinator-topology-guard.test.js (113 assertions, 2186ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: RebalanceCoordinator blocks same-node duplicate topology creation
+    ok 1 - createOperation should fail closed when the target node already hosts the partition
+    ok 2 - same-node duplicate adds should surface the occupied-target reason
+    ok 3 - blocked topology creation should not persist a replica operation
+    1..3
+ok 1 - RebalanceCoordinator blocks same-node duplicate topology creation # time=60.411ms
+
+# Subtest: RebalanceCoordinator topology guard invokes the injected inventory owner
+    ok 1 - create-time occupancy and target census share one canonical capture
+    1..1
+ok 2 - RebalanceCoordinator topology guard invokes the injected inventory owner # time=33.08ms
+
+# Subtest: RebalanceCoordinator fails topology increase closed when service owner rows are unavailable
+    not ok 1 - cache presence cannot turn unavailable owner evidence into empty
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "replica_inventory_unusable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 335
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:335:7)
+      source: |2
+            );
+      
+            t.same(error?.admissionResult?.blockingReasons,
+        ------^
+              ['replica_inventory_unusable'],
+              'cache presence cannot turn unavailable owner evidence into empty');
+      ...
+    
+    1..1
+not ok 3 - RebalanceCoordinator fails topology increase closed when service owner rows are unavailable # time=40.756ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 306
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    );
+  
+  
+    test('RebalanceCoordinator fails topology increase closed when service owner
+    rows are unavailable',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps
+    ok 1 - read duration alone cannot make a successful inventory unusable
+    ok 2 - the recovery REPLACE remains admissible
+    1..2
+ok 4 - RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps # time=27.798ms
+
+# Subtest: RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable
+    not ok 1 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 2 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 3 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 4 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 5 - the surplus REMOVE fence also has no target permission
+    not ok 6 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 7 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 8 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 9 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 10 - the surplus REMOVE fence also has no target permission
+    not ok 11 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 12 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 13 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 14 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 15 - the surplus REMOVE fence also has no target permission
+    not ok 16 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 17 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 18 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 19 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 20 - the surplus REMOVE fence also has no target permission
+    not ok 21 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 22 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 23 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 24 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 25 - the surplus REMOVE fence also has no target permission
+    not ok 26 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 27 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 28 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 29 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 30 - the surplus REMOVE fence also has no target permission
+    not ok 31 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 32 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 33 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 34 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 35 - the surplus REMOVE fence also has no target permission
+    not ok 36 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 37 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    not ok 38 - unavailable target precedes the recovery-cure exception
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 502
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:502:11)
+      source: >2
+                  ...context, normalizedMoveType,
+                });
+                t.equal(denied.state, 'target_unavailable',
+        ----------^
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_unavailable
+        +inventory_unavailable
+      ...
+    
+    not ok 39 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,3 @@
+         Array [
+        -  "partition_target_unavailable",
+        +  "replica_inventory_unavailable",
+         ]
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:11)
+      source: >2
+                t.equal(denied.state, 'target_unavailable',
+                  'unavailable target precedes the recovery-cure exception');
+                t.same(denied.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        ----------^
+              }
+              t.equal(await coordinator.resolvePrioritySurplusRemoveFenceTargetReplicaCount(context), null,
+      ...
+    
+    ok 40 - the surplus REMOVE fence also has no target permission
+    not ok 41 - the count-neutral ledger spread cure breaks the owner-read circularity
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 511
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:511:7)
+      source: >2
+            coordinator.tablePolicyService = policyOwner;
+            const recovery = await coordinator.buildTopologyGuardSnapshot(context);
+            t.equal(recovery.state, 'allowed',
+        ------^
+              'the count-neutral ledger spread cure breaks the owner-read circularity');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -allowed
+        +inventory_unavailable
+      ...
+    
+    not ok 42 - the exception never permits two replicas on one node
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 518
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:518:7)
+      source: |2
+              move: {...context.move, nodeId: spreadNode},
+            });
+            t.equal(occupied.state, 'target_node_occupied',
+        ------^
+              'the exception never permits two replicas on one node');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_node_occupied
+        +inventory_unavailable
+      ...
+    
+    not ok 43 - the recovery REPLACE must be anchored to an actual source row
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 525
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:525:7)
+      source: |2
+              move: {...context.move, replicaId: `${ledgerId}-missing`},
+            });
+            t.equal(missingSource.state, 'inventory_unusable',
+        ------^
+              'the recovery REPLACE must be anchored to an actual source row');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -inventory_unusable
+        +inventory_unavailable
+      ...
+    
+    not ok 44 - a voter off the hottest node is not the quorum-spread cure
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 532
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:532:7)
+      source: |2
+              move: {...context.move, replicaId: `${ledgerId}-r3`},
+            });
+            t.equal(nonHotSource.state, 'inventory_unusable',
+        ------^
+              'a voter off the hottest node is not the quorum-spread cure');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -inventory_unusable
+        +inventory_unavailable
+      ...
+    
+    not ok 45 - a pre-ready target is not placement-eligible without a ready lease
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 540
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:540:7)
+      source: |2
+              move: {...context.move, replicaId: null},
+            });
+            t.equal(genericAdd.state, 'inventory_unusable',
+        ------^
+              'a pre-ready target is not placement-eligible without a ready lease');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -inventory_unusable
+        +inventory_unavailable
+      ...
+    
+    not ok 46 - the first ready unoccupied target remains a valid cure
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 552
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:552:7)
+      source: |2
+              },
+            });
+            t.equal(firstFeasibleAdd.state, 'allowed',
+        ------^
+              'the first ready unoccupied target remains a valid cure');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -allowed
+        +inventory_unavailable
+      ...
+    
+    not ok 47 - the circularity exception must not admit an unready target
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 564
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:564:7)
+      source: |2
+              },
+            });
+            t.equal(unreadyAdd.state, 'inventory_unusable',
+        ------^
+              'the circularity exception must not admit an unready target');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -inventory_unusable
+        +inventory_unavailable
+      ...
+    
+    not ok 48 - startup authority cannot replace live transport evidence
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 576
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:576:7)
+      source: |2
+              },
+            });
+            t.equal(staleTransportAdd.state, 'inventory_unusable',
+        ------^
+              'startup authority cannot replace live transport evidence');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -inventory_unusable
+        +inventory_unavailable
+      ...
+    
+    not ok 49 - live CONNECTED evidence cannot replace startup authority membership
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 588
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:588:7)
+      source: |2
+              },
+            });
+            t.equal(nonAuthorityAdd.state, 'inventory_unusable',
+        ------^
+              'live CONNECTED evidence cannot replace startup authority membership');
+            coordinator.shutdown();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -inventory_unusable
+        +inventory_unavailable
+      ...
+    
+    1..49
+not ok 5 - RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable # time=95.735ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 398
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    );
+  
+    test(
+    ^
+      'RebalanceCoordinator admits only declared concentrated-ledger recovery ' +
+        'moves when the services owner is circularly unavailable',
+  ...
+
+# Subtest: RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target
+    ok 1 - createOperation should fail closed when authoritative topology already satisfies the target replica count
+    ok 2 - stale planner adds should surface the target-satisfied reason
+    ok 3 - topology guard should preserve the canonical distinct-node count in diagnostics
+    ok 4 - stale planner add should not persist a replica operation
+    1..4
+ok 6 - RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target # time=28.915ms
+
+# Subtest: RebalanceCoordinator blocks REPLACE when target node already has partition topology
+    ok 1 - createOperation should fail closed when REPLACE targets an occupied partition node
+    ok 2 - duplicate replacement target rows should surface the occupied-target reason
+    ok 3 - blocked replacement topology creation should not persist a replica operation
+    1..3
+ok 7 - RebalanceCoordinator blocks REPLACE when target node already has partition topology # time=23.886ms
+
+# Subtest: RebalanceCoordinator applies topology occupancy guard to message-group creates
+    ok 1 - message-group ADD should use the shared topology occupancy guard
+    ok 2 - message-group duplicate topology should surface the occupied-target reason
+    ok 3 - blocked message-group topology creation should not persist a replica operation
+    1..3
+ok 8 - RebalanceCoordinator applies topology occupancy guard to message-group creates # time=20.992ms
+
+# Subtest: count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted)
+    ok 1 - over-target REPLACE churn is rejected by the count-keyed lane hold
+    ok 2 - the held REPLACE churn create persists no replica operation
+    1..2
+ok 9 - count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted) # time=25.328ms
+
+# Subtest: count-keyed lane consumes canonical identity deduplication
+    ok 1 - duplicate observations of one identity do not manufacture a surplus
+    ok 2 - critical lane output depends on canonical inventory deduplication
+    1..2
+ok 10 - count-keyed lane consumes canonical identity deduplication # time=43.865ms
+
+# Subtest: count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)
+    ok 1 - alive-occupancy at target (failed replica excluded) admits the re-placement REPLACE
+    1..1
+ok 11 - count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix) # time=28.87ms
+
+# Subtest: count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target
+    ok 1 - a draining (removing) source keeps the partition over target -> churn create is held
+    ok 2 - the held churn create persists no replica operation
+    1..2
+ok 12 - count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target # time=22.769ms
+
+{"level":50,"time":"2026-11-21T23:18:54.004Z","nodeId":"node-1","pid":3405396,"subsystem":"rebalance-coordinator","operationId":"8de3d2ee-e6d1-42d5-b2a4-9c12f7fad861","error":"Unexpected topology guard mutation","nodeId":"node-1","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"msg":"Failed to persist operation"}
+# Subtest: count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain)
+    ok 1 - the planner-retained spread-cure ADD is admitted despite the over-target surplus
+    1..1
+ok 13 - count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain) # time=36.878ms
+
+# Subtest: count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape)
+    ok 1 - an untyped over-target ADD stays held
+    ok 2 - no operation persists
+    1..2
+ok 14 - count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape) # time=21.797ms
+
+# Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow)
+    ok 1 - a spread-typed ADD with coverage at target stays held
+    ok 2 - no operation persists
+    1..2
+ok 15 - count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow) # time=19.783ms
+
+# Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape)
+    ok 1 - a spread-typed ADD to an already-hosting node stays held
+    ok 2 - no operation persists
+    1..2
+ok 16 - count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape) # time=21.457ms
+
+{"level":50,"time":"2026-11-21T23:18:54.093Z","nodeId":"node-1","pid":3405396,"subsystem":"rebalance-coordinator","operationId":"11f05700-7fa3-4d13-adf7-bb15b18c4422","error":"Unexpected topology guard mutation","nodeId":"node-1","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"msg":"Failed to persist operation"}
+# Subtest: s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head)
+    ok 1 - orphan excluded from the count-census (voters=2 < target 3) -> spread ADD admitted
+    1..1
+ok 17 - s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head) # time=24.722ms
+
+# Subtest: s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted
+    ok 1 - catching-up learner counts (3 nodes == target) -> redundant ADD held
+    ok 2 - no over-creating replica operation persisted
+    1..2
+ok 18 - s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted # time=20.796ms
+
+# Subtest: s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement)
+    ok 1 - target node already occupied (full-occupancy check intact) -> blocked
+    ok 2 - no double-placement on the orphan node
+    1..2
+ok 19 - s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement) # time=20.251ms
+
+# Subtest: ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard
+    ok 1 - should be equivalent
+    ok 2 - no operation is recorded without its target
+    ok 3 - valid policy restoration admits this move at the same topology guard
+    ok 4 - a topology decision alone does not persist an operation
+    ok 5 - should be equivalent
+    ok 6 - no operation is recorded without its target
+    ok 7 - valid policy restoration admits this move at the same topology guard
+    ok 8 - a topology decision alone does not persist an operation
+    1..8
+ok 20 - ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard # time=20.591ms
+
+1..20
+# { total: 93, pass: 51, fail: 42 }
+# time=674.997ms
+not ok test/rebalancer/spread-cure-escape-schedules.test.js (17 assertions, 3473ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:352:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 1 - E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle # time=344.061ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 349
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('E2 July world, services-p1 leader alive and reachable, planner on a
+    follower: ' +
+  
+    ^
+      'the spread cure of [A,A,B] is admitted within one evaluation cycle',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:362:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 2 - E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature # time=240.159ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 360
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E2 control (only where the escape exists): the same cycle with the
+    escape answering ' +
+  
+    ^
+      'false gives the July signature', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+      const scene = await openCureScene(t, {cureNodeIds: [NODE.PEER_A, NODE.PEER_A, NODE.PEER_B]});
+  ...
+
+# Subtest: E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:379:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 3 - E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing # time=244.536ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 376
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E3 services-p1 without a leader, then a leader: nothing is admitted
+    while no replica ' +
+  
+    ^
+      'leads, and the cure is admitted within one cycle of the leader appearing',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:421:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 4 - E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer # time=246.615ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 418
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E5 over-target [A,A,A,B]: the hold fails open and the guard behind it;
+    across a ' +
+  
+    ^
+      'bounded services-p1 gap the surplus drain\'s cure waits for the gap and no longer',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:453:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 5 - E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning # time=244.898ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 450
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E6 the planner cannot reach the services-p1 leader while services-p1 is
+    healthy: ' +
+  
+    ^
+      'nothing is admitted while the route is down, and the cure is admitted within one cycle ' +
+      'of the route returning', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:498:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 6 - E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader # time=243.864ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 494
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule):
+    what each ' +
+  
+    ^
+      'commit does for the ledger\'s own cure with the services-p1 leader reachable, then ' +
+      'without a leader', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape
+    not ok 1 - NOT NULL constraint failed: services.created_at
+      ---
+      stack: >
+        insertTableRow
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:220:19)
+      
+        test/rebalancer/topology-guard-inventory-authority-fixture.js:359:9
+      
+        Array.forEach (<anonymous>)
+      
+        Object.seedRowOnAll
+        (test/rebalancer/topology-guard-inventory-authority-fixture.js:358:45)
+      
+        test/rebalancer/spread-cure-escape-schedules.test.js:211:35
+      
+        Array.forEach (<anonymous>)
+      
+        openCureScene (test/rebalancer/spread-cure-escape-schedules.test.js:211:12)
+      
+        async Test.<anonymous>
+        (test/rebalancer/spread-cure-escape-schedules.test.js:521:17)
+      at:
+        fileName: test/rebalancer/topology-guard-inventory-authority-fixture.js
+        lineNumber: 220
+        columnNumber: 19
+        functionName: insertTableRow
+      type: SqliteError
+      code: SQLITE_CONSTRAINT_NOTNULL
+      tapCaught: returnedPromiseRejection
+      source: |
+        function insertTableRow(db, row) {
+          const {sql, params} = servicesRowInsert(row);
+          db.prepare(sql).run(...params);
+        ------------------^
+        }
+      ...
+    
+    1..1
+not ok 7 - E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape # time=253.746ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 518
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E4(a) services-p1 loses two of its three replicas: no leader is ever
+    elected, and ' +
+  
+    ^
+      'the guard grants nothing for a services-p1 cure, with or without the escape',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: probe only: print the observations
+    not ok 1 - probe dump: observation output only
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 567
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:567:5)
+      
+        Test.[maybeEmitEnd] (../../../node_modules/minipass/dist/esm/index.js:704:18)
+        (../../../node_modules/minipass/src/index.ts:1022:12)
+      
+        Test.end (../../../node_modules/minipass/dist/esm/index.js:457:33)
+        (../../../node_modules/minipass/src/index.ts:745:61)
+      
+        Parser.emitComplete
+        (../../../node_modules/tap-parser/dist/esm/index.js:399:18)
+        (../../../node_modules/tap-parser/src/index.ts:520:12)
+      
+        Parser.end (../../../node_modules/tap-parser/dist/esm/index.js:384:14)
+        (../../../node_modules/tap-parser/src/index.ts:498:10)
+      source: |
+        // it fails, so this case makes the observations visible.
+        test('probe only: print the observations', (t) => {
+          t.fail('probe dump: observation output only');
+        ----^
+        });
+      ...
+    
+    not ok 2 - test unfinished
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 566
+        columnNumber: 1
+        isToplevel: true
+      stack: |
+        test/rebalancer/spread-cure-escape-schedules.test.js:566:1
+      test: "probe only: print the observations"
+      source: |
+        // PROBE ONLY (never committed): the runner prints a file's output only when
+        // it fails, so this case makes the observations visible.
+        test('probe only: print the observations', (t) => {
+        ^
+          t.fail('probe dump: observation output only');
+        });
+      ...
+    
+    1..2
+not ok 8 - probe only: print the observations # time=18.126ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 566
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    // PROBE ONLY (never committed): the runner prints a file's output only when
+    // it fails, so this case makes the observations visible.
+    test('probe only: print the observations', (t) => {
+    ^
+      t.fail('probe dump: observation output only');
+    });
+  ...
+
+1..8
+# { total: 9, pass: 0, fail: 9 }
+# time=1862.107ms
+# test-files total=4 pass=1 fail=3 assertions=155
+placement-results={"file":"test/rebalancer/move-skip-log-typed-refusal-reason.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1518,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/critical-spread-terminal-stall-repro.test.js","attempt":1,"ok":false,"assertions":19,"durationMs":1683,"retriedOnce":false,"firstFailureLine":"not ok 5 - the spread-restoring move must be ADMITTED (operation created) within one evaluation cycle — a persistently-unavailable authoritative services read must not permanently block the only cure for a critical spread gap; skipped moves: [{\"opera"}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-topology-guard.test.js","attempt":1,"ok":false,"assertions":113,"durationMs":2186,"retriedOnce":false,"firstFailureLine":"not ok 1 - cache presence cannot turn unavailable owner evidence into empty"}
+placement-results={"file":"test/rebalancer/spread-cure-escape-schedules.test.js","attempt":1,"ok":false,"assertions":17,"durationMs":3473,"retriedOnce":false,"firstFailureLine":"not ok 1 - NOT NULL constraint failed: services.created_at"}

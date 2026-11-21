@@ -1,17 +1,6 @@
-attempt 1 host adam-laptop 19:28:16
-file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2689
-    throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
-          ^
-
-Error: adam-laptop is not a ready lab machine this run: ready
-    at placeLabLanes (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2689:11)
-    at runLabTest (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2973:21)
-    at async file:///mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs:22:18
-
-Node.js v22.23.2
-attempt 1 host tv-dator 19:28:21
-lab test: tv-dator: ordinary, exclusive (18 files) cores=12 mem=15.4GiB speed x1.46
-[tv-dator] placement-shell=3259354
+attempt 1 host tv-dator 22:13:58
+lab test: tv-dator: ordinary, exclusive (21 files) cores=12 mem=15.4GiB speed x1.59
+[tv-dator] placement-shell=3337407
 [tv-dator] placement-head=23344cddc5f07a597b93f8cd0f4f69a69be937c3
 [tv-dator] placement-link=node_modules
 [tv-dator] placement-link=data/examples
@@ -20,33 +9,36 @@ lab test: tv-dator: ordinary, exclusive (18 files) cores=12 mem=15.4GiB speed x1
 [tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
 [tv-dator] placement-link=tools/tla2tools.jar
 [tv-dator] placement-prepared=import-graph
-[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
-[tv-dator] placement-pid=3259801
-[tv-dator] # test-files planned=18
-[tv-dator] classified lane ordinary: 14 file(s), jobs=4
-[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js (4 assertions, 1984ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js (4 assertions, 2042ms)
-[tv-dator] ok test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js (6 assertions, 4361ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js (3 assertions, 2440ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js (3 assertions, 4286ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js (4 assertions, 1924ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-turn-integrity.test.js (5 assertions, 2433ms)
-[tv-dator] ok test/raft/raft-rs-backend/status-read-never-waits.test.js (1 assertions, 1062ms)
-[tv-dator] ok test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js (3 assertions, 1286ms)
-[tv-dator] ok test/raft/raft-rs-backend/operation-port-status-observation.test.js (1 assertions, 1262ms)
-[tv-dator] ok test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js (5 assertions, 1971ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-trap-and-restore.test.js (1 assertions, 517ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js (2 assertions, 12404ms)
-[tv-dator] ok test/raft/raft-rs-backend/operation-port-boundary.test.js (8 assertions, 18597ms)
-[tv-dator] # test-files total=14 pass=14 fail=0 assertions=50
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3337848
+[tv-dator] # test-files planned=21
+[tv-dator] classified lane ordinary: 17 file(s), jobs=4
+[tv-dator] thermal: ok cpu 54C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js (4 assertions, 1957ms)
+[tv-dator] ok test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js (7 assertions, 2189ms)
+[tv-dator] ok test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js (1 assertions, 2216ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js (4 assertions, 1758ms)
+[tv-dator] ok test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js (6 assertions, 4039ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js (3 assertions, 2511ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js (3 assertions, 4288ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-turn-integrity.test.js (5 assertions, 2685ms)
+[tv-dator] ok test/raft/raft-rs-backend/status-read-never-waits.test.js (1 assertions, 1219ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js (4 assertions, 1720ms)
+[tv-dator] ok test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js (3 assertions, 1114ms)
+[tv-dator] ok test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js (7 assertions, 2429ms)
+[tv-dator] ok test/raft/raft-rs-backend/operation-port-status-observation.test.js (1 assertions, 1237ms)
+[tv-dator] ok test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js (5 assertions, 1938ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-trap-and-restore.test.js (1 assertions, 512ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js (2 assertions, 11402ms)
+[tv-dator] ok test/raft/raft-rs-backend/operation-port-boundary.test.js (8 assertions, 18619ms)
+[tv-dator] # test-files total=17 pass=17 fail=0 assertions=65
 [tv-dator] classified lane exclusive: 4 file(s), jobs=1
-[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js (4 assertions, 2437ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-opening-history.integration.test.js (16 assertions, 4453ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js (27 assertions, 3286ms)
-[tv-dator] ok test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js (8 assertions, 5270ms)
+[tv-dator] thermal: ok cpu 56C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js (4 assertions, 2482ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-opening-history.integration.test.js (16 assertions, 4455ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js (27 assertions, 3343ms)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js (8 assertions, 5215ms)
 [tv-dator] # test-files total=4 pass=4 fail=0 assertions=55
-lab test: tv-dator: # test-files total=18 pass=18 fail=0 assertions=105
+lab test: tv-dator: # test-files total=21 pass=21 fail=0 assertions=120
 lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
-# test-files total=18 pass=18 fail=0 assertions=105
+# test-files total=21 pass=21 fail=0 assertions=120

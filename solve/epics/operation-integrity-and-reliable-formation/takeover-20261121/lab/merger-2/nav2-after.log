@@ -1,0 +1,28 @@
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 2116 JavaScript files
+Found 12 navigability violations
+Top files:
+- src/bootstrap/node-joining-publication-activation.js: 3
+- src/bootstrap/node-joining-message-group-runtime-delegation.js: 1
+- src/node/replica-cleanup-tombstone-owner.js: 1
+- src/node/replica-handler-learner-retirement-authority.js: 1
+- src/rebalancer/operation-workflow-executor-outcome-redrive.js: 1
+- src/rebalancer/operation-workflow-placement-learner-retirement.js: 1
+- src/rebalancer/operation-workflow-reentry-authority.js: 1
+- src/rebalancer/operation-workflow-terminal-reservation-release.js: 1
+- src/rebalancer/priority-recovery-observation.js: 1
+- src/rebalancer/replica-operation-creation-request.js: 1
+src/bootstrap/node-joining-message-group-runtime-delegation.js:60 requireCurrent two_source_fallback_reads: one fact read from two sources; read the one authority for that fact
+src/bootstrap/node-joining-publication-activation.js:148 ensureDurableRejoinPartitionRuntimes legacy_term_identifiers: legacy vocabulary in an identifier; retire the legacy path and its name
+src/bootstrap/node-joining-publication-activation.js:149 ensureDurableRejoinPartitionRuntimes legacy_term_identifiers: legacy vocabulary in an identifier; retire the legacy path and its name
+src/bootstrap/node-joining-publication-activation.js:151 ensureDurableRejoinPartitionRuntimes legacy_term_identifiers: legacy vocabulary in an identifier; retire the legacy path and its name
+src/node/replica-cleanup-tombstone-owner.js:120 observeScopedLearnerCleanup catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/node/replica-handler-learner-retirement-authority.js:127 handOffAbsentLearnerCleanup catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-executor-outcome-redrive.js:59 redriveExecutorOutcomeReconcile catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-placement-learner-retirement.js:77 readSupersededDispatchReplay catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-reentry-authority.js:26 matchesRemoteReentryOperation catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-terminal-reservation-release.js:9 isTerminalTransitionOutcomeSettled catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/priority-recovery-observation.js:88 selectAuthoritativePartitionOperations catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/replica-operation-creation-request.js:84 operationMatchesCreationRequest two_source_fallback_reads: one fact read from two sources; read the one authority for that fact
+Matched 8255 inherited navigability baseline violations
+after rc=1

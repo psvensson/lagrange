@@ -1,0 +1,22 @@
+{"file":"test/cdc/cdc-authoritative-catchup-terminal.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":939,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-terminal-gate-inflight.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":952,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/pressure-governor.test.js","attempt":1,"ok":true,"assertions":95,"durationMs":1082,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":1869,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/user-table-leader-placement-cure.test.js","attempt":1,"ok":true,"assertions":77,"durationMs":1802,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":true,"assertions":102,"durationMs":2775,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-role-metadata-publication.test.js","attempt":1,"ok":true,"assertions":91,"durationMs":5819,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":5977,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+{"file":"test/bootstrap/bootstrap-api-readiness-gating.test.js","attempt":1,"ok":true,"assertions":119,"durationMs":2426,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-cleanup.property.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":2558,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-service-ready-signal.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":2970,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/dynamic-partition-cdc-subscription.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":3205,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/join-cleanup.property.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":3705,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":4002,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-control-plane-heartbeat.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":3843,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-ready-signal-retry.test.js","attempt":1,"ok":true,"assertions":55,"durationMs":3645,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":3409,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-service-canonical-readiness.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":4214,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-service-mesh-reconciliation.test.js","attempt":1,"ok":true,"assertions":56,"durationMs":4209,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-service-message-group-activation.test.js","attempt":1,"ok":false,"assertions":50,"durationMs":4563,"retriedOnce":false,"firstFailureLine":"not ok 1 - Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent"}
+{"file":"test/bootstrap/node-joining-service-node-state-update-ingress.test.js","attempt":1,"ok":true,"assertions":67,"durationMs":4505,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-participant-release-failure-projection.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":5799,"retriedOnce":false,"firstFailureLine":null}

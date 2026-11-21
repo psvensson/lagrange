@@ -1,0 +1,80 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.06
+[adams-gamla] placement-shell=2090099
+[adams-gamla] placement-head=5002e7ec32f29836ac37b582085c8c895db8b586
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=2090555
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-blocked-release.test.js (5 assertions, 4929ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: PLACEMENT_RELEASE_HOLD is idempotent by operation identity: two entry ids, one effect, a definite second answer
+[adams-gamla] ok 1 - PLACEMENT_RELEASE_HOLD is idempotent by operation identity: two entry ids, one effect, a definite second answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3251.377567
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: N1: a release attempt blocked on an entry-key collision is re-driven under a fresh entry; other partitions proceed; both blocked attempts are in the pass snapshot
+[adams-gamla] ok 2 - N1: a release attempt blocked on an entry-key collision is re-driven under a fresh entry; other partitions proceed; both blocked attempts are in the pass snapshot
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 102.568323
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F4 residue: an uncertain release whose hold another leader released retires as superseded by ledger state, never as its own settlement, listed once
+[adams-gamla] ok 3 - F4 residue: an uncertain release whose hold another leader released retires as superseded by ledger state, never as its own settlement, listed once
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 54.249476
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F4 residue within a tenure: an uncertain release whose hold is lifted after leadership start retires on the next pass, with no leadership change
+[adams-gamla] not ok 4 - F4 residue within a tenure: an uncertain release whose hold is lifted after leadership start retires on the next pass, with no leadership change
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 54.027775
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/5002e7ec32f2-mwqwocye-2188414/test/rebalancer/replica-placement-owner-blocked-release.test.js:312:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the release obligation is reached: the attempt retires on the next pass
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + {
+[adams-gamla]     +   entry_id: 'placement-owner:n1:release:pl-replica_operations-p1-3-0:000fbe54-82be-403e-909a-4213edfbff36'
+[adams-gamla]     + }
+[adams-gamla]     - null
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: ~
+[adams-gamla]   actual:
+[adams-gamla]     entry_id: 'placement-owner:n1:release:pl-replica_operations-p1-3-0:000fbe54-82be-403e-909a-4213edfbff36'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/5002e7ec32f2-mwqwocye-2188414/test/rebalancer/replica-placement-owner-blocked-release.test.js:347:14
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5002e7ec32f2-mwqwocye-2188414/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a re-drive survives a crash between its durable replacement and its proposal: the restarted owner re-drives the fresh entry, never the dead one
+[adams-gamla] ok 5 - a re-drive survives a crash between its durable replacement and its proposal: the restarted owner re-drives the fresh entry, never the dead one
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 65.65552
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..5
+[adams-gamla] # tests 5
+[adams-gamla] # suites 0
+[adams-gamla] # pass 4
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3535.720372
+[adams-gamla] # time=4929ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=5
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=5
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=5

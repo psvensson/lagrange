@@ -1,0 +1,188 @@
+placement-shell=3749034
+placement-head=0572e9e05f3188c4d36a91ca16cc65298921a3ca
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3749602
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/partition/partition-write-kernel-tenure-fence.test.js (7 assertions, 4905ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+ok 1 - kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+  ---
+  duration_ms: 3294.261253
+  type: 'test'
+  ...
+# Subtest: kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+ok 2 - kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+  ---
+  duration_ms: 78.122774
+  type: 'test'
+  ...
+# Subtest: kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+ok 3 - kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+  ---
+  duration_ms: 47.654609
+  type: 'test'
+  ...
+# Subtest: kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+ok 4 - kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+  ---
+  duration_ms: 43.547563
+  type: 'test'
+  ...
+# Subtest: kernel tenure fence (read scope): a write submitted before the replica led is refused NOT_LEADER when the replica becomes leader inside the kernel's leadership read; asked again under that tenure, it proceeds
+ok 5 - kernel tenure fence (read scope): a write submitted before the replica led is refused NOT_LEADER when the replica becomes leader inside the kernel's leadership read; asked again under that tenure, it proceeds
+  ---
+  duration_ms: 36.717949
+  type: 'test'
+  ...
+# Subtest: kernel tenure fence (join): a write delivered again under the current tenure does not join the pending write of an earlier tenure, which is released once; nothing is inherited
+not ok 6 - kernel tenure fence (join): a write delivered again under the current tenure does not join the pending write of an earlier tenure, which is released once; nothing is inherited
+  ---
+  duration_ms: 53.85235
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:365:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    W1 released once at the join, W2 answered on its own, W3 handed over on its own; {"handed":[{"id":"kernel-fence-rejoined","portTerm":1,"deferred":true},{"id":"kernel-fence-rejoined","portTerm":2,"deferred":false}],"third":"pending","kernelTimers":1}
+    + actual - expected
+    
+      {
+        firstAnswer: {
+          failureCode: 'partition_write_not_leader',
+          success: false
+        },
+        heldRetries: 0,
+        secondAnswer: {
+    +     failureCode: 'partition_write_not_leader',
+    -     failureCode: 'partition_write_cutover_paused',
+          success: false
+        },
+    +   secondBeforeOldRetry: 'pending',
+    -   secondBeforeOldRetry: {
+    -     failureCode: 'partition_write_cutover_paused',
+    -     success: false
+    -   },
+        thirdHandedOver: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    secondBeforeOldRetry:
+      success: false
+      failureCode: 'partition_write_cutover_paused'
+    firstAnswer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    secondAnswer:
+      success: false
+      failureCode: 'partition_write_cutover_paused'
+    thirdHandedOver: 1
+    heldRetries: 0
+  actual:
+    secondBeforeOldRetry: 'pending'
+    firstAnswer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    secondAnswer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    thirdHandedOver: 1
+    heldRetries: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:394:10
+    async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/test-helpers/participant-transaction-fixture.js:834:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: kernel tenure fence (ownership): a stale hand-off waking in its retry loop touches nothing of a write registered again under the same entryId; that write commits
+not ok 7 - kernel tenure fence (ownership): a stale hand-off waking in its retry loop touches nothing of a write registered again under the same entryId; that write commits
+  ---
+  duration_ms: 54.348561
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:411:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    H1 woke against W2's registration and left it alone; {"handed":[{"id":"kernel-fence-reregistered","portTerm":1,"deferred":true},{"id":"kernel-fence-reregistered","portTerm":2,"deferred":false}],"second":{"success":false,"error":"The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","failureCode":"partition_write_outcome_unknown","consensus":{"reason":"leadership-lost"},"partitionId":"tx1-v3","entryId":"kernel-fence-reregistered"}}
+    + actual - expected
+    ... Skipped lines
+    
+      {
+        apply: null,
+        firstAnswer: {
+          failureCode: 'partition_write_not_leader',
+          success: false
+    ...
+        kernelTimers: 0,
+    +   pendingAfterStaleWake: false,
+    -   pendingAfterStaleWake: true,
+        pendingOutcome: false,
+        queued: 0,
+        rows: 1,
+        secondAnswer: {
+    +     failureCode: 'partition_write_outcome_unknown',
+    +     success: false
+    -     failureCode: null,
+    -     success: true
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    handedOver: true
+    pendingAfterStaleWake: true
+    apply: ~
+    firstAnswer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    secondAnswer:
+      success: true
+      failureCode: ~
+    rows: 1
+    heldRetries: 0
+    queued: 0
+    pendingOutcome: false
+    kernelTimers: 0
+  actual:
+    handedOver: true
+    pendingAfterStaleWake: false
+    apply: ~
+    firstAnswer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    secondAnswer:
+      success: false
+      failureCode: 'partition_write_outcome_unknown'
+    rows: 1
+    heldRetries: 0
+    queued: 0
+    pendingOutcome: false
+    kernelTimers: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:451:10
+    async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/test-helpers/participant-transaction-fixture.js:834:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 5
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3616.042513
+# time=4905ms
+# test-files total=1 pass=0 fail=1 assertions=7
+placement-results={"file":"test/partition/partition-write-kernel-tenure-fence.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":4905,"retriedOnce":false,"firstFailureLine":"not ok 6 - kernel tenure fence (join): a write delivered again under the current tenure does not join the pending write of an earlier tenure, which is released once; nothing is inherited"}

@@ -1,0 +1,23 @@
+{
+  "sha": "f705ed7afd4fd4ccc8bdd6e21d374fb02000620d",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/critical-spread-terminal-stall-repro.test.js",
+    "test/rebalancer/spread-cure-escape-schedules.test.js",
+    "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+    "test/rebalancer/move-skip-log-typed-refusal-reason.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/move-skip-log-typed-refusal-reason.test.js",
+        "test/rebalancer/spread-cure-escape-schedules.test.js",
+        "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "test/rebalancer/critical-spread-terminal-stall-repro.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

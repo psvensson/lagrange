@@ -1,0 +1,25 @@
+{"file":"test/raft/raft-rs-backend/follower-proposal-refusal.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1471,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2191,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2201,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1294,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4120,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":1912,"retriedOnce":false,"firstFailureLine":"not ok 1 - W07 quiet input: existing queued proposal completes"}
+{"file":"test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":1954,"retriedOnce":false,"firstFailureLine":"not ok 1 - runtime owner captures all preaccepted input when the queued turn is admitted"}
+{"file":"test/raft/raft-rs-backend/runtime-turn-integrity.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":2686,"retriedOnce":false,"firstFailureLine":"not ok 3 - CA1: a forwarded proposal the transferring leader drops never answers the leader's own proposal, which is the retryable in-progress outcome"}
+{"file":"test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2964,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/status-read-never-waits.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1172,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1781,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":4620,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1132,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-authority-observation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1709,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2507,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1212,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-status-observation.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1283,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1908,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-trap-and-restore.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":607,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":11300,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-boundary.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":19135,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2491,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-opening-history.integration.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":4459,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":3353,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":5272,"retriedOnce":false,"firstFailureLine":null}

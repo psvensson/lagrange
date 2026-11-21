@@ -1,0 +1,130 @@
+lab test: adam-laptop: ordinary (24 files) cores=8 mem=15.5GiB speed x2.00
+[adam-laptop] placement-shell=3796038
+[adam-laptop] placement-head=8e84e2801987b162359de39ef35e54aaf8462261
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3796986
+[adam-laptop] # test-files planned=24
+[adam-laptop] classified lane ordinary: 24 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/partition/participant-release-control-three-member.test.js (1 assertions, 7384ms)
+[adam-laptop] ok test/partition/participant-release-caller-lifetimes.test.js (4 assertions, 7505ms)
+[adam-laptop] ok test/partition/participant-release-applied-position.test.js (8 assertions, 7692ms)
+[adam-laptop] ok test/partition/participant-release-build-provenance.test.js (3 assertions, 8462ms)
+[adam-laptop] ok test/partition/participant-release-delivery-recorder.test.js (4 assertions, 777ms)
+[adam-laptop] ok test/partition/participant-release-current-control-replay.test.js (2 assertions, 11065ms)
+[adam-laptop] ok test/partition/participant-release-deadline-recovery.test.js (2 assertions, 11004ms)
+[adam-laptop] ok test/partition/participant-release-first-prepare-native.test.js (1 assertions, 10609ms)
+[adam-laptop] ok test/partition/participant-release-native-application-order.test.js (1 assertions, 10818ms)
+[adam-laptop] ok test/partition/participant-release-prepare-identity-native.test.js (1 assertions, 10744ms)
+[adam-laptop] ok test/partition/participant-release-prepared-settlement-native.test.js (1 assertions, 11127ms)
+[adam-laptop] ok test/partition/participant-release-retention-native.test.js (1 assertions, 11328ms)
+[adam-laptop] ok test/partition/participant-release-protocol.test.js (19 assertions, 13350ms)
+[adam-laptop] ok test/partition/partition-participant-transaction-topology.test.js (12 assertions, 10646ms)
+[adam-laptop] ok test/partition/partition-participant-transaction-apply.test.js (28 assertions, 11966ms)
+[adam-laptop] ok test/partition/partition-cdc-delivery-progress.test.js (6 assertions, 13210ms)
+[adam-laptop] ok test/partition/proposal-queue-capacity.property.test.js (7 assertions, 1215ms)
+[adam-laptop] ok test/partition/proposal-queue-size-invariant.property.test.js (7 assertions, 1296ms)
+[adam-laptop] ok test/partition/write-path-epoch-fencing.test.js (5 assertions, 2750ms)
+[adam-laptop] ok test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js (3 assertions, 2847ms)
+[adam-laptop] not ok test/partition/placement-retained-leadership.test.js (4 assertions, 9820ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+[adam-laptop] not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 6544.193983
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:36:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'A used current B route instead of saved A closure'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:47:12
+[adam-laptop]     async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:94:7)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:16:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: paused pinned A request survives B custody and genuine A recovery unchanged
+[adam-laptop] not ok 2 - paused pinned A request survives B custody and genuine A recovery unchanged
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 175.236717
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:58:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "Cannot read properties of undefined (reading 'entryId')"
+[adam-laptop]   code: 'ERR_TEST_FAILURE'
+[adam-laptop]   name: 'TypeError'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:69:27
+[adam-laptop]     async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:94:7)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:16:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a lost committed reply retires from the visible winner without another native proposal
+[adam-laptop] ok 3 - a lost committed reply retires from the visible winner without another native proposal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 148.803368
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+[adam-laptop] not ok 4 - genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 156.827495
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:122:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'false == true'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership.test.js:133:12
+[adam-laptop]     async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:94:7)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/8e84e2801987-mwqz6ll0-2337449/test/partition/placement-retained-leadership-fixture.js:16:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]   ...
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 1
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 7036.985218
+[adam-laptop] # time=9820ms
+[adam-laptop] ok test/raft/raft-rs-backend/transfer-leadership-write-path.test.js (3 assertions, 2283ms)
+[adam-laptop] ok test/partition/settled-replay-preserves-result.test.js (6 assertions, 9439ms)
+[adam-laptop] ok test/partition/partition-runtime-reconstruction-leadership.test.js (20 assertions, 35555ms)
+[adam-laptop] # test-files total=24 pass=23 fail=1 assertions=149
+lab test: adam-laptop: # test-files total=24 pass=23 fail=1 assertions=149
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=24 pass=23 fail=1 assertions=149

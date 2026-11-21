@@ -1,0 +1,17 @@
+{
+  "sha": "5392380aefb180e4d56b4e5c1026c4271a8ba0e4",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/provisioning-deadline-error-message.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/provisioning-deadline-error-message.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

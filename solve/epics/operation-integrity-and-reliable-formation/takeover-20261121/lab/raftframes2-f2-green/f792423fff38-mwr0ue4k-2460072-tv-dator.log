@@ -1,0 +1,106 @@
+placement-shell=3397879
+placement-head=f792423fff38d1f5cad23ce126cf20b9e4b77b24
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3398341
+# test-files planned=15
+classified lane ordinary: 12 file(s), jobs=4
+thermal: ok cpu 58C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+ok test/transport/message-router-ping-wait-bound-spent.test.js (28 assertions, 816ms)
+ok test/transport/message-router-cold-reconnect-delivery-grant.test.js (25 assertions, 1163ms)
+ok test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js (8 assertions, 1433ms)
+ok test/transport/message-router-delivery-deadline-liveness.test.js (25 assertions, 1584ms)
+ok test/transport/raft-frame-unacknowledged-delivery.test.js (2 assertions, 1609ms)
+ok test/transport/router-adopted-connection-reconnect-schedule.test.js (1 assertions, 1333ms)
+ok test/transport/message-router-transport-cleanup.test.js (16 assertions, 923ms)
+ok test/transport/message-router-quarantine-liveness-guard.test.js (27 assertions, 1486ms)
+ok test/transport/node-incarnation-websocket-fence.test.js (88 assertions, 945ms)
+not ok test/transport/message-router-endpoint-address-change-redial.test.js (4 assertions, 3283ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+{"level":50,"time":"2026-11-21T23:11:13.445Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","event":"wait_bound_spent","wait":"PING_TIMEOUT_MS x pingMaxMissed (keepalive)","awaited":"keepalive PONG from the connected node","boundMs":200,"elapsedMs":"unmeasured","lastObserved":{"missedPings":2,"answeredAliveByRecentInbound":false,"severed":true},"scope":{"nodeId":"node-b","targetNodeId":"node-b","connectionId":"b25e076a-491e-49c7-a3d9-649880932e98"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+{"level":50,"time":"2026-11-21T23:11:13.446Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","nodeId":"node-a","connectionId":"b25e076a-491e-49c7-a3d9-649880932e98","contextNodeId":"node-b","msg":"Self-connection lost - fatal error"}
+{"level":50,"time":"2026-11-21T23:11:13.450Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","event":"wait_bound_spent","wait":"PING_TIMEOUT_MS x pingMaxMissed (keepalive)","awaited":"keepalive PONG from the connected node","boundMs":200,"elapsedMs":"unmeasured","lastObserved":{"missedPings":2,"answeredAliveByRecentInbound":false,"severed":true},"scope":{"nodeId":"node-b","targetNodeId":"node-a","connectionId":"700ba0c6-d9a7-40c8-a814-75e91d5c2d62"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: MessageRouter same-nodeId new-address recovery
+    # Subtest: severs a stale-but-open connection whose peer stopped answering pings
+    ok 1 - severs a stale-but-open connection whose peer stopped answering pings
+      ---
+      duration_ms: 394.603982
+      type: 'test'
+      ...
+{"level":50,"time":"2026-11-21T23:11:13.825Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","nodeId":"node-a","connectionId":"dd7887e9-e2b2-40db-a3e9-87d0ba948e54","contextNodeId":"node-b","msg":"Self-connection lost - fatal error"}
+    # Subtest: recovers connectivity to a peer that restarted on a new address
+    not ok 2 - recovers connectivity to a peer that restarted on a new address
+      ---
+      duration_ms: 2069.573895
+      type: 'test'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f792423fff38-mwr0ue4k-2460072/test/transport/message-router-endpoint-address-change-redial.test.js:121:3'
+      failureType: 'testCodeFailure'
+      error: 'node-a must re-establish connectivity to node-b at its NEW address (got address=ws://localhost:19821, state=reconnecting)'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f792423fff38-mwr0ue4k-2460072/test/transport/message-router-endpoint-address-change-redial.test.js:167:14)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+{"level":50,"time":"2026-11-21T23:11:15.868Z","nodeId":"node-a","pid":3398455,"subsystem":"message-router","nodeId":"node-a","connectionId":"3d951542-ca7a-4f30-a0fc-e01dacf716a8","msg":"Self-connection lost - fatal error"}
+    # Subtest: severs a stale-but-open INBOUND connection whose peer went silent
+    ok 3 - severs a stale-but-open INBOUND connection whose peer went silent
+      ---
+      duration_ms: 340.340827
+      type: 'test'
+      ...
+    1..3
+not ok 1 - MessageRouter same-nodeId new-address recovery
+  ---
+  duration_ms: 2806.202979
+  type: 'suite'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f792423fff38-mwr0ue4k-2460072/test/transport/message-router-endpoint-address-change-redial.test.js:35:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 3
+# suites 1
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2811.952658
+# time=3283ms
+ok test/partition/raft-rs-transport-demux.test.js (16 assertions, 1263ms)
+ok test/transport/message-router.test.js (499 assertions, 4822ms)
+# test-files total=12 pass=11 fail=1 assertions=739
+classified lane exclusive: 3 file(s), jobs=1
+thermal: ok cpu 56C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/transport/raft-frame-liveness-residual.integration.test.js (1 assertions, 1041ms)
+ok test/transport/raft-frame-reconnect-owner.integration.test.js (2 assertions, 1746ms)
+ok test/transport/raft-frame-turn-not-held.integration.test.js (1 assertions, 1051ms)
+# test-files total=3 pass=3 fail=0 assertions=4
+placement-results={"file":"test/transport/message-router-ping-wait-bound-spent.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":816,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-cold-reconnect-delivery-grant.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1163,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":1433,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-delivery-deadline-liveness.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1584,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1609,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/router-adopted-connection-reconnect-schedule.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1333,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-transport-cleanup.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":923,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-quarantine-liveness-guard.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":1486,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/node-incarnation-websocket-fence.test.js","attempt":1,"ok":true,"assertions":88,"durationMs":945,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-endpoint-address-change-redial.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":3283,"retriedOnce":false,"firstFailureLine":"not ok 2 - recovers connectivity to a peer that restarted on a new address"}
+placement-results={"file":"test/partition/raft-rs-transport-demux.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1263,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router.test.js","attempt":1,"ok":true,"assertions":499,"durationMs":4822,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-liveness-residual.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1041,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-reconnect-owner.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1746,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/raft-frame-turn-not-held.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1051,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,1354 @@
+lab test: adam-laptop: ordinary, bootstrap (10 files) cores=8 mem=15.5GiB speed x2.04
+[adam-laptop] placement-shell=3764072
+[adam-laptop] placement-head=097888f1a6be9cc38dc48de14a07d5504bd99950
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3764529
+[adam-laptop] # test-files planned=10
+[adam-laptop] classified lane ordinary: 5 file(s), jobs=4
+[adam-laptop] thermal: ok cpu 74C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/cdc/bootstrap-direct-write-raft-routing.test.js (17 assertions, 1010ms)
+[adam-laptop] not ok test/cdc/bootstrap-mode-routing.property.test.js (11 assertions, 1716ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: Property 6: Bootstrap mode routing enforcement
+[adam-laptop]     # Subtest: writes route through SQL engine when bootstrap disabled
+[adam-laptop]         ok 1 - all writes route through SQL engine when bootstrap mode is disabled
+[adam-laptop]         1..1
+[adam-laptop]     ok 1 - writes route through SQL engine when bootstrap disabled # time=36.323ms
+[adam-laptop]     
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.474Z","nodeId":"property-test-node","pid":3764550,"subsystem":"cdc-integration","tableName":"storage_reservations","id":"00000018-0003-1000-a020-4828a54debf6","error":"partitionService.executeQuery is not a function","nodeId":"property-test-node","causeId":null,"operation":"INSERT","primaryKey":{"reservation_id":"00000018-0003-1000-a020-4828a54debf6"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"prop-test","msg":"Failed to insert system table row"}
+[adam-laptop]     # Subtest: writes go to local partitions when bootstrap enabled
+[adam-laptop]         not ok 1 - Property failed after 1 tests { seed: -1651737082, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["tables","insert","00000000-0000-1000-8000-000000000000"] Shrunk 5 time(s) Got TypeError: partitionService.executeQuery is not a function     at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-bootstrap-direct-sql.js:128:28     at submitRoutedMutationHop (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-terminal-gate.js:89:10)     at executeBootstrapDirectSql (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-bootstrap-direct-sql.js:127:10)     at CDCIntegrationService.executeSQLDirectToLocalPartition (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-routed-mutation-readiness.js:275:12)     at BootstrapDirectWriteRouter.execute [as executeFn] (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-integration-service-lifecycle.js:358:14)     at BootstrapDirectWriteRouter.execute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/write-router/index.js:29:17)     at CDCIntegrationService.executeSQL (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-integration-service-lifecycle.js:328:39)     at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-integration-service-mutation-operations.js:246:35     at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/src/cdc/cdc-integration-service-coalesced-mutation.js:71:17  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[adam-laptop]           ---
+[adam-laptop]           stack: |
+[adam-laptop]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[adam-laptop]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[adam-laptop]           at:
+[adam-laptop]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[adam-laptop]             lineNumber: 126
+[adam-laptop]             columnNumber: 15
+[adam-laptop]             functionName: buildError
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: |
+[adam-laptop]             function buildError(errorMessage, out) {
+[adam-laptop]                 if (!out.runConfiguration.errorWithCause) {
+[adam-laptop]                     throw new Error(errorMessage);
+[adam-laptop]             --------------^
+[adam-laptop]                 }
+[adam-laptop]                 const ErrorWithCause = Error;
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 2 - writes go to local partitions when bootstrap enabled # time=40.806ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/bootstrap-mode-routing.property.test.js
+[adam-laptop]         lineNumber: 346
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]              * to local partitions and does NOT route through SQL engine.
+[adam-laptop]              */
+[adam-laptop]             t.test(
+[adam-laptop]         ------^
+[adam-laptop]               'writes go to local partitions when bootstrap enabled',
+[adam-laptop]               async (t) => {
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: writes route through SQL after clearBootstrapMode
+[adam-laptop]         ok 1 - writes route through SQL engine after clearBootstrapMode is called
+[adam-laptop]         1..1
+[adam-laptop]     ok 3 - writes route through SQL after clearBootstrapMode # time=6.855ms
+[adam-laptop]     
+[adam-laptop]     # Subtest: SERVICES upsert is refused before routing in every mode
+[adam-laptop]         ok 1 - SERVICES upsert is refused before any routing
+[adam-laptop]         1..1
+[adam-laptop]     ok 4 - SERVICES upsert is refused before routing in every mode # time=3.241ms
+[adam-laptop]     
+[adam-laptop]     # Subtest: direct partition write throws when bootstrap disabled
+[adam-laptop]         ok 1 - executeSQLDirectToLocalPartition throws when bootstrap mode is disabled
+[adam-laptop]         1..1
+[adam-laptop]     ok 5 - direct partition write throws when bootstrap disabled # time=2.452ms
+[adam-laptop]     
+[adam-laptop]     1..5
+[adam-laptop] not ok 1 - Property 6: Bootstrap mode routing enforcement # time=357.178ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/bootstrap-mode-routing.property.test.js
+[adam-laptop]     lineNumber: 286
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]     test('Property 6: Bootstrap mode routing enforcement',
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         /**
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.476Z","nodeId":"property-test-node","pid":3764550,"subsystem":"cdc-integration","tableName":"tables","id":"00000018-0003-1000-a020-4828a54debf6","error":"partitionService.executeQuery is not a function","nodeId":"property-test-node","causeId":null,"operation":"INSERT","primaryKey":{"table_id":"00000018-0003-1000-a020-4828a54debf6"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"prop-test","msg":"Failed to insert system table row"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.478Z","nodeId":"property-test-node","pid":3764550,"subsystem":"cdc-integration","tableName":"tables","id":"00000000-0003-1000-a020-4828a54debf6","error":"partitionService.executeQuery is not a function","nodeId":"property-test-node","causeId":null,"operation":"INSERT","primaryKey":{"table_id":"00000000-0003-1000-a020-4828a54debf6"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"prop-test","msg":"Failed to insert system table row"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.479Z","nodeId":"property-test-node","pid":3764550,"subsystem":"cdc-integration","tableName":"tables","id":"00000000-0000-1000-a020-4828a54debf6","error":"partitionService.executeQuery is not a function","nodeId":"property-test-node","causeId":null,"operation":"INSERT","primaryKey":{"table_id":"00000000-0000-1000-a020-4828a54debf6"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"prop-test","msg":"Failed to insert system table row"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.480Z","nodeId":"property-test-node","pid":3764550,"subsystem":"cdc-integration","tableName":"tables","id":"00000000-0000-1000-8000-0000a54debf6","error":"partitionService.executeQuery is not a function","nodeId":"property-test-node","causeId":null,"operation":"INSERT","primaryKey":{"table_id":"00000000-0000-1000-8000-0000a54debf6"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"prop-test","msg":"Failed to insert system table row"}
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.482Z","nodeId":"property-test-node","pid":3764550,"subsystem":"cdc-integration","tableName":"tables","id":"00000000-0000-1000-8000-000000000000","error":"partitionService.executeQuery is not a function","nodeId":"property-test-node","causeId":null,"operation":"INSERT","primaryKey":{"table_id":"00000000-0000-1000-8000-000000000000"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"prop-test","msg":"Failed to insert system table row"}
+[adam-laptop] 1..1
+[adam-laptop] # { total: 5, pass: 4, fail: 1 }
+[adam-laptop] # time=510.622ms
+[adam-laptop] not ok test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js (48 assertions, 2262ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.136Z","nodeId":"821fd172-1841-4c35-879b-8425b9482c39","pid":3764557,"subsystem":"cdc-integration","tableName":"services","id":"service-1","error":"partitionService.executeQuery is not a function","nodeId":"821fd172-1841-4c35-879b-8425b9482c39","causeId":null,"operation":"INSERT","primaryKey":{"service_id":"service-1"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"test-node","msg":"Failed to insert system table row"}
+[adam-laptop] # Subtest: CDCIntegrationService - executeSQL switches from bootstrap to normal mode
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute [as executeFn]
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:358:14)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute (src/cdc/write-router/index.js:29:17)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQL
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:328:39)
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-mutation-operations.js:246:35
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-coalesced-mutation.js:71:17
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 1 - CDCIntegrationService - executeSQL switches from bootstrap to normal mode # time=50.676ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js
+[adam-laptop]     lineNumber: 59
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('CDCIntegrationService - executeSQL switches from bootstrap to normal
+[adam-laptop]     mode',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const mockSqlEngine = createMockSqlQueryEngine();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - executeSQL throws when SQL engine missing in normal mode
+[adam-laptop]     ok 1 - bootstrap mode should be disabled
+[adam-laptop]     ok 2 - SQL engine should be null
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.757Z","nodeId":"96b2631f-bf7f-4360-ab6e-b6d976482e49","pid":3764557,"subsystem":"cdc-integration","event":"wait_bound_spent","wait":"CDC_DEFAULTS.RETRY_MAX_ATTEMPTS","awaited":"routed system-table mutation accepted by the engine","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"attempts":6,"maxAttempts":6,"errorCode":null,"retryAfterMs":100},"scope":{"nodeId":"test-node","tableName":"services"},"repeats":0,"nodeId":"96b2631f-bf7f-4360-ab6e-b6d976482e49","msg":"Wait bound spent"}
+[adam-laptop]     ok 3 - should throw error about missing SQL engine
+[adam-laptop]     1..3
+[adam-laptop] ok 2 - CDCIntegrationService - executeSQL throws when SQL engine missing in normal mode # time=511.645ms
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:30.821Z","nodeId":"710655de-35f0-4d0c-8597-8f7fb704c656","pid":3764557,"subsystem":"cdc-integration","tableName":"nodes","id":"node-1","error":"partitionService.executeQuery is not a function","nodeId":"710655de-35f0-4d0c-8597-8f7fb704c656","causeId":null,"operation":"INSERT","primaryKey":{"node_id":"node-1"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"test-node","msg":"Failed to insert system table row"}
+[adam-laptop] # Subtest: CDCIntegrationService - executeSQL single code path based on mode flag
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute [as executeFn]
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:358:14)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute (src/cdc/write-router/index.js:29:17)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQL
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:328:39)
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-mutation-operations.js:246:35
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-coalesced-mutation.js:71:17
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 3 - CDCIntegrationService - executeSQL single code path based on mode flag # time=8.003ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js
+[adam-laptop]     lineNumber: 147
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('CDCIntegrationService - executeSQL single code path based on mode flag',
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const mockSqlEngine = createMockSqlQueryEngine();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - transient detection includes leader-transition query failures
+[adam-laptop]     ok 1 - generic query-failed wrapper should be treated as transient for CDC writes
+[adam-laptop]     ok 2 - leader-forwarding failures should be retried
+[adam-laptop]     ok 3 - transport timeout during leader handoff should be retried
+[adam-laptop]     ok 4 - distributed participant failures should be retried on system-table writes
+[adam-laptop]     ok 5 - typed partition cutover pauses should be retried on system-table writes
+[adam-laptop]     ok 6 - retryable pressure admission deferrals should be treated as transient
+[adam-laptop]     ok 7 - non-transient SQL errors should not be retried
+[adam-laptop]     1..7
+[adam-laptop] ok 4 - CDCIntegrationService - transient detection includes leader-transition query failures # time=1.437ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - local write routing preserves typed terminal participant disposition
+[adam-laptop]     ok 1 - a committed deterministic participant failure must not be replayed
+[adam-laptop]     1..1
+[adam-laptop] ok 5 - CDCIntegrationService - local write routing preserves typed terminal participant disposition # time=0.644ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - a partition write refused during consensus recovery, or released with an unknown outcome, is transient
+[adam-laptop]     ok 1 - a recovery refusal is retried (Consensus recovery in progress on this replica: recovery-deferred (phase application); retry after 0 ms)
+[adam-laptop]     ok 2 - a released write whose outcome is unknown is retried (The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent)
+[adam-laptop]     1..2
+[adam-laptop] ok 6 - CDCIntegrationService - a partition write refused during consensus recovery, or released with an unknown outcome, is transient # time=0.877ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService retries retryable control-plane write admission failures through the shared SQL-routed path
+[adam-laptop]     ok 1 - retryable control-plane admission deferrals should not fail the write path closed
+[adam-laptop]     ok 2 - system-table writes should retry once through the shared SQL-routed path
+[adam-laptop]     ok 3 - retryable non-critical system-table writes should preserve the shared default routed lane classification
+[adam-laptop]     1..3
+[adam-laptop] ok 7 - CDCIntegrationService retries retryable control-plane write admission failures through the shared SQL-routed path # time=12.586ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService preserves explicit delivery source through one routed system-table write
+[adam-laptop]     ok 1 - routed write should still succeed
+[adam-laptop]     ok 2 - routed write should execute exactly once
+[adam-laptop]     ok 3 - routed write should preserve the owner-supplied delivery source
+[adam-laptop]     1..3
+[adam-laptop] ok 8 - CDCIntegrationService preserves explicit delivery source through one routed system-table write # time=1.382ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService derives a coalesced delivery source for routed system-table writes
+[adam-laptop]     ok 1 - routed write should still succeed
+[adam-laptop]     ok 2 - coalesced writes should not collapse into the table-level source bucket
+[adam-laptop]     1..2
+[adam-laptop] ok 9 - CDCIntegrationService derives a coalesced delivery source for routed system-table writes # time=1.162ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService derives replica-operation delivery source from routed update identity
+[adam-laptop]     ok 1 - routed write should still succeed
+[adam-laptop]     ok 2 - replica-operation writes should carry the row-scoped coalescing key
+[adam-laptop]     ok 3 - replica-operation writes should not collapse into the table-level source bucket
+[adam-laptop]     1..3
+[adam-laptop] ok 10 - CDCIntegrationService derives replica-operation delivery source from routed update identity # time=2.203ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService preserves canonical transaction-control routing gap defers instead of retrying them away
+[adam-laptop]     ok 1 - canonical routing-gap defers should fail closed without an internal retry loop
+[adam-laptop]     ok 2 - routing-gap admission defers should be surfaced after the first SQL result
+[adam-laptop]     ok 3 - wrapped error should preserve defer semantics for upstream owners
+[adam-laptop]     ok 4 - wrapped error should preserve the canonical routing-gap reason code
+[adam-laptop]     ok 5 - should be equivalent
+[adam-laptop]     ok 6 - wrapped error should preserve the bounded retry hint
+[adam-laptop]     1..6
+[adam-laptop] ok 11 - CDCIntegrationService preserves canonical transaction-control routing gap defers instead of retrying them away # time=13.399ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService surfaces system-table owner handoff participant failures without burning the routed SQL retry ladder
+[adam-laptop]     ok 1 - owner handoff participant failures should surface immediately to the owner loop
+[adam-laptop]     ok 2 - system-table owner handoff failures should not consume the full CDC retry ladder
+[adam-laptop]     ok 3 - wrapped error should preserve the distributed participant failure code
+[adam-laptop]     ok 4 - wrapped error should preserve the owner handoff participant witness
+[adam-laptop]     1..4
+[adam-laptop] ok 12 - CDCIntegrationService surfaces system-table owner handoff participant failures without burning the routed SQL retry ladder # time=2.256ms
+[adam-laptop] 
+[adam-laptop] 1..12
+[adam-laptop] # { total: 36, pass: 34, fail: 2 }
+[adam-laptop] # time=1249.889ms
+[adam-laptop] not ok test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js (121 assertions, 2547ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: CDCIntegrationService - tracks epochChanges in stats
+[adam-laptop]     ok 1 - should track epoch changes
+[adam-laptop]     1..1
+[adam-laptop] ok 1 - CDCIntegrationService - tracks epochChanges in stats # time=11.354ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - EPOCH_CONFIG_KEY is exported
+[adam-laptop]     ok 1 - should export correct config key
+[adam-laptop]     1..1
+[adam-laptop] ok 2 - CDCIntegrationService - EPOCH_CONFIG_KEY is exported # time=0.797ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - setRebalancer
+[adam-laptop]     ok 1 - should set rebalancer
+[adam-laptop]     1..1
+[adam-laptop] ok 3 - CDCIntegrationService - setRebalancer # time=1.176ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - setRebalancer throws on null
+[adam-laptop]     ok 1 - should have error message
+[adam-laptop]     1..1
+[adam-laptop] ok 4 - CDCIntegrationService - setRebalancer throws on null # time=0.996ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC processes valid event
+[adam-laptop]     ok 1 - should process event
+[adam-laptop]     ok 2 - should return node ID
+[adam-laptop]     ok 3 - should return new state
+[adam-laptop]     ok 4 - should indicate state changed
+[adam-laptop]     1..4
+[adam-laptop] ok 5 - CDCIntegrationService - handleNodeStateCDC processes valid event # time=2.323ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event
+[adam-laptop]     ok 1 - should emit one nodeStateChange event
+[adam-laptop]     ok 2 - event should have node ID
+[adam-laptop]     ok 3 - event should have new state
+[adam-laptop]     ok 4 - event should have cdc source
+[adam-laptop]     1..4
+[adam-laptop] ok 6 - CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event # time=0.959ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC triggers rebalancer
+[adam-laptop]     ok 1 - should trigger rebalancer
+[adam-laptop]     ok 2 - rebalancer should receive node ID
+[adam-laptop]     ok 3 - rebalancer should receive new state
+[adam-laptop]     1..3
+[adam-laptop] ok 7 - CDCIntegrationService - handleNodeStateCDC triggers rebalancer # time=1.068ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC rejects non-nodes table
+[adam-laptop]     ok 1 - should not process
+[adam-laptop]     ok 2 - should have error message
+[adam-laptop]     1..2
+[adam-laptop] ok 8 - CDCIntegrationService - handleNodeStateCDC rejects non-nodes table # time=0.606ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC rejects invalid event
+[adam-laptop]     ok 1 - should not process null event
+[adam-laptop]     ok 2 - should have error message
+[adam-laptop]     1..2
+[adam-laptop] ok 9 - CDCIntegrationService - handleNodeStateCDC rejects invalid event # time=0.722ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC rejects missing node_id
+[adam-laptop]     ok 1 - should not process
+[adam-laptop]     ok 2 - should have error message
+[adam-laptop]     1..2
+[adam-laptop] ok 10 - CDCIntegrationService - handleNodeStateCDC rejects missing node_id # time=1.021ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC rejects missing status
+[adam-laptop]     ok 1 - should not process
+[adam-laptop]     ok 2 - should have error message
+[adam-laptop]     1..2
+[adam-laptop] ok 11 - CDCIntegrationService - handleNodeStateCDC rejects missing status # time=0.69ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC tracks state changes
+[adam-laptop]     ok 1 - first event should have null old state
+[adam-laptop]     ok 2 - first event should have JOINING new state
+[adam-laptop]     ok 3 - second event should have JOINING old state
+[adam-laptop]     ok 4 - second event should have READY new state
+[adam-laptop]     1..4
+[adam-laptop] ok 12 - CDCIntegrationService - handleNodeStateCDC tracks state changes # time=1.16ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC skips unchanged state
+[adam-laptop]     ok 1 - should process event
+[adam-laptop]     ok 2 - should indicate state not changed
+[adam-laptop]     ok 3 - should only emit one event (for first change)
+[adam-laptop]     1..3
+[adam-laptop] ok 13 - CDCIntegrationService - handleNodeStateCDC skips unchanged state # time=0.767ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats
+[adam-laptop]     ok 1 - should track node state changes
+[adam-laptop]     1..1
+[adam-laptop] ok 14 - CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stats # time=0.706ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC without rebalancer
+[adam-laptop]     ok 1 - should process event without rebalancer
+[adam-laptop]     ok 2 - should indicate state changed
+[adam-laptop]     1..2
+[adam-laptop] ok 15 - CDCIntegrationService - handleNodeStateCDC without rebalancer # time=0.517ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - handleNodeStateCDC handles DRAINING state
+[adam-laptop]     ok 1 - should trigger rebalance for draining node
+[adam-laptop]     1..1
+[adam-laptop] ok 16 - CDCIntegrationService - handleNodeStateCDC handles DRAINING state # time=0.572ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - setBootstrapMode enables bootstrap mode
+[adam-laptop]     ok 1 - should enable bootstrap mode
+[adam-laptop]     ok 2 - should store partition services
+[adam-laptop]     1..2
+[adam-laptop] ok 17 - CDCIntegrationService - setBootstrapMode enables bootstrap mode # time=0.883ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - setBootstrapMode disables bootstrap mode
+[adam-laptop]     ok 1 - should enable bootstrap mode
+[adam-laptop]     ok 2 - should disable bootstrap mode
+[adam-laptop]     ok 3 - should clear partition services
+[adam-laptop]     1..3
+[adam-laptop] ok 18 - CDCIntegrationService - setBootstrapMode disables bootstrap mode # time=0.619ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - clearBootstrapMode disables bootstrap mode
+[adam-laptop]     ok 1 - should enable bootstrap mode
+[adam-laptop]     ok 2 - should disable bootstrap mode
+[adam-laptop]     ok 3 - should clear partition services
+[adam-laptop]     1..3
+[adam-laptop] ok 19 - CDCIntegrationService - clearBootstrapMode disables bootstrap mode # time=0.607ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - setBootstrapMode requires Map when enabling
+[adam-laptop]     ok 1 - should throw error about Map requirement
+[adam-laptop]     ok 2 - should throw error about Map requirement
+[adam-laptop]     1..2
+[adam-laptop] ok 20 - CDCIntegrationService - setBootstrapMode requires Map when enabling # time=0.79ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - bootstrap mode starts disabled
+[adam-laptop]     ok 1 - should start with bootstrap mode disabled
+[adam-laptop]     ok 2 - should start with null partition services
+[adam-laptop]     1..2
+[adam-laptop] ok 21 - CDCIntegrationService - bootstrap mode starts disabled # time=0.462ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from INSERT
+[adam-laptop]     ok 1 - should extract table name from INSERT
+[adam-laptop]     1..1
+[adam-laptop] ok 22 - CDCIntegrationService - extractTableNameFromSQL extracts from INSERT # time=1.749ms
+[adam-laptop] 
+[adam-laptop] # Subtest: extractTableNameFromSQL extracts from INSERT OR REPLACE
+[adam-laptop]     ok 1 - should extract table name from INSERT OR REPLACE
+[adam-laptop]     1..1
+[adam-laptop] ok 23 - extractTableNameFromSQL extracts from INSERT OR REPLACE # time=0.643ms
+[adam-laptop] 
+[adam-laptop] # Subtest: extractTableNameFromSQL extracts from INSERT OR IGNORE
+[adam-laptop]     ok 1 - should extract table name from INSERT OR IGNORE
+[adam-laptop]     1..1
+[adam-laptop] ok 24 - extractTableNameFromSQL extracts from INSERT OR IGNORE # time=0.843ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from UPDATE
+[adam-laptop]     ok 1 - should extract table name from UPDATE
+[adam-laptop]     1..1
+[adam-laptop] ok 25 - CDCIntegrationService - extractTableNameFromSQL extracts from UPDATE # time=0.743ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - extractTableNameFromSQL extracts from DELETE
+[adam-laptop]     ok 1 - should extract table name from DELETE
+[adam-laptop]     1..1
+[adam-laptop] ok 26 - CDCIntegrationService - extractTableNameFromSQL extracts from DELETE # time=0.696ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - extractTableNameFromSQL returns explicit invalid and not-found states
+[adam-laptop]     ok 1 - should return explicit invalid_input for empty string
+[adam-laptop]     ok 2 - should return explicit invalid_input for null
+[adam-laptop]     ok 3 - should return explicit not_found for invalid SQL
+[adam-laptop]     1..3
+[adam-laptop] ok 27 - CDCIntegrationService - extractTableNameFromSQL returns explicit invalid and not-found states # time=0.904ms
+[adam-laptop] 
+[adam-laptop] # Subtest: executeSQLDirectToLocalPartition executes on local partition
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js:748:32)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 28 - executeSQLDirectToLocalPartition executes on local partition # time=24.639ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js
+[adam-laptop]     lineNumber: 725
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('executeSQLDirectToLocalPartition executes on local partition', async (t)
+[adam-laptop]     => {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       const service = new CDCIntegrationService({
+[adam-laptop]         nodeId: 'test-node',
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: executeSQLDirectToLocalPartition throws when not in bootstrap mode
+[adam-laptop]     ok 1 - should throw error about bootstrap mode
+[adam-laptop]     1..1
+[adam-laptop] ok 29 - executeSQLDirectToLocalPartition throws when not in bootstrap mode # time=0.495ms
+[adam-laptop] 
+[adam-laptop] # Subtest: executeSQLDirectToLocalPartition throws when partition not found
+[adam-laptop]     ok 1 - should throw error about missing partition
+[adam-laptop]     ok 2 - should mention the table name
+[adam-laptop]     1..2
+[adam-laptop] ok 30 - executeSQLDirectToLocalPartition throws when partition not found # time=0.593ms
+[adam-laptop] 
+[adam-laptop] # Subtest: executeSQLDirectToLocalPartition throws when SQL parsing fails
+[adam-laptop]     ok 1 - should throw error about table name extraction
+[adam-laptop]     1..1
+[adam-laptop] ok 31 - executeSQLDirectToLocalPartition throws when SQL parsing fails # time=0.639ms
+[adam-laptop] 
+[adam-laptop] # Subtest: executeSQLDirectToLocalPartition handles partition errors
+[adam-laptop]     not ok 1 - should throw partition error
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js
+[adam-laptop]         lineNumber: 867
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js:867:7)
+[adam-laptop]       source: >2
+[adam-laptop]             t.fail('should throw error when partition returns error');
+[adam-laptop]           } catch (error) {
+[adam-laptop]             t.ok(error.message.includes('Partition error'), 'should throw partition error');
+[adam-laptop]         ------^
+[adam-laptop]           }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 32 - executeSQLDirectToLocalPartition handles partition errors # time=3.185ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js
+[adam-laptop]     lineNumber: 840
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('executeSQLDirectToLocalPartition handles partition errors', async (t) =>
+[adam-laptop]     {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       const service = new CDCIntegrationService({
+[adam-laptop]         nodeId: 'test-node',
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T21:50:31.371Z","nodeId":"508492e9-3d44-4bed-83dc-890a76c794c5","pid":3764564,"subsystem":"cdc-integration","tableName":"services","id":"service-1","error":"partitionService.executeQuery is not a function","nodeId":"508492e9-3d44-4bed-83dc-890a76c794c5","causeId":null,"operation":"INSERT","primaryKey":{"service_id":"service-1"},"code":null,"retryAfterMs":0,"writeMode":"bootstrap-direct","bootstrapMode":true,"attempt":null,"cacheWaitTimedOut":false,"contextNodeId":"test-node","msg":"Failed to insert system table row"}
+[adam-laptop] # Subtest: CDCIntegrationService - executeSQL routes to direct partition in bootstrap mode
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute [as executeFn]
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:358:14)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute (src/cdc/write-router/index.js:29:17)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQL
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:328:39)
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-mutation-operations.js:246:35
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-coalesced-mutation.js:71:17
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 33 - CDCIntegrationService - executeSQL routes to direct partition in bootstrap mode # time=6.943ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js
+[adam-laptop]     lineNumber: 873
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('CDCIntegrationService - executeSQL routes to direct partition in
+[adam-laptop]     bootstrap mode',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const service = new CDCIntegrationService({
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - executeSQL routes to SQL engine in normal mode
+[adam-laptop]     ok 1 - bootstrap mode should be disabled
+[adam-laptop]     ok 2 - should succeed
+[adam-laptop]     ok 3 - should execute query through SQL engine
+[adam-laptop]     ok 4 - should execute INSERT query
+[adam-laptop]     1..4
+[adam-laptop] ok 34 - CDCIntegrationService - executeSQL routes to SQL engine in normal mode # time=4.139ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - canWriteSystemTableLocally detects local leader ownership
+[adam-laptop]     ok 1 - should treat a local services leader as a writable owner
+[adam-laptop]     ok 2 - should reject unknown tables
+[adam-laptop]     1..2
+[adam-laptop] ok 35 - CDCIntegrationService - canWriteSystemTableLocally detects local leader ownership # time=0.728ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - steady-state writes use isolated SQL sessions
+[adam-laptop]     ok 1 - should succeed with an isolated session
+[adam-laptop]     ok 2 - should execute one routed SQL write
+[adam-laptop]     ok 3 - should provide a SQL session id
+[adam-laptop]     ok 4 - should not reuse the default session
+[adam-laptop]     ok 5 - should use the CDC system-write session prefix
+[adam-laptop]     1..5
+[adam-laptop] ok 36 - CDCIntegrationService - steady-state writes use isolated SQL sessions # time=1.935ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - steady-state writes keep a stable widened recovery selection key across isolated SQL sessions
+[adam-laptop]     ok 1 - should execute both routed SQL writes
+[adam-laptop]     ok 2 - steady-state CDC writes should still use isolated SQL sessions
+[adam-laptop]     ok 3 - steady-state CDC writes should pass one explicit widened-routing selection key
+[adam-laptop]     ok 4 - identical steady-state CDC writes should reuse the same widened-routing selection key
+[adam-laptop]     1..4
+[adam-laptop] ok 37 - CDCIntegrationService - steady-state writes keep a stable widened recovery selection key across isolated SQL sessions # time=1.766ms
+[adam-laptop] 
+[adam-laptop] # Subtest: CDCIntegrationService - update upsert and delete preserve routed session and widened selection options
+[adam-laptop]     ok 1 - should execute one routed SQL write per mutation type
+[adam-laptop]     ok 2 - mutation should preserve the explicit routed SQL session id
+[adam-laptop]     ok 3 - mutation should preserve the widened recovery candidate selection key
+[adam-laptop]     ok 4 - mutation should preserve the explicit routed SQL session id
+[adam-laptop]     ok 5 - mutation should preserve the widened recovery candidate selection key
+[adam-laptop]     ok 6 - mutation should preserve the explicit routed SQL session id
+[adam-laptop]     ok 7 - mutation should preserve the widened recovery candidate selection key
+[adam-laptop]     1..7
+[adam-laptop] ok 38 - CDCIntegrationService - update upsert and delete preserve routed session and widened selection options # time=3.122ms
+[adam-laptop] 
+[adam-laptop] 1..38
+[adam-laptop] # { total: 83, pass: 80, fail: 3 }
+[adam-laptop] # time=1562.233ms
+[adam-laptop] not ok test/cdc/cdc-shutdown-terminal-owner-write.test.js (24 assertions, 1580ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+[adam-laptop] not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 84.43153
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:373:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "the answer is the CDC service's typed shut-down code"
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTerminalAfterShutdown (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:384:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+[adam-laptop] not ok 2 - (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 13.409437
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:394:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     no retry delay is armed after shutdown began
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   100
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 100
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTerminalAfterShutdown (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:334:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:405:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+[adam-laptop] ok 3 - (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 5.088575
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+[adam-laptop] not ok 4 - (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4.304464
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:444:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "the answer is the CDC service's typed shut-down code"
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTerminalAfterShutdown (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/097888f1a6be-mwqxygjo-2260091/test/cdc/cdc-shutdown-terminal-owner-write.test.js:461:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+[adam-laptop] ok 5 - (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.204178
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+[adam-laptop] ok 6 - (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.218136
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the publication persist loop reads a failed write back, except through a torn-down writer
+[adam-laptop] ok 7 - the publication persist loop reads a failed write back, except through a torn-down writer
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.748501
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+[adam-laptop] ok 8 - an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.581046
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+[adam-laptop] ok 9 - semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.140558
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+[adam-laptop] ok 10 - catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.754715
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: catch-up: started after the mark, it reads nothing and settles at once
+[adam-laptop] ok 11 - catch-up: started after the mark, it reads nothing and settles at once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.020386
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop] ok 12 - real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 30.931226
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop] ok 13 - real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 15.824129
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: census: every CDC delayed-work site is the primitive or classified, with no bypass route
+[adam-laptop] ok 14 - census: every CDC delayed-work site is the primitive or classified, with no bypass route
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 9.672673
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+[adam-laptop] ok 15 - in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4.128285
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+[adam-laptop] ok 16 - in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.582739
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+[adam-laptop] ok 17 - in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.765443
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+[adam-laptop] ok 18 - in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.04034
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: after the mark (S5, S6): the repair entry points read nothing and apply nothing
+[adam-laptop] ok 19 - after the mark (S5, S6): the repair entry points read nothing and apply nothing
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.026313
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+[adam-laptop] ok 20 - in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.244599
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+[adam-laptop] ok 21 - in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.777547
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+[adam-laptop] ok 22 - in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.523451
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+[adam-laptop] ok 23 - routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.255502
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+[adam-laptop] ok 24 - routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 27.064116
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..24
+[adam-laptop] # tests 24
+[adam-laptop] # suites 0
+[adam-laptop] # pass 21
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 238.822257
+[adam-laptop] # time=1580ms
+[adam-laptop] # test-files total=5 pass=1 fail=4 assertions=221
+[adam-laptop] classified lane bootstrap: 5 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 74C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/bootstrap/bootstrap-mode.test.js (42 assertions, 1465ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 2 }
+[adam-laptop] # Subtest: Bootstrap mode - enable sets flag and stores partition services
+[adam-laptop]     ok 1 - bootstrap mode should be enabled
+[adam-laptop]     ok 2 - should store ref
+[adam-laptop]     ok 3 - should have 2 partition services
+[adam-laptop]     1..3
+[adam-laptop] ok 1 - Bootstrap mode - enable sets flag and stores partition services # time=80.004ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] # Subtest: Bootstrap mode - disable clears flag and partition services
+[adam-laptop]     ok 1 - should be enabled
+[adam-laptop] Bootstrap mode disabled - writes will route through SQL engine { nodeId: 'test-seed-node' }
+[adam-laptop]     ok 2 - bootstrap mode should be disabled
+[adam-laptop]     ok 3 - should clear partition services
+[adam-laptop]     1..3
+[adam-laptop] ok 2 - Bootstrap mode - disable clears flag and partition services # time=1.314ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] Bootstrap mode disabled - writes will route through SQL engine { nodeId: 'test-seed-node' }
+[adam-laptop] # Subtest: Bootstrap mode - clearBootstrapMode is convenience method
+[adam-laptop]     ok 1 - should be disabled
+[adam-laptop]     ok 2 - should clear partition services
+[adam-laptop]     1..2
+[adam-laptop] ok 3 - Bootstrap mode - clearBootstrapMode is convenience method # time=1.164ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] # Subtest: Bootstrap mode - requires Map when enabling
+[adam-laptop]     ok 1 - should throw Map error
+[adam-laptop]     ok 2 - should throw Map error
+[adam-laptop]     1..2
+[adam-laptop] ok 4 - Bootstrap mode - requires Map when enabling # time=0.869ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Bootstrap mode - starts disabled by default
+[adam-laptop]     ok 1 - should start disabled
+[adam-laptop]     ok 2 - should have no partition services
+[adam-laptop]     ok 3 - should start with SQL write router
+[adam-laptop]     1..3
+[adam-laptop] ok 5 - Bootstrap mode - starts disabled by default # time=0.623ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] # Subtest: Bootstrap mode - swaps write router strategy on mode transitions
+[adam-laptop]     ok 1 - should use bootstrap direct write router when enabled
+[adam-laptop] Bootstrap mode disabled - writes will route through SQL engine { nodeId: 'test-seed-node' }
+[adam-laptop]     ok 2 - should switch back to SQL write router when disabled
+[adam-laptop]     1..2
+[adam-laptop] ok 6 - Bootstrap mode - swaps write router strategy on mode transitions # time=0.669ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] Executing SQL directly on local partition (bootstrap mode) {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   tableName: 'services',
+[adam-laptop]   partitionId: 'services-p1',
+[adam-laptop]   sql: 'INSERT INTO services (service_id) VALUES (?)'
+[adam-laptop] }
+[adam-laptop] # Subtest: Bootstrap mode - direct write executes on correct partition
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         Test.<anonymous> (test/bootstrap/bootstrap-mode.test.js:190:32)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 7 - Bootstrap mode - direct write executes on correct partition # time=30.035ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/bootstrap-mode.test.js
+[adam-laptop]     lineNumber: 170
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]   
+[adam-laptop]     // Test 2: Direct write to local partition
+[adam-laptop]   
+[adam-laptop]     test('Bootstrap mode - direct write executes on correct partition', async (t)
+[adam-laptop]     => {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
+[adam-laptop]       service.initialize();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 3 }
+[adam-laptop] Executing SQL directly on local partition (bootstrap mode) {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   partitionId: 'nodes-p1',
+[adam-laptop]   sql: 'INSERT INTO nodes (node_id) VALUES (?)'
+[adam-laptop] }
+[adam-laptop] # Subtest: Bootstrap mode - direct write finds partition by table name
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         Test.<anonymous> (test/bootstrap/bootstrap-mode.test.js:217:28)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 8 - Bootstrap mode - direct write finds partition by table name # time=4.995ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/bootstrap-mode.test.js
+[adam-laptop]     lineNumber: 197
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('Bootstrap mode - direct write finds partition by table name', async (t)
+[adam-laptop]     => {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
+[adam-laptop]       service.initialize();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] # Subtest: Bootstrap mode - direct write throws when partition not found
+[adam-laptop]     ok 1 - should throw error about missing partition
+[adam-laptop]     1..1
+[adam-laptop] ok 9 - Bootstrap mode - direct write throws when partition not found # time=0.864ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] # Subtest: Bootstrap mode - direct write throws when not in bootstrap mode
+[adam-laptop]     ok 1 - should throw bootstrap error
+[adam-laptop]     1..1
+[adam-laptop] ok 10 - Bootstrap mode - direct write throws when not in bootstrap mode # time=0.847ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] # Subtest: Bootstrap mode - direct write throws when SQL parsing fails
+[adam-laptop]     ok 1 - should throw table name error
+[adam-laptop]     1..1
+[adam-laptop] ok 11 - Bootstrap mode - direct write throws when SQL parsing fails # time=1.017ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] Executing SQL directly on local partition (bootstrap mode) {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   partitionId: 'nodes-p1',
+[adam-laptop]   sql: 'INSERT INTO nodes (node_id) VALUES (?)'
+[adam-laptop] }
+[adam-laptop] # Subtest: Bootstrap mode - direct write handles partition errors
+[adam-laptop]     not ok 1 - should throw partition error
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/bootstrap-mode.test.js
+[adam-laptop]         lineNumber: 314
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/bootstrap-mode.test.js:314:7)
+[adam-laptop]       source: >2
+[adam-laptop]             t.fail('should throw when partition returns error');
+[adam-laptop]           } catch (error) {
+[adam-laptop]             t.ok(error.message.includes('Mock partition error'), 'should throw partition error');
+[adam-laptop]         ------^
+[adam-laptop]           }
+[adam-laptop]           t.end();
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 12 - Bootstrap mode - direct write handles partition errors # time=4.589ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/bootstrap-mode.test.js
+[adam-laptop]     lineNumber: 298
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]     test('Bootstrap mode - direct write handles partition errors', async (t) => {
+[adam-laptop]     ^
+[adam-laptop]       const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
+[adam-laptop]       service.initialize();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] Inserting system table row via SQL { tableName: 'nodes', id: 'node-1', nodeId: 'test-seed-node' }
+[adam-laptop] Executing SQL directly on local partition (bootstrap mode) {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   partitionId: 'nodes-p1',
+[adam-laptop]   sql: 'INSERT INTO nodes (node_id, node_address, cpu_usage_percent, memory_usage_percent, disk_usage_percen'
+[adam-laptop] }
+[adam-laptop] # Subtest: Bootstrap mode - routes to direct partition when enabled
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute [as executeFn]
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:358:14)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute (src/cdc/write-router/index.js:29:17)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQL
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:328:39)
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-mutation-operations.js:246:35
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-coalesced-mutation.js:71:17
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 13 - Bootstrap mode - routes to direct partition when enabled # time=9.015ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/bootstrap-mode.test.js
+[adam-laptop]     lineNumber: 320
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]   
+[adam-laptop]     // Test 3: executeSQL routing based on mode
+[adam-laptop]   
+[adam-laptop]     test('Bootstrap mode - routes to direct partition when enabled', async (t) =>
+[adam-laptop]     {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
+[adam-laptop]       service.initialize();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: true }
+[adam-laptop] Inserting system table row via SQL { tableName: 'nodes', id: 'node-1', nodeId: 'test-seed-node' }
+[adam-laptop] System table row inserted { tableName: 'nodes', id: 'node-1', success: true }
+[adam-laptop] # Subtest: Bootstrap mode - routes to SQL engine when disabled
+[adam-laptop]     ok 1 - should succeed
+[adam-laptop]     ok 2 - should call SQL engine
+[adam-laptop]     1..2
+[adam-laptop] ok 14 - Bootstrap mode - routes to SQL engine when disabled # time=5.26ms
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: true }
+[adam-laptop] Bootstrap mode enabled - writes go directly to local partitions { nodeId: 'test-seed-node', partitionCount: 1 }
+[adam-laptop] Inserting system table row via SQL { tableName: 'nodes', id: 'node-1', nodeId: 'test-seed-node' }
+[adam-laptop] Executing SQL directly on local partition (bootstrap mode) {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   partitionId: 'nodes-p1',
+[adam-laptop]   sql: 'INSERT INTO nodes (node_id, node_address, cpu_usage_percent, memory_usage_percent, disk_usage_percen'
+[adam-laptop] }
+[adam-laptop] # Subtest: Bootstrap mode - switches from bootstrap to normal mode
+[adam-laptop]     not ok 1 - partitionService.executeQuery is not a function
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         src/cdc/cdc-bootstrap-direct-sql.js:128:28
+[adam-laptop]       
+[adam-laptop]         submitRoutedMutationHop (src/cdc/cdc-terminal-gate.js:89:10)
+[adam-laptop]       
+[adam-laptop]         executeBootstrapDirectSql (src/cdc/cdc-bootstrap-direct-sql.js:127:10)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQLDirectToLocalPartition
+[adam-laptop]         (src/cdc/cdc-routed-mutation-readiness.js:275:12)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute [as executeFn]
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:358:14)
+[adam-laptop]       
+[adam-laptop]         BootstrapDirectWriteRouter.execute (src/cdc/write-router/index.js:29:17)
+[adam-laptop]       
+[adam-laptop]         CDCIntegrationService.executeSQL
+[adam-laptop]         (src/cdc/cdc-integration-service-lifecycle.js:328:39)
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-mutation-operations.js:246:35
+[adam-laptop]       
+[adam-laptop]         src/cdc/cdc-integration-service-coalesced-mutation.js:71:17
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/cdc/cdc-bootstrap-direct-sql.js
+[adam-laptop]         lineNumber: 128
+[adam-laptop]         columnNumber: 28
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]           // commits would apply twice (R11: no fallback).
+[adam-laptop]           return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+[adam-laptop]             () => partitionService.executeQuery(sql, params));
+[adam-laptop]         ---------------------------^
+[adam-laptop]         }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 15 - Bootstrap mode - switches from bootstrap to normal mode # time=4.032ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/bootstrap-mode.test.js
+[adam-laptop]     lineNumber: 373
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]     test('Bootstrap mode - switches from bootstrap to normal mode', async (t) => {
+[adam-laptop]     ^
+[adam-laptop]       const mockSqlEngine = createMockSqlQueryEngine();
+[adam-laptop]       const service = new CDCIntegrationService({
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] CDC integration service initialized { nodeId: 'test-seed-node', hasSqlQueryEngine: false }
+[adam-laptop] Inserting system table row via SQL { tableName: 'nodes', id: 'node-1', nodeId: 'test-seed-node' }
+[adam-laptop] # Subtest: Bootstrap mode - throws when SQL engine missing in normal mode
+[adam-laptop]     ok 1 - should throw SQL engine error
+[adam-laptop]     1..1
+[adam-laptop] ok 16 - Bootstrap mode - throws when SQL engine missing in normal mode # time=506.432ms
+[adam-laptop] 
+[adam-laptop] 1..16
+[adam-laptop] # { total: 26, pass: 21, fail: 5 }
+[adam-laptop] # time=677.733ms
+[adam-laptop] Failed to insert system table row {
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   id: 'node-1',
+[adam-laptop]   error: 'partitionService.executeQuery is not a function',
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   causeId: null,
+[adam-laptop]   operation: 'INSERT',
+[adam-laptop]   primaryKey: { node_id: 'node-1' },
+[adam-laptop]   code: null,
+[adam-laptop]   retryAfterMs: 0,
+[adam-laptop]   writeMode: 'bootstrap-direct',
+[adam-laptop]   bootstrapMode: true,
+[adam-laptop]   attempt: null,
+[adam-laptop]   cacheWaitTimedOut: false
+[adam-laptop] }
+[adam-laptop] Failed to insert system table row {
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   id: 'node-1',
+[adam-laptop]   error: 'partitionService.executeQuery is not a function',
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   causeId: null,
+[adam-laptop]   operation: 'INSERT',
+[adam-laptop]   primaryKey: { node_id: 'node-1' },
+[adam-laptop]   code: null,
+[adam-laptop]   retryAfterMs: 0,
+[adam-laptop]   writeMode: 'bootstrap-direct',
+[adam-laptop]   bootstrapMode: true,
+[adam-laptop]   attempt: null,
+[adam-laptop]   cacheWaitTimedOut: false
+[adam-laptop] }
+[adam-laptop] Transient CDC SQL exception, retrying {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   attempt: 1,
+[adam-laptop]   maxAttempts: 6,
+[adam-laptop]   error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+[adam-laptop]   retryAfterMs: 100
+[adam-laptop] }
+[adam-laptop] Transient CDC SQL exception, retrying {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   attempt: 2,
+[adam-laptop]   maxAttempts: 6,
+[adam-laptop]   error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+[adam-laptop]   retryAfterMs: 100
+[adam-laptop] }
+[adam-laptop] Transient CDC SQL exception, retrying {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   attempt: 3,
+[adam-laptop]   maxAttempts: 6,
+[adam-laptop]   error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+[adam-laptop]   retryAfterMs: 100
+[adam-laptop] }
+[adam-laptop] Transient CDC SQL exception, retrying {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   attempt: 4,
+[adam-laptop]   maxAttempts: 6,
+[adam-laptop]   error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+[adam-laptop]   retryAfterMs: 100
+[adam-laptop] }
+[adam-laptop] Transient CDC SQL exception, retrying {
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   attempt: 5,
+[adam-laptop]   maxAttempts: 6,
+[adam-laptop]   error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+[adam-laptop]   retryAfterMs: 100
+[adam-laptop] }
+[adam-laptop] Wait bound spent {
+[adam-laptop]   event: 'wait_bound_spent',
+[adam-laptop]   wait: 'CDC_DEFAULTS.RETRY_MAX_ATTEMPTS',
+[adam-laptop]   awaited: 'routed system-table mutation accepted by the engine',
+[adam-laptop]   boundMs: null,
+[adam-laptop]   elapsedMs: 'unmeasured',
+[adam-laptop]   lastObserved: { attempts: 6, maxAttempts: 6, errorCode: null, retryAfterMs: 100 },
+[adam-laptop]   scope: { nodeId: 'test-seed-node', tableName: 'nodes' },
+[adam-laptop]   repeats: 0
+[adam-laptop] }
+[adam-laptop] Failed to insert system table row {
+[adam-laptop]   tableName: 'nodes',
+[adam-laptop]   id: 'node-1',
+[adam-laptop]   error: 'CDCIntegrationService not properly initialized: sqlQueryEngine not provided',
+[adam-laptop]   nodeId: 'test-seed-node',
+[adam-laptop]   causeId: null,
+[adam-laptop]   operation: 'INSERT',
+[adam-laptop]   primaryKey: { node_id: 'node-1' },
+[adam-laptop]   code: null,
+[adam-laptop]   retryAfterMs: 100,
+[adam-laptop]   writeMode: 'sql-routed',
+[adam-laptop]   bootstrapMode: false,
+[adam-laptop]   attempt: 6,
+[adam-laptop]   cacheWaitTimedOut: false
+[adam-laptop] }
+[adam-laptop] ok test/bootstrap/bootstrap-sequence.test.js (68 assertions, 19522ms)
+[adam-laptop] ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 30274ms)
+[adam-laptop] ok test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js (1 assertions, 12897ms)
+[adam-laptop] ok test/bootstrap/seed-registration-phase.test.js (61 assertions, 6764ms)
+[adam-laptop] # test-files total=5 pass=4 fail=1 assertions=173
+lab test: adam-laptop: # test-files total=10 pass=5 fail=5 assertions=394
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=10 pass=5 fail=5 assertions=394

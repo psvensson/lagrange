@@ -1,0 +1,5 @@
+{"file":"test/cdc/bootstrap-mode-routing.property.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1689,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":1745,"retriedOnce":false,"firstFailureLine":"not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN"}
+{"file":"test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":2173,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js","attempt":1,"ok":true,"assertions":125,"durationMs":2515,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-mode.test.js","attempt":1,"ok":true,"assertions":48,"durationMs":1307,"retriedOnce":false,"firstFailureLine":null}

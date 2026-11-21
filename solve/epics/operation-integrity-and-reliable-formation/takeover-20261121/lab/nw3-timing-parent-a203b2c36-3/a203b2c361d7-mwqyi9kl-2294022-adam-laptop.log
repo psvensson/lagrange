@@ -1,0 +1,14 @@
+placement-shell=3777090
+placement-head=a203b2c361d7928859942ee91852a72eb11b15aa
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3777541
+# test-files planned=1
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: hold cpu 81C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 81C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 43C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 28146ms)
+# test-files total=1 pass=1 fail=0 assertions=1
+placement-results={"file":"test/bootstrap/seed-bootstrap-direct-lane.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":28146,"retriedOnce":false,"firstFailureLine":null}

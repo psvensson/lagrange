@@ -1,0 +1,5 @@
+{"file":"test/cdc/bootstrap-direct-write-raft-routing.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":839,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/bootstrap-mode-routing.property.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1706,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":2238,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js","attempt":1,"ok":true,"assertions":130,"durationMs":2250,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-mode.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":1504,"retriedOnce":false,"firstFailureLine":null}

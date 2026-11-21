@@ -1,0 +1,120 @@
+placement-shell=3394176
+placement-head=b3c84c85a2ddd491cfe9d535b3712ac07387931d
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3395023
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/query/named-write-cdc-sticky-unknown.test.js (3 assertions, 4881ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once
+not ok 1 - an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once
+  ---
+  duration_ms: 2794.527846
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/named-write-cdc-sticky-unknown.test.js:127:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the caller gets the named UNKNOWN, never NOT_PROPOSED: {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","pendingInstance":null}
+    + actual - expected
+    
+      {
+    +   definitelyUnapplied: true,
+    +   failureCode: undefined,
+    +   outcome: undefined,
+    +   thrown: true
+    -   definitelyUnapplied: false,
+    -   failureCode: 'partition_write_outcome_unknown',
+    -   outcome: 'unknown',
+    -   thrown: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    thrown: false
+    outcome: 'unknown'
+    failureCode: 'partition_write_outcome_unknown'
+    definitelyUnapplied: false
+  actual:
+    thrown: true
+    definitelyUnapplied: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    withSurface.cdc (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/named-write-cdc-sticky-unknown.test.js:142:12)
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/unknown-outcome-surface-fixture.js:328:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/named-write-cdc-sticky-unknown.test.js:130:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied
+not ok 2 - a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied
+  ---
+  duration_ms: 466.992507
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/named-write-cdc-sticky-unknown.test.js:169:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    terminal, outcome unknown: {"success":false,"error":"CDCIntegrationService shut down before this write was confirmed: its outcome is not known here (see its cause), and no retry through the service can succeed","failureCode":"partition_write_outcome_unknown","outcome":"unknown","pendingInstance":{"writeIdentity":"storage_reservations:sticky-shutdown:birth","instance":"b6478fcf-1b2d-4111-876e-13f4d1dc5022","idempotencyKey":"cpw-21537904aae0d774cce5926dccd7fdd5","entryId":"dwrite-participant-38820d182a4a62eb","outcome":"unknown"}}
+    + actual - expected
+    
+      {
+    +   code: undefined,
+    -   code: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
+        definitelyUnapplied: false,
+        pendingInstance: 'unknown',
+        retryable: false,
+    +   thrown: false,
+    -   thrown: true,
+        unknown: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    thrown: true
+    code: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN'
+    retryable: false
+    unknown: true
+    definitelyUnapplied: false
+    pendingInstance: 'unknown'
+  actual:
+    thrown: false
+    retryable: false
+    unknown: true
+    definitelyUnapplied: false
+    pendingInstance: 'unknown'
+  operator: 'deepStrictEqual'
+  stack: |-
+    withSurface.cdc (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/named-write-cdc-sticky-unknown.test.js:177:12)
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/unknown-outcome-surface-fixture.js:328:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b3c84c85a2dd-mwr0nd8i-2447205/test/query/named-write-cdc-sticky-unknown.test.js:171:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: mirror: every attempt of the CDC call refused before proposal is definite NOT_PROPOSED
+ok 3 - mirror: every attempt of the CDC call refused before proposal is definite NOT_PROPOSED
+  ---
+  duration_ms: 660.087948
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 1
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3927.196073
+# time=4881ms
+# test-files total=1 pass=0 fail=1 assertions=3
+placement-results={"file":"test/query/named-write-cdc-sticky-unknown.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":4881,"retriedOnce":false,"firstFailureLine":"not ok 1 - an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once"}

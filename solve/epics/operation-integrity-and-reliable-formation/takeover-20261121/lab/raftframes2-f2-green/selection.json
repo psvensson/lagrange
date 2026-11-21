@@ -1,0 +1,51 @@
+{
+  "sha": "f792423fff38d1f5cad23ce126cf20b9e4b77b24",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/router-adopted-connection-reconnect-schedule.test.js",
+    "test/transport/raft-frame-reconnect-owner.integration.test.js",
+    "test/transport/raft-frame-unacknowledged-delivery.test.js",
+    "test/transport/raft-frame-liveness-residual.integration.test.js",
+    "test/transport/raft-frame-turn-not-held.integration.test.js",
+    "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js",
+    "test/partition/raft-rs-transport-demux.test.js",
+    "test/transport/message-router.test.js",
+    "test/transport/message-router-quarantine-liveness-guard.test.js",
+    "test/transport/message-router-ping-wait-bound-spent.test.js",
+    "test/transport/node-incarnation-websocket-fence.test.js",
+    "test/transport/message-router-cold-reconnect-delivery-grant.test.js",
+    "test/transport/message-router-endpoint-address-change-redial.test.js",
+    "test/transport/message-router-transport-cleanup.test.js",
+    "test/transport/message-router-delivery-deadline-liveness.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/raft-frame-unacknowledged-delivery.test.js",
+        "test/transport/router-adopted-connection-reconnect-schedule.test.js",
+        "test/transport/message-router.test.js",
+        "test/transport/message-router-endpoint-address-change-redial.test.js",
+        "test/transport/message-router-quarantine-liveness-guard.test.js",
+        "test/transport/message-router-delivery-deadline-liveness.test.js",
+        "test/transport/message-router-transport-cleanup.test.js",
+        "test/transport/message-router-cold-reconnect-delivery-grant.test.js",
+        "test/transport/node-incarnation-websocket-fence.test.js",
+        "test/partition/raft-rs-transport-demux.test.js",
+        "test/transport/message-router-ping-wait-bound-spent.test.js",
+        "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/transport/raft-frame-liveness-residual.integration.test.js",
+        "test/transport/raft-frame-reconnect-owner.integration.test.js",
+        "test/transport/raft-frame-turn-not-held.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

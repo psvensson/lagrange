@@ -1,0 +1,25 @@
+{
+  "sha": "23344cddc5f07a597b93f8cd0f4f69a69be937c3",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js",
+    "test/bootstrap/node-joining-service-message-group-activation.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/node-joining-service-message-group-activation.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

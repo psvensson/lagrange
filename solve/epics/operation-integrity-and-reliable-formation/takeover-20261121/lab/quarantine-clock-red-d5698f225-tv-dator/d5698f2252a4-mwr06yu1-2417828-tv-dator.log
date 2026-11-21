@@ -1,0 +1,212 @@
+placement-shell=3388840
+placement-head=d5698f2252a4b0a2d6fa19d6522f0ccdf68254e5
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3389472
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 65C (coretemp/Package id 0) nvme 53C (nvme/Sensor 1)
+not ok test/query/query-executor-no-handler-quarantine-clock.test.js (10 assertions, 660ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: a no-handler quarantine of the services-p1 leader expires on the executor node clock at exactly its duration, with no real wait
+    ok 1 - the production quarantine of a control-plane partition applies
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+    ok 2 - the read is refused
+    ok 3 - one hop reached the leader node, which had no handler for the replica
+    # {"quarantineMs":30000,"beforeExpiry":{"success":false,"error":"Partition service not found"},"atExpiry":{"success":false,"error":"Partition service not found"},"hops":[{"address":"quarantine-leader-node/partition/services-p1-quarantine-leader-node","handled":false}]}
+    ok 4 - one millisecond of node time before expiry the address is still quarantined
+    not ok 5 - at mark + duration of node time the leader is routed again and answers
+      ---
+      compare: ===
+      at:
+        fileName: test/query/query-executor-no-handler-quarantine-clock.test.js
+        lineNumber: 42
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/query/query-executor-no-handler-quarantine-clock.test.js:42:5)
+      source: >2
+          t.equal(beforeExpiry.success, false,
+            'one millisecond of node time before expiry the address is still quarantined');
+          t.equal(atExpiry.success, true,
+        ----^
+            'at mark + duration of node time the leader is routed again and answers');
+          t.same(hopShape(world.hops), [
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    not ok 6 - the read before expiry left no hop; the read at expiry reached the leader, never the serving follower
+      ---
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,10 +1,6 @@
+         Array [
+           Object {
+             "address": "quarantine-leader-node/partition/services-p1-quarantine-leader-node",
+             "handled": false,
+           },
+        -  Object {
+      
+        -    "address":
+        "quarantine-leader-node/partition/services-p1-quarantine-leader-node",
+      
+        -    "handled": true,
+      
+        -  },
+         ]
+      at:
+        fileName: test/query/query-executor-no-handler-quarantine-clock.test.js
+        lineNumber: 44
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/query/query-executor-no-handler-quarantine-clock.test.js:44:5)
+      source: |2
+          t.equal(atExpiry.success, true,
+            'at mark + duration of node time the leader is routed again and answers');
+          t.same(hopShape(world.hops), [
+        ----^
+            {address: world.leaderAddress, handled: false},
+            {address: world.leaderAddress, handled: true},
+      ...
+    
+    1..6
+not ok 1 - a no-handler quarantine of the services-p1 leader expires on the executor node clock at exactly its duration, with no real wait # time=73.4ms
+  ---
+  at:
+    fileName: test/query/query-executor-no-handler-quarantine-clock.test.js
+    lineNumber: 18
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('a no-handler quarantine of the services-p1 leader expires on the
+    executor ' +
+  
+    ^
+      'node clock at exactly its duration, with no real wait', async (t) => {
+      const world = openQuarantineWorld();
+  ...
+
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+# Subtest: host time passing alone leaves the no-handler quarantine in force
+    # {"success":true,"error":null,"hops":[{"address":"quarantine-leader-node/partition/services-p1-quarantine-leader-node","handled":false},{"address":"quarantine-leader-node/partition/services-p1-quarantine-leader-node","handled":true}]}
+    not ok 1 - the read is still refused
+      ---
+      compare: ===
+      at:
+        fileName: test/query/query-executor-no-handler-quarantine-clock.test.js
+        lineNumber: 66
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/query/query-executor-no-handler-quarantine-clock.test.js:66:5)
+      source: >2
+          t.comment(JSON.stringify({success: read.success, error: read.error ?? null,
+            hops: hopShape(world.hops)}));
+          t.equal(read.success, false, 'the read is still refused');
+        ----^
+          t.same(hopShape(world.hops), [{address: world.leaderAddress, handled: false}],
+            'refused locally: no hop after the no-handler answer');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    not ok 2 - refused locally: no hop after the no-handler answer
+      ---
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,6 +1,10 @@
+         Array [
+           Object {
+             "address": "quarantine-leader-node/partition/services-p1-quarantine-leader-node",
+             "handled": false,
+           },
+        +  Object {
+      
+        +    "address":
+        "quarantine-leader-node/partition/services-p1-quarantine-leader-node",
+      
+        +    "handled": true,
+      
+        +  },
+         ]
+      at:
+        fileName: test/query/query-executor-no-handler-quarantine-clock.test.js
+        lineNumber: 67
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/query/query-executor-no-handler-quarantine-clock.test.js:67:5)
+      source: >2
+            hops: hopShape(world.hops)}));
+          t.equal(read.success, false, 'the read is still refused');
+          t.same(hopShape(world.hops), [{address: world.leaderAddress, handled: false}],
+        ----^
+            'refused locally: no hop after the no-handler answer');
+        });
+      ...
+    
+    1..2
+not ok 2 - host time passing alone leaves the no-handler quarantine in force # time=6.848ms
+  ---
+  at:
+    fileName: test/query/query-executor-no-handler-quarantine-clock.test.js
+    lineNumber: 51
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('host time passing alone leaves the no-handler quarantine in force',
+    async (t) => {
+  
+    ^
+      const world = openQuarantineWorld();
+      await world.readOwnerFact();
+  ...
+
+1..2
+# { total: 8, pass: 4, fail: 4 }
+# time=98.929ms
+# test-files total=1 pass=0 fail=1 assertions=10
+placement-results={"file":"test/query/query-executor-no-handler-quarantine-clock.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":660,"retriedOnce":false,"firstFailureLine":"not ok 5 - at mark + duration of node time the leader is routed again and answers"}

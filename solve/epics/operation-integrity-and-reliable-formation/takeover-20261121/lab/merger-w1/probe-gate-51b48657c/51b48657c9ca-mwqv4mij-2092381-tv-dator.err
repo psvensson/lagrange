@@ -1,0 +1,370 @@
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071422,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071427
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'coordinator_created_operation',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'recovery',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+    replica_id: 'p-gate-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071393,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071400
+}
+Failed to create storage reservation for operation {
+  operationId: 'c6a64998-c547-4c76-aaf7-9250104fc8ec',
+  reservationId: 'res-c6a64998-c547-4c76-aaf7-9250104fc8ec',
+  error: 'injected storage_reservations constraint violation'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071436,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071437
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'coordinator_created_operation',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071488,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071489
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'coordinator_created_operation',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795293071491,
+    completed_at: 1795293071491,
+    error_message: 'terminal owner won before reservation rearm'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071496
+}
+Operation failed {
+  operationId: 'op-gate',
+  type: 'ADD',
+  partitionId: 'sys-postgres-wire',
+  targetNodeId: 'target-node',
+  errorMessage: 'terminal owner won before reservation rearm'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071526,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071527
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'coordinator_created_operation',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071553,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071554
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'coordinator_created_operation',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'transition_retry_resume',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'storage reservation unavailable: Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795293071589,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795293071591
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'coordinator_created_operation',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Storage reservation creation failed for operation op-gate: Authoritative replica operation is unavailable for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-gate',
+  boundary: 'recovery',
+  partitionId: 'sys-postgres-wire',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'injected storage_reservations constraint violation'
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-gate',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'p-gate'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-gate',
+  workflowStep: 'ACTIVE',
+  partitionId: 'p-gate',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-gate',
+  disposition: 'refused',
+  step: 'FAILED',
+  partitionId: 'p-gate'
+}

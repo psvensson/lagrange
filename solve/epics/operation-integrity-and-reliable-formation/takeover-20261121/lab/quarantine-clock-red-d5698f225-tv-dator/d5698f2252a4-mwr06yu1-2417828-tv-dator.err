@@ -1,0 +1,68 @@
+No handler registered for partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'getReadRetryAttemptLimit',
+  awaited: 'successful partition read within the read attempt limit',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    attempts: 1,
+    lastError: 'No handler registered for address quarantine-leader-node/partition/services-p1-quarantine-leader-node',
+    lastErrorCode: null,
+    lastParticipantNodeId: 'quarantine-leader-node',
+    awaitedRoutingRepair: false,
+    maxAttempts: 1
+  },
+  scope: {
+    partitionId: 'services-p1',
+    forRead: true,
+    nodeId: 'quarantine-planner-node'
+  },
+  repeats: 0
+}
+Canonical partition leader service missing {
+  partitionId: 'services-p1',
+  leaderNodeId: 'quarantine-leader-node',
+  routableNodeIds: [ 'quarantine-leader-node', 'quarantine-follower-node' ],
+  staleLeaderNodeIds: [ 'quarantine-leader-node' ],
+  routingSnapshot: {
+    reasonCode: 'ok',
+    routingReadinessDimension: 'controlPlaneRecoveryEligible',
+    serviceRowCount: 2,
+    activeAddressedServiceCount: 2,
+    routableServiceCount: 2,
+    canonicalLeaderServiceCount: 1,
+    leaderKnown: true,
+    canonicalLeaderNodeId: 'quarantine-leader-node',
+    deniedByNodeId: {}
+  }
+}
+No service found for partition { partitionId: 'services-p1' }
+No handler registered for partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'getReadRetryAttemptLimit',
+  awaited: 'successful partition read within the read attempt limit',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    attempts: 1,
+    lastError: 'No handler registered for address quarantine-leader-node/partition/services-p1-quarantine-leader-node',
+    lastErrorCode: null,
+    lastParticipantNodeId: 'quarantine-leader-node',
+    awaitedRoutingRepair: false,
+    maxAttempts: 1
+  },
+  scope: {
+    partitionId: 'services-p1',
+    forRead: true,
+    nodeId: 'quarantine-planner-node'
+  },
+  repeats: 0
+}

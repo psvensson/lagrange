@@ -1,0 +1,14 @@
+placement-shell=3703851
+placement-head=5392380aefb180e4d56b4e5c1026c4271a8ba0e4
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3704802
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/query/provisioning-deadline-error-message.test.js (4 assertions, 1215ms)
+# test-files total=1 pass=1 fail=0 assertions=4
+placement-results={"file":"test/query/provisioning-deadline-error-message.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1215,"retriedOnce":false,"firstFailureLine":null}

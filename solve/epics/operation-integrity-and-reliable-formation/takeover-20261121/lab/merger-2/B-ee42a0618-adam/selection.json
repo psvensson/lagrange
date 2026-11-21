@@ -1,0 +1,23 @@
+{
+  "sha": "ee42a06185dede1399c675a38751d308e89049ec",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/replica-dispatch-reservation-identity.test.js",
+    "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+    "test/rebalancer/reservation-file-backed-restart.test.js",
+    "test/rebalancer/dispatch-terminal-operation-eviction.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "test/control-plane/replica-dispatch-reservation-identity.test.js",
+        "test/rebalancer/reservation-file-backed-restart.test.js",
+        "test/rebalancer/dispatch-terminal-operation-eviction.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -360,3 +360,208 @@ at line 696: `'the registered release owner revalidates the healed leader'` (`fa
 `lab/kernel-green-a5bf0100-run2` (full set), `lab/kernel-attr-recon-a5bf0100-1`, `-2`, `lab/kernel-attr-recon-c9d8896f-1`,
 `-2` (and in `lab/kernel-red-0bb5c473`). Chase as a flake with this evidence retained; no kernel path found in the
 revalidation it waits for (section 12).
+
+## 15. Verifier conditions on `a5bf01004` (reports/verify-write-kernel-tenure-fence.md) and the re-staged witnesses
+
+### 15.1 Correction to section 8 (verifier finding 7)
+Wrong: "between the read's return and the registration no caller awaits or calls consensus". Placement
+(`partition-placement-admission.js:241`) and formation (`membership-publication-formation-transition-command.js:520`)
+call `pausedWriteAnswerOf`, which reads the status again (`partition-participant-transaction-pause.js:227-233`).
+Harmless there: a term that changes inside that read no longer matches the release admission's proof and raises the
+pause (CUTOVER_PAUSED, nothing registered); this is what made the placement witness g green before the repair.
+
+### 15.2 The join gap in this composition (finding from `lab/kernel-join-red-f36abd20`)
+After a renewal the participant cutover pause is raised (its admission proof carries the term), and the release
+cannot resume while ANY write is pending (`isReleaseDrained`: `proposals === 0 && pendingOutcomes === 0`,
+`partition-participant-release-contract.js:116-119`; the fixture's resume answered `release_drain_pending`).
+- Placement checks the pause BEFORE its join (`proposePlacementCommand` :241 then :245): a new-tenure admission is
+  refused CUTOVER_PAUSED while the old write pends and never reaches the join; the owner's next pass follows
+  WRITE_PATH_RELEASED after the release resumed (once the old write is gone). The ruled placement witness ("gets its
+  own proposal in the same turn while the old write is still pending") has no schedule here: withdrawn
+  (`f36abd208` version failed on its premise). The kernel closure still applies to any joiner that is past the pause.
+- The ordinary write joins BEFORE the pause (`applyWrite` :702, then `startAdmittedPartitionWrite`): the join gap is
+  real there. Witness "kernel tenure fence (join)": the re-delivery must not join (old write released once,
+  LEADERSHIP_LOST), answers on its own (CUTOVER_PAUSED), and after the release resumes the next delivery is handed
+  over itself.
+- Consequence worth the lead's attention: a PARKED write of an ended tenure keeps the whole partition paused until
+  its readmit or its 30 s commit deadline (drain blocked), because the fence releases it only at a hand-over. The
+  join closure shortens that only when a re-delivery arrives.
+
+### 15.3 Ownership (verifier finding 2, REQUIRED)
+Each hand-off records its registration (`handoff.registration`, the queue entry object); every by-entryId action of
+an execution (the fence's release, mark PROPOSED/QUEUED, reject on a port refusal or a spent budget) requires
+`ownsPendingWrite`. Witness "kernel tenure fence (ownership)", the verifier's schedule: parked W1 readmitted and
+deferred sleeps in its retry loop; a role edge releases W1; the replica leads again; W2 registers the same entryId
+and is handed over; the stale hand-off wakes: W2 must stay pending and commit.
+
+### 15.4 Null tenure (verifier finding 4): OPEN
+The witness could not construct a write parked with no tenure in the participant fixture (core made leader without
+an event, admission resumed, partition reserved: the write settled at once, `lab/kernel-join-red-f36abd20` test 7
+premise). Withdrawn; the hole stays as the verifier states it (readmit of a null-tenure parked write while not
+leading proposes; raft-rs forwards). Not repaired: making a null tenure never propose needs a fixture census (61 test
+files assign `isLeader = true`; those without a LEADER event register with null).
+
+### 15.5 Contract gap (verifier finding 3) and PREPARE (finding 5), recorded
+- The fence sits above the port's queue and the turn's inbound drain. Every readmit runs inside a consensus turn
+  (`partition-participant-transaction-apply.js:413-417`, the decision's `afterCommit`), so every readmitted parked
+  write takes the port-queued path of witness c: closed only by the raft owner's refusal at the propose step
+  (section 7, in progress). The owner's tenure contract is NOT closed while witness c is red.
+- PREPARE: a kept sealed session (`keepsSealedSession`) re-proposes the T1-sealed bytes under T2, and
+  `prepareSession` skips the release fence and the topology check for a sealed session (:413-425); the comment
+  "a sealed command already submitted" is not true of a fence-released PREPARE. For PREPARE the fence changes who
+  re-proposes, not whether T1-staged bytes enter under T2. For the participant owner (with 14.3).
+
+### 15.6 As implemented and executed (adam-laptop, check base 0dbed1718)
+Commits: `f36abd208` (join/ownership/null witnesses, first staging), `859b990da` (re-staged: join on the ordinary
+write path, ownership on the verifier's schedule; placement join and null tenure withdrawn), `0572e9e05` (the retry
+gate held the commit deadline too; fixed), `eb281f314` (repair + docs + drain-scenario stub; pushed, HEAD).
+Repair details: `releasedOnEndedTenure` releases only the owning hand-off's registration and only in QUEUED;
+`ownsPendingWrite` guards every by-entryId action of an execution; `releaseJoinedWriteOfEndedTenure` is called by
+the registry's `getPendingCommittedWriteOutcome` (a released write's outcome is dropped from the join map, so the
+caller registers its own); registry accessors `pendingCommittedWriteOf`, `committedWriteProposalOf`
+(`ProposalQueue.proposalStateOf`). Docs: `architecture/process-replication.md` (write kernel bullets).
+
+| Witness | Red | Green at `eb281f314` (`lab/kernel-final-eb281f31-set`) |
+|---|---|---|
+| join (ordinary re-delivery) | `lab/kernel-join-red-0572e9e0`: second joined (`pending`), inherited NOT_LEADER | green |
+| ownership (verifier's schedule) | same run: re-registered handed-over W2 answered OUTCOME_UNKNOWN by the stale hand-off, `pendingAfterStaleWake: false` | green |
+| read scope (null -> T) | green on `a5bf01004` (added after it) | green |
+| a, b, d, e, g, placement g | as section 12 | green |
+| c port-queued | red | red (raft owner) |
+(`lab/kernel-join-red-f36abd20`, `-859b990d`: superseded stagings, kept; their failures are setup artifacts: release
+drain, held deadline.)
+
+Verifier's list D at `eb281f314` vs `8e84e2801` (`lab/kernel-final-eb281f31-set`, `-release`, `-recon-1..5`;
+`lab/kernel-base-8e84e280-d`):
+- partition-participant-transaction-apply, -topology, write-path-epoch-fencing, settled-replay-preserves-result,
+  partition-cdc-delivery-progress, both proposal-queue property tests, transfer-leadership-write-path,
+  transfer-leadership-drop-classification, all 13 participant-release-* files: GREEN at head and at base.
+- placement-retained-leadership [1, 2, 4]: RED at head and at base, identical first assertion
+  ('A used current B route instead of saved A closure'; [4] 'false == true'): pre-existing.
+- Placement base reds unchanged (drain [4,10,11], construction [4,5], barrier [2], core [18]).
+- partition-runtime-reconstruction-leadership: 5 dedicated runs at head: 4 pass, 1 fail (`-recon-3`, W-B6-3, the same
+  assertion as section 14.4); it also passed in the head set run; at base 1 of 1 passed. Totals so far with the fence
+  (a5bf01004 or later): 2 failures in 10 runs; without (8e84e2801 / witness commits): 0 in 4. Not separated; no
+  mechanism found by reading. Recommended: an A/B batch of 10 runs each on one host before attributing it.
+
+## 16. Second writer (`claude:kernel-2`, 2026-11-21/22): the reconstruction flake and the pause after a renewal
+
+Took over at `eb281f314` (clean worktree). Commit `0a88745f6` (witnesses only; src = `eb281f314`), pushed.
+Nothing executed on the desktop; every run on adam-laptop, check base `0dbed1718`.
+
+### 16.1 Item 1: `partition-runtime-reconstruction-leadership` test 5 (W-B6-3) is a pre-existing flake
+A/B batch, one host (adam-laptop), interleaved head/base, 2026-11-21 23:29-23:59 CET, no runner failures (no
+`-notrun` directories): head `eb281f314` `lab/kernelab-head-01..10`: 1 failure (`-06`); base `8e84e2801`
+`lab/kernelab-base-01..10`: 2 failures (`-04`, `-05`). Every failure is test 5 at `:696-700` ("the registered
+release owner revalidates the healed leader"), 10.2 s (the 10 s `GROUP_BUDGET_MS` wait); failing files 36.0-36.9 s,
+passing 28.9-30.5 s. The base, which has no fence, fails the same way: decisive. Counts: 3 failures in 20; if both
+sides had the same rate, a 1/2 split is the most even possible (Fisher two-sided p = 1); even 0 vs 3 would arise by
+chance with probability 2 x C(10,3)/C(20,3) = 0.21. Totals including section 15.6: with the fence 3/20, without 2/14.
+Classified: pre-existing, NOT attributable to the fence. Test not changed.
+
+Trace of the wait (VERIFIED by read unless marked):
+- The wait ends when `leaderOf()` (test `:664-665`, the first service whose port reports LEADER) has no cutover
+  pause. The pause is lifted only by a release resume: node's `ReplicaHandler` release recovery
+  (`replica-handler-release-recovery.js:202-238`, woken by that partition's consensus events `:271-274`, retried
+  every `RECOVERY_RETRY_MS` = 1 s on a non-CUT_OVER answer `:227-230`) runs `runParticipantCutover`
+  (`replica-handler-participant-cutover.js:327-376`), which ends in `resumeParticipantCutoverAdmission`
+  (`partition-participant-transaction-pause.js:277-287`: admission OPEN, WRITE_PATH_RELEASED).
+- Only node-1 can do that in this fixture. `releaseControlOwnerFirst` (`cutover.js:219-246`, called at `:341`) needs
+  the control owner's node: `currentControlNodeId` (`:208-217`) finds a local control leader (the fixture hosts the
+  control service only on the first node's handler, `partition-release-fixture.js:53-61`, `:95`) or asks the query
+  engine's topology owner, which is null here (handlers get `cdcIntegrationService: {}` `:41`, services have no
+  `sqlQueryEngine`; `releaseQueryEngine` `cutover.js:160-165`). On node-2/node-3 the attempt answers UNAVAILABLE
+  CURRENT_CONTROL_OWNER (`:223-226`) forever. So the test passes only if the OLD leader r1 leads again.
+- Who leads after the heal is an election race. A reconstructed multi-voter group does not campaign
+  (`raft-rs-runtime-owner.js:548-562`): r1 returns as a follower and campaigns on its own timer. Election timeouts
+  are jittered by the replica's index in its own `replicaIds` x 2500 ms (`replica-election-timeouts.js:34-48`,
+  `src/raft/constants.js:45`; the fixture builds joiners with `replicaIds = members.slice(0, joined + 1)`,
+  `partition-admitted-group-fixture.js:94-106`, `:132`): r1 150 ms, r2 2650 ms, r3 5150 ms. The binding sets only
+  `election_tick` (`raft-rs-runtime-tuning.js:26-37`, `vendor/raft-rs-wasm/src/lib.rs:459`), so raft-rs randomizes
+  in [tick, 2 x tick) (`raft-0.7.0/src/config.rs:148-154`): r1 every 150-300 ms, r2 uniformly in [2.65, 5.3) s.
+  Pre-vote and check-quorum are on: r2 and r3 IGNORE r1's (pre-)votes while they heard r1 within their own
+  election timeout (`raft.rs:1333-1336`, in_lease). r1 can win only after r2's lease ends (2.65 s after r1's last
+  heartbeat) and before r2's own timeout fires; if r2 times out before r1's next pre-vote lands (r1 retries every
+  150-300 ms; delivery latency grows with host load), r2 campaigns, r1 grants (it has no leader, no lease), r2 leads,
+  and node-2's recovery can never resume: the wait expires. INFERRED from these reads, consistent with the timings:
+  a passing test 5 takes about 3.7 s (file 29-30.5 s vs 36-37 s with test 5 at 10.2 s), i.e. r1 wins after r2's
+  2.65 s lease plus one 1 s recovery retry, never at its own 150-300 ms timer.
+- Fence paths ruled out (each reached only by a registered write, and none is registered during the wait):
+  the release at hand-over (`proposeUnlessDeferred` -> `releasedOnEndedTenure`, `raft-write-commit.js:102-136`)
+  and the ownership check (`:87-90`) run only inside a write's execution; the join release
+  (`getPendingCommittedWriteOutcome`) only for a caller joining an entryId; the read compare
+  (`partitionWriteLeadershipRefusalOf` `:489-502`) only on a write's admission path (the recovery reads
+  `readStatus` directly, `release-recovery.js:77`, `cutover.js:302`). Between `entry-full` (answered before the
+  heal, test `:676-679`: PROPOSED when the group failed, released by the no-role demotion; head and base differ only
+  in skipping `rejectCommittedWrite` on an already released entry, which returned false at base) and `entry-healed`
+  (`:701`, after the wait) the test registers nothing; the recovery registers nothing (origin recorded at setup, so no
+  ENABLE; PAUSE/INSPECT/RESUME read facts). The drain census therefore reads zero proposals and pending outcomes on
+  every member at head and at base.
+- For the fixture/test owner (not changed): the wait assumes the old leader regains leadership. Either give every
+  node's handler a route to the control owner, or let the test name the replica it waits on through the release
+  fixture's own `release()` after leadership settles.
+
+### 16.2 Item 2: a write of an ended tenure does NOT hold the release pause beyond its reservation (no red)
+Witnesses (commit `0a88745f6`, `test/partition/partition-write-kernel-tenure-fence.test.js`, virtual clock, real kernel,
+real release contract via `resumeFixtureParticipantAdmission` / `readParticipantReleaseFacts`, each beside a control
+schedule without the write). Lab: `lab/kernel2-pause-0a88745f` (9/9 green, both new tests included).
+- (pause, parked): reserved by a PREPARE, W parked under T1, renewed to T2 (TERM_CHANGE, no role edge), reservation
+  held 5 s more, then decided. With W: at the renewal work {participantPrepared 1, proposals 1, pendingOutcomes 1},
+  release `release_drain_pending`, W pending; control: {1, 0, 0}, `release_drain_pending`. Both stay refused while
+  reserved; at the decision the readmit hands W over and the fence releases it NOT_LEADER, the work drains to 0 and
+  the release resumes in the same virtual instant. Pause = 5000 ms in both (= the reservation), 0 ms beyond it; W
+  never handed over; 0 live kernel timers.
+- (pause, deferred): W deferred once by the port under T1, renewed: the pause ends at W's next kernel retry, which
+  releases it NOT_LEADER (asserted <= 100 ms, the maximum retry delay; by the retry owner's arithmetic the first
+  retry is at 10 ms); control resumes at the renewal (0 ms); nothing proposed under T2; 0 queued, 0 pending, 0 timers.
+Why (VERIFIED by read): parking happens only while the partition is reserved (`raft-write-commit.js:524-525`;
+placement and formation pass `park: isPartitionReserved`), and the reservation and the drain read the same rows
+(`_participant_transactions WHERE state = PREPARED`: `SELECT_RESERVATION` / `SELECT_PREPARED_PARTICIPANTS`,
+`partition-participant-transaction-constants.js:278-289`); `isReleaseDrained` needs `participantPrepared === 0`
+(`partition-participant-release-contract.js:116-119`). So the reservation alone keeps the release refused for as long
+as any parked write can exist, and its end runs the readmit (`partition-participant-transaction-apply.js:413-417`),
+where the fence releases an ended-tenure write synchronously (`runRetryableControlPlaneWrite` calls its executor
+before any await). The 30 s commit deadline is never the bound. For a deferred write, `pendingOutcomes` clears only
+when the execution returns (`setPendingCommittedWriteOutcome` in `partition-service-cdc-stream-base.js`), and the
+execution awaits the retry sleep inside `handOffToConsensus` (`raft-write-commit.js:145-160`, `:427`).
+Consequence: the ruled repair (release at the tenure's END through `releasedOnEndedTenure`, called from the
+TERM_CHANGE wiring) would not shorten the pause in either case (INFERRED: parked, the reservation still refuses;
+deferred, proposals would drop at once but the pending outcome stays until the same retry fires). No source change
+was made: there is no red for it to turn green. If the lead still wants it (its only effect: the parked write's
+caller answered at the renewal instead of at the decision), the change is one kernel function
+`releaseWritesOfEndedTenure(service)` running `releasedOnEndedTenure` over `WRITE_HANDOFFS.get(service)`, wired as
+`onTermChange` in `wirePartitionRaftLifecycleEvents` (`wireReplicaLifecycleEvents` already calls `onTermChange`
+after renewing the tenure, `replica-leadership-state.js:203-206`); the (pause, parked) witness would then read W
+released at the renewal and work {1, 0, 0}, with the same pause.
+
+### 16.3 Item 2(c): the two neighbours (report only)
+- Pending fingerprints (placement and formation owners): `partition-placement-admission.js:244-265` (join compare by
+  value `:245-248`, set `:257`, cleanup `:261-265` deletes when `get(entryId) === fingerprint`) and
+  `membership-publication-formation-transition-command.js:540-560` (`:541-545`, `:547`, `:554-559`). Schedule: R1
+  registers W1 (E, F); R2 with the same (E, F) reaches the join while W1 is an ended-tenure QUEUED write; the join
+  release drops W1's outcome synchronously and R2 registers W2, setting map[E] = F; W1's promise settles a few
+  microtasks later and its cleanup finds the equal value and deletes W2's fingerprint; R3 (E, F) then finds W2
+  pending without a fingerprint and is refused ERROR.BYTES / INVALID_COMMAND instead of joining. Reachability today:
+  both callers check the cutover pause before the join (placement `:241` then `:245`; formation `:520` then `:541`),
+  every tenure change raises the pause (the admission proof carries term and leader), and the release cannot resume
+  while W1's outcome is pending, so R2 is refused CUTOVER_PAUSED and W1's cleanup runs first: not reachable through
+  a tenure change in these two callers; it becomes reachable if a join moves before the pause or another path
+  re-registers an entryId before the old promise settles. Fix there: clean up by registration identity (a token or the
+  commit promise), not by value.
+- Null tenure with the raft owner's `f94291812` (read, not merged): the port records `submittedTerm` =
+  `group.lastStatus.term` at submit (`withSubmittedTerm`, `raft-rs-proposal-term.js`) and at the propose step refuses
+  (core's dropped-proposal refusal; nothing enters the log, nothing is forwarded) unless the core leads at exactly that
+  term. So the verifier's null-tenure hole (finding 4: a null-tenure parked write readmitted while not leading is
+  proposed and raft-rs forwards it) is closed there: the kernel answers it as a consensus refusal, not proposed.
+  Remaining (INFERRED, narrow): a null-tenure write handed over inside the very turn in which the core becomes
+  leader, before that turn announces LEADER, at the term the preceding CANDIDATE announcement already carried (e.g. a
+  decision applied in the winning turn readmits a write parked while not leading): the kernel fence passes
+  (null === null), the port queues it with that term, and after the announcement it enters under the NEW leader's
+  term. Not an ended tenure's write; whether it must be refused is the null-tenure ruling (verifier finding 4).
+
+### 16.4 Open
+- Owner's tenure contract NOT closed: witness c (port-queued proposal) stays red until the raft owner's
+  `f94291812` is merged.
+- Lead: item 2 ruling against 16.2 (no repair made). Flake 16.1 to its fixture/test owner. Fingerprint cleanup 16.3
+  to the placement and formation owners.
+- The section 15.6 set was not re-run: src at `0a88745f6` is identical to `eb281f314` (`lab/kernel-final-eb281f31-set`).

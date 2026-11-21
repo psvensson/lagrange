@@ -1,0 +1,3 @@
+{"file":"test/control-plane/replica-dispatch-reservation-identity.test.js","attempt":1,"ok":false,"assertions":27,"durationMs":1322,"retriedOnce":false,"firstFailureLine":"not ok 7 - the canonical owner dispatches after the strict identity gate"}
+{"file":"test/rebalancer/reservation-file-backed-restart.test.js","attempt":1,"ok":false,"assertions":39,"durationMs":1433,"retriedOnce":false,"firstFailureLine":"not ok 25 - the existing reservation gate dispatches exactly once"}
+{"file":"test/rebalancer/reservation-fail-closed-dispatch-gate.test.js","attempt":1,"ok":false,"assertions":78,"durationMs":1660,"retriedOnce":false,"firstFailureLine":"not ok 5 - restored authority dispatches exactly once through the existing gate"}

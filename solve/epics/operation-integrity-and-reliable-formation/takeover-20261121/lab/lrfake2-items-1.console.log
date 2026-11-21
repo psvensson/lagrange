@@ -1,0 +1,24 @@
+lab test: adam-laptop: ordinary, bootstrap (4 files) cores=8 mem=15.5GiB speed x2.03
+[adam-laptop] placement-shell=3755060
+[adam-laptop] placement-head=6003683136eb8fb3818a63e7a6b63cbf0eee051f
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3755517
+[adam-laptop] # test-files planned=4
+[adam-laptop] classified lane ordinary: 2 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] ok test/test-helpers/committed-write-answer.test.js (6 assertions, 1707ms)
+[adam-laptop] ok test/rebalancer/node-storage-budget-service.test.js (22 assertions, 2353ms)
+[adam-laptop] # test-files total=2 pass=2 fail=0 assertions=28
+[adam-laptop] classified lane bootstrap: 2 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 62C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/register-node-in-cluster.test.js (86 assertions, 3079ms)
+[adam-laptop] ok test/bootstrap/move-replica-assignment-token.test.js (27 assertions, 7103ms)
+[adam-laptop] # test-files total=2 pass=2 fail=0 assertions=113
+lab test: adam-laptop: # test-files total=4 pass=4 fail=0 assertions=141
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=4 pass=4 fail=0 assertions=141
+exit=0

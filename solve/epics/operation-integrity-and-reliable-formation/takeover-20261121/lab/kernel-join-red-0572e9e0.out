@@ -1,0 +1,191 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.02
+[adam-laptop] placement-shell=3749034
+[adam-laptop] placement-head=0572e9e05f3188c4d36a91ca16cc65298921a3ca
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3749602
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/partition/partition-write-kernel-tenure-fence.test.js (7 assertions, 4905ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+[adam-laptop] ok 1 - kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3294.261253
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+[adam-laptop] ok 2 - kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 78.122774
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+[adam-laptop] ok 3 - kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 47.654609
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+[adam-laptop] ok 4 - kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 43.547563
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (read scope): a write submitted before the replica led is refused NOT_LEADER when the replica becomes leader inside the kernel's leadership read; asked again under that tenure, it proceeds
+[adam-laptop] ok 5 - kernel tenure fence (read scope): a write submitted before the replica led is refused NOT_LEADER when the replica becomes leader inside the kernel's leadership read; asked again under that tenure, it proceeds
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 36.717949
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (join): a write delivered again under the current tenure does not join the pending write of an earlier tenure, which is released once; nothing is inherited
+[adam-laptop] not ok 6 - kernel tenure fence (join): a write delivered again under the current tenure does not join the pending write of an earlier tenure, which is released once; nothing is inherited
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 53.85235
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:365:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     W1 released once at the join, W2 answered on its own, W3 handed over on its own; {"handed":[{"id":"kernel-fence-rejoined","portTerm":1,"deferred":true},{"id":"kernel-fence-rejoined","portTerm":2,"deferred":false}],"third":"pending","kernelTimers":1}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]         firstAnswer: {
+[adam-laptop]           failureCode: 'partition_write_not_leader',
+[adam-laptop]           success: false
+[adam-laptop]         },
+[adam-laptop]         heldRetries: 0,
+[adam-laptop]         secondAnswer: {
+[adam-laptop]     +     failureCode: 'partition_write_not_leader',
+[adam-laptop]     -     failureCode: 'partition_write_cutover_paused',
+[adam-laptop]           success: false
+[adam-laptop]         },
+[adam-laptop]     +   secondBeforeOldRetry: 'pending',
+[adam-laptop]     -   secondBeforeOldRetry: {
+[adam-laptop]     -     failureCode: 'partition_write_cutover_paused',
+[adam-laptop]     -     success: false
+[adam-laptop]     -   },
+[adam-laptop]         thirdHandedOver: 1
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     secondBeforeOldRetry:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_cutover_paused'
+[adam-laptop]     firstAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_not_leader'
+[adam-laptop]     secondAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_cutover_paused'
+[adam-laptop]     thirdHandedOver: 1
+[adam-laptop]     heldRetries: 0
+[adam-laptop]   actual:
+[adam-laptop]     secondBeforeOldRetry: 'pending'
+[adam-laptop]     firstAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_not_leader'
+[adam-laptop]     secondAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_not_leader'
+[adam-laptop]     thirdHandedOver: 1
+[adam-laptop]     heldRetries: 0
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:394:10
+[adam-laptop]     async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/test-helpers/participant-transaction-fixture.js:834:14)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: kernel tenure fence (ownership): a stale hand-off waking in its retry loop touches nothing of a write registered again under the same entryId; that write commits
+[adam-laptop] not ok 7 - kernel tenure fence (ownership): a stale hand-off waking in its retry loop touches nothing of a write registered again under the same entryId; that write commits
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 54.348561
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:411:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     H1 woke against W2's registration and left it alone; {"handed":[{"id":"kernel-fence-reregistered","portTerm":1,"deferred":true},{"id":"kernel-fence-reregistered","portTerm":2,"deferred":false}],"second":{"success":false,"error":"The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","failureCode":"partition_write_outcome_unknown","consensus":{"reason":"leadership-lost"},"partitionId":"tx1-v3","entryId":"kernel-fence-reregistered"}}
+[adam-laptop]     + actual - expected
+[adam-laptop]     ... Skipped lines
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]         apply: null,
+[adam-laptop]         firstAnswer: {
+[adam-laptop]           failureCode: 'partition_write_not_leader',
+[adam-laptop]           success: false
+[adam-laptop]     ...
+[adam-laptop]         kernelTimers: 0,
+[adam-laptop]     +   pendingAfterStaleWake: false,
+[adam-laptop]     -   pendingAfterStaleWake: true,
+[adam-laptop]         pendingOutcome: false,
+[adam-laptop]         queued: 0,
+[adam-laptop]         rows: 1,
+[adam-laptop]         secondAnswer: {
+[adam-laptop]     +     failureCode: 'partition_write_outcome_unknown',
+[adam-laptop]     +     success: false
+[adam-laptop]     -     failureCode: null,
+[adam-laptop]     -     success: true
+[adam-laptop]         }
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     handedOver: true
+[adam-laptop]     pendingAfterStaleWake: true
+[adam-laptop]     apply: ~
+[adam-laptop]     firstAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_not_leader'
+[adam-laptop]     secondAnswer:
+[adam-laptop]       success: true
+[adam-laptop]       failureCode: ~
+[adam-laptop]     rows: 1
+[adam-laptop]     heldRetries: 0
+[adam-laptop]     queued: 0
+[adam-laptop]     pendingOutcome: false
+[adam-laptop]     kernelTimers: 0
+[adam-laptop]   actual:
+[adam-laptop]     handedOver: true
+[adam-laptop]     pendingAfterStaleWake: false
+[adam-laptop]     apply: ~
+[adam-laptop]     firstAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_not_leader'
+[adam-laptop]     secondAnswer:
+[adam-laptop]       success: false
+[adam-laptop]       failureCode: 'partition_write_outcome_unknown'
+[adam-laptop]     rows: 1
+[adam-laptop]     heldRetries: 0
+[adam-laptop]     queued: 0
+[adam-laptop]     pendingOutcome: false
+[adam-laptop]     kernelTimers: 0
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/partition/partition-write-kernel-tenure-fence.test.js:451:10
+[adam-laptop]     async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0572e9e05f31-mwqwttaz-2197481/test/test-helpers/participant-transaction-fixture.js:834:14)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..7
+[adam-laptop] # tests 7
+[adam-laptop] # suites 0
+[adam-laptop] # pass 5
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3616.042513
+[adam-laptop] # time=4905ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=7
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=7
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=7

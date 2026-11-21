@@ -1602,3 +1602,589 @@ Rulings (to the kernel writer): bind the release to the owning registration (ide
 witness, together with the join closure; a null tenure never proposes (witness first); record the contract gap and
 the PREPARE finding; run the missing suites at head and at 8e84e2801 and the reconstruction suite five times. The
 owner's tenure contract is NOT reported closed while witness c (raft owner's forwarding refusal) is red.
+
+## 2026-11-21 — owner-fact read: proof runs and end report of the first writer (work/owner-fact-read-20261121, tip fb1d4c11b; record 17-18)
+Executed on adams-gamla. (a) All S0 files at ee58d307f: 8 of 9 green, the one red being the recorded finding.
+(b) Mutant table, every mutant executed: m02, m03, m04, m05b, m06, m07, m08, m09, m10, m11 killed by named cases;
+m01 survives witnesses 2+3 and is killed on the caller-side case; m05 survives (equivalent: both role checks refuse
+a follower with the same answer; removing both is killed). The two role checks are distinct decisions (execute at
+all / leadership lost during the read) but both rest on the cached status. commit === applied: no mutant, no
+witness. (c) Change cone at fb1d4c11b versus b638284d1: 2171 files, 2057 pass, 114 fail: 76 red at base with the
+same first failure, 33 red at base with a different first failure (not attributed further), 1 the recorded
+finding, and FOUR REGRESSIONS of this branch: three fakes ("this.readOwnRaftStatus is not a function") and
+readiness-owner-authority-contract ("leader-required routing never sends the owner read to the follower": the
+published leader names a node with no service, the Q1(B) widening asks every routable replica, the follower stub
+answered success): possibly a safety issue, unresolved.
+Corrective round: only the contract text and record corrections done; 1(b) stopped on the raft owner (the cached
+status is indistinguishable from a fresh one); 1(a), 2, 3, 4, 6, deadline/routing not done (plans in record 18.4).
+Recorded: read-point-moved is not time-based and no starvation schedule was found; retries bounded (3 attempts,
+50 ms apart, inside the caller's deadline); the currentTermApplied definition with raft.rs lines.
+Rulings (successor started on the same worktree): order of importance: probe the readiness-contract regression
+first (classify: caller accepted an unqualified answer = defect in this slice; stub refused by the caller = the
+test's routing-level assertion restated as the acceptance-level safety property, widening allowed only for
+requests carrying the leader-qualified decision; forged leader witness = outside the fault model, stop for a
+ruling); "published but unusable" becomes a named unavailable reason; then applied position from the store in the
+statement's transaction (read-point-moved deleted), role/term from the raft owner's current observation (merge
+work/raft-owner-authority-20261121), required deadline and routing class in the final signature, typed floors,
+single-flight key with kind and floor plus echoed request, fake migrations, the census ratchet for the 37
+remaining consumers, the foreign-transaction refusal, and commit === applied kept only if a witness can
+distinguish it.
+
+## 2026-11-21 — W1b round 3 (work/placement-outcome-format-20261121, tip ec1b2f77c; record section 20)
+Executed on adams-gamla (lab/w1b-r3-red-a1 -> lab/w1b-r3-green-a1; mutants lab/w1b-mutant-definite-moved-a43,
+lab/w1b-mutant-blocked-invisible-a1). N1: branch (i) taken: release shown idempotent at apply by operation
+identity on the real partition (second release under another entry id commits REFUSED HOLD_NOT_HELD, row
+byte-identical, definite), so a blocked RELEASE is re-driven under a fresh entry id (durable attempt row replaced
+before submission; visible as REDRIVEN_UNDER_FRESH_ENTRY; bounded history); a blocked ADMIT still stops only its
+own partition; the witness reads lastPassSnapshot.blockedAttempts for both. F4 residue: an uncertain RELEASE whose
+hold is no longer engaged retires as SUPERSEDED_BY_LEDGER (receipt and hold read in one transaction; never counted
+as applied; listed once). N4: the DEFINITE set pinned literally (13 codes with reasons); the mutant moving
+BACKPRESSURE is killed only by the pin. The blocked-attempt mechanism now has a real mutant kill. Tip run: 12
+files, 9 green; the 3 reds identical at base 0993265e5. Hand-offs written: snapshot owner (staging-db format check,
+error.code, a declared format revision); merger (eight owner hunks listed for re-application on the placement-owner
+repair branch; LEADER_UNKNOWN stays in the waiting map). Open from the verifier: N3 (BYTES without a colliding
+record is not listed), N6 minor. Not run: the change cone, the pair's whole-corpus selection, any merged tree.
+Lead: short re-check started (reports/verify-w1b-round3.md) on the two new behaviours (re-drive under a fresh
+entry; retirement on hold absence, in particular whether "hold not engaged" can be read before the leader applied
+its predecessor's entries).
+
+## 2026-11-21 — named-write outcome, stage 3 corrective (work/line-regression-causes-20261121, baa2a2580 / 5392380ae)
+Executed on the lab (lab/nw2-red-70dfcdba8-1: 7 of 8 red as intended; lab/nw2-after-baa2a2580-1, 21 files;
+lab/nw2-after-5392380ae-1 green). UNKNOWN is a named outcome (CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN with its
+classifier row); returned and thrown unknowns arrive as one answer (outcome unknown, PENDING/RETRY, typed code,
+cause carried); APPLIED on a failed answer and UNKNOWN on a successful one fail closed as invalid. Consumers:
+gateway telemetry, outcome snapshot/owner contract, system-metadata owner error, admin route (was 503
+owner_not_ready for a returned unknown and 500 failed for a thrown one; now 503 with outcome unknown and
+ADMIN_OWNER_OUTCOME_UNKNOWN: the split-brain verifier had been reading an unknown write as refused).
+Zero-participant success: no real producer returns it for a named write (the engine refuses a plan with no
+partition; an UPDATE/DELETE matching no row is answered by its one partition with a receipt and 0 rows); such an
+answer is now UNKNOWN; judge table 52 rows. Reproduced and repaired: a constraint violation and a NOT_LEADER
+refusal through CDC routed via the engine were judged UNKNOWN (the thrown error dropped the participant set), so a
+definite failure was re-sent to the bound; now FAILED / NOT_PROPOSED, sent once. Managed-split message fixed;
+census over all of src found 6 undefined members (5 outside scope, one makes a port clash throw a TypeError).
+Bootstrap-direct fallback (report): reachable only on the seed in its bootstrap window when the raft lane fails
+for any reason; can apply a write twice or diverge between replicas; two real fresh-seed starts never took it.
+Rulings: scope extended for the vocabulary reason and the five message members (if no other active branch touches
+the files). The bootstrap-direct fallback is DELETED under the owner's standing rule, as its own red-first commit
+pair, after counting its log line in both retained GCP runs (non-zero = stop and report), with a witness that a
+raft-lane failure in the window executes nothing outside raft and ends in an owned outcome (wait for the leaders
+inside the existing bootstrap deadline, or typed failure), and a before/after timing of a normal fresh-seed start;
+if deletion breaks or slows a normal start, that is the necessity proof and the writer stops. To be reported to
+the owner.
+
+## 2026-11-21 — re-check of W1b round 3 (reports/verify-w1b-round3.md): APPROVE-WITH-CONDITIONS for ec1b2f77c
+No interleaving found that duplicates, loses or permanently blocks a placement or a hold release. Both new
+behaviours are safe because the apply re-validates every release (engaged -> RELEASED or COPY_PHASE_NOT_IDLE;
+lifted, never engaged, absent, terminal -> HOLD_NOT_HELD with no rows) and the owner re-derives the release from
+the census on every pass; safety does not rest on "never re-engaged". Trigger pair BYTES + OTHER_RECORD arises only
+from a committed record of another digest. Lab claims and both mutant kills confirmed; the three remaining reds
+match base 0993265e5. Hand-off list complete (nine textual hunks, eight items).
+Conditions: R1 the per-pass reconcileReleaseAttempts call has no witness; R2 at this tip the re-drive has no
+owner-side fence (the tenure guard must precede redrivenReleaseAttempt on the repair branch); R3 the
+leadership-start retirement runs before any term-start barrier (on the repair branch the per-pass reconciliation
+goes behind passTermStartBarrier); follow-ups R4-R7.
+Ruling: the writer adds the R1 witness with a mutant kill and records R2, R3, R6 in the merger hand-off and R4, R5,
+R7 as follow-ups. ec1b2f77c plus that closing commit is the merge candidate for this line, after the
+retained-repair branch.
+
+## 2026-11-21 — fixture migration line complete for its assigned files (work/line-regression-fixtures-b-20261121, cfd056019)
+Executed on tv-dator (lab/lrfixc-all-2): 20 of 20 files green, 591 assertions, every file on its first attempt.
+Changed expected values, each recorded old -> new with its reason: entity-interaction-contract case 6
+message-group half DEFER -> FAIL with the exact group-safety reason asserted (the DEFER came only from a
+hand-built context; production logic unchanged since the case was added); placement-create-bootstrap-binding case
+14 round 2: the REMOVE at PENDING evaluated by the production prospective evaluator; REPLACE at ACTIVE and STOPPING
+restated as the real admission applier's PARTITION_BUSY refusal in both orders, writing no row; voter-floor counts
+unchanged at 3. No fixture state that production cannot produce remains in those files. This branch is the fixture
+merge candidate (it contains the first writer's branch); the receipt-fake groups are on their own branch.
+Owner confirmation still owed: the executed contract "a message-group REMOVE that would drop active replicas below
+the minimum FAILS the operation; it is not deferred and retried".
+
+## 2026-11-21 — integration candidate: gate-decision probe (lab/merger-w1/probe-gate-51b48657c; record section 6)
+Executed on tv-dator (probe ref probe/merge-w1-gate-decision 51b48657c, tests only, behaviour unchanged). All three
+files that pass on 23344cddc and fail on the merge are FIXTURE DEBT: in all six gate calls the retained owner sees
+a plain object cache double with no change feed and no ledger route (binding UNAVAILABLE), and the fixture answers
+the replica_operations owner read with the row present but readAuthorityWitness null; the owner refuses the
+unqualified read (unqualified_shape), owes CLEARING and ROUTE, arms nothing, and the gate withholds. Not an owner
+defect (the rule lets only a QUALIFIED read settle a present row; the integration line's older draft accepted
+unqualified reads) and not a missing re-drive (nothing transient). The first merger stopped there (context).
+Rulings (second merger started on the candidate worktree): A true merge of the fixture branch
+work/line-regression-fixtures-b-20261121 (cfd056019, tests only); B migrate the three files' harness to production
+behaviour (leader read-authority witness from the production builder; ledger route through the real publishers into
+a real SystemTableCache with its change feed; no assertion change); C the re-drive as ruled, red-first, with two
+counted negatives; D the two timing tests on virtual time.
+
+## 2026-11-21 — receipt-fake migration (work/line-regression-receipt-fakes-20261121, tip 48a44d167; reports/line-regression-receipt-fakes.md)
+Executed on adam-laptop (lab/lrfake-final-3): 26 of 28 files green, 883 assertions; no src change; the judge repair
+and its corrective round merged in without conflict. One shared helper (test/test-helpers/committed-write-answer.js)
+builds a double's answers with production code at three levels (partition leader commit identity / settled replay;
+the real distributed write coordinator over the real executor rendering; a real CDC service method) and is pinned
+by a test against the real judge. Groups: G2 6/6, G18 2/2, G13 4/4, G3 4/4, G12 2/2, G1 5/7, durable-voter green
+(its real cause: the hand-built partition service had no nodeId). Two files had a second fixture gap hidden behind
+the missing receipt. No file slowed by more than about 2 s; nothing hit the 30 s re-send bound.
+Changed pins already made: heartbeat-storage-budget-preservation expects confirmWriteEffect in the write options;
+the CREATE-TABLE-below-quorum budget 10 ms -> 2000 ms with its assertion unchanged; bootstrap-api's fallback
+assertions restated as "exactly one services INSERT reaches the CDC owner, no raw SQL write".
+Rulings for the two open pins: register-node-in-cluster #9 (phaseScope 'join' expected at the engine): restated to
+the same property at its current owner, the gateway's phase gate; node-storage-budget-service #17 (a bare failure
+surfacing as 'write failed'): the definite failure is built through the helper's producer failure mode and the
+producer's own text is asserted. Closing writer started for: #13 (producer failure mode in the helper), the two
+pins, move-replica-assignment-token (unassigned G12 file), a re-merge of the causes branch, a final 29-file run.
+
+## 2026-11-21 — topology guard migration, stage 2 (work/topology-guard-owner-fact-20261121, tip d6fa64092; record 9-9.11)
+Executed on the lab, each witness red on its predecessor first (lab/guard-stage1-red-625381bd6,
+lab/guard-stage2-red-582d197bc -> lab/guard-stage2-green-807652bae, lab/guard-stage2-final-6d1237341,
+lab/guard-stage2-final2-4da9da27a, lab/guard-stage2-harness-d6fa64092): the reproduction, W1 (asks only the
+leader, admits once), W2 (the planner's own turn defers 5 times with owner_fact_read_failed, then exactly one
+proposal), W3 (stale published leader), election-log-not-applied (5 deferrals then one proposal minting -r2),
+read-point-moved, the retired-source check (the cache hint no longer releases the lease), the bootstrap address
+book as a hint, siblings. One owner-fact adapter and one hint adapter; the guard's refusals are now distinct
+(replica_inventory_unavailable DEFERRED with the read's reason; replica_inventory_unusable BLOCKED); the two
+cache-based escapes and getAuthoritativeEntityServiceRows are deleted; coupled pair registered. Residual witness
+(deposed services leader + operation completed elsewhere): NOT demonstrated: the old leader had stepped down and
+its receiver refused owner_fact_not_leader; the pending-turn window is not exercised.
+LEAD RULING WITHDRAWN: the over-target create-lane hold was told to DEFER on an unavailable read. That contradicts
+the SEALED invariant failed-authoritative-read-admission-verdict (architecture/contracts/invariants.json), which
+names this hold as a deliberate fail-OPEN hold with a deadlock witness (fail-closing it would strand the surplus
+drain it exists to release) and a red-on-revert test. The executed defect was a follower's INCOMPLETE rows used
+as data, not the fail-open on a read gap. Corrected ruling: READY owner fact decides; typed UNAVAILABLE fails open
+as sealed; the evidence test is restored; invariants.json is not edited; no supersession is made (there is no
+stronger proof). The successor also checks every migrated consumer's failed-read verdict against that invariant.
+Other closing items (successor started): witness and routing of the allocator's typed deferral in the workflow's
+REPLACE target binding (through the existing per-operation retry); delete the message-group bootstrap branch if no
+production caller exists; the W2 fixture waits in real time because the address quarantine uses a 30 s host-clock
+window (one-clock finding to establish; production consequence for how fast the PostgreSQL service is placed after
+one failed delivery); audit:impact-contracts; cone attribution at head; adaptation list for the read's final
+signature. Independent verification of this branch follows the read's re-verification.
+
+## 2026-11-21 — raft frame line, first writer's final report (work/raft-frame-delivery-20261121, head d3edaa08c; record 13-18)
+All executed on the lab.
+STEP 1 (e), raft envelopes as one consensus delivery class (5e5f5ffa8, follow-ups 393ece640; W-HID-1 supersession
+in its own commit 8a8b08f79): one CONSENSUS_ENVELOPE frame, no ACK, no SERVICE_RESPONSE, no delivery lifetime, no
+queue, no fallback reconnect; DELIVERED once written to the peer or handed to this router's own dispatch; one send
+closure and one receiver branch for partition, message-group and WASM groups; receiver-side refusals counted at the
+receiver. For N=50: 150 frames / 100 back / 50 orphaned / 50 timers before; 0 back / 0 orphaned / 0 timers after;
+slow peer holding a turn 4003 ms -> under 2000 ms; frames per node pair 396/792/1584 -> 132/264/528 (still red as
+kept: coalescing waits on the owner). Findings routed: F-2 an adopted inbound connection's reconnectAttempts
+becomes NaN (re-dial about every 1 ms for ever); F-3 an inbound queue overflow holds the group instead of dropping
+the envelope; F-6 after a persistence deferral mid-drain the remaining inbound is still stepped into the core.
+ITEM A (1d4125c7b red, bc949308f fix): currentTermApplied = this replica leads and its last applied entry's term is
+its current term; 12/12 green with consumer tests.
+ITEM B (90021de24 red, 97ba4431b): port.observeCurrentAuthority() in src/raft/raft-rs-current-authority.js: two
+core reads, never a turn, never steps/drains/persists/applies/announces/caches; role and leader NOT_SETTLED while
+a turn is pending, a Ready is held, or a leader has not applied an own-term entry; readStatus unchanged; 18/18
+green incl. "a deposed leader is observed as a follower at the newer term while readStatus still says leader".
+ITEM C (adfbbed6a red, f94291812 fix, d3edaa08c witness updates): a proposal enters the core only under the
+leadership it was submitted under (src/raft/raft-rs-proposal-term.js); a non-leader or other-term core answers the
+core's own proposal-dropped refusal; no production caller relies on follower forwarding; witness c (copied from the
+kernel branch) red -> green; three tests that used forwarding to stage schedules were updated.
+Open with the owner: the empty-Ready transaction (i); the slow-peer policy for coalescing (c1); acknowledgement of
+the W-HID-1 supersession.
+Started: extraction of item C onto work/raft-owner-authority-20261121 (with A and B); independent verification of
+the raft-owner items (reports/verify-raft-owner-authority.md) and of the transport change
+(reports/verify-consensus-delivery-class.md); a successor on the frame worktree for F-2 (red-first, with a count
+from the retained GCP logs), F-3, and step (h) "status announced only on change" with a census of every
+announcement consumer first.
+
+## 2026-11-21 — verification of the consensus delivery class (reports/verify-consensus-delivery-class.md): APPROVE-WITH-CONDITIONS through 393ece640
+No safety defect. Verified by reading: same-node delivery is queued, never stepped inline; liveness guards read
+any parsed frame incl. the new class; half-open sockets are severed by the application keepalive after about 61 s
+(unchanged); no non-raft message lost its ACK; lab counts confirmed ((e) 150/100/50/50 -> green; (c1) 396/792/1584
+-> 132/264/528; C7 4003 ms -> green).
+Findings: (1) RAFT TRAFFIC NO LONGER DIALS: the old fallback dialed for a raft envelope without an open connection;
+the class fails at once. Before (e) the dialing end made 118 dials in a 20-minute outage; after (e) it is bounded
+at 10 attempts and the adopted end keeps dialing only because of F-2. If F-2 is merely bounded, two live members
+whose link was down longer than the schedule never reconnect while only raft flows. The C13 long-outage clause was
+WEAKENED inside the repair commit. (2) F-2 is pre-existing and severe (attempts null, 240001 refused dials at a
+commit whose src equals base). (3) The W-HID-1 supersession is weaker for the SENDER: a retiring incarnation's
+dropped raft envelope used to show FAILED at the sender; now the sender records DELIVERED on the same-node path
+and the receiver counts the refusal; the remote path never had it; no src decision reads the observation.
+(4) Evidence gap: formation-sim-production-partitions is red before and after (46 !== 138); no corpus, cone,
+matrix or real formation run exists for this change. (5) F-3 pre-existing, low severity.
+Estimate (not measured): (e) alone is worth roughly 2 to 5 points of seed CPU during formation, about 406-418 s
+against the 420 s bound: inside run-to-run noise; (e) alone should not be expected to pass the gate reliably.
+Rulings: the frame successor's F-2 repair must bring an OWNED UNENDING reconnect (capped backoff, as long as the
+peer is a member, stops on membership loss or shutdown), restore the original C13 clause, and witness the
+permanent-disconnect hazard on a probe; 5e5f5ffa8 + 8a8b08f79 + 393ece640 + that repair merge as one unit; the
+suites the verifier lists run on the merged tree with consensusDelivery stats per node. For the OWNER to
+acknowledge: the W-HID-1 supersession (what is given up: the sender-side FAILED observation for a same-node
+envelope dropped by a retiring incarnation) and that raft traffic no longer establishes connections (the
+connection owner does).
+
+## 2026-11-21 — W1b closing round (work/placement-outcome-format-20261121, tip dc7f80b7f): MERGE CANDIDATE for this line
+Executed on adams-gamla (lab/w1b-r4-green-a1: 4/4 files, blocked-release 5/5; mutant
+lab/w1b-mutant-no-per-pass-release-a1 killed only by the new witness #4, confirming R1). New witnesses: #4 an
+uncertain release whose hold is lifted under another entry during the same tenure retires on the next pass with no
+leadership change; #5 crash between the re-drive's durable row replacement and its proposal: a second owner on the
+same store proposes only the fresh entry (green; no mutant of its own; a crash before the upsert is by reading
+only). Record: merger facts R2 (tenure guard before redrivenReleaseAttempt), R3 (per-pass call inside
+readPassCensus behind passTermStartBarrier), R6 (no cap needed; bound stated); R4 sentence corrected; R5 unchanged
+(current versus history told apart by state). Not run: the change cone, the pair's whole-corpus selection, any
+merged tree.
+Incident (no effect on results): another agent overwrote a shared scratchpad helper; two launches of this writer
+then wrote an untracked directory and two console files into the PRIMARY checkout and removed exactly those. Lead
+check: the primary checkout still shows the same 92 entries and its tracked content equals the preservation
+snapshot (the only difference is the four untracked source files, which the snapshot also holds).
+
+## 2026-11-21 — verification of the raft-owner authority items (reports/verify-raft-owner-authority.md)
+A currentTermApplied: APPROVE (applied term is the runtime owner's group.appliedTerm, restored on restart; cannot
+be wrongly true in any constructed state; served from the cached observation by readStatus, so stale mid-turn
+there; of four readers only message-group removal became more permissive and the native admission still refuses).
+B observeCurrentAuthority: APPROVE-WITH-CONDITIONS. Non-driving and uncached verified (exactly status and
+has_ready); a busy leader is not starved (NOT_SETTLED only before the first own-term apply). B-1: a leader with
+its term applied is reported LEADER mid-turn while the successor's higher-term envelopes sit unstepped in its own
+inbound queue; ticks queue behind a pending turn so check-quorum cannot fire; a turn can pend up to 120 s on
+persistence admission; the record's advice that a consumer need not use `settled` yields a stale leader-qualified
+read. Closure: unsettled when a queued envelope's term exceeds the status term. appliedIndex is the runtime's
+mirror, not a store read.
+C proposal fence: APPROVE-WITH-CONDITIONS (strictly safer than base). C-1: the term-mismatch arm is reclassified by
+droppedByLeadershipTransfer as HOST_FAILURE / leadership-transfer-in-progress / retryable true, so the write
+kernel re-proposes the same entry; only the kernel's own release protects the invariant. C-2: conf-change
+proposals carry no submitted term. C-3: a proposal submitted while an announced candidate is proposed if that
+term is won. C-4: ingress still admits a peer's MsgPropose. C-5: retryable false on the refusal is a contradiction
+(kernel ignores it; message groups rely on cached readStatus to call it a routing miss; WASM writers answer
+UNKNOWN). Unwitnessed: the term comparison itself, the fence on further batch members, readyHeld, the
+ownTermApplied arm, every typed hold, A's snapshot and hard-state restore fallbacks. Evidence gaps: only six files
+at head; no test/partition in any C run; no corpus.
+Rulings: a corrective writer on the extraction branch (after the extraction reports): B-1 closure plus a clock-lag
+signal when ticks are queued behind a pending turn; C-1 a named, un-reclassified answer for a proposal whose
+submitting leadership ended, with one consistent classification for every proposer (not proposed, definite,
+re-decide), C-2 submitted term on conf changes, C-3 refuse a proposal submitted under no leadership, C-4 ingress
+refuses a peer's MsgPropose; witnesses for every unwitnessed mechanism; partition suites run. The owner-fact
+successor was told: refuse unless the observation is the settled leader answer; two red witnesses (stepped;
+delivered-but-queued, which stays red until B-1 lands); the applied position stays the store read; the contract's
+step-down bound corrected again.
+
+## 2026-11-21 — CDC plan stamp closing items (work/cdc-currentness-stamp-20261121, final sha 5c412e839; record section 21)
+Executed on the lab (lab/cdcstamp-c3a-red on tv-dator: the six new witnesses red; lab/cdcstamp-c3b, c3c, final:
+stage file 73 of 75, the two reds being the ruled selection bounds, still 243 / 685 raft status reads). Third
+mutant (routing reads a table outside the declared list) killed by the structural case. Dead probes deleted in the
+routing file and the latency transfer (list in record 21.2); the router is now validated to deliver at wiring; K1:
+version answers validated as non-negative integers at wiring, a non-integer at read time means the plan is not
+held; unwired start and propagate refuse typed, stop does nothing. Two tests outside the CDC area passed an empty
+router object into real bootstrap/joining phases and now pass a router double. Declared behaviour change: wiring a
+router that cannot deliver is refused at initialize (before: MESSAGE_ROUTER_UNAVAILABLE at use). Router-double
+census: 22 files, none refused at wiring; two fail identically at 23344cddc.
+Foreground-boundary first case: NOT test waiting but product work paid once per process: the first call of
+runtimeBuildProvenance() (measureBoot) verifies the raft-rs binding, fingerprints all of src and every production
+dependency file and hashes the SQLite addon and the ~125 MB node executable: 3.1 s wall / 4.4 s CPU cold, 14 ms
+warm (probes lab/cdcstamp-first-case-probe, lab/cdcstamp-first-case-phases). The budget is not raised.
+Lead: a short read-only check started (reports/verify-cdc-closing-and-boot-provenance.md): (1) the closing
+commits, centred on whether any production construction order wires a not-yet-deliverable router (the new refusal
+would break startup) and whether any deleted guard protected row data or an optional structure; (2) where the boot
+provenance cost falls on a real node's formation timeline (first caller, main loop or threads, once or repeated,
+any trace in the retained seed profile): on a 1-CPU node 4.4 CPU-seconds is the same order as the margin by which
+formation missed its bound. 5c412e839 is the merge candidate for this line once check (1) approves.
+
+## 2026-11-21 — check of the CDC closing commits and the boot provenance cost (reports/verify-cdc-closing-and-boot-provenance.md)
+CDC 5c412e839: APPROVE-WITH-CONDITIONS for merge. Verified: the router refusal cannot fire in production (the
+service is constructed and initialized only in latency-topology-setup.js, which already asserted a router; seed
+and joiner pass a real MessageRouter whose deliver is on the prototype); every deleted guard protected a wired
+collaborator method, row guards kept; lab files confirmed (six witnesses red then green; third mutant killed).
+Condition: the navigability ratchet baselines still list the routing file: run the static ratchet at head and
+tighten. Non-blocking observations recorded.
+Boot provenance: on a real node the first call is at the ENTRYPOINT (acquireLagrangeRuntime awaits
+logBootProvenance before the node starts), not lazily; the lazy path exists only in processes that skip the
+entrypoint (tests). Hashing is synchronous on the main thread (one 125 MB block), src is walked twice; once per
+process. The seed profile's chunk 0 contains it; chunk 1 does not. Estimate: 5 to 12 s per node boot at 1 CPU;
+its share of the 420 s formation bound in the retained run is about zero (containers were up 27 to 65 s before the
+formation clock started); it would count only for a process restart inside the window. No action for the gate;
+recorded as a boot-cost item with options in the report.
+Ruling: the second merger received TASK E: true merge of 5c412e839 into the integration candidate, its file set
+executed, the ratchet tightened one-way.
+
+## 2026-11-21 — bootstrap-direct fallback DELETED (work/line-regression-causes-20261121, head 097888f1a; report section "Stage 3 follow-up")
+Executed. Real-cluster evidence: ZERO occurrences of the fallback's log line in both retained GCP seed logs (run 1
+node 751f5575, run 2 node 95ce5141) and in the other four node logs; positive control: both seed logs start at
+process start and contain warnings inside the bootstrap window, so a fallback would have been logged. Witness
+through the real seed startup child (lab/nw2-red-a203b2c36-1 -> lab/nw2-after-097888f1a-1): when the raft lane
+answers the first window write with NOT_LEADER, the fallback re-executed the INSERT outside raft AND that seed
+still failed to start (original-allocation-observation-unavailable, 11.3 s): the fallback ran and did not save the
+start; after the deletion nothing runs outside raft and the outcome is owned. A normal start never took the
+fallback (0 direct writes), so no extra wait was added; the existing wait is waitForRequiredPartitionLeadership().
+Normal-start time 26.0 / 27.8 / 27.0 s before, 30.3 s after (ONE sample on an unchanged path). No named write runs
+in the bootstrap window (table with file:line in the report). Hand-over edits made: the UNKNOWN reason in the
+authoritative-row vocabulary; two message members at their owners. Left: three router message members (the
+transport constants file is owned by the raft frame branch; passed to its writer).
+Stopped: five unit files red because their fakes model the deleted lane or assert the direct fan-out.
+Rulings: a fixture writer migrates the five files (the fake's write lane answers through the raft lane; a direct
+fan-out assertion becomes "exactly one write through raft, nothing outside raft"; a file that shows the deletion
+broke a reachable state stops the work) and repeats the start-time measurement three times before and after on one
+host (consistently slower = stop). Independent re-check started (reports/verify-named-write-stage3.md) with
+separate verdicts for the named-outcome commits and for the deletion, including whether any refusal existed that
+the fallback did rescue and how the very first seed writes are made before a raft leader exists.
+
+## 2026-11-21 — receipt-fake migration COMPLETE (work/line-regression-receipt-fakes-20261121, 9e534235f)
+Executed on adams-gamla (lab/lrfake2-final-2): 29 of 29 files green, 912 assertions; no file slower than 20 s. The
+branch carries a true merge of the named-write branch at a203b2c36 (judge repairs, UNKNOWN as a named outcome,
+hand-over edits, the fallback's red witnesses; NOT the fallback deletion 097888f1a).
+Helper: two producer-built failure modes (not-leader refusal before proposal; committed statement failure), pinned
+as FAILED / NOT_PROPOSED, never UNKNOWN, at the engine, through the real CDC and through a named gateway write.
+Changed expectations (recorded old -> new): register-node-in-cluster #9 (join scope asserted at the join-admission
+gateway: every write carries it, the startup SQL phase is 'join', as many writes as the engine receives);
+node-storage-budget-service #17 (text 'write failed' -> the producer's 'Distributed operation failed due to
+participant failures'); move-replica-assignment-token (fixture debt: the test's fast Date.now made the named
+write's own wait expire; the fast clock is now installed only after the write is accepted; no assertion changed).
+Finding and ruling on register-node-in-cluster #13: since 160bf0e6c a named write hands each caller a NEW Error
+whose cause is the producer's error, so asserting that error.cause IS the CDC's thrown object cannot hold. LEAD
+RULING: confirmed as implemented: the participant failure is the error the registration's gateway write threw, all
+seven assertions unchanged, plus one assertion that the producer's error is in the cause chain (chain membership
+is the property; the depth is an implementation detail).
+Remaining fixture debt noted: subtests 11 and 12 still throw a hand-built participant failure (they pass).
+Merge plan: this branch brings the named-write commits and their fixtures together (the named-write branch must
+not merge without them); it merges into the candidate after the re-check of the stage-3 named-outcome commits; the
+fallback deletion follows separately after its own re-check, fixture migration and timing runs.
+
+## 2026-11-21 — re-check of the named-write stage 3 and the fallback deletion (reports/verify-named-write-stage3.md)
+(i) Named-outcome commits through e5cdc7770: REJECTED as they stand. (ii) Fallback deletion 097888f1a:
+APPROVE-WITH-CONDITIONS.
+Finding 1, NEW DEFECT from baa2a2580 (by reading; no witness): a first attempt can be judged NOT_PROPOSED while its
+entry may still commit: the CDC loop re-sends a typed unknown under the same key and throws only the last answer;
+"unresolved" is sticky only within one delivery; the thrown error now carries participants and settleInstance
+releases on NOT_PROPOSED. Schedule: attempt 1 unknown (leader lost after proposal), attempts 2..n NOT_LEADER,
+instance released as definitively unapplied, attempt 1's entry commits later.
+Finding 2, undeclared change from baa2a2580: the CDC's terminal SHUT_DOWN answer links a typed unknown through
+cause and becomes the returned unknown answer; cdc-shutdown-terminal-owner-write cases (i), (ii-a), (iv) are red at
+head for this reason (not deletion debt).
+Confirmed: the UNKNOWN classifier and its consumers; conversion by code, never by text; the judge (mixed or
+multi-partition answers are UNKNOWN; partial application is never FAILED); the hand-over edits; lab files.
+Deletion: 0 fallback lines in both GCP seed logs (verifier's own count); no direct lane is needed for the first
+rows; BUT one transient refusal now fails the start (window callers single-shot; no CDC retry in bootstrap mode);
+service_definitions, service_endpoints and config are written with no leadership wait; a failed attempt with rows
+written cannot continue (re-founding); "failed even with the fallback" was shown only for the first services
+INSERT; the author's window times were misstated. Pre-existing: both GCP seeds log config seeded 0, skipped 72 and
+that caller cannot tell applied from refused.
+Rulings (to the writer on the branch, scope extended to src): A unresolved is sticky for the whole write
+instance: the loop's answer is the most uncertain observed; only a commit receipt (or the owner's authoritative
+resolution) makes it definite; witnesses for [unknown, NOT_LEADER, NOT_LEADER] and the definite mirror. B a
+shut-down owner's answer stays terminal and is never converted into pending/retry; the three red cases go green
+unchanged. C the bootstrap window waits for the leader of every partition it writes through the existing owned
+wait, inside the existing deadline; witness through the real seed startup; timing repeated. D the config seeding
+summary investigated and reported.
+Consequence for merging: the receipt-fake branch (9e534235f) contains baa2a2580 and is NOT merged into the
+candidate until A and B land and the named-write branch is merged into it again.
+
+## 2026-11-21 — topology guard closing items (work/topology-guard-owner-fact-20261121, 017921e17; record section 10)
+Executed on the lab (lab/guard2-final-017921e17 with attribution.txt): 139 files, 112 pass, 27 fail; no red from
+this branch (26 identical at base; one identical on the integration line; one earlier hidden red is green again).
+Over-target hold: restored to the sealed fail-open; READY decides from the leader's rows; UNAVAILABLE gives no rows
+and no cache count and fails open with one log line naming the reason and G1; invariants.json untouched; the
+sealed evidence test restored (only the call-shape adaptation kept) plus two rows for the guard's typed DEFER and
+typed DENY. Writer's correction to the lead's brief: before this branch a follower's incomplete answer was turned
+into [] and the hold failed open on EVERY read from a follower host; the read mode made a gap that never closed.
+Per consumer against the sealed sentence: guard, retired-source check and allocator fail closed; the address book
+is a hint; REMOVE fence and spread confirmation untouched.
+REPLACE target binding: green on first run, no product change (a thrown deferRetry reaches runOperationOwnerAction,
+whose catch arms the operation's own retry; exactly one allocation, one binding write, one CREATE after READY).
+SQL provisioning never reaches the allocator in production. The message-group bootstrap branch deleted (two
+production callers of createOperation, neither reaches it). audit:impact-contracts passes.
+One-clock finding (not changed): the temporarily-unroutable-address quarantine reads Date.now()
+(query-executor-temporary-unroutable-addresses.js:29, :132) while the executor has the node clock; in production
+ONE NO_HANDLER answer from the services-p1 leader keeps owner-fact reads unavailable for 30 s: about six planner
+turns spent, the PG-wire service placed up to about 35 s late.
+rebalance-coordinator-topology-guard.test.js: red before and after because its double answers the entity read
+without rowSetComplete (fixture gap since 11384acd1), so the guard's own unit file asserts nothing today.
+Started: independent verification of the consumer migration (reports/verify-topology-guard-migration.md), with the
+earliest-formation liveness question (can the guard get a READY owner fact while the first partitions are placed,
+now that the cache-based escapes are gone); a writer on work/query-executor-quarantine-20261121 for the one-clock
+repair (red-first) and a witnessed proposal for the NO_HANDLER penalty (no duration change without a ruling).
+
+## 2026-11-21 — write kernel tenure fence, follow-up (work/write-kernel-tenure-fence-20261121, head eb281f314; record 14-15)
+Executed (lab/kernel-join-red-0572e9e0 -> lab/kernel-final-eb281f31-set; base lab/kernel-base-8e84e280-d).
+Ownership: each write records its own registration; a release acts only on the registration it owns and only
+before hand-over (the verifier's schedule red -> green). Join gap closed on the ordinary-write path: every caller
+joins through getPendingCommittedWriteOutcome, which first runs the same release step. The lead's PLACEMENT join
+witness cannot be built: after a renewal the participant cutover pause is raised and placement checks the pause
+before its join, so a new-tenure admission never reaches the join (withdrawn; the gap is real for ordinary writes,
+which join before the pause). Docs updated. Suites the verifier listed: green at head and at base
+(participant-transaction apply/topology, epoch fencing, settled replay, CDC delivery progress, proposal-queue
+properties, transfer-leadership, 13 participant-release files); placement-retained-leadership fails cases 1, 2, 4
+identically at base.
+Open: (1) reconstruction test 5 fails 2 of 10 runs with the fence and 0 of 4 without: not separable from chance;
+(2) null tenure not repaired (the witness could not park a write without a tenure; 61 test files fake leadership
+with isLeader = true); (3) side finding: a parked write from an ended tenure keeps its whole partition paused until
+readmission or its 30 s deadline; (4) the pending-fingerprint cleanup in placement admission and formation
+compares by value (other owners). The tenure contract is NOT closed while witness c is red.
+Rulings (successor on the same worktree): an interleaved 10-versus-10 A/B batch for the flake on one host plus a
+trace of the wait it times out on; the parked-write pause gets a red witness and the repair is the SAME release
+step called a third time, from the tenure-change event (hand-over, join, tenure end: one function, no timer),
+never touching a write already handed to consensus; report on the fingerprint cleanup and on whether the raft
+owner's "a non-leader core refuses" rule closes the null-tenure case at the port.
+
+## 2026-11-21 — verification of the topology guard migration (reports/verify-topology-guard-migration.md): APPROVE-WITH-CONDITIONS for 017921e17
+Holds: the repair (reproduction, W1-W3, siblings, election log, read point, retired source, address book: red then
+green, confirmed per file and assertion count); the cone (139 files, 112 pass, 27 fail, none from the branch); no
+follower, cache or default-[] rows reach the guard, the allocator, the recent-target lease or the hold's count;
+every deferral has a wake (the planner's scheduled turn or the workflow's per-operation retry) and none spins; the
+hold matches the sealed sentence; partition placement during formation never runs the guard (only the unified
+rebalancer sets the flag); deleted pieces have no caller.
+Findings: (1) the hold's fail-open is NEUTRALISED in effect: the guard runs right behind the hold and defers the
+same cure ADD that the deleted escape used to admit; (2) NO SUPERSESSION EXISTS: commit 494c71ec1 (2026-07-18,
+quest spread-cure-union-escape-and-monotone-gate) SEALS "an UNAVAILABLE authoritative services read -> an admitted
+spread-restoring operation within one evaluation cycle" through the conservative-union escape; the branch reverses
+it and changed the sealed test; the sealed invariant still names replica_inventory_unusable as the guard's verdict
+on a failed read; (3) the guard's decision table is mostly unasserted (its unit file never reaches the guard);
+(4) pre-existing cache-derived grants remain; (5) the hint adapter is not the production path; (6) the deferral
+reason is dropped from the planner's log; (7) stale-complete inventory at floor 0: bounded by the deposed-leader
+window; (8) quarantine: host clock, 30 s, NO_HANDLER only, about 35 s worst case.
+LEAD: the ruling "delete the guard's two cache-based escapes" was MADE WITHOUT CHECKING FOR A SEAL and reversed a
+sealed result; it is suspended, not confirmed. Hypothesis to settle by execution: in July the services read was
+unavailable for minutes because of the read-mode defect this branch repairs; with the owner-fact read the same
+situation gives a READY fact; with services-p1 truly leaderless the escape cannot help because the admitted cure
+cannot complete. A writer produces the evidence (the original sealed test byte-identical at head; the July
+situation at base and head; a genuinely leaderless services-p1; the circular schedules incl. services-p1 itself and
+the concentrated ledger; the hold composed with the guard) and recommends RESTORE (as sealed or narrowed) or
+SUPERSEDE (stronger sentence, witnesses, a draft supersession record). Until the ruling the sealed test is restored
+to its 23344cddc content on the branch and the guard's source is not changed further. Also: the guard unit fixture
+repaired so the decision table runs; the deferral reason kept in the planner log.
+Conditions recorded for the three-node run: every deferral logs its cause on the planner node; any
+replica_inventory_unavailable run longer than about 35 s is explained.
+Process correction for the lead: before ruling a deletion of any arm, grep the quest logs and the invariant
+registry for a seal on it.
+
+## 2026-11-21 — raft-owner authority branch extracted (work/raft-owner-authority-20261121, head 692336b45; reports/raft-owner-authority-extraction.md)
+Seven commits on 23344cddc, red-first per item, each through the hook: A 03d235ef5 / 3de457241; B e15e12b14 /
+ea85ea499; C a0617f2e0 / 83622061e / 692336b45. Every source and test file byte-identical to its source commit; no
+pick conflicted; the six transport commits are left out. Executed on tv-dator: base 21/21 green; head 22/25: all A,
+B, C witnesses green; three files red (runtime-captured-inbound-service-native,
+runtime-captured-inbound-boundary-native, runtime-turn-integrity CA1 and CA1/M9: eight subtests): each failing
+subtest's SETUP has a follower propose and forward, which item C removes; they fail identically at the source head
+and pass at ea85ea499 (before C); none of C's own lab runs had included them.
+Started: the corrective writer on this branch (reports/raft-owner-authority-corrective.md): restage those three
+files without follower forwarding with every assertion kept (runtime-turn-integrity is the sealed pre-drain
+differential oracle: its claim text is read first; a case whose premise was "a follower forwards" stops the item);
+B-1 (unsettled on a queued higher-term envelope and on a tick backlog; the observation stays non-driving); C-1 a
+named, un-reclassified refusal for a proposal whose submitting leadership ended; C-5 one classification for every
+proposer (nothing proposed = definite; re-decide; not a host failure); C-2 conf changes carry the submitted term;
+C-3 a submission under no leadership is refused; C-4 the ingress refuses a peer's forwarded proposal; a mutant
+kill for every unwitnessed mechanism; raft and partition proposal suites at head and base. The owner-fact
+successor was told it may merge the branch now and must refuse on any unsettled answer.
+
+## 2026-11-21 — placement stage 3 (work/placement-owner-repair-20261121, head 376592b8b; record 29-32)
+Executed on the lab. STAGE 3a (5a1f66105), lab/por-s3a-5a1f6610: construction orders 1-9 and the teardown witness
+green (4, 5, 6 red before). No per-partition scheduler is constructed; the capability probe and the
+skip-on-any-sink branch are gone; attach preconditions (ledger replica open, cache set, coordinator set) are each
+retried by the event that makes them true (initialize, cache setter, coordinator setter/rebind, factory binding);
+one coordinator attach path with typed refusals; the fallback constructor removed; ControlPlaneSetup.create always
+binds the factory, which takes the node authority at attach time and requires the timer pair; an occupied
+leadership sink at attach is a typed refusal. Teardown witness green without repair (quiesceRebalancing nulls the
+coordinator synchronously).
+Corrective round 2: item 2 red -> green (lab/por-cr2-witnesses-c9ff75c7 -> lab/por-cr2-item2-536d024a): a failure is
+classified by what is known of the proposal (not handed over / definite refusal: failed candidate, pass continues;
+admitted then local failure: admitted + abort; handed over with no answer: attempt retained + abort). Item 4: the
+verifier's schedule witnessed green with no change; item 5: witness green (mutation not run); item 3: not
+reproducible (the evaluation type-checks every field).
+STAGE 3b (376592b8b): deleted R2's flag check (in rebalance-coordinator-operation-creation.js),
+initializeRebalancer, the existing-rebalancer branch, applyRebalancerDependencies; the partition's rebalancer field
+is now always null (dead reads in five partition files, out of the writer's scope). 144 files: 22 red before, 70
+red after: 42 files turned red, all through R2: unbound TEST coordinators now create operations through placement
+admission and fail. Tests not migrated (36 migrate, 6 decide per test, a delete group).
+Rulings: R2's deletion stays; a test-migration writer (same worktree) merges the fixture branch for its helpers,
+binds test coordinators like production through ONE shared harness whose admission answers come from the
+production admission code (or builds operations through the producers when the test is about what follows
+creation), decides the 6 per property, deletes only cases that pin the retired mechanism (never one about a
+preserved requirement), removes the dead rebalancer reads, attributes the 19 unattributed reds. Item 4: no source
+change. Independent verification started (reports/verify-placement-stage3.md), with a SEAL CHECK on everything 3b
+deleted and the formation question: how are the very first operations created on a fresh seed now that creation
+always goes through placement admission.
+
+## 2026-11-22 — verification of placement stage 3 (reports/verify-placement-stage3.md): APPROVE-WITH-CONDITIONS for 3a, corrective items 1-2, and 3b
+Formation question answered (verified): 3b changes nothing on a production node: the flag is false only inside the
+coordinator's constructor and is bound in the same synchronous run of ControlPlaneSetup.create; the only
+new RebalanceCoordinator in src is that one; R2's false arm has not run on a node since 2026-11-19; the seed's
+first operations are the placement owner's own admissions and never pass through createOperation.
+Seal check: nothing in invariants.json or the decision tables names a deleted symbol; no sealed PRODUCTION
+behaviour is removed. BUT F5: R2's false arm was the last source path on which SEALED WITNESSES ran (e.g.
+dt6-priority-recovery-add-dispatch-cadence, the named cure proof of its quest), now red; the open quest
+replica-placement-admission-owner requires supersession records before any source change
+(supersessions-recorded-first) and has none.
+F6: partition-service-leader-activation-methods.js:39-46 is NOT a dead read: with rebalancer always null every
+readiness dip demotes and re-promotes the runtime-service owner and the service-installation reconciler; in
+production since ab901b40f (inferred); its witness partition-rebalancer-leadership-readiness-hysteresis.test.js is
+red by reading and was in no lab selection.
+Other findings: F1 re-entry during the attach's synchronous prefix runs the factory again and throws typed into
+that event; F2 the typed refusal has no handler; F3 the timer-pair check cannot fail through the production
+factory; F4 a binder sweep after quiesce is not excluded by the teardown witness; F8 3b changed 49 files, not 42;
+F9 placementResyncAdmissions not incremented in one case; F10 a deterministically throwing submission is head of
+line for the tenure; a third new UnifiedRebalancer exists (runtime-service setup).
+Rulings (to the writer holding the worktree): F6 first, red-first, as a product defect (the hysteresis moves to
+the owner that drives the sink; witness that a dip shorter than the window causes zero demotions); the red files
+are classified SEALED versus ordinary: sealed witnesses are NOT migrated, restated or deleted: for each a
+proof-transfer plan onto the placement-owner path is written for the lead's ruling and the supersession records;
+ordinary files are migrated; F1, F4, F9 witnessed and fixed, F2 and F10 witnessed and reported; the remaining
+reads re-examined before deletion. The branch carries 49 red files from 3b until then: not merged.
+
+## 2026-11-22 — write kernel tenure fence, closing (work/write-kernel-tenure-fence-20261121, head 0a88745f6; src identical to eb281f314; record section 16)
+Executed on adam-laptop. Flake: interleaved A/B, no runner failures: head 1 failure in 10
+(lab/kernelab-head-06), base 8e84e2801 2 in 10 (lab/kernelab-base-04, -05), every failure the same 10 s wait at
+:696: PRE-EXISTING, not caused by the fence. Mechanism (inferred, timings fit): only node-1 can resume in the
+fixture (the control partition lives only on node-1's handler); the old leader must win the election after the
+heal; election timeouts are offset per replica and randomized; with check-quorum the others ignore its pre-votes
+until their lease expires; if r2's timeout fires first, r2 leads, can never resume, and the wait expires. Goes to
+the fixture/test owner with its trace.
+Parked-write pause: the lead's premise does NOT hold (lab/kernel2-pause-0a88745f, 9/9 green witnesses on the real
+kernel and release contract): the pause lasts exactly the reservation's remaining life (5000 ms with and without
+the parked write; 0 ms beyond it); the 30 s deadline is never the limit; a deferred write adds at most 100 ms.
+LEAD RULING WITHDRAWN: "release at tenure end through the same release step": no failing test demonstrates a
+defect, so no change (it would only answer a parked write's caller earlier); the exact change is recorded in
+section 16.2 should a witness ever need it.
+Fingerprint cleanup by value in placement admission and formation: not reachable today (both check the cutover
+pause before the join); owners' fix recorded (clean up by registration identity). Null tenure: closed at the port
+by the raft owner's rule (a non-leading or other-term core refuses instead of forwarding); narrow inferred
+remainder: a write handed over in the very turn in which the core wins, at the term its candidate announcement
+already carried (the raft corrective writer has C-3 for exactly this).
+STATE: this branch is a merge candidate for the kernel fence (approved with conditions; conditions answered);
+the owner's tenure contract is closed only when the raft-owner branch with the proposal fence is merged with it
+(witness c green on the merged tree).
+
+## 2026-11-22 — integration candidate at 487d12c91 (second merger; reports/integration-merge-record.md sections 7-12; lab/merger-2/)
+A fixture-migration merge 7a9f52e64: no textual conflict; 48 files, 44 pass; all 20 fixture files green with
+their original counts; the 4 reds identical to 78c40b57b.
+B dispatch-gate harness ee42a0618: the replica_operations owner read carries a witness from the production
+builder; the coordinator uses a real SystemTableCache and the ledger route is published through the real
+publishers (incl. PARTITIONS leader_node_id); the three files that passed on 23344cddc and failed on the merge are
+green with unchanged assertion counts.
+C re-drive: red dadbc11f0 (mirror case 8 and two negatives) -> green cd177cba8 (mirror 12/12; dispatches 1 / 0 / 0).
+Port reportRetainedRepairVerdict({operationId, createdAt, verdict}) as the fourth required port; emission only in
+retireRetainedRepair when the record refused its last caller and none is waiting; the gate records the withheld
+attempt (createdAt, ownership fence epoch, budget deadline) in a map owned by the workflow owner, cleared on
+terminal state and shutdown; confirmed re-enters dispatchOperation once; unconfirmed ends the wait with
+OPERATION_NOT_DISPATCHABLE; no timer, no polling. DEVIATION from the ruling: not the 953d705f8 retry entry (every
+arm of it sets a timer). RESIDUAL stated by the author: if the decision that answers a caller also retires the
+record, the gate's wait gets no verdict and stays until terminal state or shutdown.
+E CDC plan stamp merge 8d897772b: no conflict; 57 files, 53 pass; the stamp witness fails only its two ruled
+selection-bound cases. Ratchet tightening 487d12c91: to min(committed, current) per key, no entry added
+(owner_port 2008 -> 1969, identity_keyed 82 -> 81, row_field 682 -> 680, two_source 1686 -> 1658, typeof 594 ->
+586, legacy 2835 -> 2760, catch_returns_default 374 -> 367). FINDING: the full-repo navigability audit shows 12
+sites above their baseline allowance in 10 files unchanged since 23344cddc (the hook checks only staged files):
+pre-existing ratchet debt needing an owner (fix the sites; never raise the baseline).
+Head: 132 files, 114 pass, 18 fail, each with the same first failing line as before; the 97-file cone went from 24
+to 16 reds.
+Not done: D (two timing tests on virtual time).
+Started: independent verification of the re-drive (reports/verify-withheld-dispatch-redrive.md), centred on lost
+wakes (incl. the stated residual), double dispatch, the fence, and whether the new map is a second mechanism; a
+third merger: D; F merge of the outcome-format branch dc7f80b7f; G merge of the placement-owner repair at
+8e84e2801 with the outcome-format and retained-repair hunks re-applied by hand in replica-placement-owner.js; H
+merge of the write-kernel fence 0a88745f6 (witness c stays red until the raft-owner branch merges).
+
+## 2026-11-22 — verification of the withheld-dispatch re-drive (reports/verify-withheld-dispatch-redrive.md): APPROVE-WITH-CONDITIONS for cd177cba8
+Safe to keep, not yet a reliable cure. Findings (by reading at cd177cba8 plus lab files): (1) LOST WAKE ON A HELD
+LANE: the re-drive deletes the wait and calls plain dispatchOperation, which returns the lane holder's promise and
+never runs the new factory; when the verdict arrives while the withheld turn still holds the lane (it does a
+leader-required read there) the re-drive is lost; the codebase names this class BR2a; the witness cannot see it.
+(2) the wait is registered after the answer (a verdict in the microtask gap is never served; low). (3) the stated
+residual is benign (same-step retirements; the lost verdict would be UNCONFIRMED; a leaked entry until terminal or
+shutdown; no timer enforces the recorded deadline). (4) a stale wait is not cleared when the gate later passes
+(one spurious dispatch wake possible). (5) UNCONFIRMED only logs and ends the wait: the outcome object is discarded
+and the operation is neither failed nor retried; row_changed leaves a possibly dispatchable row withheld. (6) the
+createdAt fence protects against an old incarnation; an ownership move is fenced by isOperationLocallyOwned in the
+dispatch entry; "exactly once" is the fixture plus the dispatch machine's claim. (7) the deviation is correct
+(every arm of the 953d705f8 entry sets a timer and its runner never dispatches; the new map is a different
+concern). (8) port: one construction site, validated, no probe. Surviving mutants: createdAt, epoch and deadline
+comparisons, clear-on-shutdown, both emission conditions, the missing-port throw. No run of the three gate files at
+head 487d12c91.
+Rulings (task I for the candidate's writer, after its merges): the re-drive uses the existing re-arm mechanism for
+a wake that arrives while the lane is held (held-lane witness first); the wait is registered before asking and
+cleared when the gate passes; a verdict is handled by the same code path the gate uses at ask time: row_changed
+re-evaluates once; a definite refusal ends the wait with the typed non-dispatchable outcome handed to the
+workflow's existing handling (no limbo); witnesses for the surviving mutants; the mirror and gate files run at the
+actual head. These are conditions for the three-node run.

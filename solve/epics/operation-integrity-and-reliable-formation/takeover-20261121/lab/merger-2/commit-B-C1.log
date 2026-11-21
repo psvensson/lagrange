@@ -1,0 +1,57 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: 7a9f52e647336a0b00b450a38389fe08151ac4f0
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 0 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 0 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 0 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 0 JavaScript files
+Found 0 navigability violations
+Matched 0 inherited navigability baseline violations
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/integration-candidate-20261121 ee42a0618] test: dispatch-gate harness answers and routes the ledger as production does
+ 8 files changed, 167 insertions(+), 43 deletions(-)
+B-SHA=ee42a06185dede1399c675a38751d308e89049ec
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: ee42a06185dede1399c675a38751d308e89049ec
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 1 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 1 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 1 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 1 JavaScript files
+Found 0 navigability violations
+Matched 0 inherited navigability baseline violations
+Scoped complexity ratchet: 0 violation(s) in 1 target(s) (threshold: 12).
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/integration-candidate-20261121 dadbc11f0] test: a withheld dispatch is re-driven once by the retained verdict, never otherwise
+ 4 files changed, 100 insertions(+), 13 deletions(-)
+C1-SHA=dadbc11f0126d4a60dab619ff8379a84493c543f
+rc=0

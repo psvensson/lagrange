@@ -1,0 +1,91 @@
+lab test: tv-dator: ordinary (9 files) cores=12 mem=15.4GiB speed x1.45
+[tv-dator] placement-shell=3282988
+[tv-dator] placement-head=4da9da27a9fcaa69c2075c9a406da06016f2a4eb
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3283440
+[tv-dator] # test-files planned=9
+[tv-dator] classified lane ordinary: 9 file(s), jobs=4
+[tv-dator] thermal: ok cpu 58C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/required-entity-operation-observation.test.js (177 assertions, 1722ms)
+[tv-dator] not ok test/raft/raft-rs-backend/committed-membership-stamp.test.js (1 assertions, 1888ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: T2: a join is stamped with the committed configuration its leader answers (log fold over the test founders), not the planted rows; the target replays to the fold
+[tv-dator] not ok 1 - T2: a join is stamped with the committed configuration its leader answers (log fold over the test founders), not the planted rows; the target replays to the fold
+[tv-dator]   ---
+[tv-dator]   duration_ms: 426.982789
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:52:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the creation read succeeds (SERVICES inventory of partition o1-stamp unavailable: hint_read_failed)
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + Error: SERVICES inventory of partition o1-stamp unavailable: hint_read_failed
+[tv-dator]     +     at CreationOwner.buildServicesInventoryUnavailableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-read-methods.js:514:19)
+[tv-dator]     +     at CreationOwner.readBootstrapServiceRows (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+[tv-dator]     +     at async buildCommittedBootstrapTopology (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+[tv-dator]     +     at async CreationOwner.createOperationRecordInternal (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+[tv-dator]     +     at async createJoinOperation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-harness.js:375:5)
+[tv-dator]     +     at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:93:21)
+[tv-dator]     +     at async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     +     at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {
+[tv-dator]     +   deferRetry: true,
+[tv-dator]     +   nextAction: 'retry',
+[tv-dator]     +   reasonCode: 'hint_read_failed',
+[tv-dator]     +   rebalanceSkipReason: 'services_inventory_unavailable'
+[tv-dator]     + }
+[tv-dator]     - undefined
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   actual:
+[tv-dator]     rebalanceSkipReason: 'services_inventory_unavailable'
+[tv-dator]     reasonCode: 'hint_read_failed'
+[tv-dator]     nextAction: 'retry'
+[tv-dator]     deferRetry: true
+[tv-dator]   error: 'SERVICES inventory of partition o1-stamp unavailable: hint_read_failed'
+[tv-dator]   stack: |-
+[tv-dator]     CreationOwner.buildServicesInventoryUnavailableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-read-methods.js:514:19)
+[tv-dator]     CreationOwner.readBootstrapServiceRows (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+[tv-dator]     async buildCommittedBootstrapTopology (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+[tv-dator]     async CreationOwner.createOperationRecordInternal (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+[tv-dator]     async createJoinOperation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-harness.js:375:5)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:93:21)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:95:12)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] 1..1
+[tv-dator] # tests 1
+[tv-dator] # suites 0
+[tv-dator] # pass 0
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 433.776773
+[tv-dator] # time=1888ms
+[tv-dator] ok test/rebalancer/topology-guard-inventory-authority.test.js (57 assertions, 2812ms)
+[tv-dator] ok test/rebalancer/services-inventory-owner-fact-siblings.test.js (34 assertions, 5094ms)
+[tv-dator] ok test/control-plane/readiness-snapshot-persistence.test.js (57 assertions, 1389ms)
+[tv-dator] ok test/rebalancer/topology-guard-owner-fact-inventory.test.js (25 assertions, 4818ms)
+[tv-dator] ok test/rebalancer/topology-guard-owner-fact-read-point.test.js (11 assertions, 4813ms)
+[tv-dator] ok test/rebalancer/rebalance-coordinator-operation-ownership.test.js (233 assertions, 1378ms)
+[tv-dator] ok test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js (4 assertions, 10524ms)
+[tv-dator] # test-files total=9 pass=8 fail=1 assertions=599
+lab test: tv-dator: # test-files total=9 pass=8 fail=1 assertions=599
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=9 pass=8 fail=1 assertions=599
+exit=1

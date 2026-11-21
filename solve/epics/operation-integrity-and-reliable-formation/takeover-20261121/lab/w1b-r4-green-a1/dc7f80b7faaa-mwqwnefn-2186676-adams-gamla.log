@@ -1,0 +1,19 @@
+placement-shell=2089066
+placement-head=dc7f80b7faaa1950ff8e82c55f53b1c922e79c8e
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=2089522
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=3
+thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (3 assertions, 1875ms)
+ok test/rebalancer/replica-placement-owner-blocked-attempt.test.js (1 assertions, 6663ms)
+ok test/rebalancer/replica-placement-owner-blocked-release.test.js (5 assertions, 6910ms)
+ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 6238ms)
+# test-files total=4 pass=4 fail=0 assertions=13
+placement-results={"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1875,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-blocked-attempt.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6663,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-blocked-release.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6910,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6238,"retriedOnce":false,"firstFailureLine":null}

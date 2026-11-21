@@ -1,0 +1,529 @@
+placement-shell=3753080
+placement-head=5c412e83931fc871ae9a3f4e0afbfdb77a26ca2c
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3753588
+# test-files planned=3
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/partition/partition-cdc-currentness-stamp-witness.test.js (75 assertions, 7750ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+ok 1 - one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+  ---
+  duration_ms: 3350.484894
+  type: 'test'
+  ...
+# measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+# Subtest: one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+  ---
+  duration_ms: 78.219126
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5c412e83931f-mwqx3wae-2212900/test/partition/partition-cdc-currentness-stamp-witness.test.js:358:3'
+  failureType: 'testCodeFailure'
+  error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5c412e83931f-mwqx3wae-2212900/test/partition/partition-cdc-currentness-stamp-witness.test.js:361:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+# Subtest: one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+ok 3 - one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+  ---
+  duration_ms: 58.9238
+  type: 'test'
+  ...
+# measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+# Subtest: one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+not ok 4 - one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+  ---
+  duration_ms: 56.413156
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5c412e83931f-mwqx3wae-2212900/test/partition/partition-cdc-currentness-stamp-witness.test.js:358:3'
+  failureType: 'testCodeFailure'
+  error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5c412e83931f-mwqx3wae-2212900/test/partition/partition-cdc-currentness-stamp-witness.test.js:361:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+# Subtest: the currentness input list is one complete, well-formed enumeration
+ok 5 - the currentness input list is one complete, well-formed enumeration
+  ---
+  duration_ms: 30.861731
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+ok 6 - the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+  ---
+  duration_ms: 52.314792
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+ok 7 - the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+  ---
+  duration_ms: 58.693077
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+ok 8 - the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+  ---
+  duration_ms: 39.361936
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+ok 9 - the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+  ---
+  duration_ms: 38.386996
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+ok 10 - the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+  ---
+  duration_ms: 42.18981
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+ok 11 - the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+  ---
+  duration_ms: 43.096544
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+ok 12 - the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+  ---
+  duration_ms: 41.128027
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+ok 13 - the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+  ---
+  duration_ms: 41.86263
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+ok 14 - the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+  ---
+  duration_ms: 38.35435
+  type: 'test'
+  ...
+# Subtest: the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+ok 15 - the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+  ---
+  duration_ms: 39.959033
+  type: 'test'
+  ...
+# Subtest: the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+ok 16 - the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+  ---
+  duration_ms: 53.857676
+  type: 'test'
+  ...
+# Subtest: the next currentness check after invocation.retired changes answers per the new fact (not-current)
+ok 17 - the next currentness check after invocation.retired changes answers per the new fact (not-current)
+  ---
+  duration_ms: 33.685937
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+ok 18 - the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+  ---
+  duration_ms: 39.040294
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.stopped changes answers per the new fact (not-current)
+ok 19 - the next currentness check after topology.stopped changes answers per the new fact (not-current)
+  ---
+  duration_ms: 42.314146
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+ok 20 - the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+  ---
+  duration_ms: 37.158067
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+ok 21 - the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+  ---
+  duration_ms: 38.933216
+  type: 'test'
+  ...
+# Subtest: the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+ok 22 - the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+  ---
+  duration_ms: 40.308591
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:18.738Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-renamed"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+ok 23 - the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 40.475176
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:18.781Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+ok 24 - the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 42.275004
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+ok 25 - the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+  ---
+  duration_ms: 37.006589
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.initialized changes answers per the new fact (not-current)
+ok 26 - the next currentness check after source.initialized changes answers per the new fact (not-current)
+  ---
+  duration_ms: 42.044347
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.raft changes answers per the new fact (not-current)
+ok 27 - the next currentness check after source.raft changes answers per the new fact (not-current)
+  ---
+  duration_ms: 55.053974
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+ok 28 - the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+  ---
+  duration_ms: 36.147688
+  type: 'test'
+  ...
+# Subtest: the next currentness check after source.group-id changes answers per the new fact (not-current)
+ok 29 - the next currentness check after source.group-id changes answers per the new fact (not-current)
+  ---
+  duration_ms: 36.700038
+  type: 'test'
+  ...
+# Subtest: the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+ok 30 - the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+  ---
+  duration_ms: 43.930044
+  type: 'test'
+  ...
+# Subtest: the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+ok 31 - the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+  ---
+  duration_ms: 38.599198
+  type: 'test'
+  ...
+# Subtest: the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+ok 32 - the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+  ---
+  duration_ms: 42.320465
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.address changes answers per the new fact (reobserved)
+ok 33 - the next currentness check after services.address changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 44.731695
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.node-id changes answers per the new fact (reobserved)
+ok 34 - the next currentness check after services.node-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 41.74868
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.service-id changes answers per the new fact (reobserved)
+ok 35 - the next currentness check after services.service-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 38.548359
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.created-at changes answers per the new fact (reobserved)
+ok 36 - the next currentness check after services.created-at changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 44.24388
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+ok 37 - the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 43.464997
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+ok 38 - the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 59.737974
+  type: 'test'
+  ...
+# Subtest: the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+ok 39 - the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 40.676798
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.462Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after services.status changes answers per the new fact (reobserved)
+ok 40 - the next currentness check after services.status changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 37.487993
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.498Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after services.service-type changes answers per the new fact (reobserved)
+ok 41 - the next currentness check after services.service-type changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 35.74332
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.537Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after services.group-id changes answers per the new fact (reobserved)
+ok 42 - the next currentness check after services.group-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 38.789711
+  type: 'test'
+  ...
+# Subtest: the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+ok 43 - the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 36.353653
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.616Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+ok 44 - the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 41.901375
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.653Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after nodes.status changes answers per the new fact (reobserved)
+ok 45 - the next currentness check after nodes.status changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 37.404541
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.694Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+ok 46 - the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 38.540886
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.735Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+ok 47 - the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 41.702812
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.776Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+ok 48 - the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 39.751394
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.817Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+ok 49 - the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 41.602807
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.875Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+ok 50 - the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 56.661587
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.909Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+ok 51 - the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 36.336159
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.945Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+ok 52 - the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 37.13772
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:19.982Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+ok 53 - the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 36.792155
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:20.023Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+ok 54 - the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+  ---
+  duration_ms: 40.498841
+  type: 'test'
+  ...
+# Subtest: the currentness check evaluates the response deadline on every read with nothing else changing
+ok 55 - the currentness check evaluates the response deadline on every read with nothing else changing
+  ---
+  duration_ms: 35.369684
+  type: 'test'
+  ...
+# Subtest: checks of one delivery with no plan input changed reuse the owner-held plan
+ok 56 - checks of one delivery with no plan input changed reuse the owner-held plan
+  ---
+  duration_ms: 35.957781
+  type: 'test'
+  ...
+# Subtest: an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+ok 57 - an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+  ---
+  duration_ms: 37.843214
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:20.168Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: a plan input changed between two drives (different turns) is seen by the next read
+ok 58 - a plan input changed between two drives (different turns) is seen by the next read
+  ---
+  duration_ms: 40.448813
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a system table cache without table versions
+ok 59 - CDCGroupPropagationService refuses wiring a system table cache without table versions
+  ---
+  duration_ms: 30.397789
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+ok 60 - CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+  ---
+  duration_ms: 26.628394
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a configuration without a revision
+ok 61 - CDCGroupPropagationService refuses wiring a configuration without a revision
+  ---
+  duration_ms: 27.838605
+  type: 'test'
+  ...
+# Subtest: the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+ok 62 - the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+  ---
+  duration_ms: 33.57476
+  type: 'test'
+  ...
+# Subtest: a plan input moved during a plan observation is not held: the next read observes anew
+ok 63 - a plan input moved during a plan observation is not held: the next read observes anew
+  ---
+  duration_ms: 39.355313
+  type: 'test'
+  ...
+# Subtest: stamp component: the tree routing generation (a recompute alone reorders the plan)
+ok 64 - stamp component: the tree routing generation (a recompute alone reorders the plan)
+  ---
+  duration_ms: 61.544585
+  type: 'test'
+  ...
+# Subtest: stamp component: the tree identity (a tree re-wired at an equal generation)
+ok 65 - stamp component: the tree identity (a tree re-wired at an equal generation)
+  ---
+  duration_ms: 51.305276
+  type: 'test'
+  ...
+# Subtest: stamp component: the cache identity (a cache re-wired at equal table versions)
+ok 66 - stamp component: the cache identity (a cache re-wired at equal table versions)
+  ---
+  duration_ms: 43.628953
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T21:27:20.525Z","nodeId":"node-a","pid":3753605,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+# Subtest: stamp component: the router identity (a router wired late makes grouped targets routable)
+ok 67 - stamp component: the router identity (a router wired late makes grouped targets routable)
+  ---
+  duration_ms: 40.070841
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a message router that cannot deliver
+ok 68 - CDCGroupPropagationService refuses wiring a message router that cannot deliver
+  ---
+  duration_ms: 26.678078
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a systemTableCache whose getTableMutationVersion() answers no version
+ok 69 - CDCGroupPropagationService refuses wiring a systemTableCache whose getTableMutationVersion() answers no version
+  ---
+  duration_ms: 26.941293
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a latencyTreeService whose getRoutingGeneration() answers no version
+ok 70 - CDCGroupPropagationService refuses wiring a latencyTreeService whose getRoutingGeneration() answers no version
+  ---
+  duration_ms: 26.108539
+  type: 'test'
+  ...
+# Subtest: CDCGroupPropagationService refuses wiring a config whose getRevision() answers no version
+ok 71 - CDCGroupPropagationService refuses wiring a config whose getRevision() answers no version
+  ---
+  duration_ms: 25.410356
+  type: 'test'
+  ...
+# Subtest: a version source answering no version at read time holds no plan: each read observes anew
+ok 72 - a version source answering no version at read time holds no plan: each read observes anew
+  ---
+  duration_ms: 24.582599
+  type: 'test'
+  ...
+# Subtest: a never-initialized CDCGroupPropagationService cannot start or propagate, also after a stop: a typed refusal
+ok 73 - a never-initialized CDCGroupPropagationService cannot start or propagate, also after a stop: a typed refusal
+  ---
+  duration_ms: 23.877274
+  type: 'test'
+  ...
+# Subtest: the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates
+ok 74 - the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates
+  ---
+  duration_ms: 26.249652
+  type: 'test'
+  ...
+# Subtest: production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+ok 75 - production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+  ---
+  duration_ms: 28.429249
+  type: 'test'
+  ...
+1..75
+# tests 75
+# suites 0
+# pass 73
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6347.519594
+# time=7750ms
+# test-files total=1 pass=0 fail=1 assertions=75
+classified lane bootstrap: 2 file(s), jobs=2
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/cache-hydration-strictness.test.js (7 assertions, 2401ms)
+ok test/bootstrap/create-self-hosted-registration.test.js (19 assertions, 2569ms)
+# test-files total=2 pass=2 fail=0 assertions=26
+placement-results={"file":"test/partition/partition-cdc-currentness-stamp-witness.test.js","attempt":1,"ok":false,"assertions":75,"durationMs":7750,"retriedOnce":false,"firstFailureLine":"not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once"}
+placement-results={"file":"test/bootstrap/cache-hydration-strictness.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2401,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/create-self-hosted-registration.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":2569,"retriedOnce":false,"firstFailureLine":null}

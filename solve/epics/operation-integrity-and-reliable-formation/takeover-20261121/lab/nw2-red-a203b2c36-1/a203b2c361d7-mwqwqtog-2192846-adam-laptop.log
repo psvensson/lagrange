@@ -1,0 +1,154 @@
+placement-shell=3747568
+placement-head=a203b2c361d7928859942ee91852a72eb11b15aa
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3748025
+# test-files planned=5
+classified lane ordinary: 3 file(s), jobs=4
+thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/transport/router-in-process-address-in-use.test.js (1 assertions, 396ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: an in-process port clash rejects with the address-in-use error
+not ok 1 - an in-process port clash rejects with the address-in-use error
+  ---
+  duration_ms: 2.710004
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/transport/router-in-process-address-in-use.test.js:23:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    not a TypeError: ROUTER_ERROR_MSG.addressInUse is not a function
+    + actual - expected
+    
+    + 'TypeError'
+    - 'Error'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Error'
+  actual: 'TypeError'
+  operator: 'strictEqual'
+  stack: |-
+    Object.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/transport/router-in-process-address-in-use.test.js:28:14)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/transport/router-in-process-address-in-use.test.js:27:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 21.66302
+# time=396ms
+ok test/raft/authoritative-row-mutation-outcome-classifier.test.js (133 assertions, 838ms)
+not ok test/constants/message-table-census.test.js (1 assertions, 2868ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: every message-table member referenced under src is defined
+not ok 1 - every message-table member referenced under src is defined
+  ---
+  duration_ms: 2592.362806
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/constants/message-table-census.test.js:138:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    references to members no message table defines (3164 accesses checked; not checked: 3 computed, 66 on tables bound otherwise)
+    + actual - expected
+    
+    + [
+    +   'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE',
+    +   'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND',
+    +   'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE'
+    1: 'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND'
+    2: 'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/constants/message-table-census.test.js:161:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2601.37863
+# time=2868ms
+# test-files total=3 pass=1 fail=2 assertions=135
+classified lane bootstrap: 2 file(s), jobs=2
+thermal: ok cpu 56C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js (1 assertions, 12804ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# WITNESS seed-bootstrap-lane-refusal {"wallMs":11300,"returnedRuntime":false,"refused":{"partitionId":"services-p1","sql":"INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,"},"directWrites":[{"partitionId":"services-p1","sql":"INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,"}],"startupError":"original-allocation-observation-unavailable"}
+# Subtest: a raft-lane refusal in the bootstrap window is not executed outside raft
+not ok 1 - a raft-lane refusal in the bootstrap window is not executed outside raft
+  ---
+  duration_ms: 11403.62383
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js:22:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no statement executed outside raft
+    + actual - expected
+    
+    + [
+    +   {
+    +     partitionId: 'services-p1',
+    +     sql: 'INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      partitionId: 'services-p1'
+      sql: 'INSERT INTO services (service_id, service_type, node_id, partition_id, group_id,'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/a203b2c361d7-mwqwqtog-2192846/test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js:32:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11411.144171
+# time=12804ms
+ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 26979ms)
+# test-files total=2 pass=1 fail=1 assertions=2
+placement-results={"file":"test/transport/router-in-process-address-in-use.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":396,"retriedOnce":false,"firstFailureLine":"not ok 1 - an in-process port clash rejects with the address-in-use error"}
+placement-results={"file":"test/raft/authoritative-row-mutation-outcome-classifier.test.js","attempt":1,"ok":true,"assertions":133,"durationMs":838,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/constants/message-table-census.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":2868,"retriedOnce":false,"firstFailureLine":"not ok 1 - every message-table member referenced under src is defined"}
+placement-results={"file":"test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":12804,"retriedOnce":false,"firstFailureLine":"not ok 1 - a raft-lane refusal in the bootstrap window is not executed outside raft"}
+placement-results={"file":"test/bootstrap/seed-bootstrap-direct-lane.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":26979,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,95 @@
+placement-shell=3282988
+placement-head=4da9da27a9fcaa69c2075c9a406da06016f2a4eb
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3283440
+# test-files planned=9
+classified lane ordinary: 9 file(s), jobs=4
+thermal: ok cpu 58C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/rebalancer/required-entity-operation-observation.test.js (177 assertions, 1722ms)
+not ok test/raft/raft-rs-backend/committed-membership-stamp.test.js (1 assertions, 1888ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: T2: a join is stamped with the committed configuration its leader answers (log fold over the test founders), not the planted rows; the target replays to the fold
+not ok 1 - T2: a join is stamped with the committed configuration its leader answers (log fold over the test founders), not the planted rows; the target replays to the fold
+  ---
+  duration_ms: 426.982789
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:52:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the creation read succeeds (SERVICES inventory of partition o1-stamp unavailable: hint_read_failed)
+    + actual - expected
+    
+    + Error: SERVICES inventory of partition o1-stamp unavailable: hint_read_failed
+    +     at CreationOwner.buildServicesInventoryUnavailableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-read-methods.js:514:19)
+    +     at CreationOwner.readBootstrapServiceRows (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+    +     at async buildCommittedBootstrapTopology (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+    +     at async CreationOwner.createOperationRecordInternal (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+    +     at async createJoinOperation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-harness.js:375:5)
+    +     at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:93:21)
+    +     at async Test.run (node:internal/test_runner/test:1054:7)
+    +     at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {
+    +   deferRetry: true,
+    +   nextAction: 'retry',
+    +   reasonCode: 'hint_read_failed',
+    +   rebalanceSkipReason: 'services_inventory_unavailable'
+    + }
+    - undefined
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  actual:
+    rebalanceSkipReason: 'services_inventory_unavailable'
+    reasonCode: 'hint_read_failed'
+    nextAction: 'retry'
+    deferRetry: true
+  error: 'SERVICES inventory of partition o1-stamp unavailable: hint_read_failed'
+  stack: |-
+    CreationOwner.buildServicesInventoryUnavailableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-read-methods.js:514:19)
+    CreationOwner.readBootstrapServiceRows (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+    async buildCommittedBootstrapTopology (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+    async CreationOwner.createOperationRecordInternal (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+    async createJoinOperation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-harness.js:375:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:93:21)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4da9da27a9fc-mwqui5fo-2058187/test/raft/raft-rs-backend/committed-membership-stamp.test.js:95:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 433.776773
+# time=1888ms
+ok test/rebalancer/topology-guard-inventory-authority.test.js (57 assertions, 2812ms)
+ok test/rebalancer/services-inventory-owner-fact-siblings.test.js (34 assertions, 5094ms)
+ok test/control-plane/readiness-snapshot-persistence.test.js (57 assertions, 1389ms)
+ok test/rebalancer/topology-guard-owner-fact-inventory.test.js (25 assertions, 4818ms)
+ok test/rebalancer/topology-guard-owner-fact-read-point.test.js (11 assertions, 4813ms)
+ok test/rebalancer/rebalance-coordinator-operation-ownership.test.js (233 assertions, 1378ms)
+ok test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js (4 assertions, 10524ms)
+# test-files total=9 pass=8 fail=1 assertions=599
+placement-results={"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":1722,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/committed-membership-stamp.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":1888,"retriedOnce":false,"firstFailureLine":"not ok 1 - T2: a join is stamped with the committed configuration its leader answers (log fold over the test founders), not the planted rows; the target replays to the fold"}
+placement-results={"file":"test/rebalancer/topology-guard-inventory-authority.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":2812,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/services-inventory-owner-fact-siblings.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":5094,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/readiness-snapshot-persistence.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":1389,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-inventory.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":4818,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-read-point.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":4813,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-operation-ownership.test.js","attempt":1,"ok":true,"assertions":233,"durationMs":1378,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":10524,"retriedOnce":false,"firstFailureLine":null}

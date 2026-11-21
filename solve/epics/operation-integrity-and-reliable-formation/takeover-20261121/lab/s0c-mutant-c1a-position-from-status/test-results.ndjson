@@ -1,0 +1,1 @@
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":82,"durationMs":6010,"retriedOnce":false,"firstFailureLine":"not ok 2 - in process, beforeRead: the witness names the applied position the statement read at"}

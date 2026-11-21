@@ -1,0 +1,57 @@
+{"file":"test/config/configuration-manager-revision.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":364,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache-mutation-version-survives-clear.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":463,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache-row-preview.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":624,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache-observation.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":1345,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":3457,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-cdc-receiver-admission.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":6884,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-provisional-route.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6833,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-custody-handoff.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":9657,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-currentness-stamp-witness.test.js","attempt":1,"ok":false,"assertions":75,"durationMs":5911,"retriedOnce":false,"firstFailureLine":"not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once"}
+{"file":"test/partition/partition-cdc-lane-typed-backpressure.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":3748,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-lane-wave-isolation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3714,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-topology-progress-currentness.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":5850,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":5925,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-growth-dispatch-identity.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":6008,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":8336,"retriedOnce":false,"firstFailureLine":"not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed"}
+{"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6330,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-post-copy.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":5987,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":7171,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-real-publication.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6332,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":2730,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/application-write-formation-authority.test.js","attempt":1,"ok":true,"assertions":84,"durationMs":4953,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":9732,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":5552,"retriedOnce":false,"firstFailureLine":"not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed vo"}
+{"file":"test/topology/cdc-group-propagation-foreground-boundary.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":4624,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-proposal-cost.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1967,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-real-group-native-ledger-recovery.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":8630,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1113,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-stop-arms-nothing.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1249,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-wave-isolation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":851,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/latency-tree-routing-generation.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":553,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-recipient-domain-and-retained-debt.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":862,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-wave-lifecycle.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1763,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-transition-authorization-row.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1764,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache.test.js","attempt":1,"ok":true,"assertions":310,"durationMs":2953,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-service.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":946,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/replica-operation-structured-mutation-native.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":20998,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/config/configuration-manager.test.js","attempt":1,"ok":true,"assertions":95,"durationMs":1392,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":2205,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/read-only-system-table-cache.test.js","attempt":1,"ok":true,"assertions":58,"durationMs":1477,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":2879,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-membership-epoch-binding.test.js","attempt":1,"ok":false,"assertions":122,"durationMs":3174,"retriedOnce":false,"firstFailureLine":"not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"}
+{"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":2953,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":true,"assertions":102,"durationMs":2698,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/config/latency-topology-ownership-guardrails.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":921,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-ownership-lease-fencing.test.js","attempt":1,"ok":true,"assertions":231,"durationMs":5640,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/latency-tree-service.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1120,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":2280,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/check-runtime-grammar-contracts.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":752,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/remove-active-dispatch-redrive.test.js","attempt":1,"ok":true,"assertions":181,"durationMs":2200,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-terminal-cas.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1826,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":785,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-repository.test.js","attempt":1,"ok":true,"assertions":466,"durationMs":27589,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-teardown-pending-cdc-delivery.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":3007,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/create-self-hosted-registration.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":1458,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":563,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/cache-hydration-strictness.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1423,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/cdc-source-occurrence-delivery.integration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":8775,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,17 @@
+{
+  "sha": "d5698f2252a4b0a2d6fa19d6522f0ccdf68254e5",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/query-executor-no-handler-quarantine-clock.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/query-executor-no-handler-quarantine-clock.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

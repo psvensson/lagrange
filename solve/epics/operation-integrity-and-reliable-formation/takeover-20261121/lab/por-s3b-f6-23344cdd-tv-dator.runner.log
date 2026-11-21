@@ -1,0 +1,20 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.47
+[tv-dator] placement-shell=3396764
+[tv-dator] placement-head=23344cddc5f07a597b93f8cd0f4f69a69be937c3
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3397209
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 63C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] ok test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js (18 assertions, 1131ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=18
+lab test: tv-dator: # test-files total=1 pass=1 fail=0 assertions=18
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=1 fail=0 assertions=18

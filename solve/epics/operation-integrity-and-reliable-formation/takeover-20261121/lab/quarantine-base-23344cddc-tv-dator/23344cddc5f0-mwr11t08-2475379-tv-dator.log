@@ -1,0 +1,37 @@
+placement-shell=3402658
+placement-head=23344cddc5f07a597b93f8cd0f4f69a69be937c3
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3403103
+# test-files planned=11
+classified lane ordinary: 11 file(s), jobs=4
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/query/query-executor-serve-eligibility-routing.test.js (38 assertions, 933ms)
+ok test/query/readiness-routing-denial-observability.test.js (2 assertions, 1063ms)
+ok test/query/routing-overlay-complete-state-retirement.test.js (5 assertions, 1106ms)
+ok test/query/cache-based-routing.test.js (8 assertions, 1211ms)
+ok test/query/query-executor-executeonpartition-no-handler-repair.test.js (69 assertions, 1086ms)
+ok test/query/query-executor-recovery-owned-routing.test.js (43 assertions, 1117ms)
+ok test/query/query-executor-session-binding-and-build-sql.test.js (65 assertions, 1268ms)
+ok test/query/cache-based-routing.property.test.js (13 assertions, 1534ms)
+ok test/query/service-read-locality-routing.test.js (32 assertions, 1185ms)
+ok test/control-plane/control-plane-read-authority-token.test.js (41 assertions, 1143ms)
+ok test/query/sql-query-engine-routing-overlay-state.test.js (80 assertions, 1153ms)
+# test-files total=11 pass=11 fail=0 assertions=396
+placement-results={"file":"test/query/query-executor-serve-eligibility-routing.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":933,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/readiness-routing-denial-observability.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1063,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/routing-overlay-complete-state-retirement.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1106,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/cache-based-routing.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":1211,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/query-executor-executeonpartition-no-handler-repair.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":1086,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/query-executor-recovery-owned-routing.test.js","attempt":1,"ok":true,"assertions":43,"durationMs":1117,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/query-executor-session-binding-and-build-sql.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":1268,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/cache-based-routing.property.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":1534,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/service-read-locality-routing.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":1185,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/control-plane-read-authority-token.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1143,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/sql-query-engine-routing-overlay-state.test.js","attempt":1,"ok":true,"assertions":80,"durationMs":1153,"retriedOnce":false,"firstFailureLine":null}

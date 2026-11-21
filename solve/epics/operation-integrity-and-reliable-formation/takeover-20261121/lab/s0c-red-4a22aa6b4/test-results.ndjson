@@ -1,0 +1,2 @@
+{"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":false,"assertions":122,"durationMs":765,"retriedOnce":false,"firstFailureLine":"not ok 1 - owner_fact_unknown_field: floor"}
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":73,"durationMs":9749,"retriedOnce":false,"firstFailureLine":"not ok 1 - in process, beforeRead: READY, the position is read, not inferred"}

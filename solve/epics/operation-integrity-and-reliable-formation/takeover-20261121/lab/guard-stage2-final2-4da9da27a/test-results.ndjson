@@ -1,0 +1,9 @@
+{"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":1722,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/committed-membership-stamp.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":1888,"retriedOnce":false,"firstFailureLine":"not ok 1 - T2: a join is stamped with the committed configuration its leader answers (log fold over the test founders), not the planted rows; the target replays to the fold"}
+{"file":"test/rebalancer/topology-guard-inventory-authority.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":2812,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/services-inventory-owner-fact-siblings.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":5094,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/readiness-snapshot-persistence.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":1389,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/topology-guard-owner-fact-inventory.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":4818,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/topology-guard-owner-fact-read-point.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":4813,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-operation-ownership.test.js","attempt":1,"ok":true,"assertions":233,"durationMs":1378,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":10524,"retriedOnce":false,"firstFailureLine":null}

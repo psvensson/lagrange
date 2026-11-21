@@ -1,0 +1,48 @@
+{"file":"test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1093,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1486,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-create-bootstrap-binding.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":3676,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":3746,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":3791,"retriedOnce":false,"firstFailureLine":"not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row"}
+{"file":"test/partition/placement-growth-dispatch-identity.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":3837,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":4248,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-post-copy.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":3642,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":5413,"retriedOnce":false,"firstFailureLine":"not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed"}
+{"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4261,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-real-publication.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":3725,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-record-step-shape.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1270,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/application-write-formation-authority.test.js","attempt":1,"ok":true,"assertions":84,"durationMs":4299,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":2436,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":7908,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":3429,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":5669,"retriedOnce":false,"firstFailureLine":"not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed vo"}
+{"file":"test/rebalancer/admission-real-size-estimates.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":1945,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-real-group-native-ledger-recovery.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":9040,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-transition-authorization-row.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1328,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/duplicate-operation-prevention.property.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":2817,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1549,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":2003,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":1883,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/replica-operation-structured-mutation-native.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":19382,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":2431,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":2299,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":2037,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-membership-epoch-binding.test.js","attempt":1,"ok":false,"assertions":122,"durationMs":2851,"retriedOnce":false,"firstFailureLine":"not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"}
+{"file":"test/control-plane/replica-dispatch-routing.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":2208,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":3158,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":2175,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":true,"assertions":102,"durationMs":2023,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-ownership-lease-fencing.test.js","attempt":1,"ok":true,"assertions":231,"durationMs":4683,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1901,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1940,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":2121,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/remove-active-dispatch-redrive.test.js","attempt":1,"ok":true,"assertions":181,"durationMs":2734,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-terminal-cas.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":2624,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":2230,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/check-runtime-grammar-contracts.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":869,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":1099,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/membership-count-neutral-steady-trim.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1481,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-insert-retry-idempotency.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1489,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-repository.test.js","attempt":1,"ok":true,"assertions":466,"durationMs":27034,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":544,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1505,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1135,"retriedOnce":false,"firstFailureLine":null}

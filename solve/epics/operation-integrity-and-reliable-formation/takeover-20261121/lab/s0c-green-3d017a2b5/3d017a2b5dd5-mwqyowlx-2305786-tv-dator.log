@@ -1,0 +1,406 @@
+placement-shell=3335008
+placement-head=3d017a2b5dd53038fe3fd51bc29183458fa12a37
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3335464
+# test-files planned=15
+classified lane ordinary: 15 file(s), jobs=4
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/cache/system-table-cache-observation.test.js (14 assertions, 1450ms)
+ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 2136ms)
+ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 2548ms)
+ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (7 assertions, 4314ms)
+ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 1688ms)
+ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 1474ms)
+ok test/control-plane/control-plane-owner-fact-read.test.js (153 assertions, 435ms)
+not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (82 assertions, 6641ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+    ok 1 - in process: never READY without the row
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - routed: never READY without the row
+    ok 5 - should be equal
+    ok 6 - the fresh leader ships no rows
+    1..6
+ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=2451.599ms
+
+# Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+    ok 1 - leader: same typed answer
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - follower: same typed answer
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - names the leader it knows
+    ok 8 - insufficiently applied leader: same typed answer
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - deposed leader: same typed answer
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - names the leader that replaced it
+    1..14
+ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=387.656ms
+
+# Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+    ok 1 - the read reaches the replica that leads now
+    ok 2 - never the replica that stopped leading during its read
+    ok 3 - should be equivalent
+    ok 4 - the old leader refused after its read, shipping no rows
+    1..4
+ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=263.842ms
+
+# Subtest: readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote
+    ok 1 - in process, beforeRead: READY, the position is read, not inferred
+    ok 2 - in process, beforeRead: the witness names the applied position the statement read at
+    ok 3 - in process, beforeRead: the write applied before that position
+    ok 4 - in process, beforeRead: the rows are those of that position
+    ok 5 - in process, afterRead: READY, the position is read, not inferred
+    ok 6 - in process, afterRead: the witness names the applied position the statement read at
+    ok 7 - in process, afterRead: the write applied after that position
+    ok 8 - in process, afterRead: the rows are those of that position
+    ok 9 - remote, beforeRead: READY, the position is read, not inferred
+    ok 10 - remote, beforeRead: the witness names the applied position the statement read at
+    ok 11 - remote, beforeRead: the write applied before that position
+    ok 12 - remote, beforeRead: the rows are those of that position
+    ok 13 - remote, afterRead: READY, the position is read, not inferred
+    ok 14 - remote, afterRead: the witness names the applied position the statement read at
+    ok 15 - remote, afterRead: the write applied after that position
+    ok 16 - remote, afterRead: the rows are those of that position
+    1..16
+ok 4 - readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote # time=310.571ms
+
+# Subtest: readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport
+    ok 1 - setup: the old leader's core answered the successor's term, and that send is pending
+    ok 2 - setup: the status the old leader reports is still its last announced observation
+    not ok 3 - in process: its core no longer leads, so it refuses
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 232
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:232:5)
+      source: >2
+          const remote = decisionOf(
+            await group.deliverOverTransport(other.nodeId, old, structuredClone(request)));
+          t.equal(local.failureCode, REASON.NOT_LEADER, 'in process: its core no longer leads, so it refuses');
+        ----^
+          t.equal(local.shipsRows, false, 'in process: no rows');
+          t.same(remote, local, 'over the transport: the same typed answer');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_not_leader
+        +null
+      ...
+    
+    not ok 4 - in process: no rows
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 233
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:233:5)
+      source: >2
+            await group.deliverOverTransport(other.nodeId, old, structuredClone(request)));
+          t.equal(local.failureCode, REASON.NOT_LEADER, 'in process: its core no longer leads, so it refuses');
+          t.equal(local.shipsRows, false, 'in process: no rows');
+        ----^
+          t.same(remote, local, 'over the transport: the same typed answer');
+          held.release();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    ok 5 - over the transport: the same typed answer
+    1..5
+not ok 5 - readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport # time=253.076ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 210
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('readOwnerFact: a leader whose core has stepped its successor\'s term
+    while its own turn ' +
+  
+    ^
+      'is pending refuses typed, in process and over the transport',
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer
+    ok 1 - it does not wait on the plain read's flight
+    ok 2 - the leader received the owner-fact request and decided it
+    ok 3 - should be equal
+    ok 4 - the answer echoes an owner-fact decision
+    ok 5 - the answer echoes exactly the request its receiver decided
+    1..5
+ok 6 - readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer # time=238.01ms
+
+# Subtest: readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows
+    ok 1 - in process: never the staged absence
+    ok 2 - in process: typed
+    ok 3 - in process: no rows
+    ok 4 - remote: never the staged absence
+    ok 5 - remote: typed
+    ok 6 - remote: no rows
+    ok 7 - with the transaction gone the leader answers
+    ok 8 - should be equivalent
+    1..8
+ok 7 - readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows # time=335.605ms
+
+# Subtest: readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group
+    ok 1 - the receiver refuses it typed
+    ok 2 - with no rows
+    ok 3 - should be equal
+    ok 4 - readOwnerFact names it
+    ok 5 - a floor of the read partition is answered
+    1..5
+ok 8 - readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group # time=355.246ms
+
+# Subtest: readOwnerFact: the deadline and the routing class are required and travel to the query owner
+    ok 1 - should be equal
+    ok 2 - the caller's routing class reaches the query owner
+    ok 3 - and its frozen read authority
+    ok 4 - the caller's deadline bounds the query owner's
+    ok 5 - a call without a deadline is refused
+    ok 6 - and issues no read
+    1..6
+ok 9 - readOwnerFact: the deadline and the routing class are required and travel to the query owner # time=227.29ms
+
+# Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+    ok 1 - never READY with no rows
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 10 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=232.214ms
+
+1..10
+# { total: 72, pass: 70, fail: 2 }
+# time=5068.683ms
+ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 7267ms)
+not ok test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js (7 assertions, 8799ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: B-1 ACCEPTANCE (red until the raft owner's correction): a leader whose successor's envelope is delivered but still queued behind its own pending turn refuses an owner fact
+    ok 1 - setup: a successor leads a newer term and its envelope was delivered to the old leader
+    ok 2 - setup: the old leader's turn is pending at a held send
+    ok 3 - setup: the old leader has not stepped the newer term
+    not ok 4 - in process: refused, no rows
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+        lineNumber: 57
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js:57:5)
+      source: >2
+          const local = await old.handleRemoteQuery(structuredClone(request));
+          const remote = await group.deliverOverTransport(second.nodeId, old, structuredClone(request));
+          t.ok(refusedWithoutRows(local), 'in process: refused, no rows');
+        ----^
+          t.ok(refusedWithoutRows(remote), 'over the transport: refused, no rows');
+          t.not(local?.failureCode, REASON.ELECTION_LOG_NOT_APPLIED,
+      ...
+    
+    not ok 5 - over the transport: refused, no rows
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+        lineNumber: 58
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js:58:5)
+      source: >2
+          const remote = await group.deliverOverTransport(second.nodeId, old,
+        structuredClone(request));
+          t.ok(refusedWithoutRows(local), 'in process: refused, no rows');
+          t.ok(refusedWithoutRows(remote), 'over the transport: refused, no rows');
+        ----^
+          t.not(local?.failureCode, REASON.ELECTION_LOG_NOT_APPLIED,
+            'the refusal is about leadership, not the election log');
+      ...
+    
+    ok 6 - the refusal is about leadership, not the election log
+    1..6
+not ok 1 - B-1 ACCEPTANCE (red until the raft owner's correction): a leader whose successor's envelope is delivered but still queued behind its own pending turn refuses an owner fact # time=7278.771ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+    lineNumber: 35
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('B-1 ACCEPTANCE (red until the raft owner\'s correction): a leader whose
+    successor\'s ' +
+  
+    ^
+      'envelope is delivered but still queued behind its own pending turn refuses an owner fact',
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+1..1
+# { total: 6, pass: 4, fail: 2 }
+# time=7299.829ms
+ok test/query/system-table-ingress-boundary-adversarial.test.js (3074 assertions, 1765ms)
+not ok test/control-plane/readiness-owner-authority-contract.test.js (15 assertions, 977ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'services-owner/partition/services-p1'
+}
+# Subtest: the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated
+    ok 1 - the named API reaches the pre-ready canonical services owner
+    ok 2 - the named API returns only the witnessed owner answer
+    ok 3 - the named API preserves readiness-owner purpose through the view and CDC
+    ok 4 - the readiness-owned read does not re-enter readiness adjudication
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'services-owner/partition/services-p1'
+}
+    ok 5 - the named readiness-owner API cannot be weakened by caller options
+    ok 6 - the named API owns the complete authority and fallback contract
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'services-owner/partition/services-p1'
+}
+    ok 7 - an ordinary read routes on the same structural route during recovery
+    ok 8 - ordinary system-table routing does not consult readiness
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'services-owner/partition/services-p1'
+}
+    ok 9 - an old follower session pin cannot displace the canonical leader
+    ok 10 - leader-required routing ignores follower session affinity
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'services-owner/partition/services-p1'
+}
+    not ok 11 - a live follower cannot replace missing canonical leader authority
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/readiness-owner-authority-contract.test.js
+        lineNumber: 294
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/readiness-owner-authority-contract.test.js:294:5)
+      source: |2
+            {readAuthority: hostileReadAuthority},
+          );
+          t.equal(missingLeaderResult.success, false,
+        ----^
+            'a live follower cannot replace missing canonical leader authority');
+          t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    not ok 12 - leader-required routing never sends the owner read to the follower
+      ---
+      compare: ===
+      at:
+        fileName: test/control-plane/readiness-owner-authority-contract.test.js
+        lineNumber: 296
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/readiness-owner-authority-contract.test.js:296:5)
+      source: |2
+          t.equal(missingLeaderResult.success, false,
+            'a live follower cannot replace missing canonical leader authority');
+          t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+        ----^
+            'leader-required routing never sends the owner read to the follower');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -4
+        +5
+      ...
+    
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'services-owner/partition/services-p1'
+}
+    ok 13 - an ACK without a current Raft leader witness cannot release formation
+    ok 14 - unwitnessed owner rows are discarded instead of becoming evidence
+    1..14
+not ok 1 - the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated # time=151.522ms
+  ---
+  at:
+    fileName: test/control-plane/readiness-owner-authority-contract.test.js
+    lineNumber: 45
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('the readiness-owner API carries non-downgradable authority across ' +
+    ^
+      'owner RPC while ordinary recovery reads remain readiness-gated',
+    async (t) => {
+  ...
+
+1..1
+# { total: 14, pass: 12, fail: 2 }
+# time=169.415ms
+ok test/query/parallel-query-coordinator.test.js (121 assertions, 1736ms)
+ok test/control-plane/control-plane-read-authority-token.test.js (41 assertions, 985ms)
+ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 5817ms)
+# test-files total=15 pass=12 fail=3 assertions=3815
+placement-results={"file":"test/cache/system-table-cache-observation.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":1450,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-hosted-replica.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2136,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":true,"assertions":32,"durationMs":2548,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-leader-required-fresh-leader-absence.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":4314,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":1688,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":true,"assertions":107,"durationMs":1474,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":true,"assertions":153,"durationMs":435,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":82,"durationMs":6641,"retriedOnce":false,"firstFailureLine":"not ok 3 - in process: its core no longer leads, so it refuses"}
+placement-results={"file":"test/cdc/cdc-owner-fact-redirect-deadline.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":7267,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":8799,"retriedOnce":false,"firstFailureLine":"not ok 4 - in process: refused, no rows"}
+placement-results={"file":"test/query/system-table-ingress-boundary-adversarial.test.js","attempt":1,"ok":true,"assertions":3074,"durationMs":1765,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/readiness-owner-authority-contract.test.js","attempt":1,"ok":false,"assertions":15,"durationMs":977,"retriedOnce":false,"firstFailureLine":"not ok 11 - a live follower cannot replace missing canonical leader authority"}
+placement-results={"file":"test/query/parallel-query-coordinator.test.js","attempt":1,"ok":true,"assertions":121,"durationMs":1736,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/control-plane-read-authority-token.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":985,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/query-executor-recovery-read-lifetime.test.js","attempt":1,"ok":true,"assertions":122,"durationMs":5817,"retriedOnce":false,"firstFailureLine":null}

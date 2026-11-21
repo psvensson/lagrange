@@ -474,3 +474,60 @@ None. No assertion line was changed, removed or loosened in either file. Additio
 - Commits: 5b3c29192 (entity file + shared helper; hook also regenerated inventory.json, impact-graph-seal.json),
   92a441229 (placement file; hook regenerated inventory.json, impact-graph-seal.json, subsystem-classes.json). Both
   pushed to `origin/work/line-regression-fixtures-b-20261121`. Two commits total, both through `tools/heavy.sh`.
+
+### Successor C, continuation after the coordinator's rulings
+
+Rulings received: (1) placement cases 12/13 as PREFLIGHT confirmed; (2) entity case 6 message-group half restated as
+FAIL with the reason asserted; (3) placement case 14: rounds 1/3 evaluate each subject alone; round 2 = the reachable
+part through the prospective evaluator (REMOVE at PENDING) and the unreachable part restated as the admission
+applier's refusal in both orders; a test must not commit a state production cannot produce (option (b) rejected);
+(4) final consolidated run, all 20 green.
+
+**For the owner (contract as executed):** a message-group REMOVE that would drop active replicas below the minimum
+FAILS the operation; it is not deferred and retried.
+
+#### Changed expected values
+
+1. `rebalancer-entity-interaction-contract`, case 6, message-group half (commit c2558d9c2):
+   classification `DEFER` → `FAIL`; new assertion on the reason, exact text `message_group group-safety would drop
+   active replicas below minimum (2/3)`. Why: the real workflow owner answers this (lab `lrfixc-entity-1`). The entity
+   tier reaches the floor and answers through `buildDeferredRemoveSafetyEvaluationForOperation`, which defers only a
+   REPLACE removal phase or a REMOVE of an over-replicated system-table partition
+   (`priority-recovery-superseded-target.js:357-397`, `resolveRemoveSafetyDeferredReason`;
+   `operation-workflow-recovery-reconcile.js:513-528`, `isCriticalRemoveOverReplicated`); every other REMOVE is FAIL,
+   and the dispatch gate then fails the operation (`settleDispatchFailure`,
+   `operation-workflow-dispatch-response-reconcile.js:567-573`) instead of scheduling a safety retry. Same logic at
+   d29c7d8c8, where the case was added; DEFER came only from the hand context's always-DEFER builder and never
+   described a reachable state. The diagnostic `t.comment` is removed.
+2. `placement-create-bootstrap-binding`, case 14, round 2 (commit cfd056019):
+   old: each of REMOVE@PENDING, REPLACE@ACTIVE, REPLACE@STOPPING, evaluated by the effect owner
+   (`owner.evaluateRemoveSafety`), names the in-flight native placement in its error (3 assertions).
+   new: REMOVE@PENDING evaluated as a preflight (`evaluateProspectiveRemoveSafety`) still names the placement (1
+   assertion, same regex); REPLACE@ACTIVE and REPLACE@STOPPING beside an in-flight native placement are restated as
+   the real admission applier's refusal in both orders: a native placement requested behind an in-flight REPLACE at
+   ACTIVE and at STOPPING is `{outcome: REFUSED, reason: PARTITION_BUSY, operationIds: [that REPLACE]}` and writes no
+   row (2 × 2 assertions); a REPLACE requested behind the in-flight placement is `{REFUSED, PARTITION_BUSY,
+   [the placement]}` and writes no row (2 assertions). Added: the contender placement is asserted `ADMITTED` (1).
+   Why: the pair cannot exist (PARTITION_BUSY), so "a removal is judged against the in-flight placement" moved from
+   the removal-safety evaluation to the admission boundary for existing operations; a comment at the round says so.
+3. Case 14 voter-floor counts (`voterFloorReads`, ~:644/:681/:697 now): **unchanged, 3 → 3 at all three checks**
+   (the expression is `phases.length` instead of `requests.length`, the same three phases). Per round: round 1 adds 3
+   (one per phase, each subject alone on the entity, so the complete read holds no in-flight competitor; at
+   92a441229 it was 0 because the three subjects were in flight together and each deferred on the other two); round
+   2 adds 0 (the preflight defers on the placement before the floor; refusals do not evaluate); round 3 adds 0 (owner
+   unavailability defers before the floor).
+
+Not changed: round 1 and round 3 assertions (same text and values). Round 3 now ends the native placement first
+(committed FAILED) and commits each of its 9 subjects alone before evaluating it, so no forbidden pair exists.
+Terminals go through `commitOperationTerminal` (record advanced to FAILED by `advanceOperationFixture`; the owner's
+CAS on the current step writing the transition columns of its canonical row; asserts one changed row).
+
+#### Lab
+
+- Commits after the rulings (both through `tools/heavy.sh`, pushed): **c2558d9c2** (entity file; hook regenerated
+  inventory.json, impact-graph-seal.json), **cfd056019** (placement file; hook regenerated inventory.json,
+  impact-graph-seal.json, subsystem-classes.json). Successor C total: 5b3c29192, 92a441229, c2558d9c2, cfd056019.
+- `lab/lrfixc-all-2` (tv-dator, cfd056019), the 20 files of `lrfixb-all-2`: **20 pass / 0 fail, 591 assertions**,
+  every file green on its first attempt (no retry). placement-create-bootstrap-binding 14/14 (cases 12, 13, 14 green);
+  rebalancer-entity-interaction-contract 35 assertions (34 before plus the new reason assertion in case 6). The other
+  18 files have the same counts as in `lrfixb-all-2`.

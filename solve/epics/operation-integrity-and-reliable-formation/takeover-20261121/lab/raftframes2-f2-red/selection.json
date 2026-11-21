@@ -1,0 +1,17 @@
+{
+  "sha": "ca6071d4db32e89c631b7b39d593ac7f13f6aa75",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/router-adopted-connection-reconnect-schedule.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/router-adopted-connection-reconnect-schedule.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

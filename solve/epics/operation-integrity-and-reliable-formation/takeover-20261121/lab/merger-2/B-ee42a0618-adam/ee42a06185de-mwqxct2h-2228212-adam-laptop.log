@@ -1,0 +1,20 @@
+placement-shell=3756986
+placement-head=ee42a06185dede1399c675a38751d308e89049ec
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3757443
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/rebalancer/reservation-file-backed-restart.test.js (39 assertions, 2611ms)
+ok test/control-plane/replica-dispatch-reservation-identity.test.js (27 assertions, 2696ms)
+ok test/rebalancer/dispatch-terminal-operation-eviction.test.js (23 assertions, 2705ms)
+ok test/rebalancer/reservation-fail-closed-dispatch-gate.test.js (78 assertions, 3049ms)
+# test-files total=4 pass=4 fail=0 assertions=167
+placement-results={"file":"test/rebalancer/reservation-file-backed-restart.test.js","attempt":1,"ok":true,"assertions":39,"durationMs":2611,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/replica-dispatch-reservation-identity.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":2696,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/dispatch-terminal-operation-eviction.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":2705,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/reservation-fail-closed-dispatch-gate.test.js","attempt":1,"ok":true,"assertions":78,"durationMs":3049,"retriedOnce":false,"firstFailureLine":null}

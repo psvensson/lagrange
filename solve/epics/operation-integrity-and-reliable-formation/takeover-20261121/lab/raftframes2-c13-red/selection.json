@@ -1,0 +1,17 @@
+{
+  "sha": "aaba000fb1cd3ab39403e43033a9494fdea0d222",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/raft-frame-reconnect-owner.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/raft-frame-reconnect-owner.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

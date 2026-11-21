@@ -1,0 +1,1 @@
+{"file":"test/query/query-executor-no-handler-quarantine-clock.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":660,"retriedOnce":false,"firstFailureLine":"not ok 5 - at mark + duration of node time the leader is routed again and answers"}

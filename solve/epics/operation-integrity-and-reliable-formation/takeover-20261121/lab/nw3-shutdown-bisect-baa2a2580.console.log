@@ -1,0 +1,221 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.28
+[adam-laptop] placement-shell=3783009
+[adam-laptop] placement-head=baa2a25802570aa5cf6ecd9c3e106f76cd93b0a5
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3783460
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/cdc/cdc-shutdown-terminal-owner-write.test.js (24 assertions, 1187ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+[adam-laptop] not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 72.373445
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:373:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "the answer is the CDC service's typed shut-down code"
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTerminalAfterShutdown (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:384:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+[adam-laptop] not ok 2 - (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 11.740219
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:394:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     no retry delay is armed after shutdown began
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   100
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 100
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTerminalAfterShutdown (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:334:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:405:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+[adam-laptop] ok 3 - (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4.70293
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+[adam-laptop] not ok 4 - (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.826153
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:444:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "the answer is the CDC service's typed shut-down code"
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTerminalAfterShutdown (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqyoyqx-2306298/test/cdc/cdc-shutdown-terminal-owner-write.test.js:461:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+[adam-laptop] ok 5 - (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.037004
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+[adam-laptop] ok 6 - (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.075988
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the publication persist loop reads a failed write back, except through a torn-down writer
+[adam-laptop] ok 7 - the publication persist loop reads a failed write back, except through a torn-down writer
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.767853
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+[adam-laptop] ok 8 - an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.563824
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+[adam-laptop] ok 9 - semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.929536
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+[adam-laptop] ok 10 - catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.661894
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: catch-up: started after the mark, it reads nothing and settles at once
+[adam-laptop] ok 11 - catch-up: started after the mark, it reads nothing and settles at once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.676926
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop] ok 12 - real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 28.336328
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop] ok 13 - real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 15.562104
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: census: every CDC delayed-work site is the primitive or classified, with no bypass route
+[adam-laptop] ok 14 - census: every CDC delayed-work site is the primitive or classified, with no bypass route
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 9.061357
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+[adam-laptop] ok 15 - in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.10989
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+[adam-laptop] ok 16 - in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.317834
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+[adam-laptop] ok 17 - in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.407648
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+[adam-laptop] ok 18 - in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.011501
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: after the mark (S5, S6): the repair entry points read nothing and apply nothing
+[adam-laptop] ok 19 - after the mark (S5, S6): the repair entry points read nothing and apply nothing
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.33077
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+[adam-laptop] ok 20 - in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.85232
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+[adam-laptop] ok 21 - in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.468072
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+[adam-laptop] ok 22 - in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.797323
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+[adam-laptop] ok 23 - routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.745926
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+[adam-laptop] ok 24 - routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 17.441567
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..24
+[adam-laptop] # tests 24
+[adam-laptop] # suites 0
+[adam-laptop] # pass 21
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 201.699843
+[adam-laptop] # time=1187ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=24
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=24
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=24

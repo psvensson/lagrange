@@ -1,0 +1,32 @@
+{"file":"test/cache/system-table-cache-mutation-version-survives-clear.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":696,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache-row-preview.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":996,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/read-only-system-table-cache.test.js","attempt":1,"ok":true,"assertions":58,"durationMs":1641,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/config/configuration-manager-revision.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":618,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache-observation.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":2025,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/config/latency-topology-ownership-guardrails.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":773,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/config/configuration-manager.test.js","attempt":1,"ok":true,"assertions":95,"durationMs":2101,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cache/system-table-cache.test.js","attempt":1,"ok":true,"assertions":310,"durationMs":4274,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-cdc-receiver-admission.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":12361,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-custody-handoff.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":14483,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-currentness-stamp-witness.test.js","attempt":1,"ok":false,"assertions":75,"durationMs":13617,"retriedOnce":false,"firstFailureLine":"not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once"}
+{"file":"test/message-group/message-group-native-provisional-route.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":17837,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-lane-typed-backpressure.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":10847,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-lane-wave-isolation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":10834,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-proposal-cost.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":3470,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-service.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":2120,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-topology-progress-currentness.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":11212,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-stop-arms-nothing.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":2510,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-wave-isolation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1484,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":2005,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-foreground-boundary.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":10450,"retriedOnce":false,"firstFailureLine":"not ok 1 - foreground consumer rechecks stop after actual ATTEMPTS_EXHAUSTED"}
+{"file":"test/topology/latency-tree-routing-generation.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1022,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-recipient-domain-and-retained-debt.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1601,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/latency-tree-service.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1491,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/topology/cdc-group-propagation-wave-lifecycle.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":2591,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/cache-hydration-strictness.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":3216,"retriedOnce":false,"firstFailureLine":"not ok 1 - phaseCacheHydration should fail when required hydration is incomplete"}
+{"file":"test/bootstrap/cdc-initial-subscription-leader-fallback.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3472,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/latency-topology-owner-delegation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3516,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":3511,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-teardown-pending-cdc-delivery.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6430,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/cdc-source-occurrence-delivery.integration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":16006,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-native-w7-multi-target-route.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":8096,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,17 @@
+{
+  "sha": "eb281f314565d4eb3c7e53798aa34e585c7fbcbf",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-runtime-reconstruction-leadership.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

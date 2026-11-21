@@ -1,0 +1,110 @@
+lab test: adam-laptop: ordinary (3 files) cores=8 mem=15.5GiB speed x2.04
+[adam-laptop] placement-shell=3699081
+[adam-laptop] placement-head=adfbbed6a2fa19fc2c492ac94b57a92229fd14d9
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3699539
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/raft/raft-rs-backend/follower-proposal-refusal.test.js (1 assertions, 1694ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: port: a follower refuses a proposal and forwards nothing
+[adam-laptop] not ok 1 - port: a follower refuses a proposal and forwards nothing
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 164.395863
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/follower-proposal-refusal.test.js:31:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     a follower's proposal is refused and never forwarded: {"leader":"follower-propose-a","follower":"follower-propose-b","answer":{"outcome":"CORE_OK","reason":"drained","phase":null},"forwarded":1,"commits":[{"replicaId":"follower-propose-a","command":"proposed-at-a-follower","index":2,"term":1},{"replicaId":"follower-propose-b","command":"proposed-at-a-follower","index":2,"term":1},{"replicaId":"follower-propose-c","command":"proposed-at-a-follower","index":2,"term":1}]}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   commits: 3,
+[adam-laptop]     +   dropped: false,
+[adam-laptop]     +   forwarded: 1,
+[adam-laptop]     +   outcome: 'CORE_OK'
+[adam-laptop]     -   commits: 0,
+[adam-laptop]     -   dropped: true,
+[adam-laptop]     -   forwarded: 0,
+[adam-laptop]     -   outcome: 'CORE_REFUSED'
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     outcome: 'CORE_REFUSED'
+[adam-laptop]     dropped: true
+[adam-laptop]     forwarded: 0
+[adam-laptop]     commits: 0
+[adam-laptop]   actual:
+[adam-laptop]     outcome: 'CORE_OK'
+[adam-laptop]     dropped: false
+[adam-laptop]     forwarded: 1
+[adam-laptop]     commits: 3
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/follower-proposal-refusal.test.js:62:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 191.786449
+[adam-laptop] # time=1694ms
+[adam-laptop] not ok test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js (1 assertions, 1714ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: port: a proposal queued behind a busy turn does not enter consensus under the leadership that succeeded the one it was submitted under
+[adam-laptop] not ok 1 - port: a proposal queued behind a busy turn does not enter consensus under the leadership that succeeded the one it was submitted under
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 184.868852
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js:42:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the proposal submitted while queued-fence-a led at term 1 entered consensus under another leadership; {"leader":"queued-fence-a","successor":"queued-fence-c","submittedTerm":1,"successorTerm":2,"queuedAnswer":{"outcome":"CORE_OK","reason":"drained"},"leaderAfter":{"role":"follower","term":2,"leaderId":"queued-fence-c"},"witnessCommits":[{"replicaId":"queued-fence-c","command":"proposal-submitted-under-the-previous-leadership","index":3,"term":2}]}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   'queued-fence-c@2'
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 'queued-fence-c@2'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/adfbbed6a2fa-mwqtwmzj-2023679/test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js:109:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 208.463525
+[adam-laptop] # time=1714ms
+[adam-laptop] ok test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js (1 assertions, 2292ms)
+[adam-laptop] # test-files total=3 pass=1 fail=2 assertions=3
+lab test: adam-laptop: # test-files total=3 pass=1 fail=2 assertions=3
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=1 fail=2 assertions=3

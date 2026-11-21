@@ -1,0 +1,39 @@
+{
+  "sha": "504e2c9895926ba94a5586e0262f99c3599aff29",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/query-executor-no-handler-quarantine-clock.test.js",
+    "test/query/cache-based-routing.property.test.js",
+    "test/query/cache-based-routing.test.js",
+    "test/query/query-executor-recovery-owned-routing.test.js",
+    "test/query/query-executor-serve-eligibility-routing.test.js",
+    "test/query/readiness-routing-denial-observability.test.js",
+    "test/query/routing-overlay-complete-state-retirement.test.js",
+    "test/query/service-read-locality-routing.test.js",
+    "test/query/sql-query-engine-routing-overlay-state.test.js",
+    "test/query/query-executor-session-binding-and-build-sql.test.js",
+    "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+    "test/control-plane/control-plane-read-authority-token.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/query-executor-no-handler-quarantine-clock.test.js",
+        "test/query/cache-based-routing.test.js",
+        "test/query/routing-overlay-complete-state-retirement.test.js",
+        "test/query/readiness-routing-denial-observability.test.js",
+        "test/query/query-executor-session-binding-and-build-sql.test.js",
+        "test/query/cache-based-routing.property.test.js",
+        "test/query/query-executor-recovery-owned-routing.test.js",
+        "test/query/query-executor-serve-eligibility-routing.test.js",
+        "test/query/service-read-locality-routing.test.js",
+        "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+        "test/query/sql-query-engine-routing-overlay-state.test.js",
+        "test/control-plane/control-plane-read-authority-token.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

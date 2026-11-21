@@ -1,0 +1,866 @@
+placement-shell=3721465
+placement-head=48a44d1678176ff021b442001d6af513b5b5282f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3722034
+# test-files planned=28
+classified lane ordinary: 17 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/control-plane/heartbeat-liveness-at-commit.test.js (7 assertions, 2667ms)
+ok test/control-plane/heartbeat-periodic-writes.property.test.js (41 assertions, 3275ms)
+ok test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js (53 assertions, 3326ms)
+ok test/control-plane/heartbeat-storage-budget-preservation.test.js (41 assertions, 2887ms)
+ok test/control-plane/runtime-access-settled-replay-projection.test.js (1 assertions, 2361ms)
+ok test/control-plane/heartbeat-memory-trend.test.js (144 assertions, 6139ms)
+ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 3230ms)
+ok test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js (4 assertions, 2341ms)
+ok test/control-plane/service-instance-selection-admission.test.js (23 assertions, 2649ms)
+ok test/partition/durable-voter-visibility-role-write.test.js (24 assertions, 2637ms)
+ok test/query/sql-query-engine-create-table-quorum.test.js (2 assertions, 2236ms)
+ok test/rebalancer/executor-bypasses-workflow-owner.test.js (7 assertions, 3003ms)
+not ok test/rebalancer/node-storage-budget-service.test.js (23 assertions, 4537ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: resolveBudget - absolute budget from config
+    1..0
+ok 1 - resolveBudget - absolute budget from config # time=162.995ms
+
+# Subtest: resolveBudget - ratio budget from config
+    1..0
+ok 2 - resolveBudget - ratio budget from config # time=88.35ms
+
+# Subtest: resolveBudget - absolute wins when both provided
+    1..0
+ok 3 - resolveBudget - absolute wins when both provided # time=85.702ms
+
+# Subtest: resolveBudget - backfill when no config set
+    1..0
+ok 4 - resolveBudget - backfill when no config set # time=86.258ms
+
+# Subtest: resolveBudget - error when ratio out of range
+    1..0
+ok 5 - resolveBudget - error when ratio out of range # time=64.42ms
+
+# Subtest: resolveBudget - error when ratio below minimum
+    1..0
+ok 6 - resolveBudget - error when ratio below minimum # time=82.772ms
+
+# Subtest: resolveBudget - error when budget non-positive
+    1..0
+ok 7 - resolveBudget - error when budget non-positive # time=79.13ms
+
+# Subtest: resolveBudget - error when budget exceeds disk
+    1..0
+ok 8 - resolveBudget - error when budget exceeds disk # time=87.503ms
+
+# Subtest: resolveBudget - error when budget below minimum
+    1..0
+ok 9 - resolveBudget - error when budget below minimum # time=77.139ms
+
+# Subtest: resolveBudget - error when disk unavailable for ratio
+    1..0
+ok 10 - resolveBudget - error when disk unavailable for ratio # time=82.328ms
+
+# Subtest: resolveBudget - error when no config and no disk
+    1..0
+ok 11 - resolveBudget - error when no config and no disk # time=82.908ms
+
+# Subtest: resolveBudget - throws on null nodeRow
+    1..0
+ok 12 - resolveBudget - throws on null nodeRow # time=124.234ms
+
+# Subtest: buildBudgetRow - valid budget preserves status
+    1..0
+ok 13 - buildBudgetRow - valid budget preserves status # time=81.589ms
+
+# Subtest: buildBudgetRow - invalid budget sets JOINING status
+    1..0
+ok 14 - buildBudgetRow - invalid budget sets JOINING status # time=64.12ms
+
+# Subtest: registerNodeBudget - persists valid budget
+    1..0
+ok 15 - registerNodeBudget - persists valid budget # time=136.229ms
+
+# Subtest: registerNodeBudget - forwards write options to the registration write
+    1..0
+ok 16 - registerNodeBudget - forwards write options to the registration write # time=73.658ms
+
+# Subtest: registerNodeBudget - throws on upsert failure
+    not ok 1 - Expected values to be strictly deep-equal: + actual - expected    Comparison { +   message: 'The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent' -   message: 'write failed'   }
+      ---
+      stack: >
+        async Test.<anonymous>
+        (test/rebalancer/node-storage-budget-service.test.js:397:3)
+      at:
+        fileName: test/rebalancer/node-storage-budget-service.test.js
+        lineNumber: 397
+        columnNumber: 3
+        typeName: async Test
+        methodName: <anonymous>
+        functionName: async Test.<anonymous>
+      type: AssertionError
+      generatedMessage: true
+      code: ERR_ASSERTION
+      actual: !error
+        name: Error
+        message: The proposal was accepted into consensus and its outcome is not known
+          to this replica; a retry with the same entryId is idempotent
+        stack: >-
+          Error: The proposal was accepted into consensus and its outcome is not known
+          to this replica; a retry with the same entryId is idempotent
+              at failedResultError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/48a44d167817-mwqvc5ws-2104819/src/control-plane/owners/node-registration-incarnation-write.js:422:17)
+              at attempt (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/48a44d167817-mwqvc5ws-2104819/src/control-plane/owners/node-registration-incarnation-write.js:396:7)
+              at async writeNodeRegistrationAtIncarnation (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/48a44d167817-mwqvc5ws-2104819/src/control-plane/owners/node-registration-incarnation-write.js:594:24)
+              at async NodeStorageBudgetService.registerNodeBudget (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/48a44d167817-mwqvc5ws-2104819/src/rebalancer/node-storage-budget-service.js:263:26)
+              at async waitForActual (node:assert:644:5)
+              at async Function.rejects (node:assert:767:25)
+              at async Test.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/48a44d167817-mwqvc5ws-2104819/test/rebalancer/node-storage-budget-service.test.js:397:3)
+        cause:
+          success: false
+          outcome: unknown
+          completionState: unknown
+          deferRetry: true
+          error: The proposal was accepted into consensus and its outcome is not known to
+            this replica; a retry with the same entryId is idempotent
+          failureCode: partition_write_outcome_unknown
+          entryId: null
+          contractState: pending
+          nextAction: retry
+          pendingInstance:
+            writeIdentity: '["nodes","test-node-1",1,"birth"]'
+            instance: e861d48b-6c18-4677-8070-598408928c88
+            idempotencyKey: cpw-aeec8d55e22c027d9c9cf63c65f60d26
+            entryId: null
+            outcome: unknown
+          cause:
+            success: false
+            error: write failed
+            requestKey: '{"data":null,"deliveryPriority":"critical","ignoreExisting":false,"kind":"control-plane-mutation","operation":"insert","routingReadinessDimension":"controlPlaneRecoveryEligible","row":{"boot_incarnation":1,"created_at":1795293471430,"disk_gb":100,"host_id":"adam-Aspire-A515-52G","last_heartbeat":1795293471430,"node_address":"ws://localhost:3000","node_id":"test-node-1","status":"active","storage_budget_bytes":53687091200,"storage_budget_source":"absolute","storage_budget_updated_at":1795293471430},"tableName":"nodes","whereClause":null,"workClass":"interactive"}'
+            idempotencyKey: cpw-aeec8d55e22c027d9c9cf63c65f60d26
+            outcome: owner_not_ready
+            completionState: owner_not_ready
+            contractState: deferred
+            nextAction: retry
+        deferRetry: true
+        failureCode: partition_write_outcome_unknown
+      expected:
+        message: write failed
+      operator: rejects
+      diff: simple
+      tapCaught: returnedPromiseRejection
+      source: |2
+          });
+      
+          await assert.rejects(
+        --^
+            () => service.registerNodeBudget(lifecycleRegistration()),
+            {message: 'write failed'},
+      ...
+    
+    1..1
+not ok 17 - registerNodeBudget - throws on upsert failure # time=154.436ms
+  ---
+  at:
+    fileName: test/rebalancer/node-storage-budget-service.test.js
+    lineNumber: 385
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('registerNodeBudget - throws on upsert failure', async (t) => {
+    ^
+      setup({node: {storageBudgetBytes: 50 * NUM.BYTES_PER_GIB}});
+      const mockCdc = createMockCdc({success: false, error: 'write failed'});
+  ...
+
+# Subtest: registerNodeBudget - throws on missing nodeRow
+    1..0
+ok 18 - registerNodeBudget - throws on missing nodeRow # time=76.314ms
+
+# Subtest: initialize - throws on missing nodeId
+    1..0
+ok 19 - initialize - throws on missing nodeId # time=73.388ms
+
+# Subtest: initialize - throws on missing cdcIntegrationService
+    1..0
+ok 20 - initialize - throws on missing cdcIntegrationService # time=61.549ms
+
+# Subtest: resolveBudget - budget bytes are floored
+    1..0
+ok 21 - resolveBudget - budget bytes are floored # time=62.501ms
+
+# Subtest: resolveBudget - resolvedAt is a timestamp
+    1..0
+ok 22 - resolveBudget - resolvedAt is a timestamp # time=58.508ms
+
+1..22
+# { total: 22, pass: 21, fail: 1 }
+# time=2040.689ms
+ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 4196ms)
+ok test/test-helpers/committed-write-answer.test.js (4 assertions, 3305ms)
+ok test/rebalancer/placement-admission-cross-coordinator-target-census.test.js (4 assertions, 9814ms)
+ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 9884ms)
+# test-files total=17 pass=16 fail=1 assertions=445
+classified lane bootstrap: 7 file(s), jobs=2
+thermal: ok cpu 60C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/node-joining-lease-registration.test.js (5 assertions, 3211ms)
+ok test/bootstrap/bootstrap-api.test.js (185 assertions, 6565ms)
+ok test/bootstrap/node-joining-service-message-group-activation.test.js (54 assertions, 4066ms)
+ok test/bootstrap/node-registration-idempotency.test.js (6 assertions, 3523ms)
+not ok test/bootstrap/register-node-in-cluster.test.js (85 assertions, 4116ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+{"subsystem":"node-joining","nodeId":"test-node-123","nodeAddress":"ws://localhost:9000","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-123","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-123' }
+Resolving node storage budget { nodeId: 'test-node-123' }
+Node storage budget resolved {
+  nodeId: 'test-node-123',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-123',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-123","nodeAddress":"ws://localhost:9000","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-123","nodeAddress":"ws://localhost:9000","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-123","endpointId":"ep-test-node-123-ws","transportType":"ws","address":"ws://localhost:9000","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should create the canonical nodes row and upsert endpoints
+    ok 1 - should create one canonical nodes row during registration
+    ok 2 - should use correct node_id
+    ok 3 - should use correct node_address
+    ok 4 - should have cpu_cores > 0
+    ok 5 - should have memory_mb > 0
+    ok 6 - should have disk_gb > 0
+    ok 7 - should persist JOINING status until ready signaling
+    ok 8 - should persist CONNECTED admission state in the canonical nodes row
+    ok 9 - join registration should not assign the ready lease before ready signaling
+    ok 10 - the row is born at this process's exact boot incarnation
+    ok 11 - should upsert node_endpoints table
+    ok 12 - should upsert node_endpoints table
+    ok 13 - should use correct endpoint_id
+    ok 14 - should use correct node_id
+    ok 15 - should use ws transport type
+    ok 16 - should use correct address
+    ok 17 - should use priority 0
+    ok 18 - should set status to active
+    1..18
+ok 1 - registerNodeInCluster() - should create the canonical nodes row and upsert endpoints # time=174.709ms
+
+# Subtest: registerNodeInCluster() - a joiner without a startup-minted incarnation is refused at construction, so no row can be born
+    ok 1 - the joiner fails closed before any registration can run
+    1..1
+ok 2 - registerNodeInCluster() - a joiner without a startup-minted incarnation is refused at construction, so no row can be born # time=2.79ms
+
+{"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-canonical-endpoint' }
+Resolving node storage budget { nodeId: 'test-node-canonical-endpoint' }
+Node storage budget resolved {
+  nodeId: 'test-node-canonical-endpoint',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-canonical-endpoint',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","nodeAddress":"joiner-host:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","endpointId":"ep-test-node-canonical-endpoint-ws","transportType":"ws","address":"ws://joiner-host:8082","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should canonicalize raw node address to websocket endpoint
+    ok 1 - should upsert node_endpoints table
+    ok 2 - join-time endpoint registration should publish canonical websocket address
+    1..2
+ok 3 - registerNodeInCluster() - should canonicalize raw node address to websocket endpoint # time=21.414ms
+
+{"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-explicit-endpoint' }
+Resolving node storage budget { nodeId: 'test-node-explicit-endpoint' }
+Node storage budget resolved {
+  nodeId: 'test-node-explicit-endpoint',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-explicit-endpoint',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","nodeAddress":"joiner-host:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","endpointId":"ep-test-node-explicit-endpoint-ws","transportType":"ws","address":"ws://172.20.0.42:8082","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should publish explicit advertised websocket endpoint when configured
+    ok 1 - should upsert node_endpoints table
+    ok 2 - explicit advertised websocket address should be published canonically
+    1..2
+ok 4 - registerNodeInCluster() - should publish explicit advertised websocket endpoint when configured # time=26.538ms
+
+{"subsystem":"node-joining","nodeId":"test-node-456","nodeAddress":"ws://localhost:9001","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-456","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-456' }
+Resolving node storage budget { nodeId: 'test-node-456' }
+Node storage budget resolved {
+  nodeId: 'test-node-456',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-456',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+{"subsystem":"node-joining","nodeId":"test-node-456","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","level":"error","message":"Failed to register node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-456","attempt":1,"maxAttempts":2,"delayMs":200,"retryAfterMs":null,"error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+{"subsystem":"node-joining","nodeId":"test-node-456","nodeAddress":"ws://localhost:9001","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-456","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-456' }
+Node storage budget resolved {
+  nodeId: 'test-node-456',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-456',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+{"subsystem":"node-joining","nodeId":"test-node-456","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","level":"error","message":"Failed to register node in cluster"}
+# Subtest: registerNodeInCluster() - should throw error if query fails
+    ok 1 - should throw error with correct message
+    1..1
+ok 5 - registerNodeInCluster() - should throw error if query fails # time=208.821ms
+
+{"subsystem":"node-joining","nodeId":"test-node-789","nodeAddress":"ws://localhost:9002","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-789","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+{"subsystem":"node-joining","nodeId":"test-node-789","error":"Failed to register node: NodeStorageBudgetSetup requires cdcIntegrationService","level":"error","message":"Failed to register node in cluster"}
+# Subtest: registerNodeInCluster() - should throw error if CDC service not available
+    ok 1 - should throw error
+    1..1
+ok 6 - registerNodeInCluster() - should throw error if CDC service not available # time=2.41ms
+
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","nodeAddress":"ws://localhost:9003","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-join-cache-wait' }
+Node storage budget resolved {
+  nodeId: 'test-node-join-cache-wait',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-join-cache-wait',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","nodeAddress":"ws://localhost:9003","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","nodeAddress":"ws://localhost:9003","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","endpointId":"ep-test-node-join-cache-wait-ws","transportType":"ws","address":"ws://localhost:9003","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should skip cache waits before CDC subscriptions are active
+    ok 1 - should upsert endpoint rows during registration
+    ok 2 - join-time endpoint upserts carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)
+    ok 3 - join-time endpoint upserts should carry a bounded routed query timeout
+    ok 4 - join-time endpoint upserts should declare join phase scope explicitly
+    1..4
+ok 7 - registerNodeInCluster() - should skip cache waits before CDC subscriptions are active # time=20.586ms
+
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","nodeAddress":"ws://localhost:9004","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-join-cache-wait-active' }
+Node storage budget resolved {
+  nodeId: 'test-node-join-cache-wait-active',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-join-cache-wait-active',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","nodeAddress":"ws://localhost:9004","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","nodeAddress":"ws://localhost:9004","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","endpointId":"ep-test-node-join-cache-wait-active-ws","transportType":"ws","address":"ws://localhost:9004","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should skip cache waits even after CDC subscriptions are marked active
+    ok 1 - should upsert join admission rows during registration
+    ok 2 - join admission writes carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)
+    ok 3 - join admission writes should carry a bounded routed query timeout even after CDC subscriptions become active
+    ok 4 - join admission writes should keep join phase scope while readiness still owns convergence
+    1..4
+ok 8 - registerNodeInCluster() - should skip cache waits even after CDC subscriptions are marked active # time=14.848ms
+
+{"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","nodeAddress":"ws://localhost:9014","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-join-sql-fallback' }
+Node storage budget resolved {
+  nodeId: 'test-node-join-sql-fallback',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-join-sql-fallback',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+{"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","nodeAddress":"ws://localhost:9014","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","nodeAddress":"ws://localhost:9014","level":"info","message":"Registering node endpoint in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","endpointId":"ep-test-node-join-sql-fallback-ws","transportType":"ws","address":"ws://localhost:9014","level":"info","message":"Node endpoint registered in cluster"}
+# Subtest: registerNodeInCluster() - should use join phase SQL fallback when CDC mutation helpers are not ready
+    ok 1 - join admission should route through the startup SQL fallback when CDC mutation helpers are unavailable
+    not ok 2 - join-phase SQL fallback should carry explicit join phase scope (calls without it: [["INSERT INTO nodes (node_id, node_address, host_id, cpu_cores",null],["INSERT INTO node_endpoints (endpoint_id, node_id, transport_",null],["INSERT INTO service_endpoints (endpoint_id, service_id, node",null],["INSERT INTO service_endpoints (endpoint_id, service_id, node",null]])
+      ---
+      at:
+        fileName: test/bootstrap/register-node-in-cluster.test.js
+        lineNumber: 448
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/bootstrap/register-node-in-cluster.test.js:448:7)
+      source: >2
+            t.ok(queryCalls.length > 0,
+              'join admission should route through the startup SQL fallback when CDC mutation helpers are unavailable');
+            t.ok(
+        ------^
+              queryCalls.every((call) =>
+                call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+      ...
+    
+    ok 3 - the join-phase SQL path is gated by its phase scope alone (no cache-wait opt-out exists: writes answer at their commit)
+    ok 4 - join-phase SQL fallback should write the canonical nodes row first
+    1..4
+not ok 9 - registerNodeInCluster() - should use join phase SQL fallback when CDC mutation helpers are not ready # time=42.426ms
+  ---
+  at:
+    fileName: test/bootstrap/register-node-in-cluster.test.js
+    lineNumber: 402
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('registerNodeInCluster() - should use join phase SQL fallback when CDC
+    mutation helpers are not ready',
+  
+    ^
+      async (t) => {
+        const queryCalls = [];
+  ...
+
+{"subsystem":"node-joining","nodeId":"test-node-owner-path","nodeAddress":"ws://localhost:9010","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-owner-path","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-owner-path' }
+Resolving node storage budget { nodeId: 'test-node-owner-path' }
+Node storage budget resolved {
+  nodeId: 'test-node-owner-path',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-owner-path',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-owner-path","nodeAddress":"ws://localhost:9010","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-owner-path","nodeAddress":"ws://localhost:9010","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-owner-path","endpointId":"ep-test-node-owner-path-ws","transportType":"ws","address":"ws://localhost:9010","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should use the registration owner path for nodes row creation
+    ok 1 - should create exactly one canonical nodes row
+    ok 2 - registration should persist CONNECTED until ready signaling completes
+    ok 3 - registration should create the canonical node row directly
+    ok 4 - successful registration should expose join membership from the canonical nodes cache row
+    1..4
+ok 10 - registerNodeInCluster() - should use the registration owner path for nodes row creation # time=16.613ms
+
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-admission-retry' }
+Node storage budget resolved {
+  nodeId: 'test-node-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","attempt":1,"maxAttempts":2,"delayMs":250,"retryAfterMs":250,"error":"Failed to register node: Distributed operation failed due to participant failures","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-admission-retry' }
+Node storage budget resolved {
+  nodeId: 'test-node-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-admission-retry","endpointId":"ep-test-node-admission-retry-ws","transportType":"ws","address":"ws://localhost:9012","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should retry transient participant failures during node admission
+    ok 1 - join admission should retry the canonical nodes write once after a retryable failure
+    ok 2 - membership should be visible from the canonical nodes cache row after the retried admission succeeds
+    ok 3 - endpoint publication should still complete after the retried admission succeeds
+    ok 4 - endpoint publication should continue after the nodes write retry succeeds
+    1..4
+ok 11 - registerNodeInCluster() - should retry transient participant failures during node admission # time=20.484ms
+
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-phase-admission-retry' }
+Node storage budget resolved {
+  nodeId: 'test-node-phase-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-phase-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","attempt":1,"maxAttempts":2,"delayMs":200,"retryAfterMs":null,"error":"Failed to register node: Distributed operation failed due to participant failures","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-phase-admission-retry' }
+Node storage budget resolved {
+  nodeId: 'test-node-phase-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-phase-admission-retry',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","endpointId":"ep-test-node-phase-admission-retry-ws","transportType":"ws","address":"ws://localhost:9013","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should retry admission at phase scope when the first routed attempt exhausts the inner retry budget
+    ok 1 - phase-scoped join admission should rerun node registration after the first routed attempt ages out the inner retry budget
+    ok 2 - phase-scoped retry should still complete canonical membership registration
+    ok 3 - phase-scoped retry should still complete endpoint publication
+    1..3
+ok 12 - registerNodeInCluster() - should retry admission at phase scope when the first routed attempt exhausts the inner retry budget # time=16.798ms
+
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","nodeAddress":"ws://localhost:9011","level":"info","message":"Registering node in cluster"}
+# Subtest: registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-seed-restart-failure' }
+Node storage budget resolved {
+  nodeId: 'test-node-seed-restart-failure',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-seed-restart-failure',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","attempt":1,"maxAttempts":2,"delayMs":250,"retryAfterMs":250,"error":"Failed to register node: Distributed operation failed due to participant failures","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","nodeAddress":"ws://localhost:9011","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Resolving node storage budget { nodeId: 'test-node-seed-restart-failure' }
+Node storage budget resolved {
+  nodeId: 'test-node-seed-restart-failure',
+  budgetBytes: 1024,
+  budgetSource: 'test',
+  diskBytes: 1024,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-seed-restart-failure',
+  budgetBytes: 1024,
+  budgetSource: 'test'
+}
+{"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+    ok 1 - seed restart-style admission failures should surface through registerNodeInCluster
+    ok 2 - join registration should preserve the participant-failure code
+    ok 3 - join registration should preserve retry-after hints from the owner path
+    not ok 4 - join registration should retain the original owner-path failure as cause
+      ---
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,2 +1,24 @@
+         Error: Distributed operation failed due to participant failures {
+        +  "cause": Error: Distributed operation failed due to participant failures {
+      
+        +    "cause": Error: Distributed operation failed due to participant failures
+        {
+      
+        +      "code": "DISTRIBUTED_PARTICIPANT_FAILURE",
+      
+        +      "retryAfterMs": 250,
+      
+        +    },
+      
+        +    "code": "DISTRIBUTED_PARTICIPANT_FAILURE",
+      
+        +    "retryAfterMs": 250,
+      
+        +    "pendingInstance": Object {
+      
+        +      "writeIdentity":
+        "[\"nodes\",\"test-node-seed-restart-failure\",1,\"birth\"]",
+      
+        +      "instance": "b10096b0-d483-4e94-80e8-a06db9dfd61a",
+      
+        +      "idempotencyKey": "cpw-90c06a7f864fd745749303f8cb4b2af4",
+      
+        +      "entryId": null,
+      
+        +      "outcome": "unknown",
+      
+        +    },
+      
+        +  },
+      
+        +  "pendingInstance": Object {
+      
+        +    "writeIdentity":
+        "[\"nodes\",\"test-node-seed-restart-failure\",1,\"birth\"]",
+      
+        +    "instance": "b10096b0-d483-4e94-80e8-a06db9dfd61a",
+      
+        +    "idempotencyKey": "cpw-90c06a7f864fd745749303f8cb4b2af4",
+      
+        +    "entryId": null,
+      
+        +    "outcome": "unknown",
+      
+        +  },
+         }
+      compare: ===
+      at:
+        fileName: test/bootstrap/register-node-in-cluster.test.js
+        lineNumber: 720
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/bootstrap/register-node-in-cluster.test.js:720:7)
+      source: >2
+              'join registration should preserve retry-after hints from the owner path',
+            );
+            t.equal(
+        ------^
+              error?.cause,
+              participantFailure,
+      ...
+    
+    ok 5 - membership should not appear in cache when admission fails
+    ok 6 - endpoint publication should not appear in cache when admission fails
+    ok 7 - join registration should stop before endpoint upserts when admission fails
+    1..7
+not ok 13 - registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication # time=275.754ms
+  ---
+  at:
+    fileName: test/bootstrap/register-node-in-cluster.test.js
+    lineNumber: 658
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('registerNodeInCluster() - should fail narrowly on seed participant
+    failure before endpoint publication',
+  
+    ^
+      async (t) => {
+        const upsertCalls = [];
+  ...
+
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin","nodeAddress":"joiner-host:8080","reusedEndpointCount":2,"level":"info","message":"Reusing existing canonical membership for durable rejoin"}
+# Subtest: registerNodeInCluster() - should reuse canonical membership during durable rejoin while refreshing the canonical nodes row
+    ok 1 - durable rejoin never upserts over the canonical nodes row
+    ok 2 - the reused endpoint rows advance with the node by one CAS each on their observed (legacy) incarnation
+    ok 3 - durable rejoin refreshes the canonical nodes row with one incarnation-advance CAS so peers learn it is connected but not ready
+    ok 4 - the refresh is fenced by the observed (older) boot incarnation
+    ok 5 - the refresh stamps this boot incarnation and CONNECTED admission state
+    ok 6 - durable rejoin refresh should explicitly clear the ready lease until READY signaling completes
+    ok 7 - durable rejoin should report that it reused canonical membership
+    ok 8 - durable rejoin should explain why fresh admission writes were skipped
+    ok 9 - durable rejoin should satisfy join membership from canonical cache evidence
+    ok 10 - durable rejoin should satisfy endpoint publication from canonical cache evidence
+    ok 11 - durable rejoin should locally project the cached node row back to CONNECTED
+    1..11
+ok 14 - registerNodeInCluster() - should reuse canonical membership during durable rejoin while refreshing the canonical nodes row # time=22.221ms
+
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","nodeAddress":"joiner-cache-only:8080","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-durable-rejoin-cache-only' }
+Resolving node storage budget { nodeId: 'test-node-durable-rejoin-cache-only' }
+Node storage budget resolved {
+  nodeId: 'test-node-durable-rejoin-cache-only',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-durable-rejoin-cache-only',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","nodeAddress":"joiner-cache-only:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","nodeAddress":"joiner-cache-only:8080","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","endpointId":"ep-test-node-durable-rejoin-cache-only-ws","transportType":"ws","address":"ws://joiner-cache-only:8082","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should not treat cache-only durable rejoin metadata as canonical proof
+    ok 1 - cache-only metadata must not be treated as canonical durable rejoin proof
+    ok 2 - registration should fall back to fresh admission writes when authoritative rejoin rows are absent
+    1..2
+ok 15 - registerNodeInCluster() - should not treat cache-only durable rejoin metadata as canonical proof # time=12.302ms
+
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","nodeAddress":"new-host:8080","level":"info","message":"Registering node in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+Creating NodeStorageBudgetService { nodeId: 'test-node-durable-rejoin-drift' }
+Resolving node storage budget { nodeId: 'test-node-durable-rejoin-drift' }
+Node storage budget resolved {
+  nodeId: 'test-node-durable-rejoin-drift',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill',
+  diskBytes: 107374182400,
+  phase: 'startup'
+}
+Node storage budget resolved during startup {
+  nodeId: 'test-node-durable-rejoin-drift',
+  budgetBytes: 107374182400,
+  budgetSource: 'backfill'
+}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","nodeAddress":"new-host:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","nodeAddress":"new-host:8080","level":"info","message":"Registering node endpoint in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+{"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","endpointId":"ep-test-node-durable-rejoin-drift-ws","transportType":"ws","address":"ws://new-host:8082","level":"info","message":"Node endpoint registered in cluster"}
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+# Subtest: registerNodeInCluster() - should fall back to fresh admission writes when durable rejoin node metadata drifted
+    ok 1 - durable rejoin should perform fresh admission writes when node address metadata drifted
+    1..1
+ok 16 - registerNodeInCluster() - should fall back to fresh admission writes when durable rejoin node metadata drifted # time=12.171ms
+
+1..16
+# { total: 69, pass: 67, fail: 2 }
+# time=918.361ms
+ok test/bootstrap/register-service-move-handoff-refused.test.js (16 assertions, 2596ms)
+ok test/bootstrap/storage-budget-bootstrap.test.js (21 assertions, 2730ms)
+# test-files total=7 pass=6 fail=1 assertions=372
+classified lane exclusive: 4 file(s), jobs=1
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2810ms)
+ok test/wasm-service/bound-creation-physical-custody.integration.test.js (20 assertions, 6125ms)
+ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 14385ms)
+ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 3056ms)
+# test-files total=4 pass=4 fail=0 assertions=66
+placement-results={"file":"test/control-plane/heartbeat-liveness-at-commit.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2667,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-periodic-writes.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":3275,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":3326,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-storage-budget-preservation.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":2887,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/runtime-access-settled-replay-projection.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2361,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-memory-trend.test.js","attempt":1,"ok":true,"assertions":144,"durationMs":6139,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/service-instance-creation-cas.test.js","attempt":1,"ok":true,"assertions":31,"durationMs":3230,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2341,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/service-instance-selection-admission.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":2649,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/durable-voter-visibility-role-write.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":2637,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/sql-query-engine-create-table-quorum.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2236,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/executor-bypasses-workflow-owner.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3003,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/node-storage-budget-service.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":4537,"retriedOnce":false,"firstFailureLine":"not ok 1 - Expected values to be strictly deep-equal: + actual - expected    Comparison { +   message: 'The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent' -   message: 'wr"}
+placement-results={"file":"test/runtime/service-runtime-consensus-publication.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":4196,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/test-helpers/committed-write-answer.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3305,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/placement-admission-cross-coordinator-target-census.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":9814,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":9884,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-lease-registration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3211,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-api.test.js","attempt":1,"ok":true,"assertions":185,"durationMs":6565,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-joining-service-message-group-activation.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":4066,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-registration-idempotency.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":3523,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/register-node-in-cluster.test.js","attempt":1,"ok":false,"assertions":85,"durationMs":4116,"retriedOnce":false,"firstFailureLine":"not ok 2 - join-phase SQL fallback should carry explicit join phase scope (calls without it: [[\"INSERT INTO nodes (node_id, node_address, host_id, cpu_cores\",null],[\"INSERT INTO node_endpoints (endpoint_id, node_id, transport_\",null],[\"INSERT INTO serv"}
+placement-results={"file":"test/bootstrap/register-service-move-handoff-refused.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2596,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/storage-budget-bootstrap.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2730,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-handler-embedding.integration.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2810,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-physical-custody.integration.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":6125,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-restart.integration.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":14385,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":3056,"retriedOnce":false,"firstFailureLine":null}

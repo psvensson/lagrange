@@ -1,0 +1,17 @@
+{
+  "sha": "8e84e2801987b162359de39ef35e54aaf8462261",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

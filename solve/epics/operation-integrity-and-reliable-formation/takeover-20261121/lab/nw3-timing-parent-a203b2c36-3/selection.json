@@ -1,0 +1,17 @@
+{
+  "sha": "a203b2c361d7928859942ee91852a72eb11b15aa",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "sha": "9c3604ed90f800b3f07b33a5e9620b3cc932ee5c",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/router-adopted-connection-reconnect-schedule.test.js",
+    "test/transport/raft-frame-reconnect-owner.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/router-adopted-connection-reconnect-schedule.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/transport/raft-frame-reconnect-owner.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

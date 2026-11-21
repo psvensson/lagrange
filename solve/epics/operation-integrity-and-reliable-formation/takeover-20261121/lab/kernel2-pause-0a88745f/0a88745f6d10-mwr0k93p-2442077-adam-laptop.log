@@ -1,0 +1,14 @@
+placement-shell=3844437
+placement-head=0a88745f6d1072e00c209d2793b3b2e55a3e76c2
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3844894
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/partition/partition-write-kernel-tenure-fence.test.js (9 assertions, 5047ms)
+# test-files total=1 pass=1 fail=0 assertions=9
+placement-results={"file":"test/partition/partition-write-kernel-tenure-fence.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":5047,"retriedOnce":false,"firstFailureLine":null}
