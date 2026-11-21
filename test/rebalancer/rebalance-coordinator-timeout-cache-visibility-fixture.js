@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {applyCDCIntegrationServiceCacheVisibilityWait} from
   '../../src/cdc/cdc-integration-service-cache-visibility-wait.js';
@@ -73,6 +74,26 @@ export function createCoordinator(overrides = {}) {
   })));
 }
 
+// Common sweep wiring. Each case supplies the ledger and the authority
+// conditions it exercises.
+export function createTimeoutSweepCoordinator(overrides) {
+  return createCoordinator({
+    transactionCoordinator: buildTransactionCoordinator(),
+    messageRouter: {
+      async deliver() {
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {targetReplicaCount: 3, minReplicaCount: 1};
+      },
+    },
+    enableTimeouts: false,
+    ...overrides,
+  });
+}
+
 class FixtureServiceCacheRefresh {}
 applyCDCIntegrationServiceCacheVisibilityWait(FixtureServiceCacheRefresh);
 
@@ -87,8 +108,8 @@ function createServiceCacheRefresh(cache, gateway) {
   return Object.assign(host, gateway.cdcIntegrationService);
 }
 
-export function createTimeoutVisibilityCache(operationRow, serviceRows) {
-  const cache = new SystemTableCache();
+export function createTimeoutVisibilityCache(operationRow, serviceRows, options = {}) {
+  const cache = new SystemTableCache(options);
   cache.applySystemTableChange('replica_operations', CDC_OPERATION.UPSERT, operationRow);
   for (const row of serviceRows) {
     cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, row);

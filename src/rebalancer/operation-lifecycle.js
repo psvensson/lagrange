@@ -7,6 +7,8 @@ import {
   createNextOperationProgressEvent,
 } from './operation-progress-events.js';
 import {
+  OBSERVED_LIFECYCLE_RECONCILE_REQUEST,
+  buildObservedLifecycleReconcile,
   createOperationLifecycleEventResolver,
 } from './operation-lifecycle-event-resolution.js';
 import {
@@ -677,6 +679,10 @@ function advanceOperationLifecycle(currentProgressOrState, eventInput) {
       OPERATION_PROGRESS_TYPEOF_STRING ?
     currentProgressOrState :
     currentProgress.state;
+  if (event.type === OBSERVED_LIFECYCLE_RECONCILE_REQUEST) {
+    return buildObservedLifecycleReconcile(currentProgress, currentState,
+      OPERATION_PROGRESS_TERMINAL_STATES.has(currentState));
+  }
   const transition =
     findOperationLifecycleTransition(currentState, event.type) ||
     buildInvalidOperationLifecycleTransition(currentState, event);

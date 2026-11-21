@@ -1,3 +1,5 @@
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
+  './operation-workflow-recovery-reconcile-shared.js';
 import {readStateField} from '../utils/state-field-read.js';
 /**
  * Owner contract:
@@ -23,9 +25,6 @@ import {
   OPERATION_WORKFLOW_OUTCOME_VALUES,
 } from './operation-workflow-owner-constants.js';
 import {
-  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED,
-} from './operation-workflow-recovery-reconcile-shared.js';
-import {
   applyOperationWorkflowOwnerTargetProgressReentryAction,
   normalizeOperationWorkflowOwnerTargetProgressOwnerSnapshot,
   resolveOperationWorkflowOwnerTargetProgressReentryAction,
@@ -44,9 +43,10 @@ const OPERATION_WORKFLOW_OWNER_LOCAL_INITIALIZATION_RETRY_ERROR =
   'control_plane_pressure_degraded while local workflow owner initialization is pending';
 const OPERATION_WORKFLOW_OWNER_NO_OPERATION = null;
 const {
-  OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION:
-    OPERATION_WORKFLOW_OWNER_OBSERVED_PROGRESS_ROUTE_ACTION,
+  OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
 } = OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
+
 function shouldReturnDeferredDispatchOwnerProgressResult(result) {
   return (
     result?.applied !== true &&
@@ -304,9 +304,14 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   }
 
   async reconcileObservedProgressOperation(operationId) {
-    if (!operationId) {
+    if (
+      typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
+      operationId.length === 0
+    ) {
       return false;
     }
+    const expectedTimeoutHandle =
+      this.observedProgressRetryTimerByOperationId.get(operationId)?.timeoutHandle;
     const visibilityObservation =
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
@@ -319,32 +324,24 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       this.buildObservedProgressOperationRouteEvidence(operation);
     const routeAction =
       this.resolveObservedProgressOperationRouteAction(routeEvidence);
-    if (
-      routeAction ===
-      OPERATION_WORKFLOW_OWNER_OBSERVED_PROGRESS_ROUTE_ACTION.SKIP
-    ) {
-      this.clearObservedProgressRetry(operationId);
+    if (routeAction === OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.SKIP) {
+      this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
       return false;
     }
     if (
       routeAction ===
-      OPERATION_WORKFLOW_OWNER_OBSERVED_PROGRESS_ROUTE_ACTION.WAKE_REMOTE_OWNER
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.WAKE_REMOTE_OWNER
     ) {
       const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
-      this.clearObservedProgressRetry(operationId);
+      this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
       return woken;
     }
-    try {
-      return await this.runOperationWorkflowOwnerAdapter(
-        operation,
-        {
-          ...OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
-          mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS,
-        },
-      );
-    } finally {
-      this.clearObservedProgressRetry(operationId);
-    }
+    const result = await this.runOperationWorkflowOwnerAdapter(operation, {
+      mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS,
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+    });
+    if (result.applied) this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
+    return result;
   }
 
   finalizePriorityRecoveryPartitionOperationObservation(snapshot, operations) {

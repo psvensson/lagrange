@@ -30,7 +30,7 @@ const {
   RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE,
   RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES,
   ReplicaStatus, SQL_RECONCILIATION_REASON,
-  STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME,
+  STOPPING_REPLICA_OBSERVATION_STATE,
   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
   TIMEOUT_BUDGET_CLASSIFICATION, TIMEOUT_BUDGET_DEFAULT,
   UNIFIED_SERVICE_TYPE,
@@ -152,11 +152,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return true;
     }
     if (options.scheduleObservedProgressRetry !== false) {
-      this.scheduleObservedProgressRetry(
-        operation.operationId,
-        SYSTEM_TABLE_NAME.SERVICES,
-        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
-      );
+      this.scheduleActiveReplicaHandoffRetry(operation);
     }
     return false;
   }

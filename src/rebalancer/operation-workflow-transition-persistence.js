@@ -54,7 +54,6 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaStatus,
-  SYSTEM_TABLE_NAME,
   TRANSITION_STEP_OPTIONS,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
@@ -668,8 +667,7 @@ class OperationWorkflowTransitionPersistence
     if (failureAdmission.refused) {
       if (failureAdmission.supersessionChanged) return PRIORITY_TARGET_SUPERSESSION_CHANGED;
       if (failureAdmission.targetProgressPending) {
-        this.scheduleObservedProgressRetry(operation.operationId, SYSTEM_TABLE_NAME.SERVICES,
-          OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT);
+        this.scheduleActiveReplicaHandoffRetry(operation);
         return ELAPSED_REPLACE_TARGET_ACTIVE;
       }
       if (failureAdmission.unavailable) {
