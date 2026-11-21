@@ -10,6 +10,7 @@ import {
   buildTransactionCoordinator,
   createCommittedTimeoutLedger,
   createCoordinator,
+  createTimeoutSweepCoordinator,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
@@ -45,26 +46,14 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
       };
 
       const ledger = createCommittedTimeoutLedger(nonPrioritySyncingOperationRow);
-      const coordinator = createCoordinator({
+      const coordinator = createTimeoutSweepCoordinator({
         nodeId: 'node-2',
-        transactionCoordinator: buildTransactionCoordinator(),
         systemTableCache: {
           get() {
             return null;
           },
         },
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-          },
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
         ...ledger.options,
-        enableTimeouts: false,
       });
 
       coordinator.initialize();
@@ -134,9 +123,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
     };
 
     const ledger = createCommittedTimeoutLedger(authoritativeTerminalRow);
-    const coordinator = createCoordinator({
+    const coordinator = createTimeoutSweepCoordinator({
       nodeId: 'node-1',
-      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get(tableName, key) {
           if (tableName !== 'replica_operations') {
@@ -157,13 +145,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
       ...ledger.options,
-      enableTimeouts: false,
     });
 
     coordinator.initialize();
