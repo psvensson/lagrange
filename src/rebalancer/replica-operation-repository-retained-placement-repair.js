@@ -124,12 +124,14 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     // The binding changes only here, inside the serialized decision, from the
-    // current canonical route; custody is not trusted across a route
-    // publication or a binding other than the one it was attested under.
-    bindRetainedRepairDecision(attempt, mode) {
+    // current canonical route. Custody holds while the binding it was attested
+    // under is current: a route change or a published incarnation change of
+    // the bound endpoint (both part of the binding) ends it, as a disclaim
+    // does; a publication that leaves the binding as it was does not.
+    bindRetainedRepairDecision(attempt) {
       const binding = this.resolveRetainedPlacementRepairRoute();
-      if (attempt.custody.state === CUSTODY.DELEGATED && (mode === MODE.HANDOFF ||
-          !isDeepStrictEqual(attempt.custody.binding, binding))) {
+      if (attempt.custody.state === CUSTODY.DELEGATED &&
+          !isDeepStrictEqual(attempt.custody.binding, binding)) {
         attempt.custody = SELF_CUSTODY;
       }
       const changed = !isDeepStrictEqual(attempt.binding, binding);
@@ -138,7 +140,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async retryRetainedRepairDecision(attempt, kinds, mode) {
-      const {binding, changed} = this.bindRetainedRepairDecision(attempt, mode);
+      const {binding, changed} = this.bindRetainedRepairDecision(attempt);
       if (mode === MODE.HANDOFF && !changed && kinds === OBSERVATION.ROUTE) return false;
       if (binding.state === BINDING.UNAVAILABLE) {
         return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE,
@@ -163,7 +165,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     // After a committed refusal of that entry it reads the census once: ABSENT
     // proposes a successor, so a join never ends on ABSENT with nothing owed.
     async joinRetainedRepairDecision(attempt, kinds) {
-      const {binding} = this.bindRetainedRepairDecision(attempt, MODE.JOIN);
+      const {binding} = this.bindRetainedRepairDecision(attempt);
       if (binding.state === BINDING.UNAVAILABLE) {
         return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE,
           RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE);
@@ -185,7 +187,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async confirmRetainedRepair(attempt, kinds, scope) {
-      const {binding} = this.bindRetainedRepairDecision(attempt, MODE.CONFIRM);
+      const {binding} = this.bindRetainedRepairDecision(attempt);
       const decision = await this.readRetainedRepairDecision(attempt, scope, binding);
       if (decision.state === DECISION.UNAVAILABLE) {
         return this.oweRetainedRepair(attempt, kinds, decision.reason);
@@ -201,7 +203,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     // again, and native replay answers its committed result with no proposal.
     async resolveCommittedPinnedEntry(attempt) {
       if (attempt.entry.state !== ENTRY.PINNED) return false;
-      const {binding} = this.bindRetainedRepairDecision(attempt, MODE.RESOLVE);
+      const {binding} = this.bindRetainedRepairDecision(attempt);
       if (binding.state !== BINDING.LOCAL) return false;
       return this.submitRetainedPlacementRepairAttempt(attempt, UNFENCED, binding);
     },
