@@ -26,23 +26,24 @@ function hasAffectedRows(result) {
     Number.isSafeInteger(value) && value >= 0 && value === counts[0]);
 }
 
-function belongsToEntry(result, key) {
+function belongsToNamedWrite(result, {key, partitionId}) {
   return hasText(result.partitionId) &&
+    (partitionId === null || result.partitionId === partitionId) &&
     result.entryId === deriveParticipantEntryId(key, result.partitionId);
 }
 
-function isCommittedPartitionSuccess(result, key) {
+function isCommittedPartitionSuccess(result, attempt) {
   const witness = result.durableCommitWitness;
   return result.success === true && result.deferRetry !== true && hasAffectedRows(result) &&
-    witness?.partitionId === result.partitionId && belongsToEntry(witness, key) &&
+    witness?.partitionId === result.partitionId && belongsToNamedWrite(witness, attempt) &&
     Number.isSafeInteger(witness.logIndex) && witness.logIndex > 0 &&
     Number.isSafeInteger(witness.term) && witness.term > 0;
 }
 
-function isCommittedPartitionFailure(result, key) {
+function isCommittedPartitionFailure(result, attempt) {
   return result.committed === true &&
     result.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED &&
-    hasText(result.failureCode) && belongsToEntry(result, key) &&
+    hasText(result.failureCode) && belongsToNamedWrite(result, attempt) &&
     Number.isSafeInteger(result.logIndex) && result.logIndex > 0;
 }
 
@@ -52,21 +53,22 @@ const NON_REFUSAL_CODES = new Set([
   PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED,
 ]);
 
-function isPartitionPreProposalRefusal(result, key) {
+function isPartitionPreProposalRefusal(result, attempt) {
   return result.committed !== true && isPartitionWriteFailureCode(result.failureCode) &&
     !NON_REFUSAL_CODES.has(result.failureCode) &&
     hasText(result.partitionId) &&
-    (result.entryId == null || belongsToEntry(result, key));
+    (attempt.partitionId === null || result.partitionId === attempt.partitionId) &&
+    (result.entryId == null || belongsToNamedWrite(result, attempt));
 }
 
-function judgePartitionAnswer(result, key) {
-  if (isCommittedPartitionSuccess(result, key)) return NAMED_WRITE_ATTEMPT.APPLIED;
+function judgePartitionAnswer(result, attempt) {
+  if (isCommittedPartitionSuccess(result, attempt)) return NAMED_WRITE_ATTEMPT.APPLIED;
   if (result.success !== false && !(result instanceof Error)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
   const [nested] = Array.isArray(result.participantFailures) ? result.participantFailures : [];
   const failure = result.participantFailures?.length === 1 &&
     nested?.partitionId === result.partitionId ? nested : result;
-  if (isCommittedPartitionFailure(failure, key)) return NAMED_WRITE_ATTEMPT.FAILED;
-  if (isPartitionPreProposalRefusal(failure, key)) return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
+  if (isCommittedPartitionFailure(failure, attempt)) return NAMED_WRITE_ATTEMPT.FAILED;
+  if (isPartitionPreProposalRefusal(failure, attempt)) return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
   return NAMED_WRITE_ATTEMPT.UNKNOWN;
 }
 
@@ -81,33 +83,48 @@ function hasCompleteDistributedParticipants(result) {
     participants.every((partition) => hasText(partition) && actual.includes(partition));
 }
 
-function judgeDistributedAnswer(result, key) {
-  if (result.idempotencyKey !== key || !hasText(result.operationId) ||
+function distributedAffectedRowsAgree(result, attempt) {
+  const {participantResults, partitions, mirrorPartitions} = result;
+  if (!hasAffectedRows(result) || !participantResults.every(
+    (entry) => isCommittedPartitionSuccess(entry, attempt))) return false;
+  if (participantResults.length === 0) {
+    return !attempt.unresolved && result.affectedRows === 0;
+  }
+  if (attempt.partitionId !== null &&
+      (partitions.length !== 1 || mirrorPartitions.length !== 0)) return false;
+  const primaryResults = participantResults.filter((entry) =>
+    partitions.includes(entry.partitionId));
+  if (primaryResults.some(isAppliedWithUnknownCount)) return isAppliedWithUnknownCount(result);
+  const total = primaryResults.reduce((sum, entry) =>
+    sum + (entry.affectedRows ?? entry.changes), 0);
+  return result.affectedRows === total;
+}
+
+function judgeDistributedAnswer(result, attempt) {
+  if (result.idempotencyKey !== attempt.key || !hasText(result.operationId) ||
       !hasCompleteDistributedParticipants(result)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
   const {participantResults} = result;
-  if (result.success === true && result.deferRetry !== true && hasAffectedRows(result) &&
-      participantResults.every((entry) => entry.success === true && hasAffectedRows(entry))) {
-    return NAMED_WRITE_ATTEMPT.APPLIED;
-  }
+  if (result.success === true && result.deferRetry !== true &&
+      distributedAffectedRowsAgree(result, attempt)) return NAMED_WRITE_ATTEMPT.APPLIED;
   if (result.success !== false || participantResults.length === 0) {
     return NAMED_WRITE_ATTEMPT.UNKNOWN;
   }
-  const verdicts = participantResults.map((entry) => judgePartitionAnswer(entry, key));
+  const verdicts = participantResults.map((entry) => judgePartitionAnswer(entry, attempt));
   const first = verdicts[0];
   return verdicts.every((verdict) => verdict === first) ? first : NAMED_WRITE_ATTEMPT.UNKNOWN;
 }
 
-function judgeNamedWriteOutcome(answer, key) {
+function judgeNamedWriteOutcome(answer, attempt) {
   if (!answer || typeof answer !== 'object') return NAMED_WRITE_ATTEMPT.UNKNOWN;
   if (answer.code === CDC_ERROR_CODE.SHUT_DOWN &&
       answer.writeOutcome === CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED) {
     return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
   }
   if (answer.partitionResult && answer.success === true && answer.committed === true) {
-    return judgeNamedWriteOutcome(answer.partitionResult, key);
+    return judgeNamedWriteOutcome(answer.partitionResult, attempt);
   }
-  if (Array.isArray(answer.participantResults)) return judgeDistributedAnswer(answer, key);
-  return judgePartitionAnswer(answer, key);
+  if (Array.isArray(answer.participantResults)) return judgeDistributedAnswer(answer, attempt);
+  return judgePartitionAnswer(answer, attempt);
 }
 
-export {NAMED_WRITE_ATTEMPT, judgeNamedWriteOutcome};
+export {NAMED_WRITE_ATTEMPT, belongsToNamedWrite, judgeNamedWriteOutcome};

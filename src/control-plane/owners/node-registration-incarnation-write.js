@@ -388,7 +388,7 @@ async function readAuthoritativeNodeRow(gateway, nodeId) {
 async function attempt(write) {
   try {
     const result = await write();
-    if (classifyControlPlaneMutationResult(result).applied === true ||
+    if ((result?.success === true && classifyControlPlaneMutationResult(result).applied === true) ||
         isPendingInstanceApplied(result)) {
       return {applied: true, result, error: null};
     }
@@ -420,10 +420,7 @@ function isAttemptOutcomeIndeterminate(attemptOutcome) {
 
 function failedResultError(result) {
   const error = new Error(typeof result.error === 'string' ?
-    result.error : result.error?.message || NODE_REGISTRATION_NOT_APPLIED);
-  if (result.error && typeof result.error === 'object') {
-    error.cause = result.error;
-  }
+    result.error : result.error?.message || NODE_REGISTRATION_NOT_APPLIED, {cause: result});
   for (const field of FAILED_RESULT_ERROR_FIELDS) {
     if (result[field] !== undefined) error[field] = result[field];
   }

@@ -120,6 +120,8 @@ function buildPartitionExecutionSuccessOutcome(
     rowSetComplete: result.rowSetComplete === true,
     readAuthorityWitness: result.readAuthorityWitness,
     ...(result.partial === undefined ? {} : {partial: result.partial}),
+    ...(result.durableCommitWitness === undefined ? {} :
+      {durableCommitWitness: result.durableCommitWitness}),
     ...(result.authoritativeObservation === undefined ? {} :
       {authoritativeObservation: result.authoritativeObservation}),
     // A settled replay's named state travels with its count (or in place of

@@ -87,6 +87,8 @@ function buildDistributedMutationResult(
     ...mutationResult,
     partitions: partitionIds,
     rows,
+    ...(results.length === 1 && results[0].durableCommitWitness ?
+      {durableCommitWitness: results[0].durableCommitWitness} : {}),
     ...(hasSharedOriginHlc ? {originHlc} : {}),
     distributedMetrics: {
       fanout: fanoutMetrics,

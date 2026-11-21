@@ -17,7 +17,7 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_WRITE_ROUTE,
-  controlPlaneWriteIdentity,
+  controlPlaneWriteRoute,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
 
@@ -331,7 +331,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
     // Every attempt of this logical write - the engine's, the CDC service's
     // and its caller's - is delivered under its one identity (the caller's
     // key, a named write's instance, or one for this call).
-    const route = controlPlaneWriteIdentity(CONTROL_PLANE_WRITE_ROUTE.CDC,
+    const route = controlPlaneWriteRoute(CONTROL_PLANE_WRITE_ROUTE.CDC,
       this.nodeId, tableName);
     const command = {mutation: normalizedMutation, ignoreExisting: writeOptions.ignoreExisting,
       sessionId: writeOptions.sessionId};

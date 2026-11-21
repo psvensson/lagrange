@@ -1096,7 +1096,7 @@ function createBlindBirthReplayHarness(initialRow) {
 
   const rawInsert = base.gateway.insertSystemTableRow;
   base.gateway.insertSystemTableRow = (tableName, row, options = {}) =>
-    runControlPlaneWrite(options, {tableName, row}, 'native-registration-fixture',
+    runControlPlaneWrite(options, {tableName, row}, {id: tableName, partitionId: 'nodes-p1'},
       async ({tableName, row}, idempotencyKey) => {
         const partitionId = 'nodes-p1';
         const entryId = deriveParticipantEntryId(idempotencyKey, partitionId);

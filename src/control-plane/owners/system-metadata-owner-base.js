@@ -154,7 +154,7 @@ function buildSystemMetadataMutationError(
   const error =
     resultOrError instanceof Error ?
       resultOrError :
-      new Error(message);
+      new Error(message, {cause: resultOrError});
   if (!error.message || error.message.length === 0) {
     error.message = message;
   }
