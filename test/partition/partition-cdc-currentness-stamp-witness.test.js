@@ -14,9 +14,10 @@
 // double), the operational selection collaborator the subscriber factory takes
 // (it answers the source; in production it is the bootstrap selection owner,
 // whose local-leader path reads raft status once per evaluation, pinned by the
-// selection anchor at the end of this file), the latency tree collaborator (a
-// routing order the test states), and the remote recipient (an identified
-// in-process peer answering through the current ACK + SERVICE_RESPONSE wire).
+// selection anchor at the end of this file), and the remote recipient (an
+// identified in-process peer answering through the current ACK +
+// SERVICE_RESPONSE wire). The latency tree is the real owner over the same
+// cache (only the routing-order case states an order by hand).
 // Evidence ceiling: one process, component composition; no native recipient
 // commit and no raft-rs status read inside the full chain.
 import assert from 'node:assert/strict';
@@ -36,7 +37,7 @@ import {resolveOperationalMessageGroupSelection} from
   '../../src/bootstrap/shared/message-group-selection.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
-import {CDC_COMPLETION, buildCommittedCdcOutcome, unknownCdcAcceptance} from
+import {CDC_COMPLETION, CDC_COVERAGE_STATE, buildCommittedCdcOutcome, unknownCdcAcceptance} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {copyCdcEvent} from '../../src/cdc/cdc-event-envelope.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
@@ -46,6 +47,7 @@ import {LATENCY_GROUP_STATE, LATENCY_PROPAGATION_MODE, LATENCY_TOPOLOGY_CONFIG_K
 import {CDC_GROUP_PROPAGATION_STATE, CDC_MESSAGE_GROUP_REPLICA_SUFFIX} from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
+import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {createCdcObligationLane} from '../../src/partition/partition-cdc-obligation-lane.js';
 import {PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
@@ -243,13 +245,33 @@ async function startRouterAndPeer(f, t) {
   answerTargetDeliveries(f);
 }
 
-function startTopology(f, t) {
-  f.tree = {getRoutingOrder: () => {
-    // One plan observation (captureDurablePropagationPlan) reads the routing
-    // order exactly once, in safe and grouped mode alike.
+// One plan observation (captureDurablePropagationPlan) reads the routing order
+// exactly once, in safe and grouped mode alike, so a plan rebuild is counted at
+// the tree collaborator. The real tree owner by default (its routing views are
+// recomputed from this cache, as in production); a stated routing order only
+// where a case changes that order by hand.
+function startTree(f, t, stubTree) {
+  if (stubTree) {
+    return {getRoutingOrder: () => {
+      f.counts.planBuilds += 1;
+      return [...f.routingOrder];
+    }};
+  }
+  const tree = new LatencyTreeService({nodeId: SOURCE_NODE, systemTableCache: f.cache,
+    nowFn: f.clock.now});
+  tree.initialize();
+  tree.start();
+  t.after(() => tree.stop());
+  const read = tree.getRoutingOrder.bind(tree);
+  tree.getRoutingOrder = (...args) => {
     f.counts.planBuilds += 1;
-    return [...f.routingOrder];
-  }};
+    return read(...args);
+  };
+  return tree;
+}
+
+function startTopology(f, t, {stubTree = false} = {}) {
+  f.tree = startTree(f, t, stubTree);
   f.topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE, systemTableCache: f.cache,
     messageRouter: f.router, latencyTreeService: f.tree, nowFn: f.clock.now,
     ...FAST_FOREGROUND_RETRY, deliveryRetryMaxAttempts: ONE_ATTEMPT_PER_DRIVE});
@@ -260,7 +282,7 @@ function startTopology(f, t) {
 
 // One owed row on a leading partition with one production subscriber; no
 // subscriber callback runs during setup (readiness is withheld until the end).
-async function currentnessFixture(t, {targets = [TARGET_GROUP]} = {}) {
+async function currentnessFixture(t, {targets = [TARGET_GROUP], stubTree = false} = {}) {
   const clock = heldDispatchClock(START_MS);
   const f = {clock, cache: new SystemTableCache({timeSource: clock}), updatedAt: START_MS,
     ready: false, closed: false, targetMode: RESPONSE.NATIVE, routingOrder: [],
@@ -268,7 +290,7 @@ async function currentnessFixture(t, {targets = [TARGET_GROUP]} = {}) {
     counts: {planBuilds: 0, checkSelections: 0, deliverySelections: 0}};
   seedTopologyRows(f, targets);
   await startRouterAndPeer(f, t);
-  startTopology(f, t);
+  startTopology(f, t, {stubTree});
   f.source = createDurableSourceMessageGroupService(SOURCE_GROUP,
     {canAcceptCDCEvent: () => f.ready});
   f.selected = f.source;
@@ -299,25 +321,38 @@ function resetCounts(f) {
 
 // --- witness 1: the cost of one delivery with nothing changing ---
 
+// One delivery of one range with nothing changing, counted whole: the wave's
+// own plan captures (admission and post-success) included.
+async function countOneDelivery(t, targetCount) {
+  const targets = Array.from({length: targetCount}, (_unused, index) =>
+    `stamp-target-${index}`);
+  const f = await currentnessFixture(t, {targets});
+  resetCounts(f);
+  const outcome = await f.drive();
+  if (f.duringError) throw f.duringError;
+  assert.equal(outcome.state, DRIVE.DRAINED, 'setup: the delivery completed');
+  assert.deepEqual(f.targetCalls.map((call) => call.targetGroupId).sort(), targets,
+    'setup: every target was delivered through the real router');
+  const today = `measured: ${f.counts.planBuilds} plan rebuilds, ` +
+    `${f.counts.checkSelections} currentness selection evaluations (each one raft status ` +
+    'read on a node whose local message-group replica leads), ' +
+    `${f.counts.deliverySelections} delivery selection(s), for one delivery of one range to ` +
+    `${targetCount} target group(s)`;
+  t.diagnostic(today);
+  return {counts: {...f.counts}, today};
+}
+
 for (const targetCount of [1, 3]) {
   test(`one CDC delivery to ${targetCount} target group(s) with nothing changing rebuilds ` +
-    'the propagation plan and reads raft status at most once', async (t) => {
-    const targets = Array.from({length: targetCount}, (_unused, index) =>
-      `stamp-target-${index}`);
-    const f = await currentnessFixture(t, {targets});
-    resetCounts(f);
-    const outcome = await f.drive();
-    if (f.duringError) throw f.duringError;
-    assert.equal(outcome.state, DRIVE.DRAINED, 'setup: the delivery completed');
-    assert.deepEqual(f.targetCalls.map((call) => call.targetGroupId).sort(), targets,
-      'setup: every target was delivered through the real router');
-    const today = `today: ${f.counts.planBuilds} plan rebuilds, ${f.counts.checkSelections} ` +
-      'currentness selection evaluations (each one raft status read on a node whose local ' +
-      `message-group replica leads), ${f.counts.deliverySelections} delivery selection(s), ` +
-      `for one delivery of one range to ${targetCount} target group(s)`;
-    t.diagnostic(today);
-    assert.ok(f.counts.planBuilds <= 1, `plan rebuilds must be at most 1; ${today}`);
-    assert.ok(f.counts.checkSelections <= 1,
+    'the propagation plan at most once', async (t) => {
+    const {counts, today} = await countOneDelivery(t, targetCount);
+    assert.ok(counts.planBuilds <= 1, `plan rebuilds must be at most 1; ${today}`);
+  });
+
+  test(`one CDC delivery to ${targetCount} target group(s) with nothing changing reads raft ` +
+    'status for currentness at most once', async (t) => {
+    const {counts, today} = await countOneDelivery(t, targetCount);
+    assert.ok(counts.checkSelections <= 1,
       `currentness raft status reads must be at most 1; ${today}`);
   });
 }
@@ -456,7 +491,7 @@ const TOPOLOGY_AND_SOURCE_INPUTS = [
   mutate: () => ConfigurationManager.getInstance().setByPath(
     LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE, LATENCY_PROPAGATION_MODE.GROUPED)},
   {id: 'tree.routing-order', reads: 'cdc-group-propagation-routing.js:412-421',
-    kind: KIND.UNCHANGED, discriminating: false,
+    kind: KIND.UNCHANGED, discriminating: false, fixture: {stubTree: true},
     // The routing order only orders the required set; the set itself is the
     // cache's (routing.js:351-367), so an order change alone changes neither
     // the answer nor the leaves. Kept so the list stays complete.
@@ -676,7 +711,7 @@ test('the currentness input list is one complete, well-formed enumeration', () =
 for (const input of CURRENTNESS_INPUTS) {
   test(`the next currentness check after ${input.id} changes answers per the new fact ` +
     `(${input.kind})`, async (t) => {
-    const f = await currentnessFixture(t);
+    const f = await currentnessFixture(t, input.fixture);
     await input.prepare?.(f);
     const observed = await observeCheckAcrossChange(f, input);
     if (input.kind === KIND.NOT_CURRENT) {
@@ -724,6 +759,77 @@ test('the currentness check evaluates the response deadline on every read with n
   assert.ok(observed.pendingTimers > 0, 'setup: the deadline timer was armed, not dispatched');
   assert.ok(observed.threw, 'a read past the deadline answers not current by itself');
 });
+
+// --- witness 4: the plan is observed once per change of its inputs ---
+
+function progressSnapshot(f) {
+  const progress = progressOf(f);
+  return JSON.parse(JSON.stringify({sourceCoverage: progress.sourceCoverage,
+    nextLeaf: progress.nextLeaf, targets: progress.targets.map(({groupId, route, coverage}) =>
+      ({groupId, route, coverage}))}));
+}
+
+test('checks of one delivery with no plan input changed reuse the owner-held plan',
+  async (t) => {
+    const f = await currentnessFixture(t);
+    const observed = {};
+    f.duringTarget = () => {
+      const context = f.captured;
+      context.assertCurrent();
+      observed.before = f.counts.planBuilds;
+      context.assertCurrent();
+      context.remainingMs();
+      observed.after = f.counts.planBuilds;
+    };
+    await f.drive();
+    if (f.duringError) throw f.duringError;
+    assert.ok(Number.isSafeInteger(observed.before), 'setup: the checks ran in flight');
+    assert.equal(observed.after - observed.before, 0,
+      `checks over unchanged plan inputs rebuild nothing (rebuilt ${observed.after -
+        observed.before})`);
+  });
+
+test('an unrelated row change in a plan table re-observes the plan and leaves stable ' +
+  'progress untouched', async (t) => {
+  const f = await currentnessFixture(t);
+  const observed = {};
+  f.duringTarget = () => {
+    const context = f.captured;
+    context.assertCurrent();
+    observed.before = progressSnapshot(f);
+    const builds = f.counts.planBuilds;
+    writeRow(f, TABLES.NODES, {[COLUMN.NODE_ID]: 'node-unrelated',
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE}, CDC_OPERATION.INSERT);
+    context.assertCurrent();
+    observed.rebuilt = f.counts.planBuilds - builds;
+    observed.after = progressSnapshot(f);
+  };
+  await f.drive();
+  if (f.duringError) throw f.duringError;
+  assert.equal(observed.before.sourceCoverage.state, CDC_COVERAGE_STATE.COMMITTED,
+    'setup: the progress already holds a covered leaf');
+  assert.equal(observed.rebuilt, 1, 'the moved stamp re-observes the plan exactly once');
+  assert.deepEqual(observed.after, observed.before,
+    'the re-observation keeps every leaf, route and coverage: stable progress is not restarted');
+});
+
+test('a plan input changed between two drives (different turns) is seen by the next read',
+  async (t) => {
+    const f = await currentnessFixture(t);
+    f.targetMode = RESPONSE.UNKNOWN;
+    assert.equal((await f.drive()).state, DRIVE.HELD_BY_SUBSCRIBER,
+      'setup: the range is held at its target');
+    await settleTicks();
+    const moved = `${PEER}/message-group/moved-between-turns`;
+    writeRow(f, TABLES.SERVICES,
+      targetServiceRow(TARGET_GROUP, PEER, {[COLUMN.ADDRESS]: moved}));
+    await settleTicks();
+    f.targetMode = RESPONSE.NATIVE;
+    const outcome = await f.drive();
+    if (f.duringError) throw f.duringError;
+    assert.equal(f.targetCalls.at(-1).address, moved, 'the next read re-observed the moved route');
+    assert.equal(outcome.state, DRIVE.DRAINED, 'the moved route covered the range');
+  });
 
 // --- anchor: one production selection evaluation is one raft status read ---
 

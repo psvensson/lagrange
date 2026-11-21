@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 247,
+    "storage-partition": 248,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2724,
-  "digest": "fnv1a32-382348f3",
+  "censusSize": 2725,
+  "digest": "fnv1a32-fde4da82",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-291676df",
+  "observationDigest": "fnv1a32-0c2770f7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -351,6 +351,7 @@
     "test/cache/system-table-cache-consistency.property.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js": "storage-partition",
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js": "storage-partition",
     "test/cache/system-table-cache-observation.test.js": "storage-partition",
     "test/cache/system-table-cache-row-preview.test.js": "storage-partition",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "storage-partition",
@@ -4230,6 +4231,11 @@
       "files": [
         "src/bootstrap/system-table-core-schema-definitions.js",
         "test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json"
+      ]
+    },
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js": {
+      "files": [
+        "src/control-plane/membership-planning-version-key.js"
       ]
     },
     "test/cache/system-table-cache-row-preview.test.js": {

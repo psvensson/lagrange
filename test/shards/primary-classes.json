@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2365,
+    "unit": 2366,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2724,
-  "digest": "fnv1a32-e1b7d212",
+  "censusSize": 2725,
+  "digest": "fnv1a32-39e059a9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -332,6 +332,7 @@
     "test/cache/system-table-cache-consistency.property.test.js": "unit",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "unit",
     "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js": "unit",
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js": "unit",
     "test/cache/system-table-cache-observation.test.js": "unit",
     "test/cache/system-table-cache-row-preview.test.js": "unit",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "unit",
