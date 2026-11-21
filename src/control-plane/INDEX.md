@@ -124,7 +124,7 @@ documentClass: generated
 - [membership-publication-formation-transition-command.js](membership-publication-formation-transition-command.js) - FORMATION_TRANSITION committed command builders, admission/proposal, and state-machine applier on... (importers: few)
 - [membership-publication-lifecycle-summary.js](membership-publication-lifecycle-summary.js) - No leading comment; first export: areMembershipLifecycleSummariesEqual. (importers: few)
 - [membership-publication-normalizers.js](membership-publication-normalizers.js) - No leading comment; first export: normalizeMembershipPublicationStringList. (importers: few)
-- [membership-publication-planning-evidence.js](membership-publication-planning-evidence.js) - No leading comment; first export: MEMBERSHIP_PUBLICATION_PLANNING_HELPERS. (importers: many)
+- [membership-publication-planning-evidence.js](membership-publication-planning-evidence.js) - No leading comment; first export: MEMBERSHIP_PUBLICATION_PLANNING_HELPERS. (importers: hub)
 - [membership-publication-planning.js](membership-publication-planning.js) - No leading comment; first export: buildPublicationMetadataRefreshRow. (importers: one)
 - [membership-publication-priority-partition-canonical-data.js](membership-publication-priority-partition-canonical-data.js) - No leading comment; first export: appendOwnArrayValue. (importers: many)
 - [membership-publication-priority-partition-readiness-data.js](membership-publication-priority-partition-readiness-data.js) - No leading comment; first export: buildPrioritySpreadEligibleNodeSnapshot. (importers: one)

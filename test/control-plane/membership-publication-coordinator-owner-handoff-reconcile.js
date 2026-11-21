@@ -311,11 +311,12 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication(_publicationId, options = {}) {
+        async getPublication(publicationId, options = {}) {
           publicationReadOptions.push(options);
           const persistedRow = persistedRows[persistedRows.length - 1];
-          if (!persistedRow) {
-            return latestPublicationRow;
+          if (!persistedRow || persistedRow.publication_id !== publicationId) {
+            return latestPublicationRow.publication_id === publicationId ?
+              latestPublicationRow : null;
           }
           return {
             ...persistedRow,
@@ -480,10 +481,10 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication(_publicationId, options = {}) {
+        async getPublication(publicationId, options = {}) {
           publicationReadOptions.push(options);
           const persistedRow = persistedRows[persistedRows.length - 1];
-          return persistedRow ?
+          return persistedRow?.publication_id === publicationId ?
             {
               ...persistedRow,
               reason_code:
@@ -491,7 +492,7 @@ test('reconcileActiveGateMembershipPublication owns handoff write visibility',
               updated_at:
                 PUBLICATION_CONVERGENCE_HANDOFF_TARGET_DURABLE_UPDATED_AT,
             } :
-            latestPublicationRow;
+            (latestPublicationRow.publication_id === publicationId ? latestPublicationRow : null);
         },
         async upsertPublication(row, options = {}) {
           persistedRows.push(row);
@@ -679,9 +680,9 @@ test('reconcileActiveGateMembershipPublication widens seed-only active-gate hand
         async listPublications() {
           return {rows: [seedOnlyPublicationRow]};
         },
-        async getPublication() {
-          return persistedRows[persistedRows.length - 1] ||
-            seedOnlyPublicationRow;
+        async getPublication(publicationId) {
+          const row = persistedRows[persistedRows.length - 1] ?? seedOnlyPublicationRow;
+          return row.publication_id === publicationId ? row : null;
         },
         async upsertPublication(row) {
           persistedRows.push(row);
@@ -770,9 +771,9 @@ test('reconcileClusterMembership consumes active-gate owner reconcile handoff',
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication() {
-          return persistedRows[persistedRows.length - 1] ||
-            latestPublicationRow;
+        async getPublication(publicationId) {
+          const row = persistedRows[persistedRows.length - 1] ?? latestPublicationRow;
+          return row.publication_id === publicationId ? row : null;
         },
         async upsertPublication(row) {
           persistedRows.push(row);
@@ -939,8 +940,9 @@ test('reconcileActiveGateMembershipPublication defers stale durable readback',
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication() {
-          return latestPublicationRow;
+        async getPublication(publicationId) {
+          return latestPublicationRow.publication_id === publicationId ?
+            latestPublicationRow : null;
         },
         async upsertPublication(row) {
           return row;
@@ -1145,8 +1147,9 @@ test('reconcileActiveGateMembershipPublication bounds retryable write failure de
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication() {
-          return latestPublicationRow;
+        async getPublication(publicationId) {
+          return latestPublicationRow.publication_id === publicationId ?
+            latestPublicationRow : null;
         },
         async upsertPublication() {
           throw retryableError;
@@ -1246,8 +1249,9 @@ test(PUBLICATION_CONVERGENCE_HANDOFF_TARGET_MERGED_TEST_NAME,
         async listPublications() {
           return {rows: [latestPublicationRow]};
         },
-        async getPublication() {
-          return latestPublicationRow;
+        async getPublication(publicationId) {
+          return latestPublicationRow.publication_id === publicationId ?
+            latestPublicationRow : null;
         },
         async upsertPublication(row) {
           return row;
