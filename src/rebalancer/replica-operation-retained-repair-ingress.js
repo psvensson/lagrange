@@ -109,11 +109,13 @@ function assignRetainedRepairIngressMethods(Repository) {
         return this.acceptRetainedPlacementRepairRequest(service, payload, submitNative);
       }
       let answer;
+      const waiting = this.beginRetainedRepairDecision(attempt);
       const promise = Promise.resolve().then(async () => {
         answer = await this.decideIncomingRetainedRepair(service, payload, attempt, term);
       }).finally(() => {
         if (attempt.decision.promise !== promise) return;
         attempt.decision = IDLE_DECISION;
+        this.endRetainedRepairDecision(attempt, waiting);
         this.releaseEndedRetainedTenure(attempt);
       });
       attempt.decision = {state: RUN.RUNNING, mode: MODE.RECEIVER, promise};

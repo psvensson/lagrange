@@ -341,7 +341,9 @@ test('an absent placement row is withheld from dispatch while no ledger route is
       'the next ledger route publication owns the reconsideration');
     assert.equal(record.continuation.state, RETAINED_REPAIR_CONTINUATION.IDLE,
       'no timer: the route publication is the wake');
-    assert.equal(record.lastDecision.reason, 'route_unavailable');
+    assert.equal(record.lastDecision.reason, 'unqualified_binding',
+      'an absence read without a binding keeps its own name');
+    assert.equal(record.waiting.state, 'route_publication', 'the record names its wait');
   }, {ledgerRoute: LEDGER_ROUTE.UNPUBLISHED});
 });
 
