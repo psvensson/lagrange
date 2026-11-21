@@ -10,8 +10,10 @@ import {
   LEDGER_PARTITION_ID, NODE, admitOnLeader, commitLedgerStatement, ledgerRows,
   onLedgerLeader, placementStatement, stepLedgerRow,
 } from '../partition/placement-admission-fixture.js';
-import {attachAutoCommitLoop, createCoordinatorWithLedger, ledgerLeaderTransport} from
-  '../partition/placement-create-with-ledger-fixture.js';
+import {
+  attachAutoCommitLoop, createCoordinatorWithLedger, createRemoteLedgerCoordinator,
+  ledgerLeaderTransport,
+} from '../partition/placement-create-with-ledger-fixture.js';
 import {
   createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
 } from './schema-provisioning-job-test-support.js';
@@ -19,11 +21,7 @@ import {
 // The coordinator is not the ledger leader: it routes PLACEMENT_ADMIT to the
 // leader's published endpoint through the canonical delivery port.
 function remoteCoordinator(leader, answer) {
-  return createCoordinatorWithLedger(leader, {
-    registerLocalLeader: false,
-    publishLedgerLeader: true,
-    messageRouter: ledgerLeaderTransport(leader, answer),
-  });
+  return createRemoteLedgerCoordinator(leader, ledgerLeaderTransport(leader, answer));
 }
 
 function recordNativeDispatch(engine, coordinator, initialNodeIds = []) {
@@ -54,7 +52,7 @@ for (const caseName of ['lost', 'refused', 'malformed', 'invalid', 'refused-lost
         const {clock, cache, engine, readiness} = createServeRefreshFixture(t, gateway);
         await readiness.readServeEligibility();
         const messages = [];
-        const coordinator = remoteCoordinator(leader, async (_address, message) => {
+        const coordinator = await remoteCoordinator(leader, async (_address, message) => {
           if (message.body?.transitionKind !== 'FOUND') {
             return requestPlacementAdmission(leader, message);
           }
@@ -128,7 +126,7 @@ for (const replay of [false, true]) {
         state.nodes[1].ready_lease_expires_at = 1100;
         await readiness.readServeEligibility();
         const messages = [];
-        const coordinator = remoteCoordinator(leader, async (_address, message) => {
+        const coordinator = await remoteCoordinator(leader, async (_address, message) => {
           const answer = await requestPlacementAdmission(leader, message);
           if (message.body?.transitionKind === 'PLACEMENT') {
             messages.push({entryId: message.entryId, body: message.body});
@@ -196,7 +194,7 @@ for (const replyLost of [false, true]) {
         const {clock, cache, engine, readiness} = createServeRefreshFixture(t, gateway);
         await readiness.readServeEligibility();
         const sent = [];
-        const coordinator = remoteCoordinator(leader, async (_address, message) => {
+        const coordinator = await remoteCoordinator(leader, async (_address, message) => {
           const answer = await requestPlacementAdmission(leader, message);
           if (message.body?.transitionKind !== 'FOUND') return answer;
           sent.push(message.entryId);
@@ -258,7 +256,7 @@ for (const stopReason of ['deadline', 'cancel']) {
         const sent = [];
         const cancellationToken = new CancellationToken();
         const budget = createTimeoutBudget({configuredBudgetMs: 100, now: engine.nowFn});
-        const coordinator = remoteCoordinator(leader, async (_address, message) => {
+        const coordinator = await remoteCoordinator(leader, async (_address, message) => {
           const answer = await requestPlacementAdmission(leader, message);
           if (message.body?.transitionKind !== 'FOUND') return answer;
           sent.push(message.entryId);

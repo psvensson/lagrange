@@ -1,7 +1,9 @@
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {SQL} from '../../src/rebalancer/replica-operation-repository.js';
-import {createCoordinatorSqlStore} from './test-helpers.js';
+import {
+  createCoordinatorSqlStore, createOperationRowUpdatePort, withExecutorMutationPort,
+} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 
@@ -88,7 +90,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         Object.assign(operationRow, row);
       },
     });
-    const controlPlaneSystemTableGateway = {
+    const controlPlaneSystemTableGateway = withExecutorMutationPort({
       async readRows(tableName, sql, params = [], options = {}) {
         return this.readAuthoritativeRows(tableName, sql, params, options);
       },
@@ -103,7 +105,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       async executeQuery(sql, params) {
         return store.execute(sql, params);
       },
-    };
+    });
 
     const coordinator = createCoordinator({
       nodeId: 'node-2',
@@ -298,7 +300,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
     };
 
-    const controlPlaneSystemTableGateway = {
+    const controlPlaneSystemTableGateway = withExecutorMutationPort({
       async readRows(tableName, sql, params = [], options = {}) {
         return cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
@@ -316,26 +318,17 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         );
       },
       async executeQuery(sql, params = []) {
-        if (String(sql).startsWith('UPDATE replica_operations SET')) {
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
         return {
           success: true,
           rows: [],
           affectedRows: 0,
         };
       },
-    };
+    });
+    // The fixture's one ledger row is updated by its named columns.
+    controlPlaneSystemTableGateway.submitMutation = createOperationRowUpdatePort(
+      (operationId) => (operationId === operationRow.operation_id ? operationRow : null),
+      controlPlaneSystemTableGateway.submitMutation);
 
     const coordinator = createCoordinator({
       nodeId: 'node-2',
@@ -439,8 +432,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
     const TEST_SERVICES_TABLE = 'services';
     const TEST_CACHE_OPERATION_UPSERT = 'UPSERT';
-    const TEST_UPDATE_OPERATION_SQL_PREFIX =
-      'UPDATE replica_operations SET';
     const TEST_SELECT_SERVICE_ID_FRAGMENT = 'WHERE service_id = ?';
     const TEST_SELECT_PARTITION_NODE_FRAGMENT =
       'WHERE partition_id = ? AND node_id = ?';
@@ -539,7 +530,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
     };
 
-    const controlPlaneSystemTableGateway = {
+    const controlPlaneSystemTableGateway = withExecutorMutationPort({
       async readRows(tableName, sql, params = [], options = {}) {
         return cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
@@ -557,26 +548,17 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         );
       },
       async executeQuery(sql, params = []) {
-        if (String(sql).startsWith(TEST_UPDATE_OPERATION_SQL_PREFIX)) {
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
         return {
           success: true,
           rows: [],
           affectedRows: 0,
         };
       },
-    };
+    });
+    // The fixture's one ledger row is updated by its named columns.
+    controlPlaneSystemTableGateway.submitMutation = createOperationRowUpdatePort(
+      (operationId) => (operationId === operationRow.operation_id ? operationRow : null),
+      controlPlaneSystemTableGateway.submitMutation);
 
     const coordinator = createCoordinator({
       nodeId: TEST_TARGET_NODE_ID,
@@ -685,8 +667,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
     const TEST_SERVICES_TABLE = 'services';
     const TEST_CACHE_OPERATION_UPSERT = 'UPSERT';
-    const TEST_UPDATE_OPERATION_SQL_PREFIX =
-      'UPDATE replica_operations SET';
     const TEST_SELECT_SERVICE_ID_FRAGMENT = 'WHERE service_id = ?';
     const TEST_SELECT_PARTITION_NODE_FRAGMENT =
       'WHERE partition_id = ? AND node_id = ?';
@@ -786,7 +766,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
     };
 
-    const controlPlaneSystemTableGateway = {
+    const controlPlaneSystemTableGateway = withExecutorMutationPort({
       async readRows(tableName, sql, params = [], options = {}) {
         return cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
@@ -804,26 +784,17 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         );
       },
       async executeQuery(sql, params = []) {
-        if (String(sql).startsWith(TEST_UPDATE_OPERATION_SQL_PREFIX)) {
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.updated_at = params[2];
-          operationRow.completed_at = params[3];
-          operationRow.error_message = params[4];
-          operationRow.steps_history = params[5];
-          operationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
         return {
           success: true,
           rows: [],
           affectedRows: 0,
         };
       },
-    };
+    });
+    // The fixture's one ledger row is updated by its named columns.
+    controlPlaneSystemTableGateway.submitMutation = createOperationRowUpdatePort(
+      (operationId) => (operationId === operationRow.operation_id ? operationRow : null),
+      controlPlaneSystemTableGateway.submitMutation);
 
     const coordinator = createCoordinator({
       nodeId: TEST_TARGET_NODE_ID,
@@ -1021,7 +992,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       },
     };
 
-    const controlPlaneSystemTableGateway = {
+    const controlPlaneSystemTableGateway = withExecutorMutationPort({
       async readRows(tableName, sql, params = [], options = {}) {
         return cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
@@ -1045,7 +1016,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           affectedRows: 0,
         };
       },
-    };
+    });
 
     const coordinator = createCoordinator({
       nodeId: 'node-2',

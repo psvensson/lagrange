@@ -75,7 +75,7 @@ import {
   placementStatement,
   stepLedgerRow,
 } from './placement-admission-fixture.js';
-import {attachAutoCommitLoop, createCoordinatorWithLedger} from
+import {attachAutoCommitLoop, createCoordinatorWithLedger, createRemoteLedgerCoordinator} from
   './placement-create-with-ledger-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -97,12 +97,6 @@ const REMOTE_TIMEOUT_MS = 1_000;
 function unknownPlacementDelivery() {
   return buildDeliveryEnvelope({acknowledged: true, errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
     error: 'Request timeout'});
-}
-
-function remotePlacementCoordinator(leader, messageRouter) {
-  return createCoordinatorWithLedger(leader, {
-    registerLocalLeader: false, publishLedgerLeader: true, messageRouter,
-  });
 }
 
 async function withRemotePlacementWire(scenario) {
@@ -232,7 +226,7 @@ it('placement preserves the exact pending entry past a real former-leader refusa
       assert.equal(requests.length, 1);
       assert.equal(successor.proposed.filter(({entryId}) => entryId === refused.entryId).length, 1);
       assert.equal(ledgerRows(successor.leader).length, 1);
-      assert.equal(coordinator.uncertainPlacementAttempts.size, 0);
+      assert.equal(coordinator.uncertainPlacementAdmissionAttempts.size, 0);
     } finally {
       await stop();
       await shutdownAll(successor.leader);
@@ -266,7 +260,7 @@ it('placement retains and replays one committed entry after actual router respon
         [[intent.entryId, statement], [intent.entryId, statement]]);
       assert.equal(proposed.filter(({entryId}) => entryId === intent.entryId).length, 1);
       assert.equal(ledgerRows(leader).length, 1);
-      assert.equal(coordinator.uncertainPlacementAttempts.size, 0);
+      assert.equal(coordinator.uncertainPlacementAdmissionAttempts.size, 0);
     } finally {
       held.resolve();
     }
@@ -457,7 +451,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
               await requestPlacementAdmission(leader, message));
           },
         };
-        const coordinator = remotePlacementCoordinator(leader, messageRouter);
+        const coordinator = await createRemoteLedgerCoordinator(leader, messageRouter);
 
         const addOp = await coordinator.createOperation({
           type: OperationType.ADD,
@@ -875,7 +869,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
             return buildDeliveryEnvelope({acknowledged: true}, answer);
           },
         };
-        const coordinator = remotePlacementCoordinator(leader, messageRouter);
+        const coordinator = await createRemoteLedgerCoordinator(leader, messageRouter);
 
         const engine = Object.create(SQLQueryEngine.prototype);
         engine.nodeId = NODE.A;
@@ -952,7 +946,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
               await requestPlacementAdmission(leader, message));
           },
         };
-        const coordinator = remotePlacementCoordinator(leader, messageRouter);
+        const coordinator = await createRemoteLedgerCoordinator(leader, messageRouter);
 
         const engine = Object.create(SQLQueryEngine.prototype);
         engine.nodeId = NODE.A;

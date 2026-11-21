@@ -1,5 +1,6 @@
 import {
   createCoordinatorSqlStore, createMockCache, createMockControlPlaneSystemTableGateway,
+  createOperationRowUpdatePort,
 } from './test-helpers.js';
 import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -555,8 +556,10 @@ function buildTransactionCoordinator() {
   };
 }
 
+// A case that keeps its own ledger rows names them with `operationRowOf`;
+// the coordinator's structured writer then updates those rows by column.
 function createCoordinator(overrides = {}) {
-  const {operationRows = [], ...coordinatorOptions} = overrides;
+  const {operationRows = [], operationRowOf, ...coordinatorOptions} = overrides;
   const store = createCoordinatorSqlStore(createMockCache({replicaOperations: operationRows}));
   const sqlQueryEngine = overrides.sqlQueryEngine || {
     async executeQuery(sql, params) {
@@ -565,11 +568,16 @@ function createCoordinator(overrides = {}) {
       return result;
     },
   };
+  const controlPlaneSystemTableGateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+  if (operationRowOf) {
+    controlPlaneSystemTableGateway.submitMutation = createOperationRowUpdatePort(
+      operationRowOf, controlPlaneSystemTableGateway.submitMutation);
+  }
 
   return new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     ...coordinatorOptions,
     sqlQueryEngine,
-    controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+    controlPlaneSystemTableGateway,
   }));
 }
 

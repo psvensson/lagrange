@@ -4,7 +4,7 @@ import {CDC_OPERATION} from '../../src/constants/index.js';
 import {
   createCommittedTimeoutLedger, createTimeoutVisibilityCache,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
-import {createCoordinatorSqlStore} from './test-helpers.js';
+import {createCoordinatorSqlStore, withExecutorMutationPort} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
 
@@ -863,7 +863,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
             return publishedPriorityRecoverySnapshot;
           },
         },
-        controlPlaneSystemTableGateway: {
+        controlPlaneSystemTableGateway: withExecutorMutationPort({
           async readAuthoritativeRows(tableName, sql, params, options) {
             gatewayCalls.push({tableName, sql, options});
             // The ledger is present and current; only SERVICES misses the
@@ -873,7 +873,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           async executeQuery(sql, params) {
             return store.execute(sql, params);
           },
-        },
+        }),
         messageRouter: {
           async deliver() {
             return buildDeliveryEnvelope({acknowledged: true}, {status: TEST_DISPATCH_STATUS});

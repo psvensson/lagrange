@@ -210,20 +210,6 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
               affectedRows: 1,
             };
           }
-          if (normalizedSql.startsWith('UPDATE replica_operations SET')) {
-            const operationRow = operationRows.get(params[7]);
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[NUM.THREE];
-            operationRow.error_message = params[NUM.FOUR];
-            operationRow.steps_history = params[NUM.FIVE];
-            operationRow.replica_id = params[NUM.SIX];
-            return {
-              success: true,
-              affectedRows: 1,
-            };
-          }
           if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
             return {
               success: true,
@@ -242,6 +228,7 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       const coordinator = createCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
         sqlQueryEngine,
+        operationRowOf: (operationId) => operationRows.get(operationId),
         transactionCoordinator: buildTransactionCoordinator(),
         systemTableCache: {
           get(tableName, key) {

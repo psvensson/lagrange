@@ -20,6 +20,7 @@ import {
   createMockCache,
   createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
+  createOperationRowUpdatePort,
   createMockMessageRouter,
 } from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
@@ -38,20 +39,6 @@ function buildCoordinator({operationRow, serviceRow}) {
   };
   const sqlEngine = {
     executeQuery: async (sql, params) => {
-      if (sql.includes('UPDATE replica_operations')) {
-        const [status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId] = params;
-        const existing = trackedOperations.get(operationId);
-        if (existing) {
-          trackedOperations.set(operationId, {
-            ...existing, status, workflow_step: workflowStep,
-            updated_at: updatedAt, completed_at: completedAt,
-            error_message: errorMessage, steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
-        return {success: true};
-      }
       // status may be a function to model a status that diverges between reads.
       const resolveStatus = (s) =>
         (typeof s.status === 'function' ? s.status() : s.status);
@@ -90,6 +77,11 @@ function buildCoordinator({operationRow, serviceRow}) {
       return {success: true, rows: []};
     },
   };
+  // The tracked rows are this fixture's durable ledger: the coordinator's
+  // structured writer updates them by their named columns.
+  const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
+  gateway.submitMutation = createOperationRowUpdatePort(
+    (operationId) => trackedOperations.get(operationId), gateway.submitMutation);
   const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
     nodeId: 'test-node-1',
     systemTableCache: createMockCache(),
@@ -97,7 +89,7 @@ function buildCoordinator({operationRow, serviceRow}) {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
-    controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlEngine),
+    controlPlaneSystemTableGateway: gateway,
     transactionCoordinator: {
       begin: async () => ({success: true}),
       commit: async () => ({success: true}),

@@ -410,6 +410,39 @@ function createFixtureSystemMutationPort(execute) {
   };
 }
 
+// Bind a fixture gateway's structured port to that gateway's own statement
+// executor (late-bound, so a case that swaps executeQuery swaps the store).
+function withExecutorMutationPort(gateway) {
+  gateway.submitMutation = createFixtureSystemMutationPort(
+    (sql, params, options) => gateway.executeQuery(sql, params, options));
+  return gateway;
+}
+
+function whereColumnHolds(row, column, value) {
+  return value === null ? row[column] === null || row[column] === undefined :
+    row[column] === value;
+}
+
+// The structured replica_operations writer over a fixture's own in-memory
+// rows (`rowOf(operationId)` returns the fixture's row object). An UPDATE is
+// applied as SQL applies it - every where column must hold, a null
+// where-value meaning IS NULL - and answers its affected-row count; every
+// other mutation goes to `next` unchanged.
+function createOperationRowUpdatePort(rowOf, next) {
+  return async (mutation, options) => {
+    if (mutation?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+        mutation.operation !== 'update') {
+      return next(mutation, options);
+    }
+    const row = rowOf(mutation.whereClause?.operation_id) ?? null;
+    const holds = row !== null && Object.entries(mutation.whereClause).every(
+      ([column, value]) => whereColumnHolds(row, column, value));
+    if (holds) Object.assign(row, mutation.data);
+    const affectedRows = holds ? 1 : 0;
+    return {success: true, changes: affectedRows, affectedRows, partitionResult: {affectedRows}};
+  };
+}
+
 // The structured mutation port of a fixture that has no durable store and
 // only observes: a submitted mutation is a fixture defect, named loudly.
 function createObservationOnlyMutationPort(fixtureName) {
@@ -1412,7 +1445,8 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 }
 
 export {
-  createFixtureSystemMutationPort, createObservationOnlyMutationPort,
+  createFixtureSystemMutationPort, createObservationOnlyMutationPort, withExecutorMutationPort,
+  createOperationRowUpdatePort,
   buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
   createAllowAllStorageAdmissionService, createCoordinatorSqlStore, createMockCache,
   createMockCdcService,

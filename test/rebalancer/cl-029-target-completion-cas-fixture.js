@@ -6,8 +6,10 @@ import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-const
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
-import {createMockControlPlaneSystemTableGateway, createCoordinatorSqlStore} from
-  './test-helpers.js';
+import {
+  createFixtureSystemMutationPort, createMockControlPlaneSystemTableGateway,
+  createCoordinatorSqlStore,
+} from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {partialReadinessFake} from '../helpers/readiness-service-fixture.js';
 
@@ -17,9 +19,8 @@ const TEST_OPERATION_ID = 'op-cl-029-replace';
 const TEST_PARTITION_ID = 'control_plane_publications-p1';
 const TEST_SOURCE_REPLICA_ID = 'control_plane_publications-p1-r1';
 const TEST_TARGET_REPLICA_ID = 'control_plane_publications-p1-r2';
-const TEST_CAS_SQL_FRAGMENT = 'AND workflow_step = ?';
-const TEST_UPDATE_SQL_FRAGMENT = 'UPDATE replica_operations';
-const TEST_INSERT_SQL_FRAGMENT = 'INSERT INTO replica_operations';
+const TEST_LEDGER_TABLE = 'replica_operations';
+const TEST_UPDATE_OPERATION = 'update';
 
 /**
  * Build the CL-029 REPLACE operation row: priority control-plane
@@ -81,9 +82,9 @@ function operationToRow(op) {
 }
 
 /**
- * Durable replica_operations store with REAL CAS semantics for
- * UPDATE ... WHERE operation_id = ? AND workflow_step = ?
- * (SQL.UPDATE_OPERATION_EXPECTING_STEP).
+ * Durable replica_operations store with REAL CAS semantics: the repository's
+ * structured expected-step UPDATE (where workflow_step) is planned to SQL and
+ * applied by SQLite.
  *
  * Reads (SELECT by operation_id) are served from `readView` when set —
  * this models the run's read/write divergence: authoritative READS routed
@@ -120,31 +121,41 @@ function createCasBackedReplicaOperationStore(initialOperation) {
     },
   });
 
-  async function executeQuery(sql, params = []) {
-    if (sql.includes(TEST_UPDATE_SQL_FRAGMENT)) {
-      // Instrument the existing repository UPDATE port; SQLite alone decides
-      // whether the conditional write applied, including terminal guards.
-      const isCas = sql.includes(TEST_CAS_SQL_FRAGMENT);
-      const [, workflowStep, , , , , , , expectedWorkflowStep] = params;
-      const attempt = {
-        isCas, workflowStep,
-        expectedWorkflowStep: isCas ? expectedWorkflowStep : null,
-        authoritativeStepAtWrite: state.authoritative.workflowStep,
-        applied: false, injectedFailure: false,
-      };
-      state.updateAttempts.push(attempt);
-      if (isCas && state.failCasUpdateResult && workflowStep === state.failCasUpdateForStep) {
-        const failure = state.failCasUpdateResult;
-        state.failCasUpdateResult = null;
-        state.failCasUpdateForStep = null;
-        attempt.injectedFailure = true;
-        return failure;
-      }
-      const result = sqlStore.execute(sql, params);
-      attempt.applied = result.changes > 0;
-      return result;
+  const applyPlanned = createFixtureSystemMutationPort(
+    async (sql, params) => sqlStore.execute(sql, params));
+
+  // Instrument the repository's structured mutation port by its named fields;
+  // SQLite alone decides whether a conditional write applied, including the
+  // terminal guards.
+  async function submitMutation(mutation, options) {
+    const ledgerUpdate = mutation?.tableName === TEST_LEDGER_TABLE &&
+      mutation.operation === TEST_UPDATE_OPERATION;
+    if (!ledgerUpdate) {
+      if (mutation?.tableName === TEST_LEDGER_TABLE) state.insertAttempts.push({row: mutation.row});
+      return applyPlanned(mutation, options);
     }
-    if (sql.includes(TEST_INSERT_SQL_FRAGMENT)) state.insertAttempts.push({params});
+    const expectedWorkflowStep = mutation.whereClause?.workflow_step ?? null;
+    const isCas = expectedWorkflowStep !== null;
+    const workflowStep = mutation.data?.workflow_step;
+    const attempt = {
+      isCas, workflowStep, expectedWorkflowStep,
+      authoritativeStepAtWrite: state.authoritative.workflowStep,
+      applied: false, injectedFailure: false,
+    };
+    state.updateAttempts.push(attempt);
+    if (isCas && state.failCasUpdateResult && workflowStep === state.failCasUpdateForStep) {
+      const failure = state.failCasUpdateResult;
+      state.failCasUpdateResult = null;
+      state.failCasUpdateForStep = null;
+      attempt.injectedFailure = true;
+      return failure;
+    }
+    const result = await applyPlanned(mutation, options);
+    attempt.applied = result.changes > 0;
+    return result;
+  }
+
+  async function executeQuery(sql, params = []) {
     if (state.readView && /^SELECT /iu.test(sql)) {
       // Substitute delivery of a stale row only; execute the real query on
       // that snapshot so predicates and identity still belong to SQLite.
@@ -164,6 +175,7 @@ function createCasBackedReplicaOperationStore(initialOperation) {
     state,
     suspend: sqlStore.suspend,
     executeQuery,
+    submitMutation,
     snapshotAuthoritative,
     engageStaleReadView(snapshot) {
       state.readView = snapshot;
@@ -292,10 +304,10 @@ function createHarness(store, witness = createReplaceWitness({
     sqlQueryEngine: {
       executeQuery: store.executeQuery,
     },
-    controlPlaneSystemTableGateway:
-      createMockControlPlaneSystemTableGateway({
-        executeQuery: store.executeQuery,
-      }),
+    controlPlaneSystemTableGateway: {
+      ...createMockControlPlaneSystemTableGateway({executeQuery: store.executeQuery}),
+      submitMutation: store.submitMutation,
+    },
     storageAccountingService: {estimateReplicaBytes: () => 1},
     storageAdmissionService: {
       async checkAdd() {

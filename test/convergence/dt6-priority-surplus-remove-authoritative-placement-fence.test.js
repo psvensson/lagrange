@@ -10,6 +10,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
   createMockPolicyService,
+  createObservationOnlyMutationPort,
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 
@@ -470,6 +471,7 @@ t.test('cached RF=3 cannot authorize a five-to-four priority REMOVE when authori
     nodeId: 'node-1',
     cacheData: cacheData(fiveVoterRows),
     controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('dt6 surplus remove fence'),
       async readAuthoritativeRows(tableName) {
         if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
           return {

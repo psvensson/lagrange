@@ -11,6 +11,8 @@ import {DurableWorkflowCoordinator} from
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  createObservationOnlyMutationPort,
+  createOperationRowUpdatePort,
 } from './test-helpers.js';
 
 const TEST_NODE_ID = 'node-retained-turn';
@@ -60,24 +62,14 @@ function operationToRow(operation) {
   };
 }
 
-function applyOperationUpdate(operation, params) {
-  operation.status = params[0];
-  operation.workflowStep = params[1];
-  operation.updatedAt = params[2];
-  operation.completedAt = params[3];
-  operation.errorMessage = params[4];
-  operation.stepsHistory = JSON.parse(params[5]);
-  operation.replicaId = params[6];
-}
-
+// The fixture's durable ledger row is separate from the caller's operation
+// object: reads return it, and the coordinator's structured writer updates it
+// by its named columns.
 function createCoordinator(operation, deliveries) {
-  const executeQuery = async (sql, params) => {
+  const durable = operationToRow(operation);
+  const executeQuery = async (sql) => {
     if (sql.includes('WHERE operation_id')) {
-      return {success: true, rows: [operationToRow(operation)]};
-    }
-    if (sql.includes('UPDATE')) {
-      applyOperationUpdate(operation, params);
-      return {success: true, rows: [], affectedRows: 1};
+      return {success: true, rows: [{...durable}]};
     }
     return {success: true, rows: []};
   };
@@ -100,6 +92,9 @@ function createCoordinator(operation, deliveries) {
       readAuthoritativeRows:
         async (_tableName, sql, params) => executeQuery(sql, params),
       executeQuery,
+      submitMutation: createOperationRowUpdatePort(
+        (operationId) => (operationId === durable.operation_id ? durable : null),
+        createObservationOnlyMutationPort('retained owner turn ledger')),
     },
     operationWorkflowCoordinator: new DurableWorkflowCoordinator(),
     transactionCoordinator: createMockTransactionCoordinator(),
@@ -111,7 +106,7 @@ function createCoordinator(operation, deliveries) {
   coordinator.initialize();
   coordinator.repository.confirmReplicaOperationPersistence =
     async (projectedOperation) => ({operation: projectedOperation});
-  return coordinator;
+  return {coordinator, durable};
 }
 
 async function holdOperationOwnerLane(coordinator, rejectAfterRelease = false) {
@@ -142,7 +137,7 @@ test('ordinary concurrent execute keeps the generic coalescing contract',
   async (t) => {
     const operation = buildOperation();
     const deliveries = [];
-    const coordinator = createCoordinator(operation, deliveries);
+    const {coordinator, durable} = createCoordinator(operation, deliveries);
     const holder = await holdOperationOwnerLane(coordinator);
 
     const result = await coordinator.executeOperation(operation);
@@ -151,7 +146,7 @@ test('ordinary concurrent execute keeps the generic coalescing contract',
     t.equal(result?.reason, 'operation_already_executing',
       'the ordinary duplicate retains its established reason');
     t.equal(deliveries.length, 0, 'the ordinary duplicate does not dispatch');
-    t.equal(operation.workflowStep, WORKFLOW_STEP.PENDING,
+    t.equal(durable.workflow_step, WORKFLOW_STEP.PENDING,
       'the skipped duplicate leaves the row untouched');
     holder.release();
     await holder.promise;
@@ -162,7 +157,7 @@ test('retained schema inline execute owns a turn after a concurrent wake',
   async (t) => {
     const operation = buildOperation();
     const deliveries = [];
-    const coordinator = createCoordinator(operation, deliveries);
+    const {coordinator, durable} = createCoordinator(operation, deliveries);
     const holder = await holdOperationOwnerLane(coordinator);
 
     const executePromise = coordinator.executeOperation(operation, {
@@ -177,7 +172,7 @@ test('retained schema inline execute owns a turn after a concurrent wake',
 
     t.equal(result?.success, true, 'the exact command owns the next turn');
     t.same(deliveries, [TEST_OPERATION_ID], 'the schema child dispatches once');
-    t.equal(operation.workflowStep, WORKFLOW_STEP.CREATING,
+    t.equal(durable.workflow_step, WORKFLOW_STEP.CREATING,
       'the durable child leaves PENDING');
     await coordinator.shutdown();
   });
@@ -186,7 +181,7 @@ test('retained schema execute does not inherit the holder rejection',
   async (t) => {
     const operation = buildOperation();
     const deliveries = [];
-    const coordinator = createCoordinator(operation, deliveries);
+    const {coordinator, durable} = createCoordinator(operation, deliveries);
     const holder = await holdOperationOwnerLane(coordinator, true);
     const holderOutcome = holder.promise.catch((error) => error);
 
@@ -205,7 +200,7 @@ test('retained schema execute does not inherit the holder rejection',
       'the retained command still owns a later turn');
     t.same(deliveries, [TEST_OPERATION_ID],
       'the retained command dispatches exactly once');
-    t.equal(operation.workflowStep, WORKFLOW_STEP.CREATING,
+    t.equal(durable.workflow_step, WORKFLOW_STEP.CREATING,
       'the retained command leaves PENDING after holder failure');
     await coordinator.shutdown();
   });

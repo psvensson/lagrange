@@ -7,6 +7,7 @@ import {
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   buildMockPolicyAuthorityWitness,
+  createObservationOnlyMutationPort,
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 
@@ -64,6 +65,7 @@ async function runDependentAdmission({
   const malformed = new Set(malformedPartitionIds);
   const unavailable = new Set(unavailablePartitionIds);
   const gateway = {
+    submitMutation: createObservationOnlyMutationPort('dt6 ledger quorum admission'),
     async readAuthoritativeRows(tableName, _sql, params = [], options = {}) {
       if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
         return {success: true, rows: []};
