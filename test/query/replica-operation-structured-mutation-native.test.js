@@ -57,7 +57,10 @@ test('structured operation writes do not switch to routable SQL when CDC is unav
     });
   });
 
-test('a read-only repository cannot use legacy row methods; the canonical writer applies and fences',
+const PORT_REQUIRED_AT_CONSTRUCTION = 'every repository constructor refuses a gateway ' +
+  'without the structured port; the canonical writer applies and fences';
+
+test(PORT_REQUIRED_AT_CONSTRUCTION,
   {timeout: TIMEOUT_MS}, async () => {
     await withSurface([LEDGER_TABLE], async ({engine, gateway, deliveries,
       cdcIntegrationService, of}) => {
@@ -67,22 +70,16 @@ test('a read-only repository cannot use legacy row methods; the canonical writer
         resolveCdcIntegrationService: () => cdcIntegrationService,
         insertSystemTableRow: gateway.insertSystemTableRow.bind(gateway),
       };
-      const reader = newRepository(engine, legacyGateway, cdcIntegrationService);
-      const refused = await observeRejectedInsert(reader, operation('legacy-row'));
-      assert.deepEqual({wrote: refused.result === true, deliveries: writeCount(deliveries),
-        rows: readRows(of)}, {wrote: false, deliveries: 0, rows: []}, JSON.stringify(refused));
+      // No constructor option makes the port optional: a reader without the
+      // structured writer port is refused before any operation can reach it.
+      for (const portless of [legacyGateway, {}, undefined]) {
+        assert.throws(() => newRepository(engine, portless, cdcIntegrationService),
+          {code: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED});
+      }
+      assert.deepEqual({deliveries: writeCount(deliveries), rows: readRows(of)},
+        {deliveries: 0, rows: []});
 
-      assert.equal(refused.code, REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED);
-      assert.throws(
-        () => newRepository(engine, legacyGateway, cdcIntegrationService, {
-          requireMutationPort: true,
-        }),
-        {code: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED},
-      );
-
-      const writer = newRepository(engine, gateway, cdcIntegrationService, {
-        requireMutationPort: true,
-      });
+      const writer = newRepository(engine, gateway, cdcIntegrationService);
       assert.throws(
         () => writer.syncOwnerDependencies({controlPlaneSystemTableGateway: legacyGateway}),
         {code: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED},
