@@ -120,7 +120,10 @@ async function confirmRetainedRecovery({world, ledger, observation, holder, reta
   await settleRetainedOwner(ledger, holder);
   assert.equal(committedRepairCount(ledger), before + 1, 'release owns one new native repair');
   const restored = observation.readCommitted(retained.operationId);
-  assert.equal(restored?.operation_id, retained.operationId);
+  const nativeCommand = ledger.commands.filter(({type}) => type === 'PLACEMENT_REPAIR').at(-1);
+  assert.ok(restored, 'the committed release must restore the retained row: ' +
+    JSON.stringify(observation.readRepairOutcome(nativeCommand)));
+  assert.equal(restored.operation_id, retained.operationId);
   assert.equal(restored?.replica_id, retained.replicaId);
   assert.equal(restored?.created_at, retained.createdAt);
 }
@@ -166,7 +169,8 @@ for (const producer of ['no contender', 'ordinary birth', 'zero-update repair',
       }
       if (producer.endsWith('repair')) {
         assert.equal(ledger.coordinator.repository.retainedPlacementRepairs.size, 1,
-          'the actual ledger owner retains the original contender identity');
+          'the actual ledger owner retains the original contender identity: ' +
+            JSON.stringify(context.requests));
         await confirmRetainedRecovery(context);
         assert.deepEqual(effectViolations(observation), []);
       }

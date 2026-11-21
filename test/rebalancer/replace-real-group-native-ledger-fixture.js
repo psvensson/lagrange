@@ -8,6 +8,8 @@ import Database from 'better-sqlite3';
 import {ReplicaOperationMessageType} from '../../src/rebalancer/replica-operation-constants.js';
 import {withRepairLedger} from '../partition/placement-retained-row-repair-fixture.js';
 import {placementStatement} from '../partition/placement-admission-fixture.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
 import {classifyPlacementClass} from '../../src/rebalancer/replica-placement-owner-order.js';
 import {createOperationAt, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -77,22 +79,29 @@ function ledgerGatewayForWorld(world, ledger, original, incumbentId, observation
 }
 
 async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs) {
-  const holder = createTestCoordinator({nodeId: NODE.PEER_C,
+  const isCopy = historicalType === OperationType.ADD;
+  const sourceNode = isCopy ? NODE.SOURCE : NODE.PEER_C;
+  const targetNode = isCopy ? NODE.PEER_B : NODE.PEER_C;
+  const requests = [];
+  const holder = createTestCoordinator({nodeId: sourceNode,
     controlPlaneSystemTableGateway: ledger.gateway,
     cacheData: {services: [{replica_id: ledger.leader.replicaId, node_id: ledger.leader.nodeId,
       partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'}]},
     replaceWitness: false, committedMembershipFixture: false,
     messageRouter: {async deliver(_address, payload) {
-      return buildDeliveryEnvelope({acknowledged: true}, await send(ledger.leader, payload));
+      const answer = await send(ledger.leader, payload);
+      requests.push({type: payload.type, reason: answer.reason ?? answer.placementResult?.reason,
+        state: answer.state, failureCode: answer.failureCode});
+      return buildDeliveryEnvelope({acknowledged: true}, answer);
     }},
   });
   const operation = createOperationAt({operationId: HISTORICAL_ID, type: historicalType,
-    partitionId: PARTITION_ID, replicaId: `${PARTITION_ID}-r3`, sourceNodeId: NODE.PEER_C,
-    targetNodeId: NODE.PEER_C, membershipPublicationEpoch: 7,
-    ...(historicalType === OperationType.ADD ?
+    partitionId: PARTITION_ID, replicaId: `${PARTITION_ID}-r3`, sourceNodeId: sourceNode,
+    targetNodeId: targetNode, membershipPublicationEpoch: 7,
+    ...(isCopy ?
       {targetNodeBootIncarnation: 1, targetNodeStorageIncarnation: 1} : {})},
   Date.now() + clockOffsetMs);
-  if (historicalType === OperationType.ADD) operation.copySourceNodeId = NODE.SOURCE;
+  if (isCopy) operation.copySourceNodeId = sourceNode;
   operation.entityType = 'partition';
   operation.entityId = PARTITION_ID;
   await holder.repository.persistNewOperation(operation);
@@ -104,7 +113,7 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
   const removed = await ledger.gateway.submitMutation({tableName: 'replica_operations',
     operation: 'delete', whereClause: {operation_id: HISTORICAL_ID}});
   assert.equal(removed.partitionResult.affectedRows, 1);
-  return {holder, retained, historicalRow};
+  return {holder, retained, historicalRow, requests};
 }
 
 function effectViolations(observation) {
@@ -125,6 +134,8 @@ async function withNativeLedgerReplace(measure, {
         AND completed_at IS NULL ORDER BY operation_id`);
     const observation = {effects: [], unavailable: false, refusedReads: 0,
       readCommitted: (id) => statement.get(id),
+      readRepairOutcome: (command) => readCommittedStatementOutcome(
+        {db: reader}, ledger.leader.getCommittedEntryKey(command)),
       readLiveCompetitors: (entityId, incumbentId) => live.all(entityId, incumbentId)};
     let world;
     try {
