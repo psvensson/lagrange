@@ -11,7 +11,8 @@ import {OPERATION_RESERVATION_ATTEMPT_OUTCOME} from
 import {ReplicaOperationResponseStatus} from '../../src/rebalancer/replica-operation-constants.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
-import {PLACEMENT_REFUSAL} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {PLACEMENT_REFUSAL, PLACEMENT_TRIGGER} from
+  '../../src/rebalancer/replica-placement-owner-constants.js';
 import {classifyPlacementClass} from '../../src/rebalancer/replica-placement-owner-order.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {placementStatement} from '../partition/placement-admission-fixture.js';
@@ -145,23 +146,102 @@ function committedPlacementResult(observation, command) {
   return JSON.parse(record.ownerResultText);
 }
 
-function confirmOrdinaryFirst(context, postRelease) {
+function committedOrdinaryResult(observation, commands, request, answer) {
+  const command = commands.find(({entryId}) => entryId === request.entryId);
+  assert.ok(command, 'the exact staged ordinary request reaches native apply');
+  assert.equal(command.type, 'PLACEMENT_ADMIT');
+  assert.deepEqual(command.body, request.body);
+  const record = observation.readPlacementOutcome(command);
+  assert.equal(record.state, 'settled');
+  const result = JSON.parse(record.ownerResultText);
+  assert.equal(answer.committed, true);
+  assert.equal(answer.logIndex, record.logIndex);
+  assert.equal(answer.term, record.term);
+  assert.deepEqual(answer.placementResult, result);
+  return result;
+}
+
+function assertDebtIdentity(debt, retained, leader) {
+  assert.equal(debt.operation.operationId, retained.operationId);
+  assert.equal(debt.operation.replicaId, retained.replicaId);
+  assert.equal(debt.operation.createdAt, retained.createdAt);
+  assert.deepEqual(debt.expectedOwner, {nodeId: leader.nodeId, replicaId: leader.replicaId});
+}
+
+async function assertRenewedDebt(context, row) {
+  const {ledger, holder, retained} = context;
+  const before = committedRepairCount(ledger);
+  const repositories = [holder.repository, ledger.coordinator.repository];
+  const blocker = {operationId: row.operation_id, createdAt: row.created_at,
+    workflowStep: row.workflow_step, completedAt: row.completed_at};
+  for (const repository of repositories) {
+    const debt = repository.retainedPlacementRepairs.get(retained.operationId);
+    assert.ok(debt, 'each repository retains its own obligation after native BUSY');
+    assertDebtIdentity(debt, retained, ledger.leader);
+    assert.deepEqual(debt.blockers, [blocker]);
+    assert.equal(debt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT);
+    assert.equal(debt.delegated, undefined);
+    repository.observeRetainedPlacementRepairCommit('replica_operations', row);
+  }
+  await settleRetainedOwner(ledger, holder);
+  assert.equal(committedRepairCount(ledger), before,
+    'an unchanged commit for the new blocker preserves the release wake');
+}
+
+async function confirmOrdinaryFirst(context, postRelease, ordinary, answer, diagnostic) {
   const {world, observation, retained} = context;
   const repair = postRelease.find(({type}) => type === 'PLACEMENT_REPAIR');
+  assert.ok(repair);
   const beforeRepair = postRelease.slice(0, postRelease.indexOf(repair));
   const admissions = beforeRepair.filter(({type}) => type === 'PLACEMENT_ADMIT')
-    .map((command) => committedPlacementResult(observation, command))
-    .filter(({outcome}) => outcome === 'ADMITTED');
-  assert.ok(repair);
+    .map((command) => ({command, result: committedPlacementResult(observation, command)}))
+    .filter(({result}) => result.outcome === 'ADMITTED');
   assert.equal(admissions.length, 1);
-  const [winner] = admissions[0].operationIds;
+  const [{command, result}] = admissions;
+  const [winner] = result.operationIds;
   assert.notEqual(winner, world.operation.operationId, 'the winner is freshly admitted');
-  assert.equal(observation.readCommitted(winner)?.completed_at, null);
+  const winnerRow = observation.readCommitted(winner);
+  assert.equal(winnerRow?.completed_at, null);
+  assert.equal(winnerRow.entity_id, command.body.partitionId);
+  assert.equal(winnerRow.target_node_id, command.body.moves[0].targetNodeId);
+  const explicit = committedOrdinaryResult(observation, beforeRepair, ordinary.request, answer);
+  if (command.entryId === ordinary.request.entryId) {
+    assert.deepEqual(explicit, result);
+  } else {
+    diagnostic(`Autonomous ordinary admission ${command.entryId} won as ${winner}.`);
+    assert.equal(explicit.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+    assert.deepEqual(explicit.operationIds, [winner]);
+  }
   const renewed = committedPlacementResult(observation, repair);
   assert.equal(renewed.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
   assert.deepEqual(renewed.operationIds, [winner],
-    'the native retry observes the new live holder, not the released incarnation');
+    'the native retry names the fresh live holder');
   assert.equal(observation.readCommitted(retained.operationId), undefined);
+  await assertRenewedDebt(context, winnerRow);
+}
+
+async function confirmRestoredDebt(context, restored) {
+  const {ledger, holder, retained} = context;
+  const before = committedRepairCount(ledger);
+  const repositories = [holder.repository, ledger.coordinator.repository];
+  for (const repository of repositories) {
+    const debt = repository.retainedPlacementRepairs.get(retained.operationId);
+    if (debt) {
+      assertDebtIdentity(debt, retained, ledger.leader);
+      assert.ok(debt.delegated, 'remaining custody has a named native receiver');
+      assert.deepEqual({nodeId: debt.delegated.nodeId, replicaId: debt.delegated.replicaId},
+        debt.expectedOwner);
+      assert.equal(debt.delegated.operationId, retained.operationId);
+      assert.equal(debt.delegated.createdAt, retained.createdAt);
+    }
+    repository.observeRetainedPlacementRepairCommit('replica_operations', restored);
+  }
+  await settleRetainedOwner(ledger, holder);
+  for (const repository of repositories) {
+    assert.equal(repository.retainedPlacementRepairs.has(retained.operationId), false);
+  }
+  assert.equal(committedRepairCount(ledger), before,
+    'delivery of the committed own row retires debt without proposing again');
 }
 
 async function confirmRetainedFirst(context, ordinary, gate) {
@@ -174,16 +254,15 @@ async function confirmRetainedFirst(context, ordinary, gate) {
   assert.equal(restored?.operation_id, retained.operationId);
   assert.equal(restored?.replica_id, retained.replicaId);
   assert.equal(restored?.created_at, retained.createdAt);
+  await confirmRestoredDebt(context, restored);
   await gate.close();
-  await ordinary.release();
-  const command = ledger.commands.find(({entryId}) => entryId === ordinary.request.entryId);
-  assert.ok(command, 'the identical staged ordinary request reaches native apply');
-  const refused = committedPlacementResult(observation, command);
+  const answer = await ordinary.release();
+  const refused = committedOrdinaryResult(observation, ledger.commands, ordinary.request, answer);
   assert.equal(refused.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
   assert.deepEqual(refused.operationIds, [retained.operationId]);
 }
 
-async function confirmRetainedRecovery(context, order) {
+async function confirmRetainedRecovery(context, order, diagnostic) {
   const {world, ledger, observation, holder, retained} = context;
   const incumbent = observation.readCommitted(world.operation.operationId);
   assert.equal(incumbent.completed_at, null, 'the incumbent still owns its committed lane');
@@ -203,15 +282,17 @@ async function confirmRetainedRecovery(context, order) {
       ledger, incumbent.operation_id, WORKFLOW_STEP.FAILED);
     assert.equal(observation.readCommitted(incumbent.operation_id)?.completed_at,
       released.completed_at);
+    const ordinaryAnswer = retainedFirst ? null : await ordinary.release();
     holder.repository.observeRetainedPlacementRepairCommit('replica_operations', released);
-    if (!retainedFirst) {
-      await ordinary.release();
-      await gate.close();
-    }
+    if (!retainedFirst) await gate.close();
     await settleRetainedOwner(ledger, holder);
     assert.equal(committedRepairCount(ledger), before + 1, 'release owns one new native repair');
-    if (retainedFirst) await confirmRetainedFirst(context, ordinary, gate);
-    else confirmOrdinaryFirst(context, ledger.commands.slice(firstReleaseCommand));
+    if (retainedFirst) {
+      await confirmRetainedFirst(context, ordinary, gate);
+    } else {
+      await confirmOrdinaryFirst(context, ledger.commands.slice(firstReleaseCommand),
+        ordinary, ordinaryAnswer, diagnostic);
+    }
   } finally {
     await gate.close();
     await ordinary.release();
@@ -229,7 +310,7 @@ const scenarios = [
 ];
 for (const {producer, order} of scenarios) {
   const label = order ? `${producer}, ${order}` : producer;
-  test(`S11 real ledger after SAFE: ${label}`, () => withNativeLedgerReplace(
+  test(`S11 real ledger after SAFE: ${label}`, (t) => withNativeLedgerReplace(
     async (context) => {
       const {world, ledger, historicalRow, observation} = context;
       await reachTargetLeadership(world);
@@ -270,7 +351,7 @@ for (const {producer, order} of scenarios) {
         assert.equal(ledger.coordinator.repository.retainedPlacementRepairs.size, 1,
           'the actual ledger owner retains the original contender identity: ' +
             JSON.stringify(context.requests));
-        await confirmRetainedRecovery(context, order);
+        await confirmRetainedRecovery(context, order, (message) => t.diagnostic(message));
         assert.deepEqual(effectViolations(observation), []);
       }
       assert.equal(observation.effects.length, world.removeEffects.length);
