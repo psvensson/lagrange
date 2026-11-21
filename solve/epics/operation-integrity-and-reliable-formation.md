@@ -114,7 +114,23 @@ invalid evidence before integration.
 
 ## Core integration handoff, 21 November 2026
 
-The targeted three-host diagnostic `eca9c75a` measured early SERVICES reads
+Three-host diagnostic `3ed87e16` finished on `60fe32768`. At 5.026 seconds
+all three serving lanes were open, each priority partition had one of the
+three required placements, and operations were active. At 117.249 seconds
+four priority partitions still lacked spread. The last 19 polls could not
+establish spread or quiet. The run recorded 88 read failures in 31 polls,
+and one final view also reported serve-ineligible. CREATE and COUNT succeeded
+at 515.549 seconds. INSERT and readback succeeded on all three nodes. The
+learner-address and projection checks passed. All three containers were
+removed. The first failed SERVICES read and a 222 ms success used the same
+stream and payload sizes. Two retries of the failed read added 39,360 bytes
+of seed responses and acknowledgements. The query owner is investigating
+which outstanding work can still serve its original caller before admitting
+another read of the same replica. Keep the stale-connected and lost-reply
+controls, original deadline, and independent read authority.
+[Original report, per-node logs, physical host placement and kernel TCP samples](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-3ed87e16-peerbytes-nov21.tar.gz).
+
+The preceding diagnostic `eca9c75a` measured early SERVICES reads
 on `174398543`. Its predecessors `bd3bfd82` and `4ef9154c` ran on
 `e3e0164d6` and `3d910d700` respectively. Current integration proceeds on
 `wip/core-formation-followup-20261121`. Its reviewed components and active
@@ -145,6 +161,16 @@ corrupt the actual returned value. The placement tests deliver a matching
 entry number with a different partition or a refusal from another command.
 The source reviews held `1421ac153` and `0f1eaa080`, respectively. Neither
 case has been identified as the cause of the first physical SERVICES timeout.
+
+The next ledger repair must make duplicate observations of an unchanged busy
+owner issue zero additional proposals, and a genuine release must permit one
+recovery in either reply order. Source review rejected `2313712ce` for
+issuing another BUSY proposal on an unchanged blocker and missing an actual
+copy-capacity release after the reply. Test visible durable settlement and
+A-to-B-to-A rerouting of an unknown write independently. The native
+publication witness on `fb33fce0c` passed 15 cases and failed both new
+replacement and malformed-reply controls. The named-write owner is binding
+SQL and CDC settlement to the original participant and its durable result.
 [Publication evidence and reviews](../quests/fresh-formation-user-table-routability/log.ndjson)
 · [Placement evidence and review](../quests/strict-operation-outcomes/log.ndjson).
 
