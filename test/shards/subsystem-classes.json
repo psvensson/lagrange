@@ -28,7 +28,7 @@
   "censusSize": 2724,
   "digest": "fnv1a32-111ca453",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e41c7c7b",
+  "observationDigest": "fnv1a32-98cce58e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -22377,6 +22377,7 @@
       "files": [
         "data/fallback-census/census.json",
         "package.json",
+        "scripts/checks/fallback-branch-census-preload.js",
         "scripts/checks/fallback-necessity-trap-preload.js",
         "src/raft/raft-rs-turn-answer.js"
       ],

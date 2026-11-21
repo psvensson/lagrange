@@ -10,6 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,9 +26,12 @@ import {
   UNINSTRUMENTED, buildTrapPlan, formatPlanSummary, gateParsableArms, mergeObservations,
   readMergeInputs,
 } from '../../scripts/checks/fallback-necessity-trap.js';
+import * as trapTool from '../../scripts/checks/fallback-necessity-trap.js';
+import * as trapRuntime from '../../scripts/checks/fallback-necessity-trap-runtime.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PRELOAD = path.join(REPO, 'scripts/checks/fallback-necessity-trap-preload.js');
+const CENSUS_PRELOAD = path.join(REPO, 'scripts/checks/fallback-branch-census-preload.js');
 const CHILD_TIMEOUT_MS = 20_000;
 
 const FIXTURES = Object.freeze({
@@ -478,3 +482,150 @@ test('the recorder refuses an unknown mode and records an unplanned arm without 
   recorder.trap('ts.ffffffffffff.0#1');
   assert.equal(recorder.snapshot().arms['ts.ffffffffffff.0#1'].site, null);
 });
+
+// --- Corrective round (reports/verify-trap-apparatus.md): each hole below is
+// a known-bad input the apparatus at e39fe811c accepted.
+
+// The trap preload beside the census preload in roster-only mode: the census
+// records every Node child and worker the lane launches (roster-<pid>-<t>.json)
+// in the trap's out directory, so a process that left no observation shows.
+function rosterEnvironment(planFile, outDir, extra = {}) {
+  const env = {...process.env, NODE_OPTIONS: `--import=${CENSUS_PRELOAD} --import=${PRELOAD}`,
+    LAGRANGE_CENSUS_COVERAGE_DIR: outDir, LAGRANGE_NECESSITY_TRAP_PLAN: planFile,
+    LAGRANGE_NECESSITY_TRAP_OUT: outDir, LAGRANGE_NECESSITY_TRAP_MODE: 'observe', ...extra};
+  delete env.NODE_V8_COVERAGE;
+  return env;
+}
+
+function digestOf(file) {
+  return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+const TS = 'two_source_fallback_reads';
+const CA = 'catch_returns_default';
+
+test('hole 1: a restarted process never overwrites an earlier observation', () => {
+  assert.notEqual(trapRuntime.observationFileName(1, 0), trapRuntime.observationFileName(1, 0),
+    'two starts of pid 1 must get two files');
+  const outDir = temporaryDirectory('necessity-pid-');
+  const fileName = 'trap-1-0.json';
+  fs.writeFileSync(path.join(outDir, fileName), '{"earlier":"first hits"}\n');
+  const recorder = trapRuntime.createTrapRecorder({plan: {head: 'h', files: {}}, planDigest: 'd',
+    selection: trapRuntime.parseSelection(''), outDir, root: outDir, processKey: 'k',
+    entry: null, fileName, mode: 'observe'});
+  assert.throws(() => recorder.flush(),
+    (error) => error.code === 'LAGRANGE_NECESSITY_TRAP_OBSERVATION_EXISTS');
+  assert.equal(fs.readFileSync(path.join(outDir, fileName), 'utf8'), '{"earlier":"first hits"}\n');
+});
+
+test('hole 2: a child that ran unarmed leaves the merge incomplete, naming it', () => {
+  const root = writeCheckout();
+  const planFile = writePlan(root, planFor(root));
+  const script = [
+    'import {spawnSync} from \'node:child_process\';',
+    'const unarmed = spawnSync(process.execPath, [\'-e\', \'0\'],',
+    '  {env: {...process.env, NODE_OPTIONS: \'\'}});',
+    'const armed = spawnSync(process.execPath, [\'-e\', \'0\']);',
+    'console.log(JSON.stringify({unarmed: unarmed.pid, armed: armed.pid}));',
+    '',
+  ].join('\n');
+  const outDir = temporaryDirectory('necessity-roster-');
+  const result = runChild(root, script, rosterEnvironment(planFile, outDir));
+  assert.equal(result.status, 0, result.stderr);
+  const pids = JSON.parse(result.stdout);
+  const merged = mergeObservations(readMergeInputs([outDir]));
+  assert.equal(merged.complete, false, 'a rostered process with no observation is a gap');
+  assert.deepEqual(merged.roster.unobserved.map((entry) => entry.pid), [pids.unarmed]);
+  const cleanDir = temporaryDirectory('necessity-roster-');
+  const clean = runChild(root, script.replace(
+    '  {env: {...process.env, NODE_OPTIONS: \'\'}});', '  {});'),
+  rosterEnvironment(planFile, cleanDir));
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.equal(mergeObservations(readMergeInputs([cleanDir])).complete, true);
+});
+
+test('hole 2: a planned file no process loaded is NOT-LOADED, never not-reached', () => {
+  const root = writeCheckout();
+  const plan = planFor(root);
+  const planFile = writePlan(root, plan);
+  const outDir = temporaryDirectory('necessity-report-');
+  const result = runChild(root, [
+    'import {inCall} from \'./src/fx/chain.js\';',
+    'inCall({}, {name: 1});',
+    '',
+  ].join('\n'), rosterEnvironment(planFile, outDir));
+  assert.equal(result.status, 0, result.stderr);
+  const merged = mergeObservations(readMergeInputs([outDir]));
+  const report = trapTool.reportRun({plan, planDigest: digestOf(planFile), merged});
+  assert.equal(report.verdict, 'COMPLETE');
+  const inCall = siteIdAt(root, 'src/fx/chain.js', 5, TS);
+  const chain = siteIdAt(root, 'src/fx/chain.js', 2, TS);
+  const parse = siteIdAt(root, 'src/fx/catch.js', 4, CA);
+  assert.ok(report.hit.includes(`${inCall}#f1`));
+  assert.ok(report.notReached.includes(`${chain}#f1`), 'loaded but not reached');
+  assert.ok(report.notLoaded.includes(`${parse}#f0`), 'never loaded is not "not reached"');
+  assert.equal(report.notReached.includes(`${parse}#f0`), false);
+});
+
+test('hole 3: a throw selection that arms nothing refuses to start', () => {
+  const root = writeCheckout();
+  const planFile = writePlan(root, planFor(root));
+  const result = runChild(root, 'console.log(\'ran\');\n', childEnvironment(root, planFile,
+    temporaryDirectory('necessity-vacuous-'), {LAGRANGE_NECESSITY_TRAP_MODE: 'throw',
+      LAGRANGE_NECESSITY_TRAP_SELECT: 'bucket:N4c'}));
+  assert.notEqual(result.status, 0, 'no planned arm is in N4c');
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /selection arms no planned arm/u);
+  const chain = siteIdAt(root, 'src/fx/chain.js', 2, TS);
+  assert.deepEqual(trapTool.selectArms(planFor(root), `site:${chain}`),
+    [`${chain}#f1`, `${chain}#f2`], 'the dry run names the armed arms');
+});
+
+test('hole 3: an arm id names its side, the same with and without a census', () => {
+  const root = writeCheckout();
+  const id = siteIdAt(root, 'src/fx/typeof.js', 2, 'typeof_dual_paths');
+  const armsOf = (plan) => plan.files['src/fx/typeof.js'].sites.find((site) => site.id === id).arms;
+  assert.deepEqual(armsOf(planFor(root)), ['p0'], 'N2: the primary side is armed');
+  assert.deepEqual(armsOf(buildTrapPlan({root, census: null, head: 'test-head'})), ['f0'],
+    'without a census the fallback side is armed, under another id');
+});
+
+test('hole 4: a throw run classifies every armed arm as not reached, surfaced or swallowed',
+  () => {
+    const root = writeCheckout();
+    const plan = planFor(root);
+    const planFile = writePlan(root, plan);
+    const chain = siteIdAt(root, 'src/fx/chain.js', 2, TS);
+    const parse = siteIdAt(root, 'src/fx/catch.js', 4, CA);
+    const select = {LAGRANGE_NECESSITY_TRAP_MODE: 'throw',
+      LAGRANGE_NECESSITY_TRAP_SELECT: `site:${chain},site:${parse}`};
+    const swallowDir = temporaryDirectory('necessity-swallow-');
+    const swallowed = runChild(root, [
+      'import {chain} from \'./src/fx/chain.js\';',
+      'try { chain({}, {y: 1}, {}); } catch { /* an outer handler eats it */ }',
+      'console.log(\'green\');',
+      '',
+    ].join('\n'), rosterEnvironment(planFile, swallowDir, select));
+    assert.equal(swallowed.status, 0, swallowed.stderr);
+    const green = trapTool.reportRun({plan, planDigest: digestOf(planFile),
+      merged: mergeObservations(readMergeInputs([swallowDir])),
+      run: {id: 'swallow', lane: 'unit', laneExitCode: 0},
+      laneLogs: [`${swallowed.stdout}${swallowed.stderr}`]});
+    assert.equal(green.verdict, 'SWALLOWED', 'a green lane with a fired arm is a finding');
+    assert.deepEqual(green.swallowed, [`${chain}#f1`]);
+    assert.deepEqual(green.surfaced, []);
+    assert.ok(green.notLoaded.includes(`${parse}#f0`));
+    const surfaceDir = temporaryDirectory('necessity-surface-');
+    const red = runChild(root, [
+      'import {chain} from \'./src/fx/chain.js\';',
+      'chain({}, {y: 1}, {});',
+      '',
+    ].join('\n'), rosterEnvironment(planFile, surfaceDir, select));
+    assert.notEqual(red.status, 0);
+    const surfaced = trapTool.reportRun({plan, planDigest: digestOf(planFile),
+      merged: mergeObservations(readMergeInputs([surfaceDir])),
+      run: {id: 'surface', lane: 'unit', laneExitCode: red.status}, laneLogs: [red.stderr]});
+    assert.equal(surfaced.verdict, 'SURFACED');
+    assert.deepEqual(surfaced.surfaced, [`${chain}#f1`]);
+    assert.deepEqual(surfaced.swallowed, []);
+  });

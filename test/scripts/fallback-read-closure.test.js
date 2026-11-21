@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -353,4 +353,154 @@ test('--metric prints the selected cells as the last line for a script probe', (
     '--scope', 'src/beta/'), '0');
   assert.equal(metric('--rows', 'role_derived_leader_reads,non_required_leader_mode'), '12');
   assert.equal(check(root, '--rows', 'labels').exitCode, 2, 'an unknown row is a refusal');
+});
+
+// --- Corrective round (reports/verify-trap-apparatus.md): each hole below is
+// a known-bad input the checker at e39fe811c accepted.
+
+function metricOf(root, ...argv) {
+  return check(root, '--metric', ...argv);
+}
+
+test('hole 5: the slice probe counts the sites its scope made uncensused', () => {
+  const {root} = checkout();
+  write(root, 'src/alpha/reads.js', READS.replace('  } catch (error) {\n    return null;\n',
+    '  } catch (error) {\n    return null; // edited, so its census record no longer binds\n'));
+  const probe = metricOf(root, '--rows', 'fallback_sites_bucket', '--buckets', 'N0,N1,N2,N3',
+    '--scope', 'src/alpha/');
+  assert.notEqual(probe.stdout.at(-1), '0', 'editing a site must not reach the target');
+  assert.notEqual(probe.exitCode, 0);
+});
+
+test('hole 6: an absent census head names the ref to fetch and exits with its own code', () => {
+  const {root} = checkout();
+  const census = JSON.parse(fs.readFileSync(path.join(root, CENSUS), 'utf8'));
+  writeJson(root, CENSUS, {...census, head: 'b'.repeat(40)});
+  const result = check(root);
+  assert.equal(result.exitCode, 3);
+  assert.match(result.stderr.join('\n'), /census-head-unavailable/u);
+  assert.match(result.stderr.join('\n'),
+    /git fetch origin census\/fallback-census-head-b{9}:census\/fallback-census-head-b{9}/u);
+});
+
+test('hole 7: one red bucket-wide throw run cannot keep an arm', () => {
+  const {root} = checkout();
+  const n5 = necessitySiteId(siteOf(root, 'two_source_fallback_reads'));
+  const other = necessitySiteId(siteOf(root, 'catch_returns_default'));
+  const bucketRun = trapResult(root, n5);
+  bucketRun.selection = 'bucket:N5';
+  bucketRun.arms[`${other}#1`] = {site: other, thrown: 1, count: 1};
+  writeJson(root, 'data/fallback-census/traps/run1.json', bucketRun);
+  writeJson(root, KEPT, {version: 1, entries: [{siteId: n5, trapRun: 'run1',
+    witnessTest: 'test/alpha/witness.test.js'}]});
+  const result = check(root);
+  assert.equal(result.exitCode, 1, 'a run that armed other sites keeps nothing');
+  assert.match(result.stderr.join('\n'), /trap run/u);
+});
+
+function report(root, siteId, overrides = {}) {
+  return {schema: 'fallback-necessity-trap-report/1', plan: 'p',
+    head: git(root, 'rev-parse', 'HEAD'), mode: 'throw', selection: `site:${siteId}`,
+    run: {id: 'run1', lane: 'integration', laneExitCode: 1,
+      failedTests: ['test/alpha/witness.test.js']},
+    verdict: 'SURFACED', armed: [`${siteId}#f1`], surfaced: [`${siteId}#f1`], swallowed: [],
+    ...overrides};
+}
+
+test('hole 7: a kept arm needs a run that armed that site alone and failed its witness', () => {
+  const {root} = checkout();
+  const n5 = necessitySiteId(siteOf(root, 'two_source_fallback_reads'));
+  const other = necessitySiteId(siteOf(root, 'catch_returns_default'));
+  writeJson(root, KEPT, {version: 1, entries: [{siteId: n5, trapRun: 'run1',
+    witnessTest: 'test/alpha/witness.test.js'}]});
+  for (const [overrides, expected] of [
+    [{armed: [`${n5}#f1`, `${other}#f0`]}, /did not arm that site alone/u],
+    [{run: {id: 'run1', lane: 'integration', laneExitCode: 1, failedTests: ['test/x.test.js']}},
+      /witness is not a test the trap run failed/u],
+    [{verdict: 'SWALLOWED', surfaced: [], swallowed: [`${n5}#f1`]},
+      /names no red throw-mode trap run/u],
+  ]) {
+    writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5, overrides));
+    const result = check(root);
+    assert.equal(result.exitCode, 1, String(expected));
+    assert.match(result.stderr.join('\n'), expected);
+  }
+  writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5));
+  const kept = check(root, '--json');
+  assert.equal(kept.exitCode, 0, kept.stderr.join('\n'));
+  assert.equal(JSON.parse(kept.stdout.join('\n'))
+    .cells['fallback_sites_kept/two_source_fallback_reads/alpha'], 1);
+});
+
+test('hole 8: a leader constant injected through options is still a leader token', () => {
+  const {root} = checkout();
+  write(root, 'src/gamma/injected.js', [
+    'export function injected(options, row) {',
+    '  const {LEADER_RAFT_ROLE} = options;',
+    '  return row.raft_role === LEADER_RAFT_ROLE;',
+    '}',
+    '',
+  ].join('\n'));
+  assert.equal(metricOf(root, '--rows', 'role_derived_leader_reads', '--scope', 'src/gamma/')
+    .stdout.at(-1), '1');
+});
+
+test('hole 9: a fixture row is exempt by its service type, not a substring of its id', () => {
+  const {root} = checkout();
+  write(root, 'test/delta/meta-row.js', [
+    'export const row = {service_id: \'p1-metadata-r1\', service_type: \'message_group\',',
+    '  raft_role: \'leader\'};',
+    '',
+  ].join('\n'));
+  assert.equal(metricOf(root, '--rows', 'fixture_leader_role_rows_message_group',
+    '--scope', 'test/delta/').stdout.at(-1), '1');
+});
+
+test('hole 10: a census edit is refused even with generatedAt bumped', () => {
+  const {root, head} = checkout();
+  writeJson(root, CENSUS, censusAt(root, head, {generatedAt: '2026-11-25T00:00:00.000Z',
+    catchSides: {'unit-run': PRIMARY, 'integration-run': PRIMARY}}));
+  const result = check(root);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr.join('\n'), /re-join/u);
+});
+
+test('hole 10: the baseline must name the census head it was measured against', () => {
+  const {root} = checkout();
+  const baseline = JSON.parse(fs.readFileSync(path.join(root, BASELINE), 'utf8'));
+  writeJson(root, BASELINE, {...baseline, censusHead: 'c'.repeat(40)});
+  const result = check(root);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr.join('\n'), /baseline names census head c{40}/u);
+});
+
+test('hole 11: baselines tightened on two branches compose by cell-wise minimum', () => {
+  const {root} = checkout();
+  const mainline = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  git(root, 'checkout', '-q', '-b', 'side');
+  write(root, 'test/alpha/rows-fixture.js', FIXTURE_ROWS.replace(
+    '  {service_type: \'partition\', raft_role: \'leader\'},\n', ''));
+  writeJson(root, BASELINE, baselineOf(root));
+  commit(root, 'side lowers the fixture cell');
+  git(root, 'checkout', '-q', mainline);
+  write(root, 'src/alpha/reads.js', READS.replace(
+    'export function probe(port) {\n  return typeof port.read === \'function\' ? ' +
+      'port.read() : null;\n}\n', ''));
+  writeJson(root, BASELINE, baselineOf(root));
+  const mainBaseline = JSON.parse(fs.readFileSync(path.join(root, BASELINE), 'utf8'));
+  commit(root, 'mainline lowers the typeof cells');
+  spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'merge',
+    '--no-ff', '--no-commit', 'side'], {cwd: root, encoding: 'utf8'});
+  write(root, 'test/alpha/rows-fixture.js', FIXTURE_ROWS.replace(
+    '  {service_type: \'partition\', raft_role: \'leader\'},\n', ''));
+  const sideCells = JSON.parse(git(root, 'show', `side:${BASELINE}`)).cells;
+  const cells = {};
+  for (const cell of new Set([...Object.keys(mainBaseline.cells), ...Object.keys(sideCells)])) {
+    const value = Math.min(mainBaseline.cells[cell] ?? 0, sideCells[cell] ?? 0);
+    if (value > 0) cells[cell] = value;
+  }
+  writeJson(root, BASELINE, {...mainBaseline, cells});
+  commit(root, 'merge side: baselines compose by cell-wise minimum');
+  const result = check(root);
+  assert.equal(result.exitCode, 0, result.stderr.join('\n'));
 });
