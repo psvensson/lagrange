@@ -31,6 +31,8 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {TABLES} from '../../src/constants/tables.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from
   '../../src/rebalancer/replica-status.js';
 import {
@@ -129,7 +131,11 @@ function faultingGateway(cache, operationRow, releaseRead, fault) {
         return {success: true, rows: [{node_id: NODE_ID, boot_incarnation: 101}]};
       }
       if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        return lifecycle.readAuthoritativeRows(tableName, sql, params);
+        const result = await lifecycle.readAuthoritativeRows(tableName, sql, params);
+        if (tableName === SYSTEM_TABLE_NAME.SERVICES && sql.includes('WHERE service_id = ?')) {
+          return {...result, rowSetComplete: result.success === true};
+        }
+        return result;
       }
       const release = releaseRead.getStore();
       if (release && sql.includes('WHERE operation_id = ?') &&
@@ -146,7 +152,8 @@ function faultingGateway(cache, operationRow, releaseRead, fault) {
           return ROUTING_REFUSAL;
         }
       }
-      return {success: true, rows: operationRowsFor(operationRow, sql, params)};
+      return {success: true, rowSetComplete: true,
+        rows: operationRowsFor(operationRow, sql, params)};
     },
     async updateSystemTableRow(tableName, where, data) {
       if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
@@ -266,7 +273,7 @@ async function runCreate(t, {label, refusals = 0, holdRead = false, notGenesis =
     original.error = error;
   });
   return {created, failed, fault, handler, operationId, replicaId, operationRow,
-    admissionToken, opened, releases, original, store: lifecycle.store,
+    admissionToken, opened, releases, original, cache, gateway, store: lifecycle.store,
     restoreAuthority() {
       fault.remaining = 0;
       held?.resolve();
@@ -448,24 +455,30 @@ test('readable no-origin founding contradiction fails CREATE with a cleanup ' +
   assert.equal(row?.status, ReplicaStatus.FAILED, 'the replica is FAILED');
   assert.equal(row?.cleanup_token, buildFailedCreateCleanupToken(run.operationId),
     'no FAILED row with cleanup_token null after admission input existed');
-  // Feed the native target's durable FAILED row to the real cleanup decision
-  // functions with fixture coordinator operation state, then send their exact
-  // precondition through the target's real REMOVE handler.
-  const observation = {state: 'observed', lifecycleStatus: row.status,
-    lifecyclePrecondition: Object.fromEntries(Object.entries(row))};
-  const owner = {repository: {getActualReplicaObservation: async () => observation}};
-  const operation = {operationId: run.operationId, type: OperationType.ADD,
-    entityType: 'partition', partitionId: PARTITION_ID, replicaId: run.replicaId,
-    targetNodeId: NODE_ID, workflowStep: 'SYNCING',
-    createAdmissionAttemptToken: row.create_attempt_token,
-    createAdmissionReplicaCreatedAt: run.operationRow.create_admission_replica_created_at};
+  // Read the exact native target generation through the production repository.
+  // The fixture models the subsequent coordinator ledger terminal transition.
+  const repository = new ReplicaOperationRepository({
+    nodeId: NODE_ID, systemTableCache: run.cache, controlPlaneSystemTableGateway: run.gateway,
+    logger: run.handler.logger,
+  });
+  const owner = {repository};
+  const operation = repository.rowToOperation(run.operationRow);
   const admission = await admitCreateTerminalFailure(owner, operation);
-  assert.equal(admission.admitted, true, 'the operation owner admits the FAILED');
+  assert.equal(admission.admitted, true, 'the operation owner admits the authoritative FAILED');
+  assert.equal(admission.expectedWorkflowStep, operation.workflowStep);
+  const claim = admission.stepMetadata?.[
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION];
+  assert.ok(claim, 'the admitted failure records the cleanup generation');
+  assert.equal(claim.created_at, row.created_at);
+  assert.equal(claim.state_entered_at, row.state_entered_at);
+  assert.equal(claim.create_attempt_token, row.create_attempt_token);
+  assert.equal(claim.cleanup_token, row.cleanup_token);
   const decision = await decideFailedCreateTargetCleanup(owner, {...operation,
-    workflowStep: 'FAILED', status: ReplicaStatus.FAILED, completedAt: Date.now(),
-    stepsHistory: [{...admission.stepMetadata}]});
+    workflowStep: WORKFLOW_STEP.FAILED, status: ReplicaStatus.FAILED, completedAt: Date.now(),
+    stepsHistory: [...operation.stepsHistory, {...admission.stepMetadata}]});
   assert.equal(decision.cleanupEligible, true,
     'the cleanup decision is ELIGIBLE with the recorded lifecycle precondition');
+  assert.deepEqual(decision.lifecyclePrecondition, claim);
   const request = {operationId: `cleanup-${run.operationId}`,
     partitionId: PARTITION_ID, replicaId: run.replicaId,
     [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:

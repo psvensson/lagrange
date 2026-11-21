@@ -46,6 +46,7 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -76,19 +77,21 @@ import {
   buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {
+  createCoordinatorSqlStore,
   createMockCache,
   createMockCdcService,
+  createMockControlPlaneSystemTableGateway,
   createMockMessageRouter,
   createMockPolicyService,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
-  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 import {
   createRegisteredPartitionFactoryFixture,
   registerCompletedFreshCreateReleaseFixture,
 } from '../test-helpers/replica-handler-identity-fixture.js';
 import {waitForCondition} from '../partition/partition-service-test-support.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {runtimeBuildProvenance} from
   '../../src/diagnostics/runtime-build-provenance.js';
 
@@ -467,56 +470,6 @@ function createCohortServiceRow(replicaId, nodeId) {
   };
 }
 
-function createCohortSqlEngine({authoritativeServices}) {
-  const operations = new Map();
-  const executeQuery = async (sql, params = []) => {
-    if (
-      sql.includes('SELECT * FROM services') &&
-        sql.includes('service_type = ?')
-    ) {
-      const rows = authoritativeServices.filter(
-        (row) => row.partition_id === params[1],
-      );
-      return {success: true, rowSetComplete: true, rows};
-    }
-    if (sql.includes('INSERT INTO replica_operations')) {
-      const [
-        operationId, type, partitionId, replicaId, targetClaimKey,
-        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-        entityId,
-      ] = params;
-      operations.set(operationId, {
-        operation_id: operationId,
-        type,
-        partition_id: partitionId,
-        replica_id: replicaId,
-        target_claim_key: targetClaimKey,
-        source_node_id: sourceNodeId,
-        target_node_id: targetNodeId,
-        status,
-        workflow_step: workflowStep,
-        created_at: createdAt,
-        updated_at: updatedAt,
-        completed_at: completedAt,
-        error_message: errorMessage,
-        steps_history: stepsHistory,
-        entity_type: entityType,
-        entity_id: entityId,
-      });
-      return {success: true, changes: 1};
-    }
-    if (sql.includes('replica_operations')) {
-      return {success: true, rows: [...operations.values()]};
-    }
-    return {success: true, rows: []};
-  };
-  return {
-    operations,
-    executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
-  };
-}
-
 test('cohort-stamp-authoritative-read: a standard-path ADD persists the ' +
   'authoritative cohort while the cache view lags the services owner',
 async (t) => {
@@ -528,24 +481,22 @@ async (t) => {
   // Cache lag: the local cache shows NO sibling service rows for the
   // partition; only the authoritative owner read knows the group.
   const cache = createMockCache({services: []});
-  const sqlEngine = createCohortSqlEngine({authoritativeServices});
+  const authority = createMockCache({services: authoritativeServices});
+  const ledger = createCoordinatorSqlStore(authority);
+  const sqlEngine = {executeQuery: async (sql, params) => ledger.execute(sql, params)};
+  const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
+  gateway.submitMutation = (mutation) => ledger.submitMutation(mutation);
+  installCommittedOperationMutationFixture(gateway);
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-cohort-coordinator',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    controlPlaneSystemTableGateway: {
-      readAuthoritativeRows: async (_tableName, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-      readRows: async (_tableName, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-      executeQuery: async (sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-    },
+    controlPlaneSystemTableGateway: gateway,
     tablePolicyService: createMockPolicyService(),
     // The group's leader answers the committed-membership read with the
     // committed configuration: the services owner's authoritative members.
     messageRouter: withFixtureCommittedMembership(createMockMessageRouter(),
-      createMockCache({services: authoritativeServices})),
+      authority),
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
@@ -596,12 +547,26 @@ async (t) => {
       'the stamp names the leader\'s committed members, which the lagging ' +
         'cache could not see, plus the target',
     );
+    const persisted = ledger.execute(
+      'SELECT * FROM replica_operations WHERE operation_id = ?', [operation.operationId]);
+    t.equal(persisted.rowSetComplete, true, 'the committed exact operation lookup is complete');
+    t.equal(persisted.rows?.length, 1, 'one operation is committed for the returned identity');
+    const [first] = JSON.parse(persisted.rows?.[0]?.steps_history ?? '[]');
+    t.same(
+      first?.[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP],
+      operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
+      'the committed history carries the exact bootstrap membership',
+    );
     t.equal(
       createdEvents.length,
       1,
       'the operation persisted and emitted its created event',
     );
   } finally {
-    await coordinator.shutdown();
+    try {
+      await coordinator.shutdown();
+    } finally {
+      ledger.suspend();
+    }
   }
 });
