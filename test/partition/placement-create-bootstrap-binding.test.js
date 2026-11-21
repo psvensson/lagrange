@@ -21,7 +21,10 @@ import {replicaIdsOfStamp} from '../../src/raft/raft-committed-membership-stamp.
 import {
   OPERATION_METADATA_KEY, OperationType, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
-import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  REBALANCER_SKIP_REASON,
+  REBALANCE_COORDINATOR_DEFER_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
 import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
@@ -40,13 +43,15 @@ const VOTER_ID = `${PARTITION_ID}-r1`;
 const planner = new ControlPlaneSystemTableGateway();
 
 function createBindingCoordinator(leader, readMembership, deliverCreate = null,
-  partitionId = PARTITION_ID) {
+  partitionId = PARTITION_ID, observeEntityRead = null) {
   let nextMutation = 0;
   const sqlEngine = {
     async executeQuery(sql, params = []) {
       const statement = leader.db.prepare(sql);
       assert.equal(statement.reader, true, 'only committed apply writes this ledger');
-      return {success: true, rows: statement.all(...params), rowSetComplete: true};
+      const result = {success: true, rows: statement.all(...params), rowSetComplete: true};
+      return observeEntityRead && sql.includes('WHERE entity_type = ? AND entity_id = ?') ?
+        observeEntityRead(result) : result;
     },
   };
   const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
@@ -531,9 +536,75 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.equal(await gate(), null,
           'the next dispatch wake sees the committed terminal and may claim the self-move');
         await admission(false);
+        const afterTerminal = await owner.evaluateRemoveSafety(peerRemoval);
+        assert.doesNotMatch(String(afterTerminal?.error), new RegExp(row.operation_id),
+          'committed terminal clears arbitration even though the cache remains empty');
       } finally {
         await coordinator.shutdown();
       }
     });
   });
 }
+
+test('all removal phases distinguish complete entity reads from unavailable ownership', async () => {
+  await onLedgerLeader(async (leader, proposed) => {
+    let answer = (result) => result;
+    const coordinator = createBindingCoordinator(leader, () => committedStampFor([VOTER_ID]),
+      null, PARTITION_ID, (result) => answer(result));
+    const owner = coordinator.workflowOwner;
+    let voterFloorReads = 0;
+    owner.getCriticalReplicaRowsForSafety = async () => {
+      voterFloorReads += 1;
+      return [];
+    };
+    const now = owner.resolveTimeoutCheckNowMs();
+    const requests = [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]
+      .map((workflowStep) => {
+        const type = workflowStep === WORKFLOW_STEP.PENDING ?
+          OperationType.REMOVE : OperationType.REPLACE;
+        return {
+          ...createOperationAt({
+            operationId: `removal:${workflowStep}`, type, partitionId: PARTITION_ID,
+            sourceNodeId: NODE.A, targetNodeId: NODE.B, replicaId: VOTER_ID,
+            sourceReplicaId: VOTER_ID,
+          }, now),
+          workflowStep, entityType: 'partition', entityId: PARTITION_ID,
+        };
+      });
+
+    try {
+      for (const request of requests) await owner.evaluateRemoveSafety(request);
+      assert.equal(voterFloorReads, requests.length,
+        'a complete empty owner read reaches the separate voter floor');
+      const {command} = await admitOnLeader(leader, proposed, 'bootstrap:removal-contender',
+        placementStatement({partitionId: PARTITION_ID, target: NODE.B}));
+      assert.ok(command, 'native placement committed after the removal intents already existed');
+      const [incumbent] = ledgerRows(leader);
+
+      for (const request of requests) {
+        const evaluation = await owner.evaluateRemoveSafety(request);
+        assert.match(String(evaluation?.error), new RegExp(incumbent.operation_id));
+      }
+      assert.equal(voterFloorReads, requests.length);
+
+      for (const unavailable of [
+        () => ({success: false, error: 'owner unavailable'}),
+        (result) => ({...result, rows: [], rowSetComplete: false}),
+        (result) => ({...result, rows: [{...result.rows[0], entity_id: 'different-entity'}]}),
+      ]) {
+        answer = unavailable;
+        for (const request of requests) {
+          const evaluation = await owner.evaluateRemoveSafety(request);
+          assert.match(String(evaluation?.error), /operation ledger is unavailable/u);
+          assert.equal(evaluation.deferReason, request.type === OperationType.REMOVE ?
+            REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED :
+            REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED);
+        }
+      }
+      assert.equal(voterFloorReads, requests.length,
+        'owner unavailability never falls through to the voter floor');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+});

@@ -448,10 +448,17 @@ async function evaluateRemoveSafety(context, operation) {
   // The operation ledger serializes the actual entity. Hard-coding partition
   // here lets runtime/message-group replacements overtake their own source
   // retirement while unrelated partition rows appear idle.
-  const allOps = await context.repository.getOperationsByEntity(
-    entityType,
-    entityId,
-  );
+  let allOps;
+  try {
+    allOps = await context.repository.getRequiredOperationsByEntity(entityType, entityId);
+  } catch {
+    return context.buildDeferredRemoveSafetyEvaluation(
+      `Entity ${entityType}/${entityId} operation ledger is unavailable for removal arbitration`,
+      isReplaceRemoveDispatch ?
+        REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED :
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED,
+    );
+  }
   // CL-043: a persist-failed concurrent op (coordination row never committed)
   // stays non-terminal with no terminal-timeout anchor and would otherwise block
   // every peer surplus-drain forever. Exclude ops whose configured step timeout

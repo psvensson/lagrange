@@ -78,8 +78,14 @@ import {
 import {buildControlPlaneFailurePayload, cloneControlPlaneFailureParticipants} from
   './replica-operation-repository-control-plane-failure.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
-import {REPLICA_OPERATION_INSERT_SQL} from
-  './replica-operation-repository-constants.js';
+import {
+  REPLICA_OPERATION_INSERT_SQL,
+  REPLICA_OPERATION_REPOSITORY_ERROR_CODE,
+  REPLICA_OPERATION_REPOSITORY_ERROR_MSG,
+} from './replica-operation-repository-constants.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
+import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -483,6 +489,14 @@ function buildReplicaOperationVisibilityReadOptions(readMode) {
  * The coordinator facade delegates persistence and query concerns here.
  * This class does NOT own workflow progression, admission, or intent dedup.
  */
+function malformedRequiredEntityOperationRows() {
+  return Object.assign(new TypeError(
+    REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_MALFORMED,
+  ), {
+    reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED,
+  });
+}
+
 class ReplicaOperationRepository {
   /**
    * @param {object} options
@@ -532,6 +546,33 @@ class ReplicaOperationRepository {
         Math.floor(options.authoritativeVisibilityRetryDelayMs) :
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
     this._shuttingDown = false;
+  }
+  async getRequiredOperationsByEntity(entityType, entityId) {
+    const result = await this.executeReplicaOperationsRead(
+      SQL.SELECT_OPERATIONS_BY_ENTITY, [entityType, entityId],
+      {...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED},
+    );
+    if (result?.success !== true || result.rowSetComplete !== true) {
+      throw Object.assign(new Error(
+        REPLICA_OPERATION_REPOSITORY_ERROR_MSG.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+      ), {
+        reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_INCOMPLETE,
+      });
+    }
+    if (!Array.isArray(result.rows)) throw malformedRequiredEntityOperationRows();
+    const operations = [];
+    const operationIds = new Set();
+    for (const row of result.rows) {
+      const operation = assertOperationUpdateRecord(this.rowToOperation(row));
+      if (operation.entityType !== entityType || operation.entityId !== entityId ||
+          operationIds.has(operation.operationId)) {
+        throw malformedRequiredEntityOperationRows();
+      }
+      operationIds.add(operation.operationId);
+      operations.push(operation);
+    }
+    return operations;
   }
   /**
    * Signal that the owning rebalance coordinator is shutting down. The
