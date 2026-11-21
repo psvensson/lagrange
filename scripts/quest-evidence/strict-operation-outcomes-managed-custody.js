@@ -68,55 +68,102 @@ const LOCK_FILE = 'package-lock.json';
 const BETTER_SQLITE3 = 'node_modules/better-sqlite3';
 const SQLITE_ADDON = 'better_sqlite3.node';
 const MANAGED_RUNNER = 'scripts/run-test-files.js';
+const INVENTORY_STATE = 'ARTIFACTS';
+const PARENT_DIRECTORY = '..';
+const SOURCE_DIGEST = /^[a-f0-9]{64}$/u;
 const CLASSIFIED_RUNNER = 'scripts/run-classified-test-files.js';
 
-function readManagedFile(directory, name, expected) {
+function readManagedFile(directory, name, expected, maxBytes = ORIGINAL_FILE_MAX_BYTES) {
   const file = path.join(directory, name);
   const stat = fs.lstatSync(file);
   requireManaged(stat.isFile() && fs.realpathSync(file) === file &&
-    stat.size <= ORIGINAL_FILE_MAX_BYTES, `invalid original file: ${name}`);
+    stat.size <= maxBytes, `invalid original file: ${name}`);
   const bytes = fs.readFileSync(file);
-  requireManaged(digest(bytes) === expected, `${name} hash mismatch`);
+  if (expected !== undefined) {
+    requireManaged(digest(bytes) === expected, `${name} hash mismatch`);
+  }
   return bytes;
 }
 
-function readManagedOriginals(directory, expected) {
+function readManagedInventory(anchors, expected, pages) {
+  const host = expected.host ?? HOST;
+  let cursor = null;
+  const seen = new Set();
+  const names = [];
+  for (const [index, page] of pages.entries()) {
+    const inventory = readJson(anchors, page);
+    requireManaged(Array.isArray(inventory.names) && inventory.names.length > 0,
+      PROBLEM.INCOMPLETE);
+    const next = index === pages.length - 1 ? null : inventory.names.at(-1);
+    requireManaged(isDeepStrictEqual(
+      [inventory.job_id, inventory.host, inventory.state, inventory.next_cursor],
+      [expected.requestId, host, INVENTORY_STATE, next]) &&
+      (index === 0 || inventory.names[0] > cursor), PROBLEM.INCOMPLETE);
+    for (const name of inventory.names) {
+      requireManaged(typeof name === 'string' && name.length > 0 && !seen.has(name), PROBLEM.INCOMPLETE);
+      seen.add(name);
+      names.push(name);
+    }
+    cursor = inventory.next_cursor;
+  }
+  return names;
+}
+
+function readManagedStatus(anchors, expected) {
+  const status = readJson(anchors, MANAGED_FILE.STATUS);
+  const expectedStatus = {
+    job_id: expected.requestId, generation: expected.generation, host: expected.host ?? HOST,
+    state: expected.controllerState, exit_code: expected.exitStatus, execution_scope_closed: true,
+    source_execution_started: true, workload_started: true, reason: null,
+    source: {sha: expected.source, ref: expected.ref, repo: expected.repo},
+  };
+  requireManaged(Object.entries(expectedStatus)
+    .every(([field, value]) => isDeepStrictEqual(status[field], value)), PROBLEM.CONTROLLER);
+  return status;
+}
+
+function readManagedOriginals(directory, expected, {pages = [MANAGED_FILE.INVENTORY],
+  artifactMaxBytes = ORIGINAL_FILE_MAX_BYTES} = {}) {
   const anchors = new Map(Object.entries(expected.anchors).map(([name, expected]) =>
     [name, readManagedFile(directory, name, expected)]));
   const manifest = readJson(anchors, MANAGED_FILE.MANIFEST);
-  const inventory = readJson(anchors, MANAGED_FILE.INVENTORY);
-  requireManaged(manifest.requestId === expected.requestId &&
-    inventory.job_id === expected.requestId && inventory.host === HOST &&
-    inventory.next_cursor === null, PROBLEM.MISMATCH);
+  requireManaged(manifest.requestId === expected.requestId, PROBLEM.MISMATCH);
+  const names = readManagedInventory(anchors, expected, pages);
+  const status = readManagedStatus(anchors, expected);
   const originals = new Map();
   for (const {name, sha256, bytes} of manifest.entries) {
-    requireManaged(!path.isAbsolute(name) && path.normalize(name) === name &&
-      !name.startsWith(`..${path.sep}`) && !originals.has(name), `invalid artifact name: ${name}`);
-    const original = readManagedFile(directory, path.join(MANAGED_FILE.DIRECTORY, name), sha256);
+    requireManaged(typeof name === 'string' && !path.isAbsolute(name) &&
+      path.normalize(name) === name && name !== PARENT_DIRECTORY &&
+      !name.startsWith(PARENT_DIRECTORY + path.sep) && !originals.has(name) &&
+      typeof sha256 === 'string' && SOURCE_DIGEST.test(sha256),
+    `invalid artifact name or digest: ${name}`);
+    const original = readManagedFile(directory, path.join(MANAGED_FILE.DIRECTORY, name), sha256,
+      artifactMaxBytes);
     requireManaged(original.length === bytes, `artifact size mismatch: ${name}`);
     originals.set(name, original);
   }
-  requireManaged(isDeepStrictEqual([...originals.keys()].sort(), [...inventory.names].sort()),
-    PROBLEM.INCOMPLETE);
-  const status = readJson(anchors, MANAGED_FILE.STATUS);
-  const expectedSource = {sha: expected.source, ref: expected.ref, repo: expected.repo};
-  requireManaged(status.job_id === expected.requestId &&
-    status.generation === expected.generation &&
-    status.host === HOST && status.state === expected.controllerState &&
-    status.exit_code === expected.exitStatus &&
-    status.execution_scope_closed === true && status.source_execution_started === true &&
-    status.workload_started === true && status.reason === null &&
-    isDeepStrictEqual(status.source, expectedSource),
-  PROBLEM.CONTROLLER);
+  requireManaged(isDeepStrictEqual([...originals.keys()].sort(), names.sort()), PROBLEM.INCOMPLETE);
   return {status, originals, manifest};
 }
 
-function readManagedExecution(directory, originals, expected) {
+function readManagedCandidate(originals, expected) {
   const candidate = readJson(originals, MANAGED_FILE.SOURCE);
   requireManaged(candidate.sha === expected.source && candidate.tree === expected.tree &&
     candidate.clean === true && candidate.status === '' &&
     isDeepStrictEqual(candidate, readJson(originals, MANAGED_FILE.AFTER)),
   PROBLEM.CANDIDATE);
+  return candidate;
+}
+
+function readManagedCommand(originals, expected) {
+  const command = readJson(originals, MANAGED_FILE.COMMAND);
+  requireManaged(command.status === expected.exitStatus &&
+    command.signal === null && command.error === null,
+  PROBLEM.COMMAND);
+  return command;
+}
+
+function readManagedInvocation(originals, candidate) {
   const invocation = readJson(originals, MANAGED_FILE.INVOCATION);
   requireManaged(invocation.registeredHost === HOST &&
     invocation.env.LAGRANGE_PLACEMENT === LOCAL_PLACEMENT &&
@@ -125,10 +172,21 @@ function readManagedExecution(directory, originals, expected) {
     isDeepStrictEqual(invocation.selected, [TEST_FILE]) &&
     originals.get(MANAGED_FILE.SELECTED).toString(ENCODING.TEXT) === `${TEST_FILE}\n`,
   PROBLEM.INVOCATION);
-  const command = readJson(originals, MANAGED_FILE.COMMAND);
-  requireManaged(command.status === expected.exitStatus &&
-    command.signal === null && command.error === null,
-  PROBLEM.COMMAND);
+  return invocation;
+}
+
+function verifyManagedRun(run, originals, expected, passed) {
+  requireManaged(isDeepStrictEqual(run.checkout, readJson(originals, MANAGED_FILE.CHECKOUT)) &&
+    run.results.length === 1 && run.results[0].attempts.length === 1 &&
+    isDeepStrictEqual(run.planned, [TEST_FILE]) && run.exitStatus === expected.exitStatus &&
+    run.results[0].ok === passed && run.results[0].attempts[0].ok === passed,
+  PROBLEM.RUN_SCOPE);
+}
+
+function readManagedExecution(directory, originals, expected) {
+  const candidate = readManagedCandidate(originals, expected);
+  const invocation = readManagedInvocation(originals, candidate);
+  readManagedCommand(originals, expected);
   const report = readJson(originals, MANAGED_FILE.REPORT);
   const sections = path.join(directory, MANAGED_FILE.DIRECTORY, MANAGED_FILE.SECTIONS);
   const runs = readExecutionRuns(sections);
@@ -149,11 +207,7 @@ function readManagedExecution(directory, originals, expected) {
   PROBLEM.REPORT);
   const [run] = runs;
   const passed = expected.exitStatus === 0;
-  requireManaged(isDeepStrictEqual(run.checkout, readJson(originals, MANAGED_FILE.CHECKOUT)) &&
-    run.results.length === 1 && run.results[0].attempts.length === 1 &&
-    isDeepStrictEqual(run.planned, [TEST_FILE]) && run.exitStatus === expected.exitStatus &&
-    run.results[0].ok === passed && run.results[0].attempts[0].ok === passed,
-  PROBLEM.RUN_SCOPE);
+  verifyManagedRun(run, originals, expected, passed);
   const stdout = originals.get(MANAGED_FILE.STDOUT).toString(ENCODING.TEXT);
   const stderr = originals.get(MANAGED_FILE.STDERR);
   const tapStderr = originals.get(MANAGED_FILE.TAP + TAP_STDERR_SUFFIX);
@@ -169,22 +223,25 @@ function readManagedExecution(directory, originals, expected) {
   return {invocation, run, validation};
 }
 
-function managedProcessPairs(originals, exitStatus) {
-  const names = [...originals.keys()].filter((name) => name.startsWith(MANAGED_FILE.IDENTITY));
-  return names.filter((name) => name.endsWith(PROCESS_SUFFIX.END)).map((name) => {
-    const end = readJson(originals, name);
-    const startName = name.slice(0, -PROCESS_SUFFIX.END.length) + PROCESS_SUFFIX.START;
-    const start = readJson(originals, startName);
-    requireManaged(start.kind === PROCESS_KIND.START && end.kind === PROCESS_KIND.END &&
-      start.isMainThread === true && end.isMainThread === true &&
-      start.threadId === 0 && end.threadId === 0 && end.exitCode === exitStatus &&
-      PROCESS_FIELDS.every((field) => isDeepStrictEqual(start[field], end[field])),
-    `process identity disagreement: ${name}`);
-    return end;
-  });
+function readManagedProcessPair(originals, name, exitStatus) {
+  const end = readJson(originals, name);
+  const startName = name.slice(0, -PROCESS_SUFFIX.END.length) + PROCESS_SUFFIX.START;
+  const start = readJson(originals, startName);
+  requireManaged(start.kind === PROCESS_KIND.START && end.kind === PROCESS_KIND.END &&
+    start.isMainThread === true && end.isMainThread === true &&
+    start.threadId === 0 && end.threadId === 0 && end.exitCode === exitStatus &&
+    PROCESS_FIELDS.every((field) => isDeepStrictEqual(start[field], end[field])),
+  `process identity disagreement: ${name}`);
+  return end;
 }
 
-function readManagedNative(originals, status, {invocation, run}, expected, sourceBlob) {
+function managedProcessPairs(originals, exitStatus) {
+  return [...originals.keys()].filter((name) => name.startsWith(MANAGED_FILE.IDENTITY) &&
+    name.endsWith(PROCESS_SUFFIX.END)).map((name) =>
+    readManagedProcessPair(originals, name, exitStatus));
+}
+
+function readManagedSubstrate(originals, expected, sourceBlob) {
   const native = readJson(originals, MANAGED_FILE.NATIVE);
   const readiness = readJson(originals, MANAGED_FILE.READINESS);
   const lock = sourceBlob(LOCK_FILE, expected.source);
@@ -196,25 +253,37 @@ function readManagedNative(originals, status, {invocation, run}, expected, sourc
     readiness.requirement.source === expected.source &&
     readiness.capability.repo.lockGraphSha256 === readiness.requirement.lockGraphSha256,
   PROBLEM.SUBSTRATE);
+  return {native, readiness};
+}
+
+function verifyManagedProcessSubstrate(record, status, {sourceRoot, hostname, bootId, node}) {
+  requireManaged(record.cgroup.endsWith(`/${status.unit}\n`) && isDeepStrictEqual(
+    [record.cwd, record.hostname, record.bootId, record.execPath,
+      record.executableSha256, record.versions],
+    [sourceRoot, hostname, bootId, node.execPath, node.sha256, node.versions]),
+  `recorded process is outside the measured substrate: ${record.pid}`);
+}
+
+function readManagedNative(originals, status, {invocation, run}, expected, sourceBlob) {
+  const {native, readiness} = readManagedSubstrate(originals, expected, sourceBlob);
   const sourceRoot = run.checkout.root;
   const records = managedProcessPairs(originals, expected.exitStatus);
   const [classified] = records.filter(({argv}) =>
     argv[1] === path.join(sourceRoot, CLASSIFIED_RUNNER));
   const [runner] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, MANAGED_RUNNER));
   const [test] = records.filter(({argv}) => argv[1] === path.join(sourceRoot, TEST_FILE));
-  requireManaged(records.length === EXPECTED_PROCESS_COUNT && classified && runner && test &&
-    runner.ppid === classified.pid && test.ppid === runner.pid &&
+  requireManaged(records.length === EXPECTED_PROCESS_COUNT && classified && runner && test,
+    PROBLEM.PROCESS_TREE);
+  requireManaged(runner.ppid === classified.pid && test.ppid === runner.pid &&
     String(runner.pid) === run.runId.split(RUN_ID_SEPARATOR)[0] &&
     isDeepStrictEqual(runner.argv.slice(2), run.argv) &&
     isDeepStrictEqual(classified.argv.slice(2), invocation.argv.slice(2)),
   PROBLEM.PROCESS_TREE);
   for (const record of records) {
-    requireManaged(record.cwd === sourceRoot && record.hostname === invocation.hostname &&
-      record.bootId === readiness.capability.bootId && record.cgroup.endsWith(`/${status.unit}\n`) &&
-      record.execPath === native.process.execPath &&
-      record.executableSha256 === native.process.sha256 &&
-      isDeepStrictEqual(record.versions, native.process.versions),
-    `recorded process is outside the measured substrate: ${record.pid}`);
+    verifyManagedProcessSubstrate(record, status, {
+      sourceRoot, hostname: invocation.hostname, bootId: readiness.capability.bootId,
+      node: native.process,
+    });
   }
   const addon = native.native.find(({path: file}) => path.basename(file) === SQLITE_ADDON);
   requireManaged(addon && test.native.some((loaded) =>
@@ -235,4 +304,10 @@ function readManagedCustody(directory, expected, sourceBlob) {
     tap: originals.get(MANAGED_FILE.TAP).toString(ENCODING.TEXT)};
 }
 
-export {readManagedCustody, MANAGED_FILE, HOST, TEST_FILE};
+export {
+  CLASSIFIED_RUNNER, digest, HOST, LOCAL_PLACEMENT, MANAGED_FILE, MANAGED_RUNNER, NEWLINE,
+  NO_RETRY, PROCESS_SUFFIX, readJson,
+  readManagedCandidate, readManagedCommand, readManagedCustody, readManagedFile,
+  readManagedOriginals, readManagedProcessPair, readManagedSubstrate,
+  requireManaged, SQLITE_ADDON, TEST_FILE, verifyManagedProcessSubstrate,
+};

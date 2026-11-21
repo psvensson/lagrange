@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Admit the initial red or the bounded native SQLite execution from their
 // original artifacts. This adapter never executes tests.
-import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -12,8 +11,9 @@ import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {
   compareHistoricalControls, HISTORICAL_RUNS, requireHistorical,
 } from './strict-operation-outcomes-historical-controls.js';
+import {validateClassifiedOriginals} from './strict-operation-outcomes-classified.js';
 import {
-  readManagedCustody, HOST, MANAGED_FILE, TEST_FILE,
+  digest, readManagedCustody, requireManaged, HOST, MANAGED_FILE, TEST_FILE,
 } from './strict-operation-outcomes-managed-custody.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -86,25 +86,28 @@ const MALFORMED_ASSERTIONS = 12;
 const DEFAULT_OUTPUT = 'solve/evidence/strict-operation-outcomes.receipt.json';
 const ORIGINAL_FILE_MAX_BYTES = 256 * 1024;
 
-const ENCODING = Object.freeze({
-  TEXT: 'utf8',
-  DIGEST: 'hex',
-});
+const ENCODING = Object.freeze({TEXT: 'utf8'});
 const CLI = Object.freeze({
   EVIDENCE: '--evidence-dir',
   MANAGED: '--managed-evidence-dir',
   HISTORICAL: '--historical-evidence-dir',
+  CLASSIFIED: '--classified-evidence-dir',
+  CLASSIFIED_INPUT: '--classified-review-input',
   OUTPUT: '--output',
   PREFIX: '--',
   EVIDENCE_KEY: 'evidenceDir',
   MANAGED_KEY: 'managedEvidenceDir',
   HISTORICAL_KEY: 'historicalEvidenceDir',
+  CLASSIFIED_KEY: 'classifiedEvidenceDir',
+  CLASSIFIED_INPUT_KEY: 'classifiedReviewInput',
   OUTPUT_KEY: 'output',
 });
 const OPTION_KEYS = Object.freeze({
   [CLI.EVIDENCE]: CLI.EVIDENCE_KEY,
   [CLI.MANAGED]: CLI.MANAGED_KEY,
   [CLI.HISTORICAL]: CLI.HISTORICAL_KEY,
+  [CLI.CLASSIFIED]: CLI.CLASSIFIED_KEY,
+  [CLI.CLASSIFIED_INPUT]: CLI.CLASSIFIED_INPUT_KEY,
   [CLI.OUTPUT]: CLI.OUTPUT_KEY,
 });
 const ORIGINAL_FILE = Object.freeze({
@@ -139,6 +142,9 @@ const PROBLEM = Object.freeze({
   MANAGED_SOURCE_BLOB: 'managed source blob mismatch',
   HISTORICAL_HELPER_MISMATCH: 'the helper control does not restore the historical source',
 
+  CLASSIFIED_OPTIONS:
+    'classified validation requires both classified options and accepts no receipt options',
+  CLASSIFIED_RELEASE: 'classified strict witness omits the real nonterminal release control',
   EVIDENCE_REQUIRED: 'specify one of --evidence-dir or --managed-evidence-dir',
   HISTORICAL_REQUIRES_MANAGED: '--historical-evidence-dir requires --managed-evidence-dir',
   MANAGED_STATUS: 'managed request did not finish as the recorded test failure',
@@ -159,7 +165,6 @@ const REAL_EFFECT_ASSERTION = Object.freeze({
   CALL: 'fault is delivered after one actual repository call',
   WRITE: 'the write happened: uncertainty must not be misreported as rollback',
 });
-const DIGEST_ALGORITHM = 'sha256';
 const NEWLINE = '\n';
 const MANAGED_FAILURE = 'FAILED';
 const PREFLIGHT_NODE_VERSION = 'v22.23.2';
@@ -254,19 +259,16 @@ const MANAGED_CEILING = 'Single-file native SQLite production-owner composition 
   'Controller, nested runner and actual test-process records describe different scopes. ' +
   'The original records are unsigned. Classified consumers, physical fleet, and applicability ' +
   'to a later candidate remain outside this measurement.';
+const NONTERMINAL_RELEASE = Object.freeze({
+  CASE: 'strict outcomes release boundary retains a real nonterminal committed transition',
+  REFUSAL: 'committed nonterminal evidence cannot enter terminal release',
+  RELEASE: 'the same reservation releases only after actual terminal persistence',
+});
 const LOCK_FILE = 'package-lock.json';
 const MEASURED_MANAGED_RECEIPT_COUNT = 3;
 
 function requireEvidence(condition, message) {
   if (!condition) throw new Error(`red evidence refused: ${message}`);
-}
-
-function requireManaged(condition, message) {
-  if (!condition) throw new Error(`managed evidence refused: ${message}`);
-}
-
-function digest(bytes) {
-  return createHash(DIGEST_ALGORITHM).update(bytes).digest(ENCODING.DIGEST);
 }
 
 function parseOptions(argv) {
@@ -280,6 +282,13 @@ function parseOptions(argv) {
     requireEvidence(!Object.hasOwn(options, `${name}Provided`), `duplicate argument ${key}`);
     options[name] = path.resolve(value);
     options[`${name}Provided`] = true;
+  }
+  if (options.classifiedEvidenceDir || options.classifiedReviewInput) {
+    requireManaged(options.classifiedEvidenceDir && options.classifiedReviewInput &&
+      !options.evidenceDir && !options.managedEvidenceDir && !options.historicalEvidenceDir &&
+      !options.outputProvided,
+    PROBLEM.CLASSIFIED_OPTIONS);
+    return options;
   }
   requireEvidence(Boolean(options.evidenceDir) !== Boolean(options.managedEvidenceDir),
     PROBLEM.EVIDENCE_REQUIRED);
@@ -367,7 +376,7 @@ function validateProvenance(originals) {
 
 function checkParserCompletion(result, count, name, require = requireEvidence) {
   require(result && !result.bailout && result.skip === 0 && result.todo === 0 &&
-    result.count === count && result.plan.start === 1 && result.plan.end === count &&
+    result.count === count && result.plan?.start === 1 && result.plan.end === count &&
     !result.plan.skipAll && result.failures.every((failure) => !failure.tapError),
   `${name}: missing plan/completion, skip, todo, bailout or parser error`);
 }
@@ -383,28 +392,55 @@ function extractOriginalTap(raw) {
   return raw.slice(start, end);
 }
 
-function readTapStructure(tap) {
-  const parser = new Parser();
-  const parents = [];
-  const children = [];
-  let final;
-  parser.on(TAP_EVENT.ASSERT, (result) => parents.push(result));
-  parser.on(TAP_EVENT.CHILD, (child) => {
-    const record = {name: child.name, assertions: [], result: null, nested: false};
-    children.push(record);
-    child.on(TAP_EVENT.ASSERT, (result) => record.assertions.push(result));
-    child.on(TAP_EVENT.CHILD, () => {
-      record.nested = true;
-    });
-    child.on(TAP_EVENT.COMPLETE, (result) => {
-      record.result = result;
-    });
-  });
+function observeTap(parser) {
+  const node = {name: parser.name, assertions: [], children: [], final: null};
+  parser.on(TAP_EVENT.ASSERT, (result) => node.assertions.push(result));
+  parser.on(TAP_EVENT.CHILD, (child) => node.children.push(observeTap(child)));
   parser.on(TAP_EVENT.COMPLETE, (result) => {
-    final = result;
+    node.final = result;
   });
+  return node;
+}
+
+function readTapTree(tap) {
+  const parser = new Parser();
+  const root = observeTap(parser);
   parser.end(tap);
-  return {final, parents, children};
+  return root;
+}
+
+function readTapStructure(tap) {
+  const root = readTapTree(tap);
+  return {final: root.final, parents: root.assertions,
+    children: root.children.map(({name, assertions, final, children}) => ({
+      name, assertions, result: final, nested: children.length > 0,
+    }))};
+}
+
+function countClassifiedAssertions(node, file) {
+  checkParserCompletion(node.final, node.assertions.length, file, requireManaged);
+  requireManaged(node.final.ok === true && node.assertions.length > 0 &&
+    node.assertions.every((item) => item.ok === true &&
+      !item.skip && !item.todo && !item.tapError &&
+        !item.diag?.failedSkip && !item.diag?.failedTodo),
+  `classified TAP contains unmeasured or failed assertions: ${file}`);
+  return node.assertions.length + node.children.reduce((sum, child) =>
+    sum + countClassifiedAssertions(child, file), 0);
+}
+
+function validateClassifiedTap(bytes, file) {
+  const root = readTapTree(bytes.toString(ENCODING.TEXT));
+  const count = countClassifiedAssertions(root, file);
+  if (file === TEST_FILE) {
+    const release = root.children.find(({name}) =>
+      name === NONTERMINAL_RELEASE.CASE);
+    requireManaged(release?.assertions.some(({name}) =>
+      name === NONTERMINAL_RELEASE.REFUSAL) &&
+      release.assertions.some(({name}) =>
+        name === NONTERMINAL_RELEASE.RELEASE),
+    PROBLEM.CLASSIFIED_RELEASE);
+  }
+  return count;
 }
 
 function validateTapTotals({final, parents, children}) {
@@ -661,6 +697,15 @@ function main() {
   // selected, invalidate only that current derived receipt BEFORE validation;
   // refusal or interruption must not leave an earlier pass available to probes.
   const options = parseOptions(process.argv.slice(2));
+  if (options.classifiedEvidenceDir) {
+    const result = validateClassifiedOriginals(options.classifiedEvidenceDir,
+      options.classifiedReviewInput, {sourceBlob, validateTap: validateClassifiedTap,
+        sourceTree: (source) => sourceCommand([GIT_REV_PARSE, `${source}^{tree}`])
+          .toString(ENCODING.TEXT).trim()});
+    process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+    return;
+  }
   const output = resolveExistingParent(path.resolve(options.output));
   const directory = options.managedEvidenceDir ?? options.evidenceDir;
   const evidenceDirectory = resolveEvidenceDirectory(directory, output);
