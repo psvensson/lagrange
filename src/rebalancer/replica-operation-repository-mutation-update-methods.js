@@ -1,6 +1,10 @@
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {isDeepStrictEqual} from 'node:util';
+import {
+  buildAcknowledgedRemoveCasFields, buildStrandedRemoveCasFields,
+  isSameAcknowledgedRemovePreimage, readCurrentRemoveSubject,
+} from './operation-workflow-stranded-remove-repair.js';
 import {elapsedWorkflowPreimageMatches} from './operation-workflow-elapsed-preimage.js';
 import {
   assertOperationUpdateRecord, assertOperationUpdateSubject, buildOperationUpdateOutcome,
@@ -80,6 +84,20 @@ function serializeExpectedStepsHistory(
   return JSON.stringify(options.expectedStepsHistory);
 }
 
+function refusedUpdate() {
+  return buildOperationUpdateOutcome({
+    persisted: false, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED, operation: null,
+  });
+}
+
+async function readAcknowledgedRemoveObservation(repository, preimage) {
+  const {operation} = await readCurrentRemoveSubject(repository, preimage);
+  return operation && (operation.completedAt !== null ||
+    isSameAcknowledgedRemovePreimage(preimage, operation)) ?
+    {operation, deferredOutcome: null} :
+    {operation: null, deferredOutcome: null, outcome: refusedUpdate()};
+}
+
 function hasWinningTerminalOperation(repository, terminalTransition,
   authoritativeOperation) {
   if (!terminalTransition || !authoritativeOperation) return false;
@@ -106,14 +124,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
   class ReplicaOperationRepositoryMutationUpdateMethods {
     isReplicaOperationUpdateSatisfied(expected, observed) {
       return this.isReplicaOperationVisibilitySatisfied(expected, observed) &&
+        expected.createdAt === observed.createdAt &&
         isDeepStrictEqual(this.buildReplicaOperationUpdateData(expected),
           this.buildReplicaOperationUpdateData(observed));
     }
 
     /** Resolve existing durable truth before a workflow prepares a new effect. */
     async observeOperationTransition(operation, step, options = {}) {
-      const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(
-        operation, {requireAbsenceConfirmation: true});
+      const observation = options.acknowledgedRemovePreimage ?
+        await readAcknowledgedRemoveObservation(this, options.acknowledgedRemovePreimage) :
+        await this.queryReplicaOperationPersistenceAuthorityObservation(
+          operation, {requireAbsenceConfirmation: true});
+      if (observation.outcome) return observation;
       const durable = observation.operation;
       if (!durable) return {...observation, ...NO_OBSERVED_OPERATION_TRANSITION};
       assertOperationUpdateRecord(durable);
@@ -185,20 +207,29 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         expectedWorkflowStep,
         terminalTransition,
       );
+      const {acknowledgedRemovePreimage} = options;
+      const removeReplyCasFields = acknowledgedRemovePreimage ?
+        buildAcknowledgedRemoveCasFields(
+          acknowledgedRemovePreimage, operation, terminalTransition) :
+        options.strandedRemovePreimage === undefined ? {} :
+          buildStrandedRemoveCasFields(options.strandedRemovePreimage, operation,
+            expectedWorkflowStep, expectedStepsHistory);
       const elapsedPreimage = options.elapsedWorkflowPreimage;
       let elapsedCasFields;
       if (terminalTransition) {
         // Recovery credit requires a proved preimage. Unavailable authority
         // cannot establish that a later matching terminal was newly applied.
-        const preimage = await this.queryAuthoritativeOperationVisibilityObservation(
-          operation.operationId, {
-            authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-            requireAbsenceConfirmation: true,
-            requireCompleteExactKey: Boolean(elapsedPreimage),
-            expectedOperation: operation,
-            timeoutBudget: options.timeoutBudget,
-          });
+        const preimage = acknowledgedRemovePreimage ?
+          await readAcknowledgedRemoveObservation(this, acknowledgedRemovePreimage) :
+          await this.queryAuthoritativeOperationVisibilityObservation(
+            operation.operationId, {
+              authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+              leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+              requireAbsenceConfirmation: true,
+              requireCompleteExactKey: Boolean(elapsedPreimage),
+              expectedOperation: operation,
+              timeoutBudget: options.timeoutBudget,
+            });
         if (preimage.deferredOutcome) {
           const error = new Error(preimage.deferredOutcome.reasonCode);
           error.code = preimage.deferredOutcome.reasonCode;
@@ -207,6 +238,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           error.retryAfterMs = preimage.deferredOutcome.retryAfterMs;
           throw error;
         }
+        if (preimage.outcome) return preimage.outcome;
         const terminalPreimage = preimage.operation;
         if (terminalPreimage) {
           assertOperationUpdateRecord(terminalPreimage);
@@ -266,6 +298,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
                 options.requireCreateAdmissionAbsent === true,
               requireExactCreateTarget: options.requireExactCreateTarget === true,
               expectedStepsHistory,
+              removeReplyCasFields,
               elapsedWorkflowPreimage: elapsedCasFields,
             },
           ),
@@ -293,12 +326,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             terminalTransition,
             options.requireCreateAdmissionAbsent === true,
             expectedStepsHistory,
-          ),
-          params: this.buildReplicaOperationUpdateParams(
-            operation,
-            expectedWorkflowStep,
-            expectedStepsHistory,
-          ),
+          ) + Object.keys(removeReplyCasFields).map((field) => ` AND ${field} IS ?`).join(''),
+          params: [...this.buildReplicaOperationUpdateParams(operation, expectedWorkflowStep,
+            expectedStepsHistory), ...Object.values(removeReplyCasFields)],
         },
       );
       if (result.admissionRefused === true) {
@@ -324,13 +354,17 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         });
       }
       const changeCount = this.extractMutationChangeCount(result);
-      if (changeCount === null) return this.resolveUncountedOperationUpdate(operation);
+      if (changeCount === null) {
+        return this.resolveUncountedOperationUpdate(operation, acknowledgedRemovePreimage);
+      }
       if (changeCount <= 0) {
         if (expectedWorkflowStep || terminalTransition) {
           return this.resolveZeroChangeOperationUpdate(
             operation,
             expectedWorkflowStep,
-            {terminalTransition, requireExactCreateTarget: options.requireExactCreateTarget,
+            {terminalTransition, acknowledgedRemovePreimage,
+              expectedStepsHistory: options.expectedStepsHistory,
+              requireExactCreateTarget: options.requireExactCreateTarget,
               elapsedWorkflowPreimage: options.elapsedWorkflowPreimage},
           );
         }
@@ -343,9 +377,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       return this.confirmPersistedOperationUpdate(operation, options);
     }
 
-    async resolveUncountedOperationUpdate(operation) {
+    async resolveUncountedOperationUpdate(operation, acknowledgedRemovePreimage) {
       const observation = await this.observeOperationTransition(operation, operation.workflowStep,
-        {exactRequest: true});
+        {exactRequest: true, acknowledgedRemovePreimage});
       // An absent count proves no new write. A separate authority observation
       // may prove replay or another winner; uncertainty retains the obligation.
       return observation.outcome || buildOperationUpdateOutcome({persisted: false,
@@ -395,6 +429,10 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         }
         assertOperationUpdateRecord(observed);
         assertOperationUpdateSubject(operation, observed);
+        if ((options.expectedStepsHistory || options.acknowledgedRemovePreimage) &&
+            observed.createdAt !== operation.createdAt) {
+          throw invalidOperationPersistenceOutcome(UPDATE_NOT_CONFIRMED);
+        }
         const exact = this.isReplicaOperationUpdateSatisfied(operation, observed);
         if (!exact && observed.completedAt === null) {
           throw invalidOperationPersistenceOutcome(UPDATE_NOT_CONFIRMED);
@@ -521,7 +559,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       options = {},
     ) {
       const terminalTransition = options.terminalTransition === true;
-      const authoritativeOperation =
+      const authoritativeOperation = options.acknowledgedRemovePreimage ?
+        (await readCurrentRemoveSubject(this, options.acknowledgedRemovePreimage)).operation :
         await this.queryReplicaOperationPersistenceAuthorityOperation(operation);
       const visibilitySatisfied = this.isReplicaOperationUpdateSatisfied(
         operation,
@@ -576,7 +615,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
         if (
-          options.elapsedWorkflowPreimage || options.requireExactCreateTarget === true ||
+          options.elapsedWorkflowPreimage || options.acknowledgedRemovePreimage ||
+          options.expectedStepsHistory !== undefined ||
+          options.requireExactCreateTarget === true ||
           operationCarriesReplicaCreateAdmission(operation) ||
           operationCarriesMessageGroupMembership(operation)
         ) {

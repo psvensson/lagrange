@@ -106,7 +106,8 @@ class OperationWorkflowTransitionOrchestration
         // caller's preflight. Reconsult SQL only on this rejected transition;
         // ordinary writes retain their existing expected-step/terminal CAS.
         const replay = await this.resolveOperationTransitionBeforeWrite(operation, step,
-          {requestedOperation: options.requestedOperation, exactRequest: true});
+          {requestedOperation: options.requestedOperation, exactRequest: true,
+            acknowledgedRemovePreimage: options.acknowledgedRemovePreimage});
         if (replay) return replay;
         throw error;
       }
@@ -151,7 +152,7 @@ class OperationWorkflowTransitionOrchestration
     if (!observation.outcome) return null;
     // Reconstruct the disposable mirror only after repository proof. This
     // restores its actual history without manufacturing a transition entry.
-    this.ensureOperationWorkflow(operation);
+    if (observation.operation) this.ensureOperationWorkflow(operation);
     return buildOperationTransitionOutcome(observation.outcome);
   }
 

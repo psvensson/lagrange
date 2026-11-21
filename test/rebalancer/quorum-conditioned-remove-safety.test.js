@@ -1,3 +1,4 @@
+import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 /**
  * RebalanceCoordinator critical REMOVE safety checks.
  */
@@ -562,12 +563,15 @@ test('RebalanceCoordinator - allows REMOVE when projected quorum remains safe', 
 
   coordinator.initialize();
   try {
-    const operation = await coordinator.createOperation({
+    const move = {
       type: OperationType.REMOVE,
       partitionId: 'nodes-p1',
       nodeId: 'node-a',
       replicaId: 'nodes-p1-r1',
-    });
+    };
+    t.equal(await coordinator.getMoveSafetyError({...move, entityType: 'partition',
+      entityId: move.partitionId}), null, 'prospective safety admits the unsaved safe REMOVE');
+    const operation = await coordinator.createOperation(move);
 
     const result = await coordinator.executeOperation(operation);
 
@@ -649,9 +653,8 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
         replicaId: 'nodes-p1-r1',
       });
 
-      operation.replicaId = 'nodes-p1-r4';
-      operation.workflowStep = 'ACTIVE';
-      operation.status = 'active';
+      await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+        'nodes-p1-r4');
 
       const result = await coordinator.executeOperation(operation);
 
@@ -892,9 +895,8 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
         replicaId: `${PARTITION_ID}-r1`,
       });
 
-      operation.replicaId = `${PARTITION_ID}-r4`;
-      operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-      operation.status = 'active';
+      await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+        `${PARTITION_ID}-r4`);
 
       const blockedEvaluation =
         await coordinator.workflowOwner.evaluateRemoveSafety(operation);
@@ -1082,9 +1084,8 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
         replicaId: SOURCE_REPLICA_ID,
       });
 
-      operation.replicaId = TARGET_REPLICA_ID;
-      operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-      operation.status = 'active';
+      await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+        TARGET_REPLICA_ID);
 
       const result = await coordinator.executeOperation(operation);
 

@@ -19,6 +19,7 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-wo
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {MoveType} from '../../src/rebalancer/unified-rebalancer.js';
+import {commitRemoveSafetyStep} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
 import {registerReplaceReplicaWorkflowCreateSatisfactionTests} from './replace-replica-workflow-create-satisfaction-test-cases.js';
 import {registerReplaceReplicaWorkflowSourceRemovalRetryTests} from './replace-replica-workflow-source-removal-retry-test-cases.js';
@@ -333,8 +334,8 @@ test('REPLACE replica workflow', async (t) => {
           'REPLACE operation should transition into CREATING after create dispatch',
         );
 
-        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-        operation.status = ReplicaStatus.ACTIVE;
+        await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+          replacementReplicaId);
 
         await coordinator.executeOperation(operation);
 

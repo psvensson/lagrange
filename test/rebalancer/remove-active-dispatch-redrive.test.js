@@ -3,6 +3,7 @@ import {buildOperationUpdateOutcome} from
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {UNIFIED_SERVICE_TYPE} from '../../src/constants/unified-service-lifecycle.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED as SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {
@@ -100,6 +101,8 @@ const STABLE_SERVICE_ROWS = [
 
 function createRemoveCoordinator({
   operationRow,
+  otherOperationRows = [],
+  beforeRemoveReply,
   serviceRows = [buildActiveServiceRow(), ...STABLE_SERVICE_ROWS],
   removeResponseStatus = ReplicaOperationResponseStatus.INITIATED,
 }) {
@@ -122,11 +125,15 @@ function createRemoveCoordinator({
     cacheData: {
       nodes: nodeIds.map((nodeId) => ({node_id: nodeId, status: 'active'})),
       services: serviceRows,
-      replicaOperations: [operationRow],
+      replicaOperations: [operationRow, ...otherOperationRows],
     },
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
+        if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+          const answer = await beforeRemoveReply?.(payload);
+          if (answer !== undefined) return answer;
+        }
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: payload.type === ReplicaOperationMessageType.REMOVE_REPLICA ?
             removeResponseStatus :
@@ -353,3 +360,303 @@ test('stranded REMOVE correction preserves a competing durable terminal failure'
     await coordinator.shutdown();
   }
 });
+
+
+for (const [label, step, status, reason] of [
+  ['a valid competitor', WORKFLOW_STEP.PENDING, ReplicaStatus.PENDING,
+    /concurrent partition operation competing-remove/u],
+  ['a malformed different row', WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE,
+    /invalid operation type or step/u],
+]) {
+  test(`stranded REMOVE still defers behind ${label}`, async (t) => {
+    const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+    const other = buildOperationRow({operationId: 'competing-remove',
+      replicaId: `${PARTITION_ID}-r2`, workflowStep: step, status});
+    const {coordinator, deliveries} = createRemoveCoordinator({
+      operationRow, otherOperationRows: [other],
+    });
+    try {
+      const operation = coordinator.repository.rowToOperation(operationRow);
+      const result = await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+      t.match(result.error, reason);
+      await coordinator.reconcileOrphanedOperations();
+      t.same(removeDeliveries(deliveries), [], 'no source effect bypasses the competitor');
+      const durable = await coordinator.repository
+        .queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+      t.equal(durable.workflowStep, WORKFLOW_STEP.ACTIVE);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+}
+
+for (const mode of ['missing', 'mismatched generation', 'duplicate', 'unavailable']) {
+  test(`remove arbitration defers when its exact committed subject is ${mode}`, async (t) => {
+    const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+    const {coordinator, deliveries} = createRemoveCoordinator({operationRow});
+    const {repository, controlPlaneSystemTableGateway: gateway} = coordinator;
+    try {
+      const operation = repository.rowToOperation(operationRow);
+      const read = gateway.readAuthoritativeRows.bind(gateway);
+      gateway.readAuthoritativeRows = async (table, sql, params, options) => {
+        const result = await read(table, sql, params, options);
+        if (table !== 'replica_operations' || !sql.includes('entity_type = ? AND entity_id = ?')) {
+          return result;
+        }
+        if (mode === 'unavailable') return {success: false, error: 'leader read withheld'};
+        if (mode === 'duplicate') return {...result, rows: [...result.rows, ...result.rows]};
+        return result;
+      };
+      if (mode === 'missing' || mode === 'mismatched generation') {
+        const mutation = mode === 'missing' ? {operation: 'delete'} :
+          {operation: 'update', data: {created_at: operationRow.created_at + 1}};
+        const written = await gateway.submitMutation({...mutation, tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID}});
+        t.match(written, {success: true, partitionResult: {affectedRows: 1}});
+      }
+      const result = await coordinator.workflowOwner.evaluateRemoveSafety(operation);
+      t.match(result.error, /operation ledger is unavailable for removal arbitration/u);
+      t.same(removeDeliveries(deliveries), []);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+}
+
+for (const entityType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP,
+  UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]) {
+  test(`complete removal arbitration binds an ordinary ${entityType} row and only its peers`,
+    async (t) => {
+      const operationRow = {...buildOperationRow({operationId: PENDING_OPERATION_ID}),
+        entity_type: entityType};
+      const contender = {...operationRow, operation_id: 'typed-contender',
+        replica_id: `${PARTITION_ID}-r2`};
+      const foreign = {...operationRow, operation_id: 'other-entity-type',
+        entity_type: entityType === SERVICE_TYPE.PARTITION ?
+          SERVICE_TYPE.MESSAGE_GROUP : SERVICE_TYPE.PARTITION,
+        workflow_step: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE};
+      const {coordinator} = createRemoveCoordinator({
+        operationRow, otherOperationRows: [foreign, contender],
+      });
+      try {
+        const {repository} = coordinator;
+        const operation = repository.rowToOperation(operationRow);
+        const competitors = await repository.getRequiredRemoveArbitrationCompetitors(operation);
+        t.same(competitors.map(({operationId}) => operationId), [contender.operation_id],
+          'same text entity ID in another type could not contribute a malformed row');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+}
+
+
+for (const boundary of ['before response', 'before SQLite CAS']) {
+  const fields = boundary === 'before response' ? ['created_at', 'steps_history'] :
+    ['created_at', 'steps_history', 'updated_at', 'target_node_id', 'status', 'delete'];
+  for (const field of fields) {
+    test(`the stranded REMOVE reply cannot replace moved ${field} ${boundary}`, async (t) => {
+      const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+        workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+      const changed = {
+        created_at: operationRow.created_at + 1,
+        updated_at: operationRow.updated_at + 1,
+        target_node_id: 'new-target-same-key',
+        status: ReplicaStatus.REMOVING,
+        steps_history: JSON.stringify([...JSON.parse(operationRow.steps_history),
+          {step: WORKFLOW_STEP.ACTIVE, timestamp: operationRow.updated_at, reason: 'new owner turn'}]),
+      };
+      const {coordinator, deliveries} = createRemoveCoordinator({
+        operationRow, removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND,
+        ...(boundary === 'before response' ? {beforeRemoveReply: movePreimage} : {}),
+      });
+      const {repository, controlPlaneSystemTableGateway: gateway} = coordinator;
+      let moved;
+      let mutationRan = false;
+      let releases = 0;
+      const owner = coordinator.workflowOwner;
+      const release = owner.releaseDurableTerminalOperation.bind(owner);
+      owner.releaseDurableTerminalOperation = (...args) => {
+        releases += 1;
+        return release(...args);
+      };
+      async function movePreimage() {
+        mutationRan = true;
+        const mutation = field === 'delete' ? {operation: 'delete'} :
+          {operation: 'update', data: {[field]: changed[field]}};
+        const result = await gateway.submitMutation({...mutation, tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID}});
+        t.match(result, {success: true, partitionResult: {affectedRows: 1}},
+          'the independent writer moves the exact live preimage');
+        moved = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+      }
+      if (boundary === 'before SQLite CAS') {
+        const execute = gateway.executeQuery.bind(gateway);
+        gateway.executeQuery = async (sql, params, options) => {
+          if (!mutationRan && sql.includes('UPDATE replica_operations') &&
+              sql.includes('AND steps_history = ?') && params[1] === WORKFLOW_STEP.STOPPING) {
+            await movePreimage();
+          }
+          return execute(sql, params, options);
+        };
+      }
+      try {
+        await coordinator.reconcileOrphanedOperations();
+        t.equal(removeDeliveries(deliveries).length, 1, 'the old preimage admitted one send');
+        t.equal(mutationRan, true, 'the prior row moved after the original send');
+        t.same(await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID), moved,
+          'the late response cannot write over the moved row or reinsert an absent row');
+        t.equal(releases, 0, 'no changed or absent row grants terminal release');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+  }
+}
+
+
+for (const [answer, generation] of [
+  ['rejected', 'replaced'], ['undelivered', 'replaced'], ['thrown', 'replaced'],
+  ['rejected', 'same'], ['undelivered', 'same'], ['thrown', 'same'],
+]) {
+  test(`a ${answer} stranded REMOVE can adopt only a ${generation} terminal subject`, async (t) => {
+    const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+      workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+    let terminal;
+    const {coordinator, deliveries} = createRemoveCoordinator({
+      operationRow,
+      beforeRemoveReply: async () => {
+        const time = Date.now();
+        const mutation = await coordinator.controlPlaneSystemTableGateway.submitMutation({
+          operation: 'update', tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID, completed_at: null},
+          data: {created_at: operationRow.created_at + Number(generation === 'replaced'),
+            status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
+            updated_at: time, completed_at: time, error_message: 'independent terminal writer',
+            steps_history: JSON.stringify([...JSON.parse(operationRow.steps_history),
+              {step: WORKFLOW_STEP.FAILED, timestamp: time}])},
+        });
+        t.match(mutation, {success: true, partitionResult: {affectedRows: 1}});
+        terminal = await coordinator.repository
+          .queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+        if (answer === 'thrown') throw new Error('transport did not return a reply');
+        return answer === 'rejected' ? buildDeliveryEnvelope({acknowledged: true}, {
+          status: ReplicaOperationResponseStatus.ERROR, error: 'source rejected removal',
+        }) : buildDeliveryEnvelope({acknowledged: false}, null);
+      },
+    });
+    const released = [];
+    const owner = coordinator.workflowOwner;
+    const release = owner.releaseDurableTerminalOperation.bind(owner);
+    owner.releaseDurableTerminalOperation = (operation, outcome) => {
+      released.push(outcome.operation);
+      return release(operation, outcome);
+    };
+    try {
+      await coordinator.reconcileOrphanedOperations();
+      t.equal(removeDeliveries(deliveries).length, 1, 'the prior committed row permits one send');
+      t.same(await coordinator.repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID),
+        terminal, 'the independent terminal result remains exactly as committed');
+      t.same(released, generation === 'same' ? [terminal] : [],
+        'release authority requires the actual bound generation');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+}
+
+for (const [boundary, change] of [
+  ['completion entry', 'replacement terminal'],
+  ['completion entry', 'same-generation terminal'],
+  ['mirror refusal', 'replacement terminal'],
+  ['mirror refusal', 'same-generation terminal'],
+  ['terminal CAS', 'generation'],
+  ['terminal CAS', 'history'],
+  ['terminal CAS', 'absence'],
+]) {
+  test(`an acknowledged stranded REMOVE keeps its STOPPING subject at ${boundary}: ${change}`,
+    async (t) => {
+      const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+        workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+      const {coordinator, deliveries} = createRemoveCoordinator({
+        operationRow, removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND,
+      });
+      const {repository, controlPlaneSystemTableGateway: gateway,
+        workflowOwner: owner} = coordinator;
+      const released = [];
+      const release = owner.releaseDurableTerminalOperation.bind(owner);
+      owner.releaseDurableTerminalOperation = (operation, outcome) => {
+        released.push(outcome.operation);
+        return release(operation, outcome);
+      };
+      let changed;
+      let mutationRan = false;
+      async function changeStoppingSubject() {
+        mutationRan = true;
+        const before = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+        t.equal(before.workflowStep, WORKFLOW_STEP.STOPPING,
+          'the acknowledged reply committed real STOPPING before the change');
+        const time = Date.now();
+        const data = {
+          generation: {created_at: before.createdAt + 1},
+          history: {steps_history: JSON.stringify([...before.stepsHistory,
+            {step: WORKFLOW_STEP.STOPPING, timestamp: time, reason: 'next STOPPING owner'}])},
+        };
+        const after = data[change] || {
+          created_at: before.createdAt + Number(change === 'replacement terminal'),
+          status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
+          updated_at: time, completed_at: time, error_message: 'independent terminal writer',
+          steps_history: JSON.stringify([...before.stepsHistory,
+            {step: WORKFLOW_STEP.FAILED, timestamp: time}]),
+        };
+        const mutation = change === 'absence' ? {operation: 'delete'} :
+          {operation: 'update', data: after};
+        const result = await gateway.submitMutation({...mutation, tableName: 'replica_operations',
+          whereClause: {operation_id: ACTIVE_OPERATION_ID, workflow_step: WORKFLOW_STEP.STOPPING,
+            completed_at: null}});
+        t.match(result, {success: true, partitionResult: {affectedRows: 1}});
+        changed = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+      }
+
+      if (boundary === 'completion entry') {
+        const complete = owner.completeOperation.bind(owner);
+        owner.completeOperation = async (...args) => {
+          if (!mutationRan) await changeStoppingSubject();
+          return complete(...args);
+        };
+      } else if (boundary === 'mirror refusal') {
+        const workflow = owner.operationWorkflowCoordinator;
+        const transition = workflow.transitionStep.bind(workflow);
+        workflow.transitionStep = async (operationId, request, ...args) => {
+          if (!mutationRan && operationId === ACTIVE_OPERATION_ID &&
+              request.nextStep === WORKFLOW_STEP.REMOVED) {
+            await changeStoppingSubject();
+            workflow.removeWorkflow(operationId);
+          }
+          return transition(operationId, request, ...args);
+        };
+      } else {
+        const execute = gateway.executeQuery.bind(gateway);
+        gateway.executeQuery = async (sql, params, options) => {
+          if (!mutationRan && sql.includes('UPDATE replica_operations') &&
+              sql.includes('completed_at IS NULL') && params[1] === WORKFLOW_STEP.REMOVED) {
+            await changeStoppingSubject();
+          }
+          return execute(sql, params, options);
+        };
+      }
+      try {
+        await coordinator.reconcileOrphanedOperations();
+        t.equal(removeDeliveries(deliveries).length, 1, 'one actual REMOVE was sent');
+        t.equal(mutationRan, true, 'the forced change reached the intended terminal boundary');
+        t.same(await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID), changed,
+          'the completion reply leaves the changed STOPPING subject or exact terminal intact');
+        t.same(released, change === 'same-generation terminal' ? [changed] : [],
+          'only the correct durable terminal subject can release');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+}

@@ -28,7 +28,7 @@
   "censusSize": 2715,
   "digest": "fnv1a32-5299f43b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8a13a602",
+  "observationDigest": "fnv1a32-28b21870",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19012,7 +19012,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
-        "src/rebalancer/operation-workflow-reconcile-outcome.js"
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
     "test/rebalancer/readiness-fixture-custody.test.js": {
@@ -19286,7 +19287,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
     "test/rebalancer/replace-owner-lease-causal.test.js": {
@@ -19314,7 +19316,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
     "test/rebalancer/replace-owner-wake.test.js": {
@@ -19341,12 +19344,16 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ],
       "directories": [
-        "src/rebalancer"
+        "scripts",
+        "src",
+        "src/rebalancer",
+        "test"
       ]
     },
     "test/rebalancer/replace-real-group-d2.test.js": {
@@ -19365,6 +19372,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -19386,6 +19394,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -19409,6 +19418,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -19431,6 +19441,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -19455,6 +19466,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -19499,6 +19511,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -19515,7 +19528,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js"
       ]
     },
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": {

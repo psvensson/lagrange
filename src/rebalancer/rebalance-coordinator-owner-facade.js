@@ -291,11 +291,12 @@ class RebalanceCoordinatorOwnerFacade {
    * Complete an operation successfully.
    * Delegates to workflow owner (D7.1).
    * @param {Object} operation
+   * @param {Object} [completionOptions] - Bound completion authority.
    * @return {Promise<Object>} Typed transition outcome
    *   ({committed, disposition}).
    */
-  async completeOperation(operation) {
-    return this.workflowOwner.completeOperation(operation);
+  async completeOperation(operation, completionOptions) {
+    return this.workflowOwner.completeOperation(operation, completionOptions);
   }
 
   /**

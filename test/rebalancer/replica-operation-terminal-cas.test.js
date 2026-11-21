@@ -270,6 +270,8 @@ test(
     t.equal(mutations[0].whereClause.steps_history, observedHistory,
       'a same-step change of the history (a released hold, an appended ' +
         'claim) fails the whereClause');
+    t.equal(mutations[0].whereClause.created_at, held.createdAt);
+    t.equal(mutations[0].whereClause.completed_at, null);
     t.equal(
       repository.resolveOperationUpdateSql(
         WORKFLOW_STEP.PENDING, false, false, observedHistory),
@@ -280,10 +282,13 @@ test(
         'WHERE operation_id = ? AND workflow_step = ? AND steps_history = ?'),
       'the raw-SQL fallback carries the same predicate',
     );
+    t.match(REPOSITORY_SQL.UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY,
+      /AND created_at = \? AND completed_at IS NULL/u,
+      'the raw-SQL fallback also pins the observed incomplete generation');
     t.same(
       repository.buildReplicaOperationUpdateParams(
-        released, WORKFLOW_STEP.PENDING, observedHistory).slice(-3),
-      [TEST_OPERATION_ID, WORKFLOW_STEP.PENDING, observedHistory],
+        released, WORKFLOW_STEP.PENDING, observedHistory).slice(-4),
+      [TEST_OPERATION_ID, WORKFLOW_STEP.PENDING, observedHistory, held.createdAt],
     );
     await t.rejects(
       repository.persistOperationUpdate(released, {

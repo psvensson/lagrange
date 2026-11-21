@@ -197,7 +197,8 @@ const SQL = Object.freeze({
   UPDATE_OPERATION_EXPECTING_STEP_AND_HISTORY: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
-    WHERE operation_id = ? AND workflow_step = ? AND steps_history = ?`,
+    WHERE operation_id = ? AND workflow_step = ? AND steps_history = ?
+      AND created_at = ? AND completed_at IS NULL`,
   // Terminal-transition writes deliberately carry NO expected-step CAS (a
   // lagging non-terminal durable step must still be overwritten) but guard on
   // completed_at IS NULL so a DIFFERENT durable terminal that already won is

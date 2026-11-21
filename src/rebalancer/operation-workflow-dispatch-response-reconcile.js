@@ -23,11 +23,12 @@ import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
 } from './operation-workflow-ambiguous-create-delivery.js';
-import {didOperationReconcileAdvanceOrComplete, OPERATION_RECONCILE_OUTCOME} from
+import {didOperationReconcileAdvanceOrComplete} from
   './operation-workflow-reconcile-outcome.js';
 import {reconcileSatisfiedCreateResponse} from
   './operation-workflow-create-satisfied-response.js';
-import {repairStrandedRemoveAfterResponse} from './operation-workflow-stranded-remove-repair.js';
+import {captureStrandedRemovePreimage, resolveStrandedRemoveReply} from
+  './operation-workflow-stranded-remove-repair.js';
 import {
   applyGrowthPromoteRequestFields,
   isHeldGrowthPromoteOperation,
@@ -678,8 +679,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ] =
         attemptSeq;
     }
-    // Carry the planning epoch into the executor request (audit finding 7)
-    // so ADD/REPLACE execution can reject staleness against it.
+    // ADD/REPLACE execution rejects a stale planning epoch (audit finding 7).
     if (
       isBoundMembershipPublicationEpoch(
         operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
@@ -726,7 +726,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
     }
-    // The committed-membership stamp crosses unchanged (owner decision O1).
     if (operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]) {
       request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
@@ -745,10 +744,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       entityId,
       replaceRemovePhase: replaceRemoveDispatchPhase,
     });
-    // Delivery owns transport status; the target separately supplies its answer.
     let response;
     let transport = null;
     let retainedCreateDeliveryResolution = null;
+    const strandedRemovePreimage = captureStrandedRemovePreimage(operation);
     try {
       const delivery = await this.deliverReplicaOperationRequest(
         operation,
@@ -759,6 +758,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       transport = deliveryTransportOf(delivery);
       response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
+      if (strandedRemovePreimage) {
+        return resolveStrandedRemoveReply(this, operation, null, strandedRemovePreimage);
+      }
       const errorMsg = this.normalizeErrorMessage(
         error,
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
@@ -801,6 +803,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (!retainedCreateDeliveryResolution &&
         !isDeliveredTransportDeliveryOutcome(transport)) {
+      if (strandedRemovePreimage) {
+        return resolveStrandedRemoveReply(this, operation, null, strandedRemovePreimage);
+      }
       const errorLike = transport;
       const errorMsg = this.normalizeErrorMessage(
         errorLike,
@@ -849,14 +854,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         }
         return retainedCreateDeliveryResolution.result;
       }
-      const corrected = await repairStrandedRemoveAfterResponse(this, operation, response);
-      if (corrected === OPERATION_RECONCILE_OUTCOME.FAILED) {
-        return this.buildFailedOperationResult(operation.operationId, operation.errorMessage);
-      }
-      if (corrected === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
-        return this.buildSuccessfulOperationResult(operation.operationId, {status: corrected});
-      }
-      if (corrected) return this.buildSkippedOperationResult(corrected, operation.operationId);
+      const stranded = await resolveStrandedRemoveReply(
+        this, operation, response, strandedRemovePreimage);
+      if (stranded) return stranded;
       const reconciled = await this._handleDispatchResponse(
         operation,
         response,

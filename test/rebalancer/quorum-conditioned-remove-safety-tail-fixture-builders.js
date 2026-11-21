@@ -1,3 +1,7 @@
+import assert from 'node:assert/strict';
+import {WORKFLOW_STEP_TO_STATUS} from '../../src/rebalancer/replica-status.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {createMockPolicyService} from './test-helpers.js';
 /**
  * Shared fixture builders for the quorum-conditioned remove-safety tail
@@ -182,9 +186,8 @@ export async function runReplacementElectionNudgeScenario(context, t, {
       replicaId: testSourceReplicaId,
     });
 
-    operation.replicaId = testReplacementReplicaId;
-    operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-    operation.status = 'active';
+    await commitRemoveSafetyStep(coordinator, operation, WORKFLOW_STEP.ACTIVE,
+      testReplacementReplicaId);
 
     const blockedResult = await coordinator.executeOperation(operation);
 
@@ -220,4 +223,19 @@ export async function runReplacementElectionNudgeScenario(context, t, {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   }
+}
+
+export async function commitRemoveSafetyStep(coordinator, operation, step, replicaId) {
+  const timestamp = Date.now();
+  const requested = {...operation, replicaId, workflowStep: step,
+    status: WORKFLOW_STEP_TO_STATUS[step], updatedAt: timestamp,
+    stepsHistory: [...operation.stepsHistory, {step, timestamp}]};
+  const outcome = await coordinator.repository.persistOperationUpdate(requested,
+    {expectedWorkflowStep: operation.workflowStep});
+  assert.equal(outcome.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED);
+  const durable = await coordinator.repository.queryReplicaOperationPersistenceAuthorityOperation(
+    requested);
+  assert.equal(durable.workflowStep, step);
+  assert.equal(durable.replicaId, replicaId);
+  Object.assign(operation, durable);
 }
