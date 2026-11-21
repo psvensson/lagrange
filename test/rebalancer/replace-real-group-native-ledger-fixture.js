@@ -32,9 +32,10 @@ function routeLedgerMessages(world, ledger, observation) {
     }
     if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA &&
         payload.operationId === world.operation.operationId) {
-      const holder = observation.readCommitted(HISTORICAL_ID);
-      observation.effects.push({operationId: payload.operationId, replicaId: payload.replicaId,
-        liveCompetitor: holder?.completed_at === null ? holder.operation_id : null});
+      observation.effects.push({
+        operationId: payload.operationId, replicaId: payload.replicaId,
+        liveCompetitors: observation.readLiveCompetitors(world.partitionId, payload.operationId),
+      });
     }
     return original.deliver(address, payload, options);
   };
@@ -107,8 +108,9 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
 }
 
 function effectViolations(observation) {
-  return observation.effects.filter((effect) => effect.liveCompetitor !== null)
-    .map((effect) => ({kind: EFFECT_WHILE_LIVE, ...effect}));
+  return observation.effects.flatMap(({operationId, replicaId, liveCompetitors}) =>
+    liveCompetitors.map(({operation_id: liveCompetitor}) =>
+      ({kind: EFFECT_WHILE_LIVE, operationId, replicaId, liveCompetitor})));
 }
 
 async function withNativeLedgerReplace(measure, {
@@ -118,8 +120,12 @@ async function withNativeLedgerReplace(measure, {
     const historical = await seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs);
     const reader = new Database(ledger.leader.db.name, {readonly: true});
     const statement = reader.prepare('SELECT * FROM replica_operations WHERE operation_id = ?');
+    const live = reader.prepare(`SELECT operation_id FROM replica_operations
+      WHERE entity_type = 'partition' AND entity_id = ? AND operation_id <> ?
+        AND completed_at IS NULL ORDER BY operation_id`);
     const observation = {effects: [], unavailable: false, refusedReads: 0,
-      readCommitted: (id) => statement.get(id)};
+      readCommitted: (id) => statement.get(id),
+      readLiveCompetitors: (entityId, incumbentId) => live.all(entityId, incumbentId)};
     let world;
     try {
       const answer = await requestPlacementAdmission(ledger.leader, {

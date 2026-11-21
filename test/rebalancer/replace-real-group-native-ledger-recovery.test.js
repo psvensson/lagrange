@@ -89,6 +89,42 @@ async function trySupportedProducer(kind, {world, ledger, holder, retained}) {
   }
 }
 
+function committedRepairCount(ledger) {
+  return ledger.commands.filter(({type}) => type === 'PLACEMENT_REPAIR').length;
+}
+
+async function settleRetainedOwner(ledger, holder) {
+  await settleTurns();
+  await holder.repository.retainedPlacementRepairDrain;
+  await ledger.coordinator.repository.retainedPlacementRepairDrain;
+  await settleTurns();
+}
+
+async function confirmRetainedRecovery({world, ledger, observation, holder, retained}) {
+  const incumbent = observation.readCommitted(world.operation.operationId);
+  assert.equal(incumbent.completed_at, null, 'the incumbent still owns its committed lane');
+  const before = committedRepairCount(ledger);
+  assert.ok(before > 0, 'the actual refusal went through the committed repair boundary');
+  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
+  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', incumbent);
+  await settleRetainedOwner(ledger, holder);
+  assert.equal(committedRepairCount(ledger), before, 'unchanged BUSY does not propose again');
+  assert.equal(observation.readCommitted(retained.operationId), undefined);
+  const released = await stepRetainedLedgerRow(
+    ledger, incumbent.operation_id, WORKFLOW_STEP.FAILED);
+  assert.equal(observation.readCommitted(incumbent.operation_id)?.completed_at,
+    released.completed_at);
+  // Deliver the exact committed event to the remote owner; local observers
+  // also receive it from native apply. No caller invokes the repair again.
+  holder.repository.observeRetainedPlacementRepairCommit('replica_operations', released);
+  await settleRetainedOwner(ledger, holder);
+  assert.equal(committedRepairCount(ledger), before + 1, 'release owns one new native repair');
+  const restored = observation.readCommitted(retained.operationId);
+  assert.equal(restored?.operation_id, retained.operationId);
+  assert.equal(restored?.replica_id, retained.replicaId);
+  assert.equal(restored?.created_at, retained.createdAt);
+}
+
 for (const producer of ['no contender', 'ordinary birth', 'zero-update repair',
   'ACTIVE-reservation repair', 'private raw bypass']) {
   test(`S11 real ledger after SAFE: ${producer}`, () => withNativeLedgerReplace(
@@ -131,6 +167,8 @@ for (const producer of ['no contender', 'ordinary birth', 'zero-update repair',
       if (producer.endsWith('repair')) {
         assert.equal(ledger.coordinator.repository.retainedPlacementRepairs.size, 1,
           'the actual ledger owner retains the original contender identity');
+        await confirmRetainedRecovery(context);
+        assert.deepEqual(effectViolations(observation), []);
       }
       assert.equal(observation.effects.length, world.removeEffects.length);
     }, {historicalType: producer === 'ACTIVE-reservation repair' ?
