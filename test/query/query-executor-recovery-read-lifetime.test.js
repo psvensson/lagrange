@@ -225,6 +225,10 @@ async function openFixture(t, {holdAck = true, withAlternate = false} = {}) {
   return {
     clock, group, probeMs, read, executor, handoff, source: sender.router,
     alternateSends: () => [...resources.alternateWire.deliveries.values()],
+    withdrawPrimary: () => {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE,
+        cache.get(TABLES.SERVICES, REPLICA));
+    },
     held: () => [...wire.deliveries.values()].filter((delivery) => delivery.key === HELD_KEY),
     sent: () => [...wire.deliveries.values()],
   };
@@ -402,5 +406,28 @@ test('a required-leader read drops the old answer after the owner publishes a ne
       'the former leader cannot settle the required-leader read');
     t.equal(answer.readAuthorityWitness?.role, RAFT_ROLE.LEADER);
     t.equal(f.held().length, 1);
+    assertRetired(f, t);
+  });
+
+test('withdrawing the only eligible service retires the held answer before the deadline',
+  async (t) => {
+    const f = await openFixture(t);
+    const deadline = f.clock.now() + GRANT_PROBES * f.probeMs;
+    const pending = f.read(HELD_KEY, deadline, {readAuthority: LEADER_READ});
+    await settleUntil(t, () => f.held()[0]?.answer?.success === true,
+      'the selected partition produced an answer before withdrawal');
+    const withdrawn = f.held()[0];
+    f.withdrawPrimary();
+    f.clock.advance(f.probeMs + LATE_MS);
+    await settleUntil(t, () => !f.source.pendingResponses.has(withdrawn.id),
+      'the routing probe retires the now-ineligible response');
+    t.ok(f.clock.now() < deadline, 'ineligibility retires the waiter inside the original grant');
+    assertRetired(f, t);
+    releaseFrames(withdrawn);
+    await settleUntil(t, () => withdrawn.receivedAt !== undefined, 'withdrawn native reply arrives');
+    f.clock.advance(deadline - f.clock.now());
+    const answer = await pending;
+    t.equal(answer.success, false, 'a withdrawn service cannot settle the live read');
+    t.equal(f.held().length, 1, 'the withdrawn route is not resubmitted');
     assertRetired(f, t);
   });

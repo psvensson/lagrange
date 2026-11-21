@@ -228,6 +228,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
         let {candidates: serviceCandidates, routingSnapshot} =
           resolveAttemptCandidates();
+        readDelivery?.reconcile(serviceCandidates);
         if (
           serviceCandidates.length === 0 &&
           (!awaitedRoutingRepair || hasPlanningRefreshPendingDenial(routingSnapshot)) &&
@@ -243,6 +244,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           this.throwIfCancelled(cancellationToken);
           ({candidates: serviceCandidates, routingSnapshot} =
             resolveAttemptCandidates());
+          readDelivery?.reconcile(serviceCandidates);
         }
         if (!requireCanonicalLeader) {
           serviceCandidates = this.prioritizeSessionPartitionAddress(
@@ -331,7 +333,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             participantAddress,
           });
         };
-        let routingProbeElapsed = false;
+        let shouldRecheckRoutes = false;
         for (
           let candidateIndex = 0;
           candidateIndex < candidateQueue.length ||
@@ -385,6 +387,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             );
             if (routerOptions === null) return buildDeadlineSpentFailureResult();
             let delivery;
+            let readTicket;
             if (readDelivery) {
               const anotherCandidate = candidateIndex + 1 < candidateQueue.length;
               const probeMs = anotherCandidate || attempt < currentMaxAttempts ?
@@ -394,19 +397,19 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               const completion = await readDelivery.select(ticket, routerOptions, candidateQueue,
                 probeMs);
               if (completion === ROUTING_PROBE_ELAPSED) {
-                routingProbeElapsed = true;
+                shouldRecheckRoutes = true;
                 continue;
               }
-              ({address, request, serviceInfo} = completion.ticket);
+              readTicket = completion.ticket;
+              ({address, request, serviceInfo} = readTicket);
+              // A reply remains scoped to its route and peer incarnation
+              // even if the old replica had already executed the read.
+              if (!readDelivery.currentIn(readTicket, resolveAttemptCandidates().candidates)) {
+                shouldRecheckRoutes = true;
+                continue;
+              }
               if (completion.error) throw completion.error;
               delivery = completion.delivery;
-              // An already computed reply is still scoped to its originating
-              // candidate. A newly published canonical leader supersedes it.
-              if (requireCanonicalLeader &&
-                  !resolveAttemptCandidates().candidates.some((candidate) =>
-                    candidate.address === address)) {
-                continue;
-              }
             } else {
               deliverySubmitted = true;
               unknownOutcome.recordDelivery();
@@ -459,13 +462,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 leaderAddress: response.leaderAddress, sql, params, executionOptions,
               });
               const redirectAddress = response.leaderAddress;
-              const redirectDelivery = readDelivery ?
-                await readDelivery.redirect({address: redirectAddress, request: redirectRequest,
-                  serviceInfo: {...serviceInfo, address: redirectAddress}},
-                redirectRouterDeliveryOptions) :
+              const redirectCompletion = readDelivery ? await readDelivery.redirect(
+                redirectAddress, redirectRequest, redirectRouterDeliveryOptions) : null;
+              if (redirectCompletion && !readDelivery.redirectedRouteIsCurrent(
+                readTicket, redirectCompletion.ticket, resolveAttemptCandidates().candidates)) {
+                shouldRecheckRoutes = true;
+                continue;
+              }
+              const redirectDelivery = redirectCompletion ? redirectCompletion.delivery :
                 await this.messageRouter.deliver(
                   redirectAddress, redirectRequest, redirectRouterDeliveryOptions);
-              readDelivery?.throwIfAborted();
               unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
               deliverySubmitted = false;
               const redirectResponse = deliveryReadingOf(redirectDelivery);
@@ -768,7 +774,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             throw error;
           }
         }
-        if (attempt < currentMaxAttempts && !routingProbeElapsed &&
+        if (attempt < currentMaxAttempts && !shouldRecheckRoutes &&
             !(await waitForLeaderRetryBudget())) {
           return buildDeadlineSpentFailureResult();
         }

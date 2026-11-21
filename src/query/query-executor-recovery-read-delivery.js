@@ -1,7 +1,9 @@
+import {AddressManager} from '../address/address-manager.js';
 import {RealTimeSource} from '../time/time-source.js';
 
 const ROUTING_PROBE_ELAPSED = Symbol('routing probe elapsed');
 const READ_DELIVERY_CLOSED = 'Recovery read delivery closed';
+const READ_ROUTE_SUPERSEDED = 'Recovery read route superseded';
 const EXECUTOR_SHUTDOWN = 'Query execution aborted: SQL query engine is shutting down';
 const EXECUTOR_SHUTDOWN_CODE = 'QUERY_EXECUTOR_SHUTTING_DOWN';
 
@@ -9,16 +11,36 @@ function executorShutdownError() {
   return Object.assign(new Error(EXECUTOR_SHUTDOWN), {code: EXECUTOR_SHUTDOWN_CODE});
 }
 
+function peerIdentityOf(router, nodeId) {
+  return nodeId === router.nodeId ? router.getLocalBootIncarnationIdentity?.() :
+    router.getCurrentPrimaryConnectionBootIncarnation?.(nodeId);
+}
+
+function matchesRoute(ticket, candidate) {
+  return ticket.address === candidate.address &&
+    ticket.serviceInfo.nodeId === candidate.nodeId &&
+    ticket.serviceInfo.replicaId === candidate.replicaId;
+}
+
+function isCurrentPeer(router, ticket) {
+  const prior = ticket.peer;
+  if (!prior) return true; // The bounded cold-route attempt had no primary at submission.
+  const current = peerIdentityOf(router, prior.nodeId);
+  return current?.bootIncarnation === prior.bootIncarnation &&
+    current?.connectionId === prior.connectionId;
+}
+
 /**
  * One invocation owns its submissions and their replies. A routing probe
- * only lets that invocation inspect other eligible routes; the transport
- * retains each submitted reply on its caller grant.
+ * only lets that invocation inspect other eligible routes. The transport
+ * retains each issued reply on its caller grant.
  * @param {Object} executor - Partition routing owner.
  * @param {Object} options - Original caller cancellation.
  * @return {Object} Per-invocation scope.
  */
 function createRecoveryReadDelivery(executor, options) {
-  const clock = executor.messageRouter?.timeSource || new RealTimeSource();
+  const router = executor.messageRouter;
+  const clock = router?.timeSource || new RealTimeSource();
   const close = new AbortController();
   const sources = [close.signal, executor.partitionReadShutdownController.signal];
   if (options.signal) sources.push(options.signal);
@@ -28,28 +50,47 @@ function createRecoveryReadDelivery(executor, options) {
   });
   const pending = new Map();
 
-  function start(ticket, routerOptions) {
-    const {address, request} = ticket;
-    const existing = pending.get(address);
-    if (existing) return existing;
-    ticket.submit?.();
-    const completion = executor.messageRouter.deliver(
-      address, request, {...routerOptions, signal},
-    ).then((delivery) => ({ticket, delivery}), (error) => ({ticket, error}));
-    pending.set(address, completion);
-    return completion;
+  function cancelSupersededRoute(address, record) {
+    pending.delete(address);
+    record.controller.abort(new Error(READ_ROUTE_SUPERSEDED));
   }
 
-  function eligibleCompletions(candidateQueue) {
-    return candidateQueue.flatMap(({address}) =>
-      pending.has(address) ? [pending.get(address)] : []);
+  function currentIn(ticket, candidates) {
+    return candidates.some((candidate) => matchesRoute(ticket, candidate)) &&
+      isCurrentPeer(router, ticket);
+  }
+
+  function reconcile(candidates) {
+    for (const [address, record] of pending) {
+      if (!currentIn(record.ticket, candidates)) cancelSupersededRoute(address, record);
+    }
+  }
+
+  function start(ticket, routerOptions) {
+    const {address, serviceInfo, request} = ticket;
+    const existing = pending.get(address);
+    if (existing && currentIn(existing.ticket, [serviceInfo])) return existing.completion;
+    if (existing) cancelSupersededRoute(address, existing);
+    const controller = new AbortController();
+    const boundTicket = {...ticket, peer: peerIdentityOf(router, serviceInfo.nodeId)};
+    const deliverySignal = globalThis.AbortSignal.any([signal, controller.signal]);
+    ticket.submit?.();
+    const completion = router.deliver(
+      address, request, {...routerOptions, signal: deliverySignal},
+    ).then((delivery) => ({ticket: boundTicket, delivery}),
+      (error) => ({ticket: boundTicket, error}));
+    pending.set(address, {controller, ticket: boundTicket, completion});
+    return completion;
   }
 
   async function select(ticket, routerOptions, candidateQueue, probeMs) {
     signal.throwIfAborted();
     if (ticket) start(ticket, routerOptions);
     let timer;
-    const events = eligibleCompletions(candidateQueue);
+    const events = candidateQueue.flatMap(({address}) => {
+      const record = pending.get(address);
+      return record ? [record.completion] : [];
+    });
     if (probeMs !== null) {
       events.push(new Promise((resolve) => {
         timer = clock.setTimeout(() => resolve(ROUTING_PROBE_ELAPSED), probeMs);
@@ -67,14 +108,24 @@ function createRecoveryReadDelivery(executor, options) {
 
   return {
     select,
-    hasEligible: (candidateQueue) => eligibleCompletions(candidateQueue).length > 0,
+    reconcile,
+    currentIn,
+    hasEligible: (candidates) => candidates.some(({address}) => pending.has(address)),
     throwIfAborted: () => signal.throwIfAborted(),
-    async redirect(ticket, routerOptions) {
-      const result = await start(ticket, routerOptions);
+    async redirect(address, request, routerOptions) {
+      const {nodeId, serviceId: replicaId} = AddressManager.getInstance().parse(address);
+      const result = await start({address, request, serviceInfo: {address, nodeId, replicaId}},
+        routerOptions);
       signal.throwIfAborted();
-      pending.delete(ticket.address);
+      pending.delete(address);
       if (result.error) throw result.error;
-      return result.delivery;
+      return result;
+    },
+    redirectedRouteIsCurrent(origin, target, candidates) {
+      // A typed redirect from the still-selected owner may lead publication.
+      // A third or now-unavailable canonical route cannot inherit that grant.
+      return isCurrentPeer(router, target) &&
+        (currentIn(target, candidates) || currentIn(origin, candidates));
     },
     dispose() {
       close.abort(new Error(READ_DELIVERY_CLOSED));
@@ -84,8 +135,4 @@ function createRecoveryReadDelivery(executor, options) {
   };
 }
 
-export {
-  createRecoveryReadDelivery,
-  executorShutdownError,
-  ROUTING_PROBE_ELAPSED,
-};
+export {createRecoveryReadDelivery, executorShutdownError, ROUTING_PROBE_ELAPSED};
