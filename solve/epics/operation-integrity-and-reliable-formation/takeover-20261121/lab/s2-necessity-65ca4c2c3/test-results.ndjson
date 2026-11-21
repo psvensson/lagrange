@@ -1,0 +1,5 @@
+{"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":false,"assertions":204,"durationMs":911,"retriedOnce":false,"firstFailureLine":"not ok 5 - registration should carry generation-specific diagnostics"}
+{"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":1695,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":false,"assertions":38,"durationMs":1806,"retriedOnce":false,"firstFailureLine":"not ok 1 - one handoff was issued"}
+{"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":111,"durationMs":3033,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":544,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,1393 @@
+placement-shell=1534147
+placement-head=8d4fd93d7fee46aae86ce1f739c62c0bb267d8db
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1535097
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=3
+thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+not ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (0 assertions, 254ms)
+# no assertions executed; test process exited 1
+# time=254ms
+not ok test/control-plane/control-plane-owner-fact-read.test.js (0 assertions, 291ms)
+# no assertions executed; test process exited 1
+# time=291ms
+not ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2340ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader refuses and the replica that leads answers
+    ok 1 - earlier witness: the published leader leads and answers
+    ok 2 - should be equal
+    ok 3 - should be equivalent
+    # {"observed":{"success":false,"error":"authoritative_query_failed","authorityFailureReason":"authoritative_owner_leader_witness_required","rows":[],"witness":{"state":"observed","partitionId":"replica_operations-p1","servingNodeId":"owner-fact-node-a","servingReplicaId":"replica_operations-p1-r1","term":2,"appliedIndex":3,"commitIndex":3,"role":"follower","observedAtMs":1795260839439},"deposedServiceRole":"follower","deposedCoreRole":"follower","deposedKnownLeader":"replica_operations-p1-r2","asked":[{"targetNodeId":"owner-fact-node-a","reached":true,"success":true,"failureCode":null,"carriesRows":true,"witnessRole":"follower","witnessTerm":2}]}}
+    not ok 4 - the strict read reaches the replica that leads (today: unavailable behind the stale leader)
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 72
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:72:5)
+      source: >2
+          }));
+      
+          t.equal(after.success, true,
+        ----^
+            'the strict read reaches the replica that leads (today: unavailable behind the stale leader)');
+          t.equal(witness?.servingReplicaId, leader.replicaId, 'the answer is the leading replica\'s');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    not ok 5 - the answer is the leading replica's
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 74
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:74:5)
+      source: >2
+          t.equal(after.success, true,
+            'the strict read reaches the replica that leads (today: unavailable behind the stale leader)');
+          t.equal(witness?.servingReplicaId, leader.replicaId, 'the answer is the leading replica\'s');
+        ----^
+          t.equal(witness?.servingNodeId, leader.nodeId);
+          t.equal(witness?.partitionId, PARTITION);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -replica_operations-p1-r2
+        +replica_operations-p1-r1
+      ...
+    
+    not ok 6 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 75
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:75:5)
+      source: >2
+            'the strict read reaches the replica that leads (today: unavailable behind the stale leader)');
+          t.equal(witness?.servingReplicaId, leader.replicaId, 'the answer is the leading replica\'s');
+          t.equal(witness?.servingNodeId, leader.nodeId);
+        ----^
+          t.equal(witness?.partitionId, PARTITION);
+          t.equal(witness?.role, 'leader');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner-fact-node-b
+        +owner-fact-node-a
+      ...
+    
+    ok 7 - should be equal
+    not ok 8 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 77
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:77:5)
+      source: |2
+          t.equal(witness?.servingNodeId, leader.nodeId);
+          t.equal(witness?.partitionId, PARTITION);
+          t.equal(witness?.role, 'leader');
+        ----^
+          t.ok(Number.isSafeInteger(witness?.term) && witness.term > termBefore,
+            'the witness term is newer than the deposed leader\'s');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -leader
+        +follower
+      ...
+    
+    ok 9 - the witness term is newer than the deposed leader's
+    ok 10 - the witness names an applied index equal to its commit index
+    not ok 11 - the rows are the leading replica's, never a follower's
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,6 +1,1 @@
+        -Array [
+        -  Object {
+        -    "operation_id": "stale-published-leader-operation",
+        -    "workflow_step": "replica_operations-p1-r2",
+        -  },
+        -]
+        +Array []
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 83
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:83:5)
+      source: >2
+            witness.appliedIndex === witness?.commitIndex,
+          'the witness names an applied index equal to its commit index');
+          t.same(after.rows, [{operation_id: OPERATION, workflow_step: leader.replicaId}],
+        ----^
+            'the rows are the leading replica\'s, never a follower\'s');
+          t.equal(after.rowSetComplete, true);
+      ...
+    
+    not ok 12 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 85
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:85:5)
+      source: >2
+          t.same(after.rows, [{operation_id: OPERATION, workflow_step:
+        leader.replicaId}],
+            'the rows are the leading replica\'s, never a follower\'s');
+          t.equal(after.rowSetComplete, true);
+        ----^
+      
+          const fromDeposed = asked.filter(({targetNodeId}) => targetNodeId === deposed.nodeId);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 13 - the published replica is asked
+    not ok 14 - no replica that does not lead answers the owner-fact read successfully
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 90
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:90:5)
+      source: >2
+          const fromNonLeaders = asked.filter(({targetNodeId}) => targetNodeId !==
+        leader.nodeId);
+          t.ok(fromDeposed.length > 0, 'the published replica is asked');
+          t.ok(fromNonLeaders.every(({answer}) => answer?.success === false),
+        ----^
+            'no replica that does not lead answers the owner-fact read successfully');
+          t.ok(fromNonLeaders.every(({answer}) => !carriesRows(answer)),
+      ...
+    
+    not ok 15 - a refusing replica ships no rows
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 92
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:92:5)
+      source: >2
+          t.ok(fromNonLeaders.every(({answer}) => answer?.success === false),
+            'no replica that does not lead answers the owner-fact read successfully');
+          t.ok(fromNonLeaders.every(({answer}) => !carriesRows(answer)),
+        ----^
+            'a refusing replica ships no rows');
+          t.ok(fromDeposed.every(({answer}) => answer?.failureCode === OWNER_FACT_NOT_LEADER),
+      ...
+    
+    not ok 16 - the deposed replica refuses with the typed owner-fact refusal
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 94
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:94:5)
+      source: >2
+          t.ok(fromNonLeaders.every(({answer}) => !carriesRows(answer)),
+            'a refusing replica ships no rows');
+          t.ok(fromDeposed.every(({answer}) => answer?.failureCode === OWNER_FACT_NOT_LEADER),
+        ----^
+            'the deposed replica refuses with the typed owner-fact refusal');
+          t.ok(asked.some(({targetNodeId, answer}) =>
+      ...
+    
+    not ok 17 - the leading replica is asked and answers
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+        lineNumber: 96
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:96:5)
+      source: >2
+          t.ok(fromDeposed.every(({answer}) => answer?.failureCode ===
+        OWNER_FACT_NOT_LEADER),
+            'the deposed replica refuses with the typed owner-fact refusal');
+          t.ok(asked.some(({targetNodeId, answer}) =>
+        ----^
+            targetNodeId === leader.nodeId && answer?.success === true),
+          'the leading replica is asked and answers');
+      ...
+    
+    1..17
+not ok 1 - gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader refuses and the replica that leads answers # time=469.054ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+    lineNumber: 42
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader
+    refuses and ' +
+  
+    ^
+      'the replica that leads answers', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+1..1
+# { total: 17, pass: 7, fail: 10 }
+# time=481.076ms
+not ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 2880ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: strict CDC reads route to the registered owner while a local query is held
+    ok 1 - the remote owner has a live node connection
+    ok 2 - native owner is leader
+    ok 3 - the exact native owner transport handler is registered
+{"level":50,"time":"2026-11-21T11:33:59.299Z","nodeId":"a3d212d7-e801-46a6-b018-bd4f9bcffa5c","pid":1535124,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":113,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"a3d212d7-e801-46a6-b018-bd4f9bcffa5c","msg":"Wait bound spent"}
+    # Subtest: remote success
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        not ok 3 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 207
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:207:13)
+          source: |2
+                        'only a permitted local mode enters the held local query');
+                      t.equal(calls.localCount, strict ? 0 : 1, 'count local probes');
+                      t.equal(answer.success, scenario.success === true);
+            ------------^
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 4 - should be equivalent
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,1 @@
+            -Array [
+            -  Object {
+            -    "operation_id": "strict-read-operation",
+            -    "workflow_step": "OWNER",
+            -  },
+            -]
+            +Array []
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 209
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:209:13)
+          source: >2
+                      t.equal(answer.success, scenario.success === true);
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+            ------------^
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+          ...
+        
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        not ok 10 - owner routing reaches the real query transport
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 219
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:219:15)
+          source: >2
+                        t.equal(calls.owner.length, 0);
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+            --------------^
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+          ...
+        
+        ok 11 - should be equal
+        not ok 12 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 226
+            columnNumber: 17
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:226:17)
+          source: >2
+                          t.ok(calls.owner.every(({answer}) => !answer?.success));
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+            ----------------^
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+                        }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +undefined
+          ...
+        
+        not ok 13 - one owner delivery
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 227
+            columnNumber: 39
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:227:39)
+          source: >2
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+            --------------------------------------^
+                        }
+                      }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -1
+            +0
+          ...
+        
+        1..13
+    not ok 4 - remote success # time=162.324ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 184
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+{"level":50,"time":"2026-11-21T11:33:59.448Z","nodeId":"a3d212d7-e801-46a6-b018-bd4f9bcffa5c","pid":1535124,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":103,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"a3d212d7-e801-46a6-b018-bd4f9bcffa5c","msg":"Wait bound spent"}
+    # Subtest: remote refusal
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        not ok 10 - owner routing reaches the real query transport
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 219
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:219:15)
+          source: >2
+                        t.equal(calls.owner.length, 0);
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+            --------------^
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+          ...
+        
+        ok 11 - should be equal
+        not ok 12 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 226
+            columnNumber: 17
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:226:17)
+          source: >2
+                          t.ok(calls.owner.every(({answer}) => !answer?.success));
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+            ----------------^
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+                        }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +undefined
+          ...
+        
+        1..12
+    not ok 5 - remote refusal # time=113.655ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 184
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+    # Subtest: remote unavailable
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - owner routing reaches the real query transport
+        not ok 11 - should be equal
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 220
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:220:15)
+          source: >2
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+            --------------^
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+                          budget.deliveryPriority === 'critical'));
+          ...
+        
+        ok 12 - should be equal
+        1..12
+    not ok 6 - remote unavailable # time=109.829ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 184
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+    # Subtest: same-host owner
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - owner routing reaches the real query transport
+        not ok 11 - should be equal
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 220
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:220:15)
+          source: >2
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+            --------------^
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+                          budget.deliveryPriority === 'critical'));
+          ...
+        
+        ok 12 - should be equal
+        ok 13 - one owner delivery
+        1..13
+    not ok 7 - same-host owner # time=14.176ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 184
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+{"level":50,"time":"2026-11-21T11:33:59.701Z","nodeId":"a3d212d7-e801-46a6-b018-bd4f9bcffa5c","pid":1535124,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":107,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"a3d212d7-e801-46a6-b018-bd4f9bcffa5c","msg":"Wait bound spent"}
+    # Subtest: preferred owner
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        not ok 4 - should be equivalent
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,6 @@
+             Array [
+               Object {
+                 "operation_id": "strict-read-operation",
+            -    "workflow_step": "OWNER",
+            +    "workflow_step": "LOCAL",
+               },
+             ]
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 209
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:209:13)
+          source: >2
+                      t.equal(answer.success, scenario.success === true);
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+            ------------^
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+          ...
+        
+        not ok 5 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 210
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:210:13)
+          source: >2
+                      const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+                      t.same(answer.rows, scenario.success ? rows : []);
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+            ------------^
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -owner_rpc_lane
+            +local_partition_replica
+          ...
+        
+        not ok 6 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 211
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:211:13)
+          source: >2
+                      t.same(answer.rows, scenario.success ? rows : []);
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+            ------------^
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.routedToNode,
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +true
+          ...
+        
+        not ok 7 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 212
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:212:13)
+          source: >2
+                      t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+            ------------^
+                      t.equal(answer.systemTableDiagnostics?.routedToNode,
+                        scenario.localResult ? null : OWNER);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +true
+          ...
+        
+        not ok 8 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 213
+            columnNumber: 13
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:213:13)
+          source: >2
+                      t.equal(answer.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+                      t.equal(answer.systemTableDiagnostics?.routedToNode,
+            ------------^
+                        scenario.localResult ? null : OWNER);
+                      t.equal(answer.systemTableDiagnostics?.queryTimeoutMs, TIMEOUT_MS);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -strict-read-owner
+            +null
+          ...
+        
+        ok 9 - should be equal
+        not ok 10 - owner routing reaches the real query transport
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 219
+            columnNumber: 15
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:219:15)
+          source: >2
+                        t.equal(calls.owner.length, 0);
+                      } else {
+                        t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+            --------------^
+                        t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+                          budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+          ...
+        
+        ok 11 - should be equal
+        not ok 12 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 226
+            columnNumber: 17
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:226:17)
+          source: >2
+                          t.ok(calls.owner.every(({answer}) => !answer?.success));
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+            ----------------^
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+                        }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +undefined
+          ...
+        
+        not ok 13 - one owner delivery
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 227
+            columnNumber: 39
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:227:39)
+          source: >2
+                        } else {
+                          t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+                          if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+            --------------------------------------^
+                        }
+                      }
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -1
+            +0
+          ...
+        
+        1..13
+    not ok 8 - preferred owner # time=178.717ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 184
+        columnNumber: 17
+        typeName: Test
+      source: |2
+              ];
+              for (const scenario of cases) {
+                await t.test(scenario.label, async (t) => {
+        ----------------^
+                  const router = scenario.localOwner ? ownerRouter : callerRouter;
+                  const calls = makeReadCalls(scenario.localOwner ? partition : null);
+      ...
+    
+    # Subtest: preferred local
+        ok 1 - only a permitted local mode enters the held local query
+        ok 2 - count local probes
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - should be equal
+        1..10
+    ok 9 - preferred local # time=3.842ms
+    
+    1..9
+not ok 1 - strict CDC reads route to the registered owner while a local query is held # time=745.297ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+    lineNumber: 133
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('strict CDC reads route to the registered owner while a local query is
+    held',
+  
+    ^
+      async (t) => {
+        ConfigurationManager.getInstance().initialize({});
+  ...
+
+# Subtest: gateway.readAuthoritativeRows leader-REQUIRED: the in-process ledger leader answers without a published leader or a query engine
+    ok 1 - setup: the hosted native replica leads and has applied what it committed
+    # Subtest: the routing snapshot names no canonical leader
+        # {"observed":{"success":false,"error":"Partition service not found","source":"owner_rpc_lane","rows":[],"witness":null,"transit":[]}}
+        not ok 1 - the node hosting the leader gets its owner fact (today: unavailable)
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 356
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:356:11)
+          source: >2
+                    t.comment(JSON.stringify({observed: {success: answer.success, error: answer.error,
+                      source: answer.source, rows: answer.rows, witness, transit}}));
+                    t.equal(answer.success, true,
+            ----------^
+                      'the node hosting the leader gets its owner fact (today: unavailable)');
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 2 - the leader replica's rows
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,1 @@
+            -Array [
+            -  Object {
+            -    "operation_id": "strict-read-operation",
+            -    "workflow_step": "OWNER",
+            -  },
+            -]
+            +Array []
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 358
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:358:11)
+          source: >2
+                    t.equal(answer.success, true,
+                      'the node hosting the leader gets its owner fact (today: unavailable)');
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+            ----------^
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+          ...
+        
+        not ok 3 - the serving replica declares the row set complete
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 359
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:359:11)
+          source: >2
+                      'the node hosting the leader gets its owner fact (today: unavailable)');
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+            ----------^
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+                    t.equal(witness?.partitionId, PARTITION);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 4 - the answer carries the serving replica's leader witness
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 360
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:360:11)
+          source: >2
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+            ----------^
+                    t.equal(witness?.partitionId, PARTITION);
+                    t.equal(witness?.servingNodeId, OWNER);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -leader
+            +undefined
+          ...
+        
+        not ok 5 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 361
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:361:11)
+          source: >2
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+                    t.equal(witness?.partitionId, PARTITION);
+            ----------^
+                    t.equal(witness?.servingNodeId, OWNER);
+                    t.equal(witness?.servingReplicaId, REPLICA);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -replica_operations-p1
+            +undefined
+          ...
+        
+        not ok 6 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 362
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:362:11)
+          source: >2
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+                    t.equal(witness?.partitionId, PARTITION);
+                    t.equal(witness?.servingNodeId, OWNER);
+            ----------^
+                    t.equal(witness?.servingReplicaId, REPLICA);
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -strict-read-owner
+            +undefined
+          ...
+        
+        not ok 7 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 363
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:363:11)
+          source: >2
+                    t.equal(witness?.partitionId, PARTITION);
+                    t.equal(witness?.servingNodeId, OWNER);
+                    t.equal(witness?.servingReplicaId, REPLICA);
+            ----------^
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+                    t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -strict-read-replica
+            +undefined
+          ...
+        
+        not ok 8 - witness term
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 364
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:364:11)
+          source: >2
+                    t.equal(witness?.servingNodeId, OWNER);
+                    t.equal(witness?.servingReplicaId, REPLICA);
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+            ----------^
+                    t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+                      witness.appliedIndex === witness?.commitIndex,
+          ...
+        
+        not ok 9 - the witness names an applied index equal to its commit index
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 365
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:365:11)
+          source: >2
+                    t.equal(witness?.servingReplicaId, REPLICA);
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+                    t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+            ----------^
+                      witness.appliedIndex === witness?.commitIndex,
+                    'the witness names an applied index equal to its commit index');
+          ...
+        
+        ok 10 - the in-process leader is read without query transit
+        1..10
+    not ok 2 - the routing snapshot names no canonical leader # time=146.211ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 339
+        columnNumber: 15
+        typeName: Test
+      source: |2
+            ];
+            for (const scenario of cases) {
+              await t.test(scenario.label, async (t) => {
+        --------------^
+                transit.length = 0;
+                const gateway = createLeaderHostGateway({
+      ...
+    
+    # Subtest: no query engine exists yet (seed before cache hydration)
+        # {"observed":{"success":false,"error":"authoritative_row_source_unavailable","rows":[],"transit":[]}}
+        not ok 1 - the node hosting the leader gets its owner fact (today: unavailable)
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 356
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:356:11)
+          source: >2
+                    t.comment(JSON.stringify({observed: {success: answer.success, error: answer.error,
+                      source: answer.source, rows: answer.rows, witness, transit}}));
+                    t.equal(answer.success, true,
+            ----------^
+                      'the node hosting the leader gets its owner fact (today: unavailable)');
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 2 - the leader replica's rows
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,1 @@
+            -Array [
+            -  Object {
+            -    "operation_id": "strict-read-operation",
+            -    "workflow_step": "OWNER",
+            -  },
+            -]
+            +Array []
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 358
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:358:11)
+          source: >2
+                    t.equal(answer.success, true,
+                      'the node hosting the leader gets its owner fact (today: unavailable)');
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+            ----------^
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+          ...
+        
+        not ok 3 - the serving replica declares the row set complete
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 359
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:359:11)
+          source: >2
+                      'the node hosting the leader gets its owner fact (today: unavailable)');
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+            ----------^
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+                    t.equal(witness?.partitionId, PARTITION);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 4 - the answer carries the serving replica's leader witness
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 360
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:360:11)
+          source: >2
+                    t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+            ----------^
+                    t.equal(witness?.partitionId, PARTITION);
+                    t.equal(witness?.servingNodeId, OWNER);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -leader
+            +undefined
+          ...
+        
+        not ok 5 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 361
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:361:11)
+          source: >2
+                    t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+                    t.equal(witness?.partitionId, PARTITION);
+            ----------^
+                    t.equal(witness?.servingNodeId, OWNER);
+                    t.equal(witness?.servingReplicaId, REPLICA);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -replica_operations-p1
+            +undefined
+          ...
+        
+        not ok 6 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 362
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:362:11)
+          source: >2
+                    t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+                    t.equal(witness?.partitionId, PARTITION);
+                    t.equal(witness?.servingNodeId, OWNER);
+            ----------^
+                    t.equal(witness?.servingReplicaId, REPLICA);
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -strict-read-owner
+            +undefined
+          ...
+        
+        not ok 7 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 363
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:363:11)
+          source: >2
+                    t.equal(witness?.partitionId, PARTITION);
+                    t.equal(witness?.servingNodeId, OWNER);
+                    t.equal(witness?.servingReplicaId, REPLICA);
+            ----------^
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+                    t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -strict-read-replica
+            +undefined
+          ...
+        
+        not ok 8 - witness term
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 364
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:364:11)
+          source: >2
+                    t.equal(witness?.servingNodeId, OWNER);
+                    t.equal(witness?.servingReplicaId, REPLICA);
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+            ----------^
+                    t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+                      witness.appliedIndex === witness?.commitIndex,
+          ...
+        
+        not ok 9 - the witness names an applied index equal to its commit index
+          ---
+          at:
+            fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+            lineNumber: 365
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/cdc/cdc-owner-required-authoritative-routing.test.js:365:11)
+          source: >2
+                    t.equal(witness?.servingReplicaId, REPLICA);
+                    t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+                    t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+            ----------^
+                      witness.appliedIndex === witness?.commitIndex,
+                    'the witness names an applied index equal to its commit index');
+          ...
+        
+        ok 10 - the in-process leader is read without query transit
+        1..10
+    not ok 3 - no query engine exists yet (seed before cache hydration) # time=31.748ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+        lineNumber: 339
+        columnNumber: 15
+        typeName: Test
+      source: |2
+            ];
+            for (const scenario of cases) {
+              await t.test(scenario.label, async (t) => {
+        --------------^
+                transit.length = 0;
+                const gateway = createLeaderHostGateway({
+      ...
+    
+    1..3
+not ok 2 - gateway.readAuthoritativeRows leader-REQUIRED: the in-process ledger leader answers without a published leader or a query engine # time=243.91ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+    lineNumber: 286
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('gateway.readAuthoritativeRows leader-REQUIRED: the in-process ledger
+    leader answers ' +
+  
+    ^
+      'without a published leader or a query engine',
+    async (t) => {
+  ...
+
+1..2
+# { total: 97, pass: 62, fail: 35 }
+# time=1026.568ms
+# test-files total=4 pass=0 fail=4 assertions=125
+placement-results={"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":false,"assertions":0,"durationMs":254,"retriedOnce":false,"firstFailureLine":"no assertions executed"}
+placement-results={"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":false,"assertions":0,"durationMs":291,"retriedOnce":false,"firstFailureLine":"no assertions executed"}
+placement-results={"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":false,"assertions":18,"durationMs":2340,"retriedOnce":false,"firstFailureLine":"not ok 4 - the strict read reaches the replica that leads (today: unavailable behind the stale leader)"}
+placement-results={"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":false,"assertions":107,"durationMs":2880,"retriedOnce":false,"firstFailureLine":"not ok 3 - should be equal"}

@@ -1,0 +1,83 @@
+placement-shell=1526048
+placement-head=ed90e745834f87d1d91841497c23212b6915c2ec
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1526504
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 36C (coretemp/Package id 0) nvme unmeasured
+not ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 4648ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision
+not ok 1 - cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision
+  ---
+  duration_ms: 3201.025013
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ed90e745834f-mwqazdmd-816590/test/partition/placement-settled-replay-cutover-pause.test.js:46:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a settled E0 is answered with its original receipt
+    + actual - expected
+    
+      {
+    +   committed: undefined,
+    +   logIndex: undefined,
+    -   committed: true,
+    -   logIndex: 3,
+        partitionId: 'replica_operations-p1',
+    +   placementResult: undefined,
+    +   success: false,
+    +   term: undefined
+    -   placementResult: {
+    -     operationIds: [
+    -       'pl-tables-p1-3-0'
+    -     ],
+    -     outcome: 'ADMITTED'
+    -   },
+    -   success: true,
+    -   term: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    success: true
+    partitionId: 'replica_operations-p1'
+    placementResult:
+      outcome: 'ADMITTED'
+      operationIds:
+        0: 'pl-tables-p1-3-0'
+    committed: true
+    logIndex: 3
+    term: 1
+  actual:
+    success: false
+    partitionId: 'replica_operations-p1'
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/ed90e745834f-mwqazdmd-816590/test/partition/placement-settled-replay-cutover-pause.test.js:65:12
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ed90e745834f-mwqazdmd-816590/test/partition/placement-admission-fixture.js:40:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: cutover pause: leadership is decided before the settled replay
+ok 2 - cutover pause: leadership is decided before the settled replay
+  ---
+  duration_ms: 71.569562
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3287.607165
+# time=4648ms
+# test-files total=1 pass=0 fail=1 assertions=2
+placement-results={"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":4648,"retriedOnce":false,"firstFailureLine":"not ok 1 - cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision"}

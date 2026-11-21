@@ -1,0 +1,17 @@
+{
+  "sha": "2e0b33342e5eb7775dd594f3ca12db207a31c39f",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-settled-replay-cutover-pause.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-settled-replay-cutover-pause.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

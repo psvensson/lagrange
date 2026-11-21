@@ -1,0 +1,25 @@
+{
+  "sha": "075a413d897e35472629880ec9b0af52cab621a7",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-owner-required-authoritative-routing.test.js",
+    "test/cdc/cdc-owner-fact-stale-published-leader.test.js",
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js",
+    "test/control-plane/control-plane-owner-fact-read.test.js",
+    "test/query/query-executor-recovery-read-lifetime.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-owner-fact-non-leader-absence.test.js",
+        "test/cdc/cdc-owner-fact-stale-published-leader.test.js",
+        "test/cdc/cdc-owner-required-authoritative-routing.test.js",
+        "test/control-plane/control-plane-owner-fact-read.test.js",
+        "test/query/query-executor-recovery-read-lifetime.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

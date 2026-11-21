@@ -1,0 +1,17 @@
+{
+  "sha": "4a1bd640d1e5d403ca4d85fc2b41730812caf48e",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/replica-operation-structured-mutation-native.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/replica-operation-structured-mutation-native.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

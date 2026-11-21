@@ -1,0 +1,80 @@
+test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js
+   m1-5edfe59e2:pass(30)
+   m2-b638284d1:FAIL(18) «ReplicaOperationRepository requires a structured mutation port»
+   cone-316671f87:FAIL(18) «ReplicaOperationRepository requires a structured mutation port»
+   base:pass(30)
+test/partition/placement-retained-leadership.test.js
+   m1-5edfe59e2:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   m2-b638284d1:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   cone-316671f87:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   base:pass(4)
+test/rebalancer/assignment-epoch-fencing.test.js
+   m1-5edfe59e2:pass(26)
+   m2-b638284d1:FAIL(23) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   cone-316671f87:FAIL(23) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   base:pass(26)
+test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+   m1-5edfe59e2:pass(97)
+   m2-b638284d1:FAIL(97) «SQLite applied the ACTIVE CAS against the exact SYNCING row»
+   cone-316671f87:FAIL(97) «SQLite applied the ACTIVE CAS against the exact SYNCING row»
+   base:pass(97)
+test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js
+   m1-5edfe59e2:pass(7)
+   m2-b638284d1:FAIL(7) «the sibling SYNCING->ACTIVE ledger write starts while the unrelated INSERT remains frozen»
+   cone-316671f87:FAIL(7) «the sibling SYNCING->ACTIVE ledger write starts while the unrelated INSERT remains frozen»
+   base:pass(7)
+test/rebalancer/orphaned-operation-reconcile-redrive.test.js
+   m1-5edfe59e2:pass(14)
+   m2-b638284d1:FAIL(14) «orphaned SYNCING op is advanced to ACTIVE by the periodic sweep»
+   cone-316671f87:FAIL(14) «orphaned SYNCING op is advanced to ACTIVE by the periodic sweep»
+   base:pass(14)
+test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+   m1-5edfe59e2:pass(49)
+   m2-b638284d1:FAIL(47) «should be equal»
+   cone-316671f87:FAIL(47) «should be equal»
+   base:pass(49)
+test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+   m1-5edfe59e2:pass(315)
+   m2-b638284d1:FAIL(298) «timeout reconciliation should dispatch the existing local-owner operation once»
+   cone-316671f87:FAIL(298) «timeout reconciliation should dispatch the existing local-owner operation once»
+   base:pass(315)
+test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js
+   m1-5edfe59e2:FAIL(5) «R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entir»
+   m2-b638284d1:pass(5)
+   cone-316671f87:FAIL(5) «R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entir»
+   base:pass(5)
+test/rebalancer/replica-operations-single-writer.test.js
+   m1-5edfe59e2:pass(49)
+   m2-b638284d1:FAIL(35) «Authoritative replica operation not confirmed: op-sw-1»
+   cone-316671f87:FAIL(35) «Authoritative replica operation not confirmed: op-sw-1»
+   base:pass(49)
+test/rebalancer/required-entity-operation-observation.test.js
+   m1-5edfe59e2:pass(177)
+   m2-b638284d1:FAIL(37) «ReplicaOperationRepository requires a structured mutation port»
+   cone-316671f87:FAIL(37) «ReplicaOperationRepository requires a structured mutation port»
+   base:pass(177)
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js
+   m1-5edfe59e2:pass(293)
+   m2-b638284d1:FAIL(184) «ReplicaOperationRepository requires a structured mutation port»
+   cone-316671f87:FAIL(184) «ReplicaOperationRepository requires a structured mutation port»
+   base:pass(293)
+test/rebalancer/spread-cure-transition-authorization-production-path.test.js
+   m1-5edfe59e2:pass(2)
+   m2-b638284d1:FAIL(2) «one authorization travels the real planner, coordinator and row»
+   cone-316671f87:FAIL(2) «one authorization travels the real planner, coordinator and row»
+   base:pass(2)
+test/scripts/fallback-branch-census.test.js
+   m1-5edfe59e2:pass(38)
+   m2-b638284d1:pass(38)
+   cone-316671f87:FAIL(38) «preload launch wrappers preserve promisify(exec/execFile) and sync error semantics»
+   base:pass(38)
+test/partition/partition-cdc-owed-admission-native.test.js
+   m1-5edfe59e2:pass(1)
+   m2-b638284d1:pass(1)
+   cone-316671f87:FAIL(1) «native RF3 bounds owed admission and commits drain markers on every replica»
+   base:pass(1)
+test/scripts/check-fast-static.test.js
+   m1-5edfe59e2:pass(6)
+   m2-b638284d1:pass(6)
+   cone-316671f87:FAIL(6) «fast static is READ-ONLY: it never writes to the worktree»
+   base:pass(6)

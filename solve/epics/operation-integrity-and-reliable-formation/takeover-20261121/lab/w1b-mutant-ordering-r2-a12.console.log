@@ -1,0 +1,160 @@
+lab test: adams-gamla: ordinary (2 files) cores=4 mem=15.6GiB speed x2.01
+[adams-gamla] placement-shell=1610784
+[adams-gamla] placement-head=6a23e4abd5d59f2816abe90b4ad17f48e6ac00b6
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1614018
+[adams-gamla] # test-files planned=2
+[adams-gamla] classified lane ordinary: 2 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/control-plane/formation-transition-settled-replay.test.js (2 assertions, 5214ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: formation under the cutover pause: settled E0 answers its original receipt, a new command stays paused, a different command under E0 is never settled by its record
+[adams-gamla] not ok 1 - formation under the cutover pause: settled E0 answers its original receipt, a new command stays paused, a different command under E0 is never settled by its record
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3615.945193
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a23e4abd5d5-mwqe3efs-1002460/test/control-plane/formation-transition-settled-replay.test.js:64:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a settled E0 is answered with its original receipt under the pause
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   committed: undefined,
+[adams-gamla]     +   formationResult: undefined,
+[adams-gamla]     +   logIndex: undefined,
+[adams-gamla]     -   committed: true,
+[adams-gamla]     -   formationResult: {
+[adams-gamla]     -     action: 'DECLARE',
+[adams-gamla]     -     clusterId: 'cluster-replay',
+[adams-gamla]     -     declaredHostCount: 1,
+[adams-gamla]     -     outcome: 'APPLIED',
+[adams-gamla]     -     status: 'DECLARED'
+[adams-gamla]     -   },
+[adams-gamla]     -   logIndex: 3,
+[adams-gamla]         partitionId: 'control_plane_publications-p1',
+[adams-gamla]     +   success: false,
+[adams-gamla]     +   term: undefined
+[adams-gamla]     -   success: true,
+[adams-gamla]     -   term: 1
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     success: true
+[adams-gamla]     partitionId: 'control_plane_publications-p1'
+[adams-gamla]     formationResult:
+[adams-gamla]       outcome: 'APPLIED'
+[adams-gamla]       action: 'DECLARE'
+[adams-gamla]       status: 'DECLARED'
+[adams-gamla]       clusterId: 'cluster-replay'
+[adams-gamla]       declaredHostCount: 1
+[adams-gamla]     committed: true
+[adams-gamla]     logIndex: 3
+[adams-gamla]     term: 1
+[adams-gamla]   actual:
+[adams-gamla]     success: false
+[adams-gamla]     partitionId: 'control_plane_publications-p1'
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a23e4abd5d5-mwqe3efs-1002460/test/control-plane/formation-transition-settled-replay.test.js:76:12
+[adams-gamla]     async onPublicationsLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a23e4abd5d5-mwqe3efs-1002460/test/control-plane/formation-transition-settled-replay.test.js:50:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: formation: leadership is decided before the settled replay
+[adams-gamla] ok 2 - formation: leadership is decided before the settled replay
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 79.641344
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3703.584896
+[adams-gamla] # time=5214ms
+[adams-gamla] not ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 5221ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision
+[adams-gamla] not ok 1 - cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3626.621292
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a23e4abd5d5-mwqe3efs-1002460/test/partition/placement-settled-replay-cutover-pause.test.js:46:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a settled E0 is answered with its original receipt
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   committed: undefined,
+[adams-gamla]     +   logIndex: undefined,
+[adams-gamla]     -   committed: true,
+[adams-gamla]     -   logIndex: 3,
+[adams-gamla]         partitionId: 'replica_operations-p1',
+[adams-gamla]     +   placementResult: undefined,
+[adams-gamla]     +   success: false,
+[adams-gamla]     +   term: undefined
+[adams-gamla]     -   placementResult: {
+[adams-gamla]     -     operationIds: [
+[adams-gamla]     -       'pl-tables-p1-3-0'
+[adams-gamla]     -     ],
+[adams-gamla]     -     outcome: 'ADMITTED'
+[adams-gamla]     -   },
+[adams-gamla]     -   success: true,
+[adams-gamla]     -   term: 1
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     success: true
+[adams-gamla]     partitionId: 'replica_operations-p1'
+[adams-gamla]     placementResult:
+[adams-gamla]       outcome: 'ADMITTED'
+[adams-gamla]       operationIds:
+[adams-gamla]         0: 'pl-tables-p1-3-0'
+[adams-gamla]     committed: true
+[adams-gamla]     logIndex: 3
+[adams-gamla]     term: 1
+[adams-gamla]   actual:
+[adams-gamla]     success: false
+[adams-gamla]     partitionId: 'replica_operations-p1'
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a23e4abd5d5-mwqe3efs-1002460/test/partition/placement-settled-replay-cutover-pause.test.js:65:12
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a23e4abd5d5-mwqe3efs-1002460/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: cutover pause: leadership is decided before the settled replay
+[adams-gamla] ok 2 - cutover pause: leadership is decided before the settled replay
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 82.363743
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3719.299993
+[adams-gamla] # time=5221ms
+[adams-gamla] # test-files total=2 pass=0 fail=2 assertions=4
+lab test: adams-gamla: # test-files total=2 pass=0 fail=2 assertions=4
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=2 pass=0 fail=2 assertions=4

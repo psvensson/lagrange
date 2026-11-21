@@ -1,0 +1,1063 @@
+Failed to parse steps_history JSON {
+  operationId: 'b8206ba7-6714-44f1-a95b-a992ff3115c7',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is not JSON text'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'test-node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-orphan-1',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'latency_groups-p1'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-orphan-1',
+  workflowStep: 'ACTIVE',
+  partitionId: 'latency_groups-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'test-node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'test-node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-diverge-1',
+  disposition: 'refused',
+  step: 'FAILED',
+  partitionId: 'latency_groups-p1'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-diverge-1',
+  workflowStep: 'FAILED',
+  partitionId: 'latency_groups-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'test-node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'test-node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'test-node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-observer',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'control_plane_publications-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT',
+  awaited: 'coordinator-created operation handed off to its remote owner',
+  boundMs: 30000,
+  elapsedMs: 1795260306656,
+  lastObserved: {
+    workflowStep: 'SENDING',
+    stepTimedOut: true,
+    operationBudgetActive: false,
+    operationBudgetDeadlineMs: 1300000,
+    type: 'REPLACE',
+    status: 'pending',
+    outcome: 'handoff_retry_cleared'
+  },
+  scope: {
+    nodeId: 'node-observer',
+    partitionId: 'control_plane_publications-p1',
+    operationId: 'priority-dispatch-pending-timeout-operation'
+  },
+  repeats: 0
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-observer',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-target',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  boundary: 'coordinator_created_remote_handoff',
+  partitionId: 'sql_transaction_participants-p1',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'retryable transition claim failure'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  boundary: 'coordinator_created_remote_handoff',
+  partitionId: 'sql_transaction_participants-p1',
+  workflowStep: 'SENDING',
+  delayMs: 250,
+  errorMessage: 'Retryable control-plane transition failure'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  boundary: 'dispatch_local_owner_command',
+  partitionId: 'sql_write_operations-p1',
+  workflowStep: 'PENDING',
+  delayMs: 11,
+  errorMessage: 'retryable transition claim failure'
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  boundary: 'dispatch',
+  partitionId: 'control_plane_publications-p1',
+  workflowStep: 'PENDING',
+  delayMs: 11,
+  errorMessage: 'retryable transition claim failure'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'PENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff',
+  transportDeliveryState: 'deferred',
+  transportReasonCode: 'transport_deferred'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'PENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Failed to query operations from system table {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON',
+  nodeId: 'node-target'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Failed to query operations from system table {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON',
+  nodeId: 'node-target'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-target',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'CREATING',
+  delayMs: 11,
+  errorMessage: 'Message not acknowledged'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-target',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'CREATING',
+  delayMs: 11,
+  errorMessage: 'Connection to node node-target closed',
+  transportDeliveryState: 'deferred',
+  transportReasonCode: 'ROUTER_CONNECTION_CLOSED'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Failed to query operations from system table {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON',
+  nodeId: 'node-target'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Failed to query operations from system table {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON',
+  nodeId: 'node-target'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Failed to parse steps_history JSON {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Invalid replica operation persistence outcome: persisted operation history is invalid JSON'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 0,
+  elapsedMs: 0,
+  lastObserved: {
+    expectedWorkflowStep: 'CREATING',
+    expectedStatus: 'creating',
+    polls: 1,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'node-target',
+    partitionId: 'sql_write_operations-p1',
+    operationId: 'priority-sql-dispatch-pending-timeout-operation'
+  },
+  repeats: 0
+}
+Failed to query operations from system table {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  error: 'Authoritative replica operation not confirmed: priority-sql-dispatch-pending-timeout-operation',
+  nodeId: 'node-target'
+}
+Failed to persist operation {
+  operationId: 'priority-authoritative-only-timeout-operation',
+  error: "Cannot set properties of undefined (setting 'status')",
+  nodeId: 'node-target',
+  code: null,
+  retryAfterMs: 0,
+  reasonCode: null,
+  participationKind: null,
+  tableName: null,
+  participantFailures: [],
+  firstFailedParticipant: null
+}
+Failed to query operations from system table {
+  operationId: 'priority-authoritative-only-timeout-operation',
+  error: "Cannot set properties of undefined (setting 'status')",
+  nodeId: 'node-target'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT',
+  awaited: 'coordinator-created operation handed off to its remote owner',
+  boundMs: 30000,
+  elapsedMs: 1795260407097,
+  lastObserved: {
+    workflowStep: 'SENDING',
+    stepTimedOut: true,
+    operationBudgetActive: false,
+    operationBudgetDeadlineMs: 1200000,
+    type: 'REPLACE',
+    status: 'pending',
+    outcome: 'handoff_retry_cleared'
+  },
+  scope: {
+    nodeId: 'node-observer',
+    partitionId: 'sql_write_operations-p1',
+    operationId: 'priority-dispatch-pending-timeout-operation'
+  },
+  repeats: 0
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-observer',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-observer',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-observer',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '96c522ac-95c7-4713-96da-a98010d295d9',
+  partitionId: 'control_plane_publications-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-observer',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '4c6da3d9-3dc9-4288-81d8-d0730df1657d',
+  partitionId: 'control_plane_publications-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '84f3d14d-b26a-4702-b7c4-4821eaf7acac',
+  partitionId: 'replica_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'c56129f4-fbc9-4ccc-8e72-c625ae9259a4',
+  partitionId: 'sql_transaction_participants-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '36b42a1f-bba3-487d-a7f4-c7cbc06c0c3e',
+  partitionId: 'sql_transactions-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'SENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '3158736f-68aa-499b-a49e-129a8d14d6ed',
+  partitionId: 'control_plane_publications-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'PENDING',
+  delayMs: 1000,
+  errorMessage: 'Message not acknowledged',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '54d4b90f-c738-4428-8747-d8c757464329',
+  partitionId: 'replica_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'PENDING',
+  delayMs: 1000,
+  errorMessage: 'Message not acknowledged',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: '1062b470-3ae7-428f-b0c5-f0eade6230d8',
+  partitionId: 'sql_transaction_participants-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'PENDING',
+  delayMs: 1000,
+  errorMessage: 'Message not acknowledged',
+  boundary: 'coordinator_created_remote_handoff'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'priority-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-target',
+  workflowStep: 'PENDING',
+  delayMs: 11,
+  errorMessage: 'handoff retryable timeout',
+  boundary: 'coordinator_created_remote_handoff',
+  transportDeliveryState: 'deferred',
+  transportReasonCode: 'transport_deferred'
+}
+Operation deferred by safety policy {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  sourceNodeId: 'node-source',
+  targetNodeId: 'node-target',
+  workflowStep: 'ACTIVE',
+  reason: 'replace_remove_safety_blocked',
+  errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+}
+REPLACE source removal waiting {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  phase: 'ACTIVE',
+  sourceReplicaId: null,
+  targetReplicaId: 'sql_write_operations-p1-r4',
+  reason: 'replace_remove_safety_blocked',
+  waitingSinceMs: 1795261307194,
+  waitedMs: 0,
+  lastAttemptSeq: null,
+  lastAttemptUncertain: false,
+  attemptRebuiltAfter: 'not_rebuilt',
+  ownerPhase: 'active_deferring',
+  stalenessClass: 'never_stale_by_age',
+  retirementAdmissible: false,
+  leaderReplicaId: null,
+  sourceMembership: null,
+  authorityWaitReason: null,
+  severity: 'elevated'
+}
+Operation deferred by safety policy {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  partitionId: 'sql_write_operations-p1',
+  sourceNodeId: 'node-source',
+  targetNodeId: 'node-target',
+  workflowStep: 'ACTIVE',
+  reason: 'replace_remove_safety_blocked',
+  errorMessage: 'Partition sql_write_operations-p1 committed node authority unavailable: committed_node_read_unavailable'
+}
+REPLACE source removal waiting {
+  operationId: 'priority-sql-dispatch-pending-timeout-operation',
+  phase: 'ACTIVE',
+  sourceReplicaId: null,
+  targetReplicaId: 'sql_write_operations-p1-r4',
+  reason: 'replace_remove_safety_blocked',
+  waitingSinceMs: 1795261307202,
+  waitedMs: 0,
+  lastAttemptSeq: null,
+  lastAttemptUncertain: false,
+  attemptRebuiltAfter: 'not_rebuilt',
+  ownerPhase: 'active_deferring',
+  stalenessClass: 'never_stale_by_age',
+  retirementAdmissible: false,
+  leaderReplicaId: null,
+  sourceMembership: null,
+  authorityWaitReason: null,
+  severity: 'elevated'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'coordinator-hol-owner-node',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'coordinator-hol-slow-ledger-insert',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'coordinator-hol-slow-ledger-insert',
+    replica_id: 'replica_operations-p1-r4',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795261303124,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795261303302
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 5000,
+  elapsedMs: 5057,
+  lastObserved: {
+    expectedWorkflowStep: 'ACTIVE',
+    expectedStatus: 'active',
+    polls: 26,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'coordinator-hol-owner-node',
+    partitionId: 'control_plane_publications-p1',
+    operationId: 'coordinator-hol-sibling-reconcile'
+  },
+  repeats: 0
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'coordinator-hol-sibling-reconcile',
+  workflowStep: 'ACTIVE',
+  partitionId: 'control_plane_publications-p1',
+  cause: 'confirmation_failed',
+  attempt: 0,
+  delayMs: 500
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'coordinator-hol-owner-node',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Operation failed {
+  operationId: 'op-same-object-failOperation',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-remote',
+  errorMessage: 'test failure'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-2',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 60000,
+  elapsedMs: 70978,
+  lastObserved: {
+    type: 'REPLACE',
+    workflowStep: 'SYNCING',
+    status: 'syncing',
+    targetNodeId: 'node-2',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 224922,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:syncing',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-2',
+    partitionId: 'sql_write_operations-p1',
+    operationId: 'op-priority-syncing-timeout'
+  },
+  repeats: 0
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-priority-syncing-timeout',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-priority-syncing-timeout',
+    replica_id: 'sql_write_operations-p1-r4',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795261311673,
+    completed_at: 1795261311673,
+    error_message: 'Timeout in SYNCING step after 70978ms'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795261311705
+}
+Operation failed {
+  operationId: 'op-priority-syncing-timeout',
+  type: 'REPLACE',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-2',
+  errorMessage: 'Timeout in SYNCING step after 70978ms'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Deferred retryable replica operation transition failure {
+  operationId: 'op-deferred-transition-retry-timeout',
+  boundary: null,
+  partitionId: 'replica_operations-p1',
+  workflowStep: 'PENDING',
+  delayMs: 1000,
+  errorMessage: 'Retryable control-plane transition failure'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 66048,
+  lastObserved: {
+    type: 'REPLACE',
+    workflowStep: 'PENDING',
+    status: 'pending',
+    targetNodeId: 'node-2',
+    stepExceeded: true,
+    budgetExhausted: true,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 0,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:pending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-2',
+    partitionId: 'control_plane_publications-p1',
+    operationId: 'op-stale-priority-pending'
+  },
+  repeats: 0
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-stale-priority-pending',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-stale-priority-pending',
+    replica_id: 'control_plane_publications-p1-r4',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795261311827,
+    completed_at: 1795261311827,
+    error_message: 'Timeout in PENDING step after 66048ms'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795261311835
+}
+Operation failed {
+  operationId: 'op-stale-priority-pending',
+  type: 'REPLACE',
+  partitionId: 'control_plane_publications-p1',
+  targetNodeId: 'node-2',
+  errorMessage: 'Timeout in PENDING step after 66048ms'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-4',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 66018,
+  lastObserved: {
+    type: 'REPLACE',
+    workflowStep: 'PENDING',
+    status: 'pending',
+    targetNodeId: 'node-4',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 229982,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:pending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-4',
+    partitionId: 'sql_transactions-p1',
+    operationId: 'op-timeout-reconcile-pending-cache-active-target'
+  },
+  repeats: 0
+}
+Create failure deferred while target lifecycle is unavailable {
+  operationId: 'op-timeout-reconcile-pending-cache-active-target',
+  partitionId: 'sql_transactions-p1',
+  targetNodeId: 'node-4'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 66030,
+  lastObserved: {
+    type: 'REPLACE',
+    workflowStep: 'PENDING',
+    status: 'pending',
+    targetNodeId: 'node-4',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 229970,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:pending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-4',
+    partitionId: 'sql_transactions-p1',
+    operationId: 'op-timeout-reconcile-pending-cache-active-target'
+  },
+  repeats: 0
+}
+Create failure deferred while target lifecycle is unavailable {
+  operationId: 'op-timeout-reconcile-pending-cache-active-target',
+  partitionId: 'sql_transactions-p1',
+  targetNodeId: 'node-4'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'field_mismatch',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-timeout-reconcile-pending-cache-active-target',
+  cacheValue: {
+    operation_id: 'op-timeout-reconcile-pending-cache-active-target',
+    replica_id: 'sql_transactions-p1-r4',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795261246843,
+    completed_at: null,
+    error_message: null
+  },
+  authoritativeValue: {
+    operation_id: 'op-timeout-reconcile-pending-cache-active-target',
+    replica_id: 'sql_transactions-p1-r4',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795261311923,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [ 'status', 'workflow_step', 'updated_at' ],
+  detectedAt: 1795261311929
+}
+Operation deferred by safety policy {
+  operationId: 'op-timeout-reconcile-pending-cache-active-target',
+  partitionId: 'sql_transactions-p1',
+  sourceNodeId: 'node-1',
+  targetNodeId: 'node-4',
+  workflowStep: 'ACTIVE',
+  reason: 'replace_remove_safety_blocked',
+  errorMessage: 'Critical partition sql_transactions-p1 safety check unavailable'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-2',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Failed to query operations from system table {
+  error: 'authoritative_row_source_unavailable',
+  nodeId: 'node-1',
+  code: null,
+  retryAfterMs: 0,
+  reasonCode: null,
+  participationKind: null,
+  tableName: 'replica_operations',
+  participantFailures: [],
+  firstFailedParticipant: null,
+  completionState: null
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 60000,
+  elapsedMs: 70800,
+  lastObserved: {
+    type: 'ADD',
+    workflowStep: 'CREATING',
+    status: 'creating',
+    targetNodeId: 'node-2',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 225000,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:creating',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-1',
+    partitionId: 'partition-1',
+    operationId: 'op-cache-visible-active'
+  },
+  repeats: 0
+}
+Create failure deferred while target lifecycle is unavailable {
+  operationId: 'op-cache-visible-active',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-2'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'field_mismatch',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-cache-visible-active',
+  cacheValue: {
+    operation_id: 'op-cache-visible-active',
+    replica_id: 'partition-1-r2',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    updated_at: 1795261242221,
+    completed_at: null,
+    error_message: null
+  },
+  authoritativeValue: {
+    operation_id: 'op-cache-visible-active',
+    replica_id: 'partition-1-r2',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795261312294,
+    completed_at: 1795261312294,
+    error_message: null
+  },
+  divergentFields: [ 'status', 'workflow_step', 'updated_at', 'completed_at' ],
+  detectedAt: 1795261312301
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-1',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 70914,
+  lastObserved: {
+    type: 'ADD',
+    workflowStep: 'SENDING',
+    status: 'pending',
+    targetNodeId: 'node-2',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 224986,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:sending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-1',
+    partitionId: 'partition-1',
+    operationId: 'op-cache-visible-sending-active'
+  },
+  repeats: 0
+}
+Create failure deferred while target lifecycle is unavailable {
+  operationId: 'op-cache-visible-sending-active',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-2'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'field_mismatch',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-cache-visible-sending-active',
+  cacheValue: {
+    operation_id: 'op-cache-visible-sending-active',
+    replica_id: 'partition-1-r2',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795261242328,
+    completed_at: null,
+    error_message: null
+  },
+  authoritativeValue: {
+    operation_id: 'op-cache-visible-sending-active',
+    replica_id: 'partition-1-r2',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795261312349,
+    completed_at: 1795261312349,
+    error_message: null
+  },
+  divergentFields: [ 'status', 'workflow_step', 'updated_at', 'completed_at' ],
+  detectedAt: 1795261312355
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 5000,
+  elapsedMs: 5026,
+  lastObserved: {
+    expectedWorkflowStep: 'SENDING',
+    expectedStatus: 'pending',
+    polls: 26,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'node-single-writer',
+    partitionId: 'partition-sw-1',
+    operationId: 'op-sw-1'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 5000,
+  elapsedMs: 5019,
+  lastObserved: {
+    expectedWorkflowStep: 'SENDING',
+    expectedStatus: 'pending',
+    polls: 26,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'node-single-writer',
+    partitionId: 'sql_transactions-p1',
+    operationId: 'op-sw-1'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 5000,
+  elapsedMs: 5013,
+  lastObserved: {
+    expectedWorkflowStep: 'SENDING',
+    expectedStatus: 'pending',
+    polls: 26,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'node-single-writer',
+    partitionId: 'sql_transactions-p1',
+    operationId: 'op-sw-1'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 5000,
+  elapsedMs: 5018,
+  lastObserved: {
+    expectedWorkflowStep: 'SENDING',
+    expectedStatus: 'pending',
+    polls: 26,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'node-single-writer',
+    partitionId: 'partition-sw-1',
+    operationId: 'op-sw-1'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+  boundMs: 5000,
+  elapsedMs: 5018,
+  lastObserved: {
+    expectedWorkflowStep: 'SENDING',
+    expectedStatus: 'pending',
+    polls: 26,
+    sawVisibilityMismatch: true,
+    deferredOutcome: false
+  },
+  scope: {
+    nodeId: 'node-single-writer',
+    partitionId: 'partition-sw-1',
+    operationId: 'op-sw-1'
+  },
+  repeats: 0
+}

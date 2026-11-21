@@ -1,0 +1,14 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.42
+[tv-dator] placement-shell=2756157
+[tv-dator] placement-head=bb1c3b78e1d46d22378143fe40a18b784fa4e093
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement: the commit's generated metadata is stale; regenerate and commit test/shards/impact-graph-seal.json 
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=0
+lab test: tv-dator: 1 file(s) reported no result: exit 97
+# test-files total=1 pass=0 fail=1 assertions=0
+exit=1

@@ -1,0 +1,4 @@
+{"file":"test/scripts/fallback-branch-census.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":8844,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":15375,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/check-fast-static.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":19953,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-owed-admission-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":34415,"retriedOnce":false,"firstFailureLine":null}

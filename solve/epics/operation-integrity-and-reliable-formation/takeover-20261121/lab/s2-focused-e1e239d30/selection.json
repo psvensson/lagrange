@@ -1,0 +1,35 @@
+{
+  "sha": "e1e239d30dd60729513109d14edc7fa0951df424",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/replace-named-handoff-attempt.test.js",
+    "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js",
+    "test/bootstrap/bootstrap-topology-snapshot-owner.test.js",
+    "test/node/group-retirement-redrive.test.js",
+    "test/partition/partition-service-row-owner.test.js",
+    "test/scripts/check-runtime-grammar-contracts.test.js",
+    "test/convergence/dt-ledger-completion-continuity-discriminator.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/node/group-retirement-redrive.test.js",
+        "test/convergence/dt-ledger-completion-continuity-discriminator.test.js",
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js",
+        "test/scripts/check-runtime-grammar-contracts.test.js",
+        "test/partition/partition-service-row-owner.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/bootstrap-topology-snapshot-owner.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

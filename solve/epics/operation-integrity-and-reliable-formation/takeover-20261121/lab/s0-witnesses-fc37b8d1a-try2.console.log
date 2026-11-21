@@ -1,0 +1,183 @@
+lab test: adams-gamla: ordinary (9 files) cores=4 mem=15.6GiB speed x2.15
+[adams-gamla] placement-shell=1616129
+[adams-gamla] placement-head=fc37b8d1aa151a10f994d18ccd7815b4de96afa4
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1617991
+[adams-gamla] # test-files planned=9
+[adams-gamla] classified lane ordinary: 9 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 56C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/cdc/cdc-owner-fact-hosted-replica.test.js (2 assertions, 12911ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: a replica the handler hosts after the node joined, once elected, is read in process
+[adams-gamla]     not ok 1 - setup: the leader has applied an entry of its term and everything it committed  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: |
+[adams-gamla]         Object.settleLeader (test/cdc/cdc-owner-fact-group-fixture.js:359:14)
+[adams-gamla]         async Test.<anonymous> (test/cdc/cdc-owner-fact-hosted-replica.test.js:32:3)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 359
+[adams-gamla]         columnNumber: 14
+[adams-gamla]         typeName: Object
+[adams-gamla]         methodName: settleLeader
+[adams-gamla]         functionName: Object.settleLeader
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             },
+[adams-gamla]             async settleLeader(service) {
+[adams-gamla]               assert.equal(await group.waitFor(() => {
+[adams-gamla]         -------------^
+[adams-gamla]                 const status = service.raft.readStatus();
+[adams-gamla]                 return status.role === RAFT_ROLE.LEADER && service.role === RAFT_ROLE.LEADER &&
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - readOwnerFact: a replica the handler hosts after the node joined, once elected, is read in process # time=10555.06ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-hosted-replica.test.js
+[adams-gamla]     lineNumber: 28
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: a replica the handler hosts after the node joined, once
+[adams-gamla]     elected, is ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'read in process', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 1, pass: 0, fail: 1 }
+[adams-gamla] # time=10570.365ms
+[adams-gamla] not ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (2 assertions, 12937ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: an empty answer from a replica that does not lead is never absence
+[adams-gamla]     not ok 1 - setup: the leader has applied an entry of its term and everything it committed  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         Object.settleLeader (test/cdc/cdc-owner-fact-group-fixture.js:359:14)
+[adams-gamla]       
+[adams-gamla]         async Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-owner-fact-non-leader-absence.test.js:38:5)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 359
+[adams-gamla]         columnNumber: 14
+[adams-gamla]         typeName: Object
+[adams-gamla]         methodName: settleLeader
+[adams-gamla]         functionName: Object.settleLeader
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             },
+[adams-gamla]             async settleLeader(service) {
+[adams-gamla]               assert.equal(await group.waitFor(() => {
+[adams-gamla]         -------------^
+[adams-gamla]                 const status = service.raft.readStatus();
+[adams-gamla]                 return status.role === RAFT_ROLE.LEADER && service.role === RAFT_ROLE.LEADER &&
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - readOwnerFact: an empty answer from a replica that does not lead is never absence # time=10529.089ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+[adams-gamla]     lineNumber: 34
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: an empty answer from a replica that does not lead is
+[adams-gamla]     never absence',
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]         const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 1, pass: 0, fail: 1 }
+[adams-gamla] # time=10547.684ms
+[adams-gamla] not ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (2 assertions, 13066ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent
+[adams-gamla]     not ok 1 - setup: the leader has applied an entry of its term and everything it committed  false !== true
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         Object.settleLeader (test/cdc/cdc-owner-fact-group-fixture.js:359:14)
+[adams-gamla]       
+[adams-gamla]         async Test.<anonymous>
+[adams-gamla]         (test/cdc/cdc-leader-required-fresh-leader-absence.test.js:41:3)
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-group-fixture.js
+[adams-gamla]         lineNumber: 359
+[adams-gamla]         columnNumber: 14
+[adams-gamla]         typeName: Object
+[adams-gamla]         methodName: settleLeader
+[adams-gamla]         functionName: Object.settleLeader
+[adams-gamla]       type: AssertionError
+[adams-gamla]       generatedMessage: false
+[adams-gamla]       code: ERR_ASSERTION
+[adams-gamla]       actual: false
+[adams-gamla]       expected: true
+[adams-gamla]       operator: strictEqual
+[adams-gamla]       diff: simple
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: >2
+[adams-gamla]             },
+[adams-gamla]             async settleLeader(service) {
+[adams-gamla]               assert.equal(await group.waitFor(() => {
+[adams-gamla]         -------------^
+[adams-gamla]                 const status = service.raft.readStatus();
+[adams-gamla]                 return status.role === RAFT_ROLE.LEADER && service.role === RAFT_ROLE.LEADER &&
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - FINDING (open): a leader-REQUIRED read that is not an owner fact answers a row its leader's predecessor committed as absent # time=10577.272ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-leader-required-fresh-leader-absence.test.js
+[adams-gamla]     lineNumber: 37
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('FINDING (open): a leader-REQUIRED read that is not an owner fact answers
+[adams-gamla]     a row its ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'leader\'s predecessor committed as absent', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 1, pass: 0, fail: 1 }
+[adams-gamla] # time=10589.982ms

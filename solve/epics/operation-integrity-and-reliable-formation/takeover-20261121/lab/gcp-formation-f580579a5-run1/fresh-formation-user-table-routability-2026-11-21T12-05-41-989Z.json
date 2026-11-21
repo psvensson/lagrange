@@ -1,0 +1,75 @@
+{
+  "size": 3,
+  "docker": {
+    "hosts": [
+      "tcp://127.0.0.1:34057",
+      "tcp://127.0.0.1:37191",
+      "tcp://127.0.0.1:35069"
+    ],
+    "hostInfo": [
+      {
+        "internalIp": "10.166.15.206",
+        "externalIp": "10.166.15.206",
+        "hostName": "lagrange-fdiag-1",
+        "machineId": "boot:71e33ccd-53d1-4f9e-bea1-28e2eb58bc1e"
+      },
+      {
+        "internalIp": "10.166.15.205",
+        "externalIp": "10.166.15.205",
+        "hostName": "lagrange-fdiag-2",
+        "machineId": "boot:b8ebcb68-f3a7-4aa8-90f4-c03e9a19892d"
+      },
+      {
+        "internalIp": "10.166.15.204",
+        "externalIp": "10.166.15.204",
+        "hostName": "lagrange-fdiag-3",
+        "machineId": "boot:ae95358e-3bbb-4b18-9993-71fbb165a135"
+      }
+    ],
+    "buildOnHosts": true
+  },
+  "image": "distributed-db:test",
+  "timeouts": {
+    "nodeStartup": 60000,
+    "convergence": 90000,
+    "quietWindow": 3000,
+    "scenarioDefault": 120000,
+    "bootstrapReadyStableWindowMs": 1000
+  },
+  "convergence": {
+    "targetVoterCount": 3,
+    "settleTimeoutMs": 30000,
+    "quietWindowMs": 3000,
+    "maxSustainedOverTargetMs": 2000,
+    "sampleIntervalMs": 250
+  },
+  "resourceLimits": {
+    "memory": "1g",
+    "cpus": "1.0"
+  },
+  "scenarios": {
+    "rollingRestart": {
+      "loadDuration": "75s",
+      "preRestartSettleMs": 1000,
+      "perRestartActiveTimeoutMs": 90000,
+      "perNodeConvergenceTimeoutMs": 60000,
+      "interRestartDelayMs": 250,
+      "postRestartLoadSoakMs": 1000,
+      "postRestartQuietWindowMs": 4000,
+      "postRestartActiveTimeoutMs": 60000
+    }
+  },
+  "benchmark": {
+    "controlQueryTimeoutMs": 15000
+  },
+  "memoryLeak": {
+    "enabled": true,
+    "failOnDetection": false,
+    "requireSamples": false
+  },
+  "load": {
+    "defaultOpsPerSec": 100,
+    "defaultDuration": "30s"
+  },
+  "nodesPerHost": 1
+}

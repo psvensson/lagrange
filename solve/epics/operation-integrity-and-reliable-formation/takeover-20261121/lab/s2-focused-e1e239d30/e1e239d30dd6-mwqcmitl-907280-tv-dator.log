@@ -1,0 +1,559 @@
+placement-shell=2757872
+placement-head=e1e239d30dd60729513109d14edc7fa0951df424
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2758334
+# test-files planned=7
+classified lane ordinary: 6 file(s), jobs=4
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/rebalancer/surplus-drain-prefers-non-leader-source.test.js (33 assertions, 1727ms)
+not ok test/rebalancer/replace-named-handoff-attempt.test.js (38 assertions, 2013ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead
+    not ok 1 - one handoff was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 216
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:216:7)
+      source: |2
+          try {
+            await harness.coordinator.executeOperation(harness.operation);
+            t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+        ------^
+            const request = harness.stepDowns()[0];
+            t.ok(request.target.startsWith(TARGET_NODE_ID),
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - Cannot read properties of undefined (reading 'target')
+      ---
+      stack: >
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:218:18)
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 218
+        columnNumber: 18
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+            t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+            const request = harness.stepDowns()[0];
+            t.ok(request.target.startsWith(TARGET_NODE_ID),
+        -----------------^
+              'the handoff goes to the target node');
+            t.equal(request.payload[ReplicaOperationField.REPLICA_ID],
+      ...
+    
+    1..2
+not ok 1 - named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead # time=137.78ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 210
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('named-target only: while the source leads, the only handoff names the '
+    +
+  
+    ^
+      'REPLACE\'s own target, and removal waits for the witness to see it lead',
+    async (t) => {
+  ...
+
+# Subtest: one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target
+    not ok 1 - an accepted, unresolved attempt is not re-issued
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 251
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:251:7)
+      source: |2
+            await harness.coordinator.executeOperation(harness.operation);
+            await harness.coordinator.executeOperation(harness.operation);
+            t.equal(harness.stepDowns().length, 1,
+        ------^
+              'an accepted, unresolved attempt is not re-issued');
+            t.equal(readReplaceHandoffAttempt(harness.owner,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - Cannot read properties of null (reading 'answerClass')
+      ---
+      stack: >
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:254:37)
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 254
+        columnNumber: 37
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+              'an accepted, unresolved attempt is not re-issued');
+            t.equal(readReplaceHandoffAttempt(harness.owner,
+              harness.operation.operationId).answerClass,
+        ------------------------------------^
+            REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED, 'the attempt is accepted');
+      ...
+    
+    1..2
+not ok 2 - one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target # time=43.605ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 243
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('one attempt: an unresolved attempt blocks a second handoff; a refused '
+    +
+  
+    ^
+      'attempt resolves and the next one names the same target', async (t) => {
+      let answer = {status: ReplicaOperationResponseStatus.COMPLETED,
+  ...
+
+# Subtest: attemptSeq echo: a late answer of an earlier attempt is dropped
+    not ok 1 - Cannot read properties of null (reading 'attemptSeq')
+      ---
+      stack: >
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:293:56)
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 293
+        columnNumber: 56
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+                harness.operation.operationId,
+                {status: ReplicaOperationResponseStatus.COMPLETED,
+                  [ReplicaOperationField.ATTEMPT_SEQ]: current.attemptSeq - 1},
+        -------------------------------------------------------^
+                current.attemptSeq);
+              t.equal(applied, false, 'the late answer is not applied');
+      ...
+    
+    1..1
+not ok 3 - attemptSeq echo: a late answer of an earlier attempt is dropped # time=35.097ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 282
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('attemptSeq echo: a late answer of an earlier attempt is dropped',
+    ^
+      async (t) => {
+        const harness = await createHarness({stepDownResponse: () => null});
+  ...
+
+# Subtest: attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding
+    not ok 1 - one handoff was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 316
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:316:7)
+      source: |2
+            const attempt = readReplaceHandoffAttempt(harness.owner,
+              harness.operation.operationId);
+            t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+        ------^
+            t.equal(attempt?.answerClass, null,
+              'the mismatched answer resolved nothing');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - the mismatched answer resolved nothing
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 317
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:317:7)
+      source: |2
+              harness.operation.operationId);
+            t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+            t.equal(attempt?.answerClass, null,
+        ------^
+              'the mismatched answer resolved nothing');
+            t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -null
+        +undefined
+      ...
+    
+    not ok 3 - it was counted late
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 319
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:319:7)
+      source: |2
+            t.equal(attempt?.answerClass, null,
+              'the mismatched answer resolved nothing');
+            t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+        ------^
+              lateBefore + 1, 'it was counted late');
+            await harness.coordinator.executeOperation(harness.operation);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 4 - the outstanding attempt blocks a second handoff
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 322
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:322:7)
+      source: |2
+              lateBefore + 1, 'it was counted late');
+            await harness.coordinator.executeOperation(harness.operation);
+            t.equal(harness.stepDowns().length, 1,
+        ------^
+              'the outstanding attempt blocks a second handoff');
+            t.equal(harness.removals().length, 0, 'and no removal');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    ok 5 - and no removal
+    1..5
+not ok 4 - attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding # time=47.26ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 303
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('attemptSeq echo, routed: an answer echoing another attempt through the '
+    +
+  
+    ^
+      'real dispatch leaves the current attempt outstanding', async (t) => {
+      const harness = await createHarness({stepDownResponse: (payload) => ({
+  ...
+
+# Subtest: F-b: no handoff leaves for an operation that became terminal
+    ok 1 - the decision was to issue a handoff
+    ok 2 - nothing was sent
+    ok 3 - no STEP_DOWN left
+    1..3
+ok 5 - F-b: no handoff leaves for an operation that became terminal # time=31.043ms
+
+# Subtest: no retarget: a target that reports its replica missing fails the REPLACE before its removal intent
+    not ok 1 - the REPLACE failed before any removal intent
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 359
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:359:7)
+      source: |2
+            const persisted = await harness.coordinator.queryOperationById(
+              harness.operation.operationId);
+            t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
+        ------^
+              'the REPLACE failed before any removal intent');
+            t.equal(harness.removals().length, 0, 'no source removal was sent');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -FAILED
+        +PENDING
+      ...
+    
+    ok 2 - no source removal was sent
+    not ok 3 - no other replica was asked to lead
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "sql_transactions-p1-r4",
+        -]
+        +Array []
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 362
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:362:7)
+      source: |2
+              'the REPLACE failed before any removal intent');
+            t.equal(harness.removals().length, 0, 'no source removal was sent');
+            t.same([...new Set(harness.stepDowns().map((delivery) =>
+        ------^
+              delivery.payload[ReplicaOperationField.REPLICA_ID]))],
+            [TARGET_REPLICA_ID], 'no other replica was asked to lead');
+      ...
+    
+    1..3
+not ok 6 - no retarget: a target that reports its replica missing fails the REPLACE before its removal intent # time=34.415ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 350
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('no retarget: a target that reports its replica missing fails the ' +
+    ^
+      'REPLACE before its removal intent', async (t) => {
+      const harness = await createHarness({stepDownResponse: () => ({
+  ...
+
+# Subtest: BR12: no handoff leaves on a deferred-visibility snapshot
+    ok 1 - the deferred snapshot issues no handoff
+    ok 2 - control: the fresh copy issues the named-target handoff
+    1..2
+ok 7 - BR12: no handoff leaves on a deferred-visibility snapshot # time=39.063ms
+
+# Subtest: BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff
+    ok 1 - a non-source, non-target leader does not authorize the removal
+    not ok 2 - one handoff was issued
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 397
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:397:7)
+      source: |2
+            t.equal(harness.removals().length, 0,
+              'a non-source, non-target leader does not authorize the removal');
+            t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+        ------^
+            t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+              TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 3 - it names the REPLACE's own target
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 398
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:398:7)
+      source: |2
+              'a non-source, non-target leader does not authorize the removal');
+            t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+            t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+        ------^
+              TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+            harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -sql_transactions-p1-r4
+        +undefined
+      ...
+    
+    not ok 4 - the target leading (fresh read) lets removal proceed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 402
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:402:7)
+      source: |2
+            harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+            await harness.coordinator.executeOperation(harness.operation);
+            t.equal(harness.removals().length, 1,
+        ------^
+              'the target leading (fresh read) lets removal proceed');
+          } finally {
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    1..4
+not ok 8 - BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff # time=37.065ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 389
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('BR11: only a fresh read of the target leading authorizes removal; a ' +
+    ^
+      'third replica leading gets the named-target handoff', async (t) => {
+      const harness = await createHarness();
+  ...
+
+# Subtest: S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt
+    not ok 1 - Cannot read properties of null (reading 'answerClass')
+      ---
+      stack: >
+        Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:422:21)
+      at:
+        fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+        lineNumber: 422
+        columnNumber: 21
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+            const attempt = readReplaceHandoffAttempt(harness.owner,
+              harness.operation.operationId);
+            t.equal(attempt.answerClass, REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED,
+        --------------------^
+              'setup: attempt accepted');
+            harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+      ...
+    
+    1..1
+not ok 9 - S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt # time=32.752ms
+  ---
+  at:
+    fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+    lineNumber: 415
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    // target leading (LEADERSHIP_SAFE); a later ACTIVE wait (another check
+    // deferring) must not read "attempt unresolved" with no attempt.
+    test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
+    ^
+      'handoff attempt, not an unresolved phase with no attempt', async (t) => {
+      const harness = await createHarness();
+  ...
+
+# Subtest: necessity: the priority REPLACE leader-removal decision reads only the fresh witness; no SERVICES raft_role and no partitions.leader_node_id changes it
+    ok 1 - witness leader sql_transactions-p1-r1: none of 128 row-input combinations changes the decision
+    ok 2 - witness leader sql_transactions-p1-r4: none of 128 row-input combinations changes the decision
+    ok 3 - anchor: while the witness reads the source leading, removal waits
+    ok 4 - anchor: and the named handoff goes to the target
+    ok 5 - anchor: the witness reading the target leading changes the decision to safe
+    1..5
+ok 10 - necessity: the priority REPLACE leader-removal decision reads only the fresh witness; no SERVICES raft_role and no partitions.leader_node_id changes it # time=60.82ms
+
+1..10
+# { total: 28, pass: 13, fail: 15 }
+# time=524.348ms
+ok test/convergence/dt-ledger-completion-continuity-discriminator.test.js (64 assertions, 2157ms)
+ok test/scripts/check-runtime-grammar-contracts.test.js (70 assertions, 507ms)
+ok test/partition/partition-service-row-owner.test.js (212 assertions, 673ms)
+ok test/node/group-retirement-redrive.test.js (117 assertions, 3200ms)
+# test-files total=6 pass=5 fail=1 assertions=534
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 53C (nvme/Sensor 1)
+ok test/bootstrap/bootstrap-topology-snapshot-owner.test.js (65 assertions, 538ms)
+# test-files total=1 pass=1 fail=0 assertions=65
+placement-results={"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":1727,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":false,"assertions":38,"durationMs":2013,"retriedOnce":false,"firstFailureLine":"not ok 1 - one handoff was issued"}
+placement-results={"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":2157,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-runtime-grammar-contracts.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":507,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":673,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":3200,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":538,"retriedOnce":false,"firstFailureLine":null}

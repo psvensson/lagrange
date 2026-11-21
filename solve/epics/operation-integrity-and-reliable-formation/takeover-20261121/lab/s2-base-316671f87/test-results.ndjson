@@ -1,0 +1,2 @@
+{"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":179,"durationMs":664,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":false,"assertions":32,"durationMs":1368,"retriedOnce":false,"firstFailureLine":"not ok 1 - one handoff was issued"}

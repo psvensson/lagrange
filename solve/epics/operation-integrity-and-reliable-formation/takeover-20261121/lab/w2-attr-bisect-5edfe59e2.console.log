@@ -1,0 +1,179 @@
+lab test: adam-laptop: ordinary (16 files) cores=8 mem=15.5GiB speed x2.05
+[adam-laptop] placement-shell=3132269
+[adam-laptop] placement-head=5edfe59e2e42b0b6e04566a941e22d217c5ac35b
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3132720
+[adam-laptop] # test-files planned=16
+[adam-laptop] classified lane ordinary: 16 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 83C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 83C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 43C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+[adam-laptop] ok test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js (30 assertions, 2488ms)
+[adam-laptop] not ok test/partition/placement-retained-leadership.test.js (4 assertions, 7173ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+[adam-laptop] not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4520.08325
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:36:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'A used current B route instead of saved A closure'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:47:12
+[adam-laptop]     async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:94:7)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:16:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: paused pinned A request survives B custody and genuine A recovery unchanged
+[adam-laptop] not ok 2 - paused pinned A request survives B custody and genuine A recovery unchanged
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 113.812069
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:58:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "Cannot read properties of undefined (reading 'entryId')"
+[adam-laptop]   code: 'ERR_TEST_FAILURE'
+[adam-laptop]   name: 'TypeError'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:69:27
+[adam-laptop]     async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:94:7)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:16:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a lost committed reply retires from the visible winner without another native proposal
+[adam-laptop] ok 3 - a lost committed reply retires from the visible winner without another native proposal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 97.901893
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+[adam-laptop] not ok 4 - genuinely uncommitted pinned A request routes A-B-A without changing identity or proposing early
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 93.476798
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:122:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'false == true'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership.test.js:133:12
+[adam-laptop]     async withRepairLedger.nodeId (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:94:7)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async onLedgerLeader.dbPath (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withRepairLedger (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adam-laptop]     async withRetainedLeadershipPair (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/placement-retained-leadership-fixture.js:16:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]   ...
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 1
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 4835.301908
+[adam-laptop] # time=7173ms
+[adam-laptop] ok test/rebalancer/assignment-epoch-fencing.test.js (26 assertions, 7742ms)
+[adam-laptop] ok test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (97 assertions, 3156ms)
+[adam-laptop] ok test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js (7 assertions, 3271ms)
+[adam-laptop] ok test/rebalancer/orphaned-operation-reconcile-redrive.test.js (14 assertions, 3260ms)
+[adam-laptop] ok test/rebalancer/rebalance-coordinator-atomic-transitions.test.js (49 assertions, 3285ms)
+[adam-laptop] ok test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js (315 assertions, 3754ms)
+[adam-laptop] not ok test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (5 assertions, 19130ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, or 4096 owed events executes a constant O(1) number of SQLite read queries (<= 4 per wave) and cuts on the byte bound
+[adam-laptop] ok 1 - R1 oversized entry scaling: shipping 1 event from a single Raft entry with 512, 1024, or 4096 owed events executes a constant O(1) number of SQLite read queries (<= 4 per wave) and cuts on the byte bound
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4757.71775
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit range, and bounds full-drain latency and synchronous spans
+[adam-laptop] not ok 2 - R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event whole-unit range, and bounds full-drain latency and synchronous spans
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 5675.268891
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js:370:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'M=1024: bounded spans and full-drain latency: {"eventCount":1024,"waves":899,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":129.856,"maxDriveSpanMs":909.905,"fullDrainMs":3746.66}'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/5edfe59e2e42-mwqc477y-881521/test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js:394:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # R4 full drain metrics: {"eventCount":512,"waves":387,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":14.738,"maxDriveSpanMs":657.758,"fullDrainMs":1129.107}
+[adam-laptop] # R4 full drain metrics: {"eventCount":1024,"waves":899,"totalEntryBytesQueries":1,"maxWaveQueries":4,"tailWaveRows":128,"maxComposeSpanMs":129.856,"maxDriveSpanMs":909.905,"fullDrainMs":3746.66}
+[adam-laptop] # Subtest: R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an oversized entry's remaining owed bytes within SHIP_MAX_BYTES, the remaining ordinals ship together as one whole-entry unit
+[adam-laptop] ok 3 - R2 oversized-to-whole transition (S-12 / S-13): once committed CDC_DELIVERED reduces an oversized entry's remaining owed bytes within SHIP_MAX_BYTES, the remaining ordinals ship together as one whole-entry unit
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 242.215238
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: R3 pending/hydrated prefix paging and position-only drainPendingHydratedObligations: skipping 300 pending or hydrated rows uses paged position queries (<= 4) and drainPendingHydratedObligations never reads event_json payloads
+[adam-laptop] ok 4 - R3 pending/hydrated prefix paging and position-only drainPendingHydratedObligations: skipping 300 pending or hydrated rows uses paged position queries (<= 4) and drainPendingHydratedObligations never reads event_json payloads
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1306.631494
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: R5 byte-tally commit eviction and rollback restoration: completing multiple oversized entries evicts every tally on commit with zero retained unverified keys, and rolling back a failed CDC_DELIVERED apply after MARK_DELIVERED invalidates the uncommitted tally via afterRollback
+[adam-laptop] ok 5 - R5 byte-tally commit eviction and rollback restoration: completing multiple oversized entries evicts every tally on commit with zero retained unverified keys, and rolling back a failed CDC_DELIVERED apply after MARK_DELIVERED invalidates the uncommitted tally via afterRollback
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4880.703825
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..5
+[adam-laptop] # tests 5
+[adam-laptop] # suites 0
+[adam-laptop] # pass 4
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 16872.373791
+[adam-laptop] # time=19130ms
+[adam-laptop] ok test/rebalancer/replica-operations-single-writer.test.js (49 assertions, 3813ms)
+[adam-laptop] ok test/rebalancer/required-entity-operation-observation.test.js (177 assertions, 3765ms)
+[adam-laptop] ok test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js (293 assertions, 6259ms)
+[adam-laptop] ok test/rebalancer/spread-cure-transition-authorization-production-path.test.js (2 assertions, 2968ms)
+[adam-laptop] ok test/scripts/fallback-branch-census.test.js (38 assertions, 11504ms)
+[adam-laptop] ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 53406ms)
+[adam-laptop] ok test/scripts/check-fast-static.test.js (6 assertions, 37237ms)
+[adam-laptop] # test-files total=16 pass=14 fail=2 assertions=1113
+lab test: adam-laptop: # test-files total=16 pass=14 fail=2 assertions=1113
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=16 pass=14 fail=2 assertions=1113
+exit=1

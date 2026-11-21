@@ -1,0 +1,615 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.03
+[adam-laptop] placement-shell=3144028
+[adam-laptop] placement-head=b638284d110d2a6b7cd55ebf902a63cb262fa25a
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3144590
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 75C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/cdc/cdc-owner-required-authoritative-routing.test.js (83 assertions, 2247ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: strict CDC reads route to the registered owner while a local query is held
+[adam-laptop]     ok 1 - the remote owner has a live node connection
+[adam-laptop]     ok 2 - native owner is leader
+[adam-laptop]     ok 3 - the exact native owner transport handler is registered
+[adam-laptop] {"level":50,"time":"2026-11-21T11:54:59.331Z","nodeId":"e91dac0b-6cff-4248-963e-93c9c034957b","pid":3144606,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":117,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"e91dac0b-6cff-4248-963e-93c9c034957b","msg":"Wait bound spent"}
+[adam-laptop]     # Subtest: remote success
+[adam-laptop]         ok 1 - only a permitted local mode enters the held local query
+[adam-laptop]         ok 2 - count local probes
+[adam-laptop]         not ok 3 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 204
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:204:13)
+[adam-laptop]           source: |2
+[adam-laptop]                         'only a permitted local mode enters the held local query');
+[adam-laptop]                       t.equal(calls.localCount, strict ? 0 : 1, 'count local probes');
+[adam-laptop]                       t.equal(answer.success, scenario.success === true);
+[adam-laptop]             ------------^
+[adam-laptop]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adam-laptop]                       t.same(answer.rows, scenario.success ? rows : []);
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -true
+[adam-laptop]             +false
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 4 - should be equivalent
+[adam-laptop]           ---
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,6 +1,1 @@
+[adam-laptop]             -Array [
+[adam-laptop]             -  Object {
+[adam-laptop]             -    "operation_id": "strict-read-operation",
+[adam-laptop]             -    "workflow_step": "OWNER",
+[adam-laptop]             -  },
+[adam-laptop]             -]
+[adam-laptop]             +Array []
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 206
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:206:13)
+[adam-laptop]           source: >2
+[adam-laptop]                       t.equal(answer.success, scenario.success === true);
+[adam-laptop]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adam-laptop]                       t.same(answer.rows, scenario.success ? rows : []);
+[adam-laptop]             ------------^
+[adam-laptop]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adam-laptop]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 5 - should be equal
+[adam-laptop]         ok 6 - should be equal
+[adam-laptop]         ok 7 - should be equal
+[adam-laptop]         ok 8 - should be equal
+[adam-laptop]         ok 9 - should be equal
+[adam-laptop]         not ok 10 - owner routing reaches the real query transport
+[adam-laptop]           ---
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 216
+[adam-laptop]             columnNumber: 15
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+[adam-laptop]           source: >2
+[adam-laptop]                         t.equal(calls.owner.length, 0);
+[adam-laptop]                       } else {
+[adam-laptop]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adam-laptop]             --------------^
+[adam-laptop]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adam-laptop]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 11 - should be equal
+[adam-laptop]         not ok 12 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 223
+[adam-laptop]             columnNumber: 17
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+[adam-laptop]           source: >2
+[adam-laptop]                           t.ok(calls.owner.every(({answer}) => !answer?.success));
+[adam-laptop]                         } else {
+[adam-laptop]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adam-laptop]             ----------------^
+[adam-laptop]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adam-laptop]                         }
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -true
+[adam-laptop]             +undefined
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 13 - one owner delivery
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 224
+[adam-laptop]             columnNumber: 39
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:224:39)
+[adam-laptop]           source: >2
+[adam-laptop]                         } else {
+[adam-laptop]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adam-laptop]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adam-laptop]             --------------------------------------^
+[adam-laptop]                         }
+[adam-laptop]                       }
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -1
+[adam-laptop]             +0
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..13
+[adam-laptop]     not ok 4 - remote success # time=187.342ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]         lineNumber: 181
+[adam-laptop]         columnNumber: 17
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]               ];
+[adam-laptop]               for (const scenario of cases) {
+[adam-laptop]                 await t.test(scenario.label, async (t) => {
+[adam-laptop]         ----------------^
+[adam-laptop]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adam-laptop]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop] {"level":50,"time":"2026-11-21T11:54:59.502Z","nodeId":"e91dac0b-6cff-4248-963e-93c9c034957b","pid":3144606,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":105,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"e91dac0b-6cff-4248-963e-93c9c034957b","msg":"Wait bound spent"}
+[adam-laptop]     # Subtest: remote refusal
+[adam-laptop]         ok 1 - only a permitted local mode enters the held local query
+[adam-laptop]         ok 2 - count local probes
+[adam-laptop]         ok 3 - should be equal
+[adam-laptop]         ok 4 - should be equivalent
+[adam-laptop]         ok 5 - should be equal
+[adam-laptop]         ok 6 - should be equal
+[adam-laptop]         ok 7 - should be equal
+[adam-laptop]         ok 8 - should be equal
+[adam-laptop]         ok 9 - should be equal
+[adam-laptop]         not ok 10 - owner routing reaches the real query transport
+[adam-laptop]           ---
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 216
+[adam-laptop]             columnNumber: 15
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+[adam-laptop]           source: >2
+[adam-laptop]                         t.equal(calls.owner.length, 0);
+[adam-laptop]                       } else {
+[adam-laptop]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adam-laptop]             --------------^
+[adam-laptop]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adam-laptop]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 11 - should be equal
+[adam-laptop]         not ok 12 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 223
+[adam-laptop]             columnNumber: 17
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+[adam-laptop]           source: >2
+[adam-laptop]                           t.ok(calls.owner.every(({answer}) => !answer?.success));
+[adam-laptop]                         } else {
+[adam-laptop]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adam-laptop]             ----------------^
+[adam-laptop]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adam-laptop]                         }
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -false
+[adam-laptop]             +undefined
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..12
+[adam-laptop]     not ok 5 - remote refusal # time=118.156ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]         lineNumber: 181
+[adam-laptop]         columnNumber: 17
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]               ];
+[adam-laptop]               for (const scenario of cases) {
+[adam-laptop]                 await t.test(scenario.label, async (t) => {
+[adam-laptop]         ----------------^
+[adam-laptop]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adam-laptop]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: remote unavailable
+[adam-laptop]         ok 1 - only a permitted local mode enters the held local query
+[adam-laptop]         ok 2 - count local probes
+[adam-laptop]         ok 3 - should be equal
+[adam-laptop]         ok 4 - should be equivalent
+[adam-laptop]         ok 5 - should be equal
+[adam-laptop]         ok 6 - should be equal
+[adam-laptop]         ok 7 - should be equal
+[adam-laptop]         ok 8 - should be equal
+[adam-laptop]         ok 9 - should be equal
+[adam-laptop]         ok 10 - owner routing reaches the real query transport
+[adam-laptop]         not ok 11 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 217
+[adam-laptop]             columnNumber: 15
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:217:15)
+[adam-laptop]           source: >2
+[adam-laptop]                       } else {
+[adam-laptop]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adam-laptop]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adam-laptop]             --------------^
+[adam-laptop]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adam-laptop]                           budget.deliveryPriority === 'critical'));
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 12 - should be equal
+[adam-laptop]         1..12
+[adam-laptop]     not ok 6 - remote unavailable # time=125.357ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]         lineNumber: 181
+[adam-laptop]         columnNumber: 17
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]               ];
+[adam-laptop]               for (const scenario of cases) {
+[adam-laptop]                 await t.test(scenario.label, async (t) => {
+[adam-laptop]         ----------------^
+[adam-laptop]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adam-laptop]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: same-host owner
+[adam-laptop]         ok 1 - only a permitted local mode enters the held local query
+[adam-laptop]         ok 2 - count local probes
+[adam-laptop]         ok 3 - should be equal
+[adam-laptop]         ok 4 - should be equivalent
+[adam-laptop]         ok 5 - should be equal
+[adam-laptop]         ok 6 - should be equal
+[adam-laptop]         ok 7 - should be equal
+[adam-laptop]         ok 8 - should be equal
+[adam-laptop]         ok 9 - should be equal
+[adam-laptop]         ok 10 - owner routing reaches the real query transport
+[adam-laptop]         not ok 11 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 217
+[adam-laptop]             columnNumber: 15
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:217:15)
+[adam-laptop]           source: >2
+[adam-laptop]                       } else {
+[adam-laptop]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adam-laptop]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adam-laptop]             --------------^
+[adam-laptop]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adam-laptop]                           budget.deliveryPriority === 'critical'));
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 12 - should be equal
+[adam-laptop]         ok 13 - one owner delivery
+[adam-laptop]         1..13
+[adam-laptop]     not ok 7 - same-host owner # time=21.939ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]         lineNumber: 181
+[adam-laptop]         columnNumber: 17
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]               ];
+[adam-laptop]               for (const scenario of cases) {
+[adam-laptop]                 await t.test(scenario.label, async (t) => {
+[adam-laptop]         ----------------^
+[adam-laptop]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adam-laptop]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop] {"level":50,"time":"2026-11-21T11:54:59.785Z","nodeId":"e91dac0b-6cff-4248-963e-93c9c034957b","pid":3144606,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":106,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"e91dac0b-6cff-4248-963e-93c9c034957b","msg":"Wait bound spent"}
+[adam-laptop]     # Subtest: preferred owner
+[adam-laptop]         ok 1 - only a permitted local mode enters the held local query
+[adam-laptop]         ok 2 - count local probes
+[adam-laptop]         ok 3 - should be equal
+[adam-laptop]         not ok 4 - should be equivalent
+[adam-laptop]           ---
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,6 +1,6 @@
+[adam-laptop]              Array [
+[adam-laptop]                Object {
+[adam-laptop]                  "operation_id": "strict-read-operation",
+[adam-laptop]             -    "workflow_step": "OWNER",
+[adam-laptop]             +    "workflow_step": "LOCAL",
+[adam-laptop]                },
+[adam-laptop]              ]
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 206
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:206:13)
+[adam-laptop]           source: >2
+[adam-laptop]                       t.equal(answer.success, scenario.success === true);
+[adam-laptop]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adam-laptop]                       t.same(answer.rows, scenario.success ? rows : []);
+[adam-laptop]             ------------^
+[adam-laptop]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adam-laptop]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 5 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 207
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:207:13)
+[adam-laptop]           source: >2
+[adam-laptop]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adam-laptop]                       t.same(answer.rows, scenario.success ? rows : []);
+[adam-laptop]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adam-laptop]             ------------^
+[adam-laptop]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -owner_rpc_lane
+[adam-laptop]             +local_partition_replica
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 6 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 208
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:208:13)
+[adam-laptop]           source: >2
+[adam-laptop]                       t.same(answer.rows, scenario.success ? rows : []);
+[adam-laptop]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adam-laptop]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adam-laptop]             ------------^
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.routedToNode,
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -false
+[adam-laptop]             +true
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 7 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 209
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:209:13)
+[adam-laptop]           source: >2
+[adam-laptop]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adam-laptop]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adam-laptop]             ------------^
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.routedToNode,
+[adam-laptop]                         scenario.localResult ? null : OWNER);
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -false
+[adam-laptop]             +true
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 8 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 210
+[adam-laptop]             columnNumber: 13
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:210:13)
+[adam-laptop]           source: >2
+[adam-laptop]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.routedToNode,
+[adam-laptop]             ------------^
+[adam-laptop]                         scenario.localResult ? null : OWNER);
+[adam-laptop]                       t.equal(answer.systemTableDiagnostics?.queryTimeoutMs, TIMEOUT_MS);
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -strict-read-owner
+[adam-laptop]             +null
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 9 - should be equal
+[adam-laptop]         not ok 10 - owner routing reaches the real query transport
+[adam-laptop]           ---
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 216
+[adam-laptop]             columnNumber: 15
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+[adam-laptop]           source: >2
+[adam-laptop]                         t.equal(calls.owner.length, 0);
+[adam-laptop]                       } else {
+[adam-laptop]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adam-laptop]             --------------^
+[adam-laptop]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adam-laptop]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         ok 11 - should be equal
+[adam-laptop]         not ok 12 - should be equal
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 223
+[adam-laptop]             columnNumber: 17
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+[adam-laptop]           source: >2
+[adam-laptop]                           t.ok(calls.owner.every(({answer}) => !answer?.success));
+[adam-laptop]                         } else {
+[adam-laptop]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adam-laptop]             ----------------^
+[adam-laptop]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adam-laptop]                         }
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -true
+[adam-laptop]             +undefined
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         not ok 13 - one owner delivery
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]             lineNumber: 224
+[adam-laptop]             columnNumber: 39
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:224:39)
+[adam-laptop]           source: >2
+[adam-laptop]                         } else {
+[adam-laptop]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adam-laptop]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adam-laptop]             --------------------------------------^
+[adam-laptop]                         }
+[adam-laptop]                       }
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -1
+[adam-laptop]             +0
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..13
+[adam-laptop]     not ok 8 - preferred owner # time=154.624ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]         lineNumber: 181
+[adam-laptop]         columnNumber: 17
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]               ];
+[adam-laptop]               for (const scenario of cases) {
+[adam-laptop]                 await t.test(scenario.label, async (t) => {
+[adam-laptop]         ----------------^
+[adam-laptop]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adam-laptop]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: preferred local
+[adam-laptop]         ok 1 - only a permitted local mode enters the held local query
+[adam-laptop]         ok 2 - count local probes
+[adam-laptop]         ok 3 - should be equal
+[adam-laptop]         ok 4 - should be equivalent
+[adam-laptop]         ok 5 - should be equal
+[adam-laptop]         ok 6 - should be equal
+[adam-laptop]         ok 7 - should be equal
+[adam-laptop]         ok 8 - should be equal
+[adam-laptop]         ok 9 - should be equal
+[adam-laptop]         ok 10 - should be equal
+[adam-laptop]         1..10
+[adam-laptop]     ok 9 - preferred local # time=2.034ms
+[adam-laptop]     
+[adam-laptop]     1..9
+[adam-laptop] not ok 1 - strict CDC reads route to the registered owner while a local query is held # time=755.129ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adam-laptop]     lineNumber: 130
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('strict CDC reads route to the registered owner while a local query is
+[adam-laptop]     held',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         ConfigurationManager.getInstance().initialize({});
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..1
+[adam-laptop] # { total: 76, pass: 59, fail: 17 }
+[adam-laptop] # time=767.969ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=83
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=83
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=83
+exit=1

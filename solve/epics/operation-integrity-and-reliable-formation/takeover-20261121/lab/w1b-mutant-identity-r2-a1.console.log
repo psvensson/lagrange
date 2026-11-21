@@ -1,0 +1,312 @@
+lab test: adams-gamla: ordinary (5 files) cores=4 mem=15.6GiB speed x2.13
+[adams-gamla] placement-shell=1615578
+[adams-gamla] placement-head=daa0281a81c9832da6ef598c1032b700f7634af9
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1616060
+[adams-gamla] # test-files planned=5
+[adams-gamla] classified lane ordinary: 5 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/partition/coordinator-settlement-exact-settlement.test.js (2 assertions, 2120ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: coordinator settlement: an SQL statement record under its entry key never settles it
+[adams-gamla] not ok 1 - coordinator settlement: an SQL statement record under its entry key never settles it
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 132.417214
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/coordinator-settlement-exact-settlement.test.js:50:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'coordinator_settlement_result_unavailable'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     retainedResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-coordinator-settlement.js:36:59)
+[adams-gamla]     recordedAnswer (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-coordinator-settlement.js:43:36)
+[adams-gamla]     requestCoordinatorSettlement (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-coordinator-settlement.js:72:54)
+[adams-gamla]     ControllablePartitionService.handleAdmittedApplicationMessage (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-service-entry-apply-base.js:471:14)
+[adams-gamla]     ControllablePartitionService.handleCanonicalApplicationPayload (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-service-entry-apply-base.js:409:25)
+[adams-gamla]     ControllablePartitionService.handleApplicationMessage (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-service-entry-apply-base.js:380:17)
+[adams-gamla]     send (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/coordinator-settlement-exact-settlement.test.js:40:47)
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/coordinator-settlement-exact-settlement.test.js:63:31)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: coordinator settlement: another command's owner record under its entry key never settles it
+[adams-gamla] not ok 2 - coordinator settlement: another command's owner record under its entry key never settles it
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 62.615068
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/coordinator-settlement-exact-settlement.test.js:50:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'coordinator_settlement_result_unavailable'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     retainedResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-coordinator-settlement.js:38:30)
+[adams-gamla]     recordedAnswer (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-coordinator-settlement.js:43:36)
+[adams-gamla]     requestCoordinatorSettlement (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-coordinator-settlement.js:72:54)
+[adams-gamla]     ControllablePartitionService.handleAdmittedApplicationMessage (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-service-entry-apply-base.js:471:14)
+[adams-gamla]     ControllablePartitionService.handleCanonicalApplicationPayload (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-service-entry-apply-base.js:409:25)
+[adams-gamla]     ControllablePartitionService.handleApplicationMessage (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-service-entry-apply-base.js:380:17)
+[adams-gamla]     send (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/coordinator-settlement-exact-settlement.test.js:40:47)
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/coordinator-settlement-exact-settlement.test.js:63:31)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 221.009324
+[adams-gamla] # time=2120ms
+[adams-gamla] not ok test/control-plane/formation-transition-settled-replay.test.js (2 assertions, 6786ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: formation under the cutover pause: settled E0 answers its original receipt, a new command stays paused, a different command under E0 is never settled by its record
+[adams-gamla] not ok 1 - formation under the cutover pause: settled E0 answers its original receipt, a new command stays paused, a different command under E0 is never settled by its record
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4785.338723
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/control-plane/formation-transition-settled-replay.test.js:64:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     
+[adams-gamla]     true !== false
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: false
+[adams-gamla]   actual: true
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/control-plane/formation-transition-settled-replay.test.js:81:12
+[adams-gamla]     async onPublicationsLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/control-plane/formation-transition-settled-replay.test.js:50:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: formation: leadership is decided before the settled replay
+[adams-gamla] ok 2 - formation: leadership is decided before the settled replay
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 94.359456
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 4888.478014
+[adams-gamla] # time=6786ms
+[adams-gamla] not ok test/partition/placement-outcome-format.test.js (4 assertions, 6355ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] {"level":50,"time":"2026-11-21T12:35:40.830Z","nodeId":"test-node","pid":1616107,"subsystem":"partition","partitionId":"replica_operations-p1","error":"NOT NULL constraint failed: replica_operations.type","sql":"UPDATE replica_operations SET type = NULL WHERE operation_id = ?","params":["pl-tables-p1-3-0"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+[adams-gamla] # Subtest: a current-format applied SQL record under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla] not ok 1 - a current-format applied SQL record under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4246.365921
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-outcome-format.test.js:92:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'placement_admission_result_unavailable'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     retainedResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:67:59)
+[adams-gamla]     recordedAnswer (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:74:35)
+[adams-gamla]     recordedRequestAnswer (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:80:18)
+[adams-gamla]     Object.answerSettled (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:96:34)
+[adams-gamla]     ownerCommandPrelude (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-committed-statement-outcome.js:303:29)
+[adams-gamla]     proposePlacementCommand (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:93:19)
+[adams-gamla]     requestPlacementCommand (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:121:5)
+[adams-gamla]     requestPlacementAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:150:10)
+[adams-gamla]     assertForeignRecordIsCollision (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-outcome-format.test.js:77:27)
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-outcome-format.test.js:99:11
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a current-format statement-failure record (no result) under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla] not ok 2 - a current-format statement-failure record (no result) under the same entry key is the collision, never a settlement of the placement command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 99.124623
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-outcome-format.test.js:103:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'placement_admission_result_unavailable'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     retainedResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:67:59)
+[adams-gamla]     recordedAnswer (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:74:35)
+[adams-gamla]     recordedRequestAnswer (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:80:18)
+[adams-gamla]     Object.answerSettled (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:96:34)
+[adams-gamla]     ownerCommandPrelude (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-committed-statement-outcome.js:303:29)
+[adams-gamla]     proposePlacementCommand (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:93:19)
+[adams-gamla]     requestPlacementCommand (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:121:5)
+[adams-gamla]     requestPlacementAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/src/partition/partition-placement-admission.js:150:10)
+[adams-gamla]     assertForeignRecordIsCollision (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-outcome-format.test.js:77:27)
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-outcome-format.test.js:115:11
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a store whose outcome table has the prior format (released builds, pre-identity development builds, pre-fingerprint placement rows) is refused typed at open, read-only
+[adams-gamla] ok 3 - a store whose outcome table has the prior format (released builds, pre-identity development builds, pre-fingerprint placement rows) is refused typed at open, read-only
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 79.138185
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an owner result is recorded only with its command identity, by the recorder and by the table CHECK
+[adams-gamla] ok 4 - an owner result is recorded only with its command identity, by the recorder and by the table CHECK
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 47.028896
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..4
+[adams-gamla] # tests 4
+[adams-gamla] # suites 0
+[adams-gamla] # pass 2
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 4482.923952
+[adams-gamla] # time=6355ms
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (1 assertions, 1717ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: an unresolved attempt is discharged only by the record of its exact command
+[adams-gamla] not ok 1 - an unresolved attempt is discharged only by the record of its exact command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 7.894645
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:45:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     near-miss records settle nothing; the exact records discharge their attempts
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       [
+[adams-gamla]     -   'admit:indices-p1',
+[adams-gamla]         'admit:services-p1',
+[adams-gamla]     -   'admit:tables-p1',
+[adams-gamla]     -   'release:pl-tables-p1-3-0'
+[adams-gamla]       ]
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     0: 'admit:indices-p1'
+[adams-gamla]     1: 'admit:services-p1'
+[adams-gamla]     2: 'admit:tables-p1'
+[adams-gamla]     3: 'release:pl-tables-p1-3-0'
+[adams-gamla]   actual:
+[adams-gamla]     0: 'admit:services-p1'
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:75:12)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.start (node:internal/test_runner/test:944:17)
+[adams-gamla]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adams-gamla]   ...
+[adams-gamla] 1..1
+[adams-gamla] # tests 1
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 40.69249
+[adams-gamla] # time=1717ms
+[adams-gamla] not ok test/partition/placement-admission-apply.test.js (9 assertions, 10176ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: F6: admissions and refusals are committed outcomes and each emits ENTRY_COMMITTED
+[adams-gamla] ok 1 - F6: admissions and refusals are committed outcomes and each emits ENTRY_COMMITTED
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4847.767205
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F6: source capacity counts every copy-phase row of the source, and a row without copy_source_node_id counts against every source
+[adams-gamla] ok 2 - F6: source capacity counts every copy-phase row of the source, and a row without copy_source_node_id counts against every source
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 106.010487
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F6: an unresolved ledger transition refuses every other admission until terminal
+[adams-gamla] ok 3 - F6: an unresolved ledger transition refuses every other admission until terminal
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 62.974054
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an incomplete REPLACE holds the native entity lane during source removal
+[adams-gamla] ok 4 - an incomplete REPLACE holds the native entity lane during source removal
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 62.21092
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F5: the same entryId committed twice replays the first answer, never a second admission
+[adams-gamla] not ok 5 - F5: the same entryId committed twice replays the first answer, never a second admission
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 55.758792
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-admission-apply.test.js:171:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     
+[adams-gamla]     true !== false
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: false
+[adams-gamla]   actual: true
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-admission-apply.test.js:203:10
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/daa0281a81c9-mwqe4pa4-1006677/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F4: a FAILED move re-planned with membership unchanged is admitted under a new id
+[adams-gamla] ok 6 - F4: a FAILED move re-planned with membership unchanged is admitted under a new id
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 55.987851
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F7: a reserved partition re-parks the committed admission and applies it after the decision
+[adams-gamla] ok 7 - F7: a reserved partition re-parks the committed admission and applies it after the decision
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 80.556272
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F8: at the CDC owed bound the admission is refused CDC_CAPACITY at request and at apply, and admitted after the acknowledgement commit
+[adams-gamla] ok 8 - F8: at the CDC owed bound the admission is refused CDC_CAPACITY at request and at apply, and admitted after the acknowledgement commit
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3046.109931
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F3: a replica whose applier lacks the command type refuses it and wedges (the version fence the support envelope owns)
+[adams-gamla] ok 9 - F3: a replica whose applier lacks the command type refuses it and wedges (the version fence the support envelope owns)
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 48.455166
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..9
+[adams-gamla] # tests 9
+[adams-gamla] # suites 0
+[adams-gamla] # pass 8
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 8374.359456
+[adams-gamla] # time=10176ms
+[adams-gamla] # test-files total=5 pass=0 fail=5 assertions=18
+lab test: adams-gamla: # test-files total=5 pass=0 fail=5 assertions=18
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=5 pass=0 fail=5 assertions=18
