@@ -18,8 +18,13 @@
  * It measures and never acts (R27): it reads the tree, the committed census,
  * the baseline and their git history, prints numbers, and starts nothing.
  * Exit 0 within the baseline, 1 on a ratchet violation, 2 when it cannot
- * measure (census or baseline missing, census head not a commit in the
- * repository, a canonical lane absent, a source file that does not parse).
+ * measure (census or baseline missing, a canonical lane absent, a source file
+ * that does not parse), 3 with `census-head-unavailable` when the census head
+ * is not a commit in this clone. The census head 6a240d3de is on no branch;
+ * the pushed ref census/fallback-census-head-6a240d3de pins it, and the
+ * refusal names the fetch: `git fetch origin
+ * census/fallback-census-head-<9 hex>:census/fallback-census-head-<9 hex>`.
+ * Not wired into any gate yet: until it is, it measures only when run.
  *
  * Cells (rows x top-level directory), all one-way unless noted:
  *   fallback_sites/<row>/<dir>               detector sites of the census rows
@@ -35,26 +40,43 @@
  *   read_mode_fallback_members, non_required_leader_mode,
  *   role_derived_leader_reads, fixture_leader_role_rows,
  *   fixture_leader_role_rows_message_group: <row>/<dir>
- *     (fallback-read-closure-detectors.js)
+ *     (fallback-read-closure-detectors.js; the role row's known undercount
+ *     is listed there)
+ *   fixture_leader_role_rows_exempt/<dir>   wasm/meta rows by service type,
+ *     listed for review (informational, not one-way)
  *
  * One-way rules: no cell may exceed the committed baseline
  * (data/fallback-census/closure-baseline.json; a cell it lacks is 0, so a new
  * site anywhere fails); across the baseline's own git history no cell may
  * rise, except that bucket cells re-base when the baseline's census head
- * changes (a refresh). Every census revision since the baseline began must
- * change `head` or `generatedAt` (a re-join, never a partial edit), and at a
+ * changes (a refresh), and the semantic rows' cells re-base when the
+ * baseline records a new semantic detectors version (the baseline must name
+ * the current one, so a detector change lands with its re-measured
+ * baseline, visibly). History is read along first parents: parallel
+ * branches that each tightened different cells compose at their merge by the
+ * cell-wise minimum of their baselines, which reads as no raise; a merge
+ * that keeps a branch's higher cell is a raise. The baseline must name the
+ * census head it was measured against. Every census revision since the
+ * baseline began must bring a re-join's own evidence - a different set of
+ * runs and coverage digests - never only a new head or `generatedAt`; at a
  * refresh no site may move to a more exercised bucket (N0 < N1 = N2 < N3 <
- * N4b < N4c < N5). The tightening hint prints when the tree is below the
- * baseline; `--print-baseline` prints a baseline document for the tree and
- * writes nothing.
+ * N4b < N4c < N5). These bound tampering; they cannot re-derive coverage.
+ * The tightening hint prints when the tree is below the baseline;
+ * `--print-baseline` prints a baseline document for the tree and writes
+ * nothing.
  *
  * Kept arms (data/fallback-census/kept.json): `{"version": 1, "entries":
  * [{"siteId", "trapRun", "witnessTest"}]}` and no other field - no labels,
  * no prose. An entry stands only when its site is in N4c or N5, `trapRun`
- * names data/fallback-census/traps/<trapRun>.json, a merged throw-mode trap
- * result bound to a red lane (`run.laneExitCode` != 0) at a head that is an
- * ancestor of HEAD in which that site's arm threw, and `witnessTest` is a
- * `.test.js` file present and classified in test/shards/primary-classes.json.
+ * names data/fallback-census/traps/<trapRun>.json, a trap report
+ * (fallback-necessity-trap.js report) of a throw run bound to a red lane
+ * (`run.laneExitCode` != 0) at a head that is an ancestor of HEAD, whose
+ * selection armed that site alone, whose verdict is SURFACED with that
+ * site's arm among the surfaced, and whose failed tests include
+ * `witnessTest`, a `.test.js` file present and classified in
+ * test/shards/primary-classes.json. One bucket-wide red run keeps nothing.
+ * Limits: the report is hand-writable JSON and the coupled-pair witness of
+ * ratchet.md 1.4 is not checked.
  *
  * Probe: a slice's measuring doneWhen is the existing `script` kind, e.g.
  *   {"probe": "script", "args": {"command": "node scripts/checks/fallback-read-closure.js
@@ -62,6 +84,12 @@
  *     "target": 0}}
  * `--metric` prints the number of sites in the selected cells; with
  * --rows/--buckets/--scope only those cells are compared with the baseline.
+ * Selecting fallback_sites_bucket also selects fallback_sites_uncensused in
+ * the same scope: a site whose text was edited leaves its bucket for the
+ * uncensused row, so a slice cannot reach 0 while any site in its scope is
+ * uncensused. Reshaping code so no detector matches it (a split statement, a
+ * helper, `??=`) still lowers the syntactic rows: fewer counted shapes, never
+ * proof.
  *
  * Governed by the ambient-intrinsic audit: prototype methods are captured at
  * module load.
@@ -77,7 +105,9 @@ import {
   EVIDENCE_BUCKETS, NECESSITY_BUCKET, auditCensus, bucketRank, censusBucket, censusLaneByRun,
   isCensusRowSite, necessitySiteId, readCensus, siteBucket, siteDirectory,
 } from './fallback-necessity-sites.js';
-import {SEMANTIC_ROW, detectSemanticSites} from './fallback-read-closure-detectors.js';
+import {
+  DETECTORS_VERSION, SEMANTIC_ROW, detectSemanticSites,
+} from './fallback-read-closure-detectors.js';
 import {GIT_OUTPUT_BOUND, spawnGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 import {printRatchetTighteningHint} from '../metric-check-helpers.js';
@@ -101,12 +131,19 @@ const BASELINE_FILE = 'data/fallback-census/closure-baseline.json';
 const KEPT_FILE = 'data/fallback-census/kept.json';
 const TRAP_DIRECTORY = 'data/fallback-census/traps';
 const PRIMARY_CLASSES_FILE = 'test/shards/primary-classes.json';
-const TRAP_MERGED_SCHEMA = 'fallback-necessity-trap-merged/1';
+const TRAP_REPORT_SCHEMA = 'fallback-necessity-trap-report/1';
+const SURFACED_VERDICT = 'SURFACED';
+const ARM_SEPARATOR = '#';
+const CENSUS_REF_PREFIX = 'census/fallback-census-head-';
+const CENSUS_REF_SHA_CHARS = 9;
+const CENSUS_HEAD_UNAVAILABLE = 'census-head-unavailable';
 const THROW_MODE = 'throw';
 const TEST_SUFFIX = '.test.js';
 const JSON_SUFFIX = '.json';
 const TEXT_ENCODING = 'utf8';
 const BASELINE_VERSION = 1;
+// Baselines written before the semantic detectors were versioned.
+const FIRST_DETECTORS_VERSION = 1;
 const CELL_SEPARATOR = '/';
 const LIST_SEPARATOR = ',';
 const NEWLINE = '\n';
@@ -118,11 +155,11 @@ const WORKING_TREE = 'working tree';
 const ROOT_CELL = '.';
 const FIELD = Object.freeze({
   SCHEMA: 'schema', VERSION: 'version', ENTRIES: 'entries', CELLS: 'cells',
-  CENSUS_HEAD: 'censusHead', FILE: 'file', ROW: 'row', RANGE: 'range', RUN: 'run', ID: 'id',
-  ARMS: 'arms', SITE: 'site',
+  CENSUS_HEAD: 'censusHead', DETECTORS: 'detectors', FILE: 'file', ROW: 'row', RANGE: 'range', RUN: 'run', ID: 'id',
+  ARMS: 'arms', SITE: 'site', COVERAGE_DIGEST: 'coverageDigest', ARMED: 'armed', SURFACED: 'surfaced', FAILED_TESTS: 'failedTests',
 });
 const HINT_LABEL = 'scripts/checks/fallback-read-closure.js';
-const EXIT = Object.freeze({OK: 0, VIOLATION: 1, UNMEASURABLE: 2});
+const EXIT = Object.freeze({OK: 0, VIOLATION: 1, UNMEASURABLE: 2, CENSUS_HEAD_UNAVAILABLE: 3});
 const GIT_OK = 0;
 const GIT_NOT_ANCESTOR = 1;
 
@@ -138,11 +175,16 @@ const FAMILY = Object.freeze({
   ROLE_READ: SEMANTIC_ROW.ROLE_READ,
   FIXTURE: SEMANTIC_ROW.FIXTURE,
   FIXTURE_MESSAGE_GROUP: SEMANTIC_ROW.FIXTURE_MESSAGE_GROUP,
+  FIXTURE_EXEMPT: SEMANTIC_ROW.FIXTURE_EXEMPT,
 });
 const FAMILIES = Object.freeze(Object.values(FAMILY));
 const SEMANTIC_FAMILIES = Object.freeze([FAMILY.READ_MODE, FAMILY.LEADER_MODE, FAMILY.ROLE_READ,
-  FAMILY.FIXTURE, FAMILY.FIXTURE_MESSAGE_GROUP]);
-const ONE_WAY_FAMILIES = Object.freeze(arrayFilter(FAMILIES, (family) => family !== FAMILY.KEPT));
+  FAMILY.FIXTURE, FAMILY.FIXTURE_MESSAGE_GROUP, FAMILY.FIXTURE_EXEMPT]);
+// Informational, not one-way: kept arms (validated entries) and exempt
+// wasm/meta fixture rows (listed with their locations for review).
+const INFORMATIONAL_FAMILIES = Object.freeze([FAMILY.KEPT, FAMILY.FIXTURE_EXEMPT]);
+const ONE_WAY_FAMILIES = Object.freeze(arrayFilter(FAMILIES, (family) =>
+  !arrayIncludes(INFORMATIONAL_FAMILIES, family)));
 const KEPT_BUCKETS = Object.freeze([NECESSITY_BUCKET.N4C, NECESSITY_BUCKET.N5]);
 const KEPT_FIELDS = Object.freeze(['siteId', 'trapRun', 'witnessTest']);
 
@@ -158,7 +200,10 @@ const GIT = Object.freeze({
   VERIFY_COMMIT: ['rev-parse', '--verify', '--quiet'],
   COMMIT_SUFFIX: '^{commit}',
   HEAD: 'HEAD',
-  LOG_REVERSE: ['log', '--reverse', '--format=%H'],
+  // First parent only: a side branch's intermediate baselines are not the
+  // mainline's history, so branches that tightened different cells compose
+  // at their merge (cell-wise minimum) without reading as a raise.
+  LOG_REVERSE: ['log', '--reverse', '--first-parent', '--format=%H'],
   RANGE: '..',
   PATHS: '--',
   SHOW: 'show',
@@ -180,7 +225,10 @@ const PROBLEM = Object.freeze({
   BASELINE_SHAPE: 'the baseline is not {version: 1, censusHead, cells: {cell: count}}: ',
   RAISED: 'baseline raised (ratchet baselines are one-way): ',
   OVER: 'over the baseline: ',
-  CENSUS_EDITED: 'census changed without a re-join (head and generatedAt unchanged): ',
+  CENSUS_EDITED: 'census changed without a re-join (its runs and their coverage digests are ' +
+    'unchanged; a timestamp is no evidence): ',
+  BASELINE_CENSUS: 'the baseline names census head ',
+  BASELINE_DETECTORS: 'the baseline was measured with semantic detectors v',
   MOVED_UP: 'a census refresh moved a site to a more exercised bucket: ',
   KEPT_SHAPE: 'kept.json must be {version: 1, entries: [{siteId, trapRun, witnessTest}]}',
   KEPT_FIELD: 'kept entries carry no labels or prose; unexpected or missing field in ',
@@ -188,6 +236,8 @@ const PROBLEM = Object.freeze({
   KEPT_BUCKET: 'a kept arm must be in N4c or N5: ',
   KEPT_TRAP: 'kept entry names no red throw-mode trap run in which its arm threw: ',
   KEPT_WITNESS: 'kept entry witness is not a classified .test.js file: ',
+  KEPT_NOT_ALONE: 'kept entry\'s trap run did not arm that site alone: ',
+  KEPT_WITNESS_NOT_FAILED: 'kept entry\'s witness is not a test the trap run failed: ',
 });
 
 function cellKey(...parts) {
@@ -222,6 +272,15 @@ function isAncestor(root, revision) {
   throw new Error(`${PROBLEM.GIT}${GIT.IS_ANCESTOR.join(WORD_SEPARATOR)} ${revision}`);
 }
 
+// The census head as a typed refusal naming the pushed ref that pins it.
+function censusHeadUnavailable(head) {
+  const ref = `${CENSUS_REF_PREFIX}${String(head).slice(0, CENSUS_REF_SHA_CHARS)}`;
+  const error = new Error(`${CENSUS_HEAD_UNAVAILABLE}: ${PROBLEM.NO_CENSUS_HEAD}${head}; fetch ` +
+    `the ref that pins it: git fetch origin ${ref}:${ref}`);
+  error.code = CENSUS_HEAD_UNAVAILABLE;
+  return error;
+}
+
 function commitExists(root, revision) {
   return git(root, [...GIT.VERIFY_COMMIT, `${revision}${GIT.COMMIT_SUFFIX}`]).status === GIT_OK;
 }
@@ -238,23 +297,42 @@ function inScope(file, scope) {
 
 // --- kept arms --------------------------------------------------------------
 
-// A merged throw-mode trap result bound to a red lane run of this id.
-function isRedThrowRun(trap, runId) {
+// A trap report (fallback-necessity-trap.js report) of a throw run bound to
+// a red lane run of this id, whose verdict is SURFACED: nothing swallowed.
+function isRedThrowReport(trap, runId) {
   const run = ownField(trap, FIELD.RUN);
-  return ownField(trap, FIELD.SCHEMA) === TRAP_MERGED_SCHEMA && trap.mode === THROW_MODE &&
-    typeof trap.head === 'string' && ownField(run, FIELD.ID) === runId &&
-    Number.isInteger(run.laneExitCode) && run.laneExitCode !== 0;
+  return ownField(trap, FIELD.SCHEMA) === TRAP_REPORT_SCHEMA && trap.mode === THROW_MODE &&
+    trap.verdict === SURFACED_VERDICT && typeof trap.head === 'string' &&
+    ownField(run, FIELD.ID) === runId && Number.isInteger(run.laneExitCode) &&
+    run.laneExitCode !== 0;
 }
 
+function isArmOf(siteId) {
+  return (id) => typeof id === 'string' && stringStartsWith(id, `${siteId}${ARM_SEPARATOR}`);
+}
+
+function listOf(record, field) {
+  const value = ownField(record, field);
+  return Array.isArray(value) ? value : [];
+}
+
+// Why a kept entry's trap run does not keep its arm, or null: the run must
+// have armed that site alone (so the red lane is that arm's), surfaced its
+// throw, and failed the named witness test.
 function trapProblem(root, entry, siteId) {
   const runId = entry.trapRun;
-  if (typeof runId !== 'string' || stringSplit(runId, CELL_SEPARATOR).length > 1) return true;
+  if (typeof runId !== 'string' || stringSplit(runId, CELL_SEPARATOR).length > 1) {
+    return PROBLEM.KEPT_TRAP;
+  }
   const trap = readJson(root, `${TRAP_DIRECTORY}/${runId}${JSON_SUFFIX}`);
-  if (!isRedThrowRun(trap, runId)) return true;
-  const arms = ownField(trap, FIELD.ARMS) || {};
-  const threw = arraySome(objectKeys(arms), (id) =>
-    ownField(arms[id], FIELD.SITE) === siteId && arms[id].thrown > 0);
-  return !threw || !isAncestor(root, trap.head);
+  if (!isRedThrowReport(trap, runId)) return PROBLEM.KEPT_TRAP;
+  const armed = listOf(trap, FIELD.ARMED);
+  if (armed.length === 0 || !arrayEvery(armed, isArmOf(siteId))) return PROBLEM.KEPT_NOT_ALONE;
+  if (!arraySome(listOf(trap, FIELD.SURFACED), isArmOf(siteId))) return PROBLEM.KEPT_TRAP;
+  if (!arrayIncludes(listOf(trap.run, FIELD.FAILED_TESTS), entry.witnessTest)) {
+    return PROBLEM.KEPT_WITNESS_NOT_FAILED;
+  }
+  return isAncestor(root, trap.head) ? null : PROBLEM.KEPT_TRAP;
 }
 
 function witnessProblem(root, entry) {
@@ -273,7 +351,8 @@ function keptEntryProblem(root, entry, sitesById) {
   const matches = sitesById.get(entry.siteId) || [];
   if (matches.length !== 1) return `${PROBLEM.KEPT_SITE}${entry.siteId}`;
   if (!arrayIncludes(KEPT_BUCKETS, matches[0].bucket)) return `${PROBLEM.KEPT_BUCKET}${entry.siteId}`;
-  if (trapProblem(root, entry, entry.siteId)) return `${PROBLEM.KEPT_TRAP}${entry.siteId}`;
+  const trapped = trapProblem(root, entry, entry.siteId);
+  if (trapped) return `${trapped}${entry.siteId}`;
   return witnessProblem(root, entry) ? `${PROBLEM.KEPT_WITNESS}${entry.siteId}` : null;
 }
 
@@ -341,7 +420,6 @@ function semanticSites(root, measured, rows) {
     const location = {file: site.file, location: `${site.file}:${site.line}`};
     if (site.row === SEMANTIC_ROW.FIXTURE_EXEMPT) {
       measured.exempt += 1;
-      continue;
     }
     addSite(measured.cells, measured.locations, cellKey(site.row, siteDirectory(site.file)),
       location);
@@ -356,7 +434,7 @@ function semanticSites(root, measured, rows) {
  */
 function measureClosure(root, options = {}) {
   const census = readCensus(root, CENSUS_FILE);
-  if (!commitExists(root, census.head)) throw new Error(`${PROBLEM.NO_CENSUS_HEAD}${census.head}`);
+  if (!commitExists(root, census.head)) throw censusHeadUnavailable(census.head);
   const audit = auditCensus(census, {root});
   if (audit.missingLanes.length > 0) {
     throw new Error(`${PROBLEM.MISSING_LANES}${audit.missingLanes.join(LIST_SEPARATOR)}`);
@@ -392,7 +470,8 @@ function parseBaseline(text, origin) {
     typeof cells === 'object' && arrayEvery(objectKeys(cells), (cell) =>
     Number.isSafeInteger(cells[cell]) && cells[cell] >= 0);
   if (!valid) throw new Error(`${PROBLEM.BASELINE_SHAPE}${origin}`);
-  return {origin, censusHead: ownField(baseline, FIELD.CENSUS_HEAD), cells};
+  return {origin, censusHead: ownField(baseline, FIELD.CENSUS_HEAD),
+    detectors: ownField(baseline, FIELD.DETECTORS) ?? FIRST_DETECTORS_VERSION, cells};
 }
 
 function baselineHistory(root) {
@@ -414,8 +493,10 @@ function baselineRaises(history) {
     const before = history[index - 1];
     const after = history[index];
     const rebased = before.censusHead !== after.censusHead;
+    const redetected = before.detectors !== after.detectors;
     for (const cell of objectKeys(after.cells)) {
       if (rebased && familyOf(cell) === FAMILY.BUCKET) continue;
+      if (redetected && arrayIncludes(SEMANTIC_FAMILIES, familyOf(cell))) continue;
       if (familyOf(cell) === FAMILY.KEPT) continue;
       const previous = objectHasOwn(before.cells, cell) ? before.cells[cell] : 0;
       if (after.cells[cell] > previous) {
@@ -438,10 +519,15 @@ function bucketsByIdentity(census) {
   return buckets;
 }
 
+// The join's own evidence: its runs and their coverage digests. A re-join
+// brings new runs; an edit, whatever timestamp it bumps, does not.
+function runsEvidence(census) {
+  return jsonStringify(arrayMap(census.runs || [], (run) =>
+    [ownField(run, FIELD.ID), ownField(run, FIELD.COVERAGE_DIGEST)]).sort());
+}
+
 function censusPairProblems(older, newer, label) {
-  if (older.head === newer.head && older.generatedAt === newer.generatedAt) {
-    return [`${PROBLEM.CENSUS_EDITED}${label}`];
-  }
+  if (runsEvidence(older) === runsEvidence(newer)) return [`${PROBLEM.CENSUS_EDITED}${label}`];
   if (older.head === newer.head) return [];
   const before = bucketsByIdentity(older);
   const problems = [];
@@ -504,11 +590,19 @@ function parseArguments(argv) {
   return options;
 }
 
+// Selecting the bucket row also selects the uncensused row: a site whose text
+// changed leaves its bucket cell for the uncensused one, so a slice probe
+// cannot reach its target while any site in its scope is uncensused.
+function rowSelected(rows, family) {
+  return arrayIncludes(rows, family) ||
+    (family === FAMILY.UNCENSUSED && arrayIncludes(rows, FAMILY.BUCKET));
+}
+
 function cellSelected(cell, options) {
   const parts = stringSplit(cell, CELL_SEPARATOR);
   const rows = options[FLAG.ROWS];
   const buckets = options[FLAG.BUCKETS];
-  if (rows && !arrayIncludes(rows, parts[0])) return false;
+  if (rows && !rowSelected(rows, parts[0])) return false;
   return !buckets || parts[0] !== FAMILY.BUCKET || arrayIncludes(buckets, parts[parts.length - 1]);
 }
 
@@ -583,7 +677,8 @@ function summaryLines(measured, cells) {
 }
 
 function baselineDocument(measured, cells) {
-  const document = {version: BASELINE_VERSION, censusHead: measured.census.head, cells: {}};
+  const document = {version: BASELINE_VERSION, censusHead: measured.census.head,
+    detectors: DETECTORS_VERSION, cells: {}};
   for (const cell of [...cells.keys()].sort()) {
     if (arrayIncludes(ONE_WAY_FAMILIES, familyOf(cell))) document.cells[cell] = cells.get(cell);
   }
@@ -603,8 +698,17 @@ function measureAgainstBaseline(root, options) {
   const measured = measureClosure(root, {rows});
   if (options[FLAG.PRINT_BASELINE]) return {measured, baseline: null};
   const {history, since} = baselineHistory(root);
+  const baseline = history[history.length - 1];
   measured.violations.push(...baselineRaises(history), ...censusRevisionProblems(root, since));
-  return {measured, baseline: history[history.length - 1]};
+  if (baseline.detectors !== DETECTORS_VERSION) {
+    measured.violations.push(`${PROBLEM.BASELINE_DETECTORS}${baseline.detectors}; they are ` +
+      `v${DETECTORS_VERSION}: re-measure the baseline with them`);
+  }
+  if (baseline.censusHead !== measured.census.head) {
+    measured.violations.push(`${PROBLEM.BASELINE_CENSUS}${baseline.censusHead} but the census ` +
+      `is at ${measured.census.head}: re-measure the baseline with the census`);
+  }
+  return {measured, baseline};
 }
 
 function reportLines(measured, cells, violations, totals, options) {
@@ -631,7 +735,9 @@ function runClosureCheck(root, argv) {
     options = parseArguments(argv);
     measuredRun = measureAgainstBaseline(root, options);
   } catch (error) {
-    return {exitCode: EXIT.UNMEASURABLE, stdout: [], stderr: [`${NAME}: ${error.message}`]};
+    const exitCode = error.code === CENSUS_HEAD_UNAVAILABLE ? EXIT.CENSUS_HEAD_UNAVAILABLE :
+      EXIT.UNMEASURABLE;
+    return {exitCode, stdout: [], stderr: [`${NAME}: ${error.message}`]};
   }
   const {measured, baseline} = measuredRun;
   const cells = selectedCells(measured, options);

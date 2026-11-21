@@ -31,7 +31,7 @@
  * Governed by the ambient-intrinsic audit: prototype methods are captured at
  * module load.
  */
-import {createHash} from 'node:crypto';
+import {createHash, randomBytes} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -65,12 +65,19 @@ const TRAP_MODES = Object.freeze(Object.values(TRAP_MODE));
 const TRAP_GLOBAL = '__lagrangeNecessityTrap';
 const TRAP_MARKER = '\n//# lagrange-necessity-trap\n';
 const PLAN_SCHEMA = 'fallback-necessity-trap-plan/1';
-const OBSERVATION_SCHEMA = 'fallback-necessity-trap-observation/1';
+const OBSERVATION_SCHEMA = 'fallback-necessity-trap-observation/2';
 const OBSERVATION_PREFIX = 'trap-';
 const OBSERVATION_SUFFIX = '.json';
 const TEMPORARY_SUFFIX = '.tmp';
 const NAME_SEPARATOR = '-';
 const TRAP_ERROR_CODE = 'LAGRANGE_NECESSITY_TRAP';
+const ARMS_NOTHING_CODE = 'LAGRANGE_NECESSITY_TRAP_ARMS_NOTHING';
+const OBSERVATION_EXISTS_CODE = 'LAGRANGE_NECESSITY_TRAP_OBSERVATION_EXISTS';
+const ALREADY_EXISTS = 'EEXIST';
+const EXCLUSIVE_CREATE = 'wx';
+const START_TOKEN_BYTES = 6;
+const TOKEN_ENCODING = 'hex';
+const SELECTION_JOIN = ',';
 const DRIFT_ERROR_CODE = 'LAGRANGE_NECESSITY_TRAP_DRIFT';
 const DRIFT_REASON = 'slice-hash-mismatch';
 const ARM_SEPARATOR = '#';
@@ -106,6 +113,8 @@ const PROBLEM = Object.freeze({
   OUT: `${TRAP_ENV.OUT} must name a writable directory`,
   PLAN_SCHEMA: `the plan is not ${PLAN_SCHEMA}: `,
   THROW_NEEDS_SELECTION: `throw mode needs an include token in ${TRAP_ENV.SELECT}`,
+  ARMS_NOTHING: 'throw mode refused: the selection arms no planned arm: ',
+  OBSERVATION_EXISTS: 'necessity trap: refused to overwrite an earlier observation: ',
   SELECTION_TOKEN: 'unrecognised selection token: ',
 });
 
@@ -149,6 +158,10 @@ class NecessityTrapPlanDriftError extends ErrorConstructor {
   }
 }
 
+// Every planned arm by id. An arm is `<site id>#<side><term>`: side `f`
+// (the fallback side) or `p` (the primary side, armed for N2 sites), term the
+// chain term index (0 for a typeof or catch site), so one id names one side
+// of one site whichever census the plan was built with.
 function armRecords(plan) {
   const arms = new Map();
   for (const file of objectKeys(plan.files)) {
@@ -161,6 +174,20 @@ function armRecords(plan) {
     }
   }
   return arms;
+}
+
+/**
+ * The ids of the planned arms a selection arms, sorted.
+ * @param {Object} plan a trap plan
+ * @param {Object} selection parseSelection's answer
+ * @return {string[]} the armed arm ids
+ */
+function selectedArmIds(plan, selection) {
+  const ids = [];
+  for (const arm of armRecords(plan).values()) {
+    if (armSelected(selection, arm)) ids.push(arm.id);
+  }
+  return ids.sort();
 }
 
 function applyInsertions(text, insertions) {
@@ -215,7 +242,8 @@ function parseSelectionTokens(spec, readText) {
 function parseSelection(spec, readText = (file) => fs.readFileSync(file, TEXT_ENCODING)) {
   const include = [];
   const exclude = [];
-  for (const token of parseSelectionTokens(spec, readText)) {
+  const tokens = parseSelectionTokens(spec, readText);
+  for (const token of tokens) {
     const excluded = stringStartsWith(token, SELECTION_EXCLUDE_PREFIX);
     const body = excluded ? stringSlice(token, 1) : token;
     const split = stringIndexOf(body, SELECTION_KEY_SEPARATOR);
@@ -225,7 +253,8 @@ function parseSelection(spec, readText = (file) => fs.readFileSync(file, TEXT_EN
     }
     (excluded ? exclude : include).push({key, value: stringSlice(body, split + 1)});
   }
-  return {include, exclude, spec: String(spec || '')};
+  // The tokens themselves, `@FILE` expanded, so a result names what armed it.
+  return {include, exclude, spec: tokens.join(SELECTION_JOIN)};
 }
 
 function matcherHolds(matcher, arm) {
@@ -297,41 +326,83 @@ function writeAtomically(file, text) {
   fs.renameSync(temporary, file);
 }
 
+// The first write of a thread's observation creates its file exclusively: a
+// file already there belongs to another process start and is never replaced.
+function createExclusively(file, text) {
+  try {
+    fs.writeFileSync(file, text, {flag: EXCLUSIVE_CREATE});
+  } catch (error) {
+    if (error?.code !== ALREADY_EXISTS) throw error;
+    const exists = new ErrorConstructor(`${PROBLEM.OBSERVATION_EXISTS}${file}`, {cause: error});
+    exists.code = OBSERVATION_EXISTS_CODE;
+    throw exists;
+  }
+}
+
+function refuseVacuousThrow(mode, selection, plan) {
+  if (mode !== TRAP_MODE.THROW) return 0;
+  if (selection.include.length === 0) throw new ErrorConstructor(PROBLEM.THROW_NEEDS_SELECTION);
+  const armed = selectedArmIds(plan, selection).length;
+  if (armed === 0) {
+    const vacuous = new ErrorConstructor(`${PROBLEM.ARMS_NOTHING}${selection.spec}`);
+    vacuous.code = ARMS_NOTHING_CODE;
+    throw vacuous;
+  }
+  return armed;
+}
+
 /**
  * One thread's recorder: the trap function the rewritten code calls, and
  * its observation file.
  * @param {Object} options `{plan, planDigest, mode, selection, outDir, root,
- *   processKey, entry, fileName}`
- * @return {Object} `{trap, noteLoaded, noteRefused, flush, snapshot}`
+ *   processKey, entry, fileName, pid, threadId, startedAt, roster}`; roster
+ *   is whether the census roster records this lane's launches in outDir
+ * @return {Object} `{trap, noteLoaded, noteRefused, noteSurfaced, flush,
+ *   snapshot, armed}`
  */
 function createTrapRecorder(options) {
   const {plan, planDigest, mode, selection, outDir, root, processKey, entry} = options;
   if (!arrayIncludes(TRAP_MODES, mode)) {
     throw new ErrorConstructor(`${PROBLEM.MODE}${TRAP_MODES.join(LIST_SEPARATOR)}`);
   }
-  if (mode === TRAP_MODE.THROW && selection.include.length === 0) {
-    throw new ErrorConstructor(PROBLEM.THROW_NEEDS_SELECTION);
-  }
+  const armedCount = refuseVacuousThrow(mode, selection, plan);
   const arms = armRecords(plan);
   const hits = new Map();
   const loaded = new Set();
   const refused = new Map();
   const target = path.join(outDir, options.fileName);
+  let created = false;
 
   function snapshot() {
     const armsOut = {};
     for (const id of [...hits.keys()].sort()) armsOut[id] = hits.get(id);
     return {
       schema: OBSERVATION_SCHEMA, plan: planDigest, head: plan.head, mode,
-      selection: selection.spec, process: processKey, entry: entry ?? null,
-      loaded: [...loaded].sort(),
+      selection: selection.spec, armed: armedCount, process: processKey,
+      pid: options.pid ?? null, threadId: options.threadId ?? null,
+      startedAt: options.startedAt ?? null, roster: options.roster === true,
+      entry: entry ?? null, loaded: [...loaded].sort(),
       refused: arrayMap([...refused.keys()].sort(), (file) => ({file, reason: refused.get(file)})),
       arms: armsOut,
     };
   }
 
   function flush() {
-    writeAtomically(target, `${jsonStringify(snapshot())}\n`);
+    const text = `${jsonStringify(snapshot())}\n`;
+    if (created) {
+      writeAtomically(target, text);
+      return;
+    }
+    createExclusively(target, text);
+    created = true;
+  }
+
+  // A marker error that reached the process's uncaught handler surfaced.
+  function noteSurfaced(error) {
+    const hit = error?.code === TRAP_ERROR_CODE ? hits.get(error.armId) : undefined;
+    if (!hit) return;
+    hit.surfaced += 1;
+    flush();
   }
 
   // An id the plan does not know cannot come from a plan's rewrite; it is
@@ -346,7 +417,7 @@ function createTrapRecorder(options) {
       {caller: null, async: false, detached: true};
     const known = arm || UNKNOWN_ARM;
     return {site: known.site, file: known.file, line: known.line, bucket: known.bucket,
-      row: known.row, term: known.term, count: 0, thrown: 0, ...attribution};
+      row: known.row, term: known.term, count: 0, thrown: 0, surfaced: 0, ...attribution};
   }
 
   function trap(id, cause) {
@@ -368,19 +439,24 @@ function createTrapRecorder(options) {
     trap,
     noteLoaded: (file) => loaded.add(file),
     noteRefused: (file, reason) => refused.set(file, reason),
+    noteSurfaced,
     flush,
     snapshot,
+    armed: armedCount,
   };
 }
 
 /**
- * The observation file name of one thread.
+ * The observation file name of one thread of one process start:
+ * `trap-<pid>-<thread>-<random token>.json`, so a restarted process (the same
+ * pid) never shares a name with an earlier one.
  * @param {number} pid process id
  * @param {number} threadId worker thread id (0 on the main thread)
  * @return {string} the file name
  */
 function observationFileName(pid, threadId) {
-  return `${OBSERVATION_PREFIX}${pid}${NAME_SEPARATOR}${threadId}${OBSERVATION_SUFFIX}`;
+  return `${OBSERVATION_PREFIX}${pid}${NAME_SEPARATOR}${threadId}${NAME_SEPARATOR}` +
+    `${randomBytes(START_TOKEN_BYTES).toString(TOKEN_ENCODING)}${OBSERVATION_SUFFIX}`;
 }
 
 /**
@@ -400,7 +476,9 @@ function plannedFileOfUrl(url, root) {
 }
 
 export {
+  ARMS_NOTHING_CODE,
   DRIFT_ERROR_CODE,
+  OBSERVATION_EXISTS_CODE,
   NecessityTrapError,
   NecessityTrapPlanDriftError,
   OBSERVATION_PREFIX,
@@ -422,4 +500,5 @@ export {
   parseSelection,
   plannedFileOfUrl,
   rewriteSource,
+  selectedArmIds,
 };

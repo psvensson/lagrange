@@ -216,7 +216,7 @@ test('plan arms every census-row site and reports what it cannot arm, with the r
   assert.equal(conditional.bucket, 'N2');
   assert.equal(conditional.armedSide, 'primary', 'an N2 site arms its never-run primary');
   const chain = plan.files['src/fx/chain.js'].sites.find((site) => site.line === 2);
-  assert.deepEqual(chain.arms, [1, 2], 'a three-term chain has one arm per later term');
+  assert.deepEqual(chain.arms, ['f1', 'f2'], 'a three-term chain has one arm per later term');
   assert.equal(chain.bucket, 'N1');
   const summary = formatPlanSummary(plan);
   assert.match(summary, new RegExp(`UNINSTRUMENTED src/fx/n2.js:2 ${n2Chain.replaceAll('.', '\\.')} ` +
@@ -236,7 +236,7 @@ test('every rewritten fixture parses, keeps its line count and is armed exactly 
   }
   const nested = rewriteSource(plan, 'src/fx/typeof.js',
     fs.readFileSync(path.join(root, 'src/fx/typeof.js'), 'utf8')).split('\n')[16];
-  assert.match(nested, /: \(\(__lagrangeNecessityTrap\("ty\.[0-9a-f]{12}\.0#0"\),a\.p \|\| \(__lagrangeNecessityTrap\("ts\.[0-9a-f]{12}\.0#1"\),b\.p\)\)\);$/u,
+  assert.match(nested, /: \(\(__lagrangeNecessityTrap\("ty\.[0-9a-f]{12}\.0#f0"\),a\.p \|\| \(__lagrangeNecessityTrap\("ts\.[0-9a-f]{12}\.0#f1"\),b\.p\)\)\);$/u,
     'nested arms nest: the conditional arm wraps the chain whose term is armed');
 });
 
@@ -279,29 +279,29 @@ test('observe mode records exactly the arms that ran and changes no result', () 
   const ty = 'typeof_dual_paths';
   const ca = 'catch_returns_default';
   const expected = {
-    [`${id('src/fx/chain.js', 2, ts)}#1`]: 1,
-    [`${id('src/fx/chain.js', 2, ts)}#2`]: 1,
-    [`${id('src/fx/chain.js', 5, ts)}#1`]: 1,
-    [`${id('src/fx/typeof.js', 2, ty)}#0`]: 1,
-    [`${id('src/fx/typeof.js', 5, ty)}#0`]: 1,
-    [`${id('src/fx/typeof.js', 17, ty)}#0`]: 1,
-    [`${id('src/fx/typeof.js', 17, ts)}#1`]: 1,
-    [`${id('src/fx/catch.js', 4, ca)}#0`]: 1,
-    [`${id('src/fx/async.js', 3, ts)}#1`]: 1,
-    [`${id('src/fx/async.js', 6, ts)}#1`]: 1,
+    [`${id('src/fx/chain.js', 2, ts)}#f1`]: 1,
+    [`${id('src/fx/chain.js', 2, ts)}#f2`]: 1,
+    [`${id('src/fx/chain.js', 5, ts)}#f1`]: 1,
+    [`${id('src/fx/typeof.js', 2, ty)}#p0`]: 1,
+    [`${id('src/fx/typeof.js', 5, ty)}#f0`]: 1,
+    [`${id('src/fx/typeof.js', 17, ty)}#f0`]: 1,
+    [`${id('src/fx/typeof.js', 17, ts)}#f1`]: 1,
+    [`${id('src/fx/catch.js', 4, ca)}#f0`]: 1,
+    [`${id('src/fx/async.js', 3, ts)}#f1`]: 1,
+    [`${id('src/fx/async.js', 6, ts)}#f1`]: 1,
   };
   assert.deepEqual(Object.fromEntries(Object.entries(doc.arms).map(([arm, hit]) =>
     [arm, hit.count])), expected, 'the first chain term, unbraced if primary, noParam try ' +
     'success and every unexecuted arm stay unrecorded');
   assert.deepEqual(doc.loaded, ['src/fx/async.js', 'src/fx/catch.js', 'src/fx/chain.js',
     'src/fx/typeof.js']);
-  const later = doc.arms[`${id('src/fx/async.js', 3, ts)}#1`];
+  const later = doc.arms[`${id('src/fx/async.js', 3, ts)}#f1`];
   assert.equal(later.async, true, 'an arm reached after an await is attributed through it');
   assert.match(later.caller, /^entry-[^ ]+\.mjs:\d+:\d+$/u);
-  const timer = doc.arms[`${id('src/fx/async.js', 6, ts)}#1`];
+  const timer = doc.arms[`${id('src/fx/async.js', 6, ts)}#f1`];
   assert.deepEqual([timer.caller, timer.detached], [null, true], 'a timer arm has no caller');
-  assert.match(doc.arms[`${id('src/fx/chain.js', 5, ts)}#1`].caller, /^entry-.*\.mjs:\d+:\d+$/u);
-  assert.equal(doc.arms[`${id('src/fx/typeof.js', 2, ty)}#0`].bucket, 'N2');
+  assert.match(doc.arms[`${id('src/fx/chain.js', 5, ts)}#f1`].caller, /^entry-.*\.mjs:\d+:\d+$/u);
+  assert.equal(doc.arms[`${id('src/fx/typeof.js', 2, ty)}#p0`].bucket, 'N2');
 });
 
 test('throw mode throws at exactly the selected arm, with the original error as cause', () => {
@@ -327,23 +327,25 @@ test('throw mode throws at exactly the selected arm, with the original error as 
   const outDir = temporaryDirectory('necessity-throw-');
   const result = runChild(root, script, childEnvironment(root, planFile, outDir, {
     LAGRANGE_NECESSITY_TRAP_MODE: 'throw',
-    LAGRANGE_NECESSITY_TRAP_SELECT: `site:${chain},site:${parse},!arm:${chain}#2`,
+    LAGRANGE_NECESSITY_TRAP_SELECT: `site:${chain},site:${parse},!arm:${chain}#f2`,
   }));
   assert.equal(result.status, 0, result.stderr);
   const out = JSON.parse(result.stdout);
   assert.equal(out.inCall, 'b', 'an unselected arm runs');
   assert.equal(out.first, 1, 'an arm that is not reached does not throw');
   assert.deepEqual(out.chain, {name: 'NecessityTrapError', code: 'LAGRANGE_NECESSITY_TRAP',
-    siteId: chain, armId: `${chain}#1`, cause: null});
+    siteId: chain, armId: `${chain}#f1`, cause: null});
   assert.deepEqual(out.parse, {name: 'NecessityTrapError', code: 'LAGRANGE_NECESSITY_TRAP',
-    siteId: parse, armId: `${parse}#0`, cause: 'SyntaxError'});
+    siteId: parse, armId: `${parse}#f0`, cause: 'SyntaxError'});
   const [doc] = observations(outDir);
-  assert.equal(doc.arms[`${chain}#1`].thrown, 1);
-  assert.equal(doc.arms[`${chain}#2`], undefined, 'the trapped term stops the chain');
+  assert.equal(doc.arms[`${chain}#f1`].thrown, 1);
+  assert.equal(doc.arms[`${chain}#f2`], undefined, 'the trapped term stops the chain');
+  assert.equal(doc.armed, 2, 'the observation names how many arms the selection armed');
   assert.equal(Object.values(doc.arms).filter((arm) => arm.thrown > 0).length, 2);
   const unselected = runChild(root, script, childEnvironment(root, planFile,
     temporaryDirectory('necessity-throw-'), {LAGRANGE_NECESSITY_TRAP_MODE: 'throw',
-      LAGRANGE_NECESSITY_TRAP_SELECT: `site:${chain},!arm:${chain}#1,!arm:${chain}#2`}));
+      LAGRANGE_NECESSITY_TRAP_SELECT: `site:${chain},site:${parse},!arm:${chain}#f1,` +
+        `!arm:${chain}#f2`}));
   assert.equal(JSON.parse(unselected.stdout).chain, 2, 'an excluded arm runs');
 });
 
@@ -426,26 +428,30 @@ test('the census pre-kill flush signal writes the counts so far', async () => {
 });
 
 function observation(process, arms, extra = {}) {
-  return {schema: 'fallback-necessity-trap-observation/1', plan: 'p1', head: 'h', mode: 'observe',
-    selection: '', process, entry: null, loaded: ['src/a.js'], refused: [], arms, ...extra};
+  const [, pid, threadId] = process.split(':');
+  return {schema: 'fallback-necessity-trap-observation/2', plan: 'p1', head: 'h', mode: 'observe',
+    selection: '', armed: 0, process, pid: Number(pid), threadId: Number(threadId),
+    startedAt: 't', roster: false, entry: null, loaded: ['src/a.js'], refused: [], arms,
+    ...extra};
 }
 
 function hit(count, caller, extra = {}) {
   return {site: 'ts.aaaaaaaaaaaa.0', file: 'src/a.js', line: 3, bucket: 'N5',
-    row: 'two_source_fallback_reads', term: 1, count, thrown: 0, caller, async: false,
-    detached: caller === null, ...extra};
+    row: 'two_source_fallback_reads', term: 'f1', count, thrown: 0, surfaced: 0, caller,
+    async: false, detached: caller === null, ...extra};
 }
 
 test('merge is deterministic, sums arms, unions callers and refuses bad inputs', () => {
+  // File names as the preload writes them: one per process start.
   const left = temporaryDirectory('necessity-merge-');
   const right = temporaryDirectory('necessity-merge-');
-  fs.writeFileSync(path.join(left, 'trap-1-0.json'), JSON.stringify(
-    observation('h:1:0:t', {'ts.aaaaaaaaaaaa.0#1': hit(2, 'b.js:1:1')})));
-  fs.writeFileSync(path.join(left, 'trap-2-0.json'), JSON.stringify(
-    observation('h:2:0:t', {'ts.aaaaaaaaaaaa.0#1': hit(1, 'a.js:1:1')})));
+  fs.writeFileSync(path.join(left, 'trap-1-0-aa.json'), JSON.stringify(
+    observation('h:1:0:t', {'ts.aaaaaaaaaaaa.0#f1': hit(2, 'b.js:1:1')})));
+  fs.writeFileSync(path.join(left, 'trap-2-0-bb.json'), JSON.stringify(
+    observation('h:2:0:t', {'ts.aaaaaaaaaaaa.0#f1': hit(1, 'a.js:1:1')})));
   fs.writeFileSync(path.join(left, 'trap-9-0.json.tmp'), '{partial');
-  fs.writeFileSync(path.join(right, 'trap-3-0.json'), JSON.stringify(
-    observation('g:3:0:t', {'ts.aaaaaaaaaaaa.0#1': hit(4, null)}, {loaded: []})));
+  fs.writeFileSync(path.join(right, 'trap-3-0-cc.json'), JSON.stringify(
+    observation('g:3:0:t', {'ts.aaaaaaaaaaaa.0#f1': hit(4, null)}, {loaded: []})));
   const forward = mergeObservations(readMergeInputs([left, right]));
   const backward = mergeObservations(readMergeInputs([right, left]));
   assert.equal(JSON.stringify(forward), JSON.stringify(backward));
@@ -455,7 +461,7 @@ test('merge is deterministic, sums arms, unions callers and refuses bad inputs',
   const twoLevel = mergeObservations([...readMergeInputs([right]),
     {doc: hostLevel, source: merged}]);
   assert.equal(JSON.stringify(twoLevel), JSON.stringify(forward), 'merging merged files is a union');
-  const arm = forward.arms['ts.aaaaaaaaaaaa.0#1'];
+  const arm = forward.arms['ts.aaaaaaaaaaaa.0#f1'];
   assert.deepEqual([arm.count, arm.processes, arm.callers, arm.detached],
     [7, 3, ['a.js:1:1', 'b.js:1:1'], true]);
   assert.deepEqual(forward.loaded, {'src/a.js': 2});
@@ -466,11 +472,8 @@ test('merge is deterministic, sums arms, unions callers and refuses bad inputs',
     source: 'x'}, ...readMergeInputs([right])]), /inputs disagree on plan/u);
   assert.throws(() => mergeObservations([{doc: {schema: 'other'}, source: 'odd.json'}]),
     /not a trap observation or merged trap file: odd\.json/u);
-  const bound = mergeObservations(readMergeInputs([right]), {id: 'r1', lane: 'unit',
-    laneExitCode: 1});
-  assert.deepEqual(bound.run, {id: 'r1', lane: 'unit', laneExitCode: 1});
-  assert.throws(() => mergeObservations([{doc: bound, source: 'bound.json'}]),
-    /a run-bound trap result cannot be merged again/u);
+  assert.equal(forward.complete, false, 'observations that ran without the roster are a gap');
+  assert.deepEqual(forward.roster.unrostered, ['g:3:0:t', 'h:1:0:t', 'h:2:0:t']);
 });
 
 test('the recorder refuses an unknown mode and records an unplanned arm without a site', () => {
@@ -479,8 +482,8 @@ test('the recorder refuses an unknown mode and records an unplanned arm without 
     outDir, root: outDir, processKey: 'k', entry: null, fileName: 'trap-0-0.json'};
   assert.throws(() => createTrapRecorder({...options, mode: 'trace'}), /must be one of/u);
   const recorder = createTrapRecorder({...options, mode: 'observe'});
-  recorder.trap('ts.ffffffffffff.0#1');
-  assert.equal(recorder.snapshot().arms['ts.ffffffffffff.0#1'].site, null);
+  recorder.trap('ts.ffffffffffff.0#f1');
+  assert.equal(recorder.snapshot().arms['ts.ffffffffffff.0#f1'].site, null);
 });
 
 // --- Corrective round (reports/verify-trap-apparatus.md): each hole below is

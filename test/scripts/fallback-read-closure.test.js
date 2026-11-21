@@ -144,7 +144,24 @@ const PRIMARY = {primary: true, fallback: false};
 
 // N5 two-source, N1 catch, and a typeof record carrying a hash of text it
 // was never measured on (the 2026-11-14 hand edit's shape).
-function censusAt(root, head, {generatedAt = '2026-11-10T00:00:00.000Z', catchSides} = {}) {
+// A re-join carries its own runs: `rejoin` renames every run (and every
+// record's reference to it) as a fresh collection would.
+function rejoined(census, rejoin) {
+  if (!rejoin) return census;
+  const rename = (id) => `${id}-${rejoin}`;
+  const renameSides = (sidesByRun) => Object.fromEntries(Object.entries(sidesByRun)
+    .map(([id, sides]) => [rename(id), sides]));
+  return {...census, runs: census.runs.map((run) => ({...run, id: rename(run.id)})),
+    sites: census.sites.map((site) => ({...site, runs: site.runs.map(rename),
+      sidesByRun: renameSides(site.sidesByRun)}))};
+}
+
+function censusAt(root, head, {generatedAt = '2026-11-10T00:00:00.000Z', catchSides,
+  rejoin} = {}) {
+  return rejoined(baseCensus(root, head, generatedAt, catchSides), rejoin);
+}
+
+function baseCensus(root, head, generatedAt, catchSides) {
   const runs = LANES.map((lane) => ({id: `${lane}-run`, lane}));
   const twoSource = siteOf(root, 'two_source_fallback_reads');
   const catchSite = siteOf(root, 'catch_returns_default');
@@ -251,22 +268,21 @@ test('a census edited without a re-join is refused', () => {
     'integration-run': PRIMARY}}));
   const result = check(root);
   assert.equal(result.exitCode, 1);
-  assert.match(result.stderr.join('\n'),
-    /census changed without a re-join \(head and generatedAt unchanged\): working tree/u);
+  assert.match(result.stderr.join('\n'), /census changed without a re-join .*: working tree/u);
 });
 
 test('a refresh may move a site toward less exercised buckets only', () => {
   const {root} = checkout();
   const head = git(root, 'rev-parse', 'HEAD');
   writeJson(root, CENSUS, censusAt(root, head, {generatedAt: '2026-11-21T00:00:00.000Z',
-    catchSides: {'unit-run': BOTH, 'formation-run': BOTH}}));
+    catchSides: {'unit-run': BOTH, 'formation-run': BOTH}, rejoin: 'r2'}));
   const up = check(root);
   assert.equal(up.exitCode, 1);
   assert.match(up.stderr.join('\n'),
     /a census refresh moved a site to a more exercised bucket: src\/alpha\/reads\.js \[\d+,\d+\] N1 -> N5/u);
-  const census = censusAt(root, head, {generatedAt: '2026-11-21T00:00:00.000Z'});
+  const census = baseCensus(root, head, '2026-11-21T00:00:00.000Z');
   census.sites[0] = record(siteOf(root, 'two_source_fallback_reads'), {'unit-run': PRIMARY});
-  writeJson(root, CENSUS, census);
+  writeJson(root, CENSUS, rejoined(census, 'r2'));
   writeJson(root, BASELINE, baselineOf(root));
   commit(root, 'refresh');
   const down = check(root);
@@ -281,14 +297,15 @@ test('a census head off the lineage is a one-way cell; an absent one is unmeasur
   const tree = git(root, 'rev-parse', 'HEAD^{tree}');
   const orphan = git(root, 'commit-tree', tree, '-m', 'off lineage');
   const census = JSON.parse(fs.readFileSync(path.join(root, CENSUS), 'utf8'));
-  writeJson(root, CENSUS, {...census, head: orphan, generatedAt: '2026-11-22T00:00:00.000Z'});
+  writeJson(root, CENSUS, rejoined({...census, head: orphan,
+    generatedAt: '2026-11-22T00:00:00.000Z'}, 'r2'));
   const off = check(root);
   assert.equal(off.exitCode, 1);
   assert.match(off.stderr.join('\n'), /over the baseline: census_head_not_ancestor\/\. 1 > 0/u);
   writeJson(root, CENSUS, {...census, head: 'b'.repeat(40), generatedAt: '2026-11-23T00:00:00.000Z'});
   const absent = check(root);
-  assert.equal(absent.exitCode, 2);
-  assert.match(absent.stderr.join('\n'), /the census head is not a commit in this repository/u);
+  assert.equal(absent.exitCode, 3);
+  assert.match(absent.stderr.join('\n'), /census-head-unavailable: the census head is not a commit/u);
 });
 
 test('without a baseline the ratchet refuses to run', () => {
@@ -323,12 +340,15 @@ test('a kept arm stands only on a red throw-mode trap run and a classified witne
     assert.match(result.stderr.join('\n'), expected);
   }
   writeJson(root, KEPT, {version: 1, entries: [entry]});
-  for (const bad of [{mode: 'observe'}, {laneExitCode: 0}, {thrown: 0}]) {
-    writeJson(root, 'data/fallback-census/traps/run1.json', trapResult(root, n5, bad));
+  const runOf = (laneExitCode) => ({id: 'run1', lane: 'integration', laneExitCode,
+    failedTests: ['test/alpha/witness.test.js']});
+  for (const bad of [{mode: 'observe'}, {run: runOf(0)}, {verdict: 'NOT-REACHED', surfaced: []},
+    {schema: 'fallback-necessity-trap-merged/2'}]) {
+    writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5, bad));
     assert.match(check(root).stderr.join('\n'), /names no red throw-mode trap run/u,
       JSON.stringify(bad));
   }
-  writeJson(root, 'data/fallback-census/traps/run1.json', trapResult(root, n5));
+  writeJson(root, 'data/fallback-census/traps/run1.json', report(root, n5));
   writeJson(root, KEPT, {version: 1, entries: [{...entry, witnessTest: 'test/alpha/absent.test.js'}]});
   assert.match(check(root).stderr.join('\n'), /witness is not a classified \.test\.js file/u);
   writeJson(root, KEPT, {version: 1, entries: [entry]});
@@ -348,7 +368,8 @@ test('--metric prints the selected cells as the last line for a script probe', (
     return result.stdout.at(-1);
   };
   assert.equal(metric(), '27');
-  assert.equal(metric('--rows', 'fallback_sites_bucket', '--buckets', 'N0,N1,N2,N3'), '1');
+  assert.equal(metric('--rows', 'fallback_sites_bucket', '--buckets', 'N0,N1,N2,N3'), '2',
+    'the N1 catch site and the uncensused typeof site');
   assert.equal(metric('--rows', 'fallback_sites_bucket', '--buckets', 'N0,N1,N2,N3',
     '--scope', 'src/beta/'), '0');
   assert.equal(metric('--rows', 'role_derived_leader_reads,non_required_leader_mode'), '12');
@@ -503,4 +524,27 @@ test('hole 11: baselines tightened on two branches compose by cell-wise minimum'
   commit(root, 'merge side: baselines compose by cell-wise minimum');
   const result = check(root);
   assert.equal(result.exitCode, 0, result.stderr.join('\n'));
+});
+
+test('a new semantic detectors version re-bases the semantic cells and only them', () => {
+  const {root} = checkout();
+  const current = JSON.parse(fs.readFileSync(path.join(root, BASELINE), 'utf8'));
+  assert.equal(current.detectors, 2, 'the baseline names the detectors that measured it');
+  const older = {...current, detectors: 1,
+    cells: {...current.cells, 'role_derived_leader_reads/alpha': 6}};
+  writeJson(root, BASELINE, older);
+  commit(root, 'a baseline measured by the v1 detectors');
+  writeJson(root, BASELINE, current);
+  commit(root, 'the v2 detectors count one more reader');
+  assert.equal(check(root).exitCode, 0, 'a semantic cell may rise only with the version');
+  writeJson(root, BASELINE, {...current, detectors: 1,
+    cells: {...current.cells, 'fallback_sites_uncensused/typeof_dual_paths/alpha': 0}});
+  commit(root, 'v1 again, with a census-row cell lowered');
+  writeJson(root, BASELINE, current);
+  commit(root, 'v2, raising the census-row cell');
+  assert.match(check(root).stderr.join('\n'),
+    /baseline raised .*fallback_sites_uncensused\/typeof_dual_paths\/alpha 0/u,
+    'a detectors version never re-bases a census-row cell');
+  writeJson(root, BASELINE, {...current, detectors: 1});
+  assert.match(check(root).stderr.join('\n'), /measured with semantic detectors v1; they are v2/u);
 });

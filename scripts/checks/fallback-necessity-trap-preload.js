@@ -9,7 +9,9 @@
  * Without LAGRANGE_NECESSITY_TRAP_PLAN it does nothing. With it:
  * - LAGRANGE_NECESSITY_TRAP_MODE `observe` (no behaviour change) or `throw`;
  *   anything else refuses the process at startup;
- * - LAGRANGE_NECESSITY_TRAP_OUT the directory for `trap-<pid>-<thread>.json`;
+ * - LAGRANGE_NECESSITY_TRAP_OUT the directory for
+ *   `trap-<pid>-<thread>-<token>.json`, one file per process start, created
+ *   exclusively (a restarted process never overwrites an earlier one);
  * - LAGRANGE_NECESSITY_TRAP_SELECT the arms that throw (throw mode only, an
  *   include token is required; grammar in fallback-necessity-trap-runtime.js);
  * - LAGRANGE_NECESSITY_TRAP_ROOT the checkout the plan's paths are relative
@@ -27,6 +29,18 @@
  * process without its own listener dies by the default action, and only the
  * first-hit writes survive it).
  *
+ * The roster: run the census preload beside it in roster-only mode
+ * (`--import=<census preload>` first, LAGRANGE_CENSUS_COVERAGE_DIR set to the
+ * trap's out directory, NODE_V8_COVERAGE unset). The census preload then
+ * records every Node child and worker the lane launches as
+ * `roster-<pid>-<thread>.json` there - the census's own expected-participant
+ * roster, reused, not a second one - and `merge` reports a rostered process
+ * that left no observation as a gap. In that mode this preload also writes the
+ * census start marker and answers the census pre-kill flush request, so a
+ * harness kill does not wait for a census preload that is not collecting.
+ * A marker error that reaches the process's uncaught-exception monitor is
+ * recorded as surfaced.
+ *
  * Its import closure is node builtins, the trap runtime and the census
  * constants - three files, no packages - so it can ride a production image
  * or container that carries only src/ (copy those three files and the plan in).
@@ -38,8 +52,10 @@ import os from 'node:os';
 import {TextDecoder} from 'node:util';
 import {isMainThread, threadId} from 'node:worker_threads';
 
+import path from 'node:path';
+
 import {
-  FLUSH_INTERVAL_MS, FLUSH_PROCESS_EVENT, FLUSH_SIGNAL,
+  CENSUS_COVERAGE_DIR_ENV, FLUSH_INTERVAL_MS, FLUSH_PROCESS_EVENT, FLUSH_SIGNAL, WITNESS_MARKER,
 } from './fallback-branch-census-constants.js';
 import {
   PLAN_SCHEMA, TRAP_ENV, TRAP_GLOBAL, TRAP_PROBLEM, createTrapRecorder, observationFileName,
@@ -64,6 +80,9 @@ const EXIT = 'exit';
 const STRING_TYPE_NAME = 'string';
 const SOURCE_UNAVAILABLE = 'module-source-unavailable';
 const REFUSED_PREFIX = 'necessity trap: refused ';
+const UNCAUGHT_MONITOR = 'uncaughtExceptionMonitor';
+const MAIN_THREAD = 0;
+const ROSTER_ROLE = 'necessity-trap';
 
 function sourceText(source) {
   return typeof source === STRING_TYPE_NAME ? source : textDecoder.decode(source);
@@ -76,12 +95,41 @@ function readPlan(planPath) {
   return {plan, digest: createHash(DIGEST_ALGORITHM).update(bytes).digest(DIGEST_ENCODING)};
 }
 
-function installFlushTriggers(flush) {
+function markerPath(directory, suffix) {
+  return path.join(directory, `${WITNESS_MARKER.PREFIX}${process.pid}${WITNESS_MARKER.SEPARATOR}` +
+    `${MAIN_THREAD}${suffix}`);
+}
+
+function readMarker(file) {
+  try {
+    return jsonParse(fs.readFileSync(file, TEXT_ENCODING));
+  } catch (_error) {
+    // No request (or a torn one): there is nothing to acknowledge.
+    return null;
+  }
+}
+
+// In roster mode: the census start marker, then flush on the census
+// pre-kill request and acknowledge it, as the census preload would.
+function servePreKillFlush(directory, flush) {
+  fs.writeFileSync(markerPath(directory, WITNESS_MARKER.START), JSON.stringify({
+    pid: process.pid, threadId: MAIN_THREAD, startedAt: new Date().toISOString(),
+    role: ROSTER_ROLE}));
+  return () => {
+    flush();
+    const request = readMarker(markerPath(directory, WITNESS_MARKER.FLUSH_REQUEST));
+    if (typeof request?.id !== STRING_TYPE_NAME) return;
+    fs.writeFileSync(markerPath(directory, WITNESS_MARKER.FLUSHED),
+      JSON.stringify({id: request.id, final: false, role: ROSTER_ROLE}));
+  };
+}
+
+function installFlushTriggers(flush, rosterDirectory) {
   setInterval(flush, FLUSH_INTERVAL_MS).unref();
   process.once(BEFORE_EXIT, flush);
   process.on(EXIT, flush);
   if (!isMainThread) return;
-  process.on(FLUSH_SIGNAL, flush);
+  process.on(FLUSH_SIGNAL, rosterDirectory ? servePreKillFlush(rosterDirectory, flush) : flush);
   process.on(FLUSH_PROCESS_EVENT, flush);
   // Flush beside the process's own signal listeners, never alone: adding a
   // listener of our own would replace the default termination.
@@ -104,12 +152,16 @@ function install(planPath) {
   }
   const root = env[TRAP_ENV.ROOT] || plan.root;
   const startedAt = new Date().toISOString();
+  const rosterDirectory = env[CENSUS_COVERAGE_DIR_ENV];
+  const rostered = Boolean(rosterDirectory) &&
+    path.resolve(rosterDirectory) === path.resolve(outDir);
   const recorder = createTrapRecorder({
     plan, planDigest: digest, mode: env[TRAP_ENV.MODE], root, outDir,
     selection: parseSelection(env[TRAP_ENV.SELECT]),
     processKey: [os.hostname(), process.pid, threadId, startedAt].join(PROCESS_KEY_SEPARATOR),
     entry: process.argv[ENTRY_ARGUMENT] ?? null,
     fileName: observationFileName(process.pid, threadId),
+    pid: process.pid, threadId, startedAt, roster: rostered,
   });
   objectDefineProperty(globalThis, TRAP_GLOBAL, {
     value: recorder.trap, writable: false, enumerable: false, configurable: false,
@@ -136,8 +188,9 @@ function install(planPath) {
       return {...result, source, shortCircuit: true};
     },
   });
-  installFlushTriggers(recorder.flush);
   recorder.flush();
+  installFlushTriggers(recorder.flush, rostered ? outDir : null);
+  process.on(UNCAUGHT_MONITOR, recorder.noteSurfaced);
 }
 
 const planPath = process.env[TRAP_ENV.PLAN];

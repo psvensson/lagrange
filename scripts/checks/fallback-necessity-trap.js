@@ -5,111 +5,147 @@
  * (reports/necessity/experiment.md B; the owner's rule: an arm is kept or
  * deleted on an executed experiment, never on a label).
  *
+ * CONCLUSION RULE. "arm X is unnecessary" requires complete-coverage observe
+ * and throw runs in every lane (roster complete, nothing swallowed, the file
+ * loaded), the producer-history check (an unreachable arm may be a required
+ * path whose producer changed), then the deletion itself with its change cone
+ * and the interaction's boundary witness green; the apparatus alone never
+ * establishes it, and never for recovery schedules that no lane drives.
+ * A throw is not a deletion: a trapped catch raises NecessityTrapError where
+ * the deleted catch would let the original error through, and a trapped term
+ * throws where its deletion would yield undefined, so trap-green and
+ * deletion-green can differ either way; the deletion run is the final word.
+ *
  *   node scripts/checks/fallback-necessity-trap.js plan --out PLAN.json
  *     [--census data/fallback-census/census.json | --no-census]
+ *   node scripts/checks/fallback-necessity-trap.js select --plan PLAN.json --select SPEC
  *   node scripts/checks/fallback-necessity-trap.js merge --out MERGED.json INPUT...
- *     [--run-id ID --lane LANE --lane-exit-code N]
+ *   node scripts/checks/fallback-necessity-trap.js report --plan PLAN.json
+ *     --merged MERGED.json --out REPORT.json
+ *     [--run-id ID --lane LANE --lane-exit-code N --lane-log FILE...]
  *
  * plan detects every census-row site in src/ with the one detector module
  * (code-navigability-detectors.js), buckets it from the committed census
  * (fallback-necessity-sites.js) and computes, per file, the insertions that
  * arm it: the armed side is the alternate (the fallback side), except for
- * N2 sites, whose question is the never-run primary. A two-source chain
- * `a ?? b ?? c` gets one arm per later term (`(trap(id#1),b)`,
- * `(trap(id#2),c)`), so a middle term that answers is seen; a conditional
- * arm is wrapped the same way, an if arm or try/catch block gets a leading
- * `trap(id#0);` (a catch passes its error as the trap error's cause), an
- * unbraced if arm is braced. Each file's rewrite is re-parsed; a site whose
- * rewrite does not parse, whose node is not found, or that cannot be armed
- * (an N2 two-source primary term always evaluates) is UNINSTRUMENTED with
- * its reason: printed and kept in the plan, never skipped. stdout: counts by
- * bucket, row and directory, instrumentable versus not, then every
- * uninstrumented site. Build the plan at the checkout the lane runs.
+ * N2 sites, whose question is the never-run primary. An arm id names its
+ * side: `<site>#f1` is the first later term of a chain, `#f0` a typeof or
+ * catch fallback side, `#p0` a primary side, so one id means one side
+ * whatever census the plan was built with. A chain `a ?? b ?? c` gets one arm
+ * per later term (`(trap(id#f1),b)`, `(trap(id#f2),c)`), so a middle term
+ * that answers is seen; a conditional arm is wrapped the same way, an if arm
+ * or try/catch block gets a leading `trap(id#f0);` (a catch passes its error
+ * as the trap error's cause), an unbraced if arm is braced. Each file's
+ * rewrite is re-parsed; a site whose rewrite does not parse, whose node is
+ * not found, or that cannot be armed (an N2 two-source primary term always
+ * evaluates) is UNINSTRUMENTED with its reason: printed and kept in the
+ * plan, never skipped. Bucket selections need a plan built with the census:
+ * under --no-census every site is `uncensused`.
  *
- * The preload (fallback-necessity-trap-preload.js) applies the plan in every
- * process and worker of a lane:
+ * A lane runs with both preloads, the census preload in roster-only mode
+ * first (it records every Node child and worker the lane launches, so a
+ * process that ran unarmed shows up as a gap) and the trap preload
+ * (fallback-necessity-trap-preload.js), which applies the plan:
  *
- *   NODE_OPTIONS="--import=$PWD/scripts/checks/fallback-necessity-trap-preload.js" \
+ *   OUT=$PWD/.tmp/trap/obs; mkdir -p "$OUT"
+ *   NODE_OPTIONS="--import=$PWD/scripts/checks/fallback-branch-census-preload.js \
+ *     --import=$PWD/scripts/checks/fallback-necessity-trap-preload.js" \
+ *   LAGRANGE_CENSUS_COVERAGE_DIR=$OUT LAGRANGE_NECESSITY_TRAP_OUT=$OUT \
  *   LAGRANGE_NECESSITY_TRAP_PLAN=$PWD/.tmp/trap/plan.json \
- *   LAGRANGE_NECESSITY_TRAP_OUT=$PWD/.tmp/trap/obs \
  *   LAGRANGE_NECESSITY_TRAP_MODE=observe \
  *   node scripts/run-classified-test-files.js --primary unit
  *
- * observe: no behaviour change; each process writes trap-<pid>-<thread>.json
+ * (NODE_V8_COVERAGE stays unset: a trap run collects no coverage.)
+ * observe: no behaviour change; each process start writes its own
+ * trap-<pid>-<thread>-<token>.json (created exclusively, never overwritten)
  * with the arms that ran (count, the first caller frame outside the site
- * file, async or detached attribution) and the planned files it loaded.
+ * file, async or detached attribution), the planned files it loaded, and
+ * whether the roster covered it.
  * throw: add LAGRANGE_NECESSITY_TRAP_SELECT (for example `bucket:N1`,
- * `site:ts.3fa9c01b22de.0`, `file:src/cdc/`, `!site:...` to exclude); the
- * selected arms throw NecessityTrapError (code LAGRANGE_NECESSITY_TRAP,
- * naming the site id) instead of running, and every arm is still recorded.
- * Run throw mode in rounds: exclude the arms already hit until no new arm
- * fires (experiment.md B.1 masking).
+ * `site:ts.3fa9c01b22de.0`, `file:src/cdc/`, `!arm:...#f2` to exclude);
+ * `select` prints the arms a selection arms first, and a selection that arms
+ * no planned arm refuses to start. The selected arms throw NecessityTrapError
+ * (code LAGRANGE_NECESSITY_TRAP, naming the arm and site) instead of running,
+ * and every arm is still recorded. Run throw mode in rounds: exclude the arms
+ * already hit until no new arm fires (experiment.md B.1 masking).
  *
- * merge folds per-process observation files (directories of trap-*.json, or
- * merged files from other hosts) into one deterministic JSON: arms summed,
- * callers unioned and sorted, loaded files counted per process. It refuses
- * inputs of different plans, modes or selections, and a process counted
- * twice. `--run-id/--lane/--lane-exit-code` bind a throw-mode result to its
- * lane outcome; such a file under data/fallback-census/traps/ is what a kept
- * arm must name (fallback-read-closure.js).
+ * merge (fallback-necessity-trap-results.js) folds per-process files with
+ * the roster, host by host and then across hosts, and is INCOMPLETE (exit 1)
+ * when a rostered process left no observation, an observation ran without
+ * the roster, or a file was refused. report classifies every planned arm as
+ * HIT, NOT-REACHED (its file loaded) or NOT-LOADED (nothing is known), and in
+ * a throw run each armed arm that threw as SURFACED or SWALLOWED; its verdict
+ * is never green-meaning-unneeded (SWALLOWED and INCOMPLETE exit 1). A report
+ * of a single-site throw run bound to its lane under
+ * data/fallback-census/traps/ is what a kept arm must name
+ * (fallback-read-closure.js).
+ *
+ * LIMITS. A Node process started outside the wrapped child_process and
+ * worker_threads APIs, or a module loaded from a copy outside the plan root
+ * (a packed install), is neither rostered nor armed. A restarted process
+ * that reuses a pid shares one roster entry with its predecessor, so the
+ * roster proves at least one observation per pid and thread, not one per
+ * start. A trap report is hand-writable JSON: it records the
+ * plan digest and a digest of the lane log it read, nothing stronger.
  *
  * Lab collection (observe mode). The rule for this repository: heavy work
  * reaches a lab host only through `lab test`, placement or `lab harness run`,
  * never a raw ssh runner (docs/development/home-lab.md). Placement forwards
  * only its retry, TAP-timeout and check-base policy to the host, runs the
  * classified runner in a throwaway worktree, and has no step before or after
- * the runner, so TODAY NO LAB ROUTE CAN RUN AN OBSERVE LANE. The smallest
+ * the runner, so TODAY NO LAB ROUTE CAN RUN A TRAP LANE. The smallest
  * addition (not in this slice; about 40 lines plus its placement-script
- * witness): scripts/lab/probe.js forwards LAGRANGE_NECESSITY_TRAP_MODE
- * (PLACEMENT_FORWARDED_ENV, forwardedPolicy, forwardedArgs) and, when it is
- * set, PLACEMENT_SCRIPT_TAIL in the worktree (a) builds the plan
- * (`plan --no-census --out .tmp/trap/plan.json`: the census head 6a240d3de is
- * reachable from no ref, so a host clone lacks it and could not bucket),
- * (b) exports NODE_OPTIONS=--import=$wt/scripts/checks/fallback-necessity-trap-preload.js
- * and the PLAN, OUT and MODE variables before the runner, and (c) after the
- * runner, before cleanup removes the worktree, runs
- * `merge --out "$HOME/necessity/$sha/merged-$(hostname).json" .tmp/trap/obs`.
- * With that route, from the controller (one host per lane share, at most
- * two hosts at once):
+ * witness): scripts/lab/probe.js forwards LAGRANGE_NECESSITY_TRAP_MODE and
+ * LAGRANGE_NECESSITY_TRAP_SELECT (PLACEMENT_FORWARDED_ENV, forwardedPolicy,
+ * forwardedArgs) and, when the mode is set, PLACEMENT_SCRIPT_TAIL in the
+ * worktree (a) fetches the ref that pins the census head
+ * (`git fetch origin census/fallback-census-head-6a240d3de:census/fallback-census-head-6a240d3de`)
+ * and builds the plan with the census (`plan --out .tmp/trap/plan.json`), so
+ * bucket selections arm what they name and arm ids match the controller's,
+ * (b) exports the two preloads and the variables above before the runner,
+ * and (c) after the runner, before cleanup removes the worktree, runs
+ * `merge --out "$HOME/necessity/$sha/merged-$(hostname).json" .tmp/trap/obs`
+ * and copies the plan beside it. With that route, from the controller (one
+ * host per lane share, at most two hosts at once):
  *
  *   H=$(git rev-parse HEAD)          # the pushed head; never type a sha
  *   LAGRANGE_LAB_AGENT=claude:SESSION LAGRANGE_NECESSITY_TRAP_MODE=observe \
- *     node scripts/lab.js test all --lane unit --on HOST --sha "$H"
+ *     node scripts/lab.js test all --lane unit --on HOST --sha "$H" > lane-HOST.log
  *   mkdir -p .tmp/necessity/"$H"
- *   rsync --bwlimit=2500 HOST:necessity/"$H"/merged-'*'.json .tmp/necessity/"$H"/
+ *   rsync --bwlimit=2500 HOST:necessity/"$H"/'*' .tmp/necessity/"$H"/
  *   node scripts/checks/fallback-necessity-trap.js merge \
  *     --out .tmp/necessity/"$H"/merged.json .tmp/necessity/"$H"/merged-*.json
+ *   node scripts/checks/fallback-necessity-trap.js report --plan .tmp/necessity/"$H"/plan.json \
+ *     --merged .tmp/necessity/"$H"/merged.json --out .tmp/necessity/"$H"/report.json \
+ *     --run-id RUN --lane unit --lane-exit-code "$LANE_EXIT" --lane-log lane-HOST.log
  *
- * Only the merged JSON crosses the network (per-process files stay on the
- * host). Bucket labels come from a controller-side `plan` at "$H": site ids
- * are the same on both sides. Throw mode runs the same way with
- * LAGRANGE_NECESSITY_TRAP_SELECT forwarded, then `merge --run-id ID --lane
- * LANE --lane-exit-code N` binds the result to the lane's outcome before it
- * is committed under data/fallback-census/traps/.
+ * Only the merged JSON and the plan cross the network (per-process files stay
+ * on the host).
  *
  * Physical three-host formation (observe mode; not in this slice, about
- * 90-120 lines with its witness, no Dockerfile change: the preload's closure
- * is three files and no packages):
+ * 90-120 lines with its witness, no Dockerfile change: the preloads' closure
+ * is node builtins and a few files under scripts/checks, no packages):
  * 1. test/distributed/harness/cluster-class-lifecycle-base.js, where the
  *    container env is composed (beside memoryLeak.captureHeapArtifacts'
  *    NODE_OPTIONS): when the harness runs with LAGRANGE_NECESSITY_TRAP_PLAN,
- *    append --import=/tmp/necessity-trap/fallback-necessity-trap-preload.js
- *    to NODE_OPTIONS and set PLAN=/tmp/necessity-trap/plan.json,
- *    OUT=/tmp/necessity-trap/out, MODE=observe, ROOT=/app (about 15 lines);
+ *    append both preloads from /tmp/necessity-trap/ to NODE_OPTIONS and set
+ *    PLAN=/tmp/necessity-trap/plan.json, OUT and LAGRANGE_CENSUS_COVERAGE_DIR
+ *    =/tmp/necessity-trap/out, MODE=observe, ROOT=/app (about 15 lines);
  * 2. test/distributed/harness/docker-provider.js: a putArchive of the
- *    preload, fallback-necessity-trap-runtime.js,
- *    fallback-branch-census-constants.js, the plan (built at the image's
- *    head) and an out/ directory owned by uid 10001 into each created
+ *    preloads and their imports, the plan (built at the image's head with the
+ *    census) and an out/ directory owned by uid 10001 into each created
  *    container before start, beside the existing getContainerArchive (about
  *    30 lines; no bind mount, so nothing is copied to the remote hosts;
  *    confirm the distroless image's /tmp is writable, else use /data);
  * 3. at teardown, before removal: getContainerArchive of
  *    /tmp/necessity-trap/out per container into the run's evidence
  *    directory, refusing a container with no main-thread observation file
- *    (the roster the census lacks for dockerd-started processes), then
- *    `merge` on the controller (about 30 lines). docker stop's 25 s grace
- *    suffices: the node's own SIGTERM listener is followed and the exit
- *    flush writes the counts; first hits are already on disk.
+ *    (dockerd starts the node, so no roster entry exists for it), then
+ *    `merge` and `report` on the controller (about 30 lines). A node
+ *    restarted inside its container writes a new file (one per start).
+ *    docker stop's 25 s grace suffices: the node's own SIGTERM listener is
+ *    followed and the exit flush writes the counts; first hits are already
+ *    on disk.
  *
  * Governed by the ambient-intrinsic audit: prototype methods are captured at
  * module load.
@@ -128,9 +164,11 @@ import {
   siteDirectory,
 } from './fallback-necessity-sites.js';
 import {
-  OBSERVATION_PREFIX, OBSERVATION_SCHEMA, OBSERVATION_SUFFIX, PLAN_SCHEMA, TRAP_GLOBAL,
-  applyInsertions,
-} from './fallback-necessity-trap-runtime.js';
+  MERGED_SCHEMA, REPORT_SCHEMA, isPassingVerdict, mergeObservations, readMergeInputs, reportRun,
+  selectArms,
+} from './fallback-necessity-trap-results.js';
+import {PLAN_SCHEMA, TRAP_GLOBAL, applyInsertions} from './fallback-necessity-trap-runtime.js';
+import {sha256} from './fallback-necessity-sites.js';
 import {spawnGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 
@@ -138,17 +176,13 @@ const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
-const arraySome = Function.call.bind(Array.prototype.some);
 const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
 const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
-const stringEndsWith = Function.call.bind(String.prototype.endsWith);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MERGED_SCHEMA = 'fallback-necessity-trap-merged/1';
 const DEFAULT_CENSUS = 'data/fallback-census/census.json';
 const TEXT_ENCODING = 'utf8';
 const NEWLINE = '\n';
@@ -173,6 +207,7 @@ const ROW = Object.freeze({
 });
 const ROW_ORDER = Object.freeze([ROW.TWO_SOURCE, ROW.TYPEOF, ROW.CATCH]);
 const ARMED_SIDE = Object.freeze({PRIMARY: 'primary', FALLBACK: 'fallback'});
+const SIDE_CODE = Object.freeze({[ARMED_SIDE.PRIMARY]: 'p', [ARMED_SIDE.FALLBACK]: 'f'});
 const NODE_TYPE = Object.freeze({
   LOGICAL: 'LogicalExpression', IF: 'IfStatement', CONDITIONAL: 'ConditionalExpression',
   CATCH: 'CatchClause', BLOCK: 'BlockStatement', IDENTIFIER: 'Identifier',
@@ -190,7 +225,8 @@ const UNINSTRUMENTED = Object.freeze({
   DOES_NOT_PARSE: 'rewrite-does-not-parse',
   COMBINATION_DOES_NOT_PARSE: 'combined-rewrite-does-not-parse',
 });
-const SUBCOMMAND = Object.freeze({PLAN: 'plan', MERGE: 'merge'});
+const SUBCOMMAND = Object.freeze({PLAN: 'plan', MERGE: 'merge', REPORT: 'report',
+  SELECT: 'select'});
 const COLUMN = Object.freeze({INSTRUMENTABLE: 'instrumentable', UNINSTRUMENTED: 'uninstrumented'});
 const HEADING = Object.freeze({
   BUCKET: 'by bucket:', ROW: 'by row:', DIRECTORY: 'by directory:',
@@ -198,23 +234,25 @@ const HEADING = Object.freeze({
 const MISSING_ROOT = 'source root absent: ';
 const FLAG = Object.freeze({
   OUT: '--out', CENSUS: '--census', NO_CENSUS: '--no-census', RUN_ID: '--run-id',
-  LANE: '--lane', LANE_EXIT_CODE: '--lane-exit-code',
+  LANE: '--lane', LANE_EXIT_CODE: '--lane-exit-code', LANE_LOG: '--lane-log', PLAN: '--plan',
+  MERGED: '--merged', SELECT: '--select',
 });
 const VALUE_FLAGS = Object.freeze([
-  FLAG.OUT, FLAG.CENSUS, FLAG.RUN_ID, FLAG.LANE, FLAG.LANE_EXIT_CODE,
+  FLAG.OUT, FLAG.CENSUS, FLAG.RUN_ID, FLAG.LANE, FLAG.LANE_EXIT_CODE, FLAG.PLAN, FLAG.MERGED,
+  FLAG.SELECT,
 ]);
-const MERGE_PROBLEM = Object.freeze({
-  SCHEMA: 'not a trap observation or merged trap file: ',
-  MIXED: 'inputs disagree on ',
-  DUPLICATE: 'a process is counted twice: ',
-  BOUND: 'a run-bound trap result cannot be merged again: ',
-  RUN_FLAGS: '--run-id, --lane and --lane-exit-code go together',
-  EMPTY: 'no observation files in the inputs',
+const REQUIRED_FLAGS = Object.freeze({
+  [SUBCOMMAND.PLAN]: [FLAG.OUT],
+  [SUBCOMMAND.MERGE]: [FLAG.OUT],
+  [SUBCOMMAND.REPORT]: [FLAG.OUT, FLAG.PLAN, FLAG.MERGED],
+  [SUBCOMMAND.SELECT]: [FLAG.PLAN, FLAG.SELECT],
 });
-const MERGE_KEYS = Object.freeze(['plan', 'head', 'mode', 'selection']);
+const RUN_FLAGS_PROBLEM = '--run-id, --lane and --lane-exit-code go together';
 const USAGE = 'usage: fallback-necessity-trap.js plan --out FILE [--census FILE | --no-census]\n' +
-  '       fallback-necessity-trap.js merge --out FILE [--run-id ID --lane LANE ' +
-  '--lane-exit-code N] INPUT...';
+  '       fallback-necessity-trap.js select --plan PLAN --select SPEC\n' +
+  '       fallback-necessity-trap.js merge --out FILE INPUT...\n' +
+  '       fallback-necessity-trap.js report --plan PLAN --merged MERGED --out FILE ' +
+  '[--run-id ID --lane LANE --lane-exit-code N --lane-log FILE...]';
 
 function nodeKey(type, range) {
   return `${type}${NODE_KEY_SEPARATOR}${range[0]}${RANGE_SEPARATOR}${range[1]}`;
@@ -271,6 +309,12 @@ function chainMatches(site, terms) {
     arrayEvery(terms, (term, index) => sameRange(term, site.terms[index]));
 }
 
+// An arm is named by its side and term: `f1` the first later chain term,
+// `f0` a typeof or catch fallback side, `p0` a primary side (N2).
+function sideArm(armedSide, term) {
+  return `${SIDE_CODE[armedSide]}${term}`;
+}
+
 function twoSourceArms(site, node, armedSide, siteId) {
   const terms = fallbackChainTerms(node, null);
   const refusal = armedSide === ARMED_SIDE.PRIMARY ? UNINSTRUMENTED.PRIMARY_TERM :
@@ -279,8 +323,9 @@ function twoSourceArms(site, node, armedSide, siteId) {
   const arms = [];
   const edits = [];
   for (let term = 1; term < terms.length; term += 1) {
-    arms.push(term);
-    edits.push(...expressionArm(terms[term], trapCall(armId(siteId, term))));
+    const arm = sideArm(armedSide, term);
+    arms.push(arm);
+    edits.push(...expressionArm(terms[term], trapCall(armId(siteId, arm))));
   }
   return {arms, edits};
 }
@@ -290,17 +335,20 @@ function typeofArms(site, node, armedSide, siteId) {
   const side = sameRange(node.consequent, range) ? node.consequent :
     sameRange(node.alternate, range) ? node.alternate : undefined;
   if (!side) return {reason: UNINSTRUMENTED.SIDE_NOT_FOUND};
-  const call = trapCall(armId(siteId, 0));
-  if (node.type === NODE_TYPE.CONDITIONAL) return {arms: [0], edits: expressionArm(side, call)};
+  const arm = sideArm(armedSide, 0);
+  const call = trapCall(armId(siteId, arm));
+  if (node.type === NODE_TYPE.CONDITIONAL) return {arms: [arm], edits: expressionArm(side, call)};
   const edits = side.type === NODE_TYPE.BLOCK ? blockArm(side, call) : statementArm(side, call);
-  return {arms: [0], edits};
+  return {arms: [arm], edits};
 }
 
 function catchArms(site, node, parent, armedSide, siteId) {
   const block = armedSide === ARMED_SIDE.FALLBACK ? node.body : parent.block;
   if (!sameRange(block, site.sides[armedSide])) return {reason: UNINSTRUMENTED.SIDE_NOT_FOUND};
   const named = armedSide === ARMED_SIDE.FALLBACK && node.param?.type === NODE_TYPE.IDENTIFIER;
-  return {arms: [0], edits: blockArm(block, trapCall(armId(siteId, 0), named ? node.param.name : ''))};
+  const arm = sideArm(armedSide, 0);
+  return {arms: [arm], edits: blockArm(block, trapCall(armId(siteId, arm),
+    named ? node.param.name : ''))};
 }
 
 /**
@@ -505,128 +553,14 @@ function formatPlanSummary(plan) {
   return lines.join(NEWLINE);
 }
 
-// --- merge ------------------------------------------------------------------
-
-function asMerged(doc, source) {
-  if (doc?.schema === MERGED_SCHEMA) {
-    if (doc.run) throw new Error(`${MERGE_PROBLEM.BOUND}${source}`);
-    return doc;
-  }
-  if (doc?.schema !== OBSERVATION_SCHEMA) throw new Error(`${MERGE_PROBLEM.SCHEMA}${source}`);
-  const arms = {};
-  for (const id of objectKeys(doc.arms)) {
-    const {caller, ...arm} = doc.arms[id];
-    arms[id] = {...arm, processes: 1, callers: caller ? [caller] : []};
-  }
-  const loaded = {};
-  for (const file of doc.loaded) loaded[file] = 1;
-  return {schema: MERGED_SCHEMA, plan: doc.plan, head: doc.head, mode: doc.mode,
-    selection: doc.selection, processes: [doc.process], loaded,
-    refused: arrayMap(doc.refused, (item) => ({...item, processes: 1})), arms};
-}
-
-function addArm(into, arm) {
-  if (!into) return {...arm, callers: [...arm.callers]};
-  return {...into, count: into.count + arm.count, thrown: into.thrown + arm.thrown,
-    processes: into.processes + arm.processes, async: into.async || arm.async,
-    detached: into.detached || arm.detached,
-    callers: [...new Set([...into.callers, ...arm.callers])]};
-}
-
-function sortedObject(table, value = (item) => item) {
-  const sorted = {};
-  for (const key of objectKeys(table).sort()) sorted[key] = value(table[key]);
-  return sorted;
-}
-
-function mergedSummary(arms) {
-  const sites = new Set();
-  const byBucket = {};
-  let thrownArms = 0;
-  for (const id of objectKeys(arms)) {
-    const arm = arms[id];
-    if (arm.thrown > 0) thrownArms += 1;
-    if (!objectHasOwn(byBucket, arm.bucket)) byBucket[arm.bucket] = {arms: 0, sites: 0};
-    byBucket[arm.bucket].arms += 1;
-    if (!sites.has(arm.site)) byBucket[arm.bucket].sites += 1;
-    sites.add(arm.site);
-  }
-  return {armsHit: objectKeys(arms).length, sitesHit: sites.size, thrownArms,
-    byBucket: sortedObject(byBucket)};
-}
-
-/**
- * Fold observation and merged documents into one merged document.
- * @param {Array<{doc: Object, source: string}>} inputs parsed inputs
- * @param {Object|null} run `{id, lane, laneExitCode}` to bind, or null
- * @return {Object} the merged document (deterministic for the same inputs)
- */
-function assertMergeable(docs) {
-  if (docs.length === 0) throw new Error(MERGE_PROBLEM.EMPTY);
-  for (const key of MERGE_KEYS) {
-    if (arraySome(docs, (doc) => doc[key] !== docs[0][key])) {
-      throw new Error(`${MERGE_PROBLEM.MIXED}${key}`);
-    }
-  }
-}
-
-// Fold one merged-shape document into the running totals.
-function foldDocument(totals, doc) {
-  for (const key of doc.processes) {
-    if (totals.processes.has(key)) throw new Error(`${MERGE_PROBLEM.DUPLICATE}${key}`);
-    totals.processes.add(key);
-  }
-  for (const file of objectKeys(doc.loaded)) {
-    totals.loaded[file] = (totals.loaded[file] ?? 0) + doc.loaded[file];
-  }
-  for (const item of doc.refused) {
-    const key = jsonStringify([item.file, item.reason]);
-    totals.refused.set(key, {file: item.file, reason: item.reason,
-      processes: (totals.refused.get(key)?.processes ?? 0) + item.processes});
-  }
-  for (const id of objectKeys(doc.arms)) totals.arms[id] = addArm(totals.arms[id], doc.arms[id]);
-}
-
-function mergeObservations(inputs, run = null) {
-  const docs = arrayMap(inputs, ({doc, source}) => asMerged(doc, source));
-  assertMergeable(docs);
-  const totals = {processes: new Set(), loaded: {}, refused: new Map(), arms: {}};
-  for (const doc of docs) foldDocument(totals, doc);
-  const {processes, loaded, refused, arms} = totals;
-  const sortedArms = sortedObject(arms, (arm) => sortedObject({...arm,
-    callers: [...arm.callers].sort()}));
-  return {
-    schema: MERGED_SCHEMA, plan: docs[0].plan, head: docs[0].head, mode: docs[0].mode,
-    selection: docs[0].selection, ...(run ? {run} : {}),
-    summary: {processes: processes.size, ...mergedSummary(sortedArms)},
-    processes: [...processes].sort(), loaded: sortedObject(loaded),
-    refused: arrayMap([...refused.keys()].sort(), (key) => refused.get(key)),
-    arms: sortedArms,
-  };
-}
-
-function isObservationName(name) {
-  return stringStartsWith(name, OBSERVATION_PREFIX) && stringEndsWith(name, OBSERVATION_SUFFIX);
-}
-
-function readMergeInputs(paths) {
-  const inputs = [];
-  for (const given of paths) {
-    const files = fs.statSync(given).isDirectory() ?
-      arrayMap(arrayFilter(fs.readdirSync(given).sort(), isObservationName),
-        (name) => path.join(given, name)) : [given];
-    for (const file of files) {
-      inputs.push({doc: jsonParse(fs.readFileSync(file, TEXT_ENCODING)), source: file});
-    }
-  }
-  return inputs;
-}
-
 function parseArguments(argv) {
-  const flags = {};
+  const flags = {[FLAG.LANE_LOG]: []};
   const inputs = [];
   for (let index = 1; index < argv.length; index += 1) {
-    if (arrayIncludes(VALUE_FLAGS, argv[index])) {
+    if (argv[index] === FLAG.LANE_LOG) {
+      flags[FLAG.LANE_LOG].push(argv[index + 1]);
+      index += 1;
+    } else if (arrayIncludes(VALUE_FLAGS, argv[index])) {
       flags[argv[index]] = argv[index + 1];
       index += 1;
     } else if (argv[index] === FLAG.NO_CENSUS) {
@@ -658,32 +592,71 @@ function runBinding(flags) {
   const given = arrayFilter(values, (value) => value !== undefined).length;
   if (given === 0) return null;
   if (given !== values.length || !Number.isInteger(Number(values[2]))) {
-    throw new Error(MERGE_PROBLEM.RUN_FLAGS);
+    throw new Error(RUN_FLAGS_PROBLEM);
   }
   return {id: values[0], lane: values[1], laneExitCode: Number(values[2])};
 }
 
-function runMerge(flags, inputs, write) {
-  const merged = mergeObservations(readMergeInputs(inputs), runBinding(flags));
-  writeJson(flags[FLAG.OUT], merged);
-  const {summary} = merged;
-  write(`merge: ${summary.processes} processes, ${summary.armsHit} arms hit at ` +
-    `${summary.sitesHit} sites (${summary.thrownArms} thrown), ${merged.refused.length} ` +
-    `refused files -> ${flags[FLAG.OUT]}`);
-  for (const item of merged.refused) {
-    write(`merge: REFUSED ${item.file} ${item.reason} in ${item.processes} processes`);
-  }
-  return merged.refused.length === 0 ? 0 : FAILED;
+function readPlanFile(file) {
+  const bytes = fs.readFileSync(file);
+  return {plan: jsonParse(bytes.toString(TEXT_ENCODING)), planDigest: sha256(bytes)};
 }
+
+function runSelect(flags, write) {
+  const {plan} = readPlanFile(flags[FLAG.PLAN]);
+  const armed = selectArms(plan, flags[FLAG.SELECT]);
+  for (const id of armed) write(id);
+  write(`select: ${flags[FLAG.SELECT]} arms ${armed.length} planned arms`);
+  return armed.length > 0 ? 0 : FAILED;
+}
+
+function runMerge(flags, inputs, write) {
+  const merged = mergeObservations(readMergeInputs(inputs));
+  writeJson(flags[FLAG.OUT], merged);
+  const {summary, roster} = merged;
+  write(`merge: ${summary.processes} processes (${roster.expected} rostered), ` +
+    `${summary.armsHit} arms hit at ${summary.sitesHit} sites (${summary.thrownArms} thrown), ` +
+    `armed ${merged.armed} -> ${flags[FLAG.OUT]}`);
+  for (const gap of roster.unobserved) {
+    write(`merge: INCOMPLETE unobserved ${gap.host}:${gap.pid}:${gap.threadId} ${gap.entry}`);
+  }
+  for (const key of roster.unrostered) write(`merge: INCOMPLETE unrostered ${key}`);
+  for (const item of merged.refused) {
+    write(`merge: INCOMPLETE refused ${item.file} ${item.reason} in ${item.processes} processes`);
+  }
+  return merged.complete ? 0 : FAILED;
+}
+
+function runReport(flags, write) {
+  const {plan, planDigest} = readPlanFile(flags[FLAG.PLAN]);
+  const merged = jsonParse(fs.readFileSync(flags[FLAG.MERGED], TEXT_ENCODING));
+  const laneLogs = arrayMap(flags[FLAG.LANE_LOG], (file) => fs.readFileSync(file, TEXT_ENCODING));
+  const report = reportRun({plan, planDigest, merged, run: runBinding(flags), laneLogs});
+  writeJson(flags[FLAG.OUT], report);
+  const {counts} = report;
+  write(`report: ${report.verdict} (${report.mode}); planned ${counts.planned}: hit ${counts.hit}, ` +
+    `not reached ${counts.notReached}, NOT-LOADED ${counts.notLoaded}; armed ${counts.armed}: ` +
+    `surfaced ${counts.surfaced}, SWALLOWED ${counts.swallowed} -> ${flags[FLAG.OUT]}`);
+  for (const id of report.swallowed) write(`report: SWALLOWED ${id}`);
+  return isPassingVerdict(report.verdict) ? 0 : FAILED;
+}
+
+const RUNNERS = Object.freeze({
+  [SUBCOMMAND.PLAN]: (flags, _inputs, write) => runPlan(flags, write),
+  [SUBCOMMAND.SELECT]: (flags, _inputs, write) => runSelect(flags, write),
+  [SUBCOMMAND.MERGE]: runMerge,
+  [SUBCOMMAND.REPORT]: (flags, _inputs, write) => runReport(flags, write),
+});
 
 function main(argv) {
   const write = (line) => process.stdout.write(`${line}${NEWLINE}`);
   const {subcommand, flags, inputs} = parseArguments(argv);
-  if (!flags[FLAG.OUT] || !arrayIncludes(Object.values(SUBCOMMAND), subcommand)) {
+  const known = objectHasOwn(RUNNERS, subcommand);
+  if (!known || !arrayEvery(REQUIRED_FLAGS[subcommand], (flag) => Boolean(flags[flag]))) {
     process.stderr.write(`${USAGE}${NEWLINE}`);
     return REFUSED;
   }
-  return subcommand === SUBCOMMAND.PLAN ? runPlan(flags, write) : runMerge(flags, inputs, write);
+  return RUNNERS[subcommand](flags, inputs, write);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -697,6 +670,7 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
 
 export {
   MERGED_SCHEMA,
+  REPORT_SCHEMA,
   UNINSTRUMENTED,
   buildTrapPlan,
   formatPlanSummary,
@@ -705,4 +679,6 @@ export {
   orderedInsertions,
   planCounts,
   readMergeInputs,
+  reportRun,
+  selectArms,
 };

@@ -28,16 +28,27 @@
  *   from such a read, through a parameter named for the column, through a
  *   call given the column key (`firstStringField(row, COLUMN.RAFT_ROLE)`),
  *   or through a same-file function returning one. A LEADER token is
- *   `'leader'`, `<ROLE enum>.LEADER`, a const or import bound to one, or one
- *   normalised (`String(RAFT_ROLE.LEADER).toLowerCase()`). Live reads
- *   (`this.role`, `readStatus().role`) are not row reads.
+ *   `'leader'`, `<ROLE enum>.LEADER`, a const or import bound to one, a
+ *   SCREAMING name with LEADER and ROLE words however it arrived (injected
+ *   through options), or one normalised
+ *   (`String(RAFT_ROLE.LEADER).toLowerCase()`). Live reads (`this.role`,
+ *   `readStatus().role`) are not row reads. KNOWN UNDERCOUNT: a role read
+ *   through a helper defined in another file is not followed. At 16300e756
+ *   the verifier named two such readers the row misses:
+ *   src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js:404
+ *   (role read by an imported contract helper) and
+ *   src/rebalancer/priority-publication-leader-safety.js:52 (role read by a
+ *   method of priority-publication-safety-topology.js). New readers written
+ *   that way are invisible to this row.
  * fixture_leader_role_rows[_message_group] (test): an object literal
  *   writing a leader role into a row's role column (also through a
  *   conditional, a default or a generator argument), an assignment of one,
- *   or a defaulted `raftRole = 'leader'` parameter. The literal's
- *   service_type / entity_type / service_id decides: wasm or meta rows are
- *   exempt (reported, not counted), message-group rows have their own row,
- *   everything else - partition rows and rows of unresolved type - counts.
+ *   or a defaulted `raftRole = 'leader'` parameter. The literal's service
+ *   type, as a whole value, decides: `wasm_service` rows and rows whose
+ *   service id is a META_SERVICE_ID member are exempt (counted in an
+ *   informational cell with their locations, not ratcheted), message-group
+ *   rows have their own row, everything else - partition rows and rows of
+ *   unresolved type - counts.
  *
  * Name-based scoping (a local's or function's taint) is per file, not per
  * scope: an over-count, never an under-count, of the same shape.
@@ -53,9 +64,13 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arraySome = Function.call.bind(Array.prototype.some);
 const regexpTest = Function.call.bind(RegExp.prototype.test);
 const stringIncludes = Function.call.bind(String.prototype.includes);
-const stringSlice = Function.call.bind(String.prototype.slice);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
+
+// Bumped whenever a detector here counts differently. The ratchet re-bases
+// the semantic rows' cells, and only those, at the baseline revision that
+// records a new version, and requires the baseline to name the current one.
+const DETECTORS_VERSION = 2;
 
 const SEMANTIC_ROW = Object.freeze({
   READ_MODE: 'read_mode_fallback_members',
@@ -99,12 +114,21 @@ const COLLECTION_FREEZE = 'freeze';
 const SET_CONSTRUCTOR = 'Set';
 const STRING_CONVERTER = 'String';
 
+// A row's kind comes from its service type, read as a whole value: a string
+// literal or a `SERVICE_TYPE.X` member (`X` lowercased), never a substring of
+// another field. A META_SERVICE_ID service id marks a meta row.
 const TYPE_KEYS = Object.freeze(new Set([
-  'service_type', 'serviceType', 'entity_type', 'entityType', 'service_id', 'serviceId',
+  'service_type', 'serviceType', 'entity_type', 'entityType',
 ]));
-const TYPE_COLUMNS = Object.freeze(new Set(['SERVICE_TYPE', 'ENTITY_TYPE', 'SERVICE_ID']));
-const EXEMPT_TYPE = /wasm|meta/u;
-const MESSAGE_GROUP_TYPE = /message/u;
+const TYPE_COLUMNS = Object.freeze(new Set(['SERVICE_TYPE', 'ENTITY_TYPE']));
+const ID_KEYS = Object.freeze(new Set(['service_id', 'serviceId']));
+const ID_COLUMN = 'SERVICE_ID';
+const META_SERVICE_IDS = 'META_SERVICE_ID';
+const EXEMPT_TYPES = Object.freeze(new Set(['wasm_service']));
+const MESSAGE_GROUP_TYPES = Object.freeze(new Set(['message_group', 'message_group_replica']));
+// A SCREAMING_SNAKE name with both a LEADER and a ROLE word names a leader
+// role however it arrived (injected through options, destructured).
+const LEADER_ROLE_CONSTANT = /^(?=[A-Z0-9_]*LEADER)(?=[A-Z0-9_]*ROLE)[A-Z][A-Z0-9_]*$/u;
 
 const NODE_TYPE = Object.freeze({
   PROPERTY: 'Property', OBJECT: 'ObjectExpression', ARRAY: 'ArrayExpression',
@@ -262,7 +286,10 @@ function isLeaderToken(node, context) {
     return typeof unwrapped.value === 'string' &&
       stringToLowerCase(unwrapped.value) === LEADER_VALUE;
   }
-  if (unwrapped.type === NODE.IDENTIFIER) return context.leaderNames.has(unwrapped.name);
+  if (unwrapped.type === NODE.IDENTIFIER) {
+    return context.leaderNames.has(unwrapped.name) ||
+      regexpTest(LEADER_ROLE_CONSTANT, unwrapped.name);
+  }
   if (unwrapped.type === NODE.CALL) return isNormalisedLeader(unwrapped, context);
   if (unwrapped.type !== NODE.MEMBER || unwrapped.computed ||
       unwrapped.property.name !== LEADER_MEMBER) {
@@ -494,16 +521,31 @@ function isRoleKey(property) {
   return ROLE_FIELDS.has(keyName(property));
 }
 
-function fixtureRowKind(object, parsed) {
+// The whole value a type field holds: `'wasm_service'`, or `wasm_service`
+// for `SERVICE_TYPE.WASM_SERVICE`; undefined for anything computed.
+function typeValue(node) {
+  const value = unwrapChain(node);
+  if (value.type === NODE.LITERAL) return typeof value.value === 'string' ? value.value : undefined;
+  const name = value.type === NODE.MEMBER && !value.computed ? value.property.name : undefined;
+  return name === undefined ? undefined : stringToLowerCase(name);
+}
+
+function isMetaServiceId(property) {
+  const named = property.computed ? columnName(property.key) === ID_COLUMN :
+    ID_KEYS.has(keyName(property));
+  const value = unwrapChain(property.value);
+  return named && value.type === NODE.MEMBER && nameOf(value.object) === META_SERVICE_IDS;
+}
+
+function fixtureRowKind(object) {
   for (const property of object.properties) {
     if (property.type !== NODE_TYPE.PROPERTY) continue;
+    if (isMetaServiceId(property)) return SEMANTIC_ROW.FIXTURE_EXEMPT;
     const typed = property.computed ? TYPE_COLUMNS.has(columnName(property.key)) :
       TYPE_KEYS.has(keyName(property));
-    if (!typed) continue;
-    const text = stringToLowerCase(stringSlice(parsed.text, property.value.range[0],
-      property.value.range[1]));
-    if (regexpTest(EXEMPT_TYPE, text)) return SEMANTIC_ROW.FIXTURE_EXEMPT;
-    if (regexpTest(MESSAGE_GROUP_TYPE, text)) return SEMANTIC_ROW.FIXTURE_MESSAGE_GROUP;
+    const type = typed ? typeValue(property.value) : undefined;
+    if (EXEMPT_TYPES.has(type)) return SEMANTIC_ROW.FIXTURE_EXEMPT;
+    if (MESSAGE_GROUP_TYPES.has(type)) return SEMANTIC_ROW.FIXTURE_MESSAGE_GROUP;
   }
   return SEMANTIC_ROW.FIXTURE;
 }
@@ -514,7 +556,7 @@ function fixtureSites(parsed, sites) {
     if (node.type === NODE_TYPE.OBJECT) {
       for (const property of node.properties) {
         if (isRoleKey(property) && containsLeader(property.value, context)) {
-          sites.push(site(fixtureRowKind(node, parsed), parsed, property));
+          sites.push(site(fixtureRowKind(node), parsed, property));
         }
       }
     } else if (node.type === NODE_TYPE.ASSIGNMENT && isRoleField(node.left) &&
@@ -585,4 +627,4 @@ function detectSemanticSites(root, options = {}) {
   return {sites, parseFailures: unparsedFiles};
 }
 
-export {SEMANTIC_ROW, detectSemanticSites};
+export {DETECTORS_VERSION, SEMANTIC_ROW, detectSemanticSites};
