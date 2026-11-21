@@ -543,10 +543,11 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    * ACTIVE transition from a stale local SYNCING row.
    *
    * @param {Object} operation
-   * @return {Promise<void>}
+   * @param {Function} [onCommittedPromotion]
+   * @return {Promise<boolean>} Whether a current owner applied the ACTIVE evidence.
    * @private
    */
-  async reconcileReplaceActualActive(operation) {
+  async reconcileReplaceActualActive(operation, onCommittedPromotion) {
     const observedOperation =
       await this.adoptMostAdvancedObservedReplaceState(operation);
     if (observedOperation) {
@@ -582,6 +583,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       throw error;
     }
     if (activeTransitionCommitted === OPERATION_RECONCILE_OUTCOME.ADVANCED) {
+      onCommittedPromotion?.(activeTransitionCommitted);
       const replaceResumeResult =
         await this.executeOperationFromReconcilePath(operation);
       if (replaceResumeResult?.skipped === true) {
