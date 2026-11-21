@@ -1,3 +1,4 @@
+import {buildGrowthPromotionCohort, matchGrowthPromotionCohort} from './growth-promotion-subject.js';
 // The admission statement: the one canonical body of a PLACEMENT_ADMIT
 // command (quest replica-placement-admission-owner, design sections 2.5 and
 // 2.12 item 2). The owner builds it from an ordered candidate; the partition
@@ -116,7 +117,7 @@ function canonicalPositions(value) {
 function isValidMoveSourceReplica(move) {
   if (move.type === OperationType.REPLACE) return isText(move.sourceReplicaId);
   if (move.type === PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE) {
-    return move.sourceReplicaId === null || isText(move.sourceReplicaId);
+    return buildGrowthPromotionCohort(move.replicaId, move.sourceReplicaId) !== null;
   }
   return move.sourceReplicaId === null;
 }
@@ -325,6 +326,12 @@ function moveOf(value) {
   const move = copyStrictOwnDataRecord(value);
   if (move === null ||
       !Object.keys(move).every((field) => MOVE_ALLOWED_KEYS.has(field))) {
+    return null;
+  }
+  if (move.type === PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE &&
+      Object.hasOwn(move, 'promoteReplicaIds') &&
+      matchGrowthPromotionCohort({replicaId: move.replicaId,
+        sourceReplicaId: move.sourceReplicaId ?? null}, move.promoteReplicaIds) === null) {
     return null;
   }
   return {type: move.type, targetNodeId: move.targetNodeId,

@@ -1,4 +1,9 @@
 import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohort,
+} from './growth-promotion-subject.js';
+import {OperationType} from './replica-operation-progress.js';
+import {invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
+import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
 import {
@@ -20,6 +25,10 @@ function nullableOperationValue(value) {
  * @return {Object} The row, keyed by column.
  */
 function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
+  if (operation.type === OperationType.GROWTH_PROMOTE &&
+      readGrowthPromotionCohort(operation) === null) {
+    throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED);
+  }
   const {entityType, entityId} =
     assertCanonicalRebalancerEntityIdentity(operation);
   return {

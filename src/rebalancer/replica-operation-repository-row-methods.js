@@ -1,4 +1,10 @@
-import {decodePersistedOperationHistory} from './replica-operation-update-outcome.js';
+import {
+  decodePersistedOperationHistory,
+  invalidOperationPersistenceOutcome,
+} from './replica-operation-update-outcome.js';
+import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohort,
+} from './growth-promotion-subject.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
   readOperationRecordWorkflowStep,
@@ -188,25 +194,12 @@ function decodeReplicaOperationRow(row, onHistoryError) {
     operation.status,
   );
   if (operation.type === OperationType.GROWTH_PROMOTE) {
-    operation.sourceReplicaId =
-      operation.sourceReplicaId ||
-      getOperationMetadataString(
-        stepsHistory,
-        OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
-      ) ||
-      null;
-    const promoteReplicaIdsFromHistory = getOperationMetadataStringArray(
-      stepsHistory,
-      ReplicaOperationField.PROMOTE_REPLICA_IDS,
-    );
-    const promoteReplicaIds = promoteReplicaIdsFromHistory.length > 0 ?
-      promoteReplicaIdsFromHistory :
-      [operation.replicaId, operation.sourceReplicaId].filter(Boolean);
-    if (promoteReplicaIds.length > 0) {
-      operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] =
-        promoteReplicaIds;
+    const cohort = readGrowthPromotionCohort(operation);
+    if (row.source_replica_id === undefined || cohort === null) {
+      throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED);
     }
-  } else {
+    operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] = cohort;
+  } else if (operation.type === OperationType.REPLACE) {
     operation.sourceReplicaId = getReplaceSourceReplicaId(operation);
   }
   const replicaIds = getOperationMetadataStringArray(

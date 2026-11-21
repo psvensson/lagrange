@@ -1,3 +1,6 @@
+import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, matchGrowthPromotionCohort,
+} from '../rebalancer/growth-promotion-subject.js';
 /**
  * Owner contract:
  * Owner: the replica handler's witness seam for the REPLACE owner (quest
@@ -353,10 +356,17 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
     async handleProposeGrowthPromote(request) {
       const target = this.resolvePartitionAdministrationTarget(request);
       if (target.response) return target.response;
-      const promoteReplicaIds = Array.isArray(target.fields.promoteReplicaIds) &&
-          target.fields.promoteReplicaIds.length > 0 ?
-        target.fields.promoteReplicaIds :
-        [target.fields.replicaId, target.fields.sourceReplicaId].filter(Boolean);
+      const promoteReplicaIds = matchGrowthPromotionCohort({
+        replicaId: request?.[ReplicaOperationField.REPLICA_ID],
+        sourceReplicaId: request?.[ReplicaOperationField.SOURCE_REPLICA_ID],
+      }, target.fields.promoteReplicaIds);
+      if (promoteReplicaIds === null) {
+        return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
+          error: GROWTH_PROMOTION_COHORT_UNRESOLVED,
+          errorCode: GROWTH_PROMOTION_COHORT_UNRESOLVED,
+          nodeId: this.nodeId,
+        });
+      }
       const beforeMembership = await readPartitionCommittedMembership(
         target.service,
       );

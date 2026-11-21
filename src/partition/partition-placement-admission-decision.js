@@ -1,3 +1,4 @@
+import {buildGrowthPromotionCohort} from '../rebalancer/growth-promotion-subject.js';
 // Public entry: decidePlacementAdmission, decideHoldRelease, readPlacementCensus, isOccupyingCopy, LEDGER_PARTITION_ID.
 // Required collaborators: PartitionService SQLite db connection inside apply transaction (replica_operations-p1).
 // Durable authority / commit point: replica_operations rows in SQLite read and mutated inside applyPlacementCommand's SQLite transaction.
@@ -199,11 +200,10 @@ function admissionMetadataOf(command, statement, move) {
 }
 
 function promoteReplicaIdsOf(move) {
-  if (move.type !== PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE &&
-      move.type !== PLACEMENT_MOVE_TYPE.PROMOTE) {
-    return null;
+  if (move.type === PLACEMENT_MOVE_TYPE.GROWTH_PROMOTE) {
+    return Object.freeze(buildGrowthPromotionCohort(move.replicaId, move.sourceReplicaId));
   }
-  return Object.freeze([move.replicaId, move.sourceReplicaId].filter(Boolean));
+  return move.type === PLACEMENT_MOVE_TYPE.PROMOTE ? Object.freeze([move.replicaId]) : null;
 }
 
 function operationOf(command, statement, move, identity) {

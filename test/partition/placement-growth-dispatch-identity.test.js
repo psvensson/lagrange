@@ -97,7 +97,7 @@ async function withNativeGrowth(measure, sourceReplicaId = SECOND_LEARNER) {
     const {command} = await admitOnLeader(leader, proposed, 'growth:placement',
       placementStatement({
         partitionId: PARTITION_ID, target: NODE.A, type: OperationType.GROWTH_PROMOTE,
-        replicaId: FIRST_LEARNER, sourceReplicaId,
+        replicaId: FIRST_LEARNER, sourceReplicaId, source: null,
       }));
     assert.ok(command, 'the production placement owner committed the admission');
     const [row] = ledgerRows(leader);

@@ -1,3 +1,6 @@
+import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohort,
+} from './growth-promotion-subject.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {isDeepStrictEqual} from 'node:util';
@@ -105,6 +108,10 @@ function assertOperationUpdateRecord(operation, {terminal = false} = {}) {
     'invalid encoded entity partition identity');
   if (operation.entityType === SERVICE_TYPE.PARTITION) {
     requireOutcome(operation.partitionId === operation.entityId, 'partition entity differs');
+  }
+  if (operation.type === OperationType.GROWTH_PROMOTE) {
+    requireOutcome(readGrowthPromotionCohort(operation) !== null,
+      GROWTH_PROMOTION_COHORT_UNRESOLVED);
   }
   requireOutcome((isValidWorkflowStep(operation.type, operation.workflowStep) ||
     (COORDINATOR_OWNED_OPERATION_TYPES.includes(operation.type) &&
