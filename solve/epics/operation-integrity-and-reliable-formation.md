@@ -121,8 +121,31 @@ invalid evidence before integration.
 | Placement restoration | At `c5ef72e12` the exact, changed and unavailable E1/E2 join controls passed. Remote BUSY custody, late clearing, durable E0 replay and leadership changes still failed. Fix the sender handing off an entry the receiver no longer owns. At `f41f881ce` both ordinary and supported retained-restoration cases reached the actual native removal safety edge. A direct test-only SQL insert bypassed admission and allowed one unsafe REMOVE. Independent review confirmed that the public SQL and ordinary placement owners exclude this insert. At `0ffd8b425` a pre-existing durable competitor blocked ACTIVE and STOPPING removal with CDC withheld. Removal resumed once after release. On `f841bbff9` both missing-row entrances consumed a real release, then met a newly admitted ordinary contender and a second durable BUSY. Prove both orderings of these legitimate requests. The direct insert remains a failed mutation control. [Original execution and selected rows](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-owned-turns-and-real-removal-edge-nov21.tar.gz). |
 | SERVICES read lifetime | Independent review approved `19cd99e27` for the executor and nested transport. On `d193d4fa8` the seven-file selection passed with 469 assertions on adams-gamla. The native suite retained the same pending response past a probe, routed to a late healthy alternate, honored real session exclusions and cleaned up after loss, cancellation and shutdown. The physical trace still lacks the original inner grant for query 19. Verify formation on the frozen composition. [Review and execution originals](../quests/fresh-formation-user-table-routability/log.ndjson). |
 | Latest physical result | **0/3 consecutive passes.** Run `3ed87e16` on `60fe32768` missed formation. At 117.249 s four priority partitions still lacked spread. Later failed reads left final spread and quietness unknown. CREATE and COUNT succeeded by 515.549 s **from scenario start**. INSERT and readback succeeded through all three hosts. |
+| Compatibility and closure evidence (Q11) | Four live paths remain in the measured composition: pre-fingerprint placement replay, repository mutation submission by available method, placement delivery through `sendToAddress`, and remote ledger routing from the first SERVICES row. The November 10 receipt is historical. Its six-file existence check establishes fixture availability only. Q11 and the actual runtime owners must prove deletion and migration on the collected source before Q12 can consume current closure. |
 | Gates to smoke and comparison | After the owner repairs and review, freeze one composition. Run the focused witnesses and strict selection, fast static, and the full classified corpus required for publication by changes to proof selection, runners and placement. Three consecutive physical trials on that candidate must satisfy the existing 420 s bound, spread, quiet window, SQL, observation and cleanup predicates. Then run comparative smoke, followed by the Lagrange GCP measurement. |
 
+
+The native placement owner owns the settled-receipt lookup and format boundary.
+It must validate immutable command identity, return the original receipt while
+new writes are paused, and preserve outstanding durable data from older
+formats. The retained-repair owner must finalize outward custody after entry
+settlement. An unavailable authority read leaves a reconsideration owed
+through an identified dependency event or bounded continuation, with no
+duplicate proposal and no activity after shutdown.
+
+The repository mutation owner must migrate structured operation writes to
+`submitMutation` and prove refusal without effects when that required
+capability is missing. The placement delivery and route owners must migrate
+all callers to the canonical delivery envelope and current ledger leader
+discovery. Exercise an unresolved route, genuine later leader publication,
+and independent sender obligation retirement.
+
+Q11's proof owner must distinguish the checked classification labels, the
+finite source search and the six witness paths from measured owner results.
+Admission of a behavior claim requires applicable original executions and
+rejection of missing or failed runs. Keep the original seal and receipt as
+historical evidence. The [existing Q11 record](../quests/repository-legacy-fallback-closure/quest.json)
+owns these obligations.
 
 The placement owner also has an open lifecycle question. Determine whether a
 later learner can reuse a replica ID while historical promotion credit is
