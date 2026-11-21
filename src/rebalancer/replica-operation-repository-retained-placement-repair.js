@@ -16,7 +16,6 @@ import {unavailableRepairPreparation, unavailableRepairOwnerReply} from
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-write-kernel.js';
 import {REPAIR_ANSWER_STATE, isCommittedRepairAnswer, custodyMatches,
   readRetainedRepairRefusal} from './replica-operation-retained-repair-answer.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {LEDGER_PARTITION_ID, readPlacementCensus, readPlacementCopyOccupancy} from
   '../partition/partition-placement-admission-decision.js';
 import {REPAIR_PREPARATION_STATE as PREPARATION, PLACEMENT_ADMISSION_ERROR} from '../partition/partition-placement-admission-constants.js';
@@ -26,8 +25,6 @@ import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.
 import {PLACEMENT_CLEARING_TRIGGER, PLACEMENT_TRIGGER, PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 
-const ROW_STATE = Object.freeze({UNAVAILABLE: 'unavailable', ABSENT: 'absent',
-  EXACT: 'exact', CHANGED: 'changed'});
 const READ_BLOCKER_SQL = 'SELECT created_at, workflow_step, completed_at FROM replica_operations ' +
   'WHERE operation_id = ?';
 const REPAIR_LOG = Object.freeze({ANSWER_UNAVAILABLE: 'Retained placement repair answer unavailable',
@@ -66,32 +63,15 @@ function createRetainedPlacementRepairPorts(options) {
   return {
     repairRetainedPlacement: repairPort(options.repairRetainedPlacement,
       unavailableRepairOwnerReply),
+    resolveRetainedPlacementRepairRoute: repairPort(options.resolveRetainedPlacementRepairRoute,
+      () => null),
     prepareRetainedPlacementRepair: repairPort(options.prepareRetainedPlacementRepair,
       () => unavailableRepairPreparation(PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE)),
   };
 }
 
-function receiverChanged(attempt, tableName, row) {
-  if (!attempt.expectedOwner || !row) return false;
-  return [tableName === SYSTEM_TABLE_NAME.SERVICES, row.partition_id === LEDGER_PARTITION_ID,
-    row.raft_role === RAFT_ROLE.LEADER, typeof row.node_id === 'string',
-    typeof row.replica_id === 'string', row.replica_id !== attempt.expectedOwner.replicaId].every(Boolean);
-}
-
 function assignRetainedPlacementRepairMethods(Repository) {
   Object.assign(Repository.prototype, {
-    async confirmRetainedOperationRow(operation) {
-      const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(
-        operation, {requireAbsenceConfirmation: true});
-      if (observation?.deferredOutcome) return {state: ROW_STATE.UNAVAILABLE};
-      const observed = observation?.operation;
-      if (observed === null) return {state: ROW_STATE.ABSENT};
-      if (!observed) return {state: ROW_STATE.UNAVAILABLE};
-      return {state: observed.createdAt === operation.createdAt &&
-        this.isReplicaOperationUpdateSatisfied(operation, observed) ?
-        ROW_STATE.EXACT : ROW_STATE.CHANGED};
-    },
-
     async ensureRetainedOperationRow(operation) {
       return this.repairRetainedOperation(operation);
     },
@@ -204,6 +184,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       attempt.body = preparation.body;
       attempt.expectedOwner = preparation.owner;
+      attempt.observedRoute = this.resolveRetainedPlacementRepairRoute();
       attempt.entryId = `retained-repair:${attempt.operation.operationId}:${uuidv4()}`;
       return true;
     },
@@ -212,7 +193,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (!await this.prepareRetainedRepairAttempt(attempt)) return false;
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
       const releaseSequence = this.retainedPlacementRepairReleaseSequence ?? 0;
-      attempt.lastDecision = {state: DECISION.PENDING};
+      attempt.lastDecision = {...attempt.lastDecision, state: DECISION.PENDING};
       const answer = await this.sendRetainedRepairAttempt(attempt);
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
       attempt.lastAnswer = answer;
@@ -286,7 +267,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     retainCommittedRepairRefusal(attempt, result) {
       const refusal = readRetainedRepairRefusal(result, attempt);
       if (refusal.state === REPAIR_ANSWER_STATE.UNKNOWN) return false;
-      attempt.lastDecision = {state: DECISION.CONTENDED, result};
+      attempt.lastDecision = {...attempt.lastDecision, state: DECISION.CONTENDED, result};
       attempt.blockers = refusal.blockers;
       attempt.occupancy = refusal.occupancy;
       attempt.clearingTrigger = refusal.clearingTrigger;
@@ -359,7 +340,6 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (!this.retainedRepairAttemptIsCurrent(attempt) ||
           authority.state !== REPAIR_AUTHORITY.READY) return {state: DECISION.UNAVAILABLE};
       this.completeRetainedRepairReadDependency(attempt);
-      attempt.lastDecisionTerm = authority.witness.term;
       attempt.minimumLedgerIndex =
         Math.max(attempt.minimumLedgerIndex, authority.witness.appliedIndex);
       attempt.minimumLedgerTerm = Math.max(attempt.minimumLedgerTerm, authority.witness.term);
@@ -369,17 +349,19 @@ function assignRetainedPlacementRepairMethods(Repository) {
         const operation = this.rowToOperation(row);
         const exact = operation.createdAt === attempt.operation.createdAt &&
           this.isReplicaOperationUpdateSatisfied(attempt.operation, operation);
-        return {state: exact ? DECISION.EXACT : DECISION.CHANGED, operation};
+        return {state: exact ? DECISION.EXACT : DECISION.CHANGED, operation,
+          observedTerm: authority.witness.term};
       }
       const decision = authority.completeCensus ?
         retainedPlacementContentionDecision(
           attempt.operation, attempt.body.copyPolicy, authority.census) :
         retainedPlacementEntityDecision(attempt.operation, authority.census);
       if (decision.state === ENTITY_ADMISSION_STATE.REFUSED) {
-        return {state: DECISION.CONTENDED,
+        return {state: DECISION.CONTENDED, observedTerm: authority.witness.term,
           result: materializeRepairContention(decision.result, authority.rows)};
       }
-      return {state: DECISION.ABSENT, term: authority.witness.term};
+      return {state: DECISION.ABSENT, term: authority.witness.term,
+        observedTerm: authority.witness.term};
     },
 
     settleRetainedRepairDecision(attempt, decision) {
@@ -443,8 +425,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
 
     retainedRepairObservationKind(attempt, tableName, row) {
       if (ownRowObservation(attempt, tableName, row)) return OBSERVATION.OWN_ROW;
-      if (receiverChanged(attempt, tableName, row)) {
-        attempt.expectedOwner = {nodeId: row.node_id, replicaId: row.replica_id};
+      if (this.retainedRepairPublishedRouteChanged(attempt, tableName, row)) {
         return OBSERVATION.LEADER;
       }
       if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
@@ -459,6 +440,27 @@ function assignRetainedPlacementRepairMethods(Repository) {
         peerObservationMayClear(attempt, row);
       return blockerCleared || possiblyClearedWhilePending ?
         OBSERVATION.CLEARING : OBSERVATION.NONE;
+    },
+
+    retainedRepairPublishedRouteChanged(attempt, tableName, row) {
+      const relevant = tableName === SYSTEM_TABLE_NAME.PARTITIONS ||
+        tableName === SYSTEM_TABLE_NAME.SERVICES;
+      if (!relevant || row?.partition_id !== LEDGER_PARTITION_ID) return false;
+      const route = this.resolveRetainedPlacementRepairRoute();
+      if (route === null) {
+        // Incomplete/ambiguous publication cannot revoke actual receiver custody.
+        attempt.routeUnavailable = true;
+        return false;
+      }
+      const previous = attempt.observedRoute;
+      const owner = {nodeId: route.nodeId, replicaId: route.replicaId};
+      const changed = attempt.routeUnavailable ||
+        !isDeepStrictEqual(owner, attempt.expectedOwner) ||
+        (previous !== null && !isDeepStrictEqual(route, previous));
+      attempt.observedRoute = route;
+      attempt.routeUnavailable = false;
+      if (changed) attempt.expectedOwner = owner;
+      return changed;
     },
 
     bindRetainedPlacementRepairWake(service) {

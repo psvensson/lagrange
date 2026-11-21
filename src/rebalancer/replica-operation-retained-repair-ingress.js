@@ -27,8 +27,8 @@ function ownsIngress(service, term) {
 const REUSABLE_DECISIONS = new Set([DECISION.PENDING, DECISION.CONTENDED, DECISION.UNAVAILABLE]);
 
 function reusableRetainedDecision(attempt, term) {
-  return attempt.lastDecision !== null && REUSABLE_DECISIONS.has(attempt.lastDecision.state) &&
-    attempt.lastDecisionTerm === term && attempt.observations === REPAIR_OBSERVATION.NONE;
+  return REUSABLE_DECISIONS.has(attempt.lastDecision.state) &&
+    attempt.lastDecision.observedTerm === term && attempt.observations === REPAIR_OBSERVATION.NONE;
 }
 
 function ownsNativeCompleter(attempt, payload) {
@@ -94,7 +94,7 @@ function assignRetainedRepairIngressMethods(Repository) {
         const term = ingressTerm(service);
         await attempt.pending;
         if (!ownsIngress(service, term)) return unavailableReply(service, payload);
-        if (attempt.lastDecision !== null) {
+        if (attempt.lastDecision.state !== DECISION.UNOBSERVED) {
           return retainedRepairObservationReply(service, payload, attempt.lastDecision);
         }
         return this.acceptRetainedPlacementRepairRequest(service, payload, submitNative);
@@ -112,8 +112,7 @@ function assignRetainedRepairIngressMethods(Repository) {
           answer = unavailableReply(service, payload);
           return false;
         }
-        attempt.lastDecision = decision;
-        attempt.lastDecisionTerm = term;
+        attempt.lastDecision = {...decision, observedTerm: term};
         if (decision.state !== DECISION.ABSENT) {
           answer = retainedRepairObservationReply(service, payload, decision);
           return this.settleRetainedRepairDecision(attempt, decision);

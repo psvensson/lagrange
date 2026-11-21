@@ -5,6 +5,9 @@ import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-de
 import {PLACEMENT_ADMISSION_ERROR} from '../partition/partition-placement-admission-constants.js';
 import {RETAINED_REPAIR_DECISION as DECISION} from './replica-operation-retained-repair-record.js';
 
+const OBSERVED_DECISIONS = Object.freeze(Object.values(DECISION)
+  .filter((state) => state !== DECISION.UNOBSERVED));
+
 function retainedRepairObservationReply(service, payload, decision) {
   return {success: false, partitionId: service.partitionId,
     failureCode: decision.state === DECISION.UNAVAILABLE ?
@@ -33,7 +36,7 @@ function matchesRetainedRepairObservation(answer, attempt) {
   const ownerMatches = attempt.expectedOwner !== null &&
     observation.nodeId === attempt.expectedOwner.nodeId &&
     observation.replicaId === attempt.expectedOwner.replicaId;
-  return bodyMatches && ownerMatches && Object.values(DECISION).includes(observation.state);
+  return bodyMatches && ownerMatches && OBSERVED_DECISIONS.includes(observation.state);
 }
 
 export {retainedRepairObservationReply, matchesRetainedRepairObservation};

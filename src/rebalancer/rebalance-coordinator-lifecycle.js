@@ -355,6 +355,7 @@ class RebalanceCoordinatorLifecycle {
         prepareRetainedPlacementRepair: (operation) =>
           prepareRetainedPlacementRepairBody(this, operation),
         repairRetainedPlacement: (payload) => this.submitRetainedPlacementRepair(payload),
+        resolveRetainedPlacementRepairRoute: () => this.resolveRemoteLedgerLeader(),
         // The membership owner claim is bound to this process's issued boot
         // incarnation, the one the router carries and the nodes row publishes.
         membershipOwnerBootIncarnation:
