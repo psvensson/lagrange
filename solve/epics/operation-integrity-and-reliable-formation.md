@@ -120,7 +120,13 @@ The last physically measured source is `3d910d700` on
 repairs have distinct proof in the two Quest logs. Resolve the remote
 branch tip before resuming. The shared candidate
 `candidate/reconciliation-20261119` remains at `edbf84c2d`, and the
-accepted main reference checked on 21 November is `5edfcadb5`. The
+remote main tip observed at 04:34 UTC is `0dbed1718`. Its only change
+since `5edfcadb5` is one nightly formation-health trend record. The
+nightly ran the MovieLens formation scenario at `5edfcadb5` and reported
+`schema_admission_blocked`; no schema-state detail or spread observation
+was recorded. The next composition uses the current main tip for its
+change selection. [Nightly run](https://github.com/psvensson/lagrange/actions/runs/44860862628).
+The
 complete original dirty checkout is preserved at `b914991bd`.
 Development and measurement of the core system take precedence over new
 product features.
@@ -144,8 +150,14 @@ progress version and history unchanged. When the ACTIVE publication
 arrived, the same SQLite ADD settled once, with no additional CREATE.
 The matched file passed 287 assertions; four files on adam-laptop and
 seven on adams-gamla passed 672 and 511 respectively. The operation row
-was readable throughout these tests. The lifetime owner is checking a
-deferred read of that row and shutdown during the read.
+was readable throughout those tests. A second file-backed SQLite witness
+at `29cd457e5` reproduced a lost wake on typed deferral, a late wake that
+advanced a replacement, and fresh work after deadline or shutdown. At
+`953d705f8`, the same six cases passed on tv-dator, including healthy
+current and complete-absence controls. On adam-laptop three files
+passed (198 assertions). Indefinitely hung storage is outside this
+finite-read proof.
+[Timer authority originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--active-timer-operation-authority-29cd-953d-nov21.tar.gz).
 [Original and corrected runs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--concrete-progress-observation-paired-nov21.tar.gz).
 
 Three removal decisions remain assigned.
@@ -153,16 +165,21 @@ Three removal decisions remain assigned.
 * Planning checks the entity's competing operations before it has a row
   of its own. Dispatch verifies its existing committed subject and the
   same quorum policy. The original conflation blocked healthy moves at
-  `538bd3330`. Two companions passed at `cf7c66e39`. One fixture failed
-  before quorum arbitration because its historical row lacked the entity
-  type. The placement author owns that fixture and the composed caller run.
+  `538bd3330`. With explicit entity identity in the historical fixture,
+  all three companion files passed at `1d5f91e68` on adam-laptop (365
+  assertions). The two callers still need joint proof with the committed
+  recovery path.
 * A reply to a stranded REMOVE can arrive after its row changes. On the
   matched adams-gamla host the first correction passed the earlier
   generation and history cases (74 assertions). Independent review then
   traced a missing condition in the zero-row path. The response and
   persistence owners must bind both accepted and rejected replies to the
   sent row through the conditional write and preserve a replacement row
-  or a conflicting terminal outcome.
+  or a conflicting terminal outcome. At `3e3057074`, the three matched
+  tv-dator files passed (545 assertions) after seven failures at
+  `f29022aa1`. The subsequent handoff from corrected STOPPING to terminal
+  completion is being checked independently.
+  [Delayed-reply and healthy placement runs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--post-reply-f290-3e30-prospective-1d5f-nov21.tar.gz).
   [Removal and post-reply originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--remove-prospective-and-original-postreply-limits-nov21.tar.gz).
 * Normal native placement and restoration of a missing operation row
   disagree about entity occupancy. In the fault-injection run the
