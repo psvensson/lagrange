@@ -21,6 +21,9 @@
  */
 
 import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {advanceOperationFixture, buildCreatedOperationFixture} from './operation-outcome-fixture.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -179,18 +182,24 @@ function seedExpiredReservation(store, reservationId, operationId) {
   });
 }
 
-function seedOperation(store, operationId, status, workflowStep) {
-  store.operations.set(operationId, {
-    operation_id: operationId,
+// The committed row of the reservation's ADD standing at `workflowStep`: the
+// coordinator-created record advanced by its owner, written through the one
+// row builder (the step's own status, JSON-text producer history).
+function seedOperation(store, operationId, workflowStep) {
+  const createdAt = Date.now() - NUM.THIRTY_THOUSAND;
+  const created = buildCreatedOperationFixture({
+    operationId,
     type: OperationType.ADD,
-    partition_id: TEST_PARTITION_ID,
-    entity_type: SERVICE_TYPE.PARTITION,
-    entity_id: TEST_PARTITION_ID,
-    target_node_id: TEST_TARGET_NODE_ID,
-    status,
-    workflow_step: workflowStep,
-    completed_at: null,
+    partitionId: TEST_PARTITION_ID,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: TEST_PARTITION_ID,
+    replicaId: `${TEST_PARTITION_ID}-r2`,
+    sourceNodeId: TEST_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    createdAt,
   });
+  store.operations.set(operationId, buildCanonicalReplicaOperationRow(
+    advanceOperationFixture(created, workflowStep, createdAt + NUM.THOUSAND), null));
 }
 
 // --- TTL sweep is operation-aware ---
@@ -202,7 +211,7 @@ test('reconcileReservations - a TTL-expired reservation for a LIVE ' +
   const coordinator = createCoordinatorWithStore(store);
   seedExpiredReservation(store, LIVE_RESERVATION_ID, LIVE_OPERATION_ID);
   // In-flight ADD: syncing is non-terminal for ADD (terminal = active/failed).
-  seedOperation(store, LIVE_OPERATION_ID, 'syncing', WORKFLOW_STEP.SYNCING);
+  seedOperation(store, LIVE_OPERATION_ID, WORKFLOW_STEP.SYNCING);
 
   const result = await coordinator.reconcileReservations();
 
@@ -223,12 +232,7 @@ test('reconcileReservations - a TTL-expired reservation for a TERMINAL ' +
   const coordinator = createCoordinatorWithStore(store);
   seedExpiredReservation(store, TERMINAL_RESERVATION_ID, TERMINAL_OPERATION_ID);
   // active is the terminal success status for ADD.
-  seedOperation(
-    store,
-    TERMINAL_OPERATION_ID,
-    ReplicaStatus.ACTIVE,
-    WORKFLOW_STEP.ACTIVE,
-  );
+  seedOperation(store, TERMINAL_OPERATION_ID, WORKFLOW_STEP.ACTIVE);
 
   const result = await coordinator.reconcileReservations();
 

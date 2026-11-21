@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-733a188a",
+  "observationDigest": "fnv1a32-043a5b31",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5748,6 +5748,7 @@
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/partition/partition-write-kernel.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "test/control-plane/replica-dispatch-node-state-operation-dispatch-retry-test-cases.js"
       ]
     },
@@ -5845,7 +5846,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js": {
@@ -19017,7 +19019,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
       ]
     },
     "test/rebalancer/message-group-rebalancer-wiring.test.js": {
@@ -20168,6 +20171,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-status.js"
       ]
     },

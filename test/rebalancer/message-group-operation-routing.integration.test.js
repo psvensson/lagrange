@@ -29,8 +29,12 @@ import {
   createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
   createOperationRowInsertPort,
+  createTestCoordinator,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
+import {buildCreatedOperationFixture} from './operation-outcome-fixture.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -57,21 +61,19 @@ test('Message-group operation routing integration', async (t) => {
     'dispatch preserves message-group entity identity for coordinator',
     async (t) => {
       let receivedOperation = null;
-      const now = Date.now();
-      const opRow = {
-        operation_id: 'op-mg-1',
+      // The coordinator-created message-group ADD and its committed row.
+      const operation = buildCreatedOperationFixture({
+        operationId: 'op-mg-1',
         type: 'ADD',
-        partition_id: 'mg-1',
-        replica_id: 'mg-1-r4',
-        source_node_id: 'node-1',
-        target_node_id: 'node-2',
-        status: 'pending',
-        workflow_step: WORKFLOW_STEP.PENDING,
-        created_at: now,
-        updated_at: now,
-        entity_type: 'message_group',
-        entity_id: 'mg-1',
-      };
+        partitionId: 'mg-1',
+        replicaId: 'mg-1-r4',
+        sourceNodeId: 'node-1',
+        targetNodeId: 'node-2',
+        createdAt: Date.now(),
+        entityType: 'message_group',
+        entityId: 'mg-1',
+      });
+      const opRow = buildCanonicalReplicaOperationRow(operation, null);
 
       const service = new ReplicaDispatchService({
         nodeId: 'node-1',
@@ -121,23 +123,9 @@ test('Message-group operation routing integration', async (t) => {
           },
         },
         rebalanceCoordinator: {
-          claimDispatchTransition: async () => ({
-            operationId: opRow.operation_id,
-            type: opRow.type,
-            partitionId: opRow.partition_id,
-            replicaId: opRow.replica_id,
-            sourceNodeId: opRow.source_node_id,
-            targetNodeId: opRow.target_node_id,
-            status: opRow.status,
-            workflowStep: opRow.workflow_step,
-            createdAt: opRow.created_at,
-            updatedAt: opRow.updated_at,
-            entityType: opRow.entity_type,
-            entityId: opRow.entity_id,
-            stepsHistory: [],
-          }),
-          executeOperation: async (operation) => {
-            receivedOperation = operation;
+          claimDispatchTransition: async () => ({...operation}),
+          executeOperation: async (claimed) => {
+            receivedOperation = claimed;
           },
         },
       });
@@ -268,19 +256,30 @@ test('Message-group operation routing integration', async (t) => {
     'coordinator routes message-group operation to message-group handler',
     async (t) => {
       const deliveries = [];
-      const sqlQueryEngine = {
-        executeQuery: async () => ({success: true, rows: [], changes: 1}),
-      };
-      const coordinator = new RebalanceCoordinator({
+      // The created message-group ADD is committed in the coordinator's
+      // production-schema ledger, so its workflow writes apply and read back
+      // there (createCoordinatorSqlStore) instead of answering every
+      // statement with one affected row and no rows.
+      const operation = buildCreatedOperationFixture({
+        operationId: 'op-mg-route-1',
+        type: 'ADD',
+        partitionId: 'mg-1',
+        replicaId: 'mg-1-r4',
+        sourceNodeId: 'node-1',
+        targetNodeId: 'node-2',
+        createdAt: Date.now(),
+        entityType: 'message_group',
+        entityId: 'mg-1',
+      });
+      const coordinator = createTestCoordinator({
         nodeId: 'node-1',
-        systemTableCache: {
-          get: () => null,
-          filter: () => [],
+        cacheData: {
+          replicaOperations: [buildCanonicalReplicaOperationRow(operation, null)],
         },
-        cdcIntegrationService: {
-          upsertSystemTableRow: async () => ({success: true}),
-          updateSystemTableRow: async () => ({success: true}),
-        },
+        // The delivery spy is the router itself: no fixture witness or
+        // committed-membership answers are layered over it.
+        replaceWitness: false,
+        committedMembershipFixture: false,
         messageRouter: {
           deliver: async (target, payload) => {
             deliveries.push({target, payload});
@@ -290,12 +289,8 @@ test('Message-group operation routing integration', async (t) => {
         tablePolicyService: {
           getPolicyForPartition: () => ({}),
         },
-        sqlQueryEngine,
-        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
         transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService({
-          defaultRepairEligible: true,
-        }),
+        readinessFixture: {defaultRepairEligible: true},
         storageAdmissionService: {
           checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
           checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -303,28 +298,7 @@ test('Message-group operation routing integration', async (t) => {
         storageAccountingService: {
           estimateReplicaBytes: () => 1,
         },
-        enableTimeouts: false,
       });
-      coordinator.initialize();
-
-      const now = Date.now();
-      const operation = {
-        operationId: 'op-mg-route-1',
-        type: 'ADD',
-        partitionId: 'mg-1',
-        replicaId: 'mg-1-r4',
-        sourceNodeId: 'node-1',
-        targetNodeId: 'node-2',
-        status: 'pending',
-        workflowStep: WORKFLOW_STEP.PENDING,
-        createdAt: now,
-        updatedAt: now,
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
-        entityType: 'message_group',
-        entityId: 'mg-1',
-      };
 
       try {
         await coordinator.executeOperation(operation);
