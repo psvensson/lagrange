@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2363,
+    "unit": 2364,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2722,
-  "digest": "fnv1a32-91c0714e",
+  "censusSize": 2723,
+  "digest": "fnv1a32-a26f6ff1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1670,6 +1670,7 @@
     "test/query/readiness-routing-denial-observability.test.js": "unit",
     "test/query/reduce-by-key.test.js": "unit",
     "test/query/reduce-continuation.test.js": "unit",
+    "test/query/replica-operation-structured-mutation-native.test.js": "unit",
     "test/query/result-stream.test.js": "unit",
     "test/query/retry-continuation-flow.test.js": "unit",
     "test/query/retry-idempotency.test.js": "unit",
