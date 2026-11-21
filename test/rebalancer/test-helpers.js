@@ -1061,6 +1061,11 @@ function createCoordinatorSqlStore(cache) {
  * @param {Object} options - Options for the coordinator.
  * @return {RebalanceCoordinator} Coordinator instance.
  */
+function coordinatorConstructionGateway(options, gateway) {
+  if (options.controlPlaneSystemTableGatewayFactory === undefined) return gateway;
+  return options.controlPlaneSystemTableGatewayFactory(gateway);
+}
+
 function createTestCoordinator(options = {}) {
   const {
     nodeId = 'test-node-1',
@@ -1103,7 +1108,7 @@ function createTestCoordinator(options = {}) {
       return sqlStore.execute(sql, params);
     },
   };
-  const controlPlaneSystemTableGateway =
+  const initialControlPlaneGateway =
     options.controlPlaneSystemTableGateway || {
       readAuthoritativeRows: async (tableName, sql, params = []) =>
         withAuthoritativeReadDefaults(tableName, await mockSqlEngine.executeQuery(sql, params)),
@@ -1131,6 +1136,10 @@ function createTestCoordinator(options = {}) {
         }
       },
     };
+  // Compose the owner before RebalanceCoordinator constructs its repository;
+  // syncOwnerDependencies deliberately cannot replace this construction port.
+  const controlPlaneSystemTableGateway =
+    coordinatorConstructionGateway(options, initialControlPlaneGateway);
   const transactionCoordinator =
     Object.prototype.hasOwnProperty.call(options, 'transactionCoordinator') ?
       options.transactionCoordinator :
