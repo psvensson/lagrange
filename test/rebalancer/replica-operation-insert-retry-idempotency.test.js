@@ -25,60 +25,63 @@ import {CONTROL_PLANE_MUTATION_OPERATION} from
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {advanceOperationFixture, buildCreatedOperationFixture} from './operation-outcome-fixture.js';
 
 const TEST_NODE_ID = 'test-node-1';
 const TEST_OPERATION_ID = 'op-idem-1';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_REPLICA_ID = 'partition-1-r1';
 const TEST_TARGET_NODE_ID = 'node-2';
+const TEST_CREATED_AT = 1000;
 const VISIBILITY_TIMEOUT_MS = 200;
 const VISIBILITY_RETRY_DELAY_MS = 10;
 
-function makeRow(overrides = {}) {
-  return {
-    operation_id: TEST_OPERATION_ID,
+// The ADD as its coordinator created it (the one record builder).
+function createdOperation() {
+  return buildCreatedOperationFixture({
+    operationId: TEST_OPERATION_ID,
     type: OperationType.ADD,
-    partition_id: TEST_PARTITION_ID,
-    replica_id: TEST_REPLICA_ID,
-    source_node_id: TEST_NODE_ID,
-    target_node_id: TEST_TARGET_NODE_ID,
-    status: 'in_progress',
-    workflow_step: WORKFLOW_STEP.CREATING,
-    created_at: 1000,
-    updated_at: 1000,
-    completed_at: null,
-    error_message: null,
-    steps_history: '[]',
-    entity_type: SERVICE_TYPE.PARTITION,
-    entity_id: TEST_PARTITION_ID,
-    ...overrides,
-  };
+    partitionId: TEST_PARTITION_ID,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    sourceNodeId: TEST_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    createdAt: TEST_CREATED_AT,
+  });
+}
+
+// The durable row (the repository's one row builder) of that ADD once its
+// owner committed SENDING and then CREATING.
+function makeRow() {
+  const sending =
+    advanceOperationFixture(createdOperation(), WORKFLOW_STEP.SENDING, TEST_CREATED_AT);
+  return buildCanonicalReplicaOperationRow(
+    advanceOperationFixture(sending, WORKFLOW_STEP.CREATING, TEST_CREATED_AT), null);
 }
 
 function createRepository({insertResults, authoritativeRows, insertCalls}) {
   const mockLogger = {info() {}, warn() {}, error() {}, debug() {}};
-  const gateway = {
-    async submitMutation({operation, tableName, row}, options) {
-      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
-          tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        throw new Error('Unexpected insert retry mutation');
-      }
-      insertCalls.push({tableName, row, options});
-      const next = insertResults.shift();
-      if (next instanceof Error) {
-        throw next;
-      }
-      return next || {success: true, affectedRows: 1};
-    },
-    readRows: async () => ({
-      success: true,
-      rows: authoritativeRows(),
-    }),
-    readAuthoritativeRows: async () => ({
-      success: true,
-      rows: authoritativeRows(),
-    }),
-    executeQuery: async () => ({success: true, changes: 1}),
+  // `authoritativeRows()` is this fixture's whole replica_operations
+  // authority, so its reads answer as a complete owner read (the shared
+  // fixture gateway's authoritative-read completeness and witness).
+  const gateway = createMockControlPlaneSystemTableGateway({
+    executeQuery: async () => ({success: true, rows: authoritativeRows()}),
+  });
+  gateway.submitMutation = async ({operation, tableName, row}, options) => {
+    if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+        tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      throw new Error('Unexpected insert retry mutation');
+    }
+    insertCalls.push({tableName, row, options});
+    const next = insertResults.shift();
+    if (next instanceof Error) {
+      throw next;
+    }
+    return next || {success: true, affectedRows: 1};
   };
   return new ReplicaOperationRepository({
     ...unavailableRetainedRepairPorts(),
@@ -164,16 +167,15 @@ test('collision without an authoritative row stays a hard failure', async (t) =>
 test('collision with content-mismatched authoritative row stays a hard failure', async (t) => {
   // A same-id row whose content does not satisfy the expected operation is
   // NOT an already-applied witness — genuine-duplicate detection must not
-  // be weakened by the OR-IGNORE lane.
+  // be weakened by the OR-IGNORE lane. The mismatched row is one the owner
+  // can durably hold: the same ADD committed at SENDING (updated_at 1), not
+  // at the expected CREATING.
   const insertCalls = [];
   const repo = createRepository({
     insertResults: [{success: true, affectedRows: 0}],
     authoritativeRows: () => [
-      makeRow({
-        workflow_step: WORKFLOW_STEP.SENDING,
-        status: 'failed',
-        updated_at: 1,
-      }),
+      buildCanonicalReplicaOperationRow(
+        advanceOperationFixture(createdOperation(), WORKFLOW_STEP.SENDING, 1), null),
     ],
     insertCalls,
   });

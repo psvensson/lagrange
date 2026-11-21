@@ -31,6 +31,58 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {
+  buildCreatedOperationFixture,
+  expectedOperationWakeRow,
+  readBackOperationFixture,
+} from '../rebalancer/operation-outcome-fixture.js';
+
+const READY_RETRY_ENTITY_TYPE = 'partition';
+const READY_RETRY_REPLAY_PARTITION_ID = 'sql_write_operations-p1';
+
+// The producer history of a record created at `createdAt`: its one PENDING step.
+function createdHistoryJson(createdAt) {
+  return JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: createdAt}]);
+}
+
+// A remote-owned PENDING REPLACE the coordinator created at `createdAt` on
+// READY_RETRY_REPLAY_PARTITION_ID, node-1 -> node-2.
+function createdReplayOperation(operationId, createdAt) {
+  return buildCreatedOperationFixture({
+    operationId,
+    partitionId: READY_RETRY_REPLAY_PARTITION_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
+    createdAt,
+  });
+}
+
+// The wake the replay sends node-2 for that operation; every column the
+// replay is about is a literal.
+function expectedReplayWakeRow(operation, operationId, createdAt) {
+  return expectedOperationWakeRow(operation, {
+    operation_id: operationId,
+    type: OperationType.REPLACE,
+    partition_id: READY_RETRY_REPLAY_PARTITION_ID,
+    replica_id: null,
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: createdAt,
+    updated_at: createdAt,
+    completed_at: null,
+    error_message: null,
+    steps_history: createdHistoryJson(createdAt),
+    entity_type: READY_RETRY_ENTITY_TYPE,
+    entity_id: READY_RETRY_REPLAY_PARTITION_ID,
+    target_claim_key: null,
+    membership_publication_epoch: null,
+  });
+}
 
 const READY_RETRY_TARGET_NODE_ID = 'node-2';
 const READY_RETRY_SOURCE_NODE_ID = 'node-1';
@@ -316,16 +368,23 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
     type: OperationType.REPLACE,
     partition_id: READY_RETRY_PARTIAL_CACHE_SECOND_PARTITION_ID,
   };
-  const missingAuthoritativeOperation = {
+  // The repository answers durable PENDING records it decoded from their rows.
+  const missingAuthoritativeOperation = readBackOperationFixture(buildCreatedOperationFixture({
     operationId: READY_RETRY_PARTIAL_CACHE_MISSING_OPERATION_ID,
     partitionId: READY_RETRY_PARTIAL_CACHE_MISSING_PARTITION_ID,
     type: OperationType.REPLACE,
     sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
     targetNodeId: READY_RETRY_TARGET_NODE_ID,
-    status: READY_RETRY_PENDING_STATUS,
-    workflowStep: WORKFLOW_STEP.PENDING,
-    stepsHistory: [],
-  };
+    createdAt: now,
+  }));
+  const visibleAuthoritativeOperation = readBackOperationFixture(buildCreatedOperationFixture({
+    operationId: READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID,
+    partitionId: READY_RETRY_PARTITION_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
+    targetNodeId: READY_RETRY_TARGET_NODE_ID,
+    createdAt: now,
+  }));
   let authoritativeQueryCount = 0;
   const enqueueCalls = [];
   const blockedPartitions = [
@@ -353,19 +412,7 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
       repository: {
         async queryIncompleteOperations() {
           authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
-          return [
-            missingAuthoritativeOperation,
-            {
-              operationId: READY_RETRY_PARTIAL_CACHE_VISIBLE_OPERATION_ID,
-              partitionId: READY_RETRY_PARTITION_ID,
-              type: OperationType.REPLACE,
-              sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
-              targetNodeId: READY_RETRY_TARGET_NODE_ID,
-              status: READY_RETRY_PENDING_STATUS,
-              workflowStep: WORKFLOW_STEP.PENDING,
-              stepsHistory: [],
-            },
-          ];
+          return [missingAuthoritativeOperation, visibleAuthoritativeOperation];
         },
       },
     },
@@ -463,16 +510,15 @@ test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, async (t) => {
     type: OperationType.REPLACE,
     partition_id: READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
   };
-  const blockedAuthoritativeOperation = {
+  // The repository answers the durable PENDING record it decoded from its row.
+  const blockedAuthoritativeOperation = readBackOperationFixture(buildCreatedOperationFixture({
     operationId: READY_RETRY_OPERATION_WITNESS_BLOCKED_OPERATION_ID,
     partitionId: READY_RETRY_OPERATION_WITNESS_PARTITION_ID,
     type: OperationType.REPLACE,
     sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
     targetNodeId: READY_RETRY_TARGET_NODE_ID,
-    status: READY_RETRY_PENDING_STATUS,
-    workflowStep: WORKFLOW_STEP.PENDING,
-    stepsHistory: [],
-  };
+    createdAt: now,
+  }));
   let authoritativeQueryCount = 0;
   const enqueueCalls = [];
   const service = createService({
@@ -721,17 +767,18 @@ async (t) => {
     last_heartbeat: now,
     ready_lease_expires_at: now + 60000,
   };
-  const remoteOwnedPendingRow = {
-    operation_id: 'op-ready-retry-remote',
-    partition_id: READY_RETRY_PARTITION_ID,
-    entity_type: 'partition',
-    entity_id: READY_RETRY_PARTITION_ID,
-    replica_id: `${READY_RETRY_PARTITION_ID}-r4`,
-    source_node_id: 'node-remote-owner',
-    target_node_id: 'node-2',
-    workflow_step: WORKFLOW_STEP.PENDING,
+  // The durable row of the PENDING ADD the remote owner created.
+  const remoteOwnedOperation = buildCreatedOperationFixture({
+    operationId: 'op-ready-retry-remote',
+    partitionId: READY_RETRY_PARTITION_ID,
+    replicaId: `${READY_RETRY_PARTITION_ID}-r4`,
+    sourceNodeId: 'node-remote-owner',
+    targetNodeId: 'node-2',
     type: 'ADD',
-  };
+    createdAt: now,
+  });
+  const remoteOwnedPendingRow =
+    buildCanonicalReplicaOperationRow(remoteOwnedOperation, null);
   const deliveries = [];
   const enqueueCalls = [];
   const cacheReplicaOperations = [];
@@ -787,25 +834,25 @@ async (t) => {
       payload: {
         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
         [ControlPlaneField.OPERATION_ID]: 'op-ready-retry-remote',
-        [ControlPlaneField.OPERATION_ROW]: {
+        [ControlPlaneField.OPERATION_ROW]: expectedOperationWakeRow(remoteOwnedOperation, {
           operation_id: 'op-ready-retry-remote',
           type: 'ADD',
           partition_id: READY_RETRY_PARTITION_ID,
           replica_id: `${READY_RETRY_PARTITION_ID}-r4`,
           source_node_id: 'node-remote-owner',
           target_node_id: 'node-2',
-          status: undefined,
+          status: READY_RETRY_PENDING_STATUS,
           workflow_step: WORKFLOW_STEP.PENDING,
-          created_at: undefined,
-          updated_at: undefined,
-          completed_at: undefined,
-          error_message: undefined,
-          steps_history: '[]',
-          entity_type: 'partition',
+          created_at: now,
+          updated_at: now,
+          completed_at: null,
+          error_message: null,
+          steps_history: createdHistoryJson(now),
+          entity_type: READY_RETRY_ENTITY_TYPE,
           entity_id: READY_RETRY_PARTITION_ID,
           target_claim_key: null,
           membership_publication_epoch: null,
-        },
+        }),
       },
     }],
     'ready-node retry should wake the remote owner directly when the ready target only sees a remote-owned pending operation',
@@ -1129,16 +1176,10 @@ async (t) => {
     },
   };
 
-  service.handleCacheNodeChange('replica_operations', 'INSERT', {
-    operation_id: 'replace-op-remote-cache-1',
-    partition_id: 'sql_write_operations-p1',
-    source_node_id: 'node-1',
-    target_node_id: 'node-2',
-    workflow_step: WORKFLOW_STEP.PENDING,
-    type: OperationType.REPLACE,
-    entity_type: 'partition',
-    entity_id: 'sql_write_operations-p1',
-  });
+  const createdAt = Date.now();
+  const operation = createdReplayOperation('replace-op-remote-cache-1', createdAt);
+  service.handleCacheNodeChange('replica_operations', 'INSERT',
+    buildCanonicalReplicaOperationRow(operation, null));
 
   await new Promise((resolve) => {
     setTimeout(resolve, 0);
@@ -1156,29 +1197,8 @@ async (t) => {
       payload: {
         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
         [ControlPlaneField.OPERATION_ID]: 'replace-op-remote-cache-1',
-        [ControlPlaneField.OPERATION_ROW]: {
-          operation_id: 'replace-op-remote-cache-1',
-          type: OperationType.REPLACE,
-          partition_id: 'sql_write_operations-p1',
-          replica_id: undefined,
-          source_node_id: 'node-1',
-          target_node_id: 'node-2',
-          status: undefined,
-          workflow_step: WORKFLOW_STEP.PENDING,
-          created_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.created_at,
-          updated_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.updated_at,
-          completed_at: undefined,
-          error_message: undefined,
-          steps_history: '[]',
-          entity_type: 'partition',
-          entity_id: 'sql_write_operations-p1',
-          target_claim_key: null,
-          membership_publication_epoch: null,
-        },
+        [ControlPlaneField.OPERATION_ROW]:
+          expectedReplayWakeRow(operation, 'replace-op-remote-cache-1', createdAt),
       },
     }],
     'cache replay should wake the canonical remote owner for dispatchable rows',
@@ -1228,18 +1248,11 @@ async (t) => {
     },
   };
 
+  const createdAt = Date.now();
+  const operation = createdReplayOperation('replace-op-remote-cdc-1', createdAt);
   await service.handleCdcApplied(null, {
     tableName: 'replica_operations',
-    data: {
-      operation_id: 'replace-op-remote-cdc-1',
-      partition_id: 'sql_write_operations-p1',
-      source_node_id: 'node-1',
-      target_node_id: 'node-2',
-      workflow_step: WORKFLOW_STEP.PENDING,
-      type: OperationType.REPLACE,
-      entity_type: 'partition',
-      entity_id: 'sql_write_operations-p1',
-    },
+    data: buildCanonicalReplicaOperationRow(operation, null),
   });
 
   t.same(
@@ -1254,29 +1267,8 @@ async (t) => {
       payload: {
         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
         [ControlPlaneField.OPERATION_ID]: 'replace-op-remote-cdc-1',
-        [ControlPlaneField.OPERATION_ROW]: {
-          operation_id: 'replace-op-remote-cdc-1',
-          type: OperationType.REPLACE,
-          partition_id: 'sql_write_operations-p1',
-          replica_id: undefined,
-          source_node_id: 'node-1',
-          target_node_id: 'node-2',
-          status: undefined,
-          workflow_step: WORKFLOW_STEP.PENDING,
-          created_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.created_at,
-          updated_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.updated_at,
-          completed_at: undefined,
-          error_message: undefined,
-          steps_history: '[]',
-          entity_type: 'partition',
-          entity_id: 'sql_write_operations-p1',
-          target_claim_key: null,
-          membership_publication_epoch: null,
-        },
+        [ControlPlaneField.OPERATION_ROW]:
+          expectedReplayWakeRow(operation, 'replace-op-remote-cdc-1', createdAt),
       },
     }],
     'CDC replay should wake the canonical remote owner for dispatchable rows',

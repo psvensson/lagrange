@@ -2,12 +2,27 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
   createObservationOnlyMutationPort,
 } from './test-helpers.js';
+import {advanceOperationFixture, buildCreatedOperationFixture} from './operation-outcome-fixture.js';
+
+// A coordinator-created ADD of sql_write_operations-p1 its owner has claimed
+// (SENDING): the created record (entity identity stamped) advanced one step.
+function buildSendingAdd({operationId, replicaId, sourceNodeId}) {
+  return Object.freeze(advanceOperationFixture(buildCreatedOperationFixture({
+    operationId,
+    type: OperationType.ADD,
+    partitionId: 'sql_write_operations-p1',
+    replicaId,
+    sourceNodeId,
+    targetNodeId: 'node-other',
+    createdAt: Date.now(),
+  }), WORKFLOW_STEP.SENDING));
+}
 
 // A self-owned coordinator-created handoff must dispatch in-process on the
 // owner's own lane instead of delivering to its own `/service/replica-dispatch`
@@ -88,16 +103,10 @@ test('self-owned coordinator-created handoff dispatches in-process instead ' +
 
   try {
     // owner = sourceNodeId for a non-REPLACE op → 'node-self' is self-owned.
-    const selfOwnedOperation = Object.freeze({
+    const selfOwnedOperation = buildSendingAdd({
       operationId: 'op-self-1',
-      type: OperationType.ADD,
-      partitionId: 'sql_write_operations-p1',
       replicaId: 'sql_write_operations-p1-r1',
       sourceNodeId: 'node-self',
-      targetNodeId: 'node-other',
-      status: ReplicaStatus.PENDING,
-      workflowStep: WORKFLOW_STEP.SENDING,
-      stepsHistory: [],
     });
 
     const woken =
@@ -138,16 +147,10 @@ test('remote-owned coordinator-created handoff still delivers through the ' +
 
   try {
     // owner = sourceNodeId 'node-remote' → not self-owned on 'node-self'.
-    const remoteOwnedOperation = Object.freeze({
+    const remoteOwnedOperation = buildSendingAdd({
       operationId: 'op-remote-1',
-      type: OperationType.ADD,
-      partitionId: 'sql_write_operations-p1',
       replicaId: 'sql_write_operations-p1-r2',
       sourceNodeId: 'node-remote',
-      targetNodeId: 'node-other',
-      status: ReplicaStatus.PENDING,
-      workflowStep: WORKFLOW_STEP.SENDING,
-      stepsHistory: [],
     });
 
     await coordinator.workflowOwner.wakeCoordinatorCreatedRemoteOwner(

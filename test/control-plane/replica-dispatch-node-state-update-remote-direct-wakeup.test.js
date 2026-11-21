@@ -14,6 +14,23 @@ import {
   createService,
   initEnv,
 } from './replica-dispatch-node-state-update-test-support.js';
+import {
+  buildCreatedOperationFixture,
+  expectedOperationWakeRow,
+} from '../rebalancer/operation-outcome-fixture.js';
+
+const DIRECT_WAKEUP_PENDING_STATUS = 'pending';
+const DIRECT_WAKEUP_ENTITY_TYPE = 'partition';
+
+// The producer history of a record created at `createdAt`: its one PENDING step.
+function createdHistoryJson(createdAt) {
+  return JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: createdAt}]);
+}
+
+// The same PENDING record after a later owner write at the same step.
+function restampedOperation(operation, updatedAt) {
+  return {...operation, updatedAt};
+}
 
 const DIRECT_WAKEUP_RETRY_TEST_NAME =
   'ReplicaDispatchService retries bounded remote direct dispatch wake-ups';
@@ -98,18 +115,18 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
     },
   });
 
+  const createdAt = Date.now();
+  // The PENDING record the coordinator's createOperation hands over.
+  const operation = buildCreatedOperationFixture({
+    operationId: 'op-remote-owned-create-1',
+    partitionId: 'control_plane_publications-p1',
+    type: OperationType.REPLACE,
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
+    createdAt,
+  });
   try {
-    await service.handleCoordinatorOperationCreated({
-      operationId: 'op-remote-owned-create-1',
-      partitionId: 'control_plane_publications-p1',
-      type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-2',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      stepsHistory: [],
-    });
+    await service.handleCoordinatorOperationCreated(operation);
 
     t.same(
       deliveries,
@@ -118,27 +135,25 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
         payload: {
           type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
           [ControlPlaneField.OPERATION_ID]: 'op-remote-owned-create-1',
-          [ControlPlaneField.OPERATION_ROW]: {
+          [ControlPlaneField.OPERATION_ROW]: expectedOperationWakeRow(operation, {
             operation_id: 'op-remote-owned-create-1',
             type: OperationType.REPLACE,
             partition_id: 'control_plane_publications-p1',
-            replica_id: undefined,
+            replica_id: null,
             source_node_id: 'node-1',
             target_node_id: 'node-2',
-            status: undefined,
+            status: DIRECT_WAKEUP_PENDING_STATUS,
             workflow_step: WORKFLOW_STEP.PENDING,
-            created_at: deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.created_at,
-            updated_at: deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.updated_at,
-            completed_at: undefined,
-            error_message: undefined,
-            steps_history: '[]',
-            entity_type: undefined,
-            entity_id: undefined,
+            created_at: createdAt,
+            updated_at: createdAt,
+            completed_at: null,
+            error_message: null,
+            steps_history: createdHistoryJson(createdAt),
+            entity_type: DIRECT_WAKEUP_ENTITY_TYPE,
+            entity_id: 'control_plane_publications-p1',
             target_claim_key: null,
             membership_publication_epoch: null,
-          },
+          }),
         },
       }],
       'remote-owned coordinator creates should wake the target owner directly',
@@ -262,18 +277,18 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
   });
 
   try {
-    await service.handleCoordinatorOperationCreated({
-      operationId: DIRECT_WAKEUP_VERIFICATION_OPERATION_ID,
-      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
-      type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
-      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT,
-      stepsHistory: [],
-    });
+    await service.handleCoordinatorOperationCreated(restampedOperation(
+      buildCreatedOperationFixture({
+        operationId: DIRECT_WAKEUP_VERIFICATION_OPERATION_ID,
+        partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+        replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+        type: OperationType.REPLACE,
+        sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+        targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+        createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+      }),
+      DIRECT_WAKEUP_RETRY_UPDATED_AT,
+    ));
 
     t.equal(
       deliveries.length,
@@ -387,32 +402,21 @@ test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
     },
   });
 
+  const created = buildCreatedOperationFixture({
+    operationId: DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
+    partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+    replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+    targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+    createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+  });
   try {
-    const firstWakeup = service.handleCoordinatorOperationCreated({
-      operationId: DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
-      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
-      type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
-      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT,
-      stepsHistory: [],
-    });
+    const firstWakeup = service.handleCoordinatorOperationCreated(
+      restampedOperation(created, DIRECT_WAKEUP_RETRY_UPDATED_AT));
 
-    await service.handleCoordinatorOperationCreated({
-      operationId: DIRECT_WAKEUP_IN_FLIGHT_OPERATION_ID,
-      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
-      type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
-      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
-      stepsHistory: [],
-    });
+    await service.handleCoordinatorOperationCreated(
+      restampedOperation(created, DIRECT_WAKEUP_RETRY_UPDATED_AT + 1));
 
     t.equal(
       deliveries.length,
@@ -597,21 +601,20 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
     },
   });
 
+  const created = buildCreatedOperationFixture({
+    operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
+    partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+    entityType: DIRECT_WAKEUP_ENTITY_TYPE,
+    entityId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+    replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
+    type: OperationType.REPLACE,
+    sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
+    targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
+    createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
+  });
+  const firstOperation = restampedOperation(created, DIRECT_WAKEUP_RETRY_UPDATED_AT);
   try {
-    await service.handleCoordinatorOperationCreated({
-      operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
-      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      entityType: 'partition',
-      entityId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
-      type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
-      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT,
-      stepsHistory: [],
-    });
+    await service.handleCoordinatorOperationCreated(firstOperation);
 
     t.equal(
       deliveries.length,
@@ -625,25 +628,25 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
         payload: {
           type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
           [ControlPlaneField.OPERATION_ID]: DIRECT_WAKEUP_RETRY_OPERATION_ID,
-          [ControlPlaneField.OPERATION_ROW]: {
+          [ControlPlaneField.OPERATION_ROW]: expectedOperationWakeRow(firstOperation, {
             operation_id: DIRECT_WAKEUP_RETRY_OPERATION_ID,
             type: OperationType.REPLACE,
             partition_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
             replica_id: DIRECT_WAKEUP_RETRY_REPLICA_ID,
             source_node_id: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
             target_node_id: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-            status: undefined,
+            status: DIRECT_WAKEUP_PENDING_STATUS,
             workflow_step: WORKFLOW_STEP.PENDING,
             created_at: DIRECT_WAKEUP_RETRY_CREATED_AT,
             updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT,
-            completed_at: undefined,
-            error_message: undefined,
-            steps_history: DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON,
-            entity_type: 'partition',
+            completed_at: null,
+            error_message: null,
+            steps_history: createdHistoryJson(DIRECT_WAKEUP_RETRY_CREATED_AT),
+            entity_type: DIRECT_WAKEUP_ENTITY_TYPE,
             entity_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
             target_claim_key: null,
             membership_publication_epoch: null,
-          },
+          }),
         },
         options: {
           targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
@@ -665,20 +668,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       DIRECT_WAKEUP_RETRY_ASSERT_RETRY_DELAY,
     );
 
-    await service.handleCoordinatorOperationCreated({
-      operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
-      partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      entityType: 'partition',
-      entityId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-      replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
-      type: OperationType.REPLACE,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      sourceNodeId: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
-      targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-      createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
-      updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT + 1,
-      stepsHistory: [],
-    });
+    await service.handleCoordinatorOperationCreated(
+      restampedOperation(created, DIRECT_WAKEUP_RETRY_UPDATED_AT + 1));
 
     t.equal(
       deliveries.length,

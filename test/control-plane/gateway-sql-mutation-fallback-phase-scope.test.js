@@ -1,6 +1,7 @@
 // Startup SQL is selected by its JOIN owner's gateway construction.
 import {NodeRegistrationOwner} from '../../src/bootstrap/shared/node-registration-owner.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -18,9 +19,13 @@ function gatewayWithoutCdc(startupJoin = false) {
       return {success: true, affectedRows: 1};
     },
   };
+  // The JOIN owner as the query-system-state phase constructs it: its
+  // declared host and its required system-table cache getter (this fixture
+  // world holds no cache rows), plus the join-admission SQL engine.
   const gateway = startupJoin ?
-    new NodeRegistrationOwner({nodeId, delegates: {
+    new NodeRegistrationOwner({nodeId, hostId: LOCAL_MACHINE_HOST_ID, delegates: {
       getJoinAdmissionSqlQueryEngine: () => sqlQueryEngine,
+      getSystemTableCache: () => null,
     }}).getJoinAdmissionControlPlaneSystemTableGateway() :
     new ControlPlaneSystemTableGateway({nodeId, sqlQueryEngine});
   return {gateway, sql};

@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {NODE_STATE} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {
   ALLOWED_UNIFIED_SERVICE_TYPES,
   UNIFIED_SERVICE_TYPE,
@@ -19,26 +21,32 @@ import {
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {PriorityPublicationSafetyRows} from
   '../../src/rebalancer/priority-publication-safety-rows.js';
-import {PriorityRecoverySupersededTarget} from
-  '../../src/rebalancer/priority-recovery-superseded-target.js';
 import {
   canonicalizeRebalancerMove,
 } from '../../src/rebalancer/rebalancer-entity-identity.js';
 import {
+  REBALANCER_DEFAULT_POLICY,
   REBALANCER_ENTITY_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {
   hasObservedCompletedReplicaOperation,
 } from '../../src/rebalancer/replica-operation-observed-completion.js';
 import {
   buildMockPolicyAuthorityWitness,
   createMockCache,
+  createMockPolicyService,
   createTestCoordinator,
 } from './test-helpers.js';
+import {
+  buildCommittedOperationFixture,
+  workflowFixtureHistory,
+} from './operation-outcome-fixture.js';
 
 const {
   OPERATION_HANDLER,
@@ -106,6 +114,41 @@ function buildEvaluationContext({rows, minReplicaCount = 1, operations = []}) {
   return {calls, context};
 }
 
+const OWNER_NODE = 'owner-node';
+
+function readyNodeRow(nodeId) {
+  return {node_id: nodeId, status: NODE_STATE.ACTIVE};
+}
+
+// The effect owner's own evaluation of a removal that exists (the dispatch
+// gate). The real workflow owner proves the subject's own durable row before
+// it arbitrates competitors (getRequiredRemoveArbitrationCompetitors), so the
+// subject is its owner's record committed at the evaluated step, alone on its
+// entity, in the coordinator's production-schema ledger. `calls` records each
+// entity the owner's effect-arbitration ledger read was asked for.
+function createRemovalSafetyOwner({subject, services, nodes = [], tablePolicyService}) {
+  const coordinator = createTestCoordinator({
+    nodeId: OWNER_NODE,
+    enableTimeouts: false,
+    cacheData: {
+      replicaOperations: [buildCanonicalReplicaOperationRow(subject, null)],
+      services,
+      nodes,
+    },
+    tablePolicyService,
+  });
+  const owner = coordinator.workflowOwner;
+  const {repository} = owner;
+  const calls = [];
+  const readRequiredEntityOperationRows =
+    repository.readRequiredEntityOperationRows.bind(repository);
+  repository.readRequiredEntityOperationRows = (entityType, entityId) => {
+    calls.push({entityType, entityId});
+    return readRequiredEntityOperationRows(entityType, entityId);
+  };
+  return {calls, coordinator, owner};
+}
+
 test('runtime authoritative entity read owns canonical replica lineage',
   async (t) => {
     const entityId = 'svc-orders_100%';
@@ -159,8 +202,21 @@ test('non-partition remove safety serializes and evaluates its actual entity',
     const entityId = 'svc-runtime-safety';
     const sourceReplicaId = `${entityId}-r1`;
     const targetReplicaId = `${entityId}-r3`;
-    const {calls, context} = buildEvaluationContext({
-      rows: [
+    // The REPLACE is evaluated at its source-removal dispatch (ACTIVE).
+    const replace = buildCommittedOperationFixture({
+      operationId: 'runtime-replace-1',
+      type: OperationType.REPLACE,
+      partitionId: entityId,
+      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      entityId,
+      sourceReplicaId,
+      replicaId: targetReplicaId,
+      sourceNodeId: OWNER_NODE,
+      targetNodeId: 'node-c',
+    }, WORKFLOW_STEP.ACTIVE, Date.now());
+    const {calls, coordinator, owner} = createRemovalSafetyOwner({
+      subject: replace,
+      services: [
         serviceRow(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE, entityId,
           sourceReplicaId, 'node-a'),
         serviceRow(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE, entityId,
@@ -169,55 +225,61 @@ test('non-partition remove safety serializes and evaluates its actual entity',
           targetReplicaId, 'node-c'),
       ],
     });
-    const result = await evaluateRemoveSafety(context, {
-      operationId: 'runtime-replace-1',
-      type: OperationType.REPLACE,
-      partitionId: entityId,
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      entityId,
-      sourceReplicaId,
-      replicaId: targetReplicaId,
-    });
-    t.equal(result.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
-      'an ACTIVE canonical replacement makes count-neutral source removal safe');
-    t.same(calls, [{
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      entityId,
-    }], 'serialization reads the runtime operation ledger, not a partition alias');
+    try {
+      const result = await evaluateRemoveSafety(owner, replace);
+      t.equal(result.classification,
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+        'an ACTIVE canonical replacement makes count-neutral source removal safe');
+      t.same(calls, [{
+        entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        entityId,
+      }], 'serialization reads the runtime operation ledger, not a partition alias');
+    } finally {
+      await coordinator.shutdown();
+    }
   });
 
 test('move preflight preserves canonical entity identity at the safety owner',
   async (t) => {
-    const owner = Object.create(PriorityRecoverySupersededTarget.prototype);
+    // The real workflow owner (the coordinator's move-safety owner). Its
+    // preflight hands the prospective operation to the remove-safety
+    // evaluator, whose first owner question is the removal phase; a
+    // pass-through observer there records the operation the safety owner got.
+    const coordinator = createTestCoordinator({enableTimeouts: false});
+    const owner = coordinator.workflowOwner;
     let observedOperation = null;
-    owner.getRemoveSafetyError = async (operation) => {
-      observedOperation = operation;
-      return null;
+    const isRemoveInitialDispatchPhase = owner.isRemoveInitialDispatchPhase.bind(owner);
+    owner.isRemoveInitialDispatchPhase = (operation) => {
+      observedOperation ??= operation;
+      return isRemoveInitialDispatchPhase(operation);
     };
     const entityId = 'runtime-preflight';
-    await owner.getMoveSafetyError({
-      type: OperationType.REMOVE,
-      partitionId: entityId,
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      entityId,
-      replicaId: `${entityId}-r1`,
-      nodeId: 'node-a',
-    });
-    t.match(observedOperation, {
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-      entityId,
-      partitionId: entityId,
-    }, 'preflight cannot reconstruct a runtime move as a partition operation');
-    await t.rejects(
-      owner.getMoveSafetyError({
+    try {
+      await owner.getMoveSafetyError({
         type: OperationType.REMOVE,
-        partitionId: 'untyped-move',
-        replicaId: 'untyped-move-r1',
-      }),
-      /Unsupported rebalancer entity type/,
-      'the safety boundary rejects an untyped move instead of guessing',
-    );
+        partitionId: entityId,
+        entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        entityId,
+        replicaId: `${entityId}-r1`,
+        nodeId: 'node-a',
+      });
+      t.match(observedOperation, {
+        entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        entityId,
+        partitionId: entityId,
+      }, 'preflight cannot reconstruct a runtime move as a partition operation');
+      await t.rejects(
+        owner.getMoveSafetyError({
+          type: OperationType.REMOVE,
+          partitionId: 'untyped-move',
+          replicaId: 'untyped-move-r1',
+        }),
+        /Unsupported rebalancer entity type/,
+        'the safety boundary rejects an untyped move instead of guessing',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
   });
 
 test('planner handoff emits one complete move identity', (t) => {
@@ -295,40 +357,76 @@ test('message-group and runtime-service floors remain entity-owned',
       serviceRow(SERVICE_TYPE.MESSAGE_GROUP, groupId, 'group-r2', 'node-b'),
       serviceRow(SERVICE_TYPE.MESSAGE_GROUP, groupId, 'group-r3', 'node-c'),
     ];
-    const group = buildEvaluationContext({rows: groupRows, minReplicaCount: 3});
-    const groupResult = await evaluateRemoveSafety(group.context, {
+    // Each REMOVE is evaluated at its initial dispatch, after its claim.
+    const groupRemove = buildCommittedOperationFixture({
       operationId: 'group-remove-1',
       type: OperationType.REMOVE,
       partitionId: groupId,
       entityType: SERVICE_TYPE.MESSAGE_GROUP,
       entityId: groupId,
       replicaId: 'group-r1',
+      sourceNodeId: OWNER_NODE,
+      targetNodeId: 'node-a',
+    }, WORKFLOW_STEP.SENDING, Date.now());
+    const group = createRemovalSafetyOwner({
+      subject: groupRemove,
+      services: groupRows,
+      // Every group replica's node is routable now, so all three count.
+      nodes: ['node-a', 'node-b', 'node-c'].map(readyNodeRow),
+      // The group's authoritative policy fact: a three-replica floor.
+      tablePolicyService: createMockPolicyService({
+        getMessageGroupPolicy: () => ({
+          ...REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP,
+          minReplicaCount: 3,
+        }),
+      }),
     });
+    let groupResult;
+    try {
+      groupResult = await evaluateRemoveSafety(group.owner, groupRemove);
+    } finally {
+      await group.coordinator.shutdown();
+    }
+    // The owner fails, never defers, a REMOVE that would cross a
+    // non-system floor: its deferral builder defers only a REPLACE removal
+    // phase or an over-replicated system-table REMOVE, and the dispatch gate
+    // then fails the operation instead of retrying it.
     t.equal(groupResult.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
       'message-group removal cannot cross its replicated-group floor');
+    t.equal(groupResult.error,
+      'message_group group-safety would drop active replicas below minimum (2/3)',
+      'the refusal names the group floor and the projected count');
 
     const runtimeId = 'runtime-floor';
-    const runtime = buildEvaluationContext({
-      rows: [
-        serviceRow(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE, runtimeId,
-          `${runtimeId}-r1`, 'node-a'),
-        serviceRow(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE, runtimeId,
-          `${runtimeId}-r2`, 'node-b'),
-      ],
-      minReplicaCount: 1,
-    });
-    const runtimeResult = await evaluateRemoveSafety(runtime.context, {
+    const runtimeRemove = buildCommittedOperationFixture({
       operationId: 'runtime-remove-1',
       type: OperationType.REMOVE,
       partitionId: runtimeId,
       entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
       entityId: runtimeId,
       replicaId: `${runtimeId}-r1`,
+      sourceNodeId: OWNER_NODE,
+      targetNodeId: 'node-a',
+    }, WORKFLOW_STEP.SENDING, Date.now());
+    // The runtime-service floor is its policy owner's minimum (one replica).
+    const runtime = createRemovalSafetyOwner({
+      subject: runtimeRemove,
+      services: [
+        serviceRow(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE, runtimeId,
+          `${runtimeId}-r1`, 'node-a'),
+        serviceRow(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE, runtimeId,
+          `${runtimeId}-r2`, 'node-b'),
+      ],
     });
-    t.equal(runtimeResult.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
-      'runtime-service removal uses its availability floor, not Raft quorum');
+    try {
+      const runtimeResult = await evaluateRemoveSafety(runtime.owner, runtimeRemove);
+      t.equal(runtimeResult.classification,
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+        'runtime-service removal uses its availability floor, not Raft quorum');
+    } finally {
+      await runtime.coordinator.shutdown();
+    }
   });
 
 test('entity interaction contracts are explicit and unknown types fail closed',
@@ -394,6 +492,9 @@ test('entity interaction contracts are explicit and unknown types fail closed',
 test('untyped operation rows are outside canonical entity reads',
   async (t) => {
     const entityId = 'shared-looking-id';
+    // Only the identity is malformed: the row otherwise carries the durable
+    // shape (JSON-text producer history), so the identity owner is what
+    // refuses it.
     const untypedRow = {
       operation_id: 'untyped-partition-op',
       type: OperationType.ADD,
@@ -402,6 +503,9 @@ test('untyped operation rows are outside canonical entity reads',
       target_node_id: 'node-a',
       status: ReplicaStatus.PENDING,
       workflow_step: 'PENDING',
+      created_at: 1000,
+      updated_at: 1000,
+      steps_history: JSON.stringify(workflowFixtureHistory('PENDING', 1000)),
       entity_type: null,
       entity_id: null,
     };

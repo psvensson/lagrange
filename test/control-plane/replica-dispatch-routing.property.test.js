@@ -22,8 +22,10 @@ import {
   SERVICE_TYPE,
   SERVICE_STATUS,
   STATE,
-  WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {buildCreatedOperationFixture} from '../rebalancer/operation-outcome-fixture.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -47,40 +49,37 @@ function initEnv() {
 }
 
 /**
- * Arbitrary for generating replica operation rows.
+ * Arbitrary for generating coordinator-created PENDING partition operations
+ * and their committed replica_operations rows (the one row builder).
  */
 const operationArb = fc.record({
-  operation_id: fc.string({minLength: 5, maxLength: 15})
+  operationId: fc.string({minLength: 5, maxLength: 15})
     .map((s) => `op-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
   type: fc.constantFrom(
     OperationType.ADD,
     OperationType.REMOVE,
     OperationType.REPLACE,
   ),
-  partition_id: fc.string({minLength: 3, maxLength: 10})
+  partitionId: fc.string({minLength: 3, maxLength: 10})
     .map((s) => `part-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
-  replica_id: fc.string({minLength: 3, maxLength: 10})
+  replicaId: fc.string({minLength: 3, maxLength: 10})
     .map((s) => `rep-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
-  source_node_id: fc.string({minLength: 3, maxLength: 10})
+  sourceNodeId: fc.string({minLength: 3, maxLength: 10})
     .map((s) => `node-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
-  target_node_id: fc.string({minLength: 3, maxLength: 10})
+  targetNodeId: fc.string({minLength: 3, maxLength: 10})
     .map((s) => `tgt-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
-  status: fc.constant('pending'),
-  workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
-  created_at: fc.integer({min: 1000000000000, max: 2000000000000}),
-  updated_at: fc.integer({min: 1000000000000, max: 2000000000000}),
-}).map((row) => ({
-  ...row,
-  entity_type: 'partition',
-  entity_id: row.partition_id,
-}));
+  createdAt: fc.integer({min: 1000000000000, max: 2000000000000}),
+}).map((params) => {
+  const operation = buildCreatedOperationFixture(params);
+  return {operation, opRow: buildCanonicalReplicaOperationRow(operation, null)};
+});
 
 test('Property 16: Replica dispatch forwards to correct leader',
   async (t) => {
     await fc.assert(
       fc.asyncProperty(
         operationArb,
-        async (opRow) => {
+        async ({operation, opRow}) => {
           initEnv();
 
           let dispatchedOp = null;
@@ -125,21 +124,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
 
           const mockCoordinator = {
             isOperationLocallyOwned: () => true,
-            claimDispatchTransition: async () => ({
-              operationId: opRow.operation_id,
-              type: opRow.type,
-              partitionId: opRow.partition_id,
-              replicaId: opRow.replica_id,
-              sourceNodeId: opRow.source_node_id,
-              targetNodeId: opRow.target_node_id,
-              status: opRow.status,
-              workflowStep: opRow.workflow_step,
-              createdAt: opRow.created_at,
-              updatedAt: opRow.updated_at,
-              completedAt: null,
-              errorMessage: null,
-              stepsHistory: [],
-            }),
+            claimDispatchTransition: async () => ({...operation}),
             executeOperation: async (op) => {
               dispatchedOp = op;
             },

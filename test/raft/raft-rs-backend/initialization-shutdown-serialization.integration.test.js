@@ -5,6 +5,13 @@ import {ReplicaHandler} from '../../../src/node/replica-handler.js';
 import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {createFixture, buildService} from './startup-cleanup-native-fixture.js';
 import {pendingTurn, turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
+import {completePartitionConstructionFixture} from
+  '../../test-helpers/replica-handler-identity-fixture.js';
+
+// The node shutdown's aggregate names the exact retained runtime failure.
+function failureNamed(failure) {
+  return (error) => [...(error?.errors ?? [])].includes(failure);
+}
 
 function handlerFor(fixture, createPartitionService) {
   return new ReplicaHandler({
@@ -17,11 +24,21 @@ function handlerFor(fixture, createPartitionService) {
     timeSource: fixture.clock,
   });
 }
+// A controlled stand-in for the CREATE admission owner holding one physical
+// worker claim: it owns that claim until the claim is released (the owner's
+// ownsPhysicalWorker / releasePhysicalWorker port, as the handler consumes it).
 function releaseOwner(claim, onRelease) {
-  return {releasePhysicalWorker(value) {
-    assert.equal(value, claim);
-    onRelease();
-  }};
+  let held = claim;
+  return {
+    ownsPhysicalWorker(value) {
+      return held !== null && value === held;
+    },
+    releasePhysicalWorker(value) {
+      assert.equal(value, claim);
+      held = null;
+      onRelease();
+    },
+  };
 }
 for (const kind of ['partition', 'message-group']) {
   test(kind + ' concurrent initialize callers join one native opening', async (t) => {
@@ -129,9 +146,11 @@ test('ReplicaHandler releases CREATE claim when shutdown cleanup rejects', async
       if (failShutdown) throw failure;
     },
   };
-  const handler = handlerFor(fixture, async () => {
+  // The factory hands its constructed runtime to the host through the exact
+  // construction handoff every production factory performs (7ccb67f35).
+  const handler = handlerFor(fixture, async (options) => {
     handler.shuttingDown = true;
-    return service;
+    return completePartitionConstructionFixture(service, options);
   });
   // This controlled host boundary is about post-construction shutdown
   // ownership, not control-plane prior-existence availability.
@@ -155,6 +174,9 @@ test('ReplicaHandler releases CREATE claim when shutdown cleanup rejects', async
       skipLifecycleStatusPersistence: true,
       createPhysicalWorkerClaim: claim,
     }));
+    // The failed runtime stays retained; the node's shutdown owns its next
+    // shutdown attempt and keeps rejecting while that attempt fails.
+    await assert.rejects(handler.shutdown(), failureNamed(failure));
     assert.ok(shutdownCalls >= 2);
     assert.equal(releases, 1);
     assert.equal(handler.inProgressOperations.has(operationId), false);
