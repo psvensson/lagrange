@@ -1,3 +1,4 @@
+import {elapsedWorkflowPreimageMatches} from './operation-workflow-elapsed-preimage.js';
 import {assertOperationUpdateRecord, assertOperationUpdateSubject, invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
@@ -13,6 +14,9 @@ import {recoverCompletedLearnerRetirementCleanup} from
 import {isFailedCreateCleanupToken} from './failed-create-cleanup-token.js';
 import {assertCanonicalRebalancerEntityIdentity} from
   './rebalancer-entity-identity.js';
+
+const TERMINAL_WINNER_MOVED = 'retained durable terminal winner changed';
+const CLEANUP_TERMINAL_WINNER_MOVED = 'cleanup terminal winner changed';
 
 const {
   OperationType,
@@ -117,14 +121,11 @@ function isReplicaCleanupRecoveryOwnerCurrent(
 ) {
   return owner.isInitialized && !owner.isShuttingDown &&
     Number.isInteger(ownershipFenceEpoch) &&
-    typeof owner.getOperationOwnershipFenceEpoch === 'function' &&
     owner.getOperationOwnershipFenceEpoch() === ownershipFenceEpoch;
 }
 
 function reportReplicaCleanupRecoveryQueryFailure(options, error) {
-  if (typeof options.onQueryFailure === 'function') {
-    options.onQueryFailure(error);
-  }
+  options.onQueryFailure?.(error);
 }
 
 async function runReplicaCleanupReleaseRecoveryScan(
@@ -444,7 +445,7 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
           observation.operation &&
           !owner.repository.isReplicaOperationUpdateSatisfied(
             heldState.projectedOperation, observation.operation)) {
-        throw invalidOperationPersistenceOutcome('retained durable terminal winner changed');
+        throw invalidOperationPersistenceOutcome(TERMINAL_WINNER_MOVED);
       }
       if (observation.outcome) {
         const outcome = buildOperationTransitionOutcome(observation.outcome);
@@ -457,6 +458,14 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       // even if its current read is unavailable or a stale projection is seen.
       if (heldState.phase === TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING) {
         rearmTerminalTransitionRepairIfHeld(owner, operationId);
+        return;
+      }
+      const preimage = heldState.persistOptions.elapsedWorkflowPreimage;
+      if (preimage && !elapsedWorkflowPreimageMatches(observation.operation, preimage)) {
+        if (heldState.persistOptions.requireCreateAdmissionAbsent === true) {
+          owner.retainGuardedCreateAdmission(heldState.projectedOperation, observation.operation);
+        }
+        clearTerminalTransitionRepair(owner, operationId);
         return;
       }
       const repairAdmission = await admitReplaceTerminalRepair(owner,
@@ -510,7 +519,7 @@ async function runFailedCreateCleanupReleaseAttempt(
     assertOperationUpdateSubject(heldState.projectedOperation, authoritative);
     if (!owner.repository.isReplicaOperationUpdateSatisfied(
       heldState.projectedOperation, authoritative)) {
-      throw invalidOperationPersistenceOutcome('cleanup terminal winner changed');
+      throw invalidOperationPersistenceOutcome(CLEANUP_TERMINAL_WINNER_MOVED);
     }
   }
   if (!isTerminalFailedCreateCleanupRemove(authoritative) ||

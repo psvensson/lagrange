@@ -19,6 +19,10 @@ import {operationCarriesMessageGroupMembership} from
 // A terminal write that is also a step CAS (a REPLACE FAILED admitted
 // against its durable step, quest replace-source-removal-owner): both guards,
 // first-terminal-wins and the admitted step.
+const UPDATE_CONFIRMATION_UNRESOLVED = 'Committed operation update confirmation is unresolved';
+const UPDATE_CONFIRMATION_UNRESOLVED_CODE = 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED';
+const UPDATE_NOT_CONFIRMED = 'confirmation does not prove the requested write';
+
 const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL = `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
@@ -39,6 +43,7 @@ const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL =
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const EXPECTED_STEPS_HISTORY_REQUIRES_STEP_CAS =
   'expectedStepsHistory refines a non-terminal expected-step CAS';
+const NO_OBSERVED_OPERATION_TRANSITION = Object.freeze({outcome: null});
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
 
@@ -109,7 +114,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(
         operation, {requireAbsenceConfirmation: true});
       const durable = observation.operation;
-      if (!durable) return {...observation, outcome: null};
+      if (!durable) return {...observation, ...NO_OBSERVED_OPERATION_TRANSITION};
       assertOperationUpdateRecord(durable);
       assertOperationUpdateSubject(operation, durable);
       const terminal = durable.completedAt !== null;
@@ -242,6 +247,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
                 options.requireCreateAdmissionAbsent === true,
               requireExactCreateTarget: options.requireExactCreateTarget === true,
               expectedStepsHistory,
+              elapsedWorkflowPreimage: options.elapsedWorkflowPreimage,
             },
           ),
           data: this.buildReplicaOperationUpdateData(operation),
@@ -262,7 +268,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           // at the caller that projected the row. Retry attempts repeat it.
           beforeAttempt: options.terminalAdmission,
         },
-        options.requireExactCreateTarget === true ? null : {
+        options.requireExactCreateTarget === true || options.elapsedWorkflowPreimage ? null : {
           sql: this.resolveOperationUpdateSql(
             expectedWorkflowStep,
             terminalTransition,
@@ -305,7 +311,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           return this.resolveZeroChangeOperationUpdate(
             operation,
             expectedWorkflowStep,
-            {terminalTransition, requireExactCreateTarget: options.requireExactCreateTarget},
+            {terminalTransition, requireExactCreateTarget: options.requireExactCreateTarget,
+              elapsedWorkflowPreimage: options.elapsedWorkflowPreimage},
           );
         }
         return buildOperationUpdateOutcome({
@@ -360,8 +367,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         const observed = visibility?.operation;
         if (!observed || visibility.confirmationState !==
             REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED) {
-          const error = new Error('Committed operation update confirmation is unresolved');
-          error.code = 'OPERATION_PERSISTENCE_CONFIRMATION_UNRESOLVED';
+          const error = new Error(UPDATE_CONFIRMATION_UNRESOLVED);
+          error.code = UPDATE_CONFIRMATION_UNRESOLVED_CODE;
           error.deferredOutcome = visibility?.deferredOutcome;
           error.deferRetry = true;
           error.retryAfterMs = visibility?.deferredOutcome?.retryAfterMs;
@@ -371,7 +378,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         assertOperationUpdateSubject(operation, observed);
         const exact = this.isReplicaOperationUpdateSatisfied(operation, observed);
         if (!exact && observed.completedAt === null) {
-          throw invalidOperationPersistenceOutcome('confirmation does not prove the requested write');
+          throw invalidOperationPersistenceOutcome(UPDATE_NOT_CONFIRMED);
         }
         return buildOperationUpdateOutcome({
           persisted: exact,
@@ -550,7 +557,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
         if (
-          options.requireExactCreateTarget === true ||
+          options.elapsedWorkflowPreimage || options.requireExactCreateTarget === true ||
           operationCarriesReplicaCreateAdmission(operation) ||
           operationCarriesMessageGroupMembership(operation)
         ) {
