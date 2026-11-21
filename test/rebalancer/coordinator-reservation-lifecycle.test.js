@@ -11,6 +11,11 @@ import {REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA, SERVICES_SCHEMA,
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {controlPlaneWriteIdentity, releaseControlPlaneWriteIdentities, runControlPlaneWrite} from
+  '../../src/control-plane/control-plane-write-identity.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
+import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -1022,4 +1027,50 @@ test('reconcileReservations logs no-op sweeps at debug and mutations at info, ' 
   await coordinator.checkTimeouts();
   t.equal(reservationReconciles, 2, 'checkTimeouts fires reconcile again at 30s');
   t.end();
+});
+
+test('failed reservation release retains the exact birth until the ACTIVE row leaves', async (t) => {
+  initializeConfig();
+  const {coordinator, sqlEngine} = createCoordinatorWithStorage(t);
+  await coordinator.createOperation({
+    type: OperationType.ADD, partitionId: 'p-1', nodeId: 'target-node',
+    entityType: SERVICE_TYPE.PARTITION, entityId: 'p-1',
+  });
+  const reservation = [...sqlEngine.reservations.values()][0];
+  const id = reservation.reservation_id;
+  const prefix = ['storage_reservations', id];
+  const name = controlPlaneWriteIdentity(...prefix, 'birth');
+  const route = {id: 'reservation-lifecycle-sql', partitionId: 'storage_reservations-p1'};
+  const keys = [];
+  const witnessBirth = () => runControlPlaneWrite({writeIdentity: name}, reservation, route,
+    async (_row, key) => {
+      keys.push(key);
+      return {success: false, partitionId: route.partitionId,
+        entryId: deriveParticipantEntryId(key, route.partitionId),
+        failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN};
+    });
+  const execute = coordinator.executeOperationMutationWithRetry.bind(coordinator);
+  try {
+    await witnessBirth();
+    coordinator.executeOperationMutationWithRetry = async () => ({
+      success: false, error: 'reservation authority temporarily unavailable',
+    });
+    const refused = await coordinator.transitionActiveReservationById(
+      id, RESERVATION_STATUS.RELEASED, 4300);
+    t.equal(refused.success, false);
+    t.equal(sqlEngine.reservations.get(id).status, RESERVATION_STATUS.ACTIVE);
+    await witnessBirth();
+    t.equal(keys[1], keys[0], 'a failed transition cannot retire the pending birth');
+
+    coordinator.executeOperationMutationWithRetry = execute;
+    const committed = await coordinator.transitionActiveReservationById(
+      id, RESERVATION_STATUS.RELEASED, 4400);
+    t.equal(committed.changed, true);
+    t.equal(sqlEngine.reservations.get(id).status, RESERVATION_STATUS.RELEASED);
+    await witnessBirth();
+    t.not(keys[2], keys[0], 'a committed terminal transition ends the previous birth');
+  } finally {
+    coordinator.executeOperationMutationWithRetry = execute;
+    releaseControlPlaneWriteIdentities(...prefix);
+  }
 });

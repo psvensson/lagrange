@@ -5,6 +5,11 @@
  */
 import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {releaseControlPlaneWriteIdentities, runControlPlaneWrite} from
+  '../../src/control-plane/control-plane-write-identity.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
+import {deriveParticipantEntryId} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -262,4 +267,46 @@ test('T6: writeEndpointAtIncarnation preserves caller metadata "{}" without ' +
     '{}',
     'CAS advance writes caller metadata verbatim without storageIncarnation',
   );
+});
+
+test('failed exact endpoint deletion retains its incarnation’s pending named write', async (t) => {
+  const row = nodeEndpoint(G1, 'ws://g1-host:8082');
+  const gateway = createDurableTables({[TABLES.NODE_ENDPOINTS]: [row]});
+  const route = {id: 'endpoint-sql', partitionId: 'node_endpoints-p1'};
+  const keys = [];
+  const read = async () => ({available: true,
+    row: gateway.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID) || null});
+  const endpointWrite = () => writeEndpointAtIncarnation({
+    bootIncarnation: G1, row: {...row, address: 'ws://g1-host:8888'}, observe: read,
+    readback: async () => ({available: false, row: null}),
+    insert: () => {
+      throw new Error('the populated endpoint takes the incarnation update path');
+    },
+    update: (whereClause, data, opts) => runControlPlaneWrite(opts, {whereClause, data}, route,
+      async (_body, key) => {
+        keys.push(key);
+        return {success: false, partitionId: route.partitionId,
+          entryId: deriveParticipantEntryId(key, route.partitionId),
+          failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN};
+      }),
+  });
+  const remove = () => mutateEndpointAtIncarnation({
+    bootIncarnation: G1, whereClause: {endpoint_id: ENDPOINT_ID}, deletes: true,
+    write: (predicate) => gateway.deleteSystemTableRow(TABLES.NODE_ENDPOINTS, predicate),
+    observe: read,
+  });
+  try {
+    await endpointWrite();
+    gateway.loseNextAcknowledgement('unapplied');
+    t.equal((await remove()).outcome, OUTCOME.NOT_APPLIED);
+    t.same((await read()).row, row);
+    await endpointWrite();
+    t.equal(keys[1], keys[0], 'the unsuccessful delete cannot release the pending update');
+    t.equal((await remove()).outcome, OUTCOME.APPLIED);
+    t.equal((await read()).row, null);
+    t.same(gateway.writes.at(-1)?.whereClause,
+      {endpoint_id: ENDPOINT_ID, boot_incarnation: G1});
+  } finally {
+    releaseControlPlaneWriteIdentities('endpoint', ENDPOINT_ID, G1);
+  }
 });
