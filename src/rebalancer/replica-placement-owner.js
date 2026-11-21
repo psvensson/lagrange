@@ -311,9 +311,12 @@ class ReplicaPlacementOwner {
     return custody.running;
   }
 
-  // A pass that throws keeps its triggers in the custody for the next pass
-  // and ends the drain: the next one starts only on the next wake (a trigger
-  // or the resync), so repeated failures run at most one pass per wake.
+  // A pass that throws (it aborts: a failure outside the candidate loop)
+  // keeps its triggers in the custody for the next pass and ends the drain:
+  // the next one starts only on the next wake (a trigger or the resync), so
+  // repeated failures run at most one pass per wake. A failed CANDIDATE
+  // retains nothing: planning re-derives it from the census on the next wake,
+  // at the latest on the resync, whose pass then stays resync-only.
   async drainCustody(custody) {
     this.activeCustodies.add(custody);
     try {
@@ -322,11 +325,7 @@ class ReplicaPlacementOwner {
         custody.retainedTriggers.clear();
         this.pendingTriggers.clear();
         try {
-          const pass = await this.runPass(triggers);
-          // A candidate failed: its obligation stays with the next wake.
-          if (Object.keys(pass.failedCandidates).length > 0) {
-            for (const trigger of triggers) custody.retainedTriggers.add(trigger);
-          }
+          await this.runPass(triggers);
         } catch (error) {
           for (const trigger of triggers) custody.retainedTriggers.add(trigger);
           this.logger.warn(LOG_PASS_FAILED, {nodeId: this.nodeId,
