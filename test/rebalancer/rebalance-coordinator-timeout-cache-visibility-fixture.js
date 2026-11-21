@@ -87,8 +87,8 @@ function createServiceCacheRefresh(cache, gateway) {
   return Object.assign(host, gateway.cdcIntegrationService);
 }
 
-export function createTimeoutVisibilityCache(operationRow, serviceRows) {
-  const cache = new SystemTableCache();
+export function createTimeoutVisibilityCache(operationRow, serviceRows, options = {}) {
+  const cache = new SystemTableCache(options);
   cache.applySystemTableChange('replica_operations', CDC_OPERATION.UPSERT, operationRow);
   for (const row of serviceRows) {
     cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, row);
