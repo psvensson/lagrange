@@ -230,8 +230,6 @@ const NODE_JOINING_SERVICE_LITERAL = Object.freeze({
   MESSAGE_TIMEOUT: 'Message timeout',
   NO_HANDLER_REGISTERED_FOR_ADDRESS: 'No handler registered for address',
   OBJECT: 'object',
-  CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED:
-    'control-plane message was not acknowledged',
   FAILED: 'failed',
   SHUTTING_DOWN: 'shutting_down',
   STOPPED: 'stopped',
