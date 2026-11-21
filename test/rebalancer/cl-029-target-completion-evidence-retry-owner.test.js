@@ -109,6 +109,7 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
   buildReplaceOperation,
   createCasBackedReplicaOperationStore,
@@ -135,6 +136,9 @@ const TEST_RETRYABLE_CAS_FAILURE = Object.freeze({
   deferRetry: true,
   retryAfterMs: 50,
 });
+// A bound on the virtual-clock drive (turns, not product time): far above the
+// turns the repository's in-loop persist budget takes at the retry delay above.
+const TEST_VIRTUAL_DRIVE_TURN_LIMIT = 20000;
 // Amendment subtests: a REPLICA_CREATE_FAILED outcome whose error shape
 // classifies as a retryable control-plane failure
 // (isRetryableControlPlaneError: deferRetry === true is sufficient).
@@ -168,6 +172,22 @@ async function waitForCondition(checkFn, description) {
 
 async function quiesce() {
   await new Promise((resolve) => setTimeout(resolve, TEST_QUIESCE_MS));
+}
+
+/**
+ * Let the coordinator's virtual clock pass while a phase is pending: each turn
+ * lets the pending continuations run and, only when something is waiting on
+ * the clock (the repository's in-loop persist retry), advances it by the
+ * failure's retry delay. The clock never moves while nothing waits on it, and
+ * nothing here waits on wall time beyond one macrotask turn per step.
+ */
+async function driveVirtualClockUntil(timeSource, conditionFn) {
+  for (let turn = 0; turn < TEST_VIRTUAL_DRIVE_TURN_LIMIT && !conditionFn(); turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    if (timeSource.pendingTimerCount() > 0) {
+      timeSource.advance(TEST_RETRYABLE_CAS_FAILURE.retryAfterMs);
+    }
+  }
 }
 
 function callsOf(calls, methodName) {
@@ -833,21 +853,31 @@ test(
       async (t) => {
         const operation = buildReplaceOperation();
         const store = createCasBackedReplicaOperationStore(operation);
-        const harness = createHarness(store);
+        // The repository retries a retryable persist failure inside its own
+        // bounded loop; the outage must outlast that budget before the owner
+        // sees it. The budget is spent on this virtual clock, not wall time.
+        const timeSource = new VirtualTimeSource({startMs: Date.now()});
+        const harness = createHarness(store, undefined, {timeSource});
         const {owner} = harness;
+        let outageDrive = null;
 
         try {
           await runScenario(harness, operation, {
             emitDuringWalk: false,
             afterWalk: async () => {
               // Reads stay consistent; only the ACTIVE CAS write fails
-              // with a retryable deferRetry control-plane error.
+              // with a retryable deferRetry control-plane error, until healed.
               store.injectRetryableCasFailureForStep(
                 WORKFLOW_STEP.ACTIVE,
                 TEST_RETRYABLE_CAS_FAILURE,
               );
             },
+            beforeActive: () => {
+              outageDrive = driveVirtualClockUntil(timeSource, () =>
+                settledReconcileCount(harness) >= TEST_EXPECTED_RECONCILE_COUNT);
+            },
           });
+          await outageDrive;
 
           const activeUpdateCalls = updateStepCallsTo(
             harness.calls,
@@ -889,6 +919,7 @@ test(
           t.equal(retained?.workflowStep, WORKFLOW_STEP.ACTIVE,
             'the unapplied ACTIVE notification is retained');
           t.ok(retryTimer, 'unapplied completion retains its own scheduled reconciliation');
+          store.healRetryableCasFailure();
           await retryTimer?.callback();
           await waitForCondition(() => removeDeliveries(harness).length === 1,
             'the healed ACTIVE retry to commit and dispatch source removal');

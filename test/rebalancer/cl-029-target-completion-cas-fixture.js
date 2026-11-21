@@ -144,11 +144,8 @@ function createCasBackedReplicaOperationStore(initialOperation) {
     };
     state.updateAttempts.push(attempt);
     if (isCas && state.failCasUpdateResult && workflowStep === state.failCasUpdateForStep) {
-      const failure = state.failCasUpdateResult;
-      state.failCasUpdateResult = null;
-      state.failCasUpdateForStep = null;
       attempt.injectedFailure = true;
-      return failure;
+      return state.failCasUpdateResult;
     }
     const result = await applyPlanned(mutation, options);
     attempt.applied = result.changes > 0;
@@ -180,9 +177,16 @@ function createCasBackedReplicaOperationStore(initialOperation) {
     engageStaleReadView(snapshot) {
       state.readView = snapshot;
     },
+    // An outage, not a single refusal: every CAS write to this step answers the
+    // retryable failure until healRetryableCasFailure(), so it outlasts the
+    // repository's in-loop persist retry budget.
     injectRetryableCasFailureForStep(workflowStep, failureResult) {
       state.failCasUpdateForStep = workflowStep;
       state.failCasUpdateResult = failureResult;
+    },
+    healRetryableCasFailure() {
+      state.failCasUpdateForStep = null;
+      state.failCasUpdateResult = null;
     },
   };
 }
@@ -258,10 +262,12 @@ function instrumentMethod(target, methodName, calls) {
 /**
  * Build the real coordinator/owner wired to the CAS-backed store,
  * mirroring rebalance-coordinator-outcome-routing.test.js conventions.
+ * `timeSource` (optional) is the coordinator's clock, which its repository
+ * shares: a case that needs time to pass gives a VirtualTimeSource.
  */
 function createHarness(store, witness = createReplaceWitness({
   leaderReplicaId: TEST_TARGET_REPLICA_ID,
-})) {
+}), {timeSource} = {}) {
   const emitter = new ExecutorOutcomeEmitter({
     logger: {debug() {}, info() {}, warn() {}, error() {}},
   });
@@ -275,6 +281,7 @@ function createHarness(store, witness = createReplaceWitness({
   // leads.
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
+    timeSource,
     transactionCoordinator: createTransactionCoordinator(),
     systemTableCache: {
       get() {

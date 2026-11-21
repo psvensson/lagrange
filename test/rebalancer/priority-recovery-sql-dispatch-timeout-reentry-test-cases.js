@@ -1,6 +1,7 @@
 import {createCoordinatorSqlStore, createMockCache} from './test-helpers.js';
 import {applyOperationRowUpdate} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
   registerCase,
   dependencies,
@@ -731,7 +732,10 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
     const updateOptions = [];
     let updateCount = 0;
     const originalDateNow = Date.now;
-    Date.now = () => TEST_CAPTURED_AT_MS;
+    // One virtual clock for the owner's stamps and the coordinator's
+    // repository: it stands at TEST_CAPTURED_AT_MS until the outage below.
+    const timeSource = new VirtualTimeSource({startMs: TEST_CAPTURED_AT_MS});
+    Date.now = () => timeSource.now();
     const operationRow = buildPendingOperationRow({
       operationId: TEST_SQL_PRIORITY_TIMEOUT_OPERATION_ID,
       partitionId: TEST_PARTITION_ID,
@@ -788,6 +792,11 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         if (updateCount === 1 || updateCount === NUM.THREE) {
           return applyOperationRowUpdate(operationRow, mutation);
         }
+        // The participant answers its retryable failure only after the
+        // write's bounded per-attempt budget has elapsed (virtual time): the
+        // outage outlasts the repository's in-loop retry, so the failure
+        // reaches the workflow owner's deferred-progress lane.
+        timeSource.advance(TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS);
         return {
           success: false,
           error: TEST_DISTRIBUTED_PARTICIPANT_FAILURE,
@@ -805,6 +814,7 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
         };
       },
       nodeId: TEST_TARGET_NODE_ID,
+      timeSource,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,
       transactionCoordinator: buildTransactionCoordinator(),
