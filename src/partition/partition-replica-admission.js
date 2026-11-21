@@ -40,6 +40,7 @@ import {readCommittedMembershipStamp} from
   '../rebalancer/committed-membership-bootstrap-read.js';
 import {
   PARTITION_SERVICE_DEFAULT,
+  PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_MESSAGE_TYPE,
 } from './partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -63,6 +64,7 @@ import {
 } from './partition-service-raft-membership-administration.js';
 
 const ADMIT_REPLICA_MESSAGE_TYPE = PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA;
+const REQUEST_TRANSPORT_LOST = 'Replica admission request no longer owns this transport';
 const REQUEST_DELIVERY = Symbol('replica admission delivery');
 const DEFAULT_TARGET_REPLICATION_FACTOR = 3;
 const UNAVAILABLE_CONF_CHANGE_STATE = Object.freeze({
@@ -546,7 +548,7 @@ async function rereadCommittedStamp(service, request, signal) {
   const messageRouter = {
     deliver: (address, payload, options) => {
       if (!isCurrentAdmissionRequest(service, request, signal)) {
-        throw new Error('Replica admission request no longer owns this transport');
+        throw new Error(REQUEST_TRANSPORT_LOST);
       }
       return transport.deliver(address, payload, {...options, signal});
     },
@@ -652,6 +654,13 @@ async function driveReplicaAdmission(service) {
   return request[REQUEST_DELIVERY].promise;
 }
 
+function notifyReplicaAdmissionSettlement(service, request) {
+  if (request.state !== REPLICA_ADMISSION_REQUEST_STATE.PENDING) {
+    service.emit?.(PARTITION_SERVICE_EVENT.REPLICA_ADMISSION_SETTLED,
+      {operationId: request.operationId});
+  }
+}
+
 async function runReplicaAdmissionDelivery(service, request, signal) {
   if (!isCurrentAdmissionRequest(service, request, signal)) return request;
   if (UNCOMMITTED_ADMISSION_OUTCOMES.has(request.lastOutcome)) {
@@ -660,6 +669,7 @@ async function runReplicaAdmissionDelivery(service, request, signal) {
     if (committedVoter) {
       request.lastOutcome = REPLICA_ADMISSION_OUTCOME.ALREADY_MEMBER;
       request.state = REPLICA_ADMISSION_REQUEST_STATE.ADMITTED;
+      notifyReplicaAdmissionSettlement(service, request);
       return request;
     }
   }
@@ -684,6 +694,7 @@ async function runReplicaAdmissionDelivery(service, request, signal) {
     partitionId: service.partitionId, replicaId: service.replicaId,
     operationId: request.operationId, outcome: admission.outcome,
     reason: admission.reason ?? null, state: request.state});
+  notifyReplicaAdmissionSettlement(service, request);
   return request;
 }
 

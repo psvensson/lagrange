@@ -20,6 +20,7 @@ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
+import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
 import {
   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
@@ -42,6 +43,24 @@ const LEARNER_ADMISSION_WAIT_OUTCOME = Object.freeze({
   SERVICE_DISAPPEARED: 'service_disappeared',
   ADMISSION_REFUSED: 'admission_refused',
 });
+function learnerAdmissionWaitError(replicaId, outcome) {
+  const error = new Error(`Learner admission wait failed for replica ${replicaId}: ${outcome}`);
+  if (outcome === LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED) {
+    error.code = CREATE_ADMISSION_ERROR_CODE.DEFERRED;
+  }
+  return error;
+}
+
+function isReplicaAdmissionRefused(service) {
+  return readLowerStateField(service?.replicaAdmissionRequest?.state) ===
+    LEARNER_ADMISSION_WAIT_TOKEN.STATE_REFUSED;
+}
+
+function hasDecidedCreateReadiness(handler, service, replicaId, voterRequired) {
+  return isReplicaAdmissionRefused(service) || handler.isReplicaVoterReady(replicaId) ||
+    (!voterRequired && isLearnerAdmittedToGroup(service, replicaId));
+}
+
 const ADMITTED_RAFT_MEMBER_ROLES = Object.freeze(
   new Set(['learner', 'voter']),
 );
@@ -328,6 +347,10 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           return;
         }
         polls += 1;
+        if (isReplicaAdmissionRefused(expectedService)) {
+          throw learnerAdmissionWaitError(
+            replicaId, LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED);
+        }
         if (this.isReplicaVoterReady(replicaId)) {
           // CL-035: seed the locally-decided voting role into the local
           // SERVICES row so the REPLACE remove-safety gate observes the
@@ -360,9 +383,9 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         startedAtMs,
         polls,
       });
-      throw new Error(
+      throw Object.assign(new Error(
         `Replica ${replicaId} did not become voter-ready within ${this.syncTimeoutMs}ms`,
-      );
+      ), {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED});
     }
     /**
      * Check whether this ReplicaHandler is running with real Raft services.
@@ -442,14 +465,6 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         const requestState = readLowerStateField(
           service.replicaAdmissionRequest?.state,
         );
-        if (requestState === LEARNER_ADMISSION_WAIT_TOKEN.STATE_REFUSED) {
-          return buildLearnerAdmissionWaitOutcome(
-            false,
-            LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED,
-            deadline,
-            readHandlerNowMs(this),
-          );
-        }
         const nowBeforeDriveMs = readHandlerNowMs(this);
         if (nowBeforeDriveMs >= deadline) {
           return buildLearnerAdmissionWaitOutcome(
@@ -457,6 +472,14 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
             LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED,
             deadline,
             deadline,
+          );
+        }
+        if (isReplicaAdmissionRefused(service)) {
+          return buildLearnerAdmissionWaitOutcome(
+            false,
+            LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED,
+            deadline,
+            readHandlerNowMs(this),
           );
         }
         if (
@@ -493,17 +516,6 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
               readHandlerNowMs(this),
             );
           }
-          if (
-            readLowerStateField(currentService.replicaAdmissionRequest?.state) ===
-            LEARNER_ADMISSION_WAIT_TOKEN.STATE_REFUSED
-          ) {
-            return buildLearnerAdmissionWaitOutcome(
-              false,
-              LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED,
-              deadline,
-              readHandlerNowMs(this),
-            );
-          }
           const nowAfterDriveMs = readHandlerNowMs(this);
           if (nowAfterDriveMs >= deadline) {
             return buildLearnerAdmissionWaitOutcome(
@@ -511,6 +523,14 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
               LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED,
               deadline,
               deadline,
+            );
+          }
+          if (isReplicaAdmissionRefused(currentService)) {
+            return buildLearnerAdmissionWaitOutcome(
+              false,
+              LEARNER_ADMISSION_WAIT_OUTCOME.ADMISSION_REFUSED,
+              deadline,
+              readHandlerNowMs(this),
             );
           }
           if (
@@ -647,6 +667,8 @@ function isLearnerFirstGrowthAdd(
 
 export {
   LEARNER_ADMISSION_WAIT_OUTCOME,
+  hasDecidedCreateReadiness,
+  learnerAdmissionWaitError,
   assignReplicaHandlerVoterReadinessMethods,
   awaitBoundedReplicaAdmission,
   readHandlerNowMs,
