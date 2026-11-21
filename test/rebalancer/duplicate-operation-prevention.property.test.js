@@ -9,7 +9,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
-import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {createFixtureSystemMutationPort, createOperationRowInsertPort} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
@@ -94,7 +94,12 @@ function createMockSqlQueryEngine(options = {}) {
     ]),
   );
 
-  return {
+  const simulateDelay = async () => {
+    if (insertDelay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, insertDelay));
+    }
+  };
+  const engine = {
     executeQuery: async (sql, params) => {
       // Simulate network/processing delay
       if (insertDelay > 0) {
@@ -129,40 +134,22 @@ function createMockSqlQueryEngine(options = {}) {
         return {success: true, changes: 1};
       }
 
-      if (sql.includes('INSERT INTO replica_operations')) {
-        // Insert new operation
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId,
-        ] = params;
-        const newOp = {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-        };
-        operations.set(operationId, newOp);
-        return {success: true, changes: 1};
-      }
-
       return {success: true, rows: []};
     },
     getOperations: () => Array.from(operations.values()),
   };
+  // The structured operation INSERT takes the same simulated delay and lands
+  // in the rows by its named columns; other writes plan onto executeQuery.
+  const applyMutation = createOperationRowInsertPort(
+    (row) => {
+      operations.set(row.operation_id, row);
+    },
+    createFixtureSystemMutationPort((...args) => engine.executeQuery(...args)));
+  engine.submitMutation = async (mutation, options) => {
+    if (mutation?.operation === 'insert') await simulateDelay();
+    return applyMutation(mutation, options);
+  };
+  return engine;
 }
 
 /**
@@ -183,7 +170,7 @@ function createMockCoordinatorDeps(sqlEngine) {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     }, null),
     controlPlaneSystemTableGateway: {
-      submitMutation: createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)),
+      submitMutation: (mutation, options) => sqlEngine.submitMutation(mutation, options),
       readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
         sqlEngine.executeQuery(sql, params, queryOptions),
       readRows: async (_tableName, sql, params = [], queryOptions = {}) =>

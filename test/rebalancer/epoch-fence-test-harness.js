@@ -32,7 +32,7 @@ const TEST_TARGET_NODE_ID = 'epoch-target-node';
 const TEST_PARTITION_ID = 'p-epoch-fence';
 const TEST_OPERATION_ID = 'op-epoch-fence';
 const PLANNING_EPOCH = 7;
-const INSERT_OPERATION_SQL_FRAGMENT = 'INSERT INTO replica_operations';
+const REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const RESERVATION_ALREADY_ACTIVE = 'already_active';
 const DELIVERY_STATUS_COMPLETED = 'completed';
 const ADMISSION_DECISION_TYPE = 'admitted';
@@ -47,33 +47,20 @@ function initializeConfig() {
   });
 }
 
-function createNoopSqlQueryEngine(onInsert) {
+// The default ledger: it records each structured INSERT of an operation row
+// by its named columns and answers reads of that row; any other write
+// succeeds without effect, as this no-op ledger always has.
+function createNoopOperationLedger(onInsert) {
   const operations = new Map();
   return {
-    async executeQuery(sql, params = []) {
-      if (typeof sql === 'string' &&
-          sql.includes(INSERT_OPERATION_SQL_FRAGMENT)) {
+    async submitMutation(mutation) {
+      if (mutation?.tableName === REPLICA_OPERATIONS_TABLE && mutation.operation === 'insert') {
         onInsert();
-        operations.set(params[0], {
-          operation_id: params[0],
-          type: params[1],
-          partition_id: params[2],
-          replica_id: params[3],
-          target_claim_key: params[4],
-          source_node_id: params[5],
-          target_node_id: params[6],
-          status: params[7],
-          workflow_step: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-          completed_at: params[11],
-          error_message: params[12],
-          steps_history: params[13],
-          entity_type: params[14],
-          entity_id: params[15],
-          membership_publication_epoch: params[16],
-        });
+        operations.set(mutation.row.operation_id, {...mutation.row});
       }
+      return {success: true, changes: 1, partitionResult: {affectedRows: 1}};
+    },
+    async executeQuery(sql, params = []) {
       if (typeof sql === 'string' &&
           sql.includes('FROM replica_operations') &&
           sql.includes('operation_id = ?')) {
@@ -104,9 +91,13 @@ function createEpochCoordinator({
   let persistedRows = 0;
   let publishedEpoch = currentEpoch;
   const engine = sqlQueryEngine ||
-    createNoopSqlQueryEngine(() => {
+    createNoopOperationLedger(() => {
       persistedRows += 1;
     });
+  // A given engine is a statement store: the canonical planner reaches it.
+  // The default ledger takes the structured mutations itself.
+  const controlPlaneSystemTableGateway = createMockControlPlaneSystemTableGateway(engine);
+  if (!sqlQueryEngine) controlPlaneSystemTableGateway.submitMutation = engine.submitMutation;
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createMockTransactionCoordinator(),
@@ -125,8 +116,7 @@ function createEpochCoordinator({
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: engine,
-    controlPlaneSystemTableGateway:
-      createMockControlPlaneSystemTableGateway(engine),
+    controlPlaneSystemTableGateway,
     enableTimeouts: false,
   });
   coordinator.initialize();

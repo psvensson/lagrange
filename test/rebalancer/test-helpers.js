@@ -423,23 +423,46 @@ function whereColumnHolds(row, column, value) {
     row[column] === value;
 }
 
+function affectedRowsAnswer(affectedRows) {
+  return {success: true, changes: affectedRows, affectedRows, partitionResult: {affectedRows}};
+}
+
+// Apply one structured replica_operations UPDATE to a fixture's in-memory
+// row as SQL applies it: every where column must hold (a null where-value
+// is IS NULL), then the data columns are written. Answers the row count.
+function applyOperationRowUpdate(row, mutation) {
+  const holds = Boolean(row) && Object.entries(mutation.whereClause ?? {}).every(
+    ([column, value]) => whereColumnHolds(row, column, value));
+  if (holds) Object.assign(row, mutation.data);
+  return affectedRowsAnswer(holds ? 1 : 0);
+}
+
+// Hand each structured replica_operations UPDATE to `handle(mutation,
+// options)`; every other mutation goes to `next` unchanged.
+function routeOperationRowUpdates(handle, next) {
+  return async (mutation, options) => (
+    mutation?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+      mutation.operation === 'update' ?
+      handle(mutation, options) : next(mutation, options));
+}
+
 // The structured replica_operations writer over a fixture's own in-memory
-// rows (`rowOf(operationId)` returns the fixture's row object). An UPDATE is
-// applied as SQL applies it - every where column must hold, a null
-// where-value meaning IS NULL - and answers its affected-row count; every
-// other mutation goes to `next` unchanged.
+// rows: `rowOf(operationId)` returns the fixture's row object.
 function createOperationRowUpdatePort(rowOf, next) {
+  return routeOperationRowUpdates((mutation) => applyOperationRowUpdate(
+    rowOf(mutation.whereClause?.operation_id), mutation), next);
+}
+
+// The structured replica_operations INSERT into a fixture's own in-memory
+// rows: `insertRow(row)` stores the canonical row (named columns) and returns
+// false when its key is already present; every other mutation goes to `next`.
+function createOperationRowInsertPort(insertRow, next) {
   return async (mutation, options) => {
     if (mutation?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
-        mutation.operation !== 'update') {
+        mutation.operation !== 'insert') {
       return next(mutation, options);
     }
-    const row = rowOf(mutation.whereClause?.operation_id) ?? null;
-    const holds = row !== null && Object.entries(mutation.whereClause).every(
-      ([column, value]) => whereColumnHolds(row, column, value));
-    if (holds) Object.assign(row, mutation.data);
-    const affectedRows = holds ? 1 : 0;
-    return {success: true, changes: affectedRows, affectedRows, partitionResult: {affectedRows}};
+    return affectedRowsAnswer(insertRow({...mutation.row}) === false ? 0 : 1);
   };
 }
 
@@ -1446,7 +1469,8 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 
 export {
   createFixtureSystemMutationPort, createObservationOnlyMutationPort, withExecutorMutationPort,
-  createOperationRowUpdatePort,
+  applyOperationRowUpdate, createOperationRowInsertPort, createOperationRowUpdatePort,
+  routeOperationRowUpdates,
   buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
   createAllowAllStorageAdmissionService, createCoordinatorSqlStore, createMockCache,
   createMockCdcService,

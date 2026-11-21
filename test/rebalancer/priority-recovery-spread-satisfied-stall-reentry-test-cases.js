@@ -1,4 +1,5 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {applyOperationRowUpdate} from './test-helpers.js';
 // Quest operation-workflow-drain-redrive, acceptance #1 (mask-pinning baseline):
 // a durably STALLED, locally-owned REPLACE in its REMOVE-dispatch phase (ACTIVE)
 // that is over target gets classified spread_satisfied_in_flight, and the EXISTING
@@ -9,7 +10,6 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
   {registerCase, dependencies},
 ) {
   const {
-    NUM,
     TEST_OPERATION_TYPE_REPLACE,
     TEST_STATUS_ACTIVE,
     TEST_STEP_ACTIVE,
@@ -21,7 +21,6 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
     TEST_ENTITY_TYPE_PARTITION,
     TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT,
     TEST_QUERY_OPERATION_BY_ID_FRAGMENT,
-    TEST_UPDATE_REPLICA_OPERATIONS_PREFIX,
     TEST_QUERY_SERVICES_FRAGMENT,
     TEST_DELIVERY_STATUS_INITIATED,
     TEST_MIN_REPLICA_COUNT,
@@ -117,13 +116,6 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
     const sqlQueryEngine = {
       async executeQuery(sql, params = []) {
         const normalizedSql = String(sql);
-        if (normalizedSql.startsWith(TEST_UPDATE_REPLICA_OPERATIONS_PREFIX)) {
-          updateCount += 1;
-          operationRow.status = params[0];
-          operationRow.workflow_step = params[1];
-          operationRow.steps_history = params[NUM.FIVE];
-          return {success: true, affectedRows: 1};
-        }
         if (
           normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
           normalizedSql.includes(TEST_QUERY_OPERATION_BY_ID_FRAGMENT)
@@ -152,6 +144,11 @@ export function registerPriorityRecoverySpreadSatisfiedStallReentryTestCases(
     };
 
     const coordinator = createCoordinator({
+      // Each structured ledger UPDATE, applied to the row by column.
+      operationUpdate: async (mutation) => {
+        updateCount += 1;
+        return applyOperationRowUpdate(operationRow, mutation);
+      },
       nodeId: TEST_TARGET_NODE_ID,
       replicaOperationDispatchTimeoutMs: TEST_HANDOFF_TIMEOUT_MS,
       sqlQueryEngine,

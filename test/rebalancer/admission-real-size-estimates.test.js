@@ -13,7 +13,9 @@
  * `sizeBytes: 0` while the rest of the change remains.
  */
 
-import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {
+  createFixtureSystemMutationPort, createOperationRowInsertPort, createOperationRowUpdatePort,
+} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM} from '../../src/constants/index.js';
@@ -106,23 +108,6 @@ function createTrackingSqlEngine() {
     operations,
     reservations,
     executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-          status, step, created, updated, completed, err, history,
-          entityType, entityId,
-        ] = params;
-        operations.set(opId, {
-          operation_id: opId, type, partition_id: partId,
-          replica_id: repId, target_claim_key: targetClaimKey,
-          source_node_id: srcNode, target_node_id: tgtNode,
-          status, workflow_step: step, created_at: created,
-          updated_at: updated, completed_at: completed,
-          error_message: err, steps_history: history,
-          entity_type: entityType, entity_id: entityId,
-        });
-        return {success: true, changes: 1};
-      }
       if (sql.includes('INTO storage_reservations')) {
         const [resId, opId, eType, eId, partId, tgtNode,
           estBytes, ampFactor, status, reason,
@@ -191,7 +176,13 @@ function createCoordinatorWithRealSize(options = {}) {
     systemTableCache,
     cdcIntegrationService: createMockCdcService(),
     controlPlaneSystemTableGateway: {
-      submitMutation: createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)),
+      // Operation rows land in the engine's rows by their named columns.
+      submitMutation: createOperationRowUpdatePort(
+        (operationId) => sqlEngine.operations.get(operationId),
+        createOperationRowInsertPort(
+          (row) => !sqlEngine.operations.has(row.operation_id) &&
+            Boolean(sqlEngine.operations.set(row.operation_id, row)),
+          createFixtureSystemMutationPort((...args) => sqlEngine.executeQuery(...args)))),
       readAuthoritativeRows: async (_table, sql, params = []) =>
         sqlEngine.executeQuery(sql, params),
       readRows: async (_table, sql, params = []) =>

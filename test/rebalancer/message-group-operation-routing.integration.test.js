@@ -28,6 +28,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockControlPlaneSystemTableGateway,
   createMockTransactionCoordinator,
+  createOperationRowInsertPort,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 
@@ -342,36 +343,10 @@ test('Message-group operation routing integration', async (t) => {
     'coordinator persists canonical entity fields for message-group operations',
     async (t) => {
       const queries = [];
+      const insertedRows = [];
       const trackedOperations = new Map();
       const executeQuery = async (sql, params) => {
         queries.push({sql, params});
-        if (sql.includes('INSERT INTO replica_operations')) {
-          const [
-            operationId, type, partitionId, replicaId, targetClaimKey,
-            sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-            updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-            entityId,
-          ] = params;
-          trackedOperations.set(operationId, {
-            operation_id: operationId,
-            type,
-            partition_id: partitionId,
-            replica_id: replicaId,
-            target_claim_key: targetClaimKey,
-            source_node_id: sourceNodeId,
-            target_node_id: targetNodeId,
-            status,
-            workflow_step: workflowStep,
-            created_at: createdAt,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            entity_type: entityType,
-            entity_id: entityId,
-          });
-          return {success: true, changes: 1};
-        }
         if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
           const [operationId] = params;
           const row = trackedOperations.get(operationId);
@@ -382,6 +357,13 @@ test('Message-group operation routing integration', async (t) => {
       const sqlQueryEngine = {
         executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
       };
+      // The operation row arrives at the structured port with named columns.
+      const controlPlaneSystemTableGateway =
+        createMockControlPlaneSystemTableGateway(sqlQueryEngine);
+      controlPlaneSystemTableGateway.submitMutation = createOperationRowInsertPort((row) => {
+        insertedRows.push(row);
+        trackedOperations.set(row.operation_id, row);
+      }, controlPlaneSystemTableGateway.submitMutation);
       const coordinator = new RebalanceCoordinator({
         nodeId: 'node-1',
         systemTableCache: {
@@ -428,7 +410,7 @@ test('Message-group operation routing integration', async (t) => {
             status: 'initiated',
           })),
         },
-        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+        controlPlaneSystemTableGateway,
         tablePolicyService: {
           getPolicyForPartition: () => ({}),
         },
@@ -479,23 +461,13 @@ test('Message-group operation routing integration', async (t) => {
           'dedupe query params should include message-group entity id',
         );
 
-        const insertQuery = queries.find((q) =>
-          q.sql.includes('INSERT INTO replica_operations'),
-        );
-        t.ok(insertQuery, 'should insert operation row');
-        t.ok(
-          insertQuery.sql.includes('entity_type'),
-          'insert query should include entity_type column',
-        );
-        t.ok(
-          insertQuery.sql.includes('entity_id'),
-          'insert query should include entity_id column',
-        );
-        t.ok(
-          insertQuery.params.includes('message_group'),
-          'insert params should include message_group entity type',
-        );
-        const stepsHistory = JSON.parse(insertQuery.params[13]);
+        const [insertedRow] = insertedRows;
+        t.equal(insertedRows.length, 1, 'should insert operation row');
+        t.equal(insertedRow?.entity_type, 'message_group',
+          'the inserted row carries the message_group entity type');
+        t.equal(insertedRow?.entity_id, 'mg-1',
+          'the inserted row carries the message-group entity id');
+        const stepsHistory = JSON.parse(insertedRow.steps_history);
         t.same(
           stepsHistory[0]?.replicaIds,
           ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
