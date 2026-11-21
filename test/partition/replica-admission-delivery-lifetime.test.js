@@ -23,7 +23,8 @@ import {committedStampOfAnswer} from
   '../../src/raft/raft-committed-membership-stamp.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {ReplicaOperationField} from '../../src/rebalancer/replica-operation-constants.js';
+import {ReplicaOperationField, ReplicaOperationResponseStatus} from
+  '../../src/rebalancer/replica-operation-constants.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from
   '../../src/rebalancer/replica-create-admission-token.js';
 import {operationRow, routedCreateRequest, sqlOperationsAuthority, targetLifecycle} from
@@ -297,21 +298,19 @@ function readAdmittedLifecycle(authority, replicaId = LEARNER) {
   return authority.lifecycleStore.durableRow(TABLES.SERVICES, replicaId);
 }
 
-function cacheWithoutService(source, replicaId) {
+function copyAdmissionProjection(source) {
   const cache = new SystemTableCache();
   for (const [table, rows] of Object.entries(source.getAllData())) {
-    for (const row of rows) {
-      if (table !== TABLES.SERVICES || row.service_id !== replicaId) {
-        cache.applySystemTableChange(table, 'INSERT', row);
-      }
-    }
+    for (const row of rows) cache.applySystemTableChange(table, 'INSERT', row);
   }
   return cache;
 }
 
 async function observeCriticalServicePublication(rig, shutdown) {
   const {replicaId, cache, authority, handler, learner, outcomes} = rig;
-  assert.equal(cache.get(TABLES.SERVICES, replicaId), undefined);
+  const projected = cache.get(TABLES.SERVICES, replicaId);
+  assert.equal(projected.address, null);
+  const nextAt = projected.updated_at + 1;
   const current = readAdmittedLifecycle(authority, replicaId);
   assert.equal(current.status, ReplicaStatus.SYNCING);
   const notifications = [];
@@ -332,24 +331,24 @@ async function observeCriticalServicePublication(rig, shutdown) {
   try {
     const wrongKey = `${replicaId}-other`;
     await publish({...current, service_id: wrongKey, replica_id: wrongKey});
-    await publish({...current, create_attempt_token: 'old-attempt'});
+    await publish({...current, create_attempt_token: 'old-attempt', updated_at: nextAt});
     assert.equal(cache.get(TABLES.SERVICES, replicaId).create_attempt_token, 'old-attempt');
     assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
       'unrelated and superseded SERVICES rows cannot wake this REPLACE');
     const addressless = {...current, address: null,
-      updated_at: current.updated_at + 1};
+      updated_at: nextAt + 1};
     await publish(addressless);
     assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null);
     assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
       'the same generation without a route is still waiting');
     const foreignAddress = `${learner.unifiedAddress}-retired`;
-    await publish({...current, address: foreignAddress, updated_at: current.updated_at + 2});
+    await publish({...current, address: foreignAddress, updated_at: nextAt + 2});
     assert.equal(cache.get(TABLES.SERVICES, replicaId).address, foreignAddress);
     assert.equal(handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null,
       'a nonempty address from another route cannot wake the parked voter');
     assert.deepEqual(outcomes, [WORKFLOW_STEP.SYNCING]);
     const matching = {...current, address: learner.unifiedAddress,
-      updated_at: current.updated_at + 3};
+      updated_at: nextAt + 3};
     if (shutdown) {
       cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', matching);
       await handler.shutdown();
@@ -395,7 +394,7 @@ for (const treatment of [
       const ownerIncarnation = treatment.rejoin ? TEST_BOOT_INCARNATION + 1 : TEST_BOOT_INCARNATION;
       const {row, cache: source, authority} =
         createMaterializedJoinAuthority(stamp, ownerIncarnation, partitionId);
-      const cache = treatment.cacheLast ? cacheWithoutService(source, replicaId) : source;
+      const cache = treatment.cacheLast ? copyAdmissionProjection(source) : source;
       const replicaStateMachine = new ReplicaStateMachine({nodeId: NODE, ownerIncarnation,
         cdcIntegrationService: {}, controlPlaneSystemTableGateway: authority.gateway,
         systemTableCache: cache, timeSource: createClock});
@@ -409,6 +408,13 @@ for (const treatment of [
         createPartitionService: async (options) => {
           opened += 1;
           assert.equal(options.identityExisted, true);
+          if (treatment.cacheLast) {
+            const projected = cache.get(TABLES.SERVICES, replicaId);
+            assert.equal(projected.status, ReplicaStatus.SYNCING);
+            cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+              ...projected, address: null, updated_at: projected.updated_at + 1,
+            });
+          }
           learner = createLearner({...options, dbPath: previous.dbPath,
             systemTableCache: cache, replicaStateMachine});
           completePartitionConstructionFixture(learner, options);
@@ -429,7 +435,7 @@ for (const treatment of [
         const deliver = router.deliver.bind(router);
         router.deliver = async (address, payload, options) => {
           const result = await deliver(address, payload, options);
-          if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA) await reply.promise;
+          if (payload?.type === PARTITION_SERVICE_MESSAGE_TYPE.ADMIT_REPLICA) await reply.promise;
           return result;
         };
         const check = handler.isReplicaVoterReady.bind(handler);
@@ -461,9 +467,13 @@ for (const treatment of [
           handler.initialize();
           await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
         } else {
-          await handler.handleCreateReplica({...routedCreateRequest(row),
+          const response = await handler.handleCreateReplica({...routedCreateRequest(row),
             [ReplicaOperationField.OPERATION_TYPE]: row.type,
             [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: stamp});
+          if (treatment.cacheLast) {
+            assert.notEqual(response.status, ReplicaOperationResponseStatus.ERROR,
+              JSON.stringify(response));
+          }
         }
         if (treatment.beforeDelivery) {
           assert.equal(await waitForCondition(() =>
@@ -487,8 +497,8 @@ for (const treatment of [
             learner.getRole() === RAFT_ROLE.FOLLOWER &&
             learner.raft.readStatus().memberRole === 'voter', OBSERVATION_BOUND_MS), true,
           'the real target becomes a voter before SERVICES arrives');
-          assert.equal(cache.get(TABLES.SERVICES, replicaId), undefined,
-            'the actual CDC projection is still missing');
+          assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null,
+            'the actual CDC projection is still missing its usable address');
         }
         assert.equal(opened, 1);
         assert.equal(handler.getTrackedService(replicaId), learner);
@@ -500,10 +510,12 @@ for (const treatment of [
         if (treatment.earlyCache) {
           const current = readAdmittedLifecycle(authority, replicaId);
           const exact = treatment.earlyCache === 'exact';
-          cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-            ...current,
-            create_attempt_token: exact ? current.create_attempt_token : 'another-attempt',
+          const projected = cache.get(TABLES.SERVICES, replicaId);
+          const expectedAttempt = exact ? current.create_attempt_token : 'another-attempt';
+          cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+            ...current, create_attempt_token: expectedAttempt, updated_at: projected.updated_at + 1,
           });
+          assert.equal(cache.get(TABLES.SERVICES, replicaId).create_attempt_token, expectedAttempt);
           reply.resolve();
           assert.equal(await waitForCondition(() => voterChecks.length > 0,
             OBSERVATION_BOUND_MS), true, 'the original live voter gate consumes the published row');
