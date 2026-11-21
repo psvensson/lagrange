@@ -56,6 +56,7 @@ documentClass: generated
 - [operation-workflow-dispatch-response-reconcile.js](operation-workflow-dispatch-response-reconcile.js) - The bounded critical dispatch spent its deadline without a response: one wait_bound_spent ERROR (the deferred retry... (importers: few)
 - [operation-workflow-dispatch-wake-preemption.js](operation-workflow-dispatch-wake-preemption.js) - No leading comment; first export: buildDispatchWakeProgressPreemptEvidence. (importers: one)
 - [operation-workflow-dispatch-wake-progress-decision.js](operation-workflow-dispatch-wake-progress-decision.js) - No leading comment; first export: DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE. (importers: one)
+- [operation-workflow-elapsed-preimage.js](operation-workflow-elapsed-preimage.js) - No leading comment; first export: captureElapsedWorkflowPreimage. (importers: few)
 - [operation-workflow-executor-outcome-reconcile-methods.js](operation-workflow-executor-outcome-reconcile-methods.js) - A reconcile owns only the payload object it captured from the retry map. (importers: few)
 - [operation-workflow-executor-outcome-redrive.js](operation-workflow-executor-outcome-redrive.js) - CL-029: bound on consecutive lane waits in the re-drive loop (each wait is a full holder execution, not a poll);... (importers: one)
 - [operation-workflow-executor-outcome-visibility.js](operation-workflow-executor-outcome-visibility.js) - No leading comment; first export: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION. (importers: one)
