@@ -27,6 +27,20 @@
 // (control-plane-setup.js:415) leaves the flag false while the user and
 // priority partitions are bound before the ledger partition (join order) and
 // turns that order red.
+//
+// Stage 3 (counts and progress in every order): per order, the COUNT of
+// schedulers is asserted (zero per-partition schedulers; exactly one placement
+// owner on the node while it hosts a live ledger replica, zero otherwise) and
+// placement still proceeds: the one owner reaches the admission boundary
+// under its tenure (`observation.totals.proposals` grows) for the node's
+// deficits (user and priority partitions with one of three replicas). The
+// committed NODES / control_plane_publications read of the node's OWN
+// ServeEligibilityOwner is answered by the fixture on the readiness service
+// (readServeEligibilityCommittedRows, isLoadReady), so that owner is still
+// created lazily, when production creates it: the ordering hazard stays.
+// Orders added by the stage-3 census: late binding with no rebind, ledger
+// leadership lost and regained, ledger replica shut down and restarted, join
+// while formation is in progress (readiness transition fan-out).
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {StartupRuntimeSurfaceOwner} from
@@ -38,12 +52,13 @@ import {createControlPlaneRuntimeBundle} from
   '../../src/control-plane/control-plane-runtime-bundle.js';
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {StorageCapacityAccountingService} from
   '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {
-  LEDGER, TEST_TABLE_SCHEMA, THREE_NODES, inertSqlEngine, ownerOf, withPlacementWorld,
+  LEDGER, TEST_TABLE_SCHEMA, THREE_NODES, inertSqlEngine, ownerOf, waitUntil, withPlacementWorld,
 } from '../rebalancer/placement-owner-authority-fixture.js';
 import {createControllablePartitionService} from './partition-service-test-support.js';
 import {
@@ -53,6 +68,9 @@ import {
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
 
+// Bounds a read of the eligibility owner that setup may have started before
+// the fixture answered it (its own read timeout), then the owner's pass.
+const PLACEMENT_WAIT_MS = 15_000;
 const USER = 'orders-p1';
 const PRIORITY = 'sql_transactions-p1';
 const SPEC = Object.freeze({nodes: THREE_NODES, partitions: [
@@ -102,25 +120,65 @@ function assertPreconditionsForAPartitionScheduler(services) {
   }
 }
 
-// The construction invariant: exactly one scheduler, the placement owner on
-// the ledger service, leading with the ledger; no UnifiedRebalancer anywhere.
-function assertSingleScheduler(order, services, ledger) {
+// The counts on the node: zero per-partition schedulers; exactly one
+// placement owner, on the ledger service and its leadership sink, while the
+// node hosts a live ledger replica (`ledger` not shut down), zero otherwise.
+function assertSchedulerCounts(order, services, ledger) {
   const observed = schedulersOf(services);
   const unified = observed.filter((entry) => entry.rebalancer !== null);
   assert.deepEqual(unified, [], `${order}: no partition service holds a per-partition ` +
     `rebalancer; observed ${JSON.stringify(observed)}`);
   const owners = observed.filter((entry) => entry.placementOwner);
-  assert.deepEqual(owners.map((entry) => entry.partitionId), [LEDGER],
-    `${order}: exactly one placement owner, on the ledger partition; ${JSON.stringify(observed)}`);
-  assert.equal(owners[0].sinkIsOwner, true, `${order}: the owner is the ledger's leadership sink`);
+  const hostsLedger = Boolean(ledger) && ledger.isShutdown !== true;
+  assert.deepEqual(owners.map((entry) => entry.partitionId), hostsLedger ? [LEDGER] : [],
+    `${order}: ${hostsLedger ? 'exactly one placement owner, on the ledger partition' :
+      'no placement owner without a live ledger replica'}; ${JSON.stringify(observed)}`);
+  if (hostsLedger) {
+    assert.equal(owners[0].sinkIsOwner, true, `${order}: the owner is the ledger's leadership sink`);
+  }
+}
+
+// Placement still proceeds: the one owner reaches the admission boundary under
+// its current tenure for the node's deficits (more proposals than `before`).
+async function assertPlacementProceeds(order, ledger, before = 0) {
+  const owner = ownerOf({ledger});
+  try {
+    await waitUntil(() => owner.observation.totals.proposals > before,
+      `${order}: placement proceeds`, PLACEMENT_WAIT_MS);
+  } catch {
+    assert.fail(`${order}: the placement owner never proposed past ${before}; totals ` +
+      `${JSON.stringify(owner.observation.totals)}; last pass ` +
+      `${JSON.stringify(owner.lastPassSnapshot)}`);
+  }
+}
+
+// The construction invariant: exactly one scheduler, the placement owner on
+// the ledger service, leading with the ledger; no UnifiedRebalancer anywhere;
+// and that owner places.
+async function assertSingleScheduler(order, services, ledger) {
+  assertSchedulerCounts(order, services, ledger);
   assert.equal(ownerOf({ledger})?.isLeader, true,
     `${order}: the placement owner leads with its ledger replica`);
+  await assertPlacementProceeds(order, ledger);
+}
+
+// The fixture answers the committed read of the node's own (lazily created)
+// ServeEligibilityOwner; see the header.
+function answerCommittedReadsAt(world, readiness) {
+  readiness.readServeEligibilityCommittedRows = async (tableName) =>
+    world.committedRows(tableName);
+  readiness.isLoadReady = () => true;
+}
+
+async function addControlPlaneAnsweringReads(world, node, existing = null) {
+  await world.addControlPlane(node, existing);
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
 }
 
 // The coordinator and its collaborators built with the production
 // constructors and the arguments ControlPlaneSetup.create gives them
 // (control-plane-setup.js:283-371), without the factory binding at :415.
-function constructCoordinatorAsSetupDoes(node) {
+function constructCoordinatorAsSetupDoes(world, node) {
   const bundle = createControlPlaneRuntimeBundle({nodeId: node.nodeId,
     cdcIntegrationService: node.cdc, systemTableCache: node.cache,
     messageRouter: node.router});
@@ -133,6 +191,7 @@ function constructCoordinatorAsSetupDoes(node) {
     storageAccountingService, cdcIntegrationService: node.cdc,
     cdcGroupPropagationService: null, controlPlaneSystemTableGateway: gateway,
     getLocalClusterIncarnationFence: () => null, strictOwnerDependencies: true});
+  answerCommittedReadsAt(world, controlPlaneReadinessService);
   const coordinator = new RebalanceCoordinator({nodeId: node.nodeId, bootIncarnation: 1,
     systemTableCache: node.cache, cdcIntegrationService: node.cdc,
     messageRouter: node.router, tablePolicyService: node.tablePolicy,
@@ -150,6 +209,7 @@ async function initializeAll(services) {
 test('P0 seed order: coordinator from ControlPlaneSetup.create handed to every partition ' +
   'service at construction', () => withPlacementWorld(SPEC, async (world) => {
   const node = await world.addNode('n1');
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
   assert.equal(node.coordinator.placementAdmissionEnabled, true,
     'ControlPlaneSetup.create binds the placement-owner factory before returning');
   assert.ok(node.coordinator.controlPlaneReadinessService.serveEligibilityOwner,
@@ -159,7 +219,7 @@ test('P0 seed order: coordinator from ControlPlaneSetup.create handed to every p
   const ledger = createPartition(world, node, LEDGER, node.coordinator);
   await initializeAll([user, priority, ledger]);
   assertPreconditionsForAPartitionScheduler([user, priority]);
-  assertSingleScheduler('seed', [user, priority, ledger], ledger);
+  await assertSingleScheduler('seed', [user, priority, ledger], ledger);
 }));
 
 test('P0 join order: partition services initialised and leading before the coordinator ' +
@@ -172,24 +232,29 @@ test('P0 join order: partition services initialised and leading before the coord
   await initializeAll([user, priority, ledger]);
   assert.deepEqual(schedulersOf([user, priority, ledger]).map((entry) => entry.rebalancer),
     [null, null, null], 'no scheduler before a coordinator exists');
-  await world.addControlPlane(node);
+  await addControlPlaneAnsweringReads(world, node);
   // The binder walks partition services in registration order: the user and
   // priority partitions are handed the coordinator before the ledger is.
-  const binder = new StartupRuntimeSurfaceOwner({delegates: {
+  bindLikeStartup(node, new Map([[USER, user], [PRIORITY, priority], [LEDGER, ledger]]));
+  await settleTicks();
+  assertPreconditionsForAPartitionScheduler([user, priority]);
+  await assertSingleScheduler('join', [user, priority, ledger], ledger);
+}));
+
+// StartupRuntimeSurfaceOwner.bindControlPlaneServices over `services`.
+function bindLikeStartup(node, services) {
+  new StartupRuntimeSurfaceOwner({delegates: {
     getTablePolicyService: () => node.tablePolicy,
     getRebalanceCoordinator: () => node.coordinator,
     getMessageGroupServices: () => new Map(),
-    getPartitionServices: () => new Map([[USER, user], [PRIORITY, priority], [LEDGER, ledger]]),
-  }});
-  binder.bindControlPlaneServices();
-  await settleTicks();
-  assertPreconditionsForAPartitionScheduler([user, priority]);
-  assertSingleScheduler('join', [user, priority, ledger], ledger);
-}));
+    getPartitionServices: () => services,
+  }}).bindControlPlaneServices();
+}
 
 test('P0 late ledger replica: a joiner whose ledger replica is created after the ' +
   'coordinator was bound to its other partitions', () => withPlacementWorld(SPEC, async (world) => {
   const node = await world.addNode('n1');
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
   const user = createPartition(world, node, USER, null);
   const priority = createPartition(world, node, PRIORITY, null);
   await initializeAll([user, priority]);
@@ -197,21 +262,22 @@ test('P0 late ledger replica: a joiner whose ledger replica is created after the
   priority.setRebalanceCoordinator(node.coordinator);
   await settleTicks();
   assertPreconditionsForAPartitionScheduler([user, priority]);
-  assert.deepEqual(schedulersOf([user, priority]).filter((entry) =>
-    entry.rebalancer !== null || entry.placementOwner), [],
-  'before a ledger replica exists on the node: no scheduler at all');
+  assertSchedulerCounts('late-ledger, before a ledger replica exists on the node',
+    [user, priority], null);
   const ledger = createPartition(world, node, LEDGER, node.coordinator);
   await initializeAll([ledger]);
-  assertSingleScheduler('late-ledger', [user, priority, ledger], ledger);
+  await assertSingleScheduler('late-ledger', [user, priority, ledger], ledger);
 }));
 
-async function existingCoordinatorOrder(world, initializationOrder) {
+// The production class, constructed before the setup binds a factory: the
+// order the PartitionService constructor/setter and ControlPlaneSetup.create
+// ({rebalanceCoordinator}) accept. The two production callers pass a
+// coordinator that is null on their first call (stage-3 census: the only
+// production construction of a RebalanceCoordinator is inside
+// ControlPlaneSetup.create, which binds before it returns).
+async function existingCoordinatorWorld(world, initializationOrder) {
   const node = await world.addNode('n1', {controlPlane: false});
-  // The production class, constructed before the setup binds a factory: the
-  // order the PartitionService constructor/setter and ControlPlaneSetup.create
-  // ({rebalanceCoordinator}) accept. The two production callers pass a
-  // coordinator that is null on their first call; a second call was not traced.
-  const existing = constructCoordinatorAsSetupDoes(node);
+  const existing = constructCoordinatorAsSetupDoes(world, node);
   assert.equal(existing.placementAdmissionEnabled, false,
     'a coordinator outside ControlPlaneSetup.create starts with placement admission off');
   const services = new Map(initializationOrder.map((partitionId) =>
@@ -221,18 +287,18 @@ async function existingCoordinatorOrder(world, initializationOrder) {
   await world.addControlPlane(node, existing);
   assert.equal(node.coordinator, existing, 'ControlPlaneSetup.create adopts the existing coordinator');
   assert.equal(existing.placementAdmissionEnabled, true, 'the factory is bound afterwards');
-  const binder = new StartupRuntimeSurfaceOwner({delegates: {
-    getTablePolicyService: () => node.tablePolicy,
-    getRebalanceCoordinator: () => node.coordinator,
-    getMessageGroupServices: () => new Map(),
-    getPartitionServices: () => services,
-  }});
-  binder.bindControlPlaneServices();
+  return {node, services, beforeBinding};
+}
+
+async function existingCoordinatorOrder(world, initializationOrder) {
+  const {node, services, beforeBinding} = await existingCoordinatorWorld(world,
+    initializationOrder);
+  bindLikeStartup(node, services);
   await settleTicks();
   const user = services.get(USER);
   const priority = services.get(PRIORITY);
   assertPreconditionsForAPartitionScheduler([user, priority]);
-  assertSingleScheduler(`existing-coordinator ${initializationOrder.join(' > ')} ` +
+  await assertSingleScheduler(`existing-coordinator ${initializationOrder.join(' > ')} ` +
     `(before binding: ${JSON.stringify(beforeBinding)})`,
   [user, priority, services.get(LEDGER)], services.get(LEDGER));
 }
@@ -247,3 +313,92 @@ test('P0 existing coordinator, ledger initialised first: the ledger replica is h
   'coordinator before any partition service of the node reached the placement guard',
 () => withPlacementWorld(SPEC,
   (world) => existingCoordinatorOrder(world, [LEDGER, USER, PRIORITY])));
+
+test('P0 late factory binding with no rebind: the ledger met the coordinator before its ' +
+  'factory was bound and nothing hands it the coordinator again; the binding alone must ' +
+  'give the node its one scheduler', () => withPlacementWorld(SPEC, async (world) => {
+  const {services, beforeBinding} = await existingCoordinatorWorld(world,
+    [LEDGER, USER, PRIORITY]);
+  await settleTicks();
+  const ledger = services.get(LEDGER);
+  assertPreconditionsForAPartitionScheduler([services.get(USER), services.get(PRIORITY)]);
+  await assertSingleScheduler('late binding, no rebind (before binding: ' +
+    `${JSON.stringify(beforeBinding)})`, [...services.values()], ledger);
+}));
+
+test('P0 ledger leadership lost and regained: every leadership edge of every partition ' +
+  'reaches maybeInitializeRebalancer; the node keeps its one owner (the same object) and ' +
+  'builds no per-partition scheduler', () => withPlacementWorld(SPEC, async (world) => {
+  const node = await world.addNode('n1');
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
+  const user = createPartition(world, node, USER, node.coordinator);
+  const priority = createPartition(world, node, PRIORITY, node.coordinator);
+  const ledger = createPartition(world, node, LEDGER, node.coordinator);
+  const services = [user, priority, ledger];
+  await initializeAll(services);
+  await assertSingleScheduler('leadership: first tenure', services, ledger);
+  const owner = ownerOf({ledger});
+  const proposedBefore = owner.observation.totals.proposals;
+  for (const service of services) service.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+  await settleTicks();
+  assertSchedulerCounts('leadership: every partition deposed', services, ledger);
+  assert.equal(owner.isLeader, false, 'the deposed ledger replica\'s owner does not lead');
+  for (const service of services) {
+    service.controllablePort.term += 1;
+    service.controllablePort.setRole(RAFT_ROLE.LEADER);
+  }
+  await settleTicks();
+  assertPreconditionsForAPartitionScheduler([user, priority]);
+  assertSchedulerCounts('leadership: every partition re-elected', services, ledger);
+  assert.equal(ownerOf({ledger}), owner, 'the same owner: no second owner was constructed');
+  assert.equal(owner.isLeader, true, 'the owner leads again under the new tenure');
+  await assertPlacementProceeds('leadership: re-elected', ledger, proposedBefore);
+}));
+
+test('P0 ledger replica shut down and restarted on the node: zero owners while the node ' +
+  'hosts no ledger replica, then exactly one, the new replica\'s',
+() => withPlacementWorld(SPEC, async (world) => {
+  const node = await world.addNode('n1');
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
+  const user = createPartition(world, node, USER, node.coordinator);
+  const priority = createPartition(world, node, PRIORITY, node.coordinator);
+  const first = createPartition(world, node, LEDGER, node.coordinator);
+  await initializeAll([user, priority, first]);
+  await assertSingleScheduler('restart: first ledger replica', [user, priority, first], first);
+  const firstOwner = ownerOf({ledger: first});
+  await first.shutdown();
+  world.targets.splice(world.targets.indexOf(first), 1);
+  await settleTicks();
+  assertSchedulerCounts('restart: ledger replica shut down', [user, priority, first], first);
+  assert.equal(firstOwner.isLeader, false, 'the shut-down replica\'s owner does not lead');
+  const second = createPartition(world, node, LEDGER, node.coordinator);
+  await initializeAll([second]);
+  assertSchedulerCounts('restart: the old replica stays without an owner', [first], first);
+  assert.notEqual(ownerOf({ledger: second}), firstOwner, 'the new replica has its own owner');
+  assert.equal(firstOwner.isLeader, false, 'the old owner stays ended');
+  await assertSingleScheduler('restart: new ledger replica', [user, priority, second], second);
+}));
+
+test('P0 join while formation is in progress: the partition services are bound while not ' +
+  'background-work ready; the readiness transition fan-out later reaches ' +
+  'maybeInitializeRebalancer on every partition', () => withPlacementWorld(SPEC, async (world) => {
+  const node = await world.addNode('n1', {controlPlane: false});
+  const user = createPartition(world, node, USER, null);
+  const priority = createPartition(world, node, PRIORITY, null);
+  const ledger = createPartition(world, node, LEDGER, null);
+  const services = [user, priority, ledger];
+  // Substituted: the node-wide background-work readiness (formation not yet
+  // complete), read through each service's own isBackgroundWorkReady.
+  const formation = {ready: false};
+  for (const service of services) service.isBackgroundWorkReady = () => formation.ready;
+  await initializeAll(services);
+  await addControlPlaneAnsweringReads(world, node);
+  bindLikeStartup(node, new Map([[USER, user], [PRIORITY, priority], [LEDGER, ledger]]));
+  await settleTicks();
+  assertSchedulerCounts('formation in progress', services, ledger);
+  formation.ready = true;
+  for (const service of services) service.handleMetadataPublicationReadinessTransition();
+  await settleTicks();
+  assertPreconditionsForAPartitionScheduler([user, priority]);
+  await assertSingleScheduler('formation complete', services, ledger);
+}));
