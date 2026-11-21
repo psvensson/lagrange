@@ -263,13 +263,13 @@ class PartitionServiceRowOwner {
     };
   }
 
+  // Leadership is the live service's (tier L): the row this owner built
+  // never carries the leader role (resolvePartitionRaftRole collapses it).
   async publishCanonicalLeaderNodeId(row, service = null) {
-    const isLeader = isLeaderPartitionService(service) ||
-      row?.raft_role === RAFT_ROLE.LEADER;
     if (!row ||
         row.service_type !== SERVICE_TYPE.PARTITION ||
         row.status !== SERVICE_STATUS.ACTIVE ||
-        !isLeader ||
+        !isLeaderPartitionService(service) ||
         !this.systemTableWriter ||
         typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
       return;

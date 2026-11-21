@@ -39,6 +39,7 @@
  *    retarget it.
  */
 
+import {isDeepStrictEqual} from 'node:util';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -78,6 +79,9 @@ import {createReplaceWitness} from './replace-witness-fixture.js';
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from
+  '../../src/rebalancer/operation-workflow-owner-shared.js';
 
 const PARTITION_ID = 'sql_transactions-p1';
 const SOURCE_NODE_ID = 'node-a';
@@ -120,7 +124,7 @@ function confirmedDelivery(response) {
     buildDeliveryEnvelope({acknowledged: true}, response);
 }
 
-async function createHarness({stepDownResponse} = {}) {
+async function createHarness({stepDownResponse, sqlQueryResults} = {}) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({});
@@ -167,6 +171,7 @@ async function createHarness({stepDownResponse} = {}) {
         targetReplicaCount: 3, minReplicaCount: 3,
       }),
     }),
+    sqlQueryResults,
     cacheData: {
       nodes: NODE_IDS.map(readyNode),
       services: [
@@ -435,6 +440,77 @@ test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
       'the last attempt is the handoff attempt');
     t.equal(diagnostic.lastAttemptUncertain, false,
       'the accepted attempt is not uncertain');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+// Necessity witness (owner instruction 2026-11-21: an alternate path for one
+// decision must prove it is needed). The leader-removal gate of a priority
+// REPLACE read the SERVICES raft_role of the source, of the target and of the
+// source's co-located voter siblings (census #3 and #4), beside the
+// partitions row's leader_node_id; at 65ca4c2c3 this witness showed that no
+// such role (siblings included) and no leader_node_id changed the decision,
+// and the role reads were deleted. Partition SERVICES rows never publish
+// leader (decision table leadership-authority-projection) and the decision
+// belongs to the fresh witness (BR11). Every role the enum owns on the source
+// and target rows, and every leader_node_id the row could name, leaves the
+// decision unchanged; the witness alone moves it (the anchor that keeps this
+// from passing vacuously). Options mirror the remove-safety evaluator's call.
+const LEADER_REMOVAL_ROW_INPUTS = Object.freeze({
+  sourceRole: Object.values(RAFT_ROLE),
+  targetRole: Object.values(RAFT_ROLE),
+  leaderNodeId: [null, SOURCE_NODE_ID, TARGET_NODE_ID, PEER_NODE_B],
+  completionSafe: [true, false],
+});
+
+function rowInputCombinations(axes) {
+  return Object.entries(axes).reduce((combinations, [name, values]) =>
+    combinations.flatMap((combination) =>
+      values.map((value) => ({...combination, [name]: value}))), [{}]);
+}
+
+test('necessity: the priority REPLACE leader-removal decision reads only ' +
+  'the fresh witness; no SERVICES raft_role and no partitions.leader_node_id ' +
+  'changes it', async (t) => {
+  const partitionRead = {success: true, rows: []};
+  const harness = await createHarness({sqlQueryResults: {
+    [OPERATION_WORKFLOW_OWNER_SHARED.REMOVE_SAFETY_SQL.SELECT_PARTITION_ROW]:
+      partitionRead,
+  }});
+  const decide = (inputs) => {
+    partitionRead.rows = inputs.leaderNodeId === null ? [] :
+      [{partition_id: PARTITION_ID, leader_node_id: inputs.leaderNodeId}];
+    return harness.owner.evaluatePriorityPublicationLeaderRemoveSafety(
+      harness.operation,
+      serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID, inputs.sourceRole),
+      serviceRow(TARGET_REPLICA_ID, TARGET_NODE_ID, inputs.targetRole),
+      {priorityRecoveryCompletionSafe: inputs.completionSafe});
+  };
+  const combinations = rowInputCombinations(LEADER_REMOVAL_ROW_INPUTS);
+  try {
+    const decisionsByWitnessLeader = new Map();
+    for (const witnessLeader of [SOURCE_REPLICA_ID, TARGET_REPLICA_ID]) {
+      harness.witness.leaderReplicaId = witnessLeader;
+      const baseline = await decide(combinations[0]);
+      const divergent = [];
+      for (const inputs of combinations) {
+        if (!isDeepStrictEqual(await decide(inputs), baseline)) {
+          divergent.push(inputs);
+        }
+      }
+      t.same(divergent, [], `witness leader ${witnessLeader}: none of ` +
+        `${combinations.length} row-input combinations changes the decision`);
+      decisionsByWitnessLeader.set(witnessLeader, baseline);
+    }
+    const whileSourceLeads = decisionsByWitnessLeader.get(SOURCE_REPLICA_ID);
+    t.equal(whileSourceLeads.classification, 'defer',
+      'anchor: while the witness reads the source leading, removal waits');
+    t.equal(whileSourceLeads.handoffRequest?.requestReplicaId,
+      TARGET_REPLICA_ID, 'anchor: and the named handoff goes to the target');
+    t.equal(decisionsByWitnessLeader.get(TARGET_REPLICA_ID).classification,
+      'safe', 'anchor: the witness reading the target leading changes the ' +
+        'decision to safe');
   } finally {
     await harness.shutdown();
   }

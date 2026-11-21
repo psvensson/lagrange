@@ -48,6 +48,13 @@ import {claimWorkflowOwnershipCore} from
   '../../src/partition/managed-workflow-ownership-core.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {createGroupRetirementRedrive} from
+  '../../src/partition/group-retirement-redrive.js';
+import {PartitionServiceRowOwner} from
+  '../../src/partition/partition-service-row-owner.js';
+import {MessageGroupServiceRowOwner} from
+  '../../src/message-group/message-group-service-row-owner.js';
 import {
   TABLE_ID,
   createWorkflowOwner,
@@ -446,4 +453,109 @@ test('W4f an unacknowledged member holds the partition row and the ' +
   t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
     entry.unacknowledgedReplicaIds), [[away]],
   'the member stays listed as unacknowledged');
+});
+
+// Necessity witness for the SERVICES arm of the redrive's leader wake
+// (announcesLeader, leader-authority census N1). A services-row change of a
+// tracked member, or of a group whose membership is unavailable, re-runs the
+// step whatever the row says; the arm only chose the trigger label, and the
+// partition row owner never publishes a leader role, so over its rows the
+// label is the member-row one. The partitions row's leader_node_id is the
+// leader publication the wake follows (the anchor: it changes the trigger).
+const MEMBER_ROW_CHANGED_TRIGGER = 'member-row-changed';
+const GROUP_LEADER_TRIGGER = 'group-leader';
+const GROUP_ROW_CHANGED_TRIGGER = 'group-row-changed';
+
+function settleMicrotasks() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function observedRedrive() {
+  let listener = null;
+  const quiet = {warn() {}, error() {}, info() {}, debug() {}};
+  const redrive = createGroupRetirementRedrive({
+    logger: quiet,
+    observeSystemRows: (onRow) => {
+      listener = onRow;
+      return () => {
+        listener = null;
+      };
+    },
+    workflowLeaseMs: null,
+  }, {groupRetirementScheduler: {
+    setTimeout: () => ({unref() {}}),
+    clearTimeout() {},
+  }});
+  return {redrive, emit: async (tableName, row) => {
+    listener?.(tableName, 'UPDATE', row);
+    await settleMicrotasks();
+  }};
+}
+
+test('necessity: a member services-row change re-runs the retirement step ' +
+  'whatever role it carries; only partitions.leader_node_id is the leader ' +
+  'wake', async (t) => {
+  const partitionId = 'redrive-wake';
+  const memberReplicaId = `${partitionId}-r2`;
+  const {redrive, emit} = observedRedrive();
+  const triggers = [];
+  redrive.report({workflowId: 'wf-wake', partitionId,
+    unacknowledged: [{replicaId: memberReplicaId, nodeId: 'node-b'}],
+    redrive: async (trigger) => {
+      triggers.push(trigger);
+    }});
+  const unavailablePartitionId = 'redrive-wake-unread';
+  const unavailableTriggers = [];
+  redrive.report({workflowId: 'wf-wake-unread',
+    partitionId: unavailablePartitionId, unacknowledged: [],
+    membershipUnavailable: true, redrive: async (trigger) => {
+      unavailableTriggers.push(trigger);
+    }});
+  await settleMicrotasks();
+  const memberRow = (service) => PartitionServiceRowOwner.buildServiceRow({
+    partitionId, replicaId: memberReplicaId, nodeId: 'node-b', service,
+    status: 'active'});
+  const producedRows = [memberRow({isLeaderReplica: () => true}),
+    ...Object.values(RAFT_ROLE).map((trackedRole) =>
+      memberRow({getRole: () => trackedRole}))];
+  for (const row of producedRows) {
+    const before = triggers.length;
+    await emit('services', row);
+    t.same(triggers.slice(before), [MEMBER_ROW_CHANGED_TRIGGER],
+      `producer row (${row.raft_role}) re-runs the step as a member-row change`);
+  }
+  for (const role of Object.values(RAFT_ROLE)) {
+    const before = triggers.length;
+    await emit('services', {...memberRow(null), raft_role: role});
+    t.equal(triggers.length - before, 1,
+      `a row carrying ${role} re-runs the step exactly once`);
+  }
+  // Message-group services rows reach the same wake, and their row owner
+  // still publishes leader for a live leader; a retirement step is a
+  // partition group's, so no message-group row re-runs one, whatever role it
+  // carries (the arm is decision-dead for that service type too).
+  const messageGroupRow = (service) => MessageGroupServiceRowOwner
+    .buildServiceRow({groupId: 'mg-wake', replicaId: 'mg-wake-r1',
+      nodeId: 'node-b', service, status: 'active', timestamp: 1});
+  const messageGroupRows = [messageGroupRow({isLeader: true}),
+    ...Object.values(RAFT_ROLE).map((trackedRole) =>
+      messageGroupRow({getRole: () => trackedRole}))];
+  t.equal(messageGroupRows[0].raft_role, RAFT_ROLE.LEADER,
+    'the message-group row owner publishes leader for its live leader');
+  for (const row of messageGroupRows) {
+    const before = [triggers.length, unavailableTriggers.length];
+    await emit('services', row);
+    t.same([triggers.length, unavailableTriggers.length], before,
+      `message-group row (${row.raft_role}) re-runs no retirement step`);
+  }
+  await emit('partitions', {partition_id: unavailablePartitionId,
+    leader_node_id: 'node-c'});
+  await emit('partitions', {partition_id: unavailablePartitionId,
+    leader_node_id: null});
+  t.same(unavailableTriggers.slice(-2),
+    [GROUP_LEADER_TRIGGER, GROUP_ROW_CHANGED_TRIGGER],
+    'anchor: the partitions row\'s leader_node_id is what makes the wake a ' +
+      'leader announcement');
+  redrive.settle('wf-wake', partitionId);
+  redrive.settle('wf-wake-unread', unavailablePartitionId);
 });

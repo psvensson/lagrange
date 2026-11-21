@@ -15,46 +15,13 @@ const {
 // Observability (no behavior change): a single debug-level trace of every
 // applicable, not-yet-safe priority source-leader decision. A partition
 // REPLACE's leadership is decided by its named-target handoff (the REPLACE
-// owner); this trace records the row-observed leadership inputs.
+// owner); this trace records the leader-publication inputs. Replica rows are
+// not leadership evidence: partition SERVICES rows never publish leader
+// (decision table leadership-authority-projection).
 const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_DECISION_LOG =
   'priority-publication leader-remove-safety decision';
 
 class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
-  // leader_node_id identifies the canonical leader node, not a replica when
-  // multiple voters share that node. A distinct voter-ready LEADER row can
-  // therefore corroborate that this explicitly observed FOLLOWER is not it.
-  // A lone follower row never suffices because saturated nodes can publish a
-  // stale replica role while the canonical leader-node row still names them.
-  hasCoLocatedLeaderSiblingEvidence(
-    sourceReplicaId,
-    sourceNodeId,
-    observedSourceRoleState,
-    currentVoterReadyRows,
-  ) {
-    if (
-      observedSourceRoleState !==
-        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER ||
-      sourceReplicaId === null ||
-      sourceNodeId === null ||
-      !Array.isArray(currentVoterReadyRows)
-    ) {
-      return false;
-    }
-    return currentVoterReadyRows.some((row) => {
-      const replicaId = this.getReplicaRowIdentity(row);
-      const nodeId =
-        typeof row?.node_id === 'string' ? row.node_id.trim() : null;
-      return (
-        replicaId !== null &&
-        replicaId !== sourceReplicaId &&
-        nodeId === sourceNodeId &&
-        this.isVoterReadyReplicaTopology(row) &&
-        this.getPriorityPublicationSourceRoleState(row) ===
-          PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER
-      );
-    });
-  }
-
   buildPriorityPublicationLeaderRemoveSafetySnapshot(
     operation,
     sourceReplicaRow,
@@ -90,13 +57,9 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
     const sourceReplicaRemoved =
       Boolean(this.repository.getReplaceSourceReplicaId(operation)) &&
       !this.getReplicaRowIdentity(sourceReplicaRow);
-    const observedSourceRoleState =
-      this.getPriorityPublicationSourceRoleState(sourceReplicaRow);
     const sourceRoleState = this.resolvePriorityPublicationSourceRoleState(
       operation,
-      observedSourceRoleState,
       partitionRow,
-      sourceReplicaId,
     );
     const partitionLeaderNodeId =
       this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
@@ -117,8 +80,6 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       operation.replicaId.length > 0 ?
         operation.replicaId :
         null);
-    const replacementRoleState =
-      this.getPriorityPublicationReplacementRoleState(replacementReplicaRow);
     const rawReplacementNodeId =
       typeof replacementReplicaRow?.node_id === 'string' ?
         replacementReplicaRow.node_id.trim() :
@@ -138,18 +99,10 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       partitionLeaderNodeId !== null &&
       sourceNodeId !== null &&
       partitionLeaderNodeId === sourceNodeId;
-    const coLocatedLeaderSiblingObserved =
-      this.hasCoLocatedLeaderSiblingEvidence(
-        sourceReplicaId,
-        sourceNodeId,
-        observedSourceRoleState,
-        options.currentVoterReadyRows,
-      );
     const replacementLeaderOwnershipObserved =
-      replacementRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER ||
-      (replacementNodeId !== null &&
-        partitionLeaderMovedAwayFromSource &&
-        partitionLeaderNodeId === replacementNodeId);
+      replacementNodeId !== null &&
+      partitionLeaderMovedAwayFromSource &&
+      partitionLeaderNodeId === replacementNodeId;
     const sourceLeadershipReleaseHasCanonicalSuccessor =
       sourceLeadershipReleaseObserved &&
       partitionLeaderMovedAwayFromSource;
@@ -164,7 +117,6 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
             replacementReplicaRow,
           ),
         partitionLeaderStillSource,
-        coLocatedLeaderSiblingObserved,
         sourceLeadershipReleaseObserved,
       }));
     const priorityRecoveryFollowerSourceRemovalSafe =
@@ -191,10 +143,8 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
           partitionLeaderNodeId,
           replacementNodeId,
           sourceRoleState,
-          replacementRoleState,
           replacementLeaderOwnershipObserved,
           sourceLeadershipReleaseObserved,
-          coLocatedLeaderSiblingObserved,
         },
       );
     }
@@ -207,13 +157,11 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
         state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.NOT_APPLICABLE,
         partitionId,
         sourceRoleState,
-        observedSourceRoleState,
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
         replacementReplicaId,
         replacementNodeId,
-        replacementRoleState,
         sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
         sourceRemovalLeadershipSafe,
@@ -229,13 +177,11 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
           PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.PUBLICATION_STATUS_UNAVAILABLE,
         partitionId,
         sourceRoleState,
-        observedSourceRoleState,
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
         replacementReplicaId,
         replacementNodeId,
-        replacementRoleState,
         sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
         sourceRemovalLeadershipSafe,
@@ -254,13 +200,11 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
           PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_PUBLICATION_PUBLISHED,
         partitionId,
         sourceRoleState,
-        observedSourceRoleState,
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
         replacementReplicaId,
         replacementNodeId,
-        replacementRoleState,
         sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
         sourceRemovalLeadershipSafe,
@@ -275,14 +219,12 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
         state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,
         partitionId,
         sourceRoleState,
-        observedSourceRoleState,
         sourceReplicaId,
         sourceReplicaRemoved,
         sourceNodeId,
         partitionLeaderNodeId,
         replacementReplicaId,
         replacementNodeId,
-        replacementRoleState,
         sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
         sourceRemovalLeadershipSafe,
@@ -299,13 +241,11 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.LEADERSHIP_PENDING,
       partitionId,
       sourceRoleState,
-      observedSourceRoleState,
       sourceReplicaId,
       sourceNodeId,
       partitionLeaderNodeId,
       replacementReplicaId,
       replacementNodeId,
-      replacementRoleState,
       sourceLeadershipReleaseObserved,
       replacementLeaderOwnershipObserved,
       sourceRemovalLeadershipSafe,

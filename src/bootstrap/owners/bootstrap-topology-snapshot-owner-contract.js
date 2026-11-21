@@ -28,8 +28,6 @@ const BOOTSTRAP_TOPOLOGY_SNAPSHOT_ROW_SELECTION_REASON = Object.freeze({
 });
 
 const BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG = Object.freeze({
-  NO_PARTITION_LEADERS_FOUND_IN_SYSTEM_CACHE:
-    'No partition leaders found in system cache',
   SNAPSHOT_DIVERGED_FROM_LOCAL_AUTHORITATIVE_PARTITION_STATE:
     'Bootstrap snapshot diverged from local authoritative partition state',
   AUTHORITATIVE_PARTITION_OWNER_MISSING_DURING_CONVERGENCE:
@@ -60,8 +58,6 @@ const BOOTSTRAP_TOPOLOGY_SNAPSHOT_CACHE = Object.freeze({
 });
 
 const BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY = Object.freeze({
-  NO_PARTITION_LEADERS_FOUND_IN_SYSTEM_CACHE:
-    'no_partition_leaders_found_in_system_cache',
   EMPTY_LOCAL_AUTHORITATIVE_SNAPSHOT_RETAINING_CACHE:
     'empty_local_authoritative_snapshot_retaining_cache',
   SNAPSHOT_DIVERGED_FROM_LOCAL_AUTHORITATIVE_PARTITION_STATE:

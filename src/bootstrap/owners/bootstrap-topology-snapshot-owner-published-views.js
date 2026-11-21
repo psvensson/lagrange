@@ -3,21 +3,14 @@ import {CONFIG_KEY} from '../../config/config-constants.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   COLUMN,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
   TABLES,
 } from '../../constants/index.js';
-import {RAFT_ROLE} from '../../raft/constants.js';
 import {
   buildBootstrapTopologySnapshotEnvelope as buildBootstrapTopologySnapshotEnvelopeValue,
 } from '../bootstrap-topology-snapshot.js';
 import {
   BOOTSTRAP_API_ERROR,
 } from '../bootstrap-api-constants.js';
-import {
-  BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG,
-  BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY,
-} from './bootstrap-topology-snapshot-owner-contract.js';
 
 const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
   readPublishedAuthoritativeSystemTableSnapshotRows(tableName) {
@@ -179,7 +172,7 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
       options.currentEpoch === undefined ?
         this.getCurrentEpoch() :
         options.currentEpoch;
-    const envelope = buildBootstrapTopologySnapshotEnvelopeValue({
+    return buildBootstrapTopologySnapshotEnvelopeValue({
       systemTableCache: assertCritical(
         this.getSystemTableCache(),
         BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
@@ -191,28 +184,6 @@ const bootstrapTopologySnapshotOwnerPublishedViewsMethods = {
           cacheRows,
         ),
     });
-
-    const serviceSnapshot = envelope.systemTableSnapshots[TABLES.SERVICES] || [];
-    const leaders = serviceSnapshot.filter((service) =>
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-      service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-    );
-
-    if (leaders.length === 0) {
-      this.warnBootstrapTopologySnapshot(
-        BOOTSTRAP_TOPOLOGY_SNAPSHOT_WARNING_KEY
-          .NO_PARTITION_LEADERS_FOUND_IN_SYSTEM_CACHE,
-        BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG
-          .NO_PARTITION_LEADERS_FOUND_IN_SYSTEM_CACHE,
-        {
-          seedNodeId: this.getSeedNodeId(),
-          totalServices: serviceSnapshot.length,
-        },
-      );
-    }
-
-    return envelope;
   },
   resolveBootstrapTopologySnapshotMeta(topologySnapshotMeta = null) {
     if (topologySnapshotMeta && typeof topologySnapshotMeta === 'object') {

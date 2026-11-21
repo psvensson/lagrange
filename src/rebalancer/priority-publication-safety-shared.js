@@ -15,7 +15,6 @@ const {
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
-  RAFT_ROLE,
   REBALANCER_SKIP_REASON,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
@@ -71,8 +70,7 @@ const PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_TABLE =
         evidence.priorityRecoveryCompletionSafe === true &&
         evidence.sourceLeadershipReleaseObserved === true &&
         evidence.replacementTopologyVoterSufficient === true &&
-        (evidence.partitionLeaderStillSource !== true ||
-          evidence.coLocatedLeaderSiblingObserved === true) &&
+        evidence.partitionLeaderStillSource !== true &&
         evidence.publicationPartition !== true,
     }),
     Object.freeze({
@@ -124,7 +122,6 @@ const OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED = Object.freeze({
   PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_OPERATION_RECORD_FIELD,
   PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
-  RAFT_ROLE,
   REBALANCER_SKIP_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
