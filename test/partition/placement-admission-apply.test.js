@@ -219,11 +219,9 @@ test('F5: the same entryId committed twice replays the first answer, never a sec
   committed.stop();
 }));
 
-test('F5b: retained placement outcomes written by the preceding representation (NULL ' +
-  'last_insert_rowid) replay across reopen without mutating _partition_statement_outcomes, ' +
-  'advance durable applied progress across a duplicate followed by a healthy command on ' +
-  'two replicas after a leader-only changed-body request replay, and reject pre-fingerprint ' +
-  'REFUSED or metadata-divergent collisions', async () => {
+test('F5b: old-format outcomes retain explicit identity-unavailable debt across reopen; ' +
+  'requests make no proposals and committed duplicates preserve all durable data while ' +
+  'subsequent healthy commands advance on both replicas', async () => {
   const {directory: dir1, dbPath: leaderDbPath} = temporaryDbPath('f5b-pre-fingerprint-leader');
   const {directory: dir2, dbPath: followerDbPath} =
     temporaryDbPath('f5b-pre-fingerprint-follower');
@@ -260,7 +258,8 @@ test('F5b: retained placement outcomes written by the preceding representation (
           entryId: 'f5b-pre-fp-1',
           body: collidedBody,
         });
-        assert.equal(collidedBefore.failureCode, PLACEMENT_ADMISSION_ERROR.BYTES);
+        assert.equal(collidedBefore.failureCode,
+          PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE);
         assert.equal(outcomeRecordOf(leader2, firstCommand).lastInsertRowid, null);
 
         // Even if only step metadata differs (e.g. repair: true vs false on same partition/target),
@@ -272,17 +271,20 @@ test('F5b: retained placement outcomes written by the preceding representation (
           entryId: 'f5b-pre-fp-1',
           body: repairCollidedBody,
         });
-        assert.equal(repairCollided.failureCode, PLACEMENT_ADMISSION_ERROR.BYTES);
+        assert.equal(repairCollided.failureCode,
+          PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE);
         assert.equal(outcomeRecordOf(leader2, firstCommand).lastInsertRowid, null);
 
-        // Request replay of the identical command X succeeds and leaves _partition_statement_outcomes
-        // unmutated (pure read-only verification).
+        // Even an apparently identical caller body cannot manufacture the original
+        // bytes missing from this outcome. Preserve the complete recorded result.
         const replayed = await requestPlacementAdmission(leader2, {
           entryId: 'f5b-pre-fp-1',
           body: firstCommand.body,
         });
         assert.equal(proposed2.length, 0);
-        assert.deepEqual(resultOf(replayed), resultOf(firstAnswer));
+        assert.equal(replayed.failureCode, PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE);
+        assert.deepEqual(JSON.parse(outcomeRecordOf(leader2, firstCommand).ownerResultText),
+          resultOf(firstAnswer));
         assert.equal(outcomeRecordOf(leader2, firstCommand).lastInsertRowid, null);
 
         // Now deliver a committed batch [firstCommand, healthyCommand] to BOTH leader2 and
@@ -302,8 +304,8 @@ test('F5b: retained placement outcomes written by the preceding representation (
         assert.equal(ledgerRows(leader2).length, 2);
         assert.deepEqual(ledgerRows(leader2), ledgerRows(follower2));
 
-        // Pre-fingerprint REFUSED outcome row has no command-identity evidence in
-        // replica_operations and must fail closed on any request or apply replay
+        // Pre-fingerprint REFUSED outcome row also has no original command identity.
+        // Request refusal and no-effect committed duplicate preserve its debt
         // without mutating _partition_statement_outcomes:
         leader2.db.prepare(
           'INSERT INTO _partition_statement_outcomes ' +
@@ -320,14 +322,17 @@ test('F5b: retained placement outcomes written by the preceding representation (
           entryId: 'f5b-pre-fp-refused',
           body: collidedBody,
         });
-        assert.equal(refusedReplayReq.failureCode, PLACEMENT_ADMISSION_ERROR.BYTES);
+        assert.equal(refusedReplayReq.failureCode,
+          PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE);
         const refusedCmd = buildPlacementCommand(leader2, {
           type: 'PLACEMENT_ADMIT',
           entryId: 'f5b-pre-fp-refused',
           body: collidedBody,
         });
         assert.equal(outcomeRecordOf(leader2, refusedCmd).lastInsertRowid, null);
-        assert.equal(applyCommitted(leader2, refusedCmd), PLACEMENT_ADMISSION_ERROR.BYTES);
+        const refusedBefore = outcomeRecordOf(leader2, refusedCmd);
+        assert.equal(applyCommitted(leader2, refusedCmd), null);
+        assert.deepEqual(outcomeRecordOf(leader2, refusedCmd), refusedBefore);
         assert.equal(outcomeRecordOf(leader2, refusedCmd).lastInsertRowid, null);
 
         // Also verify pre-fingerprint RELEASED outcome replay and collision rejection
@@ -353,11 +358,12 @@ test('F5b: retained placement outcomes written by the preceding representation (
           entryId: 'f5b-pre-fp-release',
           body: {operationId: 'pl-other-p1-3-0'},
         });
-        assert.equal(
-          applyCommitted(leader2, collidedRelease),
-          PLACEMENT_ADMISSION_ERROR.BYTES,
-        );
+        const releaseBefore = outcomeRecordOf(leader2, releaseCmd);
+        const rowsBefore = ledgerRows(leader2);
+        assert.equal(applyCommitted(leader2, collidedRelease), null);
         assert.equal(applyCommitted(leader2, releaseCmd), null);
+        assert.deepEqual(outcomeRecordOf(leader2, releaseCmd), releaseBefore);
+        assert.deepEqual(ledgerRows(leader2), rowsBefore);
         assert.equal(outcomeRecordOf(leader2, releaseCmd).lastInsertRowid, null);
       }, {dbPath: followerDbPath});
     }, {dbPath: leaderDbPath});
