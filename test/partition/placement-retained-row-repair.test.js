@@ -702,3 +702,64 @@ test('an in-flight stale own-row observation reads absence once; genuine success
       await pending.remote.coordinator.shutdown();
     }
   }));
+
+for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
+  test(`remote BUSY reply retains an in-flight blocker observation: ${order}`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world);
+      const competitor = await compete(world);
+      const remote = remoteCaller(world);
+      const sender = remote.coordinator.repository;
+      const submit = sender.repairRetainedPlacement;
+      let release;
+      let received;
+      const held = new Promise((resolve) => {
+        release = resolve;
+      });
+      const arrived = new Promise((resolve) => {
+        received = resolve;
+      });
+      let first = true;
+      sender.repairRetainedPlacement = async (payload) => {
+        const reply = await submit(payload);
+        if (first) {
+          first = false;
+          assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+          received();
+          await held;
+        }
+        return reply;
+      };
+      const result = sender.repairRetainedOperation(retained);
+      await arrived;
+      try {
+        if (order === 'answer-before-CDC') {
+          release();
+          assert.equal(await result, false);
+        }
+        stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+        const clearing = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(competitor.operationIds[0]);
+        sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
+        sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
+        if (order === 'CDC-before-answer') {
+          release();
+          assert.equal(await result, false);
+        }
+        await settleRepair(world);
+        await sender.retainedPlacementRepairDrain;
+        await settleTicks();
+        assert.ok(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId));
+        assert.equal(sender.retainedPlacementRepairs.size, 0,
+          'the blocker event is owed before its BUSY response too; no own-row CDC is delivered');
+        const commands = world.commands.length;
+        sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
+        await settleTicks();
+        assert.equal(world.commands.length, commands, 'retirement cannot retain a repeated clearing event');
+      } finally {
+        release();
+        await remote.coordinator.shutdown();
+      }
+    }));
+}
