@@ -1,10 +1,10 @@
 /**
  * Property Test: Recovery Handles Incomplete Operations
  *
- * Property 8: For any operation found in SENDING or CREATING state after node
- * recovery, the RebalanceCoordinator SHALL mark it as FAILED. For operations
- * in SYNCING state, the coordinator SHALL check actual replica status and
- * reconcile.
+ * Property 8: Explicit public recovery reports the operation owner's
+ * confirmed outcome. A durable FAILED result counts as failed, while observed
+ * replica progress can advance or complete a SYNCING operation. Refused or
+ * unavailable work stays unsettled.
  *
  * Validates: Requirements 7.2, 7.3
  *
