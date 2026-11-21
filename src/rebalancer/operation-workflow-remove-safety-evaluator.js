@@ -678,7 +678,6 @@ async function evaluateRemoveSafetyWithCompetitors(context, operation, readCompe
       removingReplicaRow,
       replacementReplicaRow,
       {
-        currentVoterReadyRows,
         priorityRecoveryCompletionSafe,
         readAuthoritativePlanningSnapshot: readRemoveSafetyPlanningSnapshot,
       },
