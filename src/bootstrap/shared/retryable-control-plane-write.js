@@ -118,6 +118,11 @@ async function delayRetryableControlPlaneWrite(
 // otherwise this retry owner mints one identity and releases it when the loop
 // terminates, so an ambiguous attempt can never become a second apply.
 function loopWriteIdentity(options) {
+  if (typeof options.idempotencyKey === 'string' &&
+    options.idempotencyKey.length > 0) {
+    return {identity: Object.freeze({idempotencyKey: options.idempotencyKey}),
+      release: () => undefined};
+  }
   if (typeof options.writeIdentity === 'string' &&
     options.writeIdentity.length > 0) {
     return {identity: Object.freeze({writeIdentity: options.writeIdentity}),
