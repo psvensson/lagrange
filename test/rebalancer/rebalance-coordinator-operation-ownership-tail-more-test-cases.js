@@ -188,6 +188,9 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       cdcIntegrationService: {
       },
       controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          throw new Error('The operation read witness must not mutate');
+        },
         async readRows(tableName, sql, params) {
           gatewayCalls.push({tableName, sql, params});
           return {success: true, rows: [{operation_id: 'op-gateway'}]};

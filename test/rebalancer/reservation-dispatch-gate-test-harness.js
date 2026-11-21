@@ -16,6 +16,7 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
   createCoordinatorSqlStore,
+  createFixtureSystemMutationPort,
   createMockCache,
   createMockCdcService,
   createMockPolicyService,
@@ -189,6 +190,9 @@ function createCoordinatorWithStorage(options = {}) {
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(
+        (...args) => sqlEngine.executeQuery(...args),
+      ),
       readAuthoritativeRows: async (_table, sql, params = [], query = {}) =>
         sqlEngine.executeQuery(sql, params, query),
       readRows: async (_table, sql, params = [], query = {}) =>

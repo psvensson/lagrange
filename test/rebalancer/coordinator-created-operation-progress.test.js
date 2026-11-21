@@ -22,6 +22,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   buildMockPolicyAuthorityWitness,
+  createFixtureSystemMutationPort,
   createMockControlPlaneReadinessService,
   createMockPolicyService,
   createMockTransactionCoordinator,
@@ -267,6 +268,7 @@ async (t) => {
       },
     },
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(executeQuery),
       async readRows(tableName, sql, params = []) {
         return authoritativeRead(tableName, sql, params);
       },
@@ -462,6 +464,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
       },
     },
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(executeQuery),
       async readRows(tableName, sql, params = []) {
         return authoritativeRead(tableName, sql, params);
       },
@@ -670,6 +673,7 @@ test('dispatchOperation defers priority claim misses when durable ' +
       },
     },
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(executeQuery),
       async readRows(tableName, sql, params = []) {
         return authoritativeRead(tableName, sql, params);
       },
@@ -814,6 +818,9 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
       },
     },
     controlPlaneSystemTableGateway: {
+      async submitMutation() {
+        throw new Error('The dispatch snapshot witness must not mutate');
+      },
       async readRows() {
         return {
           success: true,
@@ -969,6 +976,9 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
       },
     },
     controlPlaneSystemTableGateway: {
+      async submitMutation() {
+        throw new Error('The dispatch snapshot witness must not mutate');
+      },
       async readRows() {
         return {
           success: true,
@@ -1145,6 +1155,7 @@ async (t) => {
       },
     },
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(executeQuery),
       async readRows(tableName, sql, params = []) {
         return authoritativeRead(tableName, sql, params);
       },
