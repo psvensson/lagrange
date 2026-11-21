@@ -33,10 +33,7 @@ const {
   STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME,
   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
   TIMEOUT_BUDGET_CLASSIFICATION, TIMEOUT_BUDGET_DEFAULT,
-  TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION,
-  TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE,
-  TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE,
-  TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE, UNIFIED_SERVICE_TYPE,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP, buildTimeoutClassification, classifySystemPartition,
   createChildTimeoutBudget, createTopLevelOperationBudget,
 } = SHARED;
@@ -547,109 +544,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     default:
       return this.config.pendingTimeoutMs;
     }
-  }
-
-  buildTimeoutReconcileOperationSelectionEvidence(
-    visibilityOperation,
-    fallbackOperation,
-  ) {
-    const visibilityOperationId = String(
-      visibilityOperation?.operationId || '',
-    ).trim();
-    const fallbackOperationId = String(
-      fallbackOperation?.operationId || '',
-    ).trim();
-    const hasVisibilityOperation =
-      visibilityOperationId.length > 0 &&
-      visibilityOperation &&
-      typeof visibilityOperation === 'object';
-    const hasFallbackOperation =
-      fallbackOperationId.length > 0 &&
-      fallbackOperation &&
-      typeof fallbackOperation === 'object';
-    const visibilityWorkflowRank =
-      hasVisibilityOperation ?
-        this.getOperationWorkflowStepRank(visibilityOperation) :
-        -1;
-    const fallbackWorkflowRank =
-      hasFallbackOperation ?
-        this.getOperationWorkflowStepRank(fallbackOperation) :
-        -1;
-    const visibilityUpdatedAt = Number(visibilityOperation?.updatedAt);
-    const fallbackUpdatedAt = Number(fallbackOperation?.updatedAt);
-    const fallbackWorkflowRankAhead =
-      hasVisibilityOperation &&
-      hasFallbackOperation &&
-      fallbackWorkflowRank > visibilityWorkflowRank;
-    const fallbackUpdatedAtAhead =
-      hasVisibilityOperation &&
-      hasFallbackOperation &&
-      fallbackWorkflowRank === visibilityWorkflowRank &&
-      Number.isFinite(fallbackUpdatedAt) &&
-      (
-        !Number.isFinite(visibilityUpdatedAt) ||
-        fallbackUpdatedAt > visibilityUpdatedAt
-      );
-
-    return Object.freeze({
-      hasVisibilityOperation,
-      hasFallbackOperation,
-      sameOperationId:
-        hasVisibilityOperation &&
-        hasFallbackOperation &&
-        visibilityOperationId === fallbackOperationId,
-      visibilityTerminal:
-        hasVisibilityOperation &&
-        this.repository.isOperationTerminal(visibilityOperation),
-      fallbackTerminal:
-        hasFallbackOperation &&
-        this.repository.isOperationTerminal(fallbackOperation),
-      fallbackWorkflowRankAhead,
-      fallbackUpdatedAtAhead,
-    });
-  }
-
-  resolveTimeoutReconcileOperationSelectionAction(
-    visibilityOperation,
-    fallbackOperation,
-  ) {
-    const evidence = this.buildTimeoutReconcileOperationSelectionEvidence(
-      visibilityOperation,
-      fallbackOperation,
-    );
-    const state =
-      TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE.find((entry) =>
-        entry.matches(evidence),
-      )?.state ||
-      TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_CURRENT;
-    return (
-      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE[state] ||
-      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_NONE
-    );
-  }
-
-  selectTimeoutReconcileOperation(
-    visibilityObservation,
-    fallbackOperation,
-  ) {
-    const visibilityOperation = visibilityObservation?.operation || null;
-    const action = this.resolveTimeoutReconcileOperationSelectionAction(
-      visibilityOperation,
-      fallbackOperation,
-    );
-    if (
-      action ===
-      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_FALLBACK
-    ) {
-      return fallbackOperation || null;
-    }
-    if (
-      action ===
-      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_VISIBILITY
-    ) {
-      return visibilityOperation || null;
-    }
-    return null;
   }
 
   async failTimedOutOperation(operation, elapsed, stepMetadata) {

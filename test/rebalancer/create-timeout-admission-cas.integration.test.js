@@ -195,29 +195,47 @@ async function withExpiredStep(measure, {
         async sweepWithDeferredVisibility(interleave) {
           const emptyBackoffMs = owner.incompleteOperationQueryEmptyBackoffMs;
           owner.incompleteOperationQueryEmptyBackoffMs = 0;
-          const probe = owner.repository.getOperationByIdVisibilityObservation
-            .bind(owner.repository);
+          const repository = owner.repository;
+          const observeVisibility = repository.getOperationByIdVisibilityObservation
+            .bind(repository);
+          const observeAuthority = repository.queryAuthoritativeOperationVisibilityObservation
+            .bind(repository);
           let armed = true;
-          owner.repository.getOperationByIdVisibilityObservation = async (id, options) => {
-            if (id !== OPERATION_ID || options?.allowPriorityRecoveryDeferredVisibility !== true ||
-                !armed) return probe(id, options);
+          const deferOnce = async (observe, id, options, isSweepRead) => {
+            if (id !== OPERATION_ID || !isSweepRead || !armed) return observe(id, options);
             armed = false;
             await interleave();
             exactPointReadUnavailable = true;
             try {
-              const observed = await probe(id, options);
-              assert.equal(observed.operation, null,
-                'the exact operation point read cannot supersede the earlier census row');
+              const observed = await observe(id, options);
+              assert.equal(observed.operation, null, 'the sweep point read is unavailable');
               assert.equal(observed.deferredOutcome?.deferRetry, true);
               return observed;
             } finally {
               exactPointReadUnavailable = false;
             }
           };
+          repository.getOperationByIdVisibilityObservation = (id, options) =>
+            deferOnce(observeVisibility, id, options,
+              options?.allowPriorityRecoveryDeferredVisibility === true);
+          repository.queryAuthoritativeOperationVisibilityObservation = (id, options) =>
+            deferOnce(observeAuthority, id, options,
+              options?.requireCompleteExactKey === true);
+          try {
+            await coordinator.checkTimeouts();
+            assert.equal(armed, false, 'the periodic sweep reached the exact point read');
+          } finally {
+            repository.getOperationByIdVisibilityObservation = observeVisibility;
+            repository.queryAuthoritativeOperationVisibilityObservation = observeAuthority;
+            owner.incompleteOperationQueryEmptyBackoffMs = emptyBackoffMs;
+          }
+        },
+        async sweepWithAvailableVisibility() {
+          const emptyBackoffMs = owner.incompleteOperationQueryEmptyBackoffMs;
+          owner.incompleteOperationQueryEmptyBackoffMs = 0;
           try {
             await coordinator.checkTimeouts();
           } finally {
-            owner.repository.getOperationByIdVisibilityObservation = probe;
             owner.incompleteOperationQueryEmptyBackoffMs = emptyBackoffMs;
           }
         },
@@ -653,6 +671,35 @@ test('a positively claimed pre-remove REPLACE target failure settles with the so
       assert.equal(claim?.create_attempt_token, failed.attemptToken);
       run.reply({status: ReplicaOperationResponseStatus.ERROR, error: 'confirmed target failure'});
       assert.equal((await run.execution).success, false);
+    });
+  });
+
+test('a priority timeout sweep waits for the current operation before failing expired work',
+  async () => {
+    const partitionId = PRIORITY_PARTITION_ID;
+    await withExpiredStep(async (run) => {
+      const original = run.row();
+      const before = run.owner.stats.operationsTimedOut;
+      await run.sweepWithDeferredVisibility(() => {
+        assert.deepEqual(run.row(), original, 'the census saw a genuine expired row');
+      });
+      assert.deepEqual(run.row(), original, 'unavailable point authority cannot fail the census row');
+      assert.equal(run.reservation().released_at, null);
+      assert.equal(run.failWrites.length, 0);
+      assert.deepEqual(run.failures, []);
+      assert.equal(run.owner.stats.operationsTimedOut, before);
+
+      await run.sweepWithAvailableVisibility();
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED,
+        'a later sweep can fail the same expired row with point authority');
+      assert.equal(run.failWrites.length, 1);
+      assert.equal(run.failures.length, 1);
+      assert.ok(Number.isFinite(run.reservation().released_at));
+      assert.equal(run.owner.stats.operationsTimedOut, before + 1);
+    }, {
+      partitionId,
+      controlPlaneReadinessService: buildPriorityDrainReadinessService(
+        partitionId, {readyNodeIds: [NODE.A, NODE.B, NODE.C]}),
     });
   });
 
