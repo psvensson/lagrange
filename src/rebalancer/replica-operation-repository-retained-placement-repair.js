@@ -1,3 +1,6 @@
+import {REPAIR_OBSERVATION as OBSERVATION, peerObservationMayClear, ownRowObservation,
+  recordRepairObservation, takeRepairObservations, observationAllowsRetry} from
+  './replica-operation-retained-repair-observation.js';
 import {unavailableRepairPreparation, unavailableRepairOwnerReply} from
   '../partition/partition-placement-repair-preparation-result.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-write-kernel.js';
@@ -113,11 +116,15 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (attempt.entryId !== payload.entryId) {
         if (attempt.pending) await attempt.pending;
         else await this.repairRetainedOperation(attempt.operation);
-        if (this.retainedPlacementRepairs.get(attempt.operation.operationId) !== attempt ||
-            attempt.entryId === null) {
-          if (this.retainedPlacementRepairs.get(attempt.operation.operationId) === attempt) {
-            this.retainedPlacementRepairs.delete(attempt.operation.operationId);
-          }
+        if (this.retainedPlacementRepairs.get(attempt.operation.operationId) !== attempt) {
+          return this.acceptRetainedPlacementRepairRequest(service, payload, submitNative);
+        }
+        if (attempt.entryId === null) {
+          attempt.entryId = payload.entryId;
+          attempt.body = payload.body;
+          attempt.blockers = null;
+          attempt.occupancy = null;
+          attempt.nativeAnswerPromise = null;
           return this.acceptRetainedPlacementRepairRequest(service, payload, submitNative);
         }
         const recorded = readCommittedStatementOutcome(service,
@@ -283,21 +290,21 @@ function assignRetainedPlacementRepairMethods(Repository) {
       return false;
     },
 
-    wakeRetainedPlacementRepairs(predicate = () => true) {
+    wakeRetainedPlacementRepairs(predicate = () => true, kind = OBSERVATION.CLEARING) {
       if (this.isShuttingDownRequested()) return;
       for (const attempt of this.retainedPlacementRepairs.values()) {
         if (predicate(attempt)) {
-          attempt.delegated = null;
-          attempt.wakePending = true;
+          recordRepairObservation(attempt, kind);
         }
       }
       if (this.retainedPlacementRepairDrain) return;
-      this.retainedPlacementRepairDrain = this.redriveRetainedPlacementRepairs()
+      this.retainedPlacementRepairDrain = Promise.resolve()
+        .then(() => this.redriveRetainedPlacementRepairs())
         .catch((error) => this.logger.warn(REPAIR_LOG.DEFERRED,
           {error: error?.message || String(error)}))
         .finally(() => {
           this.retainedPlacementRepairDrain = null;
-          if ([...this.retainedPlacementRepairs.values()].some((attempt) => attempt.wakePending)) {
+          if ([...this.retainedPlacementRepairs.values()].some((attempt) => attempt.observations)) {
             this.wakeRetainedPlacementRepairs(() => false);
           }
         });
@@ -306,51 +313,57 @@ function assignRetainedPlacementRepairMethods(Repository) {
     async redriveRetainedPlacementRepairs() {
       while (!this.isShuttingDownRequested()) {
         const attempts = [...this.retainedPlacementRepairs.values()]
-          .filter((attempt) => attempt.wakePending);
+          .filter((attempt) => attempt.observations);
         if (attempts.length === 0) return;
         for (const attempt of attempts) {
           // A clearing commit can arrive before the refused proposal's reply.
           // Join that reply first, then spend the retained wake on a fresh try.
-          if (attempt.pending) await attempt.pending;
+          while (attempt.pending) await attempt.pending;
           if (this.retainedPlacementRepairs.get(attempt.operation.operationId) !== attempt) {
             continue;
           }
-          attempt.wakePending = false;
-          await this.repairRetainedOperation(attempt.operation);
+          const observations = takeRepairObservations(attempt);
+          await this.revalidateRetainedRepairObservation(attempt, observations);
         }
+      }
+    },
+
+    async revalidateRetainedRepairObservation(attempt, observations) {
+      const observed = await this.confirmRetainedOperationRow(attempt.operation);
+      if (!this.retainedRepairAttemptIsCurrent(attempt)) return;
+      if (observed.state === ROW_STATE.EXACT || observed.state === ROW_STATE.CHANGED) {
+        this.retainedPlacementRepairs.delete(attempt.operation.operationId);
+      } else if (observed.state === ROW_STATE.ABSENT && observationAllowsRetry(observations)) {
+        await this.repairRetainedOperation(attempt.operation);
       }
     },
 
     observeRetainedPlacementRepairCommit(tableName, row) {
       for (const attempt of this.retainedPlacementRepairs.values()) {
-        if (!attempt.pending && tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-            row?.operation_id === attempt.operation.operationId) {
-          void this.confirmRetainedOperationRow(attempt.operation).then((observed) => {
-            if (!this.isShuttingDownRequested() &&
-                this.retainedPlacementRepairs.get(attempt.operation.operationId) === attempt &&
-                (observed.state === ROW_STATE.EXACT || observed.state === ROW_STATE.CHANGED)) {
-              this.retainedPlacementRepairs.delete(attempt.operation.operationId);
-            }
-          }).catch(() => {});
+        const kind = this.retainedRepairObservationKind(attempt, tableName, row);
+        if (kind !== OBSERVATION.NONE) {
+          this.wakeRetainedPlacementRepairs((candidate) => candidate === attempt, kind);
         }
       }
-      this.wakeRetainedPlacementRepairs((attempt) =>
-        this.shouldWakeRetainedRepairObservation(attempt, tableName, row));
     },
 
-    shouldWakeRetainedRepairObservation(attempt, tableName, row) {
+    retainedRepairObservationKind(attempt, tableName, row) {
+      if (ownRowObservation(attempt, tableName, row)) return OBSERVATION.OWN_ROW;
       if (receiverChanged(attempt, tableName, row)) {
         attempt.expectedOwner = {nodeId: row.node_id, replicaId: row.replica_id};
-        return true;
+        return OBSERVATION.LEADER;
       }
-      if (attempt.delegated) return false;
+      if (attempt.delegated) return OBSERVATION.NONE;
       if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
         return attempt.clearingTrigger === PLACEMENT_TRIGGER.LEADERSHIP_START ||
-            attempt.clearingTrigger === PLACEMENT_TRIGGER.NODES_OR_FORMATION;
+          attempt.clearingTrigger === PLACEMENT_TRIGGER.NODES_OR_FORMATION ?
+          OBSERVATION.CLEARING : OBSERVATION.NONE;
       }
-      if (!attempt.blockers) return false;
-      return attempt.blockers?.some((blocker) =>
+      const blockerCleared = attempt.blockers?.some((blocker) =>
         blocker.operationId === row?.operation_id && !sameBlocker(row, blocker)) === true;
+      const possiblyClearedWhilePending = attempt.pending && peerObservationMayClear(attempt, row);
+      return blockerCleared || possiblyClearedWhilePending ?
+        OBSERVATION.CLEARING : OBSERVATION.NONE;
     },
 
     bindRetainedPlacementRepairWake(service) {
