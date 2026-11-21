@@ -212,7 +212,8 @@ const isRefusedBeforeProposal = (answer) =>
 function settleInstance(record, answer) {
   // Later receipts settle the exact entry the producer sent under this key.
   record.entryId = findLinkedEntryId(answer) ?? record.entryId;
-  const verdict = judgeNamedWriteOutcome(answer, record.key);
+  const verdict = someLinkedAnswer(answer, isWriteOutcomeUnknown) ?
+    NAMED_WRITE_ATTEMPT.UNKNOWN : judgeNamedWriteOutcome(answer, record.key);
   const releases = verdict === NAMED_WRITE_ATTEMPT.APPLIED ||
     verdict === NAMED_WRITE_ATTEMPT.FAILED ||
     (verdict === NAMED_WRITE_ATTEMPT.NOT_PROPOSED && !record.unresolved);

@@ -31,45 +31,60 @@ function belongsToEntry(result, key) {
     result.entryId === deriveParticipantEntryId(key, result.partitionId);
 }
 
-function judgePartitionAnswer(result, key) {
+function isCommittedPartitionSuccess(result, key) {
   const witness = result.durableCommitWitness;
-  const failed = result.success === false || result instanceof Error;
-  if (result.success === true && result.deferRetry !== true && hasAffectedRows(result) &&
-      witness?.partitionId === result.partitionId && belongsToEntry(witness, key) &&
-      Number.isSafeInteger(witness.logIndex) && witness.logIndex > 0 &&
-      Number.isSafeInteger(witness.term) && witness.term > 0) {
-    return NAMED_WRITE_ATTEMPT.APPLIED;
-  }
-  if (failed && result.committed === true &&
-      result.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED &&
-      hasText(result.failureCode) && belongsToEntry(result, key) &&
-      Number.isSafeInteger(result.logIndex) && result.logIndex > 0) {
-    return NAMED_WRITE_ATTEMPT.FAILED;
-  }
-  const refusal = PARTITION_WRITE_LEADERSHIP_REFUSAL;
-  if (failed && result.committed !== true &&
-      isPartitionWriteFailureCode(result.failureCode) &&
-      result.failureCode !== refusal.OUTCOME_UNKNOWN &&
-      result.failureCode !== refusal.CONSENSUS_HOST_FAILURE &&
-      result.failureCode !== refusal.RESERVED &&
-      hasText(result.partitionId) &&
-      (result.entryId == null || belongsToEntry(result, key))) {
-    return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
-  }
+  return result.success === true && result.deferRetry !== true && hasAffectedRows(result) &&
+    witness?.partitionId === result.partitionId && belongsToEntry(witness, key) &&
+    Number.isSafeInteger(witness.logIndex) && witness.logIndex > 0 &&
+    Number.isSafeInteger(witness.term) && witness.term > 0;
+}
+
+function isCommittedPartitionFailure(result, key) {
+  return result.committed === true &&
+    result.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED &&
+    hasText(result.failureCode) && belongsToEntry(result, key) &&
+    Number.isSafeInteger(result.logIndex) && result.logIndex > 0;
+}
+
+const NON_REFUSAL_CODES = new Set([
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_HOST_FAILURE,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED,
+]);
+
+function isPartitionPreProposalRefusal(result, key) {
+  return result.committed !== true && isPartitionWriteFailureCode(result.failureCode) &&
+    !NON_REFUSAL_CODES.has(result.failureCode) &&
+    hasText(result.partitionId) &&
+    (result.entryId == null || belongsToEntry(result, key));
+}
+
+function judgePartitionAnswer(result, key) {
+  if (isCommittedPartitionSuccess(result, key)) return NAMED_WRITE_ATTEMPT.APPLIED;
+  if (result.success !== false && !(result instanceof Error)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
+  const [nested] = Array.isArray(result.participantFailures) ? result.participantFailures : [];
+  const failure = result.participantFailures?.length === 1 &&
+    nested?.partitionId === result.partitionId ? nested : result;
+  if (isCommittedPartitionFailure(failure, key)) return NAMED_WRITE_ATTEMPT.FAILED;
+  if (isPartitionPreProposalRefusal(failure, key)) return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
   return NAMED_WRITE_ATTEMPT.UNKNOWN;
 }
 
-function judgeDistributedAnswer(result, key) {
+function hasCompleteDistributedParticipants(result) {
   const {partitions, mirrorPartitions, participantResults} = result;
-  if (result.idempotencyKey !== key || !hasText(result.operationId) ||
-      !Array.isArray(partitions) || !Array.isArray(mirrorPartitions) ||
-      !Array.isArray(participantResults)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
+  if (!Array.isArray(partitions) || !Array.isArray(mirrorPartitions) ||
+      !Array.isArray(participantResults)) return false;
   const participants = [...partitions, ...mirrorPartitions];
   const actual = participantResults.map((entry) => entry?.partitionId);
-  const complete = new Set(participants).size === participants.length &&
-    participants.length === actual.length && participants.every(
-    (partition) => hasText(partition) && actual.includes(partition));
-  if (!complete) return NAMED_WRITE_ATTEMPT.UNKNOWN;
+  return new Set(participants).size === participants.length &&
+    participants.length === actual.length &&
+    participants.every((partition) => hasText(partition) && actual.includes(partition));
+}
+
+function judgeDistributedAnswer(result, key) {
+  if (result.idempotencyKey !== key || !hasText(result.operationId) ||
+      !hasCompleteDistributedParticipants(result)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
+  const {participantResults} = result;
   if (result.success === true && result.deferRetry !== true && hasAffectedRows(result) &&
       participantResults.every((entry) => entry.success === true && hasAffectedRows(entry))) {
     return NAMED_WRITE_ATTEMPT.APPLIED;
