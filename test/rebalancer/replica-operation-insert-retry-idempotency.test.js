@@ -24,6 +24,7 @@ import {CONTROL_PLANE_MUTATION_OPERATION} from
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 
 const TEST_NODE_ID = 'test-node-1';
 const TEST_OPERATION_ID = 'op-idem-1';
@@ -56,28 +57,23 @@ function makeRow(overrides = {}) {
 
 function createRepository({insertResults, authoritativeRows, insertCalls}) {
   const mockLogger = {info() {}, warn() {}, error() {}, debug() {}};
-  const gateway = {
-    async submitMutation({operation, tableName, row}, options) {
-      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
-          tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        throw new Error('Unexpected insert retry mutation');
-      }
-      insertCalls.push({tableName, row, options});
-      const next = insertResults.shift();
-      if (next instanceof Error) {
-        throw next;
-      }
-      return next || {success: true, affectedRows: 1};
-    },
-    readRows: async () => ({
-      success: true,
-      rows: authoritativeRows(),
-    }),
-    readAuthoritativeRows: async () => ({
-      success: true,
-      rows: authoritativeRows(),
-    }),
-    executeQuery: async () => ({success: true, changes: 1}),
+  // `authoritativeRows()` is this fixture's whole replica_operations
+  // authority, so its reads answer as a complete owner read (the shared
+  // fixture gateway's authoritative-read completeness and witness).
+  const gateway = createMockControlPlaneSystemTableGateway({
+    executeQuery: async () => ({success: true, rows: authoritativeRows()}),
+  });
+  gateway.submitMutation = async ({operation, tableName, row}, options) => {
+    if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+        tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      throw new Error('Unexpected insert retry mutation');
+    }
+    insertCalls.push({tableName, row, options});
+    const next = insertResults.shift();
+    if (next instanceof Error) {
+      throw next;
+    }
+    return next || {success: true, affectedRows: 1};
   };
   return new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,
