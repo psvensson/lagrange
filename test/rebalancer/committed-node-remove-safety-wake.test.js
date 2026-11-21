@@ -155,5 +155,9 @@ test('the removal owner observes the committed ACTIVE row before evaluating the 
     const evaluation = await h.owner.evaluateRemoveSafety(h.operation);
     t.notMatch(String(evaluation?.error), /operation ledger is unavailable/u,
       String(evaluation?.error));
-    t.comment(JSON.stringify(evaluation));
+    const source = await h.owner.observeStoppingReplicaProgress(
+      h.operation.sourceReplicaId, partitionId, h.operation.sourceNodeId,
+    );
+    t.equal(source.lifecycleStatus, 'active',
+      'an exact source read observes the original voter before removal intent');
   });

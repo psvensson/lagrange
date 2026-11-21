@@ -31,7 +31,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CDC_OPERATION,
   NODE_STATE,
-  SYSTEM_TABLE_NAME,
+  TABLES,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {
@@ -375,7 +375,7 @@ async function evolveWorld(world) {
   if (world.concurrentOperationOpen) {
     world.concurrentOperationOpen = false;
     await world.cache.replicateRemoteRow(world.coordinator.controlPlaneSystemTableGateway,
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, {...CONCURRENT_OPERATION_ROW,
+      TABLES.REPLICA_OPERATIONS, {...CONCURRENT_OPERATION_ROW,
         status: ReplicaStatus.FAILED, workflow_step: WORKFLOW_STEP.FAILED,
         completed_at: Date.now()});
     world.readiness.publish(PEER_NODE_C);
@@ -455,7 +455,7 @@ const PHASE_DRIVERS = Object.freeze({
     // Remove safety defers behind a concurrent operation on the partition
     // (CL-043 serialization), owned by another node.
     const persisted = await world.coordinator.controlPlaneSystemTableGateway.submitMutation({
-      tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      tableName: TABLES.REPLICA_OPERATIONS,
       operation: 'insert',
       row: CONCURRENT_OPERATION_ROW,
     });
