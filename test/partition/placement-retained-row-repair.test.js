@@ -1,4 +1,4 @@
-import {withRepairLedger, attachCurrentCopyOwner} from './placement-retained-row-repair-fixture.js';
+import {withRepairLedger, attachCurrentCopyOwner, stepRetainedLedgerRow} from './placement-retained-row-repair-fixture.js';
 // File-backed SQLite, real PartitionService committed apply, statement outcomes,
 // CDC ledger and repository/workflow producers. Consensus transport is a
 // controllable port: the witness orders and commits proposals, not real rs-raft.
@@ -23,8 +23,7 @@ import {createTestCoordinator} from
   '../rebalancer/test-helpers.js';
 import {clearFixtureSingletons, resetFixtureSingletons,
   resumeFixtureParticipantAdmission, send, settleTicks} from '../test-helpers/participant-transaction-fixture.js';
-import {NODE, commitLedgerStatement, ledgerRows, placementStatement,
-  stepLedgerRow} from './placement-admission-fixture.js';
+import {NODE, commitLedgerStatement, ledgerRows, placementStatement} from './placement-admission-fixture.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -90,7 +89,7 @@ for (const first of ['normal', 'retained']) {
           ['unrelated']);
         await settleRepair(world);
         assert.equal(world.commands.length, proposals, 'no self or unrelated wake loop');
-        stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+        await stepRetainedLedgerRow(world, normal.operationIds[0], WORKFLOW_STEP.FAILED);
         await settleRepair(world);
         assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId),
           'the exact holder terminal commit owns the real retry');
@@ -121,7 +120,7 @@ test('reservation gate consumes native repair refusal and retains the original r
     owner.ensureReservationForOperation = async () => ({outcome: RESERVATION.ALREADY_ACTIVE});
     assert.ok(await ensureDispatchReservationOrSkip(owner, retained),
       'the next ACTIVE-reservation invocation still withholds dispatch');
-    stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+    await stepRetainedLedgerRow(world, normal.operationIds[0], WORKFLOW_STEP.FAILED);
     await settleRepair(world);
     assert.equal(await ensureDispatchReservationOrSkip(owner, retained), null,
       'only the original native holder clearing makes this same candidate dispatchable');
@@ -197,7 +196,7 @@ test('a clearing holder commit during the old BUSY reply owns a successor attemp
     const pending = repository.persistOperationUpdate(retained,
       {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
     await gotBusy;
-    stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+    await stepRetainedLedgerRow(world, normal.operationIds[0], WORKFLOW_STEP.FAILED);
     release();
     await pending;
     await settleRepair(world);
@@ -242,7 +241,7 @@ test('current actual deficit policy preserves same-ID copies and native capacity
     const outcome = readCommittedStatementOutcome(world.leader,
       `entry:${world.commands.at(-1).entryId}`);
     assert.equal(JSON.parse(outcome.ownerResultText).reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
-    stepLedgerRow(world.leader, holders[0], WORKFLOW_STEP.FAILED);
+    await stepRetainedLedgerRow(world, holders[0], WORKFLOW_STEP.FAILED);
     await settleRepair(world);
     assert.ok(ledgerRows(world.leader).find((row) => row.operation_id === retained.operationId),
       'native clearing re-admits the original identity instead of minting another operation');
@@ -347,7 +346,7 @@ for (const first of ['normal', 'ledger']) {
         const debt = world.coordinator.repository.retainedPlacementRepairs
           .get(retained.operationId);
         assert.equal(debt.blockers[0].operationId, normal.operationIds[0]);
-        stepLedgerRow(world.leader, normal.operationIds[0], WORKFLOW_STEP.FAILED);
+        await stepRetainedLedgerRow(world, normal.operationIds[0], WORKFLOW_STEP.FAILED);
         await settleRepair(world);
         assert.ok(ledgerRows(world.leader)
           .find((row) => row.operation_id === retained.operationId));
@@ -447,7 +446,7 @@ test('a retained ordinary copy consumes source capacity and resumes on its actua
     const outcome = readCommittedStatementOutcome(world.leader, `entry:${command.entryId}`);
     assert.equal(JSON.parse(outcome.ownerResultText).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
     assert.equal(command.body.copyPolicy.statement.repair, false);
-    stepLedgerRow(world.leader, holders[2], WORKFLOW_STEP.FAILED);
+    await stepRetainedLedgerRow(world, holders[2], WORKFLOW_STEP.FAILED);
     await settleRepair(world);
     assert.ok(ledgerRows(world.leader)
       .find((row) => row.operation_id === retained.operationId));
@@ -466,7 +465,7 @@ test('retained-copy-first occupies the ordinary target lane until its own commit
     const full = await placementAdmission.requestPlacementAdmission(world.leader,
       {entryId: 'third-copy-full', body: body('third-copy-p1')});
     assert.equal(full.placementResult.reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
-    stepLedgerRow(world.leader, retained.operationId, WORKFLOW_STEP.ACTIVE);
+    await stepRetainedLedgerRow(world, retained.operationId, WORKFLOW_STEP.ACTIVE);
     const cleared = await placementAdmission.requestPlacementAdmission(world.leader,
       {entryId: 'third-copy-cleared', body: body('third-copy-p1')});
     assert.equal(cleared.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
@@ -559,7 +558,7 @@ test('remote E2 joins active E1 then takes actual custody after its definite BUS
       assert.equal(sender.retainedPlacementRepairs.get(retained.operationId).delegated, undefined);
       assert.deepEqual(owner.retainedPlacementRepairs.get(retained.operationId).blockers,
         sender.retainedPlacementRepairs.get(retained.operationId).blockers);
-      stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+      await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
       const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
         .get(competitor.operationIds[0]);
       sender.observeRetainedPlacementRepairCommit('replica_operations', cleared);
@@ -737,7 +736,7 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
           release();
           assert.equal(await result, false);
         }
-        stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+        await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
         const clearing = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(competitor.operationIds[0]);
         sender.observeRetainedPlacementRepairCommit('replica_operations', clearing);
@@ -828,7 +827,7 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
         await observeBurst(sender, incumbent);
         assert.equal(world.commands.length, before);
         assert.equal(reads, firstReads, 'exact repeated live-incumbent hints do not create more reads');
-        stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+        await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
         const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(competitor.operationIds[0]);
         await observeBurst(sender, cleared);
@@ -895,7 +894,7 @@ for (const lane of ['source', 'target']) {
           }
           const before = world.commands.length;
           const releasedId = holders.at(-1);
-          stepLedgerRow(world.leader, releasedId, WORKFLOW_STEP.FAILED);
+          await stepRetainedLedgerRow(world, releasedId, WORKFLOW_STEP.FAILED);
           const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
             .get(releasedId);
           sender.observeRetainedPlacementRepairCommit('replica_operations', row);
@@ -970,7 +969,7 @@ for (const [name, corrupt] of invalidCensusAnswers) {
           reads += 1;
           return corrupt(await read.apply(sender, args));
         };
-        stepLedgerRow(world.leader, holders[0], WORKFLOW_STEP.FAILED);
+        await stepRetainedLedgerRow(world, holders[0], WORKFLOW_STEP.FAILED);
         const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(holders[0]);
         await observeBurst(sender, cleared);
@@ -989,4 +988,98 @@ for (const [name, corrupt] of invalidCensusAnswers) {
         await remote.coordinator.shutdown();
       }
     }));
+}
+
+test('incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const competitor = await compete(world);
+    const repository = world.coordinator.repository;
+    assert.equal(await repository.repairRetainedOperation(retained), false);
+    const e0 = world.commands.at(-1);
+    raiseParticipantCutoverPause(world.leader);
+    await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+    await settleRepair(world);
+    const e1 = repository.retainedPlacementRepairs.get(retained.operationId);
+    assert.ok(e1.entryId && e1.entryId !== e0.entryId);
+    const e1Id = e1.entryId;
+    const e1Bytes = JSON.stringify(e1.body);
+    let redrives = 0;
+    const submit = repository.repairRetainedPlacement;
+    repository.repairRetainedPlacement = (payload) => {
+      redrives += 1;
+      return submit(payload);
+    };
+    const before = world.commands.length;
+    const replay = await send(world.leader, {type: 'PLACEMENT_REPAIR',
+      entryId: e0.entryId, body: e0.body});
+    assert.equal(replay.entryId, e0.entryId);
+    assert.equal(replay.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+    assert.equal(redrives, 0, 'durable E0 reply does not re-drive unrelated volatile E1');
+    const conflict = await send(world.leader, {type: 'PLACEMENT_REPAIR', entryId: e0.entryId,
+      body: {...e0.body, operation: {...e0.body.operation, updatedAt: retained.updatedAt + 1}}});
+    assert.equal(conflict.failureCode, 'placement_admission_bytes_invalid');
+    assert.equal(world.commands.length, before);
+    assert.equal(e1.entryId, e1Id);
+    assert.equal(JSON.stringify(e1.body), e1Bytes);
+  }));
+
+async function invokeRecoveryProducer(remote, operation, producer) {
+  if (producer === 'mutation') {
+    return remote.coordinator.repository.persistOperationUpdate(operation,
+      {expectedWorkflowStep: operation.workflowStep});
+  }
+  const owner = remote.coordinator.workflowOwner;
+  owner.hasStorageReservationSupport = () => true;
+  owner.ensureReservationForOperation = async () => ({outcome: RESERVATION.ALREADY_ACTIVE});
+  return ensureDispatchReservationOrSkip(owner, operation);
+}
+
+for (const producer of ['mutation', 'ACTIVE-reservation']) {
+  for (const order of ['sender-first', 'receiver-first']) {
+    test(`${producer} shares serial repair decision when clearing is ${order}`, () =>
+      withRepairLedger(async (world) => {
+        const retained = await retainMissing(world, OperationType.ADD);
+        const competitor = await compete(world);
+        const remote = remoteCaller(world);
+        const sender = remote.coordinator.repository;
+        const receiver = world.coordinator.repository;
+        const wake = receiver.wakeRetainedPlacementRepairs;
+        const delayed = [];
+        let holdWake = false;
+        receiver.wakeRetainedPlacementRepairs = (...args) => {
+          if (holdWake) delayed.push(args);
+          else wake.apply(receiver, args);
+        };
+        try {
+          await invokeRecoveryProducer(remote, retained, producer);
+          assert.equal(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+            .get(retained.operationId), undefined);
+          const before = world.commands.filter((command) => command.type === 'PLACEMENT_REPAIR').length;
+          holdWake = order === 'sender-first';
+          const clearing = await stepRetainedLedgerRow(world,
+            competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+          if (order === 'receiver-first') await settleRepair(world);
+          await observeBurst(sender, clearing);
+          holdWake = false;
+          for (const args of delayed) wake.apply(receiver, args);
+          await settleRepair(world);
+          await sender.retainedPlacementRepairDrain;
+          const repairs = world.commands.filter((command) => command.type === 'PLACEMENT_REPAIR');
+          assert.equal(repairs.length, before + 1,
+            'receiver and sender clearing share one native restoration, including decision and authority read');
+          const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+            .get(retained.operationId);
+          assert.equal(row.created_at, retained.createdAt);
+          assert.equal(row.replica_id, retained.replicaId);
+          await invokeRecoveryProducer(remote, retained, producer);
+          assert.equal(world.commands.filter((command) => command.type === 'PLACEMENT_REPAIR').length,
+            repairs.length, 'the same intact operation and ACTIVE reservation need no new repair proposal');
+        } finally {
+          holdWake = false;
+          for (const args of delayed) wake.apply(receiver, args);
+          await remote.coordinator.shutdown();
+        }
+      }));
+  }
 }

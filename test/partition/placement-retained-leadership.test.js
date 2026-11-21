@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
+import {stepRetainedLedgerRow} from './placement-retained-row-repair-fixture.js';
 import {withRetainedLeadershipPair} from './placement-retained-leadership-fixture.js';
 import {createOperationAt, OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -7,7 +8,7 @@ import {requestPlacementAdmission} from '../../src/partition/partition-placement
 import {raiseParticipantCutoverPause} from '../../src/partition/partition-participant-transaction-pause.js';
 import {clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipantAdmission,
   settleTicks} from '../test-helpers/participant-transaction-fixture.js';
-import {NODE, placementStatement, stepLedgerRow} from './placement-admission-fixture.js';
+import {NODE, placementStatement} from './placement-admission-fixture.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -46,7 +47,8 @@ test('A-origin BUSY repairs route to B and clear on the incumbent native termina
     assert.ok(messages.some((message) => message.from === a && message.to === b &&
       message.payload.type === 'PLACEMENT_REPAIR'), 'A used current B route instead of saved A closure');
     assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 1);
-    stepLedgerRow(b.leader, competitor.placementResult.operationIds[0], WORKFLOW_STEP.FAILED);
+    await stepRetainedLedgerRow(b, competitor.placementResult.operationIds[0],
+      WORKFLOW_STEP.FAILED);
     await idle(a, b);
     assert.ok(b.leader.db.prepare('SELECT operation_id FROM replica_operations WHERE operation_id = ?')
       .get(retained.operationId), 'B actual commit clears and restores without another resync');
