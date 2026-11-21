@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-18T06:01:30.842Z",
-  "rawViolationCount": 682,
+  "generatedAt": "2026-11-21T23:05:05.756Z",
+  "rawViolationCount": 680,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -2816,24 +2816,6 @@
       "line": 688,
       "column": 16,
       "functionName": "evaluateChange",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/live-query/live-query-sql-renderer.js",
-      "line": 417,
-      "column": 16,
-      "functionName": "resolveActivePartitionVersion",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/live-query/live-query-sql-renderer.js",
-      "line": 434,
-      "column": 4,
-      "functionName": "isPartitionVisibleForRouting",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

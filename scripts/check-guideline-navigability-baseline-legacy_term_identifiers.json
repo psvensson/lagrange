@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-18T06:01:34.719Z",
-  "rawViolationCount": 2835,
+  "generatedAt": "2026-11-21T23:05:05.729Z",
+  "rawViolationCount": 2760,
   "violations": [
     {
       "filePath": "src/admin/admin-cli-compat.js",
@@ -2510,51 +2510,6 @@
       "line": 39,
       "column": 6,
       "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 83,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 359,
-      "column": 30,
-      "functionName": "validateMixedVersionNodeAdmission",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 377,
-      "column": 7,
-      "functionName": "validateMixedVersionNodeAdmission",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 381,
-      "column": 6,
-      "functionName": "validateMixedVersionNodeAdmission",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/owners/support-envelope-owner.js",
-      "line": 435,
-      "column": 6,
-      "functionName": "buildDefaultDrills",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -6934,24 +6889,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 250,
-      "column": 17,
-      "functionName": "executeIntent",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
-      "line": 251,
-      "column": 22,
-      "functionName": "executeIntent",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/control-plane-system-table-gateway-normalizers.js",
       "line": 139,
       "column": 41,
@@ -6965,24 +6902,6 @@
       "line": 140,
       "column": 56,
       "functionName": "normalizePositiveInteger",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 254,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 369,
-      "column": 8,
-      "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -11560,33 +11479,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/node/replica-handler-create-methods.js",
-      "line": 722,
-      "column": 19,
-      "functionName": "createReplicaAsync",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-create-status-methods.js",
-      "line": 296,
-      "column": 17,
-      "functionName": "persistReplicaCreateInitialStatus",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/node/replica-handler-create-status-methods.js",
-      "line": 466,
-      "column": 4,
-      "functionName": "assignReplicaHandlerCreateStatusMethods",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/node/replica-handler-group-retired-tombstone-methods.js",
       "line": 20,
       "column": 2,
@@ -14309,51 +14201,6 @@
       "line": 23,
       "column": 53,
       "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 25,
-      "column": 49,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 347,
-      "column": 4,
-      "functionName": "buildWhereSplit",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 722,
-      "column": 9,
-      "functionName": "buildLegacyPlan",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 751,
-      "column": 11,
-      "functionName": "buildJoinPushdownPlan",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/join-pushdown-plan.js",
-      "line": 755,
-      "column": 11,
-      "functionName": "buildJoinPushdownPlan",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -17941,33 +17788,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 338,
-      "column": 18,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 341,
-      "column": 12,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 343,
-      "column": 19,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/sql-query-engine-metadata-authority-refresh.js",
       "line": 127,
       "column": 6,
@@ -18004,33 +17824,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 361,
-      "column": 18,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 364,
-      "column": 12,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 366,
-      "column": 19,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/query/sql-query-engine-provisioning-methods.js",
       "line": 172,
       "column": 8,
@@ -18043,24 +17836,6 @@
       "filePath": "src/query/sql-query-engine-provisioning-methods.js",
       "line": 174,
       "column": 8,
-      "functionName": "resolveProvisionTargetNodeDiagnostics",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-provisioning-methods.js",
-      "line": 191,
-      "column": 6,
-      "functionName": "resolveProvisionTargetNodeDiagnostics",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-query-engine-provisioning-methods.js",
-      "line": 193,
-      "column": 6,
       "functionName": "resolveProvisionTargetNodeDiagnostics",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
@@ -18087,15 +17862,6 @@
     {
       "filePath": "src/query/strategy-selector.js",
       "line": 37,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/streaming-aggregator.js",
-      "line": 24,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -19408,42 +19174,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
-      "line": 174,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
-      "line": 178,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
-      "line": 179,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
-      "line": 186,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
       "line": 737,
       "column": 35,
@@ -19466,303 +19196,6 @@
       "line": 770,
       "column": 11,
       "functionName": "normalizeErrorMessage",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 571,
-      "column": 4,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 576,
-      "column": 10,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 577,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 583,
-      "column": 10,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 584,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 585,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 586,
-      "column": 13,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 591,
-      "column": 10,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 592,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 593,
-      "column": 42,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 596,
-      "column": 10,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 596,
-      "column": 37,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 597,
-      "column": 10,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 599,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 600,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 601,
-      "column": 10,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 603,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 604,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 605,
-      "column": 22,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 608,
-      "column": 8,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 613,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 616,
-      "column": 8,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 617,
-      "column": 34,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 621,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 622,
-      "column": 8,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 623,
-      "column": 44,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 624,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 625,
-      "column": 6,
-      "functionName": "buildTimeoutReconcileOperationSelectionEvidence",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 631,
-      "column": 4,
-      "functionName": "resolveTimeoutReconcileOperationSelectionAction",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 635,
-      "column": 6,
-      "functionName": "resolveTimeoutReconcileOperationSelectionAction",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 650,
-      "column": 4,
-      "functionName": "selectTimeoutReconcileOperation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 655,
-      "column": 6,
-      "functionName": "selectTimeoutReconcileOperation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 661,
-      "column": 13,
-      "functionName": "selectTimeoutReconcileOperation",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -20542,15 +19975,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 253,
-      "column": 12,
-      "functionName": "getOperationsByEntityAuthoritativeObservation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/rebalancer/replica-operation-repository-incomplete-read-methods.js",
       "line": 352,
       "column": 22,
@@ -20636,105 +20060,6 @@
       "line": 469,
       "column": 15,
       "functionName": "queryIncompleteOperations",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 214,
-      "column": 6,
-      "functionName": "executeReplicaOperationGatewayMutationWithRetry",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 218,
-      "column": 10,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 221,
-      "column": 66,
-      "functionName": "retryReplicaOperationGatewayMutation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 231,
-      "column": 29,
-      "functionName": "retryReplicaOperationGatewayMutation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 283,
-      "column": 6,
-      "functionName": "executeReplicaOperationGatewayMutationAttempt",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 295,
-      "column": 12,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 306,
-      "column": 6,
-      "functionName": "executeReplicaOperationGatewayMutation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 339,
-      "column": 15,
-      "functionName": "executeReplicaOperationGatewayMutation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 342,
-      "column": 10,
-      "functionName": "executeReplicaOperationGatewayMutation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 343,
-      "column": 24,
-      "functionName": "executeReplicaOperationGatewayMutation",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
-      "line": 343,
-      "column": 44,
-      "functionName": "executeReplicaOperationGatewayMutation",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
