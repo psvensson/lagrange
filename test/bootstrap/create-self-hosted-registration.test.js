@@ -131,7 +131,13 @@ test(
     const service = createSelfHostedService('join-node-2');
     const seededRows = [];
 
-    service.messageRouter = {};
+    // The topology owners this phase wires require a router that delivers;
+    // this one is never reached (CDC subscription is stubbed below).
+    service.messageRouter = {
+      deliver: async () => {
+        throw new Error('the self-hosted registration router delivers nothing');
+      },
+    };
     service.hydrateSystemCacheFromBootstrap = async () => {};
     service.waitForSystemServiceLeaders = async () => {};
     service.registerNodeInCluster = async () => {};
