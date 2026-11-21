@@ -8,7 +8,7 @@ import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {bindReplaceCreateTargetReplicaId} from
   '../../src/rebalancer/operation-workflow-replace-target-binding.js';
-import {OPERATION_METADATA_KEY, WORKFLOW_STEP_TO_STATUS} from
+import {OPERATION_METADATA_KEY, ReplicaStatus} from
   '../../src/rebalancer/replica-operation-progress.js';
 import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
@@ -180,7 +180,7 @@ test('a competing terminal result survives acknowledgement of a previously stamp
         `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?,
          completed_at = ?, error_message = ?, steps_history = json_insert(steps_history, '$[#]', json(?))
          WHERE operation_id = ? AND workflow_step = ?`,
-        [step, WORKFLOW_STEP_TO_STATUS[step], timestamp, timestamp, 'competing terminal result',
+        [step, ReplicaStatus.FAILED, timestamp, timestamp, 'competing terminal result',
           JSON.stringify({step, timestamp}), sending.operation_id, sending.workflow_step]), 1);
     }});
   });

@@ -177,17 +177,8 @@ function allowCreateDispatchAuthority(operation) {
   };
 }
 
-/**
- * Re-read the operation owner's row before every CREATE delivery. The first
- * SENDING delivery normally observes no admission and proceeds with its
- * deterministic proposed token. After admission, every retry adopts the
- * durable tuple so mutable workflow timestamps cannot rebuild its token.
- * Native placement binding already observed its exact committed record.
- * @param {Object} owner
- * @param {Object} operation
- * @param {boolean} replaceRemoveDispatchPhase
- * @return {Promise<Object|null>}
- */
+// Adopt the durable admission tuple so retries never rebuild its token from
+// mutable workflow timestamps.
 function resolveObservedCreateDispatchAuthority(
   owner,
   operation,
@@ -217,9 +208,13 @@ async function refreshCreateDispatchAuthority(
   operation,
   replaceRemoveDispatchPhase,
 ) {
+  if (requiresPlacementCreateBootstrapTopology(operation, replaceRemoveDispatchPhase)) {
+    // The placement binder already validated the exact committed record.
+    // The dispatch workflow owns a detached copy for subsequent projections.
+    return allowCreateDispatchAuthority(structuredClone(operation));
+  }
   if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) ||
-      DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep) ||
-      requiresPlacementCreateBootstrapTopology(operation, replaceRemoveDispatchPhase)) {
+      DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep)) {
     return allowCreateDispatchAuthority(operation);
   }
   const observation =
