@@ -1452,14 +1452,10 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   const status = rawStatus === null ?
     invokeCoreAt(group, expectedGeneration, 'status') :
     {ok: true, value: rawStatus};
-  if (!status.ok) {
-    return status;
-  }
+  if (!status.ok) return status;
   const conf = invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
-  if (!conf.ok) {
-    return conf;
-  }
+  if (!conf.ok) return conf;
   // The applied index is the runtime's own, read in the same turn as the
   // configuration: the index whose apply left the core holding it (commit
   // may run ahead of it), never the core's status.applied.
@@ -1469,6 +1465,9 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
     // snapshot the store wrote), so a reader can tell an applied log from
     // one with entries still to apply.
     lastIndex: group.persistedLastIndex,
+    // The term of the last entry this replica applied (or of the snapshot it
+    // installed), read in the same turn as its applied index.
+    appliedTerm: group.appliedTerm,
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,

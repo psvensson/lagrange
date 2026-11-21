@@ -2,12 +2,13 @@
 // has applied an entry of its own term (the term of the last entry it applied
 // is its current term), monotone within that term.
 //
-// Today (red): raft-rs-status-observation.js computes it as
-// applied > pendingConfIndex. raft-rs raises pendingConfIndex to a
+// Red before its repair (1d4125c7b): raft-rs-status-observation.js computed
+// it as applied > pendingConfIndex. raft-rs raises pendingConfIndex to a
 // configuration entry's index when the leader proposes it, so after the
-// leader applies that entry (applied == pendingConfIndex) the field reads
-// false on an otherwise quiet group although the leader has applied an entry
-// of its own term - until some later entry applies. The placement owner's
+// leader applied that entry (applied == pendingConfIndex) the field read
+// false on an otherwise quiet group although the leader had applied an entry
+// of its own term - until some later entry applied. The repair compares the
+// term of the last applied entry with the current term. The placement owner's
 // term-start barrier and the owner-fact read (other lanes) depend on the
 // exact fact.
 //
