@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2372,
     "integration": 126,
-    "bootstrap": 228,
+    "bootstrap": 229,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-7d56e59c",
+  "censusSize": 2734,
+  "digest": "fnv1a32-97f209b5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -269,6 +269,7 @@
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "bootstrap",
     "test/bootstrap/schema-operations-table-schema.test.js": "bootstrap",
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": "bootstrap",
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": "bootstrap",
     "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap",

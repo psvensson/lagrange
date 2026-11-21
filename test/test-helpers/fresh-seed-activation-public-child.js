@@ -24,9 +24,10 @@ import {createRightsSampler, everyRightTransferred, readIssuedDeclaration,
 
 // R27: a solver probe never starts a seed.
 refuseUnderProbe('a fresh seed runtime');
-// The log level is optional (default error): a witness that reads the
-// seed's own warnings asks for them.
-const [mode, directory, nodeId, portsJson, host, logLevel = 'error'] = process.argv.slice(2);
+// The log level is optional (default error); so is an observation of the
+// seed's bootstrap write window (seed-bootstrap-lane-observer.js modes).
+const [mode, directory, nodeId, portsJson, host, logLevel = 'error', laneObservation = null] =
+  process.argv.slice(2);
 const ports = JSON.parse(portsJson);
 // Periodic sampling is bounded to one sample per macrotask and interval.
 // The committed transition observer below also samples each durable change,
@@ -242,6 +243,9 @@ setOriginalAllocationRightObserver(() => observe(sampleRights));
 
 // --- the supported startup path --------------------------------------------
 
+const bootstrapLane = laneObservation === null ? null :
+  (await import('./seed-bootstrap-lane-observer.js'))
+    .installSeedBootstrapLaneObserver(laneObservation);
 let startupError = null;
 let cleanupError = null;
 let service = null;
@@ -307,6 +311,7 @@ const report = {kind: 'fresh-seed-startup-settled', mode, pid: process.pid, dire
     rightSequences: durable.sampler?.sequences ?? {}, rightsAtSettle, admission, tcpConnections,
     probeOutcomes: Object.fromEntries(probeOutcomes), listeners,
     coreEntries, nativeEntryCount, nativeLeaders: [...nativeLeaders.values()], observerErrors,
+    bootstrapLane: bootstrapLane?.report() ?? null,
     samplingCost: {samples: durable.samples, totalMs: durable.sampleMs}}};
 // The parent records the real outcome before explicitly reaping this process.
 process.once('message', (message) => {

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 352,
+    "bootstrap-membership": 353,
     "cdc-metadata": 72,
     "cli-tooling": 99,
     "control-plane": 237,
@@ -25,10 +25,10 @@
     "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-99e269fe",
+  "censusSize": 2734,
+  "digest": "fnv1a32-7ae6fb5a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-08249e09",
+  "observationDigest": "fnv1a32-5743ae02",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -288,6 +288,7 @@
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "bootstrap-membership",
     "test/bootstrap/schema-operations-table-schema.test.js": "bootstrap-membership",
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap-membership",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
@@ -3939,6 +3940,15 @@
     },
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
+      ]
+    },
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
         "test/test-helpers/fresh-seed-activation-public-child.js"
       ]
     },
