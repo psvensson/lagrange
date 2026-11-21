@@ -6,7 +6,8 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminOwnerOperations} from '../../src/admin/admin-owner-operations.js';
 import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
-import {NODE_REGISTRATION_OUTCOME, writeNodeRegistrationAtIncarnation} from
+import {NODE_REGISTRATION_OUTCOME, createNodeRegistrationIssueRecord,
+  writeNodeRegistrationAtIncarnation} from
   '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import {buildNodeRegistrationRow} from
   '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
@@ -78,7 +79,9 @@ function createFixture(t, beforeDelete = () => {}, afterDelete = () => {}) {
     cdcIntegrationService: service, systemTableCache: cache});
   const owner = new NodesOwner({controlPlaneSystemTableGateway: gateway});
   async function register(bootIncarnation, status) {
+    // Each call is a new boot lifecycle's registration: its own issue record.
     const result = await writeNodeRegistrationAtIncarnation({bootIncarnation,
+      issueRecord: createNodeRegistrationIssueRecord(),
       row: registrationRow(bootIncarnation),
       observe: async () => ({available: true, row: observe()}),
       insert: (row, options) => owner.insertNode(row, options),

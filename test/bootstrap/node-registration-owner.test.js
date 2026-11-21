@@ -88,7 +88,8 @@ const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
 function buildPublicationOwnerRecorder(publicationCalls) {
   return {
     // The monotonic NODES registration (D-7) at this boot's incarnation.
-    registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+    registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+      options) => {
       publicationCalls.push({kind: 'node',
         row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
       return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -182,7 +183,8 @@ test(
     const publicationCalls = [];
     const membershipPublicationRuntimeOwner = {
       // The monotonic NODES registration (D-7) at this boot's incarnation.
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+        options) => {
         publicationCalls.push({kind: 'node',
           row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
         return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
@@ -279,7 +281,8 @@ test(
     const incarnationAdvances = [];
     const membershipPublicationRuntimeOwner = {
       // The monotonic NODES registration (D-7) at this boot's incarnation.
-      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, _issueRecord,
+        options) => {
         publicationCalls.push({kind: 'node',
           row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
         return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,

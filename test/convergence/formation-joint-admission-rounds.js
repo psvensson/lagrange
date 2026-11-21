@@ -385,28 +385,16 @@ function createRoundDriver(world) {
       await settleWorld(world);
       nextEvaluationInstant(world);
     },
-    async restartJoiner(
-      nodeId,
-      {
-        wipeDataDir = false,
-        externalServicesCleanup = false,
-        registrationNowMs = null,
-      } = {},
-    ) {
+    async restartJoiner(nodeId, {wipeDataDir = false} = {}) {
       nextEvaluationInstant(world);
       world.stopNode(nodeId, {
         expireLease: true,
         wipeDataDir,
-        externalServicesCleanup,
       });
-      if (externalServicesCleanup) {
-        world.cache.tombstoneStore.clear();
-      }
       await settleWorld(world);
       nextEvaluationInstant(world);
       const hosts = await world.registerJoiner(nodeId, {
         durableStateDetected: !wipeDataDir,
-        registrationNowMs,
       });
       watchBounds(hosts);
       joiners.set(nodeId, mountJoinReadySignal(world, nodeId));

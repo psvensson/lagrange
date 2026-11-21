@@ -28,7 +28,7 @@
   "censusSize": 2668,
   "digest": "fnv1a32-a237ffbe",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4aa9d9a3",
+  "observationDigest": "fnv1a32-dbdb156b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3257,7 +3257,8 @@
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/owners/node-registration-incarnation-write.js",
-        "src/control-plane/owners/services-owner.js"
+        "src/raft/raft-committed-membership-constants.js",
+        "src/storage/data-directory-manager.js"
       ]
     },
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": {
@@ -5749,6 +5750,7 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-error-classification.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
@@ -5756,10 +5758,12 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-retry-scheduling.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/operation-workflow-observed-progress-retention.js",
         "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "src/storage/data-directory-manager.js",
         "src/storage/data-directory-process-owner.js",
         "test/convergence/formation-joint-admission-world.js",
         "test/simulation/formation-sim-infrastructure-composition.js"

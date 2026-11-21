@@ -33,6 +33,7 @@ import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
 import {
   NODE_REGISTRATION_OUTCOME,
+  createNodeRegistrationIssueRecord,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 import {MembershipPublicationRuntimeOwner} from
@@ -105,6 +106,7 @@ test('W1 (R6-B): a registration INSERT cut by a runtime replacement, with no ' +
       writeNodeRegistrationAtIncarnation({
         row: {node_id: JOINER_ID, value: 'v'},
         bootIncarnation: BOOT_INCARNATION,
+        issueRecord: createNodeRegistrationIssueRecord(),
         observe: unavailableAuthority,
         insert: async (row) => {
           trap ??= trapCore(surface.partitionId, {once: true});
@@ -151,9 +153,11 @@ for (const [label, rebuildRow] of [['the same row', false],
       const surface = of(TABLES.NODES);
       const firstRow = nodeRow();
       // The joiner's authoritative read is unavailable, as in the lab run.
+      // The first attempt and its re-drive are one boot lifecycle.
+      const issueRecord = createNodeRegistrationIssueRecord();
       const register = (row) => withMutedConsoleError(() =>
         writeNodeRegistrationAtIncarnation({
-          row, bootIncarnation: BOOT_INCARNATION,
+          row, bootIncarnation: BOOT_INCARNATION, issueRecord,
           observe: unavailableAuthority,
           insert: (stamped, identity) => gateway.insertSystemTableRow(
             TABLES.NODES, stamped, {...JOIN_WRITE_OPTIONS, ...identity}),
