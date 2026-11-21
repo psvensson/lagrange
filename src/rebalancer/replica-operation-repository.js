@@ -502,6 +502,8 @@ class ReplicaOperationRepository {
     Object.assign(this, createRetainedPlacementRepairPorts(options));
     this.retainedPlacementRepairs = new Map();
     this.retainedPlacementRepairWakes = new Map();
+    this.retainedPlacementRepairReadRetry = null;
+    this.retainedPlacementRepairReadRetryDelayMs = 0;
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
     this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;

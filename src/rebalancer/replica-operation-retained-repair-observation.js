@@ -6,7 +6,8 @@ import {LEDGER_PARTITION_ID, copyCapacityObservationAffects} from
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {RETAINED_COPY_POLICY_STATE as POLICY} from '../partition/partition-placement-admission-constants.js';
 
-const REPAIR_OBSERVATION = Object.freeze({NONE: 0, OWN_ROW: 1, CLEARING: 2, LEADER: 4});
+const REPAIR_OBSERVATION = Object.freeze({NONE: 0, OWN_ROW: 1, CLEARING: 2,
+  LEADER: 4, CONTENTION: 8});
 
 function peerObservationMayClear(attempt, row) {
   if (!row) return false;
@@ -27,7 +28,7 @@ function ownRowObservation(attempt, tableName, row) {
 
 function recordRepairObservation(attempt, kind) {
   attempt.observations |= kind;
-  if (kind !== REPAIR_OBSERVATION.OWN_ROW) attempt.delegated = null;
+  if ((kind & REPAIR_OBSERVATION.LEADER) !== 0) attempt.delegated = null;
 }
 
 function takeRepairObservations(attempt) {

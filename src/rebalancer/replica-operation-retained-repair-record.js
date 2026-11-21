@@ -3,13 +3,15 @@ import {REPAIR_OBSERVATION} from './replica-operation-retained-repair-observatio
 import {PLACEMENT_TRIGGER} from './replica-placement-owner-constants.js';
 
 const RETAINED_REPAIR_DECISION = Object.freeze({EXACT: 'exact', CHANGED: 'changed',
-  ABSENT: 'absent', UNAVAILABLE: 'unavailable', CONTENDED: 'contended'});
-const RETAINED_REPAIR_MODE = Object.freeze({CONFIRM: 'confirm', RETRY: 'retry'});
+  ABSENT: 'absent', UNAVAILABLE: 'unavailable', CONTENDED: 'contended', PENDING: 'pending'});
+const RETAINED_REPAIR_MODE = Object.freeze({CONFIRM: 'confirm', RETRY: 'retry',
+  HANDOFF: 'handoff', JOIN: 'join', REFRESH: 'refresh'});
 
 function retainedRepairRecord(operation, entryId, body) {
   return {operation: copyOperationOutcomeData(operation), entryId, body,
-    blockers: null, occupancy: null, pending: null, lastAnswer: null,
-    observations: REPAIR_OBSERVATION.NONE,
+    blockers: null, occupancy: null, pending: null, lastAnswer: null, lastDecision: null,
+    observations: REPAIR_OBSERVATION.NONE, retryObservations: REPAIR_OBSERVATION.NONE,
+    lastDecisionTerm: null,
     minimumLedgerIndex: 0, minimumLedgerTerm: 0, expectedOwner: null,
     nativeIngressTerm: null, nativeIngressExpected: false,
     clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};

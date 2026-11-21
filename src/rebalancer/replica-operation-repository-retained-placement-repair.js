@@ -1,8 +1,9 @@
+import {assignRetainedRepairReadRetryMethods} from './replica-operation-retained-repair-read-retry.js';
 import {assignRetainedRepairIngressMethods} from './replica-operation-retained-repair-ingress.js';
 import {RETAINED_REPAIR_DECISION as DECISION, RETAINED_REPAIR_MODE as MODE,
   retainedRepairRecord, materializeRepairContention} from './replica-operation-retained-repair-record.js';
 import {matchesRetainedRepairObservation} from './replica-operation-retained-repair-reply.js';
-import {REPAIR_AUTHORITY, readRetainedRepairAuthority} from
+import {REPAIR_AUTHORITY, REPAIR_READ_SCOPE, readRetainedRepairAuthority} from
   './replica-operation-retained-repair-authority.js';
 import {retainedPlacementContentionDecision, retainedPlacementEntityDecision} from
   '../partition/partition-placement-retained-repair.js';
@@ -92,15 +93,6 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async ensureRetainedOperationRow(operation) {
-      const observation = await this.confirmRetainedOperationRow(operation);
-      if (observation.state === ROW_STATE.EXACT) {
-        const held = this.retainedPlacementRepairs.get(operation.operationId);
-        if (held?.operation.createdAt === operation.createdAt && !held.pending) {
-          this.retainedPlacementRepairs.delete(operation.operationId);
-        }
-        return true;
-      }
-      if (observation.state !== ROW_STATE.ABSENT) return false;
       return this.repairRetainedOperation(operation);
     },
 
@@ -128,8 +120,28 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async retryRetainedRepairDecision(attempt, mode) {
-      const decision = await this.readRetainedRepairDecision(attempt);
-      if (decision.state !== DECISION.ABSENT || mode === MODE.CONFIRM) {
+      if (mode === MODE.JOIN) {
+        const satisfied = await this.submitRetainedPlacementRepairAttempt(
+          attempt.operation, attempt);
+        if (satisfied || !this.retainedRepairAttemptIsCurrent(attempt)) return satisfied;
+        if (attempt.lastAnswer?.committed !== true) return false;
+        const current = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.CENSUS);
+        attempt.lastDecision = current;
+        if (current.state === DECISION.UNAVAILABLE) {
+          this.scheduleRetainedRepairReadRetry(attempt, OBSERVATION.CONTENTION);
+          return false;
+        }
+        return this.settleRetainedRepairDecision(attempt, current);
+      }
+      const scope = this.retainedRepairReadScope(mode);
+      const decision = await this.readRetainedRepairDecision(attempt, scope);
+      attempt.lastDecision = decision;
+      if (decision.state === DECISION.UNAVAILABLE) {
+        const observations = this.retainedRepairRetryObservation(mode);
+        this.scheduleRetainedRepairReadRetry(attempt, observations);
+        return false;
+      }
+      if (decision.state !== DECISION.ABSENT || mode === MODE.CONFIRM || mode === MODE.REFRESH) {
         return this.settleRetainedRepairDecision(attempt, decision);
       }
       attempt.nativeAnswerPromise = null;
@@ -139,6 +151,18 @@ function assignRetainedPlacementRepairMethods(Repository) {
       } finally {
         attempt.nativeIngressTerm = null;
       }
+    },
+
+    retainedRepairReadScope(mode) {
+      if (mode === MODE.REFRESH) return REPAIR_READ_SCOPE.CENSUS;
+      return mode === MODE.CONFIRM || mode === MODE.HANDOFF ?
+        REPAIR_READ_SCOPE.SUBJECT : REPAIR_READ_SCOPE.CURRENT;
+    },
+
+    retainedRepairRetryObservation(mode) {
+      if (mode === MODE.CONFIRM) return OBSERVATION.OWN_ROW;
+      if (mode === MODE.REFRESH) return OBSERVATION.CONTENTION;
+      return mode === MODE.HANDOFF ? OBSERVATION.LEADER : OBSERVATION.CLEARING;
     },
 
     retainedRepairAttemptIsCurrent(attempt) {
@@ -168,10 +192,12 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (!await this.prepareRetainedRepairAttempt(attempt)) return false;
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
       const releaseSequence = this.retainedPlacementRepairReleaseSequence ?? 0;
+      attempt.lastDecision = {state: DECISION.PENDING};
       const answer = await this.sendRetainedRepairAttempt(attempt);
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
       attempt.lastAnswer = answer;
       if (matchesRetainedRepairObservation(answer, attempt)) {
+        this.recordRetainedRepairCustody(attempt, answer);
         return this.consumeRetainedRepairObservation(attempt, answer.retainedRepairObservation);
       }
       const committed = isCommittedRepairAnswer(answer, attempt);
@@ -223,21 +249,24 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async confirmAdmittedRetainedRepair(attempt) {
-      const observation = await this.queryReplicaOperationPersistenceAuthorityObservation(
-        attempt.operation, {requireAbsenceConfirmation: true});
+      const decision = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.SUBJECT);
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
-      const observed = observation?.operation;
-      const exact = observed?.createdAt === attempt.operation.createdAt &&
-        this.isReplicaOperationUpdateSatisfied(attempt.operation, observed);
-      if (observed) this.retainedPlacementRepairs.delete(attempt.operation.operationId);
-      else if (observed === null && !observation?.deferredOutcome) attempt.entryId = null;
-      if (exact) this.syncIncompleteOperationObservation(observed);
-      return exact;
+      attempt.lastDecision = decision;
+      if (decision.state === DECISION.UNAVAILABLE) {
+        this.scheduleRetainedRepairReadRetry(attempt, OBSERVATION.OWN_ROW);
+        return false;
+      }
+      if (decision.state === DECISION.ABSENT) {
+        attempt.entryId = null;
+        attempt.delegated = null;
+      }
+      return this.settleRetainedRepairDecision(attempt, decision);
     },
 
     retainCommittedRepairRefusal(attempt, result) {
       const refusal = readRetainedRepairRefusal(result, attempt);
       if (refusal.state === REPAIR_ANSWER_STATE.UNKNOWN) return false;
+      attempt.lastDecision = {state: DECISION.CONTENDED, result};
       attempt.blockers = refusal.blockers;
       attempt.occupancy = refusal.occupancy;
       attempt.clearingTrigger = refusal.clearingTrigger;
@@ -245,6 +274,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
         this.retainedPlacementRepairs.delete(attempt.operation.operationId);
       } else {
         attempt.entryId = null;
+        attempt.delegated = null;
       }
       return false;
     },
@@ -253,7 +283,11 @@ function assignRetainedPlacementRepairMethods(Repository) {
       if (this.isShuttingDownRequested()) return;
       for (const attempt of this.retainedPlacementRepairs.values()) {
         if (predicate(attempt)) {
-          recordRepairObservation(attempt, kind);
+          if (attempt.retryObservations !== OBSERVATION.NONE) {
+            attempt.retryObservations |= kind;
+          } else {
+            recordRepairObservation(attempt, kind);
+          }
         }
       }
       if (this.retainedPlacementRepairDrain) return;
@@ -288,15 +322,27 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async revalidateRetainedRepairObservation(attempt, observations) {
-      const mode = observationAllowsRetry(observations) ? MODE.RETRY : MODE.CONFIRM;
+      const mode = this.retainedRepairObservationMode(attempt, observations);
       await this.runRetainedRepairDecision(attempt, () =>
         this.retryRetainedRepairDecision(attempt, mode));
     },
 
-    async readRetainedRepairDecision(attempt) {
-      const authority = await readRetainedRepairAuthority(this, attempt);
+    retainedRepairObservationMode(attempt, observations) {
+      if ((observations & OBSERVATION.LEADER) !== 0) return MODE.HANDOFF;
+      if ((observations & OBSERVATION.CONTENTION) !== 0) return MODE.REFRESH;
+      if (!observationAllowsRetry(observations)) return MODE.CONFIRM;
+      return attempt.delegated ? MODE.JOIN : MODE.RETRY;
+    },
+
+    async readRetainedRepairDecision(attempt, scope) {
+      const authority = await readRetainedRepairAuthority(this, attempt, scope);
       if (!this.retainedRepairAttemptIsCurrent(attempt) ||
           authority.state !== REPAIR_AUTHORITY.READY) return {state: DECISION.UNAVAILABLE};
+      this.completeRetainedRepairReadDependency(attempt);
+      attempt.lastDecisionTerm = authority.witness.term;
+      attempt.minimumLedgerIndex =
+        Math.max(attempt.minimumLedgerIndex, authority.witness.appliedIndex);
+      attempt.minimumLedgerTerm = Math.max(attempt.minimumLedgerTerm, authority.witness.term);
       const row = authority.rows.find((candidate) =>
         candidate.operation_id === attempt.operation.operationId);
       if (row) {
@@ -329,6 +375,11 @@ function assignRetainedPlacementRepairMethods(Repository) {
       case DECISION.CONTENDED:
         this.retainObservedRepairContention(attempt, decision.result);
         return false;
+      case DECISION.UNAVAILABLE:
+        this.scheduleRetainedRepairReadRetry(attempt, OBSERVATION.CLEARING);
+        attempt.clearingTrigger =
+          PLACEMENT_CLEARING_TRIGGER[PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE];
+        return false;
       default:
         return false;
       }
@@ -343,6 +394,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     async consumeRetainedRepairObservation(attempt, observation) {
+      attempt.lastDecision = observation;
       switch (observation.state) {
       case DECISION.EXACT:
       case DECISION.CHANGED:
@@ -351,6 +403,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
         this.retainObservedRepairContention(attempt, observation.result);
         return false;
       case DECISION.UNAVAILABLE:
+        if (!attempt.delegated) this.scheduleRetainedRepairReadRetry(attempt, OBSERVATION.OWN_ROW);
         attempt.clearingTrigger =
           PLACEMENT_CLEARING_TRIGGER[PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE];
         return false;
@@ -374,8 +427,8 @@ function assignRetainedPlacementRepairMethods(Repository) {
         attempt.expectedOwner = {nodeId: row.node_id, replicaId: row.replica_id};
         return OBSERVATION.LEADER;
       }
-      if (attempt.delegated) return OBSERVATION.NONE;
       if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        if (attempt.delegated) return OBSERVATION.NONE;
         return attempt.clearingTrigger === PLACEMENT_TRIGGER.LEADERSHIP_START ||
           attempt.clearingTrigger === PLACEMENT_TRIGGER.NODES_OR_FORMATION ?
           OBSERVATION.CLEARING : OBSERVATION.NONE;
@@ -413,6 +466,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     clearRetainedPlacementRepairCustody() {
+      this.cancelRetainedRepairReadRetry();
       for (const service of this.retainedPlacementRepairWakes.keys()) {
         this.unbindRetainedPlacementRepairWake(service);
       }
@@ -420,6 +474,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
   });
   assignRetainedRepairIngressMethods(Repository);
+  assignRetainedRepairReadRetryMethods(Repository);
 }
 
 export {assignRetainedPlacementRepairMethods, createRetainedPlacementRepairPorts};
