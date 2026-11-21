@@ -130,7 +130,23 @@ change selection. [Nightly run](https://github.com/psvensson/lagrange/actions/ru
 The
 complete original dirty checkout is preserved at `b914991bd`.
 Development and measurement of the core system take precedence over new
-product features.
+product features. The consecutive physical pass count is **0/3**.
+
+Two independent reviews found the same recovery error in different owners.
+The publication writer retains the callback for the old CDC service together
+with the statement. After replacement the callback can keep sending the
+original entry to the retired service. The placement ledger can tell a sender
+it has taken custody of entry E2 while its slot still contains E1. In each
+case a caller can finish its turn without a live owner able to carry out the
+remaining work. For both repairs, hold the original answer, replace or contend
+for the owner, and require the same entry to settle through the live owner.
+Then submit the next legitimate change. The publication tests additionally
+corrupt the actual returned value. The placement tests deliver a matching
+entry number with a different partition or a refusal from another command.
+The source reviews held `1421ac153` and `0f1eaa080`, respectively. Neither
+case has been identified as the cause of the first physical SERVICES timeout.
+[Publication evidence and reviews](../quests/fresh-formation-user-table-routability/log.ndjson)
+· [Placement evidence and review](../quests/strict-operation-outcomes/log.ndjson).
 
 On `616197e10`, all 65 files in the complement to the strict selection
 passed on tv-dator (3,108 assertions). The three-process public journey
@@ -356,9 +372,10 @@ an unresolved answer to the stale writer and allowed a freshly derived
 intent to progress. All twelve native cases and sixteen wait-bound assertions
 passed on adams-gamla. The broad coordinator run on adam-laptop still failed.
 Its retained ACK readback passed. Case 87 exposed an OPEN row with every ACK
-present and closure still owed. The publication owner is repairing that
-transition and the CDC shutdown contract. The fixture owner is correcting
-substitutes that return a different revision to an exact-key read.
+present and closure still owed. On `2c9b7ef07`, case 13 persisted that closure without replaying it.
+On `536eeb097`, the real CDC shutdown file passed all 24 assertions. The
+broader coordinator fixtures and these repairs are composed at `1421ac153`.
+[Closure and shutdown originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-cdc-and-open-closure-nov21.tar.gz).
 [Managed originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-competing-refresh-and-ack-readback-nov21.tar.gz).
 
 The prevention rule for publication is that a retry keeps the original
