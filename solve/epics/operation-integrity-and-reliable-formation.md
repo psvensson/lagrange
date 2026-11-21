@@ -139,37 +139,38 @@ authority refusal and reached the runtime constructor without a membership
 stamp. Both failure orders were reproduced on the managed lab. On
 `e7e978450` the materialized learner remains owned after the caller expires
 and a reconstructed ADD reads the original bootstrap stamp from its
-operation. Independent review identified two additional orders for the
-CREATE owners to prove: recovery of an already-admitted row lacking its
-original stamp and a voter-gated REPLACE whose usable service address
-arrives after the last consensus wake. The three-host measurement determines
-how the two demonstrated ADD repairs affect formation. A focused pass alone
-cannot establish fleet progress.
+operation. Two additional arrival orders now have managed controls.
+At `d31cbc87b`, reconstruction requires the original founding history entry.
+If its stamp is unavailable, the target retains the admitted worker and
+rechecks when the ledger or lifecycle owner signals a change. At
+`4e402178d`, a stationary committed voter can wake when its exact service
+address arrives. The initial and resumed readiness checks require the same
+attempt. The composed voter changes are on `3c5beb4e2`.
 
 The physical traces expose a second boundary in the operation ledger.
 For the same GROWTH_PROMOTE, SQLite persists the second replica in
-`source_replica_id` and the promotion cohort in the founding operation
-history. The dispatcher's CDC row conversion reconstructs source identity
-from a different history field, and its reverse projection omits the source
-column. Both `e5deee2a` and `f540550c` recorded the workflow's strict
-placement check rejecting the resulting operation. Some affected promotions
-later reached ACTIVE; count the first rejected transition and its eventual
-settlement separately. The dispatch and repository owners share one change:
-preserve the same fixed subject through a native write, CDC notification,
-replay and terminal adoption. A different promotion cohort must still be
-refused. The current administration route may change without rewriting the
-admitted subject.
+`source_replica_id` and the ordered cohort in the founding history.
+Both `e5deee2a` and `f540550c` recorded strict placement rejection after
+dispatch reconstructed a different subject. Some operations later reached
+ACTIVE. The repository, workflow and dispatch changes at `90b20be96`
+carry the admitted cohort through writes and wake notifications. A malformed
+promotion supplies no executable command or voter credit. Its live ledger
+row still identifies the competing writer for a self-move. Growth consumes
+zero copy slots, so independent copy admission can proceed. The original
+three failing controls at `657f6d974` passed with the existing dispatch and
+ledger controls on two managed hosts (five files, 100 assertions). Review
+covers these decisions for the supported row schema and existing step-age
+policy. Historical generation and retirement of voter credit still need
+their item 04 evidence.
 
-The original November 2 permanent-read-outage witness required FAILED and
-claimed removal at expiry. In the original managed `f22dd7f35` run the
-finite outage recovered. The indefinite read refusal never supplied a
-terminal decision. Its test timed out at 60 seconds and its referenced
-interval kept the process alive until the 600-second runner cutoff. The
-formation proof owner preserves that original and verifies both native
-outcomes: restoration of authority after expiry resumes the exact materialized
-worker, and a readable conflicting founding operation still requires the
-guarded FAILED and claimed REMOVE path. This prospective proof correction
-remains open through its managed run and independent review.
+The November 2 permanent-read-outage witness required FAILED and removal
+at expiry. At `f22dd7f35`, its finite outage recovered and its indefinite
+outage reached the runner cutoff. On `254b7bd63`, the native target
+preserves its exact materialized worker across authority loss and resumes
+after authority returns. A readable conflicting founding operation still
+causes guarded failure and completes removal. All four controls passed on
+tv-dator and received independent review. The cleanup control supplies the
+coordinator terminal operation. Its execution proves the target's behavior.
 
 Run `f540550c` on clean `e7e978450` missed the same 420-second
 gate. Serving lanes opened at 2.069 seconds. By expiry, two snapshot reads
@@ -189,11 +190,25 @@ deadline the three node logs contain 127 such errors across 13 operation
 keys. The first occurred on the coordinator's remote handoff. The same
 message is absent from the three preceding physical archives. The
 bootstrap binding returns an immutable committed snapshot to a path that
-updates the dispatch operation after a write. The dispatch owner is
-reproducing that boundary with an actual acknowledgement and guarded
-SQLite transition. Keep committed results immutable, and preserve one
-writable mirror per dispatch attempt. Verify the first write, duplicate
-handoff and authoritative replay before repeating the fleet trial.
+updates the dispatch operation after a write. At `8115cabe7` both bootstrap paths pass one detached,
+writable attempt to dispatch and retain the immutable committed result.
+Real PENDING and SENDING acknowledgements plus the competing SQLite
+terminal case passed. The three-process public SQL journey on `1500c51bf`
+passed on tv-dator in 39.509 seconds. This uses one host.
+
+The SENDING timeout has a separate race with target admission. At
+`dc4a03ab4`, three native controls reproduced a failure when the target
+won admission before the timeout write or while terminal repair was
+pending. Two controls preserve the opposite orders: a timeout that wins
+the conditional write fences later admission, and an explicitly confirmed
+target failure can settle. The workflow owner is carrying the
+admission-absent condition through the original write and its retry. Verify
+that the admitted target continues through its existing progress owner.
+
+The integration owner composes these changes, runs the frozen classified
+set and affected native cases on that source, and runs full-range static
+checks. The physical streak is zero of three. Follow the formation Quest
+for the exact pins, original outputs and subsequent physical trials.
 
 The prior three-host runs shared a failure to reach global quiet. Within
 the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with
