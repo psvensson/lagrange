@@ -1,3 +1,5 @@
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {withRepairLedger, attachCurrentCopyOwner, stepRetainedLedgerRow} from './placement-retained-row-repair-fixture.js';
 // File-backed SQLite, real PartitionService committed apply, statement outcomes,
 // CDC ledger and repository/workflow producers. Consensus transport is a
@@ -160,13 +162,17 @@ test('exact existing row succeeds; changed birth and history refuse without repl
     assert.equal(first.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
     const replay = await placementAdmission.requestPlacementRepair(world.leader,
       {entryId: 'exact-existing', body: {operation: retained}});
-    assert.equal(replay.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+    assert.equal(replay.committed, undefined);
+    assert.equal(replay.retainedRepairObservation.state, 'exact');
+    assert.equal(world.commands.length, 1, 'a confirmed row is not a newly committed replay entry');
     for (const operation of [{...retained, createdAt: retained.createdAt + 1},
       {...retained, stepsHistory: [...retained.stepsHistory,
         {step: retained.workflowStep, timestamp: retained.updatedAt}]}]) {
       const answer = await placementAdmission.requestPlacementRepair(world.leader,
         {entryId: `changed-${operation.stepsHistory.length}`, body: {operation}});
-      assert.equal(answer.placementResult.outcome, PLACEMENT_OUTCOME.REFUSED);
+      assert.equal(answer.committed, undefined);
+      assert.equal(answer.retainedRepairObservation.state, 'changed');
+      assert.equal(world.commands.length, 1, 'changed identity/history never earns a new proposal');
     }
     assert.equal(ledgerRows(world.leader)[0].created_at, retained.createdAt);
   }));
@@ -726,7 +732,7 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
         const reply = await submit(payload);
         if (first) {
           first = false;
-          assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+          assert.equal(repairRefusalObservation(reply).reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
           received();
           await held;
         }
@@ -764,6 +770,13 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
         await remote.coordinator.shutdown();
       }
     }));
+}
+
+function repairRefusalObservation(answer) {
+  if (answer.committed === true) return answer.placementResult;
+  assert.equal(answer.committed, undefined);
+  assert.equal(answer.retainedRepairObservation.state, 'contended');
+  return answer.retainedRepairObservation.result;
 }
 
 async function observeBurst(sender, row) {
@@ -882,7 +895,7 @@ for (const lane of ['source', 'target']) {
           const answer = await submit(payload);
           if (first) {
             first = false;
-            assert.equal(answer.placementResult.reason, lane === 'source' ?
+            assert.equal(repairRefusalObservation(answer).reason, lane === 'source' ?
               PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY : PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
             received();
             await gate;
@@ -967,11 +980,14 @@ for (const [name, corrupt] of invalidCensusAnswers) {
         assert.equal(await sender.repairRetainedOperation(retained), false);
         const held = sender.retainedPlacementRepairs.get(retained.operationId);
         assert.ok(held.occupancy);
-        const read = sender.executeReplicaOperationsRead;
+        const receiver = world.coordinator.repository;
+        const read = receiver.executeReplicaOperationsRead;
         let reads = 0;
-        sender.executeReplicaOperationsRead = async (...args) => {
+        receiver.executeReplicaOperationsRead = async (...args) => {
+          const answer = await read.apply(receiver, args);
+          if (args[2]?.authoritativeReadMode !== READ_MODE.OWNER_RPC_REQUIRED) return answer;
           reads += 1;
-          return corrupt(await read.apply(sender, args));
+          return corrupt(answer);
         };
         await stepRetainedLedgerRow(world, holders[0], WORKFLOW_STEP.FAILED);
         const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
@@ -980,11 +996,16 @@ for (const [name, corrupt] of invalidCensusAnswers) {
         assert.equal(reads, 1, 'one bounded authoritative read for the whole release burst');
         assert.equal(sender.retainedPlacementRepairs.get(retained.operationId), held,
           'partial, stale or foreign authority cannot retire or replace the exact retained record');
-        sender.executeReplicaOperationsRead = read;
+        receiver.executeReplicaOperationsRead = read;
+        assert.equal(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+          .get(retained.operationId), undefined, 'unqualified census cannot authorize the native write');
+        receiver.observeRetainedPlacementRepairCommit('services', {
+          replica_id: world.leader.replicaId, node_id: world.leader.nodeId,
+          partition_id: world.leader.partitionId, raft_role: 'leader', status: 'active'});
         await settleRepair(world);
         const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
           .get(retained.operationId);
-        assert.ok(row, 'the actual native owner can independently win; corrupted read is not its authority');
+        assert.ok(row, 'a genuine provider/leadership observation permits a new qualified owner read');
         await observeBurst(sender, row);
         assert.equal(sender.retainedPlacementRepairs.size, 0,
           'a genuine correctly scoped successor observation can still confirm the actual winner');
@@ -1136,7 +1157,7 @@ for (const authority of ['exact', 'changed', 'unavailable']) {
   test(`queued real E2 joins E1 winner and confirms ${authority} authority without relabeling`, () =>
     withRepairLedger(async (world) => {
       const race = await queuedRepairWinner(world);
-      const originalRead = race.receiver.executeReplicaOperationsRead;
+      const originalRead = race.sender.executeReplicaOperationsRead;
       try {
         assert.notEqual(race.e1.entryId, race.e2.entryId);
         assert.equal(world.commands.length, 1);
@@ -1147,12 +1168,8 @@ for (const authority of ['exact', 'changed', 'unavailable']) {
               updated_at: race.retained.updatedAt + 1}});
         }
         if (authority === 'unavailable') {
-          race.receiver.executeReplicaOperationsRead = (...args) => {
-            const held = race.receiver.retainedPlacementRepairs.get(race.retained.operationId);
-            return held?.entryId === race.e2.entryId ?
-              Promise.resolve({success: false, rowSetComplete: false}) :
-              originalRead.apply(race.receiver, args);
-          };
+          race.sender.executeReplicaOperationsRead = async () =>
+            ({success: false, rowSetComplete: false});
         }
         race.releaseSend();
         await settleTicks();
@@ -1163,14 +1180,16 @@ for (const authority of ['exact', 'changed', 'unavailable']) {
         assert.equal(await race.sourceResult, authority === 'exact');
         const reply = race.reply();
         assert.equal(reply.committed, undefined, 'E1 is not a durable outcome under E2 identity');
-        assert.equal(reply.retainedRepairObservation.state, authority);
+        assert.equal(reply.retainedRepairObservation.state, authority === 'unavailable' ? 'exact' : authority);
         assert.equal(reply.retainedRepairObservation.entryId, race.e2.entryId);
         assert.equal(world.commands.length, 1, 'joining a winner does not create an exact-existing proposal');
         if (authority === 'unavailable') {
           const held = race.sender.retainedPlacementRepairs.get(race.retained.operationId);
           assert.equal(held.entryId, race.e2.entryId);
           assert.deepEqual(held.body, race.e2.body);
-          race.receiver.executeReplicaOperationsRead = originalRead;
+          assert.equal(held.lastDecision.state, 'unavailable',
+            'the confirming actor keeps a typed uncertainty instead of trusting the winner hint');
+          race.sender.executeReplicaOperationsRead = originalRead;
           const actual = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
             .get(race.retained.operationId);
           await observeBurst(race.sender, actual);
@@ -1182,10 +1201,67 @@ for (const authority of ['exact', 'changed', 'unavailable']) {
           .get(race.retained.operationId);
         assert.equal(actual.created_at, race.retained.createdAt + (authority === 'changed' ? 1 : 0));
       } finally {
-        race.receiver.executeReplicaOperationsRead = originalRead;
+        race.sender.executeReplicaOperationsRead = originalRead;
         race.releaseSend();
         race.releaseWinner();
         await race.remote.coordinator.shutdown();
       }
     }));
 }
+
+test('real committed BUSY E0 lost reply replays across repositories without a fresh proposal', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const competitor = await compete(world);
+    const receiver = world.coordinator.repository;
+    const native = receiver.repairRetainedPlacement;
+    let first = true;
+    receiver.repairRetainedPlacement = async (payload) => {
+      const answer = await native(payload);
+      if (first) {
+        first = false;
+        throw new Error('lost actual committed BUSY E0 reply');
+      }
+      return answer;
+    };
+    assert.equal(await receiver.repairRetainedOperation(retained), false);
+    const e0 = world.commands.at(-1);
+    const recorded = readCommittedStatementOutcome(world.leader, `entry:${e0.entryId}`);
+    assert.equal(JSON.parse(recorded.ownerResultText).reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+    assert.equal(receiver.retainedPlacementRepairs.get(retained.operationId).entryId, e0.entryId);
+    const remote = remoteCaller(world);
+    try {
+      const before = world.commands.length;
+      const replay = await remote.coordinator.repository.repairRetainedPlacement(
+        {entryId: e0.entryId, body: e0.body});
+      assert.equal(replay.committed, true);
+      assert.equal(replay.entryId, e0.entryId);
+      assert.equal(replay.logIndex, recorded.logIndex);
+      assert.equal(replay.term, recorded.term);
+      assert.equal(replay.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+      assert.equal(world.commands.length, before);
+      receiver.repairRetainedPlacement = native;
+      assert.equal(await receiver.repairRetainedOperation(retained), false);
+      assert.equal(world.commands.length, before, 'the original E0 result is resolved, not reminted');
+      let observed;
+      const submit = remote.coordinator.repository.repairRetainedPlacement;
+      remote.coordinator.repository.repairRetainedPlacement = async (payload) => {
+        observed = await submit(payload);
+        return observed;
+      };
+      assert.equal(await remote.coordinator.repository.repairRetainedOperation(retained), false);
+      assert.equal(observed.committed, undefined);
+      assert.equal(observed.retainedRepairObservation.state, 'contended');
+      assert.equal(world.commands.length, before, 'current observed contention is paired with real durable E0');
+      await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+      const clearing = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(competitor.operationIds[0]);
+      await observeBurst(remote.coordinator.repository, clearing);
+      await settleRepair(world);
+      assert.equal(world.commands.length, before + 1);
+      assert.equal(world.leader.db.prepare('SELECT created_at FROM replica_operations WHERE operation_id = ?')
+        .get(retained.operationId).created_at, retained.createdAt);
+    } finally {
+      await remote.coordinator.shutdown();
+    }
+  }));

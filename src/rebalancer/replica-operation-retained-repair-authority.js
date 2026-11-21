@@ -9,6 +9,8 @@ import {LEDGER_PARTITION_ID, censusRowOf, retainedRepairCensusRead} from '../par
 import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
 import {buildCanonicalReplicaOperationRow} from './replica-operation-repository-mutation-row-methods.js';
 
+const REPAIR_READ_SCOPE = Object.freeze({CURRENT: 'current_refusal',
+  SUBJECT: 'subject', RECEIVER: 'receiver'});
 const REPAIR_AUTHORITY = Object.freeze({UNAVAILABLE: 'unavailable', READY: 'ready'});
 const REPAIR_AUTHORITY_REFUSAL = Object.freeze({READ_FAILED: 'owner_read_failed',
   UNQUALIFIED: 'unqualified_authority', INVALID_ROW: 'invalid_operation_row'});
@@ -23,11 +25,13 @@ const SQL_SEPARATOR = ', ';
 const SQL_PARAMETER = '?';
 const SQL_IN_END = ')';
 
-function readPlan(attempt) {
-  if (attempt.occupancy) {
+function readPlan(attempt, scope) {
+  const receiverCensus = scope === REPAIR_READ_SCOPE.RECEIVER && attempt.blockers === null;
+  if (scope !== REPAIR_READ_SCOPE.SUBJECT && (attempt.occupancy || receiverCensus)) {
     return {...retainedRepairCensusRead(attempt.operation.operationId), ids: null};
   }
-  const ids = attempt.blockers === null ? [attempt.operation.operationId] :
+  const ids = scope === REPAIR_READ_SCOPE.SUBJECT || attempt.blockers === null ?
+    [attempt.operation.operationId] :
     [attempt.operation.operationId, ...attempt.blockers.map((row) => row.operationId)];
   return {sql: READ_IDS_PREFIX + ids.map(() => SQL_PARAMETER).join(SQL_SEPARATOR) + SQL_IN_END,
     params: ids, ids: new Set(ids)};
@@ -72,8 +76,8 @@ function completeRows(repository, rows, attempt, plan) {
   });
 }
 
-async function readRetainedRepairAuthority(repository, attempt) {
-  const plan = readPlan(attempt);
+async function readRetainedRepairAuthority(repository, attempt, scope) {
+  const plan = readPlan(attempt, scope);
   let answer;
   try {
     answer = await repository.executeReplicaOperationsRead(plan.sql, plan.params, READ_OPTIONS);
@@ -90,4 +94,4 @@ async function readRetainedRepairAuthority(repository, attempt) {
     witness: answer.readAuthorityWitness};
 }
 
-export {REPAIR_AUTHORITY, readRetainedRepairAuthority};
+export {REPAIR_AUTHORITY, REPAIR_READ_SCOPE, readRetainedRepairAuthority};

@@ -221,8 +221,6 @@ function recordedAnswer(service, recorded, command) {
 function proposePlacementCommand(service, command) {
   const leadership = partitionWriteLeadershipRefusalOf(service);
   if (leadership !== null) return leadership;
-  const paused = pausedWriteAnswerOf(service);
-  if (paused !== null) return paused;
   const admission = admitCommittedCommand(command,
     {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.PLACEMENT_OWNER});
   if (!admission.admitted) {
@@ -238,6 +236,10 @@ function proposePlacementCommand(service, command) {
       {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} :
       answer;
   }
+  // A settled exact entry is a read of an existing outcome, not a new write.
+  // Cutover pause still refuses every uncommitted proposal or pending turn.
+  const paused = pausedWriteAnswerOf(service);
+  if (paused !== null) return paused;
   const fingerprint = commandFingerprintOf(command);
   const pendingFingerprints = pendingFingerprintsOf(service);
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
