@@ -2,7 +2,7 @@ import {
   buildPartitionPlacementMove,
   resolvePartitionPlacementIntentKey,
   resolveRuntimeServiceIntentKey,
-  supersededPlacementOperationError,
+  requireCreationReplayOutcome,
 } from './replica-operation-creation-request.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
@@ -412,8 +412,9 @@ const operationCreationSupportMethods = {
     if (retained?.entryId === answer.entryId) retained.admittedAnswer = answer;
     const [operationId] = answer[PLACEMENT_RESULT_FIELD].operationIds;
     const operation = await confirmOperation(operationId, retained, answer.entryId);
+    const terminal = requireCreationReplayOutcome(operation);
     if (attempts.get(key)?.entryId === answer.entryId) attempts.delete(key);
-    return {...answer, operation};
+    return {...answer, operation, terminal};
   },
 
   async admitPlacementStatement({
@@ -463,9 +464,6 @@ const operationCreationSupportMethods = {
         !this.operationMatchesCreationRequest(operation, move, placementIntent)) {
       return this.refuseConflictingCreation(operation, move);
     }
-    if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
-      throw supersededPlacementOperationError(operation);
-    }
     return operation;
   },
 
@@ -481,6 +479,7 @@ const operationCreationSupportMethods = {
       const operation =
         await this.repository.queryAuthoritativeOperationById(operationId);
       if (!operation) return [];
+      requireCreationReplayOutcome(operation);
       operations.push(operation);
     }
     return operations;
@@ -559,7 +558,7 @@ const operationCreationSupportMethods = {
       throwRuntimeServicePlacementError(entityId, answer, answer?.[PLACEMENT_RESULT_FIELD]);
     }
     const {operation} = answer;
-    await this.announcePlacementCreatedOperation(operation, context);
+    if (!answer.terminal) await this.announcePlacementCreatedOperation(operation, context);
     return operation;
   },
 

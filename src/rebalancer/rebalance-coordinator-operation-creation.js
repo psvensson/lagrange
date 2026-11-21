@@ -1,4 +1,7 @@
-import {readCreationRequestIdentity} from './replica-operation-creation-request.js';
+import {
+  readCreationRequestIdentity,
+  requireCreationReplayOutcome,
+} from './replica-operation-creation-request.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
@@ -785,6 +788,7 @@ class RebalanceCoordinatorOperationCreation {
         persistResult,
       });
     }
+    if (requireCreationReplayOutcome(persistResult.operation)) return persistResult.operation;
 
     this.stats.operationsCreated++;
     this.rememberOperationIntents(
