@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {CDC_OPERATION, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ControlPlaneField} from '../../src/control-plane/control-plane-constants.js';
+import {MembershipPublicationCoordinatorReads} from
+  '../../src/control-plane/membership-publication-coordinator-reads.js';
+import {readPlacementCensus} from '../../src/partition/partition-placement-admission-decision.js';
+import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {ReplicaDispatchService} from '../../src/control-plane/replica-dispatch-service.js';
@@ -107,7 +113,7 @@ async function withNativeGrowth(measure, sourceReplicaId = SECOND_LEARNER) {
 
     const world = createDispatchWorld(leader);
     try {
-      await measure(world, row, leader);
+      await measure(world, row, leader, proposed);
     } finally {
       await world.shutdown();
     }
@@ -235,4 +241,163 @@ test('growth executor wire cannot substitute an explicit foreign cohort for orig
     assert.throws(() => applyGrowthPromoteRequestFields({}, {
       ...exact, promoteReplicaIds: [FIRST_LEARNER, 'foreign-learner'],
     }), {code: 'INVALID_OPERATION_PERSISTENCE_OUTCOME'});
+  }));
+
+function commitGrowthHistory(leader, row, history, step = row.workflow_step) {
+  const isActive = step === WORKFLOW_STEP.ACTIVE;
+  assert.equal(commitLedgerStatement(leader, `growth-census:${row.operation_id}:${step}`,
+    `UPDATE replica_operations SET steps_history = ?, workflow_step = ?, status = ?,
+     completed_at = ? WHERE operation_id = ?`,
+    [JSON.stringify(history), step, WORKFLOW_STEP_TO_STATUS[step],
+      isActive ? row.updated_at + 1 : null, row.operation_id]), null);
+}
+
+async function admitOtherGrowth(leader, proposed, partitionId, learners) {
+  const {command} = await admitOnLeader(leader, proposed, `growth:placement:${partitionId}`,
+    placementStatement({partitionId, target: NODE.A, type: OperationType.GROWTH_PROMOTE,
+      replicaId: learners[0], sourceReplicaId: learners[1], source: null}));
+  assert.ok(command);
+  return ledgerRows(leader).find((row) => row.partition_id === partitionId);
+}
+
+function seedPromotablePartition(cache, partitionId, learners) {
+  cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT, {
+    partition_id: partitionId, leader_node_id: NODE.A, status: 'active', replica_count: 3,
+  });
+  const members = [`${partitionId}-leader`, ...learners];
+  for (const [index, nodeId] of [NODE.A, NODE.B, NODE.C].entries()) {
+    const replicaId = members[index];
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+      service_id: replicaId, replica_id: replicaId, service_type: 'partition',
+      partition_id: partitionId, node_id: nodeId, status: 'active',
+      raft_role: index === 0 ? 'leader' : 'learner',
+    });
+  }
+}
+
+test('native census credits healthy completed growth and preserves another real deficit', async () => {
+  await withNativeGrowth(async (_world, malformed, leader, proposed) => {
+    const healthyPartitionId = 'placement-dispatch-growth-healthy-p1';
+    const healthyLearners = [`${healthyPartitionId}-first`, `${healthyPartitionId}-second`];
+    const healthy = await admitOtherGrowth(leader, proposed, healthyPartitionId, healthyLearners);
+    const foreign = await admitOtherGrowth(leader, proposed, 'placement-dispatch-growth-foreign-p1',
+      [FIRST_LEARNER, SECOND_LEARNER]);
+    commitGrowthHistory(leader, healthy, JSON.parse(healthy.steps_history), WORKFLOW_STEP.ACTIVE);
+    commitGrowthHistory(leader, foreign, JSON.parse(foreign.steps_history), WORKFLOW_STEP.ACTIVE);
+    const history = JSON.parse(malformed.steps_history);
+    delete history[0].promoteReplicaIds;
+    commitGrowthHistory(leader, malformed, history, WORKFLOW_STEP.ACTIVE);
+    const census = readPlacementCensus(leader.db);
+
+    const cache = new SystemTableCache();
+    seedPromotablePartition(cache, PARTITION_ID, [FIRST_LEARNER, SECOND_LEARNER]);
+    seedPromotablePartition(cache, healthyPartitionId, healthyLearners);
+    const staged = [];
+    const owner = createReplicaPlacementOwner({
+      nodeId: NODE.A, ledgerPartitionService: leader, systemTableCache: cache,
+      now: () => 1_000, logger: leader.logger,
+      nodeAuthority: {
+        subscribe: () => () => {}, scheduleRefresh() {},
+        answerCommittedNodes: () => ({
+          state: 'ready', epoch: {publicationEpoch: 7},
+          formation: {state: 'FORMED', latchEpoch: 4},
+          nodeRows: [NODE.A, NODE.B, NODE.C].map((nodeId) => ({
+            node_id: nodeId, host_id: nodeId, status: 'active',
+            ready_lease_expires_at: 2_000, boot_incarnation: 1,
+          })),
+        }),
+      },
+      admitPlacement: async ({body}) => {
+        staged.push(body);
+      },
+    });
+    owner.isLeader = true;
+    try {
+      await owner.runPass(new Set());
+      assert.deepEqual(staged.map((statement) => statement.partitionId), [PARTITION_ID],
+        'real deficit survives malformed and foreign-partition cohort evidence');
+      assert.equal(staged[0].moves[0].type, OperationType.GROWTH_PROMOTE);
+      assert.equal(census.find((row) => row.operationId === malformed.operation_id)
+        .promoteReplicaIds, null, 'a missing original cohort creates no voter credit');
+    } finally {
+      owner.shutdown();
+    }
+  });
+});
+
+test('a malformed unresolved growth retains native occupancy without aborting healthy reads',
+  async () => withNativeGrowth(async ({coordinator}, malformed, leader, proposed) => {
+    const healthy = await admitOtherGrowth(leader, proposed, 'independent-growth-p1',
+      ['independent-first', 'independent-second']);
+    const history = JSON.parse(malformed.steps_history);
+    delete history[0].promoteReplicaIds;
+    commitGrowthHistory(leader, malformed, history);
+    for (const row of ledgerRows(leader)) {
+      coordinator.systemTableCache.upsert(TABLES.REPLICA_OPERATIONS, row.operation_id, row);
+    }
+    assert.deepEqual(coordinator.repository.queryCachedIncompleteOperations()
+      .map((operation) => operation.operationId), [healthy.operation_id]);
+    assert.ok(readPlacementCensus(leader.db).find(
+      (row) => row.operationId === malformed.operation_id).incomplete,
+    'the native admission still retains the exact incomplete scope');
+  }));
+
+test('actual coordinator handoff ingress retains native subject and lease',
+  async () => withNativeGrowth(async ({coordinator, service, seen}, row) => {
+    const remote = createTestCoordinator({nodeId: NODE.B});
+    const subject = coordinator.repository.rowToOperation(row);
+    subject.ownerLeaseExpiresAt = row.updated_at + 20_000;
+    let delivered;
+    remote.workflowOwner.messageRouter = {
+      async deliver(address, payload) {
+        assert.equal(address, `${NODE.A}/service/replica-dispatch`);
+        delivered = JSON.parse(JSON.stringify(payload[ControlPlaneField.OPERATION_ROW]));
+        await service.handleReplicaOperationDispatch(payload);
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
+      },
+    };
+    try {
+      assert.equal(await remote.workflowOwner.wakeCoordinatorCreatedRemoteOwner(subject), true);
+      assert.equal(seen.length, 1);
+      assert.equal(delivered.source_replica_id, SECOND_LEARNER, 'before recipient refresh');
+      assert.equal(delivered.lease_expires_at, subject.ownerLeaseExpiresAt);
+      assert.doesNotThrow(() => assertOperationUpdateSubject(
+        service.buildOperationFromRow(seen[0].context.row), subject));
+    } finally {
+      await remote.shutdown();
+    }
+  }));
+
+test('membership-publication authoritative retry retains the actual native subject and lease',
+  async () => withNativeGrowth(async ({coordinator}, row, leader) => {
+    const leaseExpiresAt = row.updated_at + 20_000;
+    assert.equal(commitLedgerStatement(leader, 'growth:lease',
+      'UPDATE replica_operations SET lease_expires_at = ? WHERE operation_id = ?',
+      [leaseExpiresAt, row.operation_id]), null);
+    const publications = Object.assign(
+      Object.create(MembershipPublicationCoordinatorReads.prototype), {
+        nodeId: NODE.A, now: () => row.updated_at, systemTableCache: new SystemTableCache(),
+        replicaOperationRepository: coordinator.repository,
+        controlPlaneReadinessService: {
+          getMembershipPublicationDiagnosticsSync: () => ({
+            publishedActiveNodeIds: [NODE.A],
+            priorityPartitionSummary: {
+              requiredDistinctNodeCount: 3, readyEligibleNodeCount: 1,
+              blockedPartitions: [{
+                partitionId: 'sql_transactions-p1', requiredDistinctNodeCount: 3,
+                readyDistinctNodeCount: 1, spreadGap: 2,
+              }],
+              missingPartitionIds: ['sql_transactions-p1'],
+            },
+            membershipLifecycleSummary: {
+              locallyEligibleNodeIds: [NODE.A], projectedServingNodeIds: [NODE.A],
+            },
+          }),
+        },
+      });
+    const rows = await publications.getDispatchRetryRowsForNode(NODE.A);
+    assert.equal(rows.length, 1, 'the actual owner discovered the native retry row');
+    assert.equal(rows[0].operation_id, row.operation_id);
+    assert.equal(rows[0].source_replica_id, SECOND_LEARNER);
+    assert.equal(rows[0].lease_expires_at, leaseExpiresAt);
   }));
