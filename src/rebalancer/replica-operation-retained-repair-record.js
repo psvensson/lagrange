@@ -17,6 +17,9 @@ const PROPOSING_MODES = new Set([RETAINED_REPAIR_MODE.RETRY, RETAINED_REPAIR_MOD
 // A local caller owns its record until settled; an ingress-only record lives
 // within the receiver's ledger tenure (custody) and retires when it ends.
 const RETAINED_REPAIR_ORIGIN = Object.freeze({CALLER: 'caller', INGRESS: 'ingress'});
+// What a retiring record that refused a caller reports to its composition.
+const RETAINED_REPAIR_VERDICT = Object.freeze({CONFIRMED: 'confirmed',
+  UNCONFIRMED: 'unconfirmed'});
 // PINNED: an exact entry is presented and unresolved. SETTLED: its durable
 // outcome settled it; the body still states the copy policy it was judged by.
 const RETAINED_REPAIR_ENTRY = Object.freeze({UNPINNED: 'unpinned', PINNED: 'pinned',
@@ -83,6 +86,7 @@ function materializeRepairContention(result, rows) {
 }
 
 export {RETAINED_REPAIR_DECISION, RETAINED_REPAIR_MODE, PROPOSING_MODES, RETAINED_REPAIR_ORIGIN,
+  RETAINED_REPAIR_VERDICT,
   RETAINED_REPAIR_ENTRY, RETAINED_REPAIR_BINDING, RETAINED_REPAIR_CUSTODY, RETAINED_REPAIR_TENURE,
   RETAINED_REPAIR_NATIVE, RETAINED_REPAIR_NATIVE_FENCE, RETAINED_REPAIR_NATIVE_ANSWER,
   RETAINED_REPAIR_BLOCKER, RETAINED_REPAIR_CONTINUATION, RETAINED_REPAIR_DECISION_RUN,
