@@ -38,6 +38,7 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
+import {createSqlEngineSeam} from '../distributed/harness/sql-engine-seam.js';
 
 /**
  * Test-local constants for fixture identities.
@@ -98,8 +99,14 @@ function createSeededCache() {
  */
 function createMockCDCService(cache) {
   // Each write answers what the CDC integration service answers for the
-  // committed one-row write (the producer's durable commit receipt).
+  // committed one-row write (the producer's durable commit receipt). The
+  // cache is this fixture's durable store, so an authoritative read is
+  // answered from it by the SQL-engine seam (contract-tested against the
+  // real engine).
+  const store = createSqlEngineSeam(cache);
   return {
+    executeAuthoritativeSystemTableRead: (_tableName, sql, params) =>
+      store.executeQuery(sql, params),
     async insertSystemTableRow(tableName, data, options) {
       cache.applySystemTableChange(tableName, 'INSERT', data);
       return cdcCommittedWriteAnswer('insertSystemTableRow', [tableName, data, options]);

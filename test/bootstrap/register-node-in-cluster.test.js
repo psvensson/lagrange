@@ -449,7 +449,10 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
       queryCalls.every((call) =>
         call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
       ),
-      'join-phase SQL fallback should carry explicit join phase scope',
+      'join-phase SQL fallback should carry explicit join phase scope ' +
+        `(calls without it: ${JSON.stringify(queryCalls
+          .filter((call) => call.options?.phaseScope !== CONTROL_PLANE_PHASE_SCOPE.JOIN)
+          .map((call) => [String(call.sql).slice(0, 60), call.options?.phaseScope ?? null]))})`,
     );
     t.ok(
       queryCalls.every((call) => !('skipCacheWait' in (call.options ?? {}))),
