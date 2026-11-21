@@ -963,7 +963,7 @@ function answerFixtureServicesRead(cache, sql, params) {
   };
 }
 
-function createCoordinatorSqlStore(cache) {
+function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
   // The store outlives its coordinator (a shutdown and re-initialize keeps
   // the ledger); while no coordinator runs it is held as its serialized
   // image, so its SQLite connection is released.
@@ -1008,6 +1008,7 @@ function createCoordinatorSqlStore(cache) {
       const [row] = run('SELECT * FROM replica_operations WHERE operation_id = ?',
         [operationId]).rows;
       if (row) {
+        onCommittedOperationWrite?.(Object.freeze({...row}));
         cache.upsert?.(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
           normalizeReplicaOperationRow(row));
       } else {
@@ -1091,7 +1092,9 @@ function createTestCoordinator(options = {}) {
     refreshAuthoritativeCacheRow: async () => true,
   };
 
-  const sqlStore = createCoordinatorSqlStore(mockCache);
+  const sqlStore = createCoordinatorSqlStore(mockCache, {
+    onCommittedOperationWrite: options.onCommittedOperationWrite,
+  });
   // The SQL engine: a test's pattern answers first, then the store.
   const mockSqlEngine = options.sqlQueryEngine || {
     executeQuery: async (sql, params) => {

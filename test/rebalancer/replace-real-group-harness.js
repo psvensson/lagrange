@@ -97,10 +97,6 @@ import {createRemovalSourceHandler} from
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
-import {assertOperationUpdateOutcome} from
-  '../../src/rebalancer/replica-operation-update-outcome.js';
-import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
-  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 // A priority control-plane partition: the named-target handoff (BR11) is
@@ -882,29 +878,16 @@ async function deliver(world, target, payload) {
     });
 }
 
-const TERMINAL_MUTATION_DISPOSITIONS = new Set([
-  DISPOSITION.UPDATED, DISPOSITION.RECOVERED, DISPOSITION.REINSERTED,
-]);
-
-function isCapturedTerminalWrite(operation, persistOptions, result) {
-  if (!TERMINAL_STEPS.has(operation?.workflowStep) ||
-      persistOptions?.terminalTransition !== true) return false;
-  const {disposition} = assertOperationUpdateOutcome(result);
-  return TERMINAL_MUTATION_DISPOSITIONS.has(disposition);
-}
-
-// Observe the committed ledger row and membership after an actual mutation.
-// Re-insertion writes a row and remains visible here even though it earns no
-// workflow progress. A replay of an existing terminal row writes nothing.
-async function captureTerminalWrite(world, repository, operation, result) {
-  const durable = await repository
-    .queryReplicaOperationPersistenceAuthorityOperation(operation);
+// The fixture store calls this once per changed ledger row in a committed
+// SQLite statement, before publishing CDC. Raft membership is a distinct oracle.
+function captureTerminalWrite(world, row) {
+  if (row.operation_id !== world.operation?.operationId ||
+      !TERMINAL_STEPS.has(row.workflow_step) || row.completed_at === null) return;
   world.terminalWrites.push(Object.freeze({
-    operationId: operation.operationId,
-    step: operation.workflowStep,
-    disposition: result?.disposition ?? null,
-    durableStepAfter: durable?.workflowStep ?? null,
-    errorMessage: operation.errorMessage ?? null,
+    operationId: row.operation_id,
+    step: row.workflow_step,
+    durableStepAfter: row.workflow_step,
+    errorMessage: row.error_message,
     sourceCommittedVoter:
       world.group.sourceCommittedVoter(world.sourceReplicaId),
     committed: world.group.committedConfiguration(),
@@ -915,18 +898,6 @@ async function captureTerminalWrite(world, repository, operation, result) {
   }));
 }
 
-function captureTerminalWrites(world, coordinator) {
-  const repository = coordinator.repository;
-  const base = repository.persistOperationUpdate.bind(repository);
-  repository.persistOperationUpdate = async (operation, persistOptions) => {
-    const result = await base(operation, persistOptions);
-    if (isCapturedTerminalWrite(operation, persistOptions, result)) {
-      await captureTerminalWrite(world, repository, operation, result);
-    }
-    return result;
-  };
-}
-
 function startCoordinator(world) {
   const coordinator = createTestCoordinator({
     nodeId: world.ownerNodeId,
@@ -934,6 +905,7 @@ function startCoordinator(world) {
     replaceWitness: false,
     committedMembershipFixture: false,
     systemTableCache: world.cache,
+    onCommittedOperationWrite: (row) => captureTerminalWrite(world, row),
     messageRouter: {
       deliver: (target, payload) => deliver(world, target, payload),
       getConnectionState: () => 'connected',
@@ -968,7 +940,6 @@ function startCoordinator(world) {
   };
   coordinator.initialize();
   coordinator.attachReplicaConsensusEvents(world.relay);
-  captureTerminalWrites(world, coordinator);
   world.coordinator = coordinator;
   return coordinator;
 }
