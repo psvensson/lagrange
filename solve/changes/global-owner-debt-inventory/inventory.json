@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3782555,
-        "sha256": "2135cc3531da0225beaa206da85174339a376dc24a8494f21e2e4652d59c615f"
+        "bytes": 3782812,
+        "sha256": "2ddf965031d7a5130cdb6f73b0c3b7ea096ffa2807ed283d5760456f91284605"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a76cbeb656deed392fd8f6cc4d1f7b2f86e1e19d90da33e88b5563d70435376d"
+        "sha256": "addd511b4e2b15934b479fbe4c97cfcbb3844f34de92d84a854ee2af79eec230"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "ba9814052328bbdd109df73c5fdcfd762887ff6ceaadc91b2d43caf311795352"
+    "inputDigest": "1b6d7b438c0ecdb2a190d3e9baabd4ab6589824e1c4c125678b2e9324d6241f8"
   },
   "reconciliation": {
     "complexity": {
@@ -135,12 +135,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a76cbeb656deed392fd8f6cc4d1f7b2f86e1e19d90da33e88b5563d70435376d"
+          "sha256": "addd511b4e2b15934b479fbe4c97cfcbb3844f34de92d84a854ee2af79eec230"
         },
         "cloneGroups": 603,
-        "duplicatedLines": 21562,
+        "duplicatedLines": 21564,
         "sourceCloneTouches": 1206,
-        "sourceDuplicatedLineTouches": 43124,
+        "sourceDuplicatedLineTouches": 43128,
         "nonzeroSourceCount": 396,
         "touchMultiplicity": 2
       }
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3782555,
-        "sha256": "2135cc3531da0225beaa206da85174339a376dc24a8494f21e2e4652d59c615f"
+        "bytes": 3782812,
+        "sha256": "2ddf965031d7a5130cdb6f73b0c3b7ea096ffa2807ed283d5760456f91284605"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "ad077992dd664e48d2a49ae9f3a3f93ab696319195565875f934c12df4e54c6a",
+      "sourceDigest": "fae65b955026ffb6d790305c84e4d9e27133ca9dd8202d9208ee722f4a4d5d93",
       "moduleCount": 6382,
-      "edgeCount": 38114,
+      "edgeCount": 38118,
       "unresolvedCount": 39
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2409,
     "assignedSignalCount": 2409,
     "uniqueAssignmentCount": 2409,
-    "digest": "e8a4e62784e2d6462872b8e375e456d72355c02ef2e64eb570e39a539aafaefb"
+    "digest": "aac9b63defbe7c3472a3824548c6f789823fd7cb1d2ce93b28e5dbd9fc661934"
   },
   "signalCounts": {
     "cognitive": 149,
@@ -333,13 +333,13 @@
       "complexity": 26,
       "cognitive": 0,
       "oversizedFiles": 0,
-      "duplicatedLines": 5531,
+      "duplicatedLines": 5535,
       "cloneTouches": 140,
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 75,
-      "importOut": 334,
-      "score": 672.1,
+      "importOut": 336,
+      "score": 672.5,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
         "test/control-plane/priority-recovery-snapshot-supplemental-retained-serial-wait-release-test-cases.js",
@@ -3703,11 +3703,11 @@
           }
         ],
         "baseline": {
-          "score": 672.1,
+          "score": 672.5,
           "complexity": 26,
           "cognitive": 0,
           "oversizedFiles": 0,
-          "duplicatedLines": 5531,
+          "duplicatedLines": 5535,
           "lintExclusions": 5
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"

@@ -38,6 +38,7 @@ import {NodeReadyLeaseAuthority} from
   '../../src/control-plane/node-ready-lease-authority.js';
 import {insertViaUpsert} from
   './heartbeat-memory-trend-test-helpers.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const TEST_NODE_ID = 'node-budget-preserve';
 const TEST_NODE_ADDRESS = '10.0.0.99:8080';
@@ -160,9 +161,9 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async (_table, row) => {
+        upsertSystemTableRow: async (_table, row, options) => {
           upserts.push(row);
-          return {success: true};
+          return cdcCommittedWriteAnswer('upsertSystemTableRow', [_table, row, options]);
         },
       },
       systemTableCache: createCacheWithBudget(),
@@ -196,11 +197,13 @@ async (t) => {
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('updateSystemTableRow', args),
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     },
     systemTableCache: createCacheWithBudget(),
     nodeMetadataMinUpdateIntervalMs: 0,
@@ -268,7 +271,8 @@ async (t) => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     },
     systemTableCache: createCacheWithBudget(),
     now: () => TEST_NOW,
@@ -376,9 +380,15 @@ async (t) => {
         // incarnation), so a re-drive after an unknown outcome is one entry.
         writeIdentity: controlPlaneWriteIdentity('endpoint',
           `ep-${TEST_NODE_ID}-ws`, TEST_BOOT_INCARNATION, 'birth'),
+        // Since 8540d6b7a the authority also hands the write its readback
+        // confirmation (a per-write closure, compared by identity here and
+        // typed below).
+        confirmWriteEffect: endpointWrites[0].options.confirmWriteEffect,
       },
       'endpoint upserts should reuse the same coalesced deferred write contract',
     );
+    t.type(endpointWrites[0].options.confirmWriteEffect, 'function',
+      'the endpoint write carries the authority\'s readback confirmation');
   } finally {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -536,7 +546,8 @@ async (t) => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     },
     systemTableCache: emptyCache,
     now: () => TEST_NOW,
