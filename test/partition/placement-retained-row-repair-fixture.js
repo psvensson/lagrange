@@ -113,8 +113,8 @@ async function stepRetainedLedgerRow(world, operationId, step) {
   const terminal = isTerminalStep(operation.type, step);
   const next = {...operation, workflowStep: step, status: step === WORKFLOW_STEP.FAILED ?
     ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[step],
-    updatedAt: now, completedAt: terminal ? now : null,
-    stepsHistory: [...operation.stepsHistory, {step, timestamp: now}]};
+  updatedAt: now, completedAt: terminal ? now : null,
+  stepsHistory: [...operation.stepsHistory, {step, timestamp: now}]};
   const answer = await world.coordinator.repository.persistOperationUpdate(next,
     {expectedWorkflowStep: operation.workflowStep, expectedStepsHistory: operation.stepsHistory});
   assert.equal(answer.persisted, true, 'normal guarded mutation commits the complete transition tuple');
