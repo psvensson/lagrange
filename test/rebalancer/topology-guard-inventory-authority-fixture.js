@@ -13,12 +13,13 @@
 // Substituted, and nothing else:
 // - the channel transit between two nodes' routers, i.e. the hop behind
 //   executeOnPartition: the planner router's query transport hands a delivery
-//   to the target node's router (deliverLocal to the replica's own registered
-//   transport handler); a hop to a node a case declares unreachable is
-//   answered "no handler";
+//   (its remaining duration and abort signal) to the target node's router
+//   (deliverLocal to the replica's own registered transport handler); a hop
+//   to a node a case declares unreachable is answered "no handler";
 // - the replica-operation ledger (replica_operations, storage_reservations),
 //   which is not the subject: the coordinator SQL store fixture, answered at
-//   the engine and at executeOnPartition with the fixture leader witness;
+//   the engine, at executeOnPartition and by the planner node's local ledger
+//   leader replica, with the fixture leader witness;
 // - the coordinator's non-subject collaborators as createTestCoordinator
 //   supplies them (readiness, storage admission and accounting, policy,
 //   dispatch router, transaction coordinator).
@@ -294,18 +295,40 @@ function answerLedgerPartitionStatement(store, partitionId, sql, params) {
     withAffectedRows(result);
 }
 
+// As on the wire, only the remaining duration and the caller's abort cross to
+// the target router; that router's delivery lifetime is its own
+// (message-router-delivery-lifetime.js refuses another router's lifetime).
 async function crossNodeHop(context, address, message, options) {
   const nodeId = String(address).split(ADDRESS_SEPARATOR)[0];
   const target = context.world.routerOf(nodeId);
   const refused = target === null || context.unreachable.has(nodeId);
+  const {deliveryLifetime, signal} = options.transportDeliveryOptions;
+  const remainingMs = deliveryLifetime.remainingMs();
   const delivery = refused ?
     buildDeliveryEnvelope({acknowledged: false, noHandler: true}) :
     await target.deliverLocal(address, CROSS_NODE_HOP_MESSAGE_ID, message, null,
-      options?.transportDeliveryOptions).then(({result, answer}) =>
+      {timeoutMs: remainingMs, signal}).then(({result, answer}) =>
       buildDeliveryEnvelope(result, answer));
-  context.observed.hops.push(Object.freeze({address, nodeId, refused,
+  context.observed.hops.push(Object.freeze({address, nodeId, refused, remainingMs,
     answer: deliveryAnswerOf(delivery)}));
   return {delivery};
+}
+
+// The planner node's own leader replica of a ledger partition, as the CDC
+// read flow sees a hosted partition service: the coordinator's ledger reads
+// in OWNER_LOCAL_ONLY mode (repository default) need a local replica, as the
+// planner node in the GCP run led replica_operations-p1. It exposes no write
+// method, so ledger writes take the engine path to the same store.
+function createLocalLedgerReplica(store, partitionId) {
+  return Object.freeze({
+    partitionId,
+    replicaId: `${partitionId}-${NODE.PLANNER}`,
+    initialized: true,
+    getRole: () => RAFT_ROLE.LEADER,
+    buildRemoteReadAuthorityWitness: () => buildMockPolicyAuthorityWitness(partitionId),
+    executeLocalQuery: async (sql, params = []) =>
+      answerLedgerPartitionStatement(store, partitionId, sql, params),
+  });
 }
 
 function tapServicesReads(gateway, observed) {
@@ -372,10 +395,14 @@ function openPlannerHost(t, world, {unreachableNodeIds = []} = {}) {
       return withAffectedRows(store.execute(sql, params));
     },
   };
+  const hostedPartitions = new Map([
+    [SERVICES_PARTITION_ID, world.replicaOn(NODE.PLANNER)],
+    ...[...LEDGER_PARTITION_IDS].map((partitionId) =>
+      [partitionId, createLocalLedgerReplica(store, partitionId)]),
+  ]);
   const cdc = new CDCIntegrationService({nodeId: NODE.PLANNER, systemTableCache: cache,
     sqlQueryEngine, messageRouter: router,
-    partitionServicesProvider: () =>
-      new Map([[SERVICES_PARTITION_ID, world.replicaOn(NODE.PLANNER)]])});
+    partitionServicesProvider: () => hostedPartitions});
   cdc.initialize();
   const gateway = new ControlPlaneSystemTableGateway({nodeId: NODE.PLANNER,
     cdcIntegrationService: cdc, systemTableCache: cache, sqlQueryEngine});
