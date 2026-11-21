@@ -33,6 +33,7 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
+import {observeCurrentAuthority} from './raft-rs-current-authority.js';
 import {
   confChangeSettlement,
   evaluateTenureCatchUpOnDrain,
@@ -2131,12 +2132,8 @@ function drainQueuedProposalBatch(group) {
 // A status read and the committed-membership read answer from the recorded
 // observation without queueing; every other command takes the group's turn.
 function executeCommand(group, command) {
-  if (runtimeHealth === REPLACING) {
-    return settledTurn(runtimeRecoveryOutcome(group));
-  }
-  if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
-    return readStatusNow(group);
-  }
+  if (runtimeHealth === REPLACING) return settledTurn(runtimeRecoveryOutcome(group));
+  if (command?.type === RUNTIME_COMMAND.READ_STATUS) return readStatusNow(group);
   if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP &&
       command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
     return continueTurn(readStatusNow(group), (status) => settledTurn(
@@ -2326,6 +2323,9 @@ function createRuntimeDispatcher(request) {
     }),
     // Answers the command's turn (raft-rs-turn-answer.js).
     execute: Object.freeze((command) => executeCommand(group, command)),
+    // The core as it is, read in the call and never a turn (raft-rs-current-authority.js).
+    observeCurrentAuthority: Object.freeze(() => settledTurn(observeCurrentAuthority(group,
+      {runtimeHealth, runtimeGeneration, invokeCoreAt, runtimeRecoveryOutcome, recoveryOutcome}))),
     // The acknowledgement that the opening's prior-existence fact is
     // durable: taken in the group's turn, so no turn sees it change.
     recordIdentity: Object.freeze(() =>

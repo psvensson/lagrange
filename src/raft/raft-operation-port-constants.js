@@ -50,6 +50,18 @@ const RAFT_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
 const RAFT_OPERATION = Object.freeze({
   READ_COMMITTED_MEMBERSHIP: 'readCommittedMembership',
   PROPOSE_MEMBERSHIP_TRANSITION: 'proposeMembershipTransition',
+  // The core as it is at the call, read and never driven, for a decision
+  // that must not rest on the status of the last completed core entry
+  // (readStatus answers that one while a core turn is pending).
+  OBSERVE_CURRENT_AUTHORITY: 'observeCurrentAuthority',
+});
+
+// A field of the current authority observation the core holds but a turn in
+// progress may not yet have made durable: the role and leader of a leader
+// that has not applied an entry of its own term, while a turn is pending or
+// the core holds a Ready.
+const RAFT_AUTHORITY_OBSERVATION = Object.freeze({
+  NOT_SETTLED: 'not-settled',
 });
 
 const RAFT_MEMBERSHIP_TRANSITION_STAGE = Object.freeze({
@@ -262,6 +274,7 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 });
 
 export {
+  RAFT_AUTHORITY_OBSERVATION,
   RAFT_CATCH_UP_REQUEST_KIND,
   RAFT_CONSENSUS_STARTUP_OUTCOME,
   RAFT_FOUNDING_GROWTH_OUTCOME,

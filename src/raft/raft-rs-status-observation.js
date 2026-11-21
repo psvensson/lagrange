@@ -173,4 +173,4 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   return result;
 }
 
-export {shapeGroupObservation, setNativeStatusObserver};
+export {currentTermApplied, shapeGroupObservation, setNativeStatusObserver};
