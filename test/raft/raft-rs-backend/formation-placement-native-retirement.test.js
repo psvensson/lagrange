@@ -901,6 +901,23 @@ for (const change of ['boot', 'service birth', 'missing service', 'older service
           assert.equal(result.terminal, true);
           assert.equal(current.workflowStep, WORKFLOW_STEP.SUPERSEDED);
           assert.deepEqual(await coordinator.dispatchOperation(removal.operation_id), result);
+          if (change === 'service birth') {
+            assert.equal(removal.workflow_step, WORKFLOW_STEP.PENDING);
+            const notifications = [];
+            const before = await coordinator.repository.queryAuthoritativeOperationById(
+              removal.operation_id);
+            const counters = {...coordinator.stats};
+            coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED, (event) => {
+              if (event.operation.operationId === removal.operation_id) notifications.push(event);
+            });
+            const staleResult = await coordinator.dispatchOperation(removal);
+            t.diagnostic(JSON.stringify({staleResult, wakeCount: notifications.length}));
+            assert.deepEqual(staleResult, result);
+            assert.deepEqual(await coordinator.repository.queryAuthoritativeOperationById(
+              removal.operation_id), before);
+            assert.deepEqual(coordinator.stats, counters);
+            assert.deepEqual(notifications, [], 'a stale dispatch must not repeat terminal release');
+          }
         } else {
           assert.equal(current.completedAt, null);
           assert.equal(current.workflowStep, WORKFLOW_STEP.SENDING);
