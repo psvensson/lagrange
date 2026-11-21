@@ -4,6 +4,8 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {isTerminalStep} from '../../src/rebalancer/replica-operation-progress.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {isGuardedLedgerUpdate, refuseGuardedLedgerUpdate} from
+  './operation-ledger-write-loss-fixture.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {createCoordinatorSqlStore, createMockControlPlaneSystemTableGateway} from
   '../rebalancer/test-helpers.js';
@@ -697,10 +699,6 @@ const PROBE_CANDIDATE_OPERATION_ID = 'holder-release-probe-self-move';
 // of an engagement that did not engage (module-local there).
 const HOLD_NOT_ENGAGED_MESSAGE_PREFIX =
   'operation-ledger self-move hold not engaged: ';
-const UPDATE_STATEMENT_MARKER = 'UPDATE replica_operations';
-const EXPECTED_STEP_PREDICATE_MARKER = 'AND workflow_step = ?';
-const UPDATE_OPERATION_ID_PARAM_INDEX = 7;
-const ZERO_ROWS_CHANGED = 0;
 
 const {FAILURE_LOG_LEVEL, OPERATION_WORKFLOW_OWNER_LITERAL} =
   OPERATION_WORKFLOW_OWNER_SHARED;
@@ -777,19 +775,20 @@ function observeTargetEngagements({target, elapsed, record, ledgerAnswers, extra
 // pressure ambiguity the claim re-arms through the dispatch retry lane).
 function injectClaimWriteRefusal({target, selfMoveId, extras}) {
   const gateway = target.controlPlaneSystemTableGateway;
-  const original = gateway.executeQuery.bind(gateway);
+  const submit = gateway.submitMutation.bind(gateway);
   const control = {armed: false};
-  gateway.executeQuery = async (sql, params, ...rest) => {
+  gateway.submitMutation = async (mutation, options) => {
     if (
       control.armed &&
-      String(sql).includes(UPDATE_STATEMENT_MARKER) &&
-      String(sql).includes(EXPECTED_STEP_PREDICATE_MARKER) &&
-      params?.[UPDATE_OPERATION_ID_PARAM_INDEX] === selfMoveId()
+      isGuardedLedgerUpdate(mutation, selfMoveId()) &&
+      mutation.whereClause.workflow_step === WORKFLOW_STEP.PENDING &&
+      mutation.data.workflow_step === WORKFLOW_STEP.SENDING
     ) {
+      const result = await refuseGuardedLedgerUpdate(submit, mutation, options);
       extras.refusedClaimWrites += SINGLE_ROW;
-      return {success: true, changes: ZERO_ROWS_CHANGED};
+      return result;
     }
-    return original(sql, params, ...rest);
+    return submit(mutation, options);
   };
   return control;
 }

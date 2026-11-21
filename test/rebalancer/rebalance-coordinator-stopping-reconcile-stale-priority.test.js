@@ -138,6 +138,7 @@ async (t) => {
     },
   });
 
+  installCommittedOperationMutationFixture(coordinator.controlPlaneSystemTableGateway);
   try {
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconciled =
@@ -368,6 +369,7 @@ test('RebalanceCoordinator fails (never completes) a STALE remote-owned ' +
       ),
   });
 
+  installCommittedOperationMutationFixture(coordinator.controlPlaneSystemTableGateway);
   try {
     coordinator.workflowOwner.buildPriorityRecoveryCompletionForOperation =
       () => Object.freeze({

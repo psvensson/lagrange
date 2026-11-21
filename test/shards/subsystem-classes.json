@@ -28,7 +28,7 @@
   "censusSize": 2714,
   "digest": "fnv1a32-2108589c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d7cb01d3",
+  "observationDigest": "fnv1a32-39f655a2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6216,6 +6216,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/rebalancer/test-helpers.js"
       ]
@@ -6226,6 +6227,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/storage-reservation-authority.js",
+        "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/rebalancer/test-helpers.js"
       ]
@@ -6251,6 +6253,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/rebalancer/test-helpers.js"
       ]
@@ -6392,6 +6395,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "test/convergence/operation-ledger-write-loss-fixture.js",
         "test/rebalancer/committed-membership-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"

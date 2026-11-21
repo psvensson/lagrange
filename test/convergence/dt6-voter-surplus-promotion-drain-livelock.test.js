@@ -26,6 +26,8 @@ import {
 import {buildMockPolicyAuthorityWitness} from '../rebalancer/test-helpers.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {isGuardedLedgerUpdate, refuseGuardedLedgerUpdate} from
+  './operation-ledger-write-loss-fixture.js';
 
 // Quest formation-voter-surplus-promotion-deferral-livelock (P1) — deterministic
 // reproduction of the affinity-demo run-21 voter-surplus wedge on
@@ -311,38 +313,25 @@ function createOperationLabels() {
 // the visibility confirmation), ZERO_ROW honestly reports changes: 0 (which
 // the unfixed head swallows). Creation INSERTs and progress UPDATEs are exempt
 // (run-21 lost exactly the terminal transitions).
-// UPDATE_OPERATION params: [status, workflow_step, updated_at, completed_at,
-// error_message, steps_history, replica_id, operation_id].
-const UPDATE_PARAM_INDEX_WORKFLOW_STEP = 1;
-const UPDATE_PARAM_INDEX_OPERATION_ID = 7;
 function armGatewayTerminalWriteLoss({coordinator, state, events}) {
   const gateway = coordinator.repository.controlPlaneSystemTableGateway;
-  const originalExecuteQuery = gateway.executeQuery.bind(gateway);
-  gateway.executeQuery = async (sql, params = [], queryOptions = {}) => {
-    const isTerminalUpdateForLostOperation =
-      typeof sql === 'string' &&
-      sql.includes('UPDATE replica_operations') &&
-      Array.isArray(params) &&
-      params[UPDATE_PARAM_INDEX_OPERATION_ID] ===
-        state.lostWriteOperationId &&
-      isTerminalStep(
-        OperationType.REPLACE,
-        params[UPDATE_PARAM_INDEX_WORKFLOW_STEP],
-      );
+  const submit = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (mutation, options) => {
     if (
-      isTerminalUpdateForLostOperation &&
+      isGuardedLedgerUpdate(mutation, state.lostWriteOperationId) &&
+      isTerminalStep(OperationType.REPLACE, mutation.data.workflow_step) &&
       state.lossMode !== LOSS_MODE.NONE &&
       state.lostWrites < LOST_TERMINAL_WRITE_COUNT
     ) {
+      const result = await refuseGuardedLedgerUpdate(submit, mutation, options);
       state.lostWrites += 1;
+      state.lossGuards.push(mutation.whereClause.completed_at);
       events.push(
         `LEDGER_TERMINAL_WRITE_LOST ${state.lostWrites} ${state.lossMode}`,
       );
-      return state.lossMode === LOSS_MODE.ZERO_ROW ?
-        {success: true, changes: 0} :
-        {success: true};
+      return state.lossMode === LOSS_MODE.ZERO_ROW ? result : {success: true};
     }
-    return originalExecuteQuery(sql, params, queryOptions);
+    return submit(mutation, options);
   };
 }
 
@@ -733,6 +722,7 @@ async function runVoterSurplusScenario({lossMode}) {
     lossMode,
     lostWriteOperationId: null,
     lostWrites: 0,
+    lossGuards: [],
   };
   armGatewayTerminalWriteLoss({coordinator, state: lossState, events});
   armAuthoritativeServicesOwnerRead({coordinator, serviceRows});
@@ -819,6 +809,7 @@ async function runVoterSurplusScenario({lossMode}) {
       finalOps,
       deferrals: firstGenerationDeferrals,
       lostWrites: lossState.lostWrites,
+      lossGuards: lossState.lossGuards,
       firstReplaceStep: firstReplaceRow?.workflow_step || null,
       firstReplaceTerminal: firstReplaceRow ?
         isTerminalStep(firstReplaceRow.type, firstReplaceRow.workflow_step) :
@@ -849,10 +840,10 @@ function assertSurplusDrainsToTarget(t, m) {
     m.firstReplaceFailReported,
     'the executor voter-ready timeout fires and failOperation runs (cycle self-breaks by design)',
   );
-  t.ok(
-    m.lostWrites > 0,
-    `the injected loss actually swallowed terminal writes (${m.lostWrites})`,
-  );
+  t.equal(m.lostWrites, LOST_TERMINAL_WRITE_COUNT,
+    'the first terminal writes reach SQLite and change zero rows');
+  t.same(m.lossGuards, Array(LOST_TERMINAL_WRITE_COUNT).fill(null),
+    'each refused write carried the owner’s terminal CAS guard');
   t.ok(
     m.firstReplaceTerminal,
     'the wedged REPLACE row reaches a durable terminal step despite the write loss ' +
@@ -1012,19 +1003,18 @@ t.test(
       // while the durable row stays readable and NON-terminal (the CL-017
       // read/apply divergence family).
       const gateway = coordinator.repository.controlPlaneSystemTableGateway;
-      const passthroughExecuteQuery = gateway.executeQuery.bind(gateway);
-      let refuseUpdates = true;
-      gateway.executeQuery = async (sql, params = [], queryOptions = {}) => {
+      const submit = gateway.submitMutation.bind(gateway);
+      const attempts = [];
+      gateway.submitMutation = async (mutation, options) => {
         if (
-          refuseUpdates &&
-          typeof sql === 'string' &&
-          sql.includes('UPDATE replica_operations') &&
-          Array.isArray(params) &&
-          params[UPDATE_PARAM_INDEX_OPERATION_ID] === operation.operationId
+          isGuardedLedgerUpdate(mutation, operation.operationId) &&
+          mutation.data.workflow_step === WORKFLOW_STEP.FAILED
         ) {
-          return {success: true, changes: 0};
+          const result = await refuseGuardedLedgerUpdate(submit, mutation, options);
+          attempts.push(mutation.whereClause.completed_at);
+          return result;
         }
-        return passthroughExecuteQuery(sql, params, queryOptions);
+        return submit(mutation, options);
       };
 
       armTerminalTransitionRepair(
@@ -1039,6 +1029,9 @@ t.test(
         'the repair state is armed for the unconfirmed terminal transition',
       );
       await runTerminalTransitionRepairAttempt(owner, operation.operationId);
+      t.same(attempts, [null], 'the first repair reaches the guarded SQLite write');
+      t.equal(row.workflow_step, WORKFLOW_STEP.SYNCING,
+        'the zero-row repair leaves the durable preimage untouched');
       t.ok(
         owner.terminalTransitionRepairStateByOperationId.has(
           operation.operationId,
@@ -1066,7 +1059,8 @@ t.test(
         'the repair abandons when a different durable terminal state won ' +
           '(any terminal frees the budget and admission lanes)',
       );
-      refuseUpdates = false;
+      t.same(attempts, [null],
+        'the conflicting terminal preimage suppresses a second write');
     } finally {
       await coordinator.shutdown();
     }
