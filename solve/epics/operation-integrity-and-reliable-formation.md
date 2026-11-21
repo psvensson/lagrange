@@ -161,8 +161,9 @@ finite-read proof.
 [Timer authority originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--active-timer-operation-authority-29cd-953d-nov21.tar.gz).
 [Original and corrected runs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--concrete-progress-observation-paired-nov21.tar.gz).
 
-The accepted-main range ending at `4007eced1` passed fast static
-against `0dbed1718` in 88.825 seconds. The whole duplication check at
+The accepted-main range ending at `012acdd6b` passed fast static
+against `0dbed1718` in 89.032 seconds on adams-gamla. The initial
+request could not provision the source. The [original requests and selected range](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--core-static-012acdd6b-nov21.tar.gz) retain both outcomes. The whole duplication check at
 `dbf6fdc9c` passed with 35 groups / 1,109 lines in source and scripts
 and 609 / 21,780 in tests. At `76755d478`, the three-process public SQL
 journey passed on tv-dator in 36.824 seconds. The named three-host gate
@@ -328,9 +329,9 @@ retry. For example, a delayed ACK carries the old membership summary.
 Merging that whole row by timestamp can erase a refresh that committed
 while the ACK was in flight. The three ordinary callers persist an ACK,
 a new publication, or a metadata refresh. Each must keep its original
-intent through retry. The next native check delays each producer in turn
-and compares the reopened ACK set, lifecycle, placement metadata and
-closure history to both acknowledged operations.
+intent through retry. The native checks delay each producer in turn and compare the reopened
+ACK set, lifecycle, placement metadata and closure history to both
+acknowledged operations.
 [Publication coordinator](../../src/control-plane/membership-publication-coordinator-persist.js)
 · [Reconciliation producer](../../src/control-plane/membership-publication-coordinator-reconcile.js).
 
@@ -346,6 +347,29 @@ the final absence check. The generic predicate controls on `dbedf08b7`
 passed 48 assertions on tv-dator.
 [Native SQLite and consumer originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-lifecycle-native-and-consumers-nov21.tar.gz)
 · [Matched ordering and predicate originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-intent-order-9f38-nov21.tar.gz).
+
+Two distinct writers can also refresh the same membership field across a
+leadership change. On `b9a589fbe`, the older intent erased the winner both
+when the newer value was already visible and when it committed during the
+conditional write. On `fd89509fe` both cases preserved the winner, returned
+an unresolved answer to the stale writer and allowed a freshly derived
+intent to progress. All twelve native cases and sixteen wait-bound assertions
+passed on adams-gamla. The broad coordinator run on adam-laptop still failed.
+Its retained ACK readback passed. Case 87 exposed an OPEN row with every ACK
+present and closure still owed. The publication owner is repairing that
+transition and the CDC shutdown contract. The fixture owner is correcting
+substitutes that return a different revision to an exact-key read.
+[Managed originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-competing-refresh-and-ack-readback-nov21.tar.gz).
+
+The prevention rule for publication is that a retry keeps the original
+operation's meaning. An ACK adds a member to the existing evidence for that
+revision. A refresh changes only the fields it was authorized to derive.
+A competing change to the same field requires a fresh decision. An atomic
+storage comparison detects interference. The publication owner determines
+which changes can safely coexist. Kubernetes describes the same distinction
+between detecting a lost update and resolving conflicting field ownership.
+[Kubernetes API concurrency](https://kubernetes.io/docs/reference/using-api/api-concepts/) ·
+[Kubernetes field conflicts](https://kubernetes.io/docs/reference/using-api/server-side-apply/).
 
 Across the three node logs in each complete recording, the query executor
 reported the following unresolved write deliveries. Each line with the exact
