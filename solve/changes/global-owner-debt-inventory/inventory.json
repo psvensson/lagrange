@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "f64ad2d22d3616be1f28eea574f7d2076ad45cb5b1b418f2dc2d65231c206074"
+        "sha256": "879ed895ac0b00768894e698b7eeb9bba44eeae6b16e3cd7d3c03a2170b34b36"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -24,7 +24,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3779960,
-        "sha256": "4e7ea2e715b31e1ed16f23257bbc7ff0d9083db520b5d1e69e71631d988463a0"
+        "sha256": "83591657e46c254f0f77628dbde9efdd873bf5abedf73298f985605bd94810fe"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a88f6a87deebd4e8a6fa9f8e7bd431b45a21e8596f1b88265225bc76a34768a6"
+        "sha256": "925b68283562f8dc5ae17ae6ff531bbb49911ec8b3e40919cd2515a336178636"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "05c768ba02d10cd2abe45f607038578bcd4f11016f90c4d081b43b81e903ecf0"
+    "inputDigest": "78bb0900f1e1ba43c687e140d1c16b8f65bf5ab7665eb600d33549c120296438"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "f64ad2d22d3616be1f28eea574f7d2076ad45cb5b1b418f2dc2d65231c206074"
+        "sha256": "879ed895ac0b00768894e698b7eeb9bba44eeae6b16e3cd7d3c03a2170b34b36"
       },
-      "declaredCount": 1738,
-      "observedCount": 1738,
-      "assignedCount": 1738
+      "declaredCount": 1737,
+      "observedCount": 1737,
+      "assignedCount": 1737
     },
     "cognitive": {
       "identity": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a88f6a87deebd4e8a6fa9f8e7bd431b45a21e8596f1b88265225bc76a34768a6"
+          "sha256": "925b68283562f8dc5ae17ae6ff531bbb49911ec8b3e40919cd2515a336178636"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -174,34 +174,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3779960,
-        "sha256": "4e7ea2e715b31e1ed16f23257bbc7ff0d9083db520b5d1e69e71631d988463a0"
+        "sha256": "83591657e46c254f0f77628dbde9efdd873bf5abedf73298f985605bd94810fe"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "b4b33de23bcfb9d66ca551e8e13b385e033fd4d70ab7d2a30ca137a893611552",
+      "sourceDigest": "c4f675e00120ff940bf0bf5bc26e610a3417ccf95638696b14375e64ddf3f8e2",
       "moduleCount": 6383,
       "edgeCount": 38064,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2408,
-    "assignedSignalCount": 2408,
-    "uniqueAssignmentCount": 2408,
-    "digest": "48fc3076b99d31092c0cf43d0c8677c9315d813a34f2225988ba5e8ec4c29d42"
+    "sourceSignalCount": 2407,
+    "assignedSignalCount": 2407,
+    "uniqueAssignmentCount": 2407,
+    "digest": "f9fc73772501254e5a9432252ba7cf7a95cd2c2ff66dabc7817354f61510abef"
   },
   "signalCounts": {
     "cognitive": 148,
-    "complexity": 1738,
+    "complexity": 1737,
     "duplication": 446,
     "fileSize": 36,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1252,
+    "filesWithDebt": 1251,
     "rankedBoundaryCount": 109,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 89,
@@ -825,34 +825,6 @@
       ]
     },
     {
-      "key": "semantic:message_router_owner/message_router_workflow",
-      "owner": "message_router_owner",
-      "boundary": "message_router_workflow",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/transport"
-      ],
-      "fileCount": 12,
-      "signalCount": 25,
-      "complexity": 20,
-      "cognitive": 4,
-      "oversizedFiles": 0,
-      "duplicatedLines": 20,
-      "cloneTouches": 1,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 136,
-      "importOut": 66,
-      "score": 114,
-      "topPaths": [
-        "src/transport/message-router-outbound-queue-admission.js",
-        "src/transport/message-router-stats-shutdown.js",
-        "src/transport/message-router-connection-authority.js",
-        "src/transport/message-router-reconnect-behaviors.js",
-        "src/transport/message-router-server-lifecycle.js"
-      ]
-    },
-    {
       "key": "area:test/transport",
       "owner": null,
       "boundary": "test/transport",
@@ -878,6 +850,34 @@
         "test/transport/node-identity-separation.property.test.js",
         "test/transport/message-router-tail-final-test-cases.js",
         "test/transport/message-router-readiness-inflight-reserve.test.js"
+      ]
+    },
+    {
+      "key": "semantic:message_router_owner/message_router_workflow",
+      "owner": "message_router_owner",
+      "boundary": "message_router_workflow",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/transport"
+      ],
+      "fileCount": 11,
+      "signalCount": 24,
+      "complexity": 19,
+      "cognitive": 4,
+      "oversizedFiles": 0,
+      "duplicatedLines": 20,
+      "cloneTouches": 1,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 134,
+      "importOut": 62,
+      "score": 110,
+      "topPaths": [
+        "src/transport/message-router-outbound-queue-admission.js",
+        "src/transport/message-router-stats-shutdown.js",
+        "src/transport/message-router-connection-authority.js",
+        "src/transport/message-router-reconnect-behaviors.js",
+        "src/transport/message-router-server-lifecycle.js"
       ]
     },
     {

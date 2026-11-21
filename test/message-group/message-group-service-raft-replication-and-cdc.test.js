@@ -72,11 +72,6 @@ const TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/control_plane_publications-p1-r1';
 const TEST_NON_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/sql_write_operations-p1-r1';
-const TEST_DELIVERY_PRIORITY = Object.freeze({
-  BACKGROUND: 'background',
-  CRITICAL: 'critical',
-  READINESS: 'readiness',
-});
 const TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS = 11;
 const TEST_RETRYABLE_FORWARD_ERROR_CODE = 'ROUTER_CONNECTION_CLOSED';
 const TEST_RETRYABLE_FORWARD_ERROR_MSG =
@@ -530,7 +525,7 @@ test('MessageGroupService - non-critical initial partitions do not claim the cri
     );
   });
 
-test('MessageGroupService - consensus envelopes to message-group peers use the readiness router lane',
+test('MessageGroupService - consensus envelopes to message-group peers go through the one send closure',
   async (t) => {
     const deliveries = [];
     const transport = {
@@ -568,11 +563,10 @@ test('MessageGroupService - consensus envelopes to message-group peers use the r
         'the consensus envelope should be delivered once');
       t.same(deliveries[0]?.payload, envelope,
         'the semantic envelope should reach the transport unchanged');
-      t.equal(
-        deliveries[0]?.options?.deliveryPriority,
-        TEST_DELIVERY_PRIORITY.READINESS,
-        'consensus delivery to an mg-1 peer should use the readiness router lane',
-      );
+      // The consensus delivery class is the router's (raft frame delivery
+      // record, repair (e)): no raft envelope carries a router lane any more.
+      t.equal(deliveries[0]?.options, undefined,
+        'the send closure hands the transport no delivery options');
     } finally {
       await service.shutdown();
     }

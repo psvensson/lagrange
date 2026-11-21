@@ -29,6 +29,7 @@ const {
   ROUTER_LOG_MSG,
   RouterMessageType,
   TRANSPORT_NUM,
+  TRANSPORT_TYPEOF,
   WebSocket,
   isRaftTransportPayload,
 } = MESSAGE_ROUTER_SHARED;
@@ -36,6 +37,9 @@ const {
 // Every written envelope has the same outcome: the router wrote it.
 const CONSENSUS_ENVELOPE_WRITTEN = buildDeliveryEnvelope({acknowledged: true});
 const NO_ERROR_CODE = null;
+// A refusal is counted under its reason, or under reason:code when the
+// handler's throw named a code.
+const REFUSAL_KEY_SEPARATOR = ':';
 
 function notWritten(error, errorCode) {
   return buildDeliveryEnvelope({acknowledged: false, error, errorCode});
@@ -98,19 +102,29 @@ function deliverConsensusEnvelope(router, targetAddress, envelope) {
   return CONSENSUS_ENVELOPE_WRITTEN;
 }
 
-function recordReceiptRefusal(router, reason, frame, error = null) {
-  const code = typeof error?.code === 'string' && error.code.length > 0 ?
+// A refusal's error code, when the handler's throw named one.
+function refusalCodeOf(error) {
+  return typeof error?.code === TRANSPORT_TYPEOF.STRING && error.code.length > 0 ?
     error.code : null;
-  const key = code === null ? reason : `${reason}:${code}`;
-  const refusals = router.consensusDelivery.receiptRefusals;
-  refusals.set(key, (refusals.get(key) ?? TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE);
-  router.logger.debug(ROUTER_LOG_MSG.CONSENSUS_ENVELOPE_REFUSED, {
+}
+
+function refusalLogFacts(reason, code, frame, error) {
+  return {
     reason,
     code,
     targetAddress: frame?.targetAddress ?? null,
     sourceNodeId: frame?.sourceNodeId ?? null,
     error: error === null ? null : String(error?.message ?? error),
-  });
+  };
+}
+
+function recordReceiptRefusal(router, reason, frame, error = null) {
+  const code = refusalCodeOf(error);
+  const key = code === null ? reason : `${reason}${REFUSAL_KEY_SEPARATOR}${code}`;
+  const refusals = router.consensusDelivery.receiptRefusals;
+  refusals.set(key, (refusals.get(key) ?? TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE);
+  router.logger.debug(ROUTER_LOG_MSG.CONSENSUS_ENVELOPE_REFUSED,
+    refusalLogFacts(reason, code, frame, error));
 }
 
 /**
