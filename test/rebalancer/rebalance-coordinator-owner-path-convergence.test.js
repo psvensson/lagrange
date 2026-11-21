@@ -792,7 +792,7 @@ test('Owner-path convergence: all progression entry points ' +
         releaseFailedPersistResolve = resolve;
       });
       let blockedFailedPersist = false;
-      let failedPersistCalls = 0;
+      let failedCommittedChanges = 0;
       let transactionCoordinatorCalls = 0;
 
       const store = createCoordinatorSqlStore({
@@ -807,16 +807,19 @@ test('Owner-path convergence: all progression entry points ' +
       });
       const sqlEngine = {
         async executeQuery(sql, params) {
-          if (sql.includes('UPDATE replica_operations') && sql.includes('completed_at IS NULL') &&
-              params[1] === WORKFLOW_STEP.FAILED && params[7] === operationId) {
-            failedPersistCalls += 1;
-            if (!blockedFailedPersist) {
-              blockedFailedPersist = true;
-              failedPersistStartedResolve();
-              await releaseFailedPersist;
-            }
+          const writesFailedForThisOperation = sql.includes('UPDATE replica_operations') &&
+            sql.includes('completed_at IS NULL') &&
+            params[1] === WORKFLOW_STEP.FAILED && params[7] === operationId;
+          if (writesFailedForThisOperation && !blockedFailedPersist) {
+            blockedFailedPersist = true;
+            failedPersistStartedResolve();
+            await releaseFailedPersist;
           }
-          return store.execute(sql, params);
+          const result = store.execute(sql, params);
+          if (writesFailedForThisOperation && result.success) {
+            failedCommittedChanges += result.changes;
+          }
+          return result;
         },
       };
 
@@ -888,16 +891,21 @@ test('Owner-path convergence: all progression entry points ' +
         async () => 0;
       coordinator.initialize();
 
+      let gateDeadline;
+      const timeoutPromise = coordinator.checkTimeouts();
       try {
-        const timeoutPromise = coordinator.checkTimeouts();
         await Promise.race([
           failedPersistStarted,
+          timeoutPromise.then(() => {
+            throw new Error('Timeout check returned before the FAILED persistence gate');
+          }),
           new Promise((_, reject) => {
-            setTimeout(() => {
+            gateDeadline = setTimeout(() => {
               reject(new Error('Timed out waiting for FAILED persistence gate'));
             }, 2000);
           }),
         ]);
+        clearTimeout(gateDeadline);
 
         emitter.emitOutcome(
           EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
@@ -919,17 +927,29 @@ test('Owner-path convergence: all progression entry points ' +
           'the rebalancer must not own SQL transaction sessions',
         );
         t.equal(
-          failedPersistCalls,
+          failedCommittedChanges,
           1,
-          'shared owner serialization should persist FAILED exactly once',
+          'exactly one guarded FAILED write changed a SQLite row',
         );
+        const readback = store.execute(
+          'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
+        );
+        t.equal(readback.rowSetComplete, true,
+          'the exact-key SQLite read is complete');
+        t.equal(readback.rows.length, 1, 'the operation has one durable row');
+        const [durable] = readback.rows;
+        t.equal(durable.workflow_step, WORKFLOW_STEP.FAILED);
+        t.equal(durable.status, ReplicaStatus.FAILED);
+        t.ok(Number.isFinite(durable.completed_at), 'the committed failure is terminal');
+        t.equal(JSON.parse(durable.steps_history).filter(
+          ({step}) => step === WORKFLOW_STEP.FAILED,
+        ).length, 1, 'durable history has one FAILED transition');
         // CL-029: the outcome arriving while the timeout path holds the
         // lane is coalesced away by runExclusive and then RE-DRIVEN after
         // the holder settles (redriveExecutorOutcomeReconcile), so the
         // outcome path may enter the lane more than once — every entry
-        // must still use the shared per-operation owner key, and the
-        // re-driven reconcile no-ops on the terminal row (asserted above
-        // via transactionCoordinatorCalls/failedPersistCalls).
+        // must still use the same per-operation key. The re-driven reconcile
+        // leaves a single committed change and durable terminal history.
         t.ok(
           recordedOwnerKeys.length >= 2,
           'timeout and outcome paths must both enter the owner lane',
@@ -940,6 +960,9 @@ test('Owner-path convergence: all progression entry points ' +
           'timeout and outcome paths must share the same owner key',
         );
       } finally {
+        clearTimeout(gateDeadline);
+        releaseFailedPersistResolve();
+        await Promise.allSettled([timeoutPromise]);
         await coordinator.shutdown();
         store.suspend();
       }
