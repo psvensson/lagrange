@@ -126,10 +126,12 @@ class SQLQueryEngineProvisionTargetMethods {
 
     const readiness = this.controlPlaneReadinessService;
     const hasExplicitTargets = explicitTargetNodeIds.length > 0;
-    let cohort = hasExplicitTargets ? null : this.observeProvisionTargetCohort();
+    let {diagnostics} = this.resolveProvisionTargetNodeIdsWithDiagnostics(
+      requiredReplicaCount, hasExplicitTargets ? null : undefined,
+    );
 
     if (
-      cohort?.state === LOCAL_STR_UNAVAILABLE &&
+      diagnostics.cohort?.state === LOCAL_STR_UNAVAILABLE &&
       typeof readiness.readServeEligibility === LOCAL_STR_FUNCTION
     ) {
       const waitBudgetMs = Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0 ?
@@ -152,12 +154,10 @@ class SQLQueryEngineProvisionTargetMethods {
         );
       }
       throwIfCancellationRequested(cancellationToken);
-      cohort = this.observeProvisionTargetCohort();
+      ({diagnostics} =
+        this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount));
     }
 
-    let diagnostics =
-      this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount, cohort)
-        .diagnostics;
     let nodeIds = hasExplicitTargets ? explicitTargetNodeIds : diagnostics.selectedNodeIds;
     const majorityCount = this.calculateQuorumReplicaCount(requiredReplicaCount);
     const requestedMinimum = options.minimumRoutableReplicaCount;
@@ -183,10 +183,8 @@ class SQLQueryEngineProvisionTargetMethods {
       if (!hasExplicitTargets && (admissionProbe || options.assertProvisioningOwnership)) {
         // The owner fences expired or superseded evidence on every answer.
         // Newly eligible targets belong to a subsequent admission attempt.
-        cohort = this.observeProvisionTargetCohort();
-        diagnostics =
-          this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount, cohort)
-            .diagnostics;
+        ({diagnostics} =
+          this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount));
         const eligibleNodeIds = new Set(diagnostics.selectedNodeIds);
         nodeIds = nodeIds.filter((nodeId) => eligibleNodeIds.has(nodeId));
       }
@@ -200,7 +198,8 @@ class SQLQueryEngineProvisionTargetMethods {
         nodeIds,
         requiredReplicaCount,
         quorumReplicaCount,
-        retryAfterMs: cohort?.retryAfterMs ?? this.tablePartitionProvisioningTimeoutMs,
+        retryAfterMs: diagnostics.cohort?.retryAfterMs ??
+          this.tablePartitionProvisioningTimeoutMs,
       });
       if (options.failOnTimeout !== false) {
         throwProvisionTargetRefusal(detail);

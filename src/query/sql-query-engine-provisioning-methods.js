@@ -111,7 +111,7 @@ class SQLQueryEngineProvisioningMethods {
    */
   resolveProvisionTargetNodeIdsWithDiagnostics(
     requestedReplicaCount,
-    cohort = this.observeProvisionTargetCohort(),
+    cohort,
   ) {
     const desiredReplicaCount =
       Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
@@ -154,10 +154,6 @@ class SQLQueryEngineProvisioningMethods {
     return uniqueNodeIds;
   }
 
-  observeProvisionTargetCohort() {
-    return this.controlPlaneReadinessService?.answerServeCohort() ?? null;
-  }
-
   /**
    * Resolve provision-target diagnostics from one committed serving cohort.
    * @param {number} requestedReplicaCount
@@ -167,7 +163,7 @@ class SQLQueryEngineProvisioningMethods {
    */
   resolveProvisionTargetNodeDiagnostics(
     requestedReplicaCount,
-    cohort = this.observeProvisionTargetCohort(),
+    cohort = this.controlPlaneReadinessService?.answerServeCohort?.() ?? null,
   ) {
     const desiredReplicaCount =
       Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
