@@ -1,18 +1,16 @@
+import {toExactInteger} from '../raft/raft-rs-record-integer.js';
 import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
 import {
   PLACEMENT_ADMISSION_ERROR, PLACEMENT_RESULT_FIELD, RETAINED_PLACEMENT_ATTEMPT,
 } from '../partition/partition-placement-admission-constants.js';
 import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
 import {
-  PLACEMENT_OUTCOME, PLACEMENT_REFUSAL, PLACEMENT_TRANSITION_KIND,
+  PLACEMENT_CLEARING_TRIGGER, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL,
+  PLACEMENT_TRANSITION_KIND, PLACEMENT_TRIGGER,
 } from './replica-placement-owner-constants.js';
 
 const PLACEMENT_REFUSAL_REASONS = new Set(Object.values(PLACEMENT_REFUSAL));
-const RETRIABLE_FOUNDING_REFUSALS = Object.freeze(new Set([
-  PLACEMENT_REFUSAL.CDC_CAPACITY,
-  PLACEMENT_REFUSAL.PARTITION_BUSY,
-  PLACEMENT_REFUSAL.LEDGER_TRANSITION_UNRESOLVED,
-]));
+const DECIMAL_RAFT_INDEX = /^\d+$/u;
 const STATIC_PRE_PROPOSAL_FAILURE_CODES = Object.freeze(new Set([
   PLACEMENT_ADMISSION_ERROR.BYTES,
   PLACEMENT_ADMISSION_ERROR.TARGET,
@@ -49,17 +47,38 @@ function bindPlacementAttemptAnswer(answer, entryId, retained) {
   return bound;
 }
 
+function foundingRefusalWaitsForCommit(answer, statement) {
+  const result = answer?.[PLACEMENT_RESULT_FIELD];
+  return statement?.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND &&
+    isPlacementAttemptIdentitySettled(answer) &&
+    result?.outcome === PLACEMENT_OUTCOME.REFUSED &&
+    PLACEMENT_CLEARING_TRIGGER[result.reason] === PLACEMENT_TRIGGER.LEDGER_COMMIT;
+}
+
+function ledgerAdvancedAfterRefusal(answer) {
+  const {observedLedgerAppliedIndex, logIndex} = answer;
+  return typeof observedLedgerAppliedIndex === 'string' &&
+    DECIMAL_RAFT_INDEX.test(observedLedgerAppliedIndex) &&
+    Number.isSafeInteger(logIndex) && logIndex > 0 &&
+    toExactInteger(observedLedgerAppliedIndex) > toExactInteger(String(logIndex));
+}
+
+function retainFoundingRefusal(answer) {
+  return {...answer, [RETAINED_PLACEMENT_ATTEMPT]: true,
+    clearingTrigger: PLACEMENT_TRIGGER.LEDGER_COMMIT};
+}
+
 function canReplaceSettledPlacementAttempt(answer, statement) {
-  const result = answer[PLACEMENT_RESULT_FIELD];
   if (statement.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND) {
-    return result?.outcome === PLACEMENT_OUTCOME.REFUSED &&
-      RETRIABLE_FOUNDING_REFUSALS.has(result.reason);
+    return foundingRefusalWaitsForCommit(answer, statement) &&
+      ledgerAdvancedAfterRefusal(answer);
   }
   return answer.failureCode === PLACEMENT_ADMISSION_ERROR.BYTES ||
-    result?.outcome === PLACEMENT_OUTCOME.REFUSED;
+    answer[PLACEMENT_RESULT_FIELD]?.outcome === PLACEMENT_OUTCOME.REFUSED;
 }
 
 export {
   bindPlacementAttemptAnswer, canReplaceSettledPlacementAttempt,
+  foundingRefusalWaitsForCommit, retainFoundingRefusal,
   isPlacementAttemptIdentitySettled,
 };

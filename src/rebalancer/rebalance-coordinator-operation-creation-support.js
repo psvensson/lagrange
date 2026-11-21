@@ -1,5 +1,6 @@
 import {
   bindPlacementAttemptAnswer, canReplaceSettledPlacementAttempt,
+  foundingRefusalWaitsForCommit, retainFoundingRefusal,
   isPlacementAttemptIdentitySettled,
 } from './placement-admission-attempt.js';
 import {
@@ -370,6 +371,9 @@ const operationCreationSupportMethods = {
       if (attempts.get(intentKey) === retained) attempts.delete(intentKey);
       return {settled: true, retryWithFreshEntry: true};
     }
+    if (foundingRefusalWaitsForCommit(answer, retained.statement)) {
+      return {settled: false, answer: retainFoundingRefusal(answer)};
+    }
     return {
       settled: true,
       retryWithFreshEntry: false,
@@ -381,6 +385,10 @@ const operationCreationSupportMethods = {
     const attempts = this.ensureUncertainPlacementAttemptsMap();
     if (!isPlacementAttemptIdentitySettled(answer)) return answer;
     const retained = attempts.get(key);
+    if (retained?.entryId === answer.entryId &&
+        foundingRefusalWaitsForCommit(answer, retained.statement)) {
+      return retainFoundingRefusal(answer);
+    }
     if (!confirmOperation || answer[PLACEMENT_RESULT_FIELD]?.outcome !==
         PLACEMENT_OUTCOME.ADMITTED) {
       if (retained?.entryId === answer.entryId) attempts.delete(key);
@@ -404,6 +412,8 @@ const operationCreationSupportMethods = {
     confirmOperation = null,
     requestedMove = null,
     assertFreshCreationAllowed,
+    prepareFreshPlacement,
+    buildFreshStatement,
   }) {
     const retainedResolution = await this.resolveRetainedPlacementAttempt(
       intentKey,
@@ -413,12 +423,14 @@ const operationCreationSupportMethods = {
       return this.finishPlacementAdmissionAttempt(intentKey,
         retainedResolution.answer, confirmOperation);
     }
+    if (prepareFreshPlacement) await prepareFreshPlacement();
     assertFreshCreationAllowed?.();
+    const freshStatement = buildFreshStatement ? buildFreshStatement() : statement;
     const explicitId = retainedResolution?.retryWithFreshEntry && !requestedMove ? null : entryId;
     const resolved = this.resolvePlacementAdmissionEntryId(
       intentKey,
       explicitId,
-      statement,
+      freshStatement,
       requestedMove,
     );
     const answer = await this.submitPlacementPayload(

@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {OWNER_CONTRACT_STATE} from '../../src/control-plane/owner-contract-outcome.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
@@ -224,53 +225,72 @@ for (const replyLost of [false, true]) {
         await query();
         t.equal(gateway.rows.get(key)?.status, 'PENDING');
         t.same(sent, [sent[0], sent[0]], 'same bytes may be read back while blocked');
+        let retainedEntryId = sent[0];
+        if (replyLost) {
+          t.equal(stepLedgerRow(leader, blocker, WORKFLOW_STEP.SYNCING), null);
+          await query();
+          t.equal(gateway.rows.get(key)?.status, 'PENDING', 'a newer commit can still refuse');
+          t.equal(sent[2], retainedEntryId);
+          t.ok(sent[3] && sent[3] !== retainedEntryId);
+          retainedEntryId = sent[3];
+          await query();
+          t.equal(sent[4], retainedEntryId, 'the new refusal waits without a self-retry loop');
+        }
+        const beforeClearing = sent.length;
         t.equal(stepLedgerRow(leader, blocker, WORKFLOW_STEP.ACTIVE), null);
         const settled = await query();
         t.equal(settled.outcome.jobId, first.outcome.jobId);
         t.equal(gateway.rows.get(key)?.status, 'SUCCEEDED');
-        t.equal(sent[2], sent[0], 'the old committed refusal is read first');
-        t.ok(sent[3] && sent[3] !== sent[0], 'the newer ledger commit permits one fresh entry');
-        t.equal(sent.length, 4);
+        t.equal(sent[beforeClearing], retainedEntryId, 'the old committed refusal is read first');
+        t.ok(sent[beforeClearing + 1] && sent[beforeClearing + 1] !== retainedEntryId,
+          'the newer ledger commit permits one fresh entry');
+        t.equal(sent.length, beforeClearing + 2);
       } finally {
         await stop();
       }
     }));
 }
 
-test('fresh FOUND rechecks its deadline after exact retained refusal resolution', (t) =>
-  onLedgerLeader(async (leader, proposed) => {
-    const blocker = await seedLedgerBlocker(leader, proposed);
-    const stop = attachAutoCommitLoop(leader, proposed);
-    try {
-      const {clock, engine, readiness} = createServeRefreshFixture(t, createGateway());
-      await readiness.readServeEligibility();
-      engine.nowFn = () => clock.now;
-      const sent = [];
-      const budget = createTimeoutBudget({configuredBudgetMs: 100, now: engine.nowFn});
-      const coordinator = remoteCoordinator(leader, async (_address, message) => {
-        const answer = await requestPlacementAdmission(leader, message);
-        if (message.body?.transitionKind !== 'FOUND') return answer;
-        sent.push(message.entryId);
-        if (sent.length === 1) {
-          return buildRejectedProposedWriteAnswer(new Error('initial reply lost'),
-            {partitionId: LEDGER_PARTITION_ID, entryId: message.entryId});
-        }
-        clock.now = budget.deadlineMs;
-        return answer;
-      });
-      const dispatched = recordNativeDispatch(engine, coordinator);
-      const context = {partitionId: 'found-expiry-p1', schemaJobId: 'found-expiry-job', replicaCount: 3};
-      await t.rejects(engine.provisionInitialTablePartition(context));
-      t.equal(stepLedgerRow(leader, blocker, WORKFLOW_STEP.ACTIVE), null);
-      await t.rejects(engine.provisionInitialTablePartition({...context, timeoutBudget: budget}),
-        {code: 'TIMEOUT'});
-      t.same(sent, [sent[0], sent[0]]);
-      t.same(ledgerRows(leader).map(({operation_id: id}) => id), [blocker]);
-      t.same(dispatched, []);
-    } finally {
-      await stop();
-    }
-  }));
+for (const stopReason of ['deadline', 'cancel']) {
+  test(`fresh FOUND rechecks ${stopReason} after retained refusal resolution`, (t) =>
+    onLedgerLeader(async (leader, proposed) => {
+      const blocker = await seedLedgerBlocker(leader, proposed);
+      const stop = attachAutoCommitLoop(leader, proposed);
+      try {
+        const {clock, engine, readiness} = createServeRefreshFixture(t, createGateway());
+        await readiness.readServeEligibility();
+        engine.nowFn = () => clock.now;
+        const sent = [];
+        const cancellationToken = new CancellationToken();
+        const budget = createTimeoutBudget({configuredBudgetMs: 100, now: engine.nowFn});
+        const coordinator = remoteCoordinator(leader, async (_address, message) => {
+          const answer = await requestPlacementAdmission(leader, message);
+          if (message.body?.transitionKind !== 'FOUND') return answer;
+          sent.push(message.entryId);
+          if (sent.length === 1) {
+            return buildRejectedProposedWriteAnswer(new Error('initial reply lost'),
+              {partitionId: LEDGER_PARTITION_ID, entryId: message.entryId});
+          }
+          if (stopReason === 'deadline') clock.now = budget.deadlineMs;
+          else cancellationToken.cancel('founding cancelled during retained resolution');
+          return answer;
+        });
+        const dispatched = recordNativeDispatch(engine, coordinator);
+        const context = {partitionId: 'found-expiry-p1', schemaJobId: 'found-expiry-job', replicaCount: 3};
+        await t.rejects(engine.provisionInitialTablePartition(context));
+        t.equal(stepLedgerRow(leader, blocker, WORKFLOW_STEP.ACTIVE), null);
+        await t.rejects(engine.provisionInitialTablePartition({
+          ...context, timeoutBudget: budget, cancellationToken,
+        }), stopReason === 'deadline' ? {code: 'TIMEOUT'} :
+          {message: 'founding cancelled during retained resolution'});
+        t.same(sent, [sent[0], sent[0]]);
+        t.same(ledgerRows(leader).map(({operation_id: id}) => id), [blocker]);
+        t.same(dispatched, []);
+      } finally {
+        await stop();
+      }
+    }));
+}
 
 for (const caseName of ['same', 'unproved', 'mixed', 'incomplete']) {
   test(`ALREADY_FOUNDED requires a complete exact founder cohort (${caseName})`, (t) =>
@@ -300,6 +320,9 @@ for (const caseName of ['same', 'unproved', 'mixed', 'incomplete']) {
         }
         if (caseName === 'incomplete') {
           t.equal(stepLedgerRow(leader, rows[2].operation_id, WORKFLOW_STEP.FAILED), null);
+        }
+        if (caseName === 'same') {
+          engine.rebalanceCoordinator = createCoordinatorWithLedger(leader);
         }
         const adoption = engine.tryProvisionFoundingSetViaPlacementAdmission(input);
         if (caseName === 'same') {

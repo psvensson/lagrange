@@ -1,3 +1,4 @@
+import {readPartitionAppliedIndex} from './partition-committed-log.js';
 // Public entry: requestPlacementAdmission, requestPlacementHoldRelease, routePlacementAdmission, applyPlacementCommand.
 // Required collaborators: PartitionService (replica_operations-p1), buildPlacementCommand, decidePlacementAdmission, decideHoldRelease.
 // Durable authority / commit point: replica_operations and _partition_statement_outcomes rows committed in applyCommittedEntrySliceTransaction.
@@ -228,8 +229,12 @@ function proposePlacementCommand(service, command) {
   const entryKey = service.getCommittedEntryKey(command);
   const recorded = readCommittedStatementOutcome(service, entryKey);
   if (recorded.state === RECORD.SETTLED) {
-    return isSameCommandReplay(service, recorded, command) ?
-      recordedAnswer(service, recorded) : refusal(service, ERROR.BYTES);
+    if (!isSameCommandReplay(service, recorded, command)) return refusal(service, ERROR.BYTES);
+    const answer = recordedAnswer(service, recorded);
+    return command.type === PLACEMENT_ADMIT_TYPE &&
+      command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
+      {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} :
+      answer;
   }
   const fingerprint = commandFingerprintOf(command);
   const pendingFingerprints = pendingFingerprintsOf(service);

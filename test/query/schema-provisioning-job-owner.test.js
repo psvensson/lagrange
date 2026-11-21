@@ -347,8 +347,9 @@ function captureFoundingAdmission(engine, precheck = () => ({allowed: true})) {
       events.push(nodeId);
       return precheck(nodeId);
     },
-    async admitPlacementStatement({statement}) {
-      proposals.push(statement);
+    async admitPlacementStatement({statement, prepareFreshPlacement, buildFreshStatement}) {
+      await prepareFreshPlacement?.();
+      proposals.push(buildFreshStatement ? buildFreshStatement() : statement);
       events.push('found');
       throw new Error('the founding admission reached the native boundary');
     },

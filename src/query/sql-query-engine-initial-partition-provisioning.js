@@ -1,3 +1,7 @@
+import {provePlacementFounders} from '../partition/partition-placement-founder-proof.js';
+import {getOperationMetadataObject, readOriginalCreateBootstrapMembership} from
+  '../rebalancer/replica-status.js';
+import {OPERATION_METADATA_KEY} from '../rebalancer/replica-operation-progress.js';
 import {isServeEligibilityAnswerEligible} from '../control-plane/serve-eligibility-owner.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-execution.js';
@@ -44,11 +48,9 @@ function isFoundingPlacementAccepted(answer, result, foundingIntentId) {
   if (result.outcome === PLACEMENT_OUTCOME.ADMITTED) {
     return true;
   }
-  const intentMatches = !result.foundingIntentId ||
-    result.foundingIntentId === foundingIntentId;
   return result.outcome === PLACEMENT_OUTCOME.REFUSED &&
     result.reason === PLACEMENT_REFUSAL.ALREADY_FOUNDED &&
-    intentMatches;
+    result.foundingIntentId === foundingIntentId;
 }
 
 function throwFoundingPlacementError(partitionId, answer, result) {
@@ -338,11 +340,11 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         routableNodeIdSet.size === 0 &&
         admittedTargetNodeIds.length > 0 &&
         requiredNewReplicaCount > 0) {
-      await context?.assertProvisioningOwnership?.();
-      throwIfCancellationRequested(cancellationToken);
-      this.assertProvisioningAttemptBudget(timeoutBudget);
-      let foundingTargetNodeIds = admittedTargetNodeIds.slice(0, requiredNewReplicaCount);
-      if (discoverTargets) {
+      const foundingCandidates = admittedTargetNodeIds.slice(0, requiredNewReplicaCount);
+      const prepareFreshTargets = () => {
+        throwIfCancellationRequested(cancellationToken);
+        this.assertProvisioningAttemptBudget(timeoutBudget);
+        if (!discoverTargets) return foundingCandidates;
         const fresh = this.requireFreshFoundingTargets({
           partitionId,
           jobId: context?.schemaJobId ?? null,
@@ -350,21 +352,22 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           requiredReplicaCount: requestedReplicaCount,
           quorumReplicaCount,
         });
-        foundingTargetNodeIds = fresh.nodeIds.slice(0, requiredNewReplicaCount);
         provisioningEpoch = fresh.epoch;
-        if (foundingTargetNodeIds.length < targetReplicaCount) {
-          targetReplicaCount = foundingTargetNodeIds.length;
-          minimumRoutableReplicaCount = Math.min(
-            minimumRoutableReplicaCount, targetReplicaCount,
-          );
-          provisioningContractState = OWNER_CONTRACT_STATE.UNDER_REPLICATED;
-        }
-      }
+        return fresh.nodeIds.slice(0, requiredNewReplicaCount);
+      };
       const founded = await this.tryProvisionFoundingSetViaPlacementAdmission({
         partitionId,
-        targetNodeIds: foundingTargetNodeIds,
+        targetNodeIds: foundingCandidates,
         context,
+        prepareFreshTargets,
       });
+      if (founded.provisioned && founded.operations.length < targetReplicaCount) {
+        targetReplicaCount = founded.operations.length;
+        minimumRoutableReplicaCount = Math.min(
+          minimumRoutableReplicaCount, targetReplicaCount,
+        );
+        provisioningContractState = OWNER_CONTRACT_STATE.UNDER_REPLICATED;
+      }
       plannedOperations.push(...founded.plannedOperations);
       createdPlanningOperations.push(...founded.createdOperations);
     } else {
@@ -678,26 +681,30 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     partitionId,
     targetNodeIds,
     context,
+    prepareFreshTargets,
   }) {
     const coordinator = this.rebalanceCoordinator;
     const jobPrefix = context?.schemaJobId || DEFAULT_FOUND_SCHEMA_JOB_ID;
     const foundingIntentId = `${jobPrefix}:${partitionId}`;
     const sourceNodeId = this.nodeId || DEFAULT_FOUND_SOURCE_NODE_ID;
     const placementClass = classifyPlacementClass(partitionId);
-    const formationLatchEpoch =
-      coordinator.resolveFormationLatchEpochForPlacement(placementClass, partitionId);
-    const statement = buildFoundingAdmissionStatement({
+    const buildStatement = (targets) => buildFoundingAdmissionStatement({
       partitionId,
       placementClass,
       foundingIntentId,
-      targetNodeIds,
+      targetNodeIds: targets,
       sourceNodeId,
-      formationLatchEpoch,
+      formationLatchEpoch:
+        coordinator.resolveFormationLatchEpochForPlacement(placementClass, partitionId),
       positions: {},
     });
+    const statementInput = prepareFreshTargets ? {
+      prepareFreshPlacement: () => context?.assertProvisioningOwnership?.(),
+      buildFreshStatement: () => buildStatement(prepareFreshTargets()),
+    } : {statement: buildStatement(targetNodeIds)};
     const answer = await coordinator.admitPlacementStatement({
       intentKey: `${FOUND_ENTRY_PREFIX}:${foundingIntentId}`,
-      statement,
+      ...statementInput,
     });
     const result = answer?.[PLACEMENT_RESULT_FIELD];
     if (!isFoundingPlacementAccepted(answer, result, foundingIntentId)) {
@@ -725,6 +732,17 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       };
     }
     const admitted = result.outcome === PLACEMENT_OUTCOME.ADMITTED;
+    const originEntryId = admitted ? answer.entryId : result.foundingEntryId;
+    const cohort = provePlacementFounders(operations.map((operation) => ({
+      ...operation,
+      bootstrapMembership: readOriginalCreateBootstrapMembership(operation.stepsHistory),
+      admission: getOperationMetadataObject(operation.stepsHistory,
+        OPERATION_METADATA_KEY.PLACEMENT_ADMISSION),
+    })), {partitionId, foundingIntentId});
+    if (!cohort || cohort.entryId !== originEntryId ||
+        operations.some(({operationId}, ordinal) => operationId !== result.operationIds[ordinal])) {
+      throwFoundingPlacementError(partitionId, answer, result);
+    }
     return {
       provisioned: true,
       deferred: false,
