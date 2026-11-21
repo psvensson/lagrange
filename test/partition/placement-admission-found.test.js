@@ -67,7 +67,8 @@ test('F9: FOUND twice under fresh entryIds answers ALREADY_FOUNDED with the live
     assert.deepEqual(resultOf(second.answer), {outcome: PLACEMENT_OUTCOME.REFUSED,
       reason: PLACEMENT_REFUSAL.ALREADY_FOUNDED,
       operationIds: resultOf(first.answer).operationIds,
-      foundingIntentId: `schema-job-1:${USER_PARTITION}`});
+      foundingIntentId: `schema-job-1:${USER_PARTITION}`,
+      foundingEntryId: first.command.entryId});
     assert.equal(ledgerRows(leader).length, 3);
   }));
 
@@ -98,11 +99,15 @@ test('F9c: a mixed set (one FAILED, the others live) is still founded', () =>
       foundingStatement(USER_PARTITION, FOUNDERS));
     assert.equal(resultOf(again.answer).reason, PLACEMENT_REFUSAL.ALREADY_FOUNDED);
     assert.deepEqual(resultOf(again.answer).operationIds, [active, pending]);
+    assert.equal(resultOf(again.answer).foundingIntentId, null);
+    assert.equal(resultOf(again.answer).foundingEntryId, null);
     // ACTIVE alone (every other founder terminal) is founded too.
     assert.equal(stepLedgerRow(leader, pending, WORKFLOW_STEP.FAILED), null);
     const third = await admitOnLeader(leader, proposed, 'found-c',
       foundingStatement(USER_PARTITION, FOUNDERS));
     assert.deepEqual(resultOf(third.answer).operationIds, [active]);
+    assert.equal(resultOf(third.answer).foundingIntentId, null);
+    assert.equal(resultOf(third.answer).foundingEntryId, null);
   }));
 
 test('F9d: a system-catalog partition answers SYSTEM_PARTITION_SEED_FOUNDED', () =>

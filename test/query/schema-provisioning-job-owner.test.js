@@ -187,6 +187,8 @@ async function queryInitialPartition(t, gateway, fixture) {
   return {answer: await query(), attempts};
 }
 
+const FOUNDING_TEST_JOB_ID = 'schema-job-partition-provisioning-test';
+
 for (const {replicaCount, members, targetNodeIds, expected} of [
   {replicaCount: 3, members: ['serve-e', 'serve-b', 'serve-a', 'serve-d', 'serve-c'],
     expected: ['serve-a', 'serve-b', 'serve-c']},
@@ -209,6 +211,7 @@ for (const {replicaCount, members, targetNodeIds, expected} of [
 
     const native = captureFoundingAdmission(engine);
     await t.rejects(engine.provisionInitialTablePartition({
+      schemaJobId: FOUNDING_TEST_JOB_ID,
       partitionId: 'width-probe-p1', replicaCount, targetNodeIds,
       assertProvisioningOwnership: async () => native.events.push('ownership'),
     }), {message: 'the founding admission reached the native boundary'});
@@ -232,6 +235,7 @@ test('founding checks the next eligible target after a pre-effect refusal',
       allowed: nodeId !== 'serve-a',
     }));
     await t.rejects(engine.provisionInitialTablePartition({
+      schemaJobId: FOUNDING_TEST_JOB_ID,
       partitionId: 'alternate-probe-p1', replicaCount: 3,
     }), {message: 'the founding admission reached the native boundary'});
     t.same(native.checked, members);
@@ -248,6 +252,7 @@ test('founding rechecks the cohort after the schema ownership fence',
     await readiness.readServeEligibility();
     const native = captureFoundingAdmission(engine);
     await t.rejects(engine.provisionInitialTablePartition({
+      schemaJobId: FOUNDING_TEST_JOB_ID,
       partitionId: 'ownership-probe-p1', replicaCount: 3,
       async assertProvisioningOwnership() {
         native.events.push('ownership');
@@ -273,6 +278,7 @@ test('admission outlasting the parent deadline cannot found a healthy cohort',
       configuredBudgetMs: 20, now: engine.nowFn,
     });
     await t.rejects(engine.provisionInitialTablePartition({
+      schemaJobId: FOUNDING_TEST_JOB_ID,
       partitionId: 'deadline-probe-p1', replicaCount: 3, timeoutBudget,
       assertProvisioningOwnership: async () => native.events.push('ownership'),
     }), {errorCode: 'TIMEOUT'});
@@ -291,6 +297,7 @@ test('explicit prechecks stop when their shared attempt deadline expires',
       return {allowed: true};
     });
     await t.rejects(engine.provisionInitialTablePartition({
+      schemaJobId: FOUNDING_TEST_JOB_ID,
       partitionId: 'explicit-deadline-p1', replicaCount: 2,
       targetNodeIds: ['serve-c', 'serve-a', 'serve-b'],
       timeoutBudget: createTimeoutBudget({configuredBudgetMs: 20, now: engine.nowFn}),
@@ -307,6 +314,7 @@ for (const explicit of [false, true]) {
       const native = captureFoundingAdmission(engine, (nodeId) =>
         nodeId === 'serve-a' ? {} : {allowed: true});
       await t.rejects(engine.provisionInitialTablePartition({
+        schemaJobId: FOUNDING_TEST_JOB_ID,
         partitionId: 'admission-unknown-p1', replicaCount: 2,
         ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
       }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE});
@@ -326,6 +334,7 @@ for (const explicit of [false, true]) {
         return {allowed: true};
       });
       await t.rejects(engine.provisionInitialTablePartition({
+        schemaJobId: FOUNDING_TEST_JOB_ID,
         partitionId: 'cancelled-admission-p1', replicaCount: 2,
         cancellationToken,
         ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
@@ -340,6 +349,7 @@ function captureFoundingAdmission(engine, precheck = () => ({allowed: true})) {
   const checked = [];
   const proposals = [];
   engine.rebalanceCoordinator = {
+    nodeId: engine.nodeId,
     placementAdmissionEnabled: true,
     resolveFormationLatchEpochForPlacement: () => 7,
     async checkProvisioningAdmission({nodeId}) {
