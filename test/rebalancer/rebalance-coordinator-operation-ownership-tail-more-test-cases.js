@@ -1,4 +1,6 @@
-import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {
+  buildTerminalOperationFixtureOutcome, installCommittedOperationMutationFixture,
+} from './operation-outcome-fixture.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
@@ -40,6 +42,11 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
     const systemTableCache = createMockCache(cacheData);
     const store = createCoordinatorSqlStore(systemTableCache);
     const sqlQueryEngine = {executeQuery: store.execute};
+    const gateway = {
+      ...createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+      submitMutation: store.submitMutation,
+    };
+    installCommittedOperationMutationFixture(gateway);
     const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
@@ -56,10 +63,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
       },
       sqlQueryEngine,
-      controlPlaneSystemTableGateway: {
-        ...createMockControlPlaneSystemTableGateway(sqlQueryEngine),
-        submitMutation: store.submitMutation,
-      },
+      controlPlaneSystemTableGateway: gateway,
       ...createStorageOwners(),
       enableTimeouts: false,
       ...overrides,
