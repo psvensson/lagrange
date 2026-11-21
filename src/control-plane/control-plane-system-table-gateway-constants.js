@@ -176,6 +176,7 @@ const CONTROL_PLANE_GATEWAY_LIMIT = Object.freeze({
 });
 const CONTROL_PLANE_GATEWAY_ERROR_CODE = Object.freeze({
   MUTATION_TRACKING_SATURATED: 'CONTROL_PLANE_MUTATION_TRACKING_SATURATED',
+  SQL_WRITE_SUBJECT_UNAVAILABLE: 'CONTROL_PLANE_SQL_WRITE_SUBJECT_UNAVAILABLE',
   SERVICES_UPSERT_FORBIDDEN: 'SERVICES_UPSERT_FORBIDDEN',
 });
 const GATEWAY_ERROR_MSG = Object.freeze({
@@ -185,6 +186,7 @@ const GATEWAY_ERROR_MSG = Object.freeze({
   EXECUTION_IDENTITY_AUTHORITY_TOKEN_REQUIRED:
     'control-plane read identity requires the frozen ingress authority token',
   SQL_ENGINE_REQUIRED: 'ControlPlaneSystemTableGateway requires sqlQueryEngine',
+  SQL_WRITE_SUBJECT_UNAVAILABLE: 'Control-plane SQL write requires a parsed mutation target',
   MUTATION_OPERATION_REQUIRED:
     'ControlPlaneSystemTableGateway requires a supported mutation operation',
   MUTATION_TABLE_REQUIRED:

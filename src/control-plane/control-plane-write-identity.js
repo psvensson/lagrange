@@ -134,7 +134,8 @@ function controlPlaneWriteIdentity(...parts) {
 function controlPlaneWriteRoute(family, nodeId, tableName) {
   return {
     id: controlPlaneWriteIdentity(family, nodeId, tableName),
-    partitionId: INITIAL_PARTITION_IDS[tableName] ?? null,
+    partitionId: Object.hasOwn(INITIAL_PARTITION_IDS, tableName) ?
+      INITIAL_PARTITION_IDS[tableName] : null,
   };
 }
 

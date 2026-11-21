@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {TABLES} from '../../src/constants/index.js';
+import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
 import {
   NODE_REGISTRATION_OUTCOME,
@@ -180,6 +181,11 @@ test('a quoted named SQL write retains its entry until its own participant answe
           assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
             [{node_address: node.node_address}], 'no NODES effect from the foreign receipt');
 
+          const invalid = await gateway.querySystemTable(
+            TABLES.NODES, 'UPDATE "nodes"', [], options);
+          assert.equal(invalid.success, false, 'an unavailable SQL subject is refused');
+          assert.equal(keys.length, 1, 'invalid SQL never enters execution or spends the held key');
+
           const confirmed = await gateway.querySystemTable(TABLES.NODES, sql, params, options);
           assert.equal(confirmed.success, true);
           assert.equal(confirmed.affectedRows, 1);
@@ -191,6 +197,14 @@ test('a quoted named SQL write retains its entry until its own participant answe
         } finally {
           engine.executeQuery = execute;
         }
+        const conflict = await gateway.querySystemTable(TABLES.NODES,
+          'INSERT INTO "nodes" (node_id, node_address) VALUES ($1, $2) ' +
+          'ON CONFLICT (node_id) DO NOTHING', [JOINER_ID, 'ws://unapplied:3'],
+          {writeIdentity: 'quoted-nodes-pg-conflict', dialect: PARSER_DIALECT.POSTGRESQL});
+        assert.equal(conflict.success, true, 'the supported PostgreSQL conflict form executes');
+        assert.equal(conflict.affectedRows, 0);
+        assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
+          [{node_address: params[0]}], 'conflict DO NOTHING preserves the committed target');
       });
   });
 

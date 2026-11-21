@@ -1,4 +1,6 @@
 import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
+import {AST_TYPE, SQLParser} from '../query/sql-parser.js';
+import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
@@ -33,6 +35,54 @@ import {
   isNamedControlPlaneWrite,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
+
+const SQL_SYNTAX_ERROR = QUERY_ERROR_CODE.SYNTAX_ERROR;
+const SQL_WRITE_AST_TYPES = new Set([AST_TYPE.INSERT, AST_TYPE.UPDATE, AST_TYPE.DELETE]);
+
+function sqlWriteSubjectUnavailable() {
+  return {success: false, error: GATEWAY_ERROR_MSG.SQL_WRITE_SUBJECT_UNAVAILABLE,
+    errorCode: CONTROL_PLANE_GATEWAY_ERROR_CODE.SQL_WRITE_SUBJECT_UNAVAILABLE};
+}
+
+function refusedSqlWriteParse(error) {
+  return {failure: {success: false, error: error.message,
+    errorCode: error.code ?? SQL_SYNTAX_ERROR,
+    ...(error.sqlState ? {sqlState: error.sqlState} : {})}};
+}
+
+function parseSqlWriteDescriptor(sql, dialect) {
+  let ast;
+  try {
+    ast = new SQLParser(sql, {dialect}).parse();
+  } catch (error) {
+    return refusedSqlWriteParse(error);
+  }
+  if (!SQL_WRITE_AST_TYPES.has(ast.type)) return null;
+  if (typeof ast.table !== 'string' || ast.table.length === 0) {
+    return {failure: sqlWriteSubjectUnavailable()};
+  }
+  const tableName = normalizeSystemTableName(ast.table);
+  return {
+    tableName, writeTarget: ast.table, writeDialect: dialect,
+    operationKind: CONTROL_PLANE_SQL_OPERATION.WRITE, isSystemTable: Boolean(tableName),
+  };
+}
+
+function inspectSqlWrite(sql, options, statementKind) {
+  const hintedKind = normalizeSqlOperationKind(
+    options.controlPlaneOperationKind || options.operationKind);
+  const candidate = statementKind === CONTROL_PLANE_SQL_OPERATION.WRITE ||
+    hintedKind === CONTROL_PLANE_SQL_OPERATION.WRITE;
+  const carriesWriteIdentity = isNamedControlPlaneWrite(options) ||
+    typeof options.idempotencyKey === 'string';
+  if (!candidate &&
+      (statementKind !== CONTROL_PLANE_SQL_OPERATION.UNKNOWN || !carriesWriteIdentity)) {
+    return null;
+  }
+  const descriptor = parseSqlWriteDescriptor(sql, options.dialect);
+  if (descriptor !== null || !candidate) return descriptor;
+  return {failure: sqlWriteSubjectUnavailable()};
+}
 
 function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   const schema = getSchemaByTableName(tableName);
@@ -135,10 +185,8 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
 
   resolveSystemTableQueryDescriptor(sql, options = {}) {
     const statementKind = extractSqlOperationKind(sql);
-    if (statementKind === CONTROL_PLANE_SQL_OPERATION.WRITE) {
-      const tableName = extractSystemTableNameFromSql(sql);
-      return {tableName, operationKind: statementKind, isSystemTable: Boolean(tableName)};
-    }
+    const write = inspectSqlWrite(sql, options, statementKind);
+    if (write !== null) return write;
     const tableName = normalizeSystemTableName(
       options?.controlPlaneTableName ||
         options?.tableName ||
@@ -363,6 +411,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
 
   async executeQuery(sql, params = [], options = {}) {
     const descriptor = this.resolveSystemTableQueryDescriptor(sql, options);
+    if (descriptor.failure) return descriptor.failure;
     const pressureDecision = await this.admitExecuteQueryPressure(
       descriptor,
       options,
@@ -390,17 +439,19 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     const queryOptions = this.buildQueryOptions(options, {
       tableName: descriptor.tableName || null,
       sql,
-      operationKind: descriptor.sqlOperation || null,
+      operationKind: descriptor.writeTarget ? descriptor.operationKind : null,
     });
     const route = controlPlaneWriteRoute(CONTROL_PLANE_WRITE_ROUTE.SQL,
-      this.nodeId, descriptor.tableName);
-    const command = {sql, params, sessionId: queryOptions.sessionId};
+      this.nodeId, descriptor.tableName ?? descriptor.writeTarget);
+    const command = {sql, params, sessionId: queryOptions.sessionId,
+      dialect: descriptor.writeDialect};
     const execute = (statement, idempotencyKey, timeoutBudget) => {
       const timeoutMs = resolveControlPlaneQueryTimeoutMs({
         requestedTimeoutMs: queryOptions.timeoutMs, timeoutBudget, now: this.now,
       });
       return this.assertSqlQueryEngine().executeQuery(statement.sql, statement.params, {
-        ...queryOptions, sessionId: statement.sessionId, idempotencyKey, timeoutBudget, timeoutMs,
+        ...queryOptions, sessionId: statement.sessionId, dialect: statement.dialect,
+        idempotencyKey, timeoutBudget, timeoutMs,
       });
     };
     const result = await this.runSingleFlight(
