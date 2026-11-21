@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 349,
+    "bootstrap-membership": 350,
     "cdc-metadata": 72,
     "cli-tooling": 99,
     "control-plane": 234,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2708,
-  "digest": "fnv1a32-b46ecbf6",
+  "censusSize": 2709,
+  "digest": "fnv1a32-595f0ee2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-16eada00",
+  "observationDigest": "fnv1a32-517bbac1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1352,6 +1352,7 @@
     "test/node/replica-state-machine.test.js": "bootstrap-membership",
     "test/node/replica-status-write-retry-spent-owner.test.js": "bootstrap-membership",
     "test/node/replica-transport-handler-identity.test.js": "bootstrap-membership",
+    "test/node/retained-create-bootstrap-custody.test.js": "bootstrap-membership",
     "test/node/runtime-service-bound-route.test.js": "bootstrap-membership",
     "test/node/runtime-service-call-cell-handler.test.js": "bootstrap-membership",
     "test/node/runtime-service-definition-authority.test.js": "bootstrap-membership",
@@ -12218,6 +12219,39 @@
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/wasm-service/wasm-service-constants.js",
         "src/wasm-service/wasm-service-replica.js"
+      ]
+    },
+    "test/node/retained-create-bootstrap-custody.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "src/rebalancer/replica-status.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/lifecycle-state-store.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/node/runtime-service-bound-route.test.js": {
