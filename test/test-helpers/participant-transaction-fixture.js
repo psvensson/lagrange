@@ -924,11 +924,13 @@ function track(promise) {
   });
   return tracked;
 }
-// Hold the write kernel's deferral retry sleeps on a replica's clock (the one
-// timer partition-service-raft-write-commit.js arms) until release(); every
-// other timer of the clock runs as before. A witness uses it to keep a
-// deferred write pending across a step without racing the retry.
-const KERNEL_RETRY_FRAME = /partition-service-raft-write-commit\.js/u;
+// Hold the write kernel's deferral retry sleeps on a replica's clock (armed by
+// partition-service-raft-write-commit.js's sleep inside the retry owner's
+// delayRetryableControlPlaneWrite) until release(); every other timer of the
+// clock, the commit deadline among them, runs as before. A witness uses it to
+// keep a deferred write pending across a step without racing the retry.
+const KERNEL_RETRY_FRAME =
+  /partition-service-raft-write-commit\.js[\s\S]*delayRetryableControlPlaneWrite/u;
 function holdKernelRetries(service) {
   const clock = service.timeSource;
   const held = [];
