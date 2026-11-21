@@ -114,8 +114,11 @@ invalid evidence before integration.
 
 ## Core integration handoff, 21 November 2026
 
-The integration owner is building on `wip/core-runtime-composed-20261120`.
-Resolve its current remote commit before resuming. The shared candidate
+The last physically measured source is `3d910d700` on
+`wip/core-runtime-composed-20261120`. Current integration proceeds on
+`wip/core-formation-followup-20261121`. Its reviewed components and active
+repairs have distinct proof in the two Quest logs. Resolve the remote
+branch tip before resuming. The shared candidate
 `candidate/reconciliation-20261119` remains at `edbf84c2d`, and the
 accepted main reference checked on 21 November is `5edfcadb5`. The
 complete original dirty checkout is preserved at `b914991bd`.
@@ -127,7 +130,75 @@ product features.
 | Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
 | Which operation may a caller replay? | The native CREATE owner now refuses a durably FAILED creation and replays a matching ACTIVE creation. The composed terminal-replay file at `e7e978450` checks that the exact failed attempt releases its lane for its successor. | Preserve the distinction between a confirmed terminal row and an unreadable or mismatched result through reconstruction. |
 | When may placement retire an existing learner? | The 24 native retirement assertions passed on `e89e3dccf` and on `e7e978450`. The cases cover a newer boot or replica birth, late promotion, a neutral durable SUPERSEDED result and continued custody of an uncertain dispatched REMOVE. | Check neutral retirement and release through the normal dispatch and recensus path when composing further changes. |
-| Does the whole cluster meet the service goal? | All 53 files from the frozen selection passed on `052a8d877` across the three lab hosts (3,291 assertions without retry). On `e7e978450`, full-range fast static passed in 55.818 seconds on tv-dator (managed request #5507). Four affected native and SQLite files passed on adam-laptop (40 assertions). | The integration owner runs the repaired composition on the three distinct hosts and keeps the original deadline and SQL predicates. Three consecutive successes precede comparative smoke. |
+| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. Physical run `4ef9154c` on this commit failed the same bound. | The placement/workflow and SQL owners have reproduced independent failures below. Integrate their reviewed repairs before another physical attempt. Three consecutive passing runs on the named hosts precede comparative smoke. |
+
+On `4ef9154c`, all three serving lanes opened after 3.930 seconds. The
+last formation poll ended at 420.001 seconds. Two control snapshots were
+unreadable and the third reported operations in flight. There were 32 polls
+and 33 read failures. The harness sent CREATE and COUNT through its seed
+SQL connection. Provisioning reported unreachable quorum for
+`tbl-5aa54f3c91d485c621cb384f40619318-p1`, and COUNT failed. The public
+write/readback gate remained unmet. All three containers were removed.
+[Physical report and node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-4ef9154c-nov21.tar.gz).
+
+The final ledger row for `pl-nodes-p1-333-0` contains PENDING, SENDING
+and FAILED. Its founding entry has no CREATE membership stamp, and every
+receiver admission field is null. While the stamp was unavailable, the
+sender deferred dispatch. The ledger later recorded a SENDING timeout
+with 256,812 ms of the operation budget remaining. At the measured candidate both PENDING and SENDING
+had a 30-second step limit. A different operation, `pl-sql_write_operations-p1-195-0`, crossed
+a local PENDING timeout, then the same CREATE reached ACTIVE and completed.
+Its duplicate timeout callbacks produced no second durable change. Three other ADDs from the same run persisted CREATING, SENDING, SYNCING
+and ACTIVE in that order on one receiver attempt. All three eventually
+completed. A repeated or late dispatch must preserve the phase that
+already committed.
+
+The integrating decision is when a prepared native ADD or REPLACE may send
+CREATE, hold off a competing ledger move, or release its reservation. While
+the founding membership is unreadable, the operation can still resume.
+The same durable fact must govern the dispatch claim, timeout recovery and
+exclusion of competing writers. Red native tests at `e0b1308a6` reached
+SENDING before binding membership on normal and priority paths. At
+`59f0bdad0` three managed files passed on the original host, including
+restart and stale ADD dispatch. Source review found a remaining conflict at
+this pin. The timeout owner retains an unstamped placement until its original
+operation deadline, while the concurrent-operation check can discard the same
+row after the shorter step timeout. The workflow owner must exercise both
+arrival orders against a real competing ledger move and preserve the existing
+clearing event before composing this repair.
+
+For user-partition CREATE, the physical refusal preceded native founding. Its
+empty reason list does not identify which scheduling condition was missing.
+Managed SQL and PG tests at `642ac7e42` reproduced inconsistent observations
+across admission. At `6130b04a2` the owning SQL path selects nodes and explains
+its decision from the same observation and checks freshness after prechecks.
+Four affected files passed on adams-gamla. A further managed test at
+`af391f8b6` showed healthy RF3/5 and RF1/3 cases checking and founding more
+nodes than requested, and an expired attempt still reaching native FOUND.
+The explicit target-order control passed. The SQL owner must bound the actual
+effect by the requested width and original attempt budget. The three-host
+run does not establish over-selection as its cause.
+
+The reviewed strict-outcome evidence at `2eda158e8` exercises three
+previously failing SQLite fixture families (621 assertions). The 85-file
+consumer selection on `7dfbdedd9` remains incomplete. One completed shard
+failed four files and another shard stopped at the lab thermal limit.
+The strict-outcome receipt admits four of six obligations. Its owners still
+owe classified closure and independent review on the composed source.
+[Strict outcome record](../quests/strict-operation-outcomes/log.ndjson).
+
+The separate support-evidence branch `wip/upgrade-support-admission-nov21`
+at `c435d5cb6` retains five managed files with 495 assertions for the
+forward upgrade admission and resumption decisions. Runtime source at
+`86112a282` prevents policy fields from authorizing those effects. The
+integration owner still owes composition of this correction. The pilot owner
+retains rollback and physical upgrade qualification under item 14.
+[Managed support admission originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-resume-authority-8611-nov21.tar.gz).
+
+The next composed trial still requires the original 420-second gate and
+public SQL journey on three distinct hosts. Historical PostgreSQL and TiDB
+smoke observations do not supply a Lagrange measurement. The registered
+comparative profile also needs a separate load generator.
 
 Three-host run `e5deee2a` on clean `9e7184a3b` exhausted the 420-second
 formation bound and the 120-second public routability bound. The harness
@@ -240,6 +311,10 @@ formation and smoke gates. Snapshot, backup and PITR keep their existing
 milestone allocations.
 
 ## Current integration summary (20 November 2026 - reliability and agent usability)
+
+This section records programme adoption and its dated starting position. Use
+the [21 November integration handoff](#core-integration-handoff-21-november-2026)
+for current source, measured results, and outstanding decisions.
 
 - **Owner and checked source:** the current Codex root session owns integration,
   taking over the stopped Antigravity session. The clean starting candidate is
