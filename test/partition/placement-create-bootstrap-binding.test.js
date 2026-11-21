@@ -32,7 +32,8 @@ const PARTITION_ID = 'placement-bootstrap-p1';
 const VOTER_ID = `${PARTITION_ID}-r1`;
 const planner = new ControlPlaneSystemTableGateway();
 
-function createBindingCoordinator(leader, readMembership, deliverCreate = null) {
+function createBindingCoordinator(leader, readMembership, deliverCreate = null,
+  partitionId = PARTITION_ID) {
   let nextMutation = 0;
   const sqlEngine = {
     async executeQuery(sql, params = []) {
@@ -60,7 +61,7 @@ function createBindingCoordinator(leader, readMembership, deliverCreate = null) 
         return deliverCreate(address, request);
       }
       assert.equal(request.type, ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP);
-      assert.equal(request.partitionId, PARTITION_ID);
+      assert.equal(request.partitionId, partitionId);
       return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]: await readMembership(),
@@ -70,11 +71,12 @@ function createBindingCoordinator(leader, readMembership, deliverCreate = null) 
   return coordinator;
 }
 
-async function withNativeCreate(measure, type = OperationType.ADD) {
+async function withNativeCreate(measure, type = OperationType.ADD,
+  partitionId = PARTITION_ID) {
   await onLedgerLeader(async (leader, proposed) => {
     const {command} = await admitOnLeader(
       leader, proposed, 'bootstrap:placement', placementStatement({
-        partitionId: PARTITION_ID, target: NODE.B, type,
+        partitionId, target: NODE.B, type,
         sourceReplicaId: type === OperationType.REPLACE ? VOTER_ID : null,
       }));
     assert.ok(command, 'the production placement owner proposed the native admission');
@@ -227,4 +229,90 @@ test('native REPLACE source-removal handoff disarms a stale target CREATE', asyn
       await coordinator.shutdown();
     }
   }, OperationType.REPLACE);
+});
+
+for (const partitionId of [PARTITION_ID, 'nodes-p1']) {
+  test(`unavailable bootstrap keeps native ADD PENDING for ${partitionId}`, async () => {
+    await withNativeCreate(async (leader, row) => {
+      const sourceReplicaId = `${partitionId}-r1`;
+      const stamp = committedStampFor([sourceReplicaId]);
+      let membershipAvailable = false;
+      let deliveries = 0;
+      const coordinator = createBindingCoordinator(leader, () => {
+        if (!membershipAvailable) {
+          throw new Error('Committed membership temporarily unavailable');
+        }
+        return stamp;
+      }, (_address, request) => {
+        deliveries += 1;
+        const [sending] = ledgerRows(leader);
+        assert.equal(sending.workflow_step, WORKFLOW_STEP.SENDING);
+        assert.deepEqual(
+          JSON.parse(sending.steps_history)[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP],
+          stamp, 'CREATE crosses the transport with the committed original bootstrap stamp',
+        );
+        assert.equal(request.operationId, row.operation_id);
+        assert.equal(request.replicaId, row.replica_id);
+        assert.deepEqual(request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP], stamp);
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: false, reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        });
+      }, partitionId);
+      const owner = coordinator.workflowOwner;
+      try {
+        // Enter the production dispatch path after its existing reservation/epoch gates.
+        const dispatch = (operation) => owner.advanceReservationClearedDispatch(
+          operation.operationId, operation);
+        await dispatch(coordinator.repository.rowToOperation(row));
+        const [blocked] = ledgerRows(leader);
+        assert.equal(deliveries, 0, 'the unavailable bootstrap prevented transport');
+        assert.equal(blocked.workflow_step, WORKFLOW_STEP.PENDING,
+          'pre-send bootstrap unavailability has no durable SENDING anchor');
+        assert.equal(blocked.steps_history, row.steps_history);
+        const pending = coordinator.repository.rowToOperation(blocked);
+        const pendingBound = owner.getTimeoutForStep(WORKFLOW_STEP.PENDING, pending);
+        assert.equal(pendingBound, owner.getTimeoutForStep(WORKFLOW_STEP.SENDING, pending),
+          'both phases currently use the same configured step bound');
+        assert.equal(owner.isOperationStepTimedOut(pending, row.created_at + pendingBound),
+          'PENDING by itself does not protect authority work across this bound');
+
+        membershipAvailable = true;
+        await dispatch(coordinator.repository.rowToOperation(blocked));
+        assert.equal(deliveries, 1, 'the recovered authority permits the original CREATE');
+      } finally {
+        await coordinator.shutdown();
+      }
+    }, OperationType.ADD, partitionId);
+  });
+}
+
+test('native placement claim must compare the exact source history used for bootstrap', async () => {
+  await withNativeCreate(async (leader, row, history) => {
+    const winner = [{...history[0], reason: 'concurrent native owner update'}];
+    let deliveries = 0;
+    const coordinator = createBindingCoordinator(leader, () => {
+      assert.equal(commitLedgerStatement(leader, 'bootstrap:dispatch-history-race',
+        `UPDATE replica_operations
+           SET steps_history = json_set(steps_history, '$[0].reason', ?)
+           WHERE operation_id = ?`,
+        [winner[0].reason, row.operation_id]), null);
+      return committedStampFor([VOTER_ID]);
+    }, () => {
+      deliveries += 1;
+      throw new Error('stale bootstrap should never reach CREATE');
+    });
+    try {
+      await coordinator.workflowOwner.advanceReservationClearedDispatch(
+        row.operation_id, coordinator.repository.rowToOperation(row));
+      const [durable] = ledgerRows(leader);
+      assert.equal(deliveries, 0);
+      assert.equal(durable.workflow_step, WORKFLOW_STEP.PENDING,
+        'a lost bootstrap history CAS cannot partially claim SENDING');
+      assert.deepEqual(JSON.parse(durable.steps_history), winner,
+        'the competing history is preserved');
+      assert.equal(durable.completed_at, null);
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 });
