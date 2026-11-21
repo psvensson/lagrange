@@ -18,6 +18,7 @@
  */
 
 import {EventEmitter} from 'events';
+import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {
@@ -281,7 +282,9 @@ function normalizeDeliveryPriority(value, fallback = null) {
     fallback;
 }
 function buildSystemTableMutationError(result, fallbackMessage) {
-  const error = new Error(result?.error || fallbackMessage);
+  const error = Object.assign(new Error(result?.error || fallbackMessage),
+    pickTypedWriteAnswer(result));
+  if (typeof result?.partitionId === 'string') error.partitionId = result.partitionId;
   if (
     typeof result?.errorCode === 'string' &&
     result.errorCode.length > 0

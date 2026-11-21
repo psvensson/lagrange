@@ -166,14 +166,15 @@ test('a text-only Error of a host failure while proposing is not retried: ' +
   const answer = partitionWriteKernel.buildPartitionWriteProposalRefusal(
     portRefusal, null,
     {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID});
-  const thrown = CDC_INTEGRATION_SERVICE_SHARED.buildSystemTableMutationError(
+  const typed = CDC_INTEGRATION_SERVICE_SHARED.buildSystemTableMutationError(
     answer, 'system table update failed');
-  t.same({failureCode: thrown.failureCode ?? null,
-    entryId: thrown.entryId ?? null}, {failureCode: null, entryId: null},
-  'setup: the Error carries the answer\'s text alone');
+  t.same({failureCode: typed.failureCode, entryId: typed.entryId},
+    {failureCode: answer.failureCode, entryId: TEST_ENTRY_ID},
+    'the actual CDC error preserves the original entry evidence');
+  const thrown = new Error(typed.message);
   const keys = [];
-  const update = () => runControlPlaneWrite({}, {op: 'update'},
-    async (idempotencyKey) => {
+  const update = () => runControlPlaneWrite({}, {op: 'update'}, 'write-classification-test',
+    async (_content, idempotencyKey) => {
       keys.push(idempotencyKey);
       if (keys.length === 1) {
         throw thrown;

@@ -378,6 +378,7 @@ class NodeRegistrationOwnerPublicationMethods {
     this.joinAdmissionControlPlaneSystemTableGateway =
       createControlPlaneRuntimeBundle({
         nodeId: this.nodeId,
+        startupSqlMutationPhase: JOIN_ADMISSION_PHASE_SCOPE,
         sqlQueryEngine: joinAdmissionSqlQueryEngine,
         cdcIntegrationService,
         systemTableCache,

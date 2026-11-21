@@ -28,6 +28,7 @@ documentClass: generated
 - [control-plane-mutation-outcome-classifier.js](control-plane-mutation-outcome-classifier.js) - No leading comment; first export: classifyControlPlaneMutationResult. (importers: hub)
 - [control-plane-mutation-readiness-constants.js](control-plane-mutation-readiness-constants.js) - No leading comment; first export: CONTROL_PLANE_MUTATION_READINESS_ERROR. (importers: few)
 - [control-plane-mutation-readiness.js](control-plane-mutation-readiness.js) - Dimensions the priority-recovery break-glass may relax. (importers: many)
+- [control-plane-named-write-outcome.js](control-plane-named-write-outcome.js) - Named writes settle only on the terminal receipt their delivery owner emits. (importers: one)
 - [control-plane-publication-merge.js](control-plane-publication-merge.js) - No leading comment; first export: CONTROL_PLANE_PUBLICATION_STATUS. (importers: hub)
 - [control-plane-publication-story.js](control-plane-publication-story.js) - No leading comment; first export: buildControlPlanePublicationStory. (importers: one)
 - [control-plane-publications-leadership.js](control-plane-publications-leadership.js) - No leading comment; first export: isControlPlanePublicationsWriteLeader. (importers: many)

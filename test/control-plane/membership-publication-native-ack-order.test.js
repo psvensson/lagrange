@@ -33,6 +33,8 @@ import {PARTITION_WRITE_RELEASE_CAUSE, buildReleasedPendingWriteAnswer} from
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
 import {WORKFLOW_TRANSITION_FIELD} from '../../src/workflow/workflow-constants.js';
+import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {controlPlaneWriteIdentity} from '../../src/control-plane/control-plane-write-identity.js';
 import {deriveParticipantEntryId} from
   '../../src/query/distributed/distributed-write-coordinator.js';
 import {
@@ -587,11 +589,17 @@ test('refresh closes a durable open row that already contains the entire ACK set
       'the confirmed closure and metadata need no repeated proposal');
   }));
 
-for (const settleBeforeRead of [false, true]) {
-  test(settleBeforeRead ?
-    'read-only replay retires the earlier refresh once its exact effect is durable' :
-    'a read-only birth replay cannot release an earlier unresolved refresh entry',
-  () => withPublicationLedger(async (ledger, writer) => {
+const retainedRefreshScenarios = [
+  {name: 'a read-only birth replay cannot release an earlier unresolved refresh entry'},
+  {name: 'read-only replay retires the earlier refresh once its exact effect is durable',
+    settleBeforeRead: true},
+  {name: 'a replacement publication owner resolves the retired owner’s exact pending entry',
+    replaceOwner: true},
+  {name: 'a malformed post-send answer and unavailable readback preserve the exact refresh',
+    corruptReply: true},
+];
+for (const {name, settleBeforeRead, replaceOwner, corruptReply} of retainedRefreshScenarios) {
+  test(name, () => withPublicationLedger(async (ledger, writer) => {
     const {leader} = ledger;
     const row = publicationRow(3, NODES, WRITER_TIME - 10);
     const publicationId = row.publication_id;
@@ -606,6 +614,21 @@ for (const settleBeforeRead of [false, true]) {
     let heldCommand;
     let pending;
     let resolving = false;
+    let replacement;
+    let readbackBlocked = false;
+    const read = writer.cdc.executeAuthoritativeSystemTableRead.bind(writer.cdc);
+    writer.cdc.executeAuthoritativeSystemTableRead = (...args) =>
+      readbackBlocked ? {success: false, rows: [], deferRetry: true} : read(...args);
+    if (corruptReply) {
+      const update = writer.cdc.updateSystemTableRow.bind(writer.cdc);
+      writer.cdc.updateSystemTableRow = async (...args) => {
+        if (resolving) return update(...args);
+        const originalReply = await update(...args).catch((error) => error);
+        assert.ok(originalReply instanceof Error, 'CDC normally rejects the released answer');
+        readbackBlocked = true;
+        return {};
+      };
+    }
     leader.controllablePort.setProposeHandler(async (command) => {
       if (!resolving && !heldCommand) {
         heldCommand = command;
@@ -643,6 +666,8 @@ for (const settleBeforeRead of [false, true]) {
       const refresh = installLifecycleRefresh(writer, original, [NODES[0]]);
       await assert.rejects(refresh(options), {code: 'PUBLICATION_WRITE_UNCONFIRMED'});
       assert.ok(heldCommand, 'the original refresh reached native consensus but has not applied');
+      if (corruptReply) assert.equal(readbackBlocked, true);
+      readbackBlocked = false;
       const unknownEntryId = heldCommand.entryId;
       assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), original);
       const beforeReplay = arrivals.length;
@@ -662,7 +687,12 @@ for (const settleBeforeRead of [false, true]) {
       assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), expectedRow);
 
       resolving = true;
-      const nextRefresh = installLifecycleRefresh(writer, expectedRow, [NODES[1]]);
+      if (replaceOwner) {
+        writer.cdc.markShuttingDown();
+        replacement = createPublicationWriter(leader, NODES[0], WRITER_TIME);
+      }
+      const activeWriter = replacement || writer;
+      const nextRefresh = installLifecycleRefresh(activeWriter, expectedRow, [NODES[1]]);
       if (settleBeforeRead) {
         await nextRefresh();
         assert.equal(arrivals.length, beforeReplay + 1,
@@ -678,15 +708,108 @@ for (const settleBeforeRead of [false, true]) {
         assert.deepEqual(readDurablePublication(leader, publicationId)
           .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[0]]);
         const current = leader.db.prepare(SELECT_ROW).get(publicationId);
-        await installLifecycleRefresh(writer, current, [NODES[1]])();
+        await installLifecycleRefresh(activeWriter, current, [NODES[1]])();
       }
       assert.equal(ledger.applied.filter(({entryId}) => entryId === unknownEntryId).length, 1);
       assert.deepEqual(readDurablePublication(leader, publicationId)
         .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[1]]);
     } finally {
+      replacement?.cdc.markShuttingDown();
       leader.executeQuery = executeQuery;
       if (heldCommand) applyCommitted(leader, heldCommand);
       await Promise.allSettled(pending ? [pending.promise] : []);
     }
   }));
 }
+
+function createNamedSqlWriter(executeOnPartitions) {
+  const table = {table_name: TABLE, table_id: TABLE, partition_key: 'publication_id',
+    primaryKey: 'publication_id'};
+  const catalog = {
+    [TABLES.TABLES]: [table],
+    [TABLES.PARTITIONS]: [{partition_id: PARTITION_ID, table_id: TABLE,
+      table_name: TABLE, leader_node_id: NODES[0], status: 'active'}],
+  };
+  const systemCache = {
+    get: (name, id) => name === TABLES.TABLES && id === TABLE ? table : null,
+    getAll: (name) => catalog[name] || [],
+    filter: (name, predicate) => (catalog[name] || []).filter(predicate),
+  };
+  const engine = new SQLQueryEngine({nodeId: NODES[0], systemCache});
+  engine.queryExecutor.executeOnPartitions = executeOnPartitions;
+  return {engine, gateway: new ControlPlaneSystemTableGateway({
+    nodeId: NODES[0], sqlQueryEngine: engine,
+  })};
+}
+
+test('the explicit SQL gateway recovers original statement parameters through the replacement engine',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const {leader} = ledger;
+    const row = publicationRow(6, NODES, WRITER_TIME);
+    await writer.coordinator.persistPublicationBirth(row);
+    const sql = `UPDATE ${TABLE} SET reason_code = ? WHERE publication_id = ?`;
+    const entered = Promise.withResolvers();
+    const arrivals = [];
+    let held;
+    let pending;
+    let retired = false;
+    leader.controllablePort.setProposeHandler(async (command) => {
+      if (!retired) {
+        held = command;
+        entered.resolve(command);
+      } else {
+        assert.equal(applyCommitted(leader, command), null);
+        ledger.applied.push(command);
+      }
+    });
+    const first = createNamedSqlWriter(async (partitions, sql, params, ...args) => {
+      const options = args.at(-1);
+      assert.deepEqual(partitions, [PARTITION_ID]);
+      assert.equal(retired, false, 'the retired route cannot be invoked');
+      arrivals.push({id: options.entryId, params});
+      pending = track(leader.executeQuery(sql, params, options));
+      const original = await Promise.race([entered.promise, settleTicks().then(() => null)]);
+      assert.equal(original?.entryId, options.entryId);
+      return [buildReleasedPendingWriteAnswer({
+        entryId: original.entryId, proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
+      }, PARTITION_ID, {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST})];
+    });
+    const replacement = createNamedSqlWriter(async (partitions, sql, params, ...args) => {
+      const options = args.at(-1);
+      assert.deepEqual(partitions, [PARTITION_ID]);
+      arrivals.push({id: options.entryId, params});
+      if (held?.entryId === options.entryId) {
+        assert.equal(applyCommitted(leader, held), null);
+        ledger.applied.push(held);
+        held = null;
+      }
+      return [await leader.executeQuery(sql, params, options)];
+    });
+    const options = {
+      writeIdentity: controlPlaneWriteIdentity('named-sql-fixture', row.publication_id),
+    };
+    try {
+      const firstResult = await first.gateway.executeQuery(
+        sql, ['old', row.publication_id], options);
+      assert.equal(firstResult.success, false);
+      assert.ok(held, 'the original SQL reached consensus');
+      const entryId = held.entryId;
+      const before = leader.db.prepare(SELECT_ROW).get(row.publication_id);
+      assert.notEqual(before.reason_code, 'old');
+      retired = true;
+
+      const next = await replacement.gateway.executeQuery(
+        sql, ['new', row.publication_id], options);
+      assert.equal(next.success, true);
+      assert.equal(arrivals[1].id, entryId);
+      assert.deepEqual(arrivals[1].params, ['old', row.publication_id]);
+      assert.notEqual(arrivals[2].id, entryId);
+      assert.deepEqual(arrivals[2].params, ['new', row.publication_id]);
+      assert.equal(leader.db.prepare(SELECT_ROW).get(row.publication_id).reason_code, 'new');
+      assert.equal(ledger.applied.filter((command) => command.entryId === entryId).length, 1);
+    } finally {
+      if (held) applyCommitted(leader, held);
+      await Promise.allSettled(pending ? [pending.promise] : []);
+      await Promise.allSettled([first.engine.shutdown(), replacement.engine.shutdown()]);
+    }
+  }));
