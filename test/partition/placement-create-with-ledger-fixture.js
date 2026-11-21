@@ -10,6 +10,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {applyCommitted} from '../test-helpers/participant-transaction-fixture.js';
+import {createObservationOnlyMutationPort} from '../rebalancer/test-helpers.js';
 import {NODE, commitLedgerStatement} from './placement-admission-fixture.js';
 
 /**
@@ -78,11 +79,16 @@ function attachAutoCommitLoop(leader, proposed) {
 
 function createAuthoritativeLedgerRepository(leader) {
   let casCounter = 0;
-  // Retain the repository owner's exact projection comparison.
+  // Retain the repository owner's exact projection comparison. Its only
+  // write is the explicit committed-statement CAS below; the structured
+  // writer port therefore observes only.
   const repository = new ReplicaOperationRepository({
     nodeId: NODE.A,
     timeSource: leader.timeSource,
     logger: leader.logger,
+    controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('placement ledger repository'),
+    },
   });
   return Object.assign(repository, {
     async executeReplicaOperationsRead(sql, params) {

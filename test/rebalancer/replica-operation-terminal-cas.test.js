@@ -132,14 +132,6 @@ function createTerminalCasHarness(t, {
       return {success: true, partitionResult: {affectedRows: changes}};
     },
   };
-  gateway.cdcIntegrationService = {
-    insertSystemTableRow: (tableName, row) => gateway.submitMutation({
-      operation: 'insert', tableName, row,
-    }),
-    updateSystemTableRow: (tableName, whereClause, data) => gateway.submitMutation({
-      operation: 'update', tableName, whereClause, data,
-    }),
-  };
   const repository = new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,
     systemTableCache: {

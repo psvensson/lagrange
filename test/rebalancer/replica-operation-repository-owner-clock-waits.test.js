@@ -9,6 +9,7 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 
 // The replica-operation repository owns three bounded loops - the post-commit
 // visibility confirmation, the retryable authoritative read and the persist
@@ -56,8 +57,10 @@ const SILENT_LOGGER = Object.freeze({
   info() {}, warn() {}, error() {}, debug() {},
 });
 
+// The structured writer port and the statement executor are one fixture store.
 function createRepository({timeSource, readAuthoritativeRows, executeQuery,
   logger = SILENT_LOGGER}) {
+  const execute = executeQuery || (async () => ({success: true, changes: 1}));
   return new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,
     timeSource,
@@ -68,8 +71,9 @@ function createRepository({timeSource, readAuthoritativeRows, executeQuery,
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
+      submitMutation: createFixtureSystemMutationPort(execute),
       readAuthoritativeRows,
-      executeQuery: executeQuery || (async () => ({success: true, changes: 1})),
+      executeQuery: execute,
     },
     authoritativeVisibilityTimeoutMs: VISIBILITY_TIMEOUT_MS,
     authoritativeVisibilityRetryDelayMs: VISIBILITY_RETRY_DELAY_MS,

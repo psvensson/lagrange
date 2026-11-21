@@ -13,6 +13,7 @@ import {RebalanceCoordinator} from
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
+import {createObservationOnlyMutationPort} from '../rebalancer/test-helpers.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
@@ -548,9 +549,7 @@ async (t) => {
     },
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
-      async submitMutation() {
-        throw new Error('Unexpected mutation in this observation fixture');
-      },
+      submitMutation: createObservationOnlyMutationPort('read model contract coordinator'),
       async readAuthoritativeRows(_tableName, _sql, _params, options = {}) {
         capturedReadOptions.push(options);
         if (

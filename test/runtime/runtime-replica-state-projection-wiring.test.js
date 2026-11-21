@@ -28,6 +28,7 @@ import {
 import {
   ReplicaOperationRepository,
 } from '../../src/rebalancer/replica-operation-repository.js';
+import {createObservationOnlyMutationPort} from '../rebalancer/test-helpers.js';
 import {
   createMockMessageRouter,
   createMockSystemCache,
@@ -259,7 +260,9 @@ test('the replica-operation repository uses exact canonical runtime IDs',
         filter: (_tableName, predicate) => projectedRows.filter(predicate),
       },
       cdcIntegrationService: {},
-      controlPlaneSystemTableGateway: {},
+      controlPlaneSystemTableGateway: {
+        submitMutation: createObservationOnlyMutationPort('runtime service identity rows'),
+      },
       logger: {
         debug() {},
         info() {},

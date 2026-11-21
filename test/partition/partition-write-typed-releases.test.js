@@ -56,6 +56,7 @@ import {RAFT_RS_ENTRY_TYPE} from
   '../../src/raft/raft-rs-ready-loop-constants.js';
 import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
+import {createObservationOnlyMutationPort} from '../rebalancer/test-helpers.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
 const TEMP_PREFIX = 'partition-write-typed-releases-';
@@ -279,7 +280,9 @@ test('F-ak: the routers that hold a write answer route it again by its code',
         systemTableCache: {get: () => null, getAll: () => [],
           filter: () => []},
         cdcIntegrationService: {},
-        controlPlaneSystemTableGateway: {},
+        controlPlaneSystemTableGateway: {
+          submitMutation: createObservationOnlyMutationPort('typed release router'),
+        },
         logger: {info() {}, warn() {}, error() {}, debug() {}},
       });
       const codes = [REFUSAL.NOT_LEADER, REFUSAL.OUTCOME_UNKNOWN,

@@ -410,6 +410,15 @@ function createFixtureSystemMutationPort(execute) {
   };
 }
 
+// The structured mutation port of a fixture that has no durable store and
+// only observes: a submitted mutation is a fixture defect, named loudly.
+function createObservationOnlyMutationPort(fixtureName) {
+  return async (mutation) => {
+    throw new Error(`Unexpected ${mutation?.operation} of ${mutation?.tableName} ` +
+      `in the observation-only fixture ${fixtureName}`);
+  };
+}
+
 function createMockControlPlaneSystemTableGateway(sqlQueryEngine = null) {
   const gateway = {
     async executeQuery(sql, params = [], _queryOptions = {}) {
@@ -1403,7 +1412,7 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 }
 
 export {
-  createFixtureSystemMutationPort,
+  createFixtureSystemMutationPort, createObservationOnlyMutationPort,
   buildMockPolicyAuthorityWitness, buildSpreadScenarioHelpers,
   createAllowAllStorageAdmissionService, createCoordinatorSqlStore, createMockCache,
   createMockCdcService,

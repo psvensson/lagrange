@@ -7,6 +7,7 @@ import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  createObservationOnlyMutationPort,
 } from './test-helpers.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
@@ -102,9 +103,7 @@ function buildCoordinator(nodeId) {
       },
     },
     controlPlaneSystemTableGateway: {
-      async submitMutation() {
-        throw new Error('Unexpected mutation in this observation fixture');
-      },
+      submitMutation: createObservationOnlyMutationPort('late dispatch honored coordinator'),
       async readRows() {
         return {success: true, rows: [], affectedRows: 0};
       },

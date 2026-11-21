@@ -6,6 +6,7 @@ import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  createObservationOnlyMutationPort,
 } from './test-helpers.js';
 
 // A self-owned coordinator-created handoff must dispatch in-process on the
@@ -36,9 +37,7 @@ function buildCoordinatorWithDeliverySpy(nodeId) {
       },
     },
     controlPlaneSystemTableGateway: {
-      async submitMutation() {
-        throw new Error('Unexpected mutation in this observation fixture');
-      },
+      submitMutation: createObservationOnlyMutationPort('self-owned handoff coordinator'),
       async readRows() {
         return {success: true, rows: [], affectedRows: 0};
       },

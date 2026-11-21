@@ -46,6 +46,7 @@ import {REBALANCE_COORDINATOR_LOG_MSG} from
   '../../src/rebalancer/rebalancer-constants.js';
 import {
   createMockCache,
+  createObservationOnlyMutationPort,
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
@@ -85,7 +86,10 @@ function terminalCleanupRepairOwner(
   options = {},
 ) {
   const scheduled = [];
-  const repository = new ReplicaOperationRepository({nodeId: TARGET_NODE});
+  const repository = new ReplicaOperationRepository({nodeId: TARGET_NODE,
+    controlPlaneSystemTableGateway: {
+      submitMutation: createObservationOnlyMutationPort('terminal cleanup repair owner'),
+    }});
   repository.queryReplicaOperationPersistenceAuthorityOperation = async () => operation;
   repository.queryTerminalReplicaCleanupOperations = async () => [operation];
   return {
