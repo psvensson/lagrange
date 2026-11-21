@@ -83,7 +83,13 @@ test('BootstrapService.phaseCacheHydration blocks mode swap when strict hydratio
       .hydrateFromLocalPartitions = async () => hydrationResult;
     service.seedCacheHydrationPhase
       .subscribeToInitialSystemTableCDC = async () => {};
-    service.messageRouter = {};
+    // The topology owners this phase wires require a router that delivers;
+    // this one is never reached (hydration fails first).
+    service.messageRouter = {
+      deliver: async () => {
+        throw new Error('the hydration-strictness router delivers nothing');
+      },
+    };
     service.cdcIntegrationService = {
       setSystemTableCache: () => {},
       setEpochManager: () => {},
