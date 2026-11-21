@@ -19,11 +19,13 @@ const TERMINAL_WINNER_MOVED = 'retained durable terminal winner changed';
 const CLEANUP_TERMINAL_WINNER_MOVED = 'cleanup terminal winner changed';
 
 const {
+  OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaStatus,
+  SYSTEM_TABLE_NAME,
   WORKFLOW_STEP,
   isCompletedReplicaOperationAnswer,
   isDeliveredTransportDeliveryOutcome,
@@ -472,6 +474,12 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
         heldState.projectedOperation, heldState.persistOptions, observation.operation);
       if (repairAdmission.completeInstead) {
         await owner.completeOperation(structuredClone(observation.operation));
+        return;
+      }
+      if (repairAdmission.targetProgressPending &&
+          owner.scheduleObservedProgressRetry(operationId, SYSTEM_TABLE_NAME.SERVICES,
+            OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT)) {
+        clearTerminalTransitionRepair(owner, operationId);
         return;
       }
       if (!repairAdmission.admitted) {
