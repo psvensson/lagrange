@@ -100,10 +100,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
   }
 
-  async completeOperation(operation) {
+  async completeOperation(operation, completionOptions) {
     return operation?.type === OperationType.GROWTH_PROMOTE ?
       completeGrowthPromoteOperation(this, operation) :
-      super.completeOperation(operation);
+      super.completeOperation(operation, completionOptions);
   }
 
   async reconcileOperationLifecycle(operation, options = {}) {

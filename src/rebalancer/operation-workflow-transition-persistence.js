@@ -427,7 +427,8 @@ class OperationWorkflowTransitionPersistence
       const outcome = await this.executeAtomicTransition(operation,
         projectedOperation.workflowStep, reason,
         () => this.repository.persistOperationUpdate(projectedOperation, persistOptions),
-        {requestedOperation: structuredClone(projectedOperation)});
+        {requestedOperation: structuredClone(projectedOperation),
+          acknowledgedRemovePreimage: persistOptions.acknowledgedRemovePreimage});
       await this.resolveNotCommittedTerminalTransition(operation, projectedOperation,
         outcome, projectedOperation.workflowStep, persistOptions);
       return outcome;
