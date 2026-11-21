@@ -407,3 +407,73 @@ test('explicit publication identity cannot be rebound to another revision or coh
     const next = await writer.coordinator.persistPublicationRow(different);
     assert.equal(next.publication_id, different.publication_id);
   }));
+
+const ACK_CLOCK = WRITER_TIME + 10;
+const RECOVERY_SOURCE = 'committed_recovery_snapshot';
+
+function installLifecycleRefresh(writer, row) {
+  const previous = normalizeControlPlanePublicationRow(row);
+  const projection = {
+    ...previous.membershipLifecycleSummary,
+    locallyEligibleNodeIds: NODES,
+    formationPlacementNodeIds: [NODES[1]],
+    recoveryActiveNodeSource: RECOVERY_SOURCE,
+  };
+  writer.coordinator.deriveClusterMembershipCandidate = async () => ({
+    ...previous, changed: false, membershipLifecycleSummaryChanged: true,
+    membershipLifecycleSummary: projection,
+  });
+  return () => writer.coordinator.reconcileClusterMembership({
+    latestPublicationRow: row, latestPublishedPublicationRow: row,
+  });
+}
+
+function assertAckAndLifecycleRefresh(row) {
+  assert.deepEqual(row.acknowledgedNodeIds, [NODES[1]]);
+  assert.deepEqual(row.membershipLifecycleSummary.locallyEligibleNodeIds, NODES);
+  assert.deepEqual(row.membershipLifecycleSummary.formationPlacementNodeIds, [NODES[1]]);
+  assert.equal(row.membershipLifecycleSummary.recoveryActiveNodeSource, RECOVERY_SOURCE);
+}
+
+for (const order of ['ack-late', 'refresh-late', 'serial']) {
+  test(`publication ACK and lifecycle refresh preserve both effects in ${order} order`,
+    () => withPublicationLedger(async (ledger, metadataWriter) => {
+      const {leader} = ledger;
+      const ackWriter = createPublicationWriter(leader, NODES[1], ACK_CLOCK);
+      let held;
+      let pending;
+      try {
+        const row = buildPublicationMetadataRefreshRow({
+          publicationRow: publicationRow(3, NODES, WRITER_TIME - 10),
+          nowMs: WRITER_TIME - 10,
+        });
+        await metadataWriter.coordinator.persistPublicationRow(row);
+        const acknowledge = () => ackWriter.coordinator
+          .acknowledgePublication(row.publication_id, NODES[1]);
+        const refresh = installLifecycleRefresh(metadataWriter, row);
+        if (order === 'serial') {
+          await refresh();
+          await acknowledge();
+        } else {
+          const ackLate = order === 'ack-late';
+          held = holdFirstAcknowledgement(leader);
+          pending = track((ackLate ? acknowledge : refresh)());
+          await settleTicks();
+          assert.ok(held.request, `the first CAS reached native routing: ${JSON.stringify(pending.value)}`);
+          await (ackLate ? refresh : acknowledge)();
+          const first = readDurablePublication(leader, row.publication_id);
+          assert.deepEqual(first.acknowledgedNodeIds, ackLate ? [] : [NODES[1]]);
+          assert.deepEqual(first.membershipLifecycleSummary.formationPlacementNodeIds,
+            ackLate ? [NODES[1]] : []);
+          held.release();
+          await pending.promise;
+          assert.equal(held.replay.changes, 0, 'the held statement actually loses the CAS');
+        }
+        assertAckAndLifecycleRefresh(readDurablePublication(leader, row.publication_id));
+      } finally {
+        held?.release();
+        await Promise.allSettled(pending ? [pending.promise] : []);
+        ackWriter.cdc.markShuttingDown();
+      }
+    }));
+}
