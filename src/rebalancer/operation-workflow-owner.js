@@ -347,13 +347,6 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     }
   }
 
-  async reconcileOperationProgress(
-    operation,
-    options = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
-  ) {
-    return super.reconcileOperationProgress(operation, options);
-  }
-
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
     partitionId,
     operations = [],

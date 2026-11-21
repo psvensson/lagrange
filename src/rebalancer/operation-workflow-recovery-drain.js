@@ -1,7 +1,5 @@
 import {readStateField} from '../utils/state-field-read.js';
-import {
-  didOperationReconcileAdvanceOrComplete,
-} from './operation-workflow-growth-promote.js';
+import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {
   admitReplaceOwnerHandBack,
 } from './operation-workflow-replace-owner-state.js';

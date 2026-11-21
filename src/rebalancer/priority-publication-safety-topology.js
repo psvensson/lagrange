@@ -1,3 +1,5 @@
+import {didOperationReconcileAdvanceOrComplete, OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
+import {assertOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
@@ -79,7 +81,10 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     }
     try {
       if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
-        await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
+        const progress = await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
+        if (!didOperationReconcileAdvanceOrComplete(progress)) {
+          return this.buildSkippedOperationResult(progress, operation.operationId);
+        }
       }
       if (STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES.has(responseStatus)) {
         if (
@@ -91,7 +96,10 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
             status: ReplicaOperationResponseStatus.IN_PROGRESS,
           });
         }
-        await this.completeOperation(operation);
+        const outcome = assertOperationTransitionOutcome(await this.completeOperation(operation));
+        if (outcome.reconcileOutcome !== OPERATION_RECONCILE_OUTCOME.COMPLETED) {
+          return this.buildSkippedOperationResult(outcome.reconcileOutcome, operation.operationId);
+        }
         return this.buildSuccessfulOperationResult(operation.operationId, {
           status: responseStatus,
         });

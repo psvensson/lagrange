@@ -59,7 +59,6 @@ test('terminal authoritative operation in reservation gate reconciles local stat
     return true;
   };
   coordinator.workflowOwner.repository.isOperationLocallyOwned = () => true;
-  coordinator.workflowOwner.confirmCommittedTransitionPersistence = async () => {};
   let retriesCleared = false;
   coordinator.workflowOwner.clearTerminalOperationRetryState = () => {
     retriesCleared = true;
@@ -107,7 +106,6 @@ test('stale epoch in epoch gate marks terminal, updates cache progress row and c
     return true;
   };
   coordinator.workflowOwner.repository.isOperationLocallyOwned = () => true;
-  coordinator.workflowOwner.confirmCommittedTransitionPersistence = async () => {};
   let retriesCleared = false;
   coordinator.workflowOwner.clearTerminalOperationRetryState = () => {
     retriesCleared = true;

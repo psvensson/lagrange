@@ -1,3 +1,6 @@
+import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OPERATION_TRANSITION_REASON,
@@ -193,6 +196,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             operationId: 'op-remote-owner',
             type: 'ADD',
             partitionId: 'partition-1',
+            entityType: 'partition',
+            entityId: 'partition-1',
             replicaId: 'partition-1-r1',
             sourceNodeId: 'node-remote',
             targetNodeId: 'node-local',
@@ -208,6 +213,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             operationId: 'op-replace-target-owner',
             type: OperationType.REPLACE,
             partitionId: 'sql_transactions-p1',
+            entityType: 'partition',
+            entityId: 'sql_transactions-p1',
             replicaId: 'sql_transactions-p1-r4',
             sourceNodeId: 'node-remote',
             targetNodeId: 'node-local',
@@ -223,6 +230,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             operationId: 'op-local-owner',
             type: 'ADD',
             partitionId: 'partition-1',
+            entityType: 'partition',
+            entityId: 'partition-1',
             replicaId: 'partition-1-r2',
             sourceNodeId: 'node-local',
             targetNodeId: 'node-local',
@@ -238,6 +247,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
             operationId: NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID,
             type: OperationType.REPLACE,
             partitionId: NON_PRIORITY_SYSTEM_PARTITION_ID,
+            entityType: 'partition',
+            entityId: NON_PRIORITY_SYSTEM_PARTITION_ID,
             replicaId: NON_PRIORITY_SYSTEM_REPLICA_ID,
             sourceNodeId: 'node-remote',
             targetNodeId: 'node-local',
@@ -251,16 +262,16 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
           },
         ];
       };
-      coordinator.workflowOwner.reconcileOperationProgress =
+      coordinator.workflowOwner.reconcileOperationLifecycle =
       async (operation) => {
         reconciledOperationIds.push(operation.operationId);
-        return false;
+        return OPERATION_RECONCILE_OUTCOME.WAITING;
       };
       coordinator.workflowOwner.reconcileReservations = async () => {
         return {expired: 0, orphansReleased: 0};
       };
-      coordinator.workflowOwner.failOperation = async () =>
-        Object.freeze({committed: true, disposition: 'updated'});
+      coordinator.workflowOwner.failOperation = async (operation) =>
+        buildTerminalOperationFixtureOutcome(operation, {failed: true});
       const expectedReconciledOperationIds = Object.freeze([
         'op-replace-target-owner',
         'op-local-owner',
@@ -352,11 +363,11 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
 
     try {
       const progressed =
-      await coordinator.reconcileOperationProgress(operation);
+      await coordinator.reconcileOperationLifecycle(operation);
       t.equal(
         progressed,
-        true,
-        'critical pending-status operations should be treated as re-armed progress',
+        OPERATION_RECONCILE_OUTCOME.WAITING,
+        'a skipped pending-status dispatch remains waiting without durable progress',
       );
       t.equal(
         executeFromReconcileCalls,
@@ -445,9 +456,9 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         operationId: operation.operationId,
       };
     };
-    coordinator.workflowOwner.failOperation = async () => {
+    coordinator.workflowOwner.failOperation = async (candidate) => {
       failOperationCalls += 1;
-      return Object.freeze({committed: true, disposition: 'updated'});
+      return buildTerminalOperationFixtureOutcome(candidate, {failed: true});
     };
 
     try {
@@ -845,6 +856,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         operationId: 'op-timeout-window-gap',
         type: 'REPLACE',
         partitionId: 'partition-1',
+        entityType: 'partition',
+        entityId: 'partition-1',
         replicaId: 'partition-1-r1',
         sourceNodeId: 'node-local',
         targetNodeId: 'node-remote',
@@ -895,8 +908,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         }
         return [operation];
       };
-      coordinator.workflowOwner.reconcileOperationProgress =
-      async () => false;
+      coordinator.workflowOwner.reconcileOperationLifecycle =
+      async () => OPERATION_RECONCILE_OUTCOME.WAITING;
       coordinator.workflowOwner.reconcileReservations = async () => ({
         expired: 0,
         orphansReleased: 0,
@@ -907,7 +920,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         operation.status = 'failed';
         operation.completedAt = nowMs;
         operation.updatedAt = nowMs;
-        return Object.freeze({committed: true, disposition: 'updated'});
+        return buildTerminalOperationFixtureOutcome(operation, {failed: true, completedAt: nowMs});
       };
 
       try {

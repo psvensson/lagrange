@@ -1,3 +1,5 @@
+import {assertOperationData, decodePersistedOperationHistory} from
+  './replica-operation-update-outcome.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {readStateField} from '../utils/state-field-read.js';
 /**
@@ -58,25 +60,15 @@ function normalizeOperationWorkflowStep(value) {
 /**
  * Read the durable transition-history entries off an operation domain
  * object (stepsHistory) or a raw replica_operations row (steps_history
- * JSON text). Unparseable text yields an empty history — the same
- * fail-closed reading as the repository row translation.
+ * JSON text). Raw rows use the repository decoder; malformed history cannot
+ * become an invented empty reconstruction basis.
  * @param {Object} operation
  * @return {Array<Object>}
  */
 function readOperationWorkflowDurableStepsHistory(operation) {
-  if (Array.isArray(operation?.stepsHistory)) {
-    return operation.stepsHistory;
-  }
-  const raw = operation?.steps_history;
-  if (typeof raw !== 'string' || raw.length === 0) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_parseError) {
-    return [];
-  }
+  assertOperationData(operation);
+  if (Array.isArray(operation?.stepsHistory)) return operation.stepsHistory;
+  return decodePersistedOperationHistory(operation?.steps_history);
 }
 
 /**

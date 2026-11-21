@@ -1,3 +1,6 @@
+import {releaseOperationLedgerSelfMoveHoldAfterTerminal} from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
+import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -23,13 +26,11 @@ import {
   armFailedCreateCleanupRelease,
   armTerminalTransitionRepair,
   recoverFailedCreateCleanupReleaseDebt,
+  clearTerminalTransitionRepair,
 } from './operation-workflow-terminal-transition-repair.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
-import {
-  releaseOperationLedgerSelfMoveHoldAfterTerminal,
-} from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
 
@@ -53,18 +54,6 @@ const {
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
 const NO_CONCURRENT_CREATE_ADMISSION_WINNER = false;
-
-// completeOperation/failOperation report their typed transition outcome
-// ({committed, disposition}) so level-triggered callers (the recovery
-// drain) stop believing unconditional progress. The early already-terminal
-// return is the local idempotent-replay arm: the live operation object only
-// carries finalStep + completedAt after a PROVEN terminal (a committed
-// write, a locally replayed committed transition, or an adopted durable
-// winner), so it reports the release-gated replay outcome.
-const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
-  committed: false,
-  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
-});
 
 // A failure no post-intent boundary applies to: written as it is.
 const UNBOUNDED_FAILURE_ADMISSION = Object.freeze({
@@ -105,6 +94,8 @@ async function observeConcurrentCreateAdmissionWinner(
   ) {
     return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
   }
+  assertOperationUpdateRecord(authoritativeOperation);
+  assertOperationUpdateSubject(operation, authoritativeOperation);
   return authoritativeOperation;
 }
 
@@ -135,6 +126,11 @@ class OperationWorkflowTransitionPersistence
     return this.repository.runReplicaOperationTransitionExclusive(
       async () => {
         const step = WORKFLOW_STEP.SENDING;
+        const replay = await this.resolveOperationTransitionBeforeWrite(operation, step);
+        if (replay) {
+          return replay.operation?.completedAt === null &&
+            this.repository.isOperationLocallyOwned(replay.operation) ? operation : null;
+        }
         const previousStep = operation.workflowStep;
         const transitionReason = OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
         const now = Date.now();
@@ -199,16 +195,6 @@ class OperationWorkflowTransitionPersistence
         };
 
         this.ensureOperationWorkflow(operation);
-        if (
-          this.operationWorkflowCoordinator.isTransitionIdempotent(
-            operation.operationId,
-            step,
-          )
-        ) {
-          commitProjectedState(operation);
-          return operation;
-        }
-
         await this.operationWorkflowCoordinator.transitionStep(
           operation.operationId,
           {nextStep: step, reason: transitionReason},
@@ -223,14 +209,15 @@ class OperationWorkflowTransitionPersistence
           );
         let transitionCommitted;
         try {
-          transitionCommitted =
-            await this.repository.persistOperationUpdate(projectedOperation, {
-              ...this.buildOperationTransitionPersistOptions(),
-              confirmPersistence: true,
-              expectedWorkflowStep: WORKFLOW_STEP.PENDING,
-              timeoutBudget: mutationBudget,
-            });
+          const persisted = await this.repository.persistOperationUpdate(projectedOperation, {
+            ...this.buildOperationTransitionPersistOptions(),
+            expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+            timeoutBudget: mutationBudget,
+          });
+          transitionCommitted = buildOperationTransitionOutcome(persisted,
+            {repository: this.repository, requestedOperation: projectedOperation});
         } catch (error) {
+          this.operationWorkflowCoordinator.removeWorkflow(operation.operationId);
           if (!this.shouldUsePriorityDispatchDeferredLocalClaim(
             operation,
             error,
@@ -246,26 +233,15 @@ class OperationWorkflowTransitionPersistence
           return operation;
         }
 
-        if (!transitionCommitted) {
-          const authoritativeOperation =
-            await this.repository.queryAuthoritativeOperationById(
-              operation.operationId,
-              {
-              },
-            );
-          if (
-            !authoritativeOperation ||
-            !this.repository.isOperationLocallyOwned(authoritativeOperation) ||
-            authoritativeOperation.workflowStep === WORKFLOW_STEP.PENDING
-          ) {
-            return null;
+        if (!transitionCommitted.committed) {
+          this.operationWorkflowCoordinator.removeWorkflow(operation.operationId);
+          if (transitionCommitted.operation?.completedAt === null &&
+              transitionCommitted.operation.workflowStep === step &&
+              this.repository.isOperationLocallyOwned(transitionCommitted.operation)) {
+            Object.assign(operation, structuredClone(transitionCommitted.operation));
+            return operation;
           }
-          this.operationWorkflowCoordinator.markTransitionCommitted(
-            operation.operationId,
-            step,
-          );
-          Object.assign(operation, authoritativeOperation);
-          return operation;
+          return null;
         }
 
         this.clearTransitionRetry(operation.operationId);
@@ -273,7 +249,8 @@ class OperationWorkflowTransitionPersistence
           operation.operationId,
           step,
         );
-        commitProjectedState(operation);
+        Object.assign(operation, structuredClone(transitionCommitted.operation));
+        delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
 
         this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
           operationId: operation.operationId,
@@ -346,34 +323,70 @@ class OperationWorkflowTransitionPersistence
     step,
     persistOptions = {},
   ) {
-    this.clearTransitionRetry(operation.operationId);
-    // Release only on a proven terminal: lost-to-other-terminal
-    // (TERMINAL_ADOPTED) or already-same-terminal (IDEMPOTENT_REPLAY).
-    // Unresolved divergence (REFUSED/REINSERTED) keeps the reservation
-    // ACTIVE — the operation is still live and re-driveable (audit
-    // findings 3+11).
     if (shouldReleaseReservationForTerminalOutcome(transitionOutcome)) {
-      this.clearTerminalOperationRetryState(operation);
-      await this.releaseReservationForOperation(operation);
-    } else {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG
-          .TERMINAL_TRANSITION_PERSIST_NOT_COMMITTED,
-        {
-          operationId: operation.operationId,
-          disposition: transitionOutcome?.disposition || null,
-          step,
-          partitionId: operation.partitionId,
-        },
-      );
-      armTerminalTransitionRepair(
-        this,
-        projectedOperation,
-        TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
-        persistOptions,
-      );
+      await this.releaseDurableTerminalOperation(operation, transitionOutcome);
+      return;
     }
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_PERSIST_NOT_COMMITTED,
+      {operationId: operation.operationId, disposition: transitionOutcome.disposition,
+        step, partitionId: operation.partitionId},
+    );
+    armTerminalTransitionRepair(this, projectedOperation,
+      TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
+  }
+
+  async releaseDurableTerminalOperation(operation, outcome) {
+    if (!shouldReleaseReservationForTerminalOutcome(outcome)) {
+      throw new Error('Terminal release requires a validated durable terminal outcome');
+    }
+    Object.assign(operation, structuredClone(outcome.operation));
+    // Register exact durable debt before attempting effects. Replay and reconstruction
+    // re-enter this same release phase without asking admission for another write.
+    armTerminalTransitionRepair(this, outcome.operation,
+      TERMINAL_TRANSITION_REPAIR_CAUSE.TERMINAL_RELEASE_PENDING);
+    const releaseState = this.terminalTransitionRepairStateByOperationId.get(operation.operationId);
+    if (!releaseState) throw new Error('Terminal release owner is shutting down');
+    if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
+      if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
+      else this.stats.operationsCompleted++;
+      releaseState.commitCounted = true;
+      releaseState.pendingCommitCredit = false;
+    }
+    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
+    await this.releaseReservationForOperation(operation);
+    this.clearTerminalOperationRetryState(operation);
+    this.clearTransitionRetry(operation.operationId);
     this.clearDeferredSafetyBlockState(operation.operationId);
+    // Terminal observations wake idempotent pruning/rebalance subscribers after
+    // release, including lost replies and reconstructed owners. No permanent
+    // event history is retained; only new committed results earn stats credit.
+    const failed = operation.workflowStep === WORKFLOW_STEP.FAILED;
+    this.emitter.emit(failed ? REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED :
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+    failed ? {operation, errorMessage: operation.errorMessage} : {operation});
+    clearTerminalTransitionRepair(this, operation.operationId);
+    armFailedCreateCleanupRelease(this, operation);
+  }
+
+  async persistTerminalOperation(operation, projectedOperation, reason, persistOptions) {
+    try {
+      const outcome = await this.executeAtomicTransition(operation,
+        projectedOperation.workflowStep, reason,
+        () => this.repository.persistOperationUpdate(projectedOperation, persistOptions),
+        {requestedOperation: structuredClone(projectedOperation)});
+      await this.resolveNotCommittedTerminalTransition(operation, projectedOperation,
+        outcome, projectedOperation.workflowStep, persistOptions);
+      return outcome;
+    } catch (error) {
+      // A failed reply can follow a durable commit. Retain the exact requested
+      // effect until the repository resolves it; never promote the mirror.
+      armTerminalTransitionRepair(this, projectedOperation,
+        error.operationWriteCommitted === true ?
+          TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED :
+          TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED, persistOptions);
+      throw error;
+    }
   }
 
   /**
@@ -388,13 +401,11 @@ class OperationWorkflowTransitionPersistence
       operation.type === OperationType.ADD ?
         WORKFLOW_STEP.ACTIVE :
         WORKFLOW_STEP.REMOVED;
-    if (
-      operation.workflowStep === finalStep &&
-      operation.completedAt !== null &&
-      operation.completedAt !== undefined
-    ) {
-      armFailedCreateCleanupRelease(this, operation);
-      return ALREADY_TERMINAL_TRANSITION_OUTCOME;
+    const replay = await this.resolveOperationTransitionBeforeWrite(operation, finalStep,
+      {terminalTransition: true, terminalErrorMessage: null});
+    if (replay) {
+      await this.releaseDurableTerminalOperation(operation, replay);
+      return replay;
     }
     // R-1a (quest replace-source-removal-owner): every success edge of a
     // partition REPLACE ends here, and none completes while its source is
@@ -426,23 +437,9 @@ class OperationWorkflowTransitionPersistence
         stepEntry,
       ],
     };
-    const projectIdempotentTransition = () => {
-      operation.workflowStep = finalStep;
-      operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
-      const previousUpdatedAt = Number(operation.updatedAt);
-      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
-        Math.max(previousUpdatedAt, now) :
-        now;
-      const previousCompletedAt = Number(operation.completedAt);
-      operation.completedAt = Number.isFinite(previousCompletedAt) ?
-        Math.max(previousCompletedAt, now) :
-        now;
-    };
-
     const persistOptions = {
       ...this.buildOperationTransitionPersistOptions(),
       terminalTransition: true,
-      returnDisposition: true,
     };
     if (isPartitionReplace(operation)) {
       persistOptions.terminalAdmission = async () => {
@@ -451,52 +448,9 @@ class OperationWorkflowTransitionPersistence
           REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
       };
     }
-    const persistFn = async () =>
-      this.repository.persistOperationUpdate(projectedOperation,
-        persistOptions);
-    const transitionOutcome = await this.executeAtomicTransition(
-      operation,
-      finalStep,
-      OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
-      persistFn,
-      {
-        onIdempotentTransition: projectIdempotentTransition,
-        afterCommit: async () => {
-          await this.confirmCommittedTransitionPersistence(
-            projectedOperation,
-            {terminalTransitionRepair: true},
-          );
-        },
-      },
-    );
-
-    if (!transitionOutcome?.committed) {
-      await this.resolveNotCommittedTerminalTransition(
-        operation,
-        projectedOperation,
-        transitionOutcome,
-        finalStep,
-        persistOptions,
-      );
-      return transitionOutcome;
-    }
-
-    this.clearTerminalOperationRetryState(operation);
-    this.clearTransitionRetry(operation.operationId);
-    operation.workflowStep = finalStep;
-    operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
-    operation.updatedAt = now;
-    operation.completedAt = now;
-    operation.stepsHistory.push(stepEntry);
-    // The holder's own committed terminal row releases the ledger self-move
-    // hold it registered on this node (a no-op for every other operation).
-    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
-    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
-
-    await this.releaseReservationForOperation(operation);
-    this.clearDeferredSafetyBlockState(operation.operationId);
-
-    this.stats.operationsCompleted++;
+    const transitionOutcome = await this.persistTerminalOperation(operation,
+      projectedOperation, OPERATION_TRANSITION_REASON.OPERATION_COMPLETED, persistOptions);
+    if (!transitionOutcome.committed) return transitionOutcome;
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
       operationId: operation.operationId,
@@ -505,9 +459,6 @@ class OperationWorkflowTransitionPersistence
       targetNodeId: operation.targetNodeId,
     });
 
-    this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
-      operation,
-    });
     armFailedCreateCleanupRelease(this, operation);
 
     try {
@@ -589,12 +540,13 @@ class OperationWorkflowTransitionPersistence
    */
   async failOperation(operation, errorMessage, options = {}) {
     const now = Date.now();
-    if (
-      operation.workflowStep === WORKFLOW_STEP.FAILED &&
-      operation.completedAt !== null &&
-      operation.completedAt !== undefined
-    ) {
-      return ALREADY_TERMINAL_TRANSITION_OUTCOME;
+    const normalizedError = this.normalizeErrorMessage(errorMessage, 'Unknown error');
+    const replay = await this.resolveOperationTransitionBeforeWrite(operation,
+      WORKFLOW_STEP.FAILED, {terminalTransition: true, terminalErrorMessage: normalizedError,
+        stepMetadata: options.stepMetadata});
+    if (replay) {
+      await this.releaseDurableTerminalOperation(operation, replay);
+      return replay;
     }
     const failureAdmission =
       await this.admitOperationFailure(operation, errorMessage, options);
@@ -602,10 +554,6 @@ class OperationWorkflowTransitionPersistence
       return failureAdmission.completeInstead ?
         this.completeOperation(operation) : buildReplaceFailureRefusal();
     }
-    const normalizedError = this.normalizeErrorMessage(
-      errorMessage,
-      'Unknown error',
-    );
     const isSafetyBlocked = this.isSafetyPolicyFailure(normalizedError);
     const logLevel =
       options.logLevel ||
@@ -647,98 +595,27 @@ class OperationWorkflowTransitionPersistence
         failedStepEntry,
       ],
     };
-    const projectIdempotentTransition = () => {
-      operation.workflowStep = WORKFLOW_STEP.FAILED;
-      operation.status = ReplicaStatus.FAILED;
-      const previousUpdatedAt = Number(operation.updatedAt);
-      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
-        Math.max(previousUpdatedAt, now) :
-        now;
-      const previousCompletedAt = Number(operation.completedAt);
-      operation.completedAt = Number.isFinite(previousCompletedAt) ?
-        Math.max(previousCompletedAt, now) :
-        now;
-      operation.errorMessage = normalizedError;
-    };
-
     const terminalPersistOptions = {
       ...failureAdmission.persistOptions,
       ...(options.requireCreateAdmissionAbsent === true ?
         {requireCreateAdmissionAbsent: true} :
         {}),
     };
-    const persistFn = async () => {
-      return this.repository.persistOperationUpdate(
-        projectedOperation,
-        {
-          ...this.buildOperationTransitionPersistOptions(),
-          ...terminalPersistOptions,
-          terminalTransition: true,
-          returnDisposition: true,
-        },
-      );
-    };
-    const transitionOutcome = await this.executeAtomicTransition(
-      operation,
-      WORKFLOW_STEP.FAILED,
-      transitionReason,
-      persistFn,
-      {
-        onIdempotentTransition: projectIdempotentTransition,
-        afterCommit: async () => {
-          await this.confirmCommittedTransitionPersistence(
-            projectedOperation,
-            {terminalTransitionRepair: true,
-              repairPersistOptions: terminalPersistOptions},
-          );
-        },
-      },
-    );
-
-    if (!transitionOutcome?.committed) {
-      const createAdmissionWinner =
-        await observeConcurrentCreateAdmissionWinner(
-          this,
-          operation,
-          transitionOutcome,
-          options,
-        );
+    const transitionOutcome = await this.persistTerminalOperation(operation,
+      projectedOperation, transitionReason, {
+        ...this.buildOperationTransitionPersistOptions(),
+        ...terminalPersistOptions,
+        terminalTransition: true,
+      });
+    if (!transitionOutcome.committed) {
+      const createAdmissionWinner = await observeConcurrentCreateAdmissionWinner(
+        this, operation, transitionOutcome, options);
       if (createAdmissionWinner) {
-        return Object.freeze({
-          ...transitionOutcome,
-          createAdmissionWon: true,
-          operation: createAdmissionWinner,
-        });
+        return Object.freeze({...transitionOutcome, createAdmissionWon: true,
+          createAdmissionOperation: createAdmissionWinner});
       }
-      // Same fail-closed release gate as completeOperation: never release
-      // on the unresolved-divergence arm (audit findings 3+11).
-      await this.resolveNotCommittedTerminalTransition(
-        operation,
-        projectedOperation,
-        transitionOutcome,
-        WORKFLOW_STEP.FAILED,
-        terminalPersistOptions,
-      );
       return transitionOutcome;
     }
-
-    this.clearTerminalOperationRetryState(operation);
-    this.clearTransitionRetry(operation.operationId);
-    operation.workflowStep = WORKFLOW_STEP.FAILED;
-    operation.status = ReplicaStatus.FAILED;
-    operation.updatedAt = now;
-    operation.completedAt = now;
-    operation.errorMessage = normalizedError;
-    operation.stepsHistory.push(failedStepEntry);
-    // The holder's own committed terminal row releases the ledger self-move
-    // hold it registered on this node (a no-op for every other operation).
-    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
-    if (this.releasePlacementHold) await this.releasePlacementHold(operation);
-
-    await this.releaseReservationForOperation(operation);
-    this.clearDeferredSafetyBlockState(operation.operationId);
-
-    this.stats.operationsFailed++;
 
     const logPayload = {
       operationId: operation.operationId,
@@ -756,10 +633,6 @@ class OperationWorkflowTransitionPersistence
 
     logMethod(logMessage, logPayload);
 
-    this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, {
-      operation,
-      errorMessage: normalizedError,
-    });
 
     try {
       this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {

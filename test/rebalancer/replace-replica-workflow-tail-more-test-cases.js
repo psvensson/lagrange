@@ -230,7 +230,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
         const persistedAfterReconcile =
           await coordinator.getOperation(operation.operationId);
 
@@ -378,7 +378,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(
           progressed,
@@ -524,7 +524,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(
           progressed,
@@ -995,7 +995,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
 
         const progressed =
-          await coordinator.workflowOwner.reconcileOperationProgress(operation);
+          await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
         const persistedOperation =
           await coordinator.getOperation(operation.operationId);
 
@@ -1122,7 +1122,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         authoritativeLearnerRow.replica_id = operation.replicaId;
 
         await coordinator.executeOperation(operation);
-        await coordinator.reconcileOperationProgress(operation);
+        await coordinator.reconcileOperationLifecycle(operation);
         const persistedOperation =
           await coordinator.getOperation(operation.operationId);
 
@@ -1252,7 +1252,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
         const persistedOperation =
           await coordinator.getOperation(operation.operationId);
 
@@ -1393,7 +1393,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(
           progressed,
@@ -1574,7 +1574,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         });
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(
           progressed,
@@ -1643,7 +1643,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           };
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(
           progressed,

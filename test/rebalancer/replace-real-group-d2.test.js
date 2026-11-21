@@ -203,7 +203,7 @@ test('P6 (b) / AN9: the target dead with the source still a voter - ' +
     loseInFlightMessages(world);
     setTargetRow(world, ReplicaStatus.FAILED);
     const readsBefore = world.witnessReads.length;
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'P6 b');
@@ -214,7 +214,7 @@ test('P6 (b) / AN9: the target dead with the source still a voter - ' +
     // re-reads the authority (the leader's own answer).
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();
@@ -252,14 +252,14 @@ test('P6 (b\'): FAILED source-retained written while R-1f\'s proposal ' +
     world.eventsSuppressed = true;
     world.group.kill(world.targetReplicaId);
     setTargetRow(world, ReplicaStatus.FAILED);
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'P6 b prime');
     t.ok(electAmongLive(world) !== null, 'a surviving member leads');
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();
@@ -300,7 +300,7 @@ test('P6 (c): the target dead after the committed removal - leaderless the ' +
       'setup: the removal committed');
     world.group.kill(world.targetReplicaId);
     setTargetRow(world, ReplicaStatus.FAILED);
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'P6 c');
@@ -311,7 +311,7 @@ test('P6 (c): the target dead after the committed removal - leaderless the ' +
     // the leader's answer classifies, and never as a rollback.
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();
@@ -406,7 +406,7 @@ async (t) => {
       `a surviving member leads (${newLeader})`);
     t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,
       'setup: the removal was lost (still a voter)');
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,

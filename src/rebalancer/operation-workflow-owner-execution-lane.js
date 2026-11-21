@@ -1,16 +1,11 @@
+import {assertOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
+import {assertOperationUpdateRecord, assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
 import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
 import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js';
-import {
-  REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
-} from './replica-operation-repository.js';
-import {
-  TERMINAL_TRANSITION_REPAIR_CAUSE,
-  armTerminalTransitionRepair,
-  clearTerminalTransitionRepair,
-} from './operation-workflow-terminal-transition-repair.js';
 import {
   OPERATION_OWNER_TURN_POLICY,
 } from './operation-owner-turn-policy.js';
@@ -500,6 +495,21 @@ class OperationWorkflowOwnerExecutionLane
     };
   }
 
+  buildTerminalOperationDispatchResult(transitionOutcome, extra = {}) {
+    const outcome = assertOperationTransitionOutcome(transitionOutcome);
+    const operationId = outcome.operation?.operationId || extra.operationId;
+    if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.FAILED) {
+      return this.buildFailedOperationResult(operationId, outcome.operation.errorMessage,
+        {reconcileOutcome: outcome.reconcileOutcome});
+    }
+    if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
+      return this.buildSuccessfulOperationResult(operationId,
+        {...extra, reconcileOutcome: outcome.reconcileOutcome});
+    }
+    return this.buildSkippedOperationResult(outcome.reconcileOutcome, operationId,
+      {reconcileOutcome: outcome.reconcileOutcome});
+  }
+
   /**
    * Delay authoritative empty-owner scans until the cache has had one bounded
    * chance to observe local replica_operations rows. An empty cache is not
@@ -591,7 +601,6 @@ class OperationWorkflowOwnerExecutionLane
    */
   buildOperationTransitionPersistOptions() {
     return {
-      confirmPersistence: false,
       disableSystemWriteSession: true,
     };
   }
@@ -616,92 +625,6 @@ class OperationWorkflowOwnerExecutionLane
   }
 
   /**
-   * Confirm one committed transition so post-commit visibility lag cannot
-   * unwind a transition that already durably committed. Confirmation never
-   * throws to the caller; for TERMINAL transitions an unconfirmed outcome
-   * (thrown or deferred) arms the terminal-transition repair instead of being
-   * dropped — a terminal projection the ledger never reflects is an immortal
-   * non-terminal row that no level-triggered path re-drives (run-21 ghost).
-   * @param {Object} operation
-   * @param {Object} [options]
-   * @param {boolean} [options.terminalTransitionRepair] - Arm repair when the
-   *   confirmation does not positively confirm visibility.
-   * @param {Object} [options.repairPersistOptions] - The terminal write's
-   *   admission options (a REPLACE FAILED's step CAS), kept by its repair.
-   * @return {Promise<void>}
-   */
-  async confirmCommittedTransitionPersistence(operation, options = {}) {
-    const repairOnUnconfirmed = options.terminalTransitionRepair === true;
-    let visibility = null;
-    try {
-      visibility =
-        await this.repository.confirmReplicaOperationPersistence(operation);
-    } catch (error) {
-      this.warnCommittedTransitionNotVisible(operation, error);
-      if (repairOnUnconfirmed) {
-        armTerminalTransitionRepair(
-          this,
-          operation,
-          TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
-          options.repairPersistOptions,
-        );
-      }
-      return;
-    }
-    if (!repairOnUnconfirmed) {
-      return;
-    }
-    this.resolveTerminalTransitionConfirmationOutcome(operation, visibility,
-      options.repairPersistOptions);
-  }
-
-  /**
-   * @param {Object} operation
-   * @param {Error} error
-   * @return {void}
-   * @private
-   */
-  warnCommittedTransitionNotVisible(operation, error) {
-    this.logger.warn(
-      OPERATION_WORKFLOW_OWNER_LITERAL.COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE,
-      {
-        operationId: operation?.operationId || null,
-        workflowStep: readStateField(operation?.workflowStep),
-        status: readStateField(operation?.status),
-        error: error?.message || String(error),
-      },
-    );
-  }
-
-  /**
-   * A positively confirmed terminal transition clears any armed repair; every
-   * other outcome (DEFERRED — the silent class) arms it.
-   * @param {Object} operation
-   * @param {Object|null} visibility
-   * @param {Object} [repairPersistOptions] - The options the terminal was
-   *   admitted with, re-used by its repair.
-   * @return {void}
-   * @private
-   */
-  resolveTerminalTransitionConfirmationOutcome(operation, visibility,
-    repairPersistOptions) {
-    if (
-      visibility?.confirmationState ===
-        REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
-      visibility?.operation
-    ) {
-      clearTerminalTransitionRepair(this, operation?.operationId || null);
-      return;
-    }
-    armTerminalTransitionRepair(
-      this,
-      operation,
-      TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_DEFERRED,
-      repairPersistOptions,
-    );
-  }
-
-  /**
    * Mirror a winning durable terminal outcome into the owner's live operation
    * object after this owner lost the terminal CAS (audit finding 6): the
    * loser must converge on the winner's terminal state, never re-assert its
@@ -714,10 +637,9 @@ class OperationWorkflowOwnerExecutionLane
     if (!operation || !winningOperation) {
       return;
     }
-    operation.status = winningOperation.status;
-    operation.workflowStep = winningOperation.workflowStep;
-    operation.completedAt = winningOperation.completedAt;
-    operation.errorMessage = winningOperation.errorMessage;
+    assertOperationUpdateRecord(winningOperation, {terminal: true});
+    assertOperationUpdateSubject(operation, winningOperation);
+    Object.assign(operation, structuredClone(winningOperation));
   }
 }
 

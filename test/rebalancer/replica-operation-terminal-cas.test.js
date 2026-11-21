@@ -1,3 +1,4 @@
+import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 // Audit finding 6 (quest replica-operation-terminal-cas): terminal
 // replica-operation transitions are first-terminal-wins, never
 // last-writer-wins. The terminal UPDATE guards on `completed_at IS NULL`
@@ -11,6 +12,12 @@
 // loser-adopts-winner disposition in resolveZeroChangeOperationUpdate fails
 // the adoption tests — while every other mechanism stays in place.
 
+import Database from 'better-sqlite3';
+import {generateCreateTableSQL, generateCreateIndexSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
+import {REPLICA_OPERATIONS_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -87,7 +94,7 @@ function makeLosingProjection(repository, overrides = {}) {
   };
 }
 
-function createTerminalCasHarness({
+function createTerminalCasHarness(t, {
   winnerRow = null,
   authorityRows = null,
   localRows = null,
@@ -97,61 +104,47 @@ function createTerminalCasHarness({
   // completed_at-IS-NULL CAS against the already-terminal row, and the real
   // post-write zero-change resolution reads the winner.
   skipPreWriteTerminalGuard = null,
-  mutationChanges = 1,
+  initialRow = null,
 } = {}) {
   const mutations = [];
-  const readRows = authorityRows || (winnerRow ? [winnerRow] : []);
+  const database = new Database(':memory:');
+  database.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+  for (const sql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) database.exec(sql);
+  t.teardown(() => database.close());
+  const planner = new ControlPlaneSystemTableGateway();
+  const seed = winnerRow || initialRow || authorityRows?.[0] || localRows?.[0] || makeRow({
+    workflow_step: WORKFLOW_STEP.PENDING, status: ReplicaStatus.PENDING, completed_at: null,
+  });
+  const insert = planner.buildSqlMutationPlan({operation: 'insert',
+    tableName: 'replica_operations', row: seed});
+  database.prepare(insert.sql).run(...insert.params);
   const gateway = {
-    readAuthoritativeRows: async (_table, _sql, _params, options = {}) => {
-      // OWNER_LOCAL_ONLY serves the lagging local replica view (the pre-write
-      // guards run against it); escalated reads serve the authority rows.
-      if (
-        options.authoritativeReadMode ===
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
-      ) {
-        return {success: true, rows: localRows || []};
+    readAuthoritativeRows: async (_table, sql, params, options = {}) => {
+      if (options.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY && localRows) {
+        return {success: true, rows: localRows};
       }
-      return {success: true, rows: readRows};
+      return {success: true, rows: database.prepare(sql).all(...params)};
     },
-    executeQuery: async (sql) => {
-      // The raw-SQL fallback evaluates the guarded terminal statement against
-      // the winning row: `completed_at IS NULL` makes a write against an
-      // already-terminal row a zero-change loss.
-      if (
-        typeof sql === 'string' &&
-        sql.includes('completed_at IS NULL') &&
-        winnerRow &&
-        winnerRow.completed_at !== null &&
-        winnerRow.completed_at !== undefined
-      ) {
-        return {success: true, changes: 0};
-      }
-      return {success: true, changes: 1};
+    executeQuery: async (sql, params = []) => {
+      const statement = database.prepare(sql);
+      return statement.reader ? {success: true, rows: statement.all(...params)} :
+        {success: true, changes: statement.run(...params).changes};
     },
     async submitMutation(mutation) {
       mutations.push(mutation);
-      // Evaluate the guarded whereClause against the winning row exactly the
-      // way the gateway SQL plan does: `completed_at IS NULL` makes a write
-      // against an already-terminal row a zero-change loss.
-      const whereClause = mutation?.whereClause || {};
-      if (
-        Object.hasOwn(whereClause, 'completed_at') &&
-        whereClause.completed_at === null &&
-        winnerRow &&
-        winnerRow.completed_at !== null &&
-        winnerRow.completed_at !== undefined
-      ) {
-        return {success: true, partitionResult: {affectedRows: 0}};
-      }
-      return {success: true, partitionResult: {affectedRows: mutationChanges}};
+      const {sql, params} = planner.buildSqlMutationPlan(mutation);
+      const {changes} = database.prepare(sql).run(...params);
+      return {success: true, partitionResult: {affectedRows: changes}};
     },
   };
-  // Mark the canonical CDC mutation ingress available so submitMutation is
-  // the exercised write path (production shape); the executeQuery fallback
-  // above covers the raw-SQL statement evaluation.
   gateway.cdcIntegrationService = {
-    insertSystemTableRow: async () => ({success: true}),
-    updateSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: (tableName, row) => gateway.submitMutation({
+      operation: 'insert', tableName, row,
+    }),
+    updateSystemTableRow: (tableName, whereClause, data) => gateway.submitMutation({
+      operation: 'update', tableName, whereClause, data,
+    }),
   };
   const repository = new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,
@@ -182,7 +175,7 @@ test(
       status: ReplicaStatus.SYNCING,
       completed_at: null,
     });
-    const {repository, mutations} = createTerminalCasHarness({
+    const {repository, mutations} = createTerminalCasHarness(t, {
       localRows: [laggingRow],
     });
     const projectedOperation = makeLosingProjection(repository);
@@ -196,7 +189,7 @@ test(
       },
     );
 
-    t.equal(persisted, true, 'the guarded write against a non-terminal row persists');
+    t.equal(persisted.persisted, true, 'the guarded write against a non-terminal row persists');
     t.equal(mutations.length, 1, 'exactly one mutation reached the gateway');
     t.equal(
       mutations[0]?.whereClause?.completed_at,
@@ -216,7 +209,7 @@ test(
 test(
   'non-terminal UPDATE keeps the expected-step CAS and no completed_at guard',
   async (t) => {
-    const {repository} = createTerminalCasHarness();
+    const {repository} = createTerminalCasHarness(t);
     const operation = repository.rowToOperation(
       makeRow({completed_at: null, workflow_step: WORKFLOW_STEP.CREATING}),
     );
@@ -248,8 +241,7 @@ test(
   'an observed-history CAS pins the exact steps history the writer read ' +
     'beside its expected step, in the whereClause and the raw-SQL fallback',
   async (t) => {
-    const {repository, mutations} = createTerminalCasHarness();
-    const held = repository.rowToOperation(makeRow({
+    const heldRow = makeRow({
       completed_at: null,
       workflow_step: WORKFLOW_STEP.PENDING,
       status: ReplicaStatus.PENDING,
@@ -257,7 +249,9 @@ test(
         step: WORKFLOW_STEP.PENDING,
         bootstrapTopologyDispatchDeferred: true,
       }]),
-    }));
+    });
+    const {repository, mutations} = createTerminalCasHarness(t, {initialRow: heldRow});
+    const held = repository.rowToOperation(heldRow);
     const released = {
       ...held,
       stepsHistory: [{step: WORKFLOW_STEP.PENDING}],
@@ -271,7 +265,7 @@ test(
       confirmPersistence: false,
     });
 
-    t.equal(persisted, true, 'the CAS against the observed row persists');
+    t.equal(persisted.persisted, true, 'the CAS against the observed row persists');
     t.equal(mutations[0].whereClause.workflow_step, WORKFLOW_STEP.PENDING);
     t.equal(mutations[0].whereClause.steps_history, observedHistory,
       'a same-step change of the history (a released hold, an appended ' +
@@ -299,7 +293,8 @@ test(
       'an observed history without an expected step is refused',
     );
     await t.rejects(
-      repository.persistOperationUpdate(released, {
+      repository.persistOperationUpdate({...released, workflowStep: WORKFLOW_STEP.ACTIVE,
+        status: ReplicaStatus.ACTIVE, completedAt: TEST_TERMINAL_AT_MS}, {
         expectedWorkflowStep: WORKFLOW_STEP.PENDING,
         expectedStepsHistory: held.stepsHistory,
         terminalTransition: true,
@@ -314,7 +309,7 @@ test(
 test(
   'ambiguous CREATE terminal settlement is one CAS on terminal and absent admission',
   async (t) => {
-    const {repository, mutations} = createTerminalCasHarness();
+    const {repository, mutations} = createTerminalCasHarness(t);
     const operation = repository.rowToOperation(makeRow({
       completed_at: null,
       workflow_step: WORKFLOW_STEP.SENDING,
@@ -338,7 +333,7 @@ test(
       },
     );
 
-    t.equal(persisted, true, 'the terminal-first arm commits');
+    t.equal(persisted.persisted, true, 'the terminal-first arm commits');
     t.equal(mutations.length, 1, 'one authoritative mutation is issued');
     t.equal(mutations[0].whereClause.completed_at, null,
       'the mutation retains the first-terminal-wins guard');
@@ -383,7 +378,7 @@ test(
     // The winner lands between the pre-write conflict guard and the guarded
     // UPDATE: the write loses the CAS, and the zero-change resolution reads
     // the winner.
-    const {repository} = createTerminalCasHarness({
+    const {repository} = createTerminalCasHarness(t, {
       winnerRow,
       skipPreWriteTerminalGuard: (repository) => {
         repository.shouldRejectConflictingTerminalTransitionMutation =
@@ -398,7 +393,6 @@ test(
         terminalTransition: true,
         confirmPersistence: false,
         disableSystemWriteSession: true,
-        returnDisposition: true,
       },
     );
 
@@ -439,7 +433,7 @@ test(
     // the guarded write changes zero rows but the visibility comparison is
     // satisfied, so this is an idempotent replay, not a lost CAS.
     const ownTerminalRow = makeRow();
-    const {repository} = createTerminalCasHarness({
+    const {repository} = createTerminalCasHarness(t, {
       winnerRow: ownTerminalRow,
       localRows: [ownTerminalRow],
     });
@@ -451,7 +445,6 @@ test(
         terminalTransition: true,
         confirmPersistence: false,
         disableSystemWriteSession: true,
-        returnDisposition: true,
       },
     );
 
@@ -465,14 +458,14 @@ test(
 );
 
 test(
-  'the default boolean contract for a lost terminal write stays false',
+  'a lost terminal writer reports canonical terminal adoption',
   async (t) => {
     const winnerRow = makeRow({
       workflow_step: WORKFLOW_STEP.ACTIVE,
       updated_at: TEST_WINNER_TERMINAL_AT_MS,
       completed_at: TEST_WINNER_TERMINAL_AT_MS,
     });
-    const {repository} = createTerminalCasHarness({
+    const {repository} = createTerminalCasHarness(t, {
       winnerRow,
       skipPreWriteTerminalGuard: (repository) => {
         repository.shouldRejectConflictingTerminalTransitionMutation =
@@ -491,14 +484,14 @@ test(
     );
 
     t.equal(
-      persisted,
-      false,
-      'callers without the typed opt-in observe the legacy boolean contract',
+      persisted.disposition,
+      REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+      'every caller consumes the mandatory typed winning terminal outcome',
     );
     t.equal(
       losingProjection.workflowStep,
       WORKFLOW_STEP.ACTIVE,
-      'the loser still adopts the winner even without the typed opt-in',
+      'the loser adopts the exact terminal winner',
     );
   },
 );
@@ -514,7 +507,7 @@ test(
       status: ReplicaStatus.SYNCING,
       completed_at: null,
     });
-    const {repository, mutations} = createTerminalCasHarness({
+    const {repository, mutations} = createTerminalCasHarness(t, {
       localRows: [laggingRow],
     });
     const projectedOperation = makeLosingProjection(repository, {
@@ -529,7 +522,6 @@ test(
         terminalTransition: true,
         confirmPersistence: false,
         disableSystemWriteSession: true,
-        returnDisposition: true,
       },
     );
 
@@ -632,7 +624,6 @@ test(
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,
-          returnDisposition: true,
         },
       );
       t.equal(
@@ -656,7 +647,6 @@ test(
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,
-          returnDisposition: true,
         },
       );
       t.equal(
@@ -744,15 +734,17 @@ test(
         {step: WORKFLOW_STEP.SYNCING, timestamp: TEST_CREATED_AT_MS},
       ]),
     });
-    const {repository, mutations} = createTerminalCasHarness({
+    const {repository, mutations} = createTerminalCasHarness(t, {
       authorityRows: [nonTerminalRow],
-      mutationChanges: 0,
+      skipPreWriteTerminalGuard: (repository) => {
+        repository.shouldRejectExpectedWorkflowStepMutation = async () => false;
+      },
     });
     const losingProjection = makeLosingProjection(repository);
 
     const result = await repository.persistOperationUpdate(
       losingProjection,
-      {terminalTransition: true, returnDisposition: true},
+      {terminalTransition: true, expectedWorkflowStep: WORKFLOW_STEP.PENDING},
     );
 
     t.same(
@@ -767,10 +759,7 @@ test(
     t.equal(mutations.length, 1, 'exactly one guarded mutation was issued');
 
     // Caller-side consequence: REFUSED is unresolved divergence.
-    const refusedOutcome = {
-      committed: false,
-      disposition: result?.disposition,
-    };
+    const refusedOutcome = buildOperationTransitionOutcome(result);
     t.equal(
       shouldReleaseReservationForTerminalOutcome(refusedOutcome),
       false,
@@ -789,25 +778,28 @@ test(
         REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
         REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
       ].map((disposition) =>
-        isTerminalTransitionOutcomeSettled({committed: false, disposition}),
+        isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
+          persisted: disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+          disposition, operation: losingProjection,
+        })),
       ),
       [true, true],
       'TERMINAL_ADOPTED and IDEMPOTENT_REPLAY settle (a durable terminal ' +
         'is proven)',
     );
     t.equal(
-      isTerminalTransitionOutcomeSettled({
-        committed: true,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
-      }),
+      isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
+        persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+        operation: losingProjection,
+      })),
       true,
       'a committed terminal settles',
     );
     t.equal(
-      isTerminalTransitionOutcomeSettled({
-        committed: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
-      }),
+      isTerminalTransitionOutcomeSettled(buildOperationTransitionOutcome({
+        persisted: true, disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
+        operation: losingProjection,
+      })),
       false,
       'REINSERTED is unresolved divergence, not settled progress',
     );
