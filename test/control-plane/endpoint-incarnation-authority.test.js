@@ -372,3 +372,31 @@ test('a delayed same-incarnation endpoint read cannot retire its pending success
     releaseControlPlaneWriteIdentities('endpoint', ENDPOINT_ID, G1);
   }
 });
+
+test('join endpoint readback requires the requested priority at the same address', async (t) => {
+  const row = nodeEndpoint(G1, 'ws://g1-host:8082');
+  const requested = {...row, priority: 2};
+  const gateway = createDurableTables({[TABLES.NODE_ENDPOINTS]: [row]});
+  const owner = g1RegistrationOwner(gateway);
+  const updateStored = gateway.updateSystemTableRow;
+  let firstAttempt = true;
+  gateway.updateSystemTableRow = (table, where, data) => {
+    if (firstAttempt) {
+      firstAttempt = false;
+      return updateStored(table, {...where, priority: requested.priority}, data);
+    }
+    return updateStored(table, where, data);
+  };
+
+  const rejected = await owner.upsertSystemTableRowWithRetry(TABLES.NODE_ENDPOINTS, requested);
+  t.match(rejected, {success: false, outcome: OUTCOME.NOT_APPLIED},
+    'the registration caller refuses a same-address endpoint with the old priority');
+  t.same(gateway.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID), row);
+
+  gateway.loseNextAcknowledgement('lost');
+  const recovered = await owner.upsertSystemTableRowWithRetry(TABLES.NODE_ENDPOINTS, requested);
+  t.match(recovered, {success: true, outcome: OUTCOME.RESOLVED_BY_READBACK},
+    'the registration caller accepts exact readback after the effect committed');
+  t.same(gateway.rowsOf(TABLES.NODE_ENDPOINTS).get(ENDPOINT_ID), requested);
+  t.equal(gateway.writes.length, 2, 'one update per registration attempt');
+});

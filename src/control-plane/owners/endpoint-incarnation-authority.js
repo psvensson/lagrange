@@ -144,7 +144,7 @@ function rowReachedDestination(row, destination) {
     row?.[column] === value);
 }
 
-function classifyEndpointReadback(read, bootIncarnation, destination,
+function classifyEndpointReadback(read, bootIncarnation, matchesDestination,
   absentOutcome = ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT) {
   if (read.available !== true) {
     return ENDPOINT_INCARNATION_OUTCOME.AUTHORITY_UNAVAILABLE;
@@ -153,7 +153,7 @@ function classifyEndpointReadback(read, bootIncarnation, destination,
   if (endpointIncarnationOf(read.row) !== bootIncarnation) {
     return ENDPOINT_INCARNATION_OUTCOME.REFUSED_STALE_INCARNATION;
   }
-  return rowReachedDestination(read.row, destination) ?
+  return matchesDestination(read.row) ?
     ENDPOINT_INCARNATION_OUTCOME.RESOLVED_BY_READBACK :
     ENDPOINT_INCARNATION_OUTCOME.NOT_APPLIED;
 }
@@ -212,7 +212,7 @@ async function mutateEndpointAtIncarnation(options) {
       return ENDPOINT_INCARNATION_OUTCOME.NOT_APPLIED;
     }
     return classifyEndpointReadback(read, bootIncarnation,
-      options.destination || {});
+      (row) => rowReachedDestination(row, options.destination || {}));
   });
   const effect = classifyControlPlaneMutationResult(attempt.result);
   if (outcome.outcome === ENDPOINT_INCARNATION_OUTCOME.APPLIED &&
@@ -240,11 +240,15 @@ async function attemptNamedEndpointWrite(row, verb, write) {
   const confirmWriteEffect = (observed) => columns.every((column, index) =>
     Object.hasOwn(observed, column) && observed[column] === values[index]);
   const attempt = await attemptWrite(() => write({writeIdentity, confirmWriteEffect}));
-  return {...attempt, confirmReadback: captureControlPlaneWriteConfirmation(writeIdentity)};
+  return {
+    ...attempt,
+    confirmWriteEffect,
+    confirmReadback: captureControlPlaneWriteConfirmation(writeIdentity),
+  };
 }
 
-function resolveEndpointWriteReadback(attempt, read, bootIncarnation, destination) {
-  const outcome = classifyEndpointReadback(read, bootIncarnation, destination,
+function resolveEndpointWriteReadback(attempt, read, bootIncarnation) {
+  const outcome = classifyEndpointReadback(read, bootIncarnation, attempt.confirmWriteEffect,
     ENDPOINT_INCARNATION_OUTCOME.NOT_APPLIED);
   if (outcome === ENDPOINT_INCARNATION_OUTCOME.RESOLVED_BY_READBACK) {
     attempt.confirmReadback(read.row);
@@ -276,8 +280,8 @@ function planEndpointWrite(options, row, observed, bootIncarnation) {
  * Birth or refresh one endpoint row at this incarnation. Absent -> insert;
  * present at the same or an older incarnation -> one CAS on the observed
  * incarnation; present at a newer incarnation -> refused, never replaced.
- * An uncertain outcome is reread once: this incarnation's row -> done; an
- * older owner still present (the birth lost a race or the observation was
+ * An uncertain outcome is reread once: this incarnation's complete requested
+ * effect -> done; an older owner still present (the observation was
  * stale) -> one CAS advance from that reread; anything else -> classified.
  * @param {Object} options
  * @param {Object} options.row - The endpoint row (endpoint_id required).
@@ -301,7 +305,6 @@ async function writeEndpointAtIncarnation(options) {
       ENDPOINT_INCARNATION_OUTCOME.REFUSED_INCARNATION_REQUIRED);
   }
   const row = stampEndpointIncarnation(options.row, bootIncarnation);
-  const destination = {[COLUMN.ADDRESS]: row[COLUMN.ADDRESS]};
   const readAuthority = options.readback || options.observe;
   // Without an observation only a birth is attempted: an INSERT can never
   // replace an existing row (a conflict is resolved by the reread below).
@@ -320,14 +323,13 @@ async function writeEndpointAtIncarnation(options) {
   const olderOwner = reread.available === true && reread.row &&
     endpointIncarnationOf(reread.row) < bootIncarnation;
   if (!olderOwner) {
-    return resolveEndpointWriteReadback(attempt, reread, bootIncarnation, destination);
+    return resolveEndpointWriteReadback(attempt, reread, bootIncarnation);
   }
   const advance = await casFromObserved(options, row, reread.row);
   if (attemptApplied(advance)) {
     return freezeOutcome(ENDPOINT_INCARNATION_OUTCOME.APPLIED, advance);
   }
-  return resolveEndpointWriteReadback(advance, await readAuthority(),
-    bootIncarnation, destination);
+  return resolveEndpointWriteReadback(advance, await readAuthority(), bootIncarnation);
 }
 
 export {
