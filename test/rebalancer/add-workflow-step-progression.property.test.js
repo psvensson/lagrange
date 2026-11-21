@@ -19,7 +19,7 @@ import {
   ADD_WORKFLOW_STEPS,
   WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-status.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 
 test('Property 5: ADD Workflow Step Progression', async (t) => {
   await t.test('ADD operation starts at PENDING step', async (t) => {
@@ -30,7 +30,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator();
 
           try {
             const operation = await coordinator.createOperation({
@@ -53,7 +53,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
   });
 
   await t.test('updateStep progresses through ADD workflow in order', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator();
 
     try {
       const operation = await coordinator.createOperation({
@@ -92,7 +92,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator();
 
           try {
             const operation = await coordinator.createOperation({
@@ -141,7 +141,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
   });
 
   await t.test('step transitions update status correctly', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator();
 
     try {
       const operation = await coordinator.createOperation({
@@ -186,7 +186,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator();
 
           try {
             const operation = await coordinator.createOperation({
@@ -211,7 +211,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
   });
 
   await t.test('stepChanged event is emitted on step transitions', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator();
     const stepChanges = [];
 
     coordinator.on('stepChanged', (event) => {
@@ -244,7 +244,7 @@ test('Property 5: ADD Workflow Step Progression', async (t) => {
   });
 
   await t.test('updatedAt is updated on each step transition', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator();
 
     try {
       const operation = await coordinator.createOperation({

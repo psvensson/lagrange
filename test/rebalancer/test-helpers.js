@@ -323,6 +323,7 @@ function createMockControlPlaneReadinessService(options = {}) {
     readinessByNodeId = {},
     livenessProjectionByNodeId = null,
     membershipPublicationPlanningSnapshot = null,
+    formation = null,
     callbacks = {},
   } = options;
   const project = (nodeRow) => projectNodeLivenessSemantics({nodeRow, nowMs: now()}).projection;
@@ -337,6 +338,7 @@ function createMockControlPlaneReadinessService(options = {}) {
         state: 'ready',
         epoch: {publicationEpoch: 1, publicationId: 'cluster_membership-1', readAtMs: now()},
         nodeRows: readNodeRows(),
+        ...(formation === null ? {} : {formation}),
       };
     },
     getNodeReadinessSync(nodeId) {
@@ -1039,15 +1041,16 @@ function answerFixtureServicesRead(cache, sql, params) {
   };
 }
 
-function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
+function createCoordinatorSqlStore(cache, {onCommittedOperationWrite, openDatabase = null} = {}) {
   // The store outlives its coordinator (a shutdown and re-initialize keeps
   // the ledger); while no coordinator runs it is held as its serialized
-  // image, so its SQLite connection is released.
+  // image (or, opened over a ledger partition's file, by that file), so its
+  // SQLite connection is released.
   let image = SQL_STORE_DATABASE_IMAGE;
   let database = null;
   let statements = new Map();
   const prepare = (sql) => {
-    database ??= new Database(image);
+    database ??= openDatabase ? openDatabase() : new Database(image);
     if (!statements.has(sql)) {
       statements.set(sql, database.prepare(sql));
     }
@@ -1055,7 +1058,7 @@ function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
   };
   const suspend = () => {
     if (database) {
-      image = database.serialize();
+      if (!openDatabase) image = database.serialize();
       database.close();
       database = null;
       statements = new Map();
@@ -1106,6 +1109,8 @@ function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
   }
   takeWrittenOperationIds();
   const execute = (sql, params) => {
+    // Rows another writer of a shared ledger file committed reach the cache first.
+    mirrorOperationWrites();
     if (extractSqlOperationKind(sql) === CONTROL_PLANE_SQL_OPERATION.READ &&
         extractSystemTableNameFromSql(sql) === SYSTEM_TABLE_NAME.SERVICES) {
       return answerFixtureServicesRead(cache, sql, params);
@@ -1175,6 +1180,7 @@ function createTestCoordinator(options = {}) {
 
   const sqlStore = createCoordinatorSqlStore(mockCache, {
     onCommittedOperationWrite: options.onCommittedOperationWrite,
+    openDatabase: options.openLedgerDatabase,
   });
   // The SQL engine: a test's pattern answers first, then the store.
   const mockSqlEngine = options.sqlQueryEngine || {
@@ -1285,7 +1291,8 @@ function createTestCoordinator(options = {}) {
 /**
  * A fixture coordinator persists a fresh create at its durable PENDING step
  * without arming its progress: the owner's create arm is inert while
- * createOperationRecordInternal runs. The reuse rearm of an existing
+ * createOperationRecordInternal or a placement admission (the partition and
+ * runtime-service path) runs. The reuse rearm of an existing
  * in-flight row (maybeRearmReusedPendingOperation) stays live, also when the
  * create's own persistence collision reuses a row. The scope is the create's
  * call chain, so a concurrent create's reuse rearm is not silenced.
@@ -1301,6 +1308,9 @@ function withInertFreshCreateArm(coordinator) {
     .bind(coordinator);
   coordinator.createOperationRecordInternal = (context) =>
     freshCreateScope.run(true, () => createRecord(context));
+  const createAdmitted = coordinator.createOperationViaPlacementAdmission.bind(coordinator);
+  coordinator.createOperationViaPlacementAdmission = (context) =>
+    freshCreateScope.run(true, () => createAdmitted(context));
   coordinator.maybeRearmReusedPendingOperation = (operation) =>
     freshCreateScope.run(false, () => rearmReused(operation));
   coordinator.armCoordinatorCreatedOperationProgress =
@@ -1480,4 +1490,5 @@ export {
   createMockRpcClient, createTestCoordinator, createTestRebalancer,
   initializeSpreadTestEnvironment, installActualReplicaObservationResolver,
   isAddLikeMoveResult, withSuccessfulStorageReservationInsert, withFixtureReplaceWitness,
+  REPLICA_OPERATION_WRITE_CAPTURE, SQL_STORE_SCHEMAS,
 };

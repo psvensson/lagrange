@@ -28,7 +28,7 @@
   "censusSize": 2733,
   "digest": "fnv1a32-9592f56f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-eb6d5c33",
+  "observationDigest": "fnv1a32-5953b4e2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6442,11 +6442,34 @@
     },
     "test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-decision.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "src/rebalancer/replica-placement-owner-constants.js",
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/placement-bound-coordinator-fixture.js",
+        "test/rebalancer/test-helpers.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/convergence/dt6-rebalancer-timeout-loop-network.test.js": {
@@ -18520,9 +18543,33 @@
     },
     "test/rebalancer/add-workflow-step-progression.property.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-decision.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+        "src/rebalancer/replica-placement-owner-constants.js",
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/test-helpers.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/admission-real-size-estimates.test.js": {
@@ -19163,9 +19210,34 @@
     },
     "test/rebalancer/operation-record-completeness.property.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-decision.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+        "src/rebalancer/replica-placement-owner-constants.js",
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/placement-bound-coordinator-fixture.js",
+        "test/rebalancer/test-helpers.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/operation-record-step-shape.test.js": {
@@ -19843,9 +19915,34 @@
     },
     "test/rebalancer/remove-workflow-step-progression.property.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-decision.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+        "src/rebalancer/replica-placement-owner-constants.js",
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/placement-bound-coordinator-fixture.js",
+        "test/rebalancer/test-helpers.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": {
@@ -20759,11 +20856,34 @@
     },
     "test/rebalancer/timeout-triggers-failure.property.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-decision.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "src/rebalancer/replica-placement-owner-constants.js",
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/rebalancer/placement-bound-coordinator-fixture.js",
+        "test/rebalancer/test-helpers.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": {

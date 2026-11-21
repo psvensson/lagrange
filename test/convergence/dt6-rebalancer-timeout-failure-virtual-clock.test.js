@@ -1,7 +1,8 @@
 import t from 'tap';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
+import {createPlacementBoundTimeoutTestCoordinator} from
+  '../rebalancer/placement-bound-coordinator-fixture.js';
 
 // DT6 item 6 — drive the REAL terminal timeout-reconcile MUTATION on the virtual clock. Step 12
 // drove the reconcile-trigger branch but stubbed reconcileTimeoutOperation (the actual state
@@ -15,6 +16,9 @@ import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinat
 // the timeout the real failOperation transition fires and persists the operation as FAILED — the
 // genuine terminal mutation, on the virtual clock, deterministically.
 //
+// The ADD is created as production creates it: placement admission on the real ledger leader
+// (placement-bound-coordinator-fixture.js), on the same virtual clock.
+//
 // HONEST SCOPE: the coordinator, the operation store, checkTimeouts, reconcileTimeoutOperation, and
 // failOperation are all real production code (the same fixture used by timeout-triggers-failure's
 // Property 7 wall-clock tests). The durable store is the production-schema SQLite fixture; only
@@ -26,7 +30,8 @@ const PENDING_TIMEOUT_MS = 10;
 async function runVirtualTimeout({advanceMs}) {
   const timeSource = new VirtualTimeSource({startMs: START_MS});
   const {coordinator, setOperationUpdatedAt, getTrackedOperation} =
-    createTimeoutTestCoordinator({timeSource, pendingTimeoutMs: PENDING_TIMEOUT_MS});
+    await createPlacementBoundTimeoutTestCoordinator({timeSource,
+      pendingTimeoutMs: PENDING_TIMEOUT_MS});
   try {
     const operation = await coordinator.createOperation({
       type: OperationType.ADD,

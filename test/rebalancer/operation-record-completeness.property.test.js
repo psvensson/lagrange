@@ -19,7 +19,21 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {committedVoterWorld, createPlacementBoundTestCoordinator} from
+  './placement-bound-coordinator-fixture.js';
+
+// A creation request production admits: a partition ADD names no physical
+// replica (the admission mints it); a REMOVE names a voter replica the
+// committed world holds (its SERVICES row and its node's committed row).
+function admissibleMove({type, partitionId, nodeId, replicaId}) {
+  return type === OperationType.ADD ? {type, partitionId, nodeId} :
+    {type, partitionId, nodeId, replicaId};
+}
+
+function coordinatorFor(request) {
+  return createPlacementBoundTestCoordinator(request.type === OperationType.REMOVE ?
+    {cacheData: committedVoterWorld(request)} : {});
+}
 
 test('Property 2: Operation Record Completeness', async (t) => {
   await t.test('createOperation creates records with all required fields', async (t) => {
@@ -29,13 +43,14 @@ test('Property 2: Operation Record Completeness', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
-          replicaId: fc.option(fc.uuid(), {nil: undefined}),
+          replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const request = admissibleMove(move);
+          const coordinator = await coordinatorFor(request);
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(request);
 
             // Verify all required fields are present (Requirements 2.2, 2.3)
             const hasOperationId = typeof operation.operationId === 'string' &&
@@ -74,12 +89,14 @@ test('Property 2: Operation Record Completeness', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
+          replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const request = admissibleMove(move);
+          const coordinator = await coordinatorFor(request);
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(request);
 
             return operation.status === ReplicaStatus.PENDING &&
               operation.workflowStep === 'PENDING';
@@ -101,12 +118,14 @@ test('Property 2: Operation Record Completeness', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
+          replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const request = admissibleMove(move);
+          const coordinator = await coordinatorFor(request);
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(request);
             const retrieved = await coordinator.getOperation(operation.operationId);
 
             return retrieved !== null &&
@@ -129,12 +148,14 @@ test('Property 2: Operation Record Completeness', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
+          replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const request = admissibleMove(move);
+          const coordinator = await coordinatorFor(request);
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(request);
 
             // Initially completedAt should be null
             const initiallyNull = operation.completedAt === null;
@@ -165,13 +186,15 @@ test('Property 2: Operation Record Completeness', async (t) => {
           type: fc.constantFrom(OperationType.ADD, OperationType.REMOVE),
           partitionId: fc.uuid(),
           nodeId: fc.uuid(),
+          replicaId: fc.uuid(),
         }),
         fc.string({minLength: 1, maxLength: 100}),
         async (move, errorMessage) => {
-          const coordinator = createTestCoordinator();
+          const request = admissibleMove(move);
+          const coordinator = await coordinatorFor(request);
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(request);
 
             // Fail the operation
             await coordinator.failOperation(operation, errorMessage);
@@ -197,7 +220,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
   });
 
   await t.test('ADD operation completes with ACTIVE status', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator();
 
     try {
       const operation = await coordinator.createOperation({
@@ -218,7 +241,9 @@ test('Property 2: Operation Record Completeness', async (t) => {
   });
 
   await t.test('REMOVE operation completes with REMOVED status', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      cacheData: committedVoterWorld({partitionId: 'test-partition', nodeId: 'test-node',
+        replicaId: 'test-replica'})});
 
     try {
       const operation = await coordinator.createOperation({
@@ -240,7 +265,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
   });
 
   await t.test('stepsHistory tracks all step transitions', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator();
 
     try {
       const operation = await coordinator.createOperation({
@@ -274,7 +299,9 @@ test('Property 2: Operation Record Completeness', async (t) => {
   });
 
   await t.test('statistics are updated correctly', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      cacheData: committedVoterWorld({partitionId: 'test-partition-2', nodeId: 'test-node-2',
+        replicaId: 'test-replica-2'})});
 
     try {
       const initialStats = await coordinator.getStats();
@@ -302,6 +329,7 @@ test('Property 2: Operation Record Completeness', async (t) => {
         type: OperationType.REMOVE,
         partitionId: 'test-partition-2',
         nodeId: 'test-node-2',
+        replicaId: 'test-replica-2',
       });
 
       await coordinator.failOperation(operation2, 'Test error');

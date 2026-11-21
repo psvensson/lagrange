@@ -19,12 +19,13 @@ import {
   ReplicaStatus,
   isTerminalStep,
 } from '../../src/rebalancer/replica-status.js';
-import {createTimeoutTestCoordinator} from './timeout-test-coordinator.js';
+import {committedVoterWorld, createPlacementBoundTimeoutTestCoordinator} from
+  './placement-bound-coordinator-fixture.js';
 
 test('Property 7: Timeout Triggers Failure', async (t) => {
   await t.test('operation in PENDING times out and fails', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -58,7 +59,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('operation in SENDING times out and fails', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -91,7 +92,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('operation in CREATING times out and fails', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({creatingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({creatingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -124,7 +125,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('operation in SYNCING times out and fails', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({syncingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({syncingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -155,17 +156,20 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
     }
   });
 
+  function removalWorld(status) {
+    const world = committedVoterWorld({partitionId: 'test-partition',
+      replicaId: 'test-replica', nodeId: 'test-node', status});
+    return {services: world.services, readinessFixture: {readNodeRows: () => world.nodes}};
+  }
+
   async function checkStoppingRemoval(status) {
     const {coordinator, setOperationUpdatedAt, getTrackedOperation} =
-      createTimeoutTestCoordinator({
+      await createPlacementBoundTimeoutTestCoordinator({
         removingTimeoutMs: 1,
-        services: [{
-          service_id: 'test-replica',
-          replica_id: 'test-replica',
-          partition_id: 'test-partition',
-          node_id: 'test-node',
-          status,
-        }],
+        // The removed replica as production holds it: its registered SERVICES
+        // row (at the case's status) and its node's committed row, which
+        // scope the REMOVE's admission.
+        ...removalWorld(status),
       });
 
     try {
@@ -206,7 +210,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('completed operation does not timeout', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -240,7 +244,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('failed operation does not timeout again', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -273,7 +277,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('timeout increments statistics', async (t) => {
     const {coordinator, backdateOperation} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const operation = await coordinator.createOperation({
@@ -300,7 +304,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('multiple operations can timeout in same check', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation, trackedOperations} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
 
     try {
       const op1 = await coordinator.createOperation({
@@ -349,7 +353,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
         }),
         async (move) => {
           const {coordinator, getTrackedOperation} =
-            createTimeoutTestCoordinator({pendingTimeoutMs: 10000});
+            await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 10000});
 
           try {
             const operation = await coordinator.createOperation({
@@ -380,7 +384,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('operationFailed event is emitted on timeout', async (t) => {
     const {coordinator, backdateOperation} =
-      createTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
     let failedEvent = null;
 
     coordinator.on('operationFailed', (event) => {

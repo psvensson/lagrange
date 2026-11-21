@@ -19,7 +19,14 @@ import {
   REMOVE_WORKFLOW_STEPS,
   WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-status.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {committedVoterWorld, createPlacementBoundTestCoordinator} from
+  './placement-bound-coordinator-fixture.js';
+
+// A production partition REMOVE names a replica the committed world holds
+// (its registered SERVICES row, its node's committed row): the world each
+// case's coordinator starts from.
+const TEST_REPLICA = Object.freeze({partitionId: 'test-partition', nodeId: 'test-node',
+  replicaId: 'test-replica'});
 
 test('Property 6: REMOVE Workflow Step Progression', async (t) => {
   await t.test('REMOVE operation starts at PENDING step', async (t) => {
@@ -31,7 +38,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
           replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator({
+            cacheData: committedVoterWorld(move)});
 
           try {
             const operation = await coordinator.createOperation({
@@ -54,7 +62,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
   });
 
   await t.test('updateStep progresses through REMOVE workflow in order', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      cacheData: committedVoterWorld(TEST_REPLICA)});
 
     try {
       const operation = await coordinator.createOperation({
@@ -95,7 +104,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
           replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator({
+            cacheData: committedVoterWorld(move)});
 
           try {
             const operation = await coordinator.createOperation({
@@ -144,7 +154,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
   });
 
   await t.test('step transitions update status correctly', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      cacheData: committedVoterWorld(TEST_REPLICA)});
 
     try {
       const operation = await coordinator.createOperation({
@@ -186,7 +197,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
           replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator({
+            cacheData: committedVoterWorld(move)});
 
           try {
             const operation = await coordinator.createOperation({
@@ -211,7 +223,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
   });
 
   await t.test('stepChanged event is emitted on step transitions', async (t) => {
-    const coordinator = createTestCoordinator();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      cacheData: committedVoterWorld(TEST_REPLICA)});
     const stepChanges = [];
 
     coordinator.on('stepChanged', (event) => {
@@ -253,7 +266,8 @@ test('Property 6: REMOVE Workflow Step Progression', async (t) => {
           replicaId: fc.uuid(),
         }),
         async (move) => {
-          const coordinator = createTestCoordinator();
+          const coordinator = await createPlacementBoundTestCoordinator({
+            cacheData: committedVoterWorld(move)});
 
           try {
             const operation = await coordinator.createOperation({
