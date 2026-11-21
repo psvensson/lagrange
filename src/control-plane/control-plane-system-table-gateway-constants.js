@@ -140,6 +140,11 @@ const CONTROL_PLANE_MUTATION_OUTCOME = Object.freeze({
   REJECTED: 'rejected',
   OWNER_NOT_READY: 'owner_not_ready',
   OBSERVED_STATE_CHANGED: 'observed_state_changed',
+  // Handed to its producer and proven neither way (a named write answered
+  // without its producer's durable commit receipt, or whose transport lost
+  // the answer): neither applied nor refused nor not-ready. Owned by the
+  // re-send under the same identity and by the owner's authoritative read.
+  UNKNOWN: 'unknown',
 });
 const CONTROL_PLANE_SQL_OPERATION = Object.freeze({
   READ: 'read',
