@@ -1,3 +1,8 @@
+import {
+  ControlPlaneSystemTableGateway, CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {ReplicaOperationRepository, SQL} from '../../src/rebalancer/replica-operation-repository.js';
+import {buildMockPolicyAuthorityWitness} from './test-helpers.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -306,3 +311,100 @@ test('malformed retained work cannot disappear into a bounded zero-row observati
     reasonCode: REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED});
   t.equal(classifications, 0, 'retained malformed work is refused before classification');
 });
+
+// Hold the first real gateway execution. A second caller reaches the actual
+// single-flight registry before release; only the ledger RPC result is controlled.
+async function readThroughHeldLedger(t, answer, firstRead, secondRead) {
+  const executions = [];
+  let notifyFirst;
+  const firstEntered = new Promise((resolve) => {
+    notifyFirst = resolve;
+  });
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.teardown(release);
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-1',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(_table, _sql, params) {
+        executions.push(params);
+        if (executions.length === 1) {
+          notifyFirst();
+          await held;
+        }
+        return {
+          success: true,
+          rows: answer(params),
+          rowSetComplete: true,
+          readAuthorityWitness: buildMockPolicyAuthorityWitness('replica_operations-p1'),
+        };
+      },
+    },
+  });
+  const repository = new ReplicaOperationRepository({
+    nodeId: 'node-1',
+    controlPlaneSystemTableGateway: gateway,
+  });
+  const first = firstRead(repository);
+  // Attach the rejection observer before releasing either operation.
+  const firstResult = Promise.allSettled([first]);
+  await firstEntered;
+  const second = Promise.allSettled([secondRead(repository)]);
+  release();
+  return {executions, settled: (await firstResult).concat(await second)};
+}
+
+const SHARED_ENTITY_ID = 'shared:entity-id';
+const readRemovalCensus = (type) =>
+  (repository) => repository.getRequiredOperationsByEntity(type, SHARED_ENTITY_ID);
+
+for (const firstType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP]) {
+  test(`required removal reads do not join another entity type (${firstType} first)`,
+    async (t) => {
+      const secondType = firstType === SERVICE_TYPE.PARTITION ?
+        SERVICE_TYPE.MESSAGE_GROUP : SERVICE_TYPE.PARTITION;
+      const answer = ([type, entityId]) => type === SERVICE_TYPE.PARTITION ? [] : [{
+        operation_id: '',
+        entity_type: type,
+        entity_id: entityId,
+      }];
+      const {executions, settled} = await readThroughHeldLedger(t, answer,
+        readRemovalCensus(firstType), readRemovalCensus(secondType));
+      t.same(executions, [[firstType, SHARED_ENTITY_ID], [secondType, SHARED_ENTITY_ID]],
+        'both exact owner RPCs execute despite their equal entity ID');
+      const [partition, group] = firstType === SERVICE_TYPE.PARTITION ?
+        settled : [...settled].reverse();
+      t.same(partition, {status: 'fulfilled', value: []}, 'complete empty belongs to the partition');
+      t.equal(group.status, 'rejected', 'the other entity retains its own malformed authority');
+      t.equal(group.reason?.reasonCode,
+        REPLICA_OPERATION_REPOSITORY_ERROR_CODE.ENTITY_OPERATION_OBSERVATION_MALFORMED);
+    });
+}
+
+test('identical typed required removal reads still join one gateway execution', async (t) => {
+  const read = readRemovalCensus(SERVICE_TYPE.PARTITION);
+  const {executions, settled} = await readThroughHeldLedger(t, () => [], read, read);
+  t.same(executions, [[SERVICE_TYPE.PARTITION, SHARED_ENTITY_ID]]);
+  t.same(settled, [{status: 'fulfilled', value: []}, {status: 'fulfilled', value: []}]);
+});
+
+const readInFlight = (params) =>
+  (repository) => repository.executeReplicaOperationsRead(
+    SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE, params,
+    {authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED},
+  );
+
+for (const [scope, first, second] of [
+  ['entity type and ID', ['p', 'n', SERVICE_TYPE.PARTITION, 'p'],
+    ['p', 'n', SERVICE_TYPE.MESSAGE_GROUP, 'g']],
+  ['separator placement', ['p:q', 'n', SERVICE_TYPE.PARTITION, 'id'],
+    ['p', 'q:n', SERVICE_TYPE.PARTITION, 'id']],
+]) {
+  test(`in-flight owner reads preserve ${scope} in gateway coalescing`, async (t) => {
+    const {executions} = await readThroughHeldLedger(t, () => [],
+      readInFlight(first), readInFlight(second));
+    t.same(executions, [first, second]);
+  });
+}
