@@ -15,6 +15,7 @@ import {
 } from './query-executor-partition-candidate-state.js';
 import {
   createRecoveryReadDelivery,
+  RECOVERY_REDIRECT_REFUSED,
   ROUTING_PROBE_ELAPSED,
 } from './query-executor-recovery-read-delivery.js';
 import {
@@ -128,7 +129,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         };
       };
 
-      // Validate dependencies
       if (!this.messageRouter) {
         this.logger.error(QUERY_LOG_MSG.MESSAGE_ROUTER_UNAVAILABLE, {
           partitionId,
@@ -219,7 +219,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               executionOptions.recoveryCandidateSelectionKey,
             transactionIdentity: executionOptions?.transactionIdentity || null,
           },
-        ), Boolean(readDelivery));
+        ), Boolean(readDelivery), requireCanonicalLeader);
       let shouldRecheckRoutes = false;
       for (let attempt = 1;
         attempt <= currentMaxAttempts || shouldRecheckRoutes || readDelivery?.hasPending();
@@ -253,13 +253,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             resolveAttemptCandidates());
           readDelivery?.reconcile(serviceCandidates);
         }
-        if (!requireCanonicalLeader) {
-          serviceCandidates = this.prioritizeSessionPartitionAddress(
-            serviceCandidates,
-            routingSnapshot,
-            executionOptions.sessionId,
-            partitionId,
-          );
+        if (!readDelivery) {
+          ({candidates: serviceCandidates} = candidateEligibility.prioritize(
+            {candidates: serviceCandidates, routingSnapshot}, requireCanonicalLeader));
         }
         if (serviceCandidates.length === 0) {
           lastFailureDetails =
@@ -399,9 +395,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             let delivery;
             let readTicket;
             if (readDelivery) {
-              inspectedRecoveryRead = true;
               const ticket = {address, request, serviceInfo, submit: observeSubmission};
-              const completion = await readDelivery.select(ticket, routerOptions, candidateQueue,
+              // Another candidate's wait can outlive the inspection that nominated this route.
+              const eligibleAtSubmit = inspectedRecoveryRead ?
+                resolveAttemptCandidates().candidates : candidateQueue;
+              if (inspectedRecoveryRead) readDelivery.reconcile(eligibleAtSubmit);
+              if (!readDelivery.currentIn(ticket, eligibleAtSubmit)) break;
+              inspectedRecoveryRead = true;
+              const completion = await readDelivery.select(ticket, routerOptions, eligibleAtSubmit,
                 recoveryReadProbeMs(routerOptions, serviceInfo));
               if (completion === ROUTING_PROBE_ELAPSED) {
                 shouldRecheckRoutes = true;
@@ -468,18 +469,17 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 leaderAddress: response.leaderAddress, sql, params, executionOptions,
               });
               const redirectAddress = response.leaderAddress;
-              if (readDelivery && !candidateEligibility.allowsAddress(redirectAddress)) continue;
-              const redirectCompletion = readDelivery ? await readDelivery.redirect(
-                redirectAddress, redirectRequest, redirectRouterDeliveryOptions,
-                markRecoverySubmission) : null;
-              if (redirectCompletion && !readDelivery.redirectedRouteIsCurrent(
-                readTicket, redirectCompletion.ticket, resolveAttemptCandidates().candidates)) {
+              const redirectDelivery = readDelivery ? await readDelivery.redirect({
+                origin: readTicket, address: redirectAddress, request: redirectRequest,
+                routerOptions: redirectRouterDeliveryOptions, submit: markRecoverySubmission,
+                resolveRoutes: resolveAttemptCandidates,
+                redirectCandidate: candidateEligibility.redirectCandidate,
+              }) : await this.messageRouter.deliver(
+                redirectAddress, redirectRequest, redirectRouterDeliveryOptions);
+              if (redirectDelivery === RECOVERY_REDIRECT_REFUSED) {
                 shouldRecheckRoutes = true;
                 continue;
               }
-              const redirectDelivery = redirectCompletion ? redirectCompletion.delivery :
-                await this.messageRouter.deliver(
-                  redirectAddress, redirectRequest, redirectRouterDeliveryOptions);
               unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
               deliverySubmitted = false;
               const redirectResponse = deliveryReadingOf(redirectDelivery);
