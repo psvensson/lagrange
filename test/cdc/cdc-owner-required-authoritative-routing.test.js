@@ -5,6 +5,7 @@ import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -243,9 +244,17 @@ test('strict CDC reads route to the registered owner while a local query is held
 // read may not wait for leader publication or for query routing, which are
 // what recovery restores.
 // Real: gateway, CDC flow, QueryExecutor, MessageRouter, a single-voter
-// raft-rs PartitionService (the witness producer). Substituted: query channel
-// transit only (recorded). Ceiling: one process, one voter; the rows are
-// seeded straight into the replica's database.
+// raft-rs PartitionService (the witness producer), and the node's
+// ReplicaHandler, whose registry holds the replica as seed bootstrap attaches
+// it (bootstrap-service-replica-registration-methods.js; the in-process arm
+// reads hosted replicas from that one owner, S0 ruling Q3). Substituted: query
+// channel transit only (recorded). Ceiling: one process, one voter; the rows
+// are seeded straight into the replica's database; the handler is
+// constructed, never initialized.
+const REFUSES_CREATION = () => {
+  throw new Error('the read witness creates no replica');
+};
+
 function seedLeaderHostCache(leaderNodeId) {
   const cache = new SystemTableCache();
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
@@ -275,6 +284,9 @@ function createLeaderHostGateway({router, cache, partition, withQueryEngine}) {
     ...(sqlQueryEngine ? {sqlQueryEngine} : {}),
   });
   cdc.initialize();
+  const handler = new ReplicaHandler({nodeId: router.nodeId, systemTableCache: cache,
+    cdcIntegrationService: cdc, createPartitionService: REFUSES_CREATION});
+  handler.localServices.set(partition.replicaId, partition);
   return new ControlPlaneSystemTableGateway({
     nodeId: router.nodeId,
     cdcIntegrationService: cdc,

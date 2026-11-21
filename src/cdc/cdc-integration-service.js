@@ -124,6 +124,9 @@ class CDCIntegrationService extends EventEmitter {
         Math.floor(options.authoritativeFallbackRetryDelayMs) :
         AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS;
     this.inFlightMutationsByKey = new Map();
+    // The node's replica handler, the one owner of the replicas this node
+    // hosts; it binds itself here (cdc-hosted-replica-owner.js).
+    this.hostedReplicaOwner = null;
     this.initialized = false;
     // Set on teardown so the routed-mutation retry-budget loop stops re-arming
     // instead of retrying writes forever once sqlQueryEngine is being nulled.
