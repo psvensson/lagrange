@@ -12,11 +12,9 @@ import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../raft/raft-committed-membership
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 import {TABLES} from '../constants/tables.js';
-import {memoizedParseStepsHistoryString} from
-  '../rebalancer/steps-history-parse-memo.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
-import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus,
-  getOperationMetadataObject} from '../rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus,
+  readOriginalCreateBootstrapMembership} from '../rebalancer/replica-status.js';
 
 // Node-local tokens: the startup owner's FRESH_SEED outcome and an explicit
 // operator request, both decided on the node that releases. A fresh CREATE
@@ -63,14 +61,6 @@ function nonempty(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
-// The steps history is decoded by its one parser (unparsable -> no steps).
-function firstStepOf(row) {
-  const raw = row?.steps_history;
-  const history = typeof raw === 'string' ?
-    memoizedParseStepsHistoryString(raw) : raw;
-  return Array.isArray(history) && history.length > 0 ? history[0] : null;
-}
-
 // (c): a completed, failed or closed create authorizes nothing.
 function createIsOpen(row) {
   return OPEN_CREATE_ADMISSION_STATES.has(row.create_admission_state) &&
@@ -93,9 +83,7 @@ function isAllowedCreateOperation(row, leader) {
 // (d): on a no-origin group, the first step carries a GENESIS stamp. The
 // configuration may have changed since, so the stamp names no required leader.
 function foundingRefusalOf(row) {
-  const step = firstStepOf(row);
-  const stamp = step === null ? null :
-    getOperationMetadataObject([step], OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP);
+  const stamp = readOriginalCreateBootstrapMembership(row?.steps_history);
   return stamp?.kind === COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS ?
     null : FRESH_CREATE_REFUSAL.NOT_GENESIS;
 }

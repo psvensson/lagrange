@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "e860b5d8eaa3a16b51529c4d12c1634af64fba1e3f6fca2f814b8e00ef6cef77"
+    "sourceSha256": "99145753d3423274cb2dd7a27454c82eb85a3b7629ef6ae6b87494273c883c5c"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 67,
     "publicExportCount": 774,
-    "importEdgeCount": 323,
+    "importEdgeCount": 326,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -4916,6 +4916,26 @@
       "conformsToLayerDirection": null
     },
     {
+      "from": "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js",
+      "specifier": "./operation-workflow-owner-shared.js",
+      "to": "src/rebalancer/operation-workflow-owner-shared.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js",
+      "specifier": "./operation-workflow-reentry-authority.js",
+      "to": "src/rebalancer/operation-workflow-reentry-authority.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
       "from": "src/rebalancer/operation-workflow-priority-recovery-errors.js",
       "specifier": "./operation-workflow-owner-shared.js",
       "to": "src/rebalancer/operation-workflow-owner-shared.js",
@@ -5039,6 +5059,16 @@
       "from": "src/rebalancer/priority-recovery-observation.js",
       "specifier": "./priority-publication-safety-shared.js",
       "to": "src/rebalancer/priority-publication-safety-shared.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-observation.js",
+      "specifier": "./replica-operation-update-outcome.js",
+      "to": "src/rebalancer/replica-operation-update-outcome.js",
       "targetModule": false,
       "sourceLayer": "raw_observation",
       "targetLayer": null,

@@ -6,6 +6,7 @@
 
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert';
+import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../../src/bootstrap/shared/replica-handler-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
 import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
@@ -36,10 +37,7 @@ describe('ReplicaHandlerSetup', () => {
     };
 
     // Create mock system table cache
-    mockSystemTableCache = {
-      get: () => null,
-      filter: () => [],
-    };
+    mockSystemTableCache = new SystemTableCache();
 
     // Create mock partition service factory
     mockCreatePartitionService = async () => ({
@@ -128,6 +126,29 @@ describe('ReplicaHandlerSetup', () => {
           return true;
         },
       );
+    });
+
+    it('refuses a cache with no matching unsubscribe before acquiring the handler', () => {
+      let subscriptions = 0;
+      assert.throws(() => {
+        const acquired = ReplicaHandlerSetup.create({
+          nodeId: TEST_NODE_ID,
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: {
+            get: mockSystemTableCache.get.bind(mockSystemTableCache),
+            filter: mockSystemTableCache.filter.bind(mockSystemTableCache),
+            onCacheChange() {
+              subscriptions += 1;
+            },
+          },
+          createPartitionService: mockCreatePartitionService,
+          ownerIncarnation: TEST_BOOT_INCARNATION,
+          deferInitialization: true,
+        });
+        createdStateMachines.push(acquired.replicaStateMachine);
+      }, {serviceName: 'ReplicaHandlerSetup', dependencyName: 'systemTableCache'});
+      assert.equal(subscriptions, 0);
     });
 
     it('should throw DependencyError when createPartitionService is missing', () => {

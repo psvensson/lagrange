@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {readCommittedStatementOutcome} from
@@ -11,7 +12,7 @@ import {placementReplicaIdOf} from
   '../../src/partition/partition-placement-admission-identity.js';
 import {replicaIdsOfStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {
-  OPERATION_METADATA_KEY, WORKFLOW_STEP_TO_STATUS,
+  OPERATION_METADATA_KEY, OperationType, WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {
@@ -69,11 +70,12 @@ function createBindingCoordinator(leader, readMembership, deliverCreate = null) 
   return coordinator;
 }
 
-async function withNativeCreate(measure) {
+async function withNativeCreate(measure, type = OperationType.ADD) {
   await onLedgerLeader(async (leader, proposed) => {
     const {command} = await admitOnLeader(
       leader, proposed, 'bootstrap:placement', placementStatement({
-        partitionId: PARTITION_ID, target: NODE.B,
+        partitionId: PARTITION_ID, target: NODE.B, type,
+        sourceReplicaId: type === OperationType.REPLACE ? VOTER_ID : null,
       }));
     assert.ok(command, 'the production placement owner proposed the native admission');
     const initial = ledgerRows(leader);
@@ -183,4 +185,46 @@ test('a competing native history update wins against bootstrap binding', async (
       await coordinator.shutdown();
     }
   });
+});
+
+test('native REPLACE source-removal handoff disarms a stale target CREATE', async () => {
+  await withNativeCreate(async (leader, row) => {
+    const requests = [];
+    const stamp = committedStampFor([VOTER_ID]);
+    const coordinator = createBindingCoordinator(leader, () => stamp, (_address, request) => {
+      requests.push(request);
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        success: false, reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      });
+    });
+    try {
+      const bound = await bindReplaceCreateTargetReplicaId(
+        coordinator.workflowOwner, coordinator.repository.rowToOperation(row), false, VOTER_ID);
+      const now = bound.updatedAt + 1;
+      const transition = (step, at) => {
+        assert.equal(commitLedgerStatement(leader, `bootstrap:replace:${step}`,
+          `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?,
+           steps_history = json_insert(steps_history, '$[#]', json(?)),
+           create_admission_state = ?, create_admission_token = ?,
+           create_admission_replica_created_at = ?, create_admission_attempt_token = ?,
+           create_admission_attempt_seq = ?, create_admission_workflow_updated_at = ?,
+           create_admission_owner_incarnation = ? WHERE operation_id = ?`,
+          [step, WORKFLOW_STEP_TO_STATUS[step], at, JSON.stringify({step, timestamp: at}),
+            CREATE_ADMISSION_STATE.MATERIALIZED, 'original-admission', now, 'original-attempt',
+            1, now, 1, row.operation_id]), null);
+      };
+      transition(WORKFLOW_STEP.CREATING, now);
+      const stale = coordinator.repository.rowToOperation(ledgerRows(leader)[0]);
+      assert.equal(coordinator.repository.isReplaceRemoveDispatchPhase(stale), false);
+      transition(WORKFLOW_STEP.ACTIVE, now + 1);
+      const [handoff] = ledgerRows(leader);
+      assert.equal(coordinator.repository.isReplaceRemoveDispatchPhase(
+        coordinator.repository.rowToOperation(handoff)), true);
+      await coordinator.workflowOwner.executeOperationInternal(stale, {});
+      assert.deepEqual(requests, [], 'stale target dispatch cannot send CREATE after handoff');
+      assert.deepEqual(ledgerRows(leader), [handoff], 'source-removal owner keeps the exact row');
+    } finally {
+      await coordinator.shutdown();
+    }
+  }, OperationType.REPLACE);
 });

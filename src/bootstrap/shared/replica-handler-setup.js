@@ -12,6 +12,7 @@
  * @module bootstrap/shared/replica-handler-setup
  */
 
+import {hasSystemCacheChangeReader} from '../../cache/system-cache-client.js';
 import {ReplicaHandler} from '../../node/replica-handler.js';
 import {ReplicaStateMachine} from '../../node/replica-state-machine.js';
 import {LoggingService} from '../../logging/logging-service.js';
@@ -200,7 +201,7 @@ class ReplicaHandlerSetup {
         ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
       );
     }
-    if (!systemTableCache) {
+    if (!hasSystemCacheChangeReader(systemTableCache)) {
       throw new DependencyError(
         REPLICA_HANDLER_SETUP_NAME,
         ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,

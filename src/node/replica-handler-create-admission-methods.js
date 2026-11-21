@@ -10,15 +10,11 @@ import {classifySystemPartition} from
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
   ReplicaOperationField,
-  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {
-  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
-  getOperationMetadataObject,
-  getOperationMetadataStringArray,
 } from '../rebalancer/replica-status.js';
 import {buildFailedCreateCleanupToken} from
   '../rebalancer/failed-create-cleanup-token.js';
@@ -45,65 +41,13 @@ import {
 } from './replica-handler-constants.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
-const EMPTY_ADMISSION_STEPS_HISTORY = Object.freeze([]);
 const ROTATING_ADMISSION_RECOVERY_REFUSED = false;
-function parseAdmissionStepsHistory(row) {
-  if (Array.isArray(row?.steps_history)) return row.steps_history;
-  if (typeof row?.steps_history !== REPLICA_HANDLER_TYPEOF.STRING) {
-    return EMPTY_ADMISSION_STEPS_HISTORY;
-  }
-  try {
-    const parsed = JSON.parse(row.steps_history);
-    return Array.isArray(parsed) ? parsed : EMPTY_ADMISSION_STEPS_HISTORY;
-  } catch (_error) {
-    return EMPTY_ADMISSION_STEPS_HISTORY;
-  }
-}
 function createAdmissionLifecycleError(message, code, deferRetry = false) {
   const error = new Error(message);
   error.code = code;
   error.errorCode = code;
   error.deferRetry = deferRetry;
   return error;
-}
-function buildRetainedCreateRequest(row, evidence) {
-  const stepsHistory = parseAdmissionStepsHistory(row);
-  const request = {
-    [ReplicaOperationField.TYPE]: ReplicaOperationMessageType.CREATE_REPLICA,
-    [ReplicaOperationField.OPERATION_ID]: row.operation_id,
-    [ReplicaOperationField.OPERATION_TYPE]: row.type,
-    [ReplicaOperationField.ENTITY_TYPE]: row.entity_type,
-    [ReplicaOperationField.ENTITY_ID]: row.entity_id,
-    [ReplicaOperationField.PARTITION_ID]: row.partition_id,
-    [ReplicaOperationField.REPLICA_ID]: row.replica_id,
-    [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: evidence.admissionToken,
-    [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]:
-      evidence.workflowUpdatedAt,
-    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
-      evidence.attemptToken,
-    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: evidence.attemptSeq,
-    createAdmissionEvidence: evidence,
-  };
-  const replicaIds = getOperationMetadataStringArray(
-    stepsHistory,
-    OPERATION_METADATA_KEY.REPLICA_IDS,
-  );
-  const metadata = [
-    [ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
-      OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA],
-    [ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA,
-      OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA],
-    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP,
-      OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP],
-  ];
-  if (replicaIds.length > 0) {
-    request[ReplicaOperationField.REPLICA_IDS] = replicaIds;
-  }
-  for (const [field, key] of metadata) {
-    const value = getOperationMetadataObject(stepsHistory, key);
-    if (value) request[field] = value;
-  }
-  return request;
 }
 function isOperationLedgerCreate(operationType) {
   return operationType === OperationType.ADD ||
@@ -720,12 +664,11 @@ function assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler) {
         owner,
         rows,
         {
-          buildRequest: buildRetainedCreateRequest,
           reconcileLifecycle: reconcileCreateAdmissionLifecycle,
           onFailure: (row, error) =>
             this.logger.warn(
               REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
-              {operationId: row.operation_id, error: error.message},
+              {operationId: row.operation_id, error: error.message, errorCode: error.code},
             ),
         },
       );

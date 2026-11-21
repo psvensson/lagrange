@@ -7,6 +7,7 @@ import {REPLICA_HANDLER_EVENT, REPLICA_HANDLER_LOG_MSG} from './replica-handler-
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {cancelParticipantAppliedPositionObservations} from
   './participant-release-applied-position-observation.js';
+import {stopRetainedBootstrapWake} from './replica-create-admission-retained-recovery.js';
 
 const RUNTIME_CLEANUP_PENDING = 'Replica runtime cleanup is still pending';
 const RUNTIME_SHUTDOWN_FAILED = 'Replica handler still owns failed runtime shutdowns';
@@ -117,6 +118,7 @@ async function fenceFailedReplicaCreateRuntime(handler, replicaId, partitionId,
 function shutdownReplicaHandler(handler, options) {
   if (handler.shutdownPromise) return handler.shutdownPromise;
   handler.shuttingDown = true;
+  stopRetainedBootstrapWake(handler);
   handler.initialized = false;
   const {promise, resolve, reject} = Promise.withResolvers();
   handler.shutdownPromise = promise;
