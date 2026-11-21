@@ -36,6 +36,8 @@ import {
   ReplicaStatus,
   WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-status.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {
   ReplicaOperationResponseStatus,
@@ -150,6 +152,15 @@ test('S1: membership change x R-1a - decide-first waits STILL_VOTER; ' +
     const [left, right] = [await outputOf(first), await outputOf(second)];
     t.equal(right.workflowStep, WORKFLOW_STEP.REMOVED, 'process-first: REMOVED');
     t.same(left, right, 'equal outputs once the event is processed');
+    const repository = second.coordinator.repository;
+    const terminal = await repository.queryReplicaOperationPersistenceAuthorityOperation(
+      second.operation);
+    const recorded = second.terminalWrites.slice();
+    const replay = await repository.persistOperationUpdate(terminal, {terminalTransition: true});
+    t.equal(replay.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      'the same durable REMOVED is an explicit repository replay');
+    t.same(second.terminalWrites, recorded,
+      'the replay adds no committed terminal write to the schedule output');
   } finally {
     await disposeWorld(first);
     await disposeWorld(second);
