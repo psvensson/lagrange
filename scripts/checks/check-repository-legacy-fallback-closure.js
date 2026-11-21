@@ -36,10 +36,9 @@ const JS_EXTENSION = '.js';
 const REASON_CENSUS_MISSING = 'Census file missing or schema mismatch';
 const REASON_CLASSIFICATION_INVALID = 'Classification file missing or invalid';
 const REASON_CLASSIFICATION_MISSING = 'Classification file missing';
-const EXIT_CODE_FAILURE = 1;
-const EXIT_CODE_SUCCESS = 0;
+const EXIT_CODE_CLOSURE_INCOMPLETE = 1;
 const SEMANTIC_CLOSURE = objectFreeze({
-  UNRESOLVED: 'unresolved', UNVERIFIED: 'unverified', PROVEN: 'proven',
+  UNRESOLVED: 'unresolved', UNVERIFIED: 'unverified',
 });
 const OWNER_EXECUTION_PROBLEM = objectFreeze({
   SELECTION: 'affected-owner-selection-mismatch',
@@ -53,6 +52,7 @@ const CLOSURE_LIMITS =
   'Census and source markers do not prove semantic classification or caller closure.';
 const REPORT_OPTION = 'execution-report';
 const STRING_OPTION = 'string';
+const DIAGNOSTIC_SCOPE = 'current-closure-diagnostic';
 
 const FALLBACK_ROWS = objectFreeze([
   'two_source_fallback_reads',
@@ -383,6 +383,7 @@ function auditCurrentClosure(root = REPO_ROOT, report = null) {
   const runtimeMarkers = auditRetiredRuntimeMarkers(root);
   const ownerExecution = verifyAffectedOwnerProofs(root, report);
   return {
+    scope: DIAGNOSTIC_SCOPE,
     sourceCommit: ownerExecution.sourceCommit,
     inventory: auditCandidateInventory(root),
     classification: auditClassificationClosure(root),
@@ -401,8 +402,9 @@ function runCurrentClosureCli() {
   const reportPath = values[REPORT_OPTION];
   const audit = auditCurrentClosure(REPO_ROOT, reportPath ? readExecutionReport(reportPath) : null);
   process.stdout.write(`${JSON.stringify(audit, null, 2)}\n`);
-  process.exitCode = audit.semanticClosure === SEMANTIC_CLOSURE.PROVEN ?
-    EXIT_CODE_SUCCESS : EXIT_CODE_FAILURE;
+  // Every result here is deliberately partial. The current owning Quest
+  // must admit semantic caller evidence before issuing an acceptance receipt.
+  process.exitCode = EXIT_CODE_CLOSURE_INCOMPLETE;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

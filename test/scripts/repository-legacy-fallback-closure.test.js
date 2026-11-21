@@ -74,6 +74,7 @@ test('normal Q11 evidence CLI refuses current closure and preserves the historic
   const result = spawnSync(process.execPath, [EVIDENCE_CLI], {cwd: ROOT, encoding: 'utf8'});
   assert.equal(result.status, 1, result.stderr);
   const audit = JSON.parse(result.stdout);
+  assert.equal(audit.scope, 'current-closure-diagnostic');
   assert.equal(audit.sourceCommit, describeCheckout(ROOT).head);
   assert.equal(audit.ownerExecution.reportApplicable, false);
   assert.ok(['unresolved', 'unverified'].includes(audit.semanticClosure));
