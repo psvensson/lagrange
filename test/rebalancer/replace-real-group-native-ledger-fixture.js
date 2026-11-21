@@ -106,9 +106,22 @@ async function withNativeLedgerReplace(measure) {
             status: ReplicaStatus.ACTIVE, updatedAt: now,
             stepsHistory: [...candidate.operation.stepsHistory,
               {step: WORKFLOW_STEP.ACTIVE, timestamp: now}]};
+          const repo = candidate.coordinator.repository;
+          const observed = [];
+          for (const method of ['shouldRejectExpectedWorkflowStepMutation',
+            'executeReplicaOperationGatewayMutationWithRetry', 'resolveZeroChangeOperationUpdate',
+            'confirmPersistedOperationUpdate']) {
+            const original = repo[method].bind(repo);
+            repo[method] = async (...args) => {
+              const result = await original(...args);
+              observed.push({method, result});
+              return result;
+            };
+          }
           const persisted = await candidate.coordinator.repository.persistOperationUpdate(active,
             {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
-          assert.equal(persisted.persisted, true);
+          assert.equal(persisted.persisted, true, JSON.stringify({admitted, active, persisted,
+            observed, actual: ledger.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(active.operationId)}));
           candidate.operation = persisted.operation;
         }});
       await settleTurns();
