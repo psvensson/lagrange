@@ -18,9 +18,16 @@ const SYSTEM_CACHE_CLIENT_ERROR_MSG = Object.freeze({
   UNSUPPORTED_MODE: (mode) => `Unsupported system cache client mode: ${mode}`,
 });
 
+const CACHE_CHANGE_READER_MEMBERS = Object.freeze([
+  'get', 'onCacheChange', 'offCacheChange',
+]);
+
+function isFunction(value) {
+  return typeof value === 'function';
+}
+
 function hasSystemCacheChangeReader(cache) {
-  return typeof cache?.get === 'function' &&
-    typeof cache.onCacheChange === 'function' && typeof cache.offCacheChange === 'function';
+  return CACHE_CHANGE_READER_MEMBERS.every((member) => isFunction(cache?.[member]));
 }
 
 function assertCacheBacking(backing) {
