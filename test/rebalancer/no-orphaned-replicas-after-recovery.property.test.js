@@ -396,7 +396,7 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
     t.pass('Operations are loaded into memory during recovery');
   });
 
-  await t.test('REMOVE operations in STOPPING are handled', async (t) => {
+  await t.test('recovery settles only its locally owned STOPPING REMOVE', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.record({
@@ -413,18 +413,29 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             status: ReplicaStatus.REMOVING,
           });
 
+          const remoteRow = createOperationRow({
+            ...params,
+            operationId: params.operationId + '-remote',
+            type: OperationType.REMOVE,
+            workflowStep: WORKFLOW_STEP.STOPPING,
+            status: ReplicaStatus.REMOVING,
+            sourceNodeId: 'other-owner-node',
+            targetNodeId: 'test-node-1',
+          });
           const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
-            operations: [opRow],
+            operations: [opRow, remoteRow],
           });
 
           try {
-            await coordinator.handleRecovery();
+            const summary = await coordinator.handleRecovery();
 
-            const tracked = trackedOperations.get(params.operationId);
-            // REMOVE STOPPING remains tracked as removing
-            return tracked !== null &&
-              tracked.status === ReplicaStatus.REMOVING &&
-              tracked.workflow_step === 'STOPPING';
+            const local = trackedOperations.get(opRow.operation_id);
+            const remote = trackedOperations.get(remoteRow.operation_id);
+            return summary.totalIncomplete === 2 && summary.markedFailed === 1 &&
+              local?.status === ReplicaStatus.FAILED &&
+              local.workflow_step === WORKFLOW_STEP.FAILED &&
+              remote?.status === ReplicaStatus.REMOVING &&
+              remote.workflow_step === WORKFLOW_STEP.STOPPING;
           } finally {
             await coordinator.shutdown();
           }
@@ -433,7 +444,7 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('REMOVE operations in STOPPING are handled');
+    t.pass('recovery settles only its locally owned STOPPING REMOVE');
   });
 
   await t.test('completed operations are not affected by recovery', async (t) => {
