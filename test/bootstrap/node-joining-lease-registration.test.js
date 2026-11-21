@@ -13,6 +13,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -45,7 +46,7 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
       },
       upsertSystemTableRow: async (tableName, rowData, options) => {
         upserts.push({tableName, rowData, options});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
 

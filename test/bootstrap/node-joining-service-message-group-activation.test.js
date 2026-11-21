@@ -67,6 +67,7 @@ import {publishRegisteredEndpoint} from
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {createIdentityTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 // The canonical node clock the joiner hands its replica lifecycle owner.
 const nodeTimeSource = new RealTimeSource();
@@ -310,7 +311,8 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
         sqlQueryEngine: {},
       };
       service.getNodeStorageBudgetService = () => ({
@@ -754,9 +756,12 @@ test('NodeJoiningService - emits events', async (t) => {
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
-        updateSystemTableRow: async () => ({success: true}),
-        deleteSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
+        updateSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('updateSystemTableRow', args),
+        deleteSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('deleteSystemTableRow', args),
       };
       return this.cdcIntegrationService;
     };

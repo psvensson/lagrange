@@ -26,6 +26,8 @@ import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer, engineCommittedWriteAnswer} from
+  '../test-helpers/committed-write-answer.js';
 
 const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
   state: 'current',
@@ -44,9 +46,9 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
 
@@ -138,9 +140,9 @@ test('registerNodeInCluster() - should canonicalize raw node address to websocke
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
-    upsertSystemTableRow: async (tableName, rowData) => {
+    upsertSystemTableRow: async (tableName, rowData, options) => {
       upsertCalls.push({tableName, rowData});
-      return {success: true};
+      return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
     },
   };
 
@@ -176,9 +178,9 @@ test('registerNodeInCluster() - should publish explicit advertised websocket end
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
-    upsertSystemTableRow: async (tableName, rowData) => {
+    upsertSystemTableRow: async (tableName, rowData, options) => {
       upsertCalls.push({tableName, rowData});
-      return {success: true};
+      return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
     },
   };
 
@@ -277,7 +279,7 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
       },
       upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData, options});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
 
@@ -341,7 +343,7 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
       },
       upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData, options});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
 
@@ -410,9 +412,12 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
     });
     service.cdcIntegrationService = {};
     service.querySystemStatePhase.joinAdmissionSqlQueryEngine = {
+      // A write answers what the engine answers for the committed
+      // statement (the producer's durable commit receipt).
       executeQuery: async (sql, params, options) => {
         queryCalls.push({sql, params, options});
-        return {success: true};
+        return /^\s*SELECT\b/iu.test(sql) ? {success: true} :
+          engineCommittedWriteAnswer(sql, params, options);
       },
     };
     service.seedJoinTimeCacheRow = () => {};
@@ -475,9 +480,9 @@ test('registerNodeInCluster() - should use the registration owner path for nodes
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
     service.sendControlPlaneNodeStateUpdate = async () => {
@@ -530,7 +535,7 @@ test('registerNodeInCluster() - should retry transient participant failures duri
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
         if (tableName === TABLES.NODES) {
           nodeWriteAttempts += 1;
@@ -538,7 +543,7 @@ test('registerNodeInCluster() - should retry transient participant failures duri
             throw participantFailure;
           }
         }
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
     service.getNodeStorageBudgetService = () => ({
@@ -605,7 +610,7 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         if (tableName === TABLES.NODES) {
           nodeWriteAttempts += 1;
           if (nodeWriteAttempts === 1) {
@@ -613,7 +618,7 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
             throw participantFailure;
           }
         }
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
     service.getNodeStorageBudgetService = () => ({
@@ -670,12 +675,12 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         if (tableName === TABLES.NODES) {
           throw participantFailure;
         }
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
     service.getNodeStorageBudgetService = () => ({
@@ -821,13 +826,14 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
-      updateSystemTableRow: async (tableName, whereClause, rowData) => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         incarnationAdvances.push({tableName, whereClause, rowData});
-        return {success: true, partitionResult: {affectedRows: 1}};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
     };
     service.sendControlPlaneNodeStateUpdate = async () => {
@@ -960,9 +966,9 @@ test('registerNodeInCluster() - should not treat cache-only durable rejoin metad
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
     service.sendControlPlaneNodeStateUpdate = async () => {
@@ -1030,9 +1036,9 @@ test('registerNodeInCluster() - should fall back to fresh admission writes when 
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
     service.sendControlPlaneNodeStateUpdate = async () => {

@@ -37,6 +37,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 /**
  * Test-local constants for fixture identities.
@@ -96,15 +97,18 @@ function createSeededCache() {
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService(cache) {
+  // Each write answers what the CDC integration service answers for the
+  // committed one-row write (the producer's durable commit receipt).
   return {
-    async insertSystemTableRow(tableName, data) {
+    async insertSystemTableRow(tableName, data, options) {
       cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
+      return cdcCommittedWriteAnswer('insertSystemTableRow', [tableName, data, options]);
     },
-    async updateSystemTableRow(tableName, whereClause, data) {
+    async updateSystemTableRow(tableName, whereClause, data, options) {
       const merged = {...whereClause, ...data};
       cache.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true};
+      return cdcCommittedWriteAnswer('updateSystemTableRow',
+        [tableName, whereClause, data, options]);
     },
   };
 }

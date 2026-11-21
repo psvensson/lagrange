@@ -25,6 +25,7 @@ import {
 } from '../../src/rebalancer/node-storage-budget-service.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const TEST_NODE_ID = 'test-node-1';
 const TEST_DISK_GB = 100;
@@ -56,9 +57,12 @@ function buildNodeRow(overrides = {}) {
   };
 }
 
-function createMockCdc(result = {success: true}) {
+// Without an explicit result, an upsert answers what the CDC integration
+// service answers for a committed one-row write (the producer's receipt).
+function createMockCdc(result = null) {
   return {
-    upsertSystemTableRow: async () => result,
+    upsertSystemTableRow: async (...args) => result ??
+      cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
@@ -338,7 +342,8 @@ test('registerNodeBudget - forwards write options to the registration ' +
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
-    upsertSystemTableRow: async () => ({success: true}),
+    upsertSystemTableRow: async (...args) =>
+      cdcCommittedWriteAnswer('upsertSystemTableRow', args),
   };
   const service = new NodeStorageBudgetService({
     nodeId: TEST_NODE_ID,
