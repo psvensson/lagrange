@@ -361,10 +361,24 @@ function nodeRow() {
     latency_assignment_state: 'unassigned', created_at: now};
 }
 
+// Bound the real executor attempt inside the longer named caller wait.
+function limitSurfaceWriteAttempt(engine) {
+  const executeQuery = engine.executeQuery;
+  engine.executeQuery = (sql, params, options = {}) => {
+    const writeOptions = /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql) ?
+      {...options, timeoutMs: Math.min(options.timeoutMs ?? SPENT_BUDGET_MS, SPENT_BUDGET_MS)} :
+      options;
+    return executeQuery.call(engine, sql, params, writeOptions);
+  };
+  return () => {
+    engine.executeQuery = executeQuery;
+  };
+}
+
 // The budget-spent shape (the lab chain): the trap outlasts the executor's
 // budget, so the attempt ends unknown; the entry commits once it is gone.
 async function spendFirstAttempt({engine, surface, attempt}) {
-  engine.queryExecutor.queryTimeoutMs = SPENT_BUDGET_MS;
+  const restoreLimit = limitSurfaceWriteAttempt(engine);
   const warnings = [];
   const logger = engine.queryExecutor.logger;
   engine.queryExecutor.logger = {...logger,
@@ -376,6 +390,7 @@ async function spendFirstAttempt({engine, surface, attempt}) {
     first = await withMutedConsoleError(attempt);
   } finally {
     trap.release();
+    restoreLimit();
     engine.queryExecutor.logger = logger;
   }
   return {first, trap, warnings};
@@ -386,7 +401,7 @@ async function spendFirstAttempt({engine, surface, attempt}) {
 // replaced runtime commits the entry while the call goes on (its owner's
 // readback, its retry loop).
 async function spendOneBudget({engine, surface, attempt}) {
-  engine.queryExecutor.queryTimeoutMs = SPENT_BUDGET_MS;
+  const restoreLimit = limitSurfaceWriteAttempt(engine);
   const trap = trapCore(surface.partitionId, {once: false});
   const logger = engine.queryExecutor.logger;
   engine.queryExecutor.logger = {...logger, debug: () => undefined,
@@ -401,6 +416,7 @@ async function spendOneBudget({engine, surface, attempt}) {
     result = await withMutedConsoleError(attempt);
   } finally {
     trap.release();
+    restoreLimit();
     engine.queryExecutor.logger = logger;
   }
   return {result, trap};
@@ -624,6 +640,7 @@ export {
   releaseTrapOnAuthoritativeRead,
   reservationCoordinator,
   lastLogIndexOf,
+  limitSurfaceWriteAttempt,
   logEntriesOf,
   loseFirstAnswerFromR1,
   nodeRow,

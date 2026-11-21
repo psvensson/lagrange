@@ -54,6 +54,7 @@ import {
   USER_TABLE,
   appliedRow,
   authoritativeLeaderReads,
+  limitSurfaceWriteAttempt,
   nodeRow,
   rowsOf,
   releaseTrapOnAuthoritativeRead,
@@ -144,6 +145,55 @@ async () => {
   });
 });
 
+test('a quoted named SQL write retains its entry until its own participant answers',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    await withSurface([TABLES.NODES, TABLES.STORAGE_RESERVATIONS],
+      async ({engine, gateway, deliveries, of}) => {
+        const nodes = of(TABLES.NODES);
+        const other = of(TABLES.STORAGE_RESERVATIONS);
+        const node = {...nodeRow(), boot_incarnation: BOOT_INCARNATION};
+        const insert = (table, row) => gateway.insertSystemTableRow(
+          table, row, JOIN_WRITE_OPTIONS);
+        assert.equal((await insert(TABLES.NODES, node)).success, true);
+        const sql = 'UPDATE "nodes" SET node_address = ? WHERE node_id = ?';
+        const params = ['ws://quoted:2', JOINER_ID];
+        const options = {writeIdentity: 'quoted-nodes-update'};
+        const execute = engine.executeQuery.bind(engine);
+        const keys = [];
+        let foreign;
+        engine.executeQuery = async (statement, args, executionOptions) => {
+          keys.push(executionOptions.idempotencyKey);
+          if (keys.length === 1) {
+            foreign = await execute(
+              'UPDATE storage_reservations SET updated_at = ? WHERE reservation_id = ?',
+              [1, 'absent'], executionOptions);
+            return foreign;
+          }
+          return execute(statement, args, executionOptions);
+        };
+        try {
+          const refused = await gateway.querySystemTable(TABLES.NODES, sql, params, options);
+          assert.equal(foreign.success, true, 'the other native participant really committed');
+          assert.equal(foreign.partitions[0], other.partitionId);
+          assert.equal(refused.success, false, 'a foreign committed receipt cannot settle NODES');
+          assert.equal(refused.failureCode, OUTCOME_UNKNOWN);
+          assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
+            [{node_address: node.node_address}], 'no NODES effect from the foreign receipt');
+
+          const confirmed = await gateway.querySystemTable(TABLES.NODES, sql, params, options);
+          assert.equal(confirmed.success, true);
+          assert.equal(confirmed.affectedRows, 1);
+          assert.equal(keys[1], keys[0], 'the proved target resolves the original named write');
+          assert.equal(deliveries.at(-1).answer.durableCommitWitness.partitionId,
+            nodes.partitionId);
+          assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
+            [{node_address: params[0]}], 'the real quoted target is updated');
+        } finally {
+          engine.executeQuery = execute;
+        }
+      });
+  });
+
 // The reservation birth V3 writes, under its name.
 function reservationBirth(gateway, bytes, now) {
   return gateway.executeQuery(RESERVATION_INSERT,
@@ -169,11 +219,13 @@ test('a re-drive refused before it was proposed does not end an instance ' +
       partitionId: surface.partitionId, failureCode: NOT_LEADER,
       error: 'No leader available for write operation'});
     const refusalMark = deliveries.length;
+    const restoreLimit = limitSurfaceWriteAttempt(engine);
     let refused;
     try {
       refused = await withMutedConsoleError(() =>
         reservationBirth(gateway, 111, now));
     } finally {
+      restoreLimit();
       surface.partition.handleRemoteQuery = handle;
     }
     const refusals = deliveries.slice(refusalMark);
@@ -437,10 +489,12 @@ for (const [label, pinClock] of [['new timestamps', false],
       {entityType: 'partition', entityId: 'p-rel'});
       await coordinator.persistNewOperation(operation);
       const authorityReads = releaseTrapOnAuthoritativeRead(gateway);
-      const clock = pinnedStamps();
-      const stamp = () => (pinClock ? clock.stamp() : undefined);
+      if (pinClock) {
+        const pinnedNow = Date.now();
+        coordinator.nowFn = () => pinnedNow;
+      }
       {
-        stamp();
+        const birthMark = deliveries.length;
         const {first} = await spendFirstAttempt({engine, surface,
           attempt: () => coordinator.createReservationForOperation(
             operation)});
@@ -468,9 +522,16 @@ for (const [label, pinClock] of [['new timestamps', false],
         assert.equal(released.changed, true,
           `setup: owner acknowledges the release (${JSON.stringify(released)})`);
         authorityReads.length = 0;
-        stamp();
+        const reensureMark = deliveries.length;
         const again = await coordinator.createReservationForOperation(
           operation);
+        const firstBirth = deliveries[birthMark];
+        const nextBirth = deliveries.slice(reensureMark).find(({table, sql}) =>
+          table === TABLES.STORAGE_RESERVATIONS && /^\s*INSERT\b/iu.test(sql));
+        assert.ok(nextBirth, `the release permits its next attempt (${JSON.stringify(again)})`);
+        assert.notEqual(nextBirth.entryId, firstBirth.entryId, 'the released birth ends its key');
+        assert.equal(nextBirth.answer.affectedRows, 0,
+          `the native insert saw the terminal row (${JSON.stringify(nextBirth.answer)})`);
         const [row] = selectRows(surface.dbPath, 'SELECT status FROM ' +
           TABLES.STORAGE_RESERVATIONS);
         assert.equal(row.status, 'released', 'setup: the row stays released');
@@ -481,7 +542,9 @@ for (const [label, pinClock] of [['new timestamps', false],
           read.options?.authoritativeReadMode ===
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED &&
           read.result?.success === true), true,
-        'the released-row answer consumes the strict durable operation owner');
+        'the released-row answer consumes the strict durable operation owner ' +
+          `(${JSON.stringify({again, reads: authorityReads.map(({tableName, result}) =>
+            [tableName, result?.success, result?.error])})})`);
       }
       await coordinator.shutdown();
     }, {cdc: true});

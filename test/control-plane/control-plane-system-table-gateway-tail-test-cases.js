@@ -4,6 +4,7 @@ import {
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
+  GATEWAY_ERROR_MSG,
 } from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
@@ -1458,23 +1459,30 @@ export function registerControlPlaneSystemTableGatewayTailTests({
     t.equal(cdcCalls[0].row[GATEWAY_ASSIGNMENT_ID_FIELD], undefined, 'assignment_id must be stripped from row');
     t.equal(cdcCalls[0].row.non_existent_metadata_field, undefined, 'unsupported metadata fields must be stripped from row');
 
-    // 2. Test UPDATE schema filtering
-    await gateway.submitMutation({
+    // Keep every predicate, or refuse before handing the statement to CDC.
+    const update = {
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
       tableName: TABLES.SERVICES,
-      whereClause: {
-        service_id: 'svc-1',
-        [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
-      },
       data: {
         status: 'active',
         [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
       },
-    });
+    };
+    await t.rejects(gateway.submitMutation({
+      ...update,
+      whereClause: {
+        service_id: 'svc-1',
+        [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
+      },
+    }), {message: GATEWAY_ERROR_MSG.MUTATION_WHERE_INVALID});
+    t.equal(cdcCalls.length, 1, 'the invalid predicate never reaches CDC');
 
+    await gateway.submitMutation({...update, whereClause: {service_id: 'svc-1'}});
     t.equal(cdcCalls.length, 2);
     t.equal(cdcCalls[1].data.status, 'active');
-    t.equal(cdcCalls[1].data[GATEWAY_ASSIGNMENT_ID_FIELD], undefined, 'assignment_id must be stripped from data');
-    t.same(cdcCalls[1].whereClause, {service_id: 'svc-1'}, 'assignment_id must be stripped from whereClause');
+    t.equal(cdcCalls[1].data[GATEWAY_ASSIGNMENT_ID_FIELD], undefined,
+      'unsupported metadata is stripped from the update data');
+    t.same(cdcCalls[1].whereClause, {service_id: 'svc-1'},
+      'the valid predicate is preserved');
   });
 }
