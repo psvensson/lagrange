@@ -54,7 +54,6 @@ function hasRouteAddress(routeOrTarget) {
 function transferInvalidLatencyBindings(progress, targets) {
   const systemTableCache = progress.cache;
   if (
-    !systemTableCache ||
     progress.targets.length === 0 ||
     progress.targets.every((leaf) => hasRouteAddress(leaf.route))
   ) {
@@ -63,8 +62,8 @@ function transferInvalidLatencyBindings(progress, targets) {
   const owner = progress.owner;
   const options = {
     systemTableCache,
-    nodeId: owner?.nodeId ?? null,
-    messageGroupReplicaSuffix: owner?.messageGroupReplicaSuffix ?? null,
+    nodeId: owner.nodeId,
+    messageGroupReplicaSuffix: owner.messageGroupReplicaSuffix ?? null,
   };
   const domain = collectKnownMessageGroupDomain(options);
   if (progress.targets.every((leaf) => domain.knownGroupIds.has(leaf.groupId))) {

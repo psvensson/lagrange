@@ -31,6 +31,7 @@ import {
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
+import {createStatedRoutingTree} from '../topology/cdc-group-propagation-service-harness.js';
 import {CDC_GROUP_PROPAGATION_RETRY} from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {PRESSURE_GOVERNOR_ACTION} from '../../src/control-plane/pressure-governor.js';
@@ -154,6 +155,7 @@ function assertProvisionalRoutesReleased(f, capturedTargets) {
   assert.deepEqual(
     buildSafeTargets({
       systemTableCache: f.source.systemTableCache,
+      latencyTreeService: createStatedRoutingTree([]),
       sourceGroupId: SOURCE_GROUP,
     }),
     capturedTargets,
@@ -332,6 +334,7 @@ test(
 
     const capturedTargets = buildSafeTargets({
       systemTableCache: f.source.systemTableCache,
+      latencyTreeService: createStatedRoutingTree([]),
       sourceGroupId: SOURCE_GROUP,
     });
     assert.equal(capturedTargets.length, 3);

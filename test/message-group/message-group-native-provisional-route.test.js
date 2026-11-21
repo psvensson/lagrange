@@ -27,6 +27,7 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {CDC_GROUP_PROPAGATION_STATE} from '../../src/topology/cdc-group-propagation-constants.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {buildSafeTargets} from '../../src/topology/cdc-group-propagation-routing.js';
+import {createStatedRoutingTree} from '../topology/cdc-group-propagation-service-harness.js';
 import {provisionalRouteFixture, registrationInsert, sourceView, targetView, recordOf,
   json, note, pump, tick, releaseB, releaseFollower, disarmProducerRetryTimer, driveWithPump,
   addressOf, payloadOf, cdcEvents, NODE_ID, SOURCE_GROUP, TARGET_GROUP, SOURCE_REPLICA,
@@ -104,7 +105,7 @@ async function writeOrdinarySource(t, f, service, entryId) {
 
 function targets(f) {
   return buildSafeTargets({systemTableCache: f.source.systemTableCache,
-    sourceGroupId: SOURCE_GROUP});
+    latencyTreeService: createStatedRoutingTree([]), sourceGroupId: SOURCE_GROUP});
 }
 
 function assertPartialRouteSetup(t, f) {

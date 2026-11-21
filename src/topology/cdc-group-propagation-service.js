@@ -25,6 +25,7 @@ import {
 import {
   CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
+  CDC_GROUP_PROPAGATION_ERROR_CODE,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
@@ -165,6 +166,9 @@ class CDCGroupPropagationService extends EventEmitter {
   /**
    * Stop propagation lifecycle.
    */ stop() {
+    // A never-initialized service has nothing to stop and stays unwired: a
+    // later start() is refused until initialize validated the wiring.
+    if (this.state === CDC_GROUP_PROPAGATION_STATE.CREATED) return;
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
     this.retireInFlightDurableWaves();
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
@@ -358,10 +362,10 @@ class CDCGroupPropagationService extends EventEmitter {
    * @private
    */
   ensureInitialized() {
-    assertCritical(
-      this.state !== CDC_GROUP_PROPAGATION_STATE.CREATED,
-      CDC_GROUP_PROPAGATION_ERROR_MSG.NOT_INITIALIZED,
-    );
+    if (this.state !== CDC_GROUP_PROPAGATION_STATE.CREATED) return;
+    const error = new Error(CDC_GROUP_PROPAGATION_ERROR_MSG.NOT_INITIALIZED);
+    error.code = CDC_GROUP_PROPAGATION_ERROR_CODE.NOT_INITIALIZED;
+    throw error;
   }
 
   /**

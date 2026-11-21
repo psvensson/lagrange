@@ -16,16 +16,17 @@ const CDC_PROPAGATION_PLAN_TABLE = Object.freeze({
   MESSAGE_GROUPS: TABLES.MESSAGE_GROUPS,
 });
 
-// The collaborators whose versions the plan stamp reads, as named in a
-// wiring refusal.
+// The collaborators the propagation plan reads, as named in a wiring refusal.
 const CDC_GROUP_PROPAGATION_COLLABORATOR = Object.freeze({
   SYSTEM_TABLE_CACHE: 'systemTableCache',
   LATENCY_TREE_SERVICE: 'latencyTreeService',
   CONFIGURATION: 'config',
+  MESSAGE_ROUTER: 'messageRouter',
 });
 
 const CDC_GROUP_PROPAGATION_ERROR_CODE = Object.freeze({
   COLLABORATOR_INVALID: 'cdc_group_propagation_collaborator_invalid',
+  NOT_INITIALIZED: 'cdc_group_propagation_not_initialized',
 });
 const CDC_MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 
