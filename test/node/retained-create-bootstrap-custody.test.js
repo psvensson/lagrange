@@ -187,3 +187,40 @@ test('only a durable original bootstrap and its publication wake the exact stopp
       await fixture.handler.shutdown();
     }
   }));
+
+test('exact terminal operation publication closes parked admission without a target effect',
+  async () => onLedgerLeader(async (leader, proposed) => {
+    const row = await admitBeforeRestart(leader, proposed, null);
+    const fixture = await createHandlerFixture({
+      row, authorityFor: (cache) => restartAuthority(leader, cache),
+    });
+    try {
+      await fixture.handler.startReplicaCreateAdmissionRecovery();
+      const parked = fixture.authority.read(row.operation_id);
+      const settledAt = parked.updated_at + 1;
+      assert.equal(commitLedgerStatement(leader, 'retained-bootstrap:publish-terminal',
+        `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?, completed_at = ?
+        WHERE operation_id = ?`,
+        [WORKFLOW_STEP.FAILED, ReplicaStatus.FAILED, settledAt, settledAt, parked.operation_id]),
+      null);
+      fixture.cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPSERT',
+        fixture.authority.read(row.operation_id));
+      let settled = null;
+      for (let turn = 0; turn < 40; turn += 1) {
+        settled = fixture.authority.read(row.operation_id);
+        if (settled.create_admission_state === CREATE_ADMISSION_STATE.CLOSED) break;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      assert.equal(settled?.create_admission_state, CREATE_ADMISSION_STATE.CLOSED);
+      assert.equal(settled?.completed_at, settledAt);
+      assert.equal(settled?.create_admission_attempt_token, parked.create_admission_attempt_token);
+      assert.equal(fixture.physicalStarts(), 0);
+      const lifecycle = fixture.authority.lifecycleStore.durableRow(
+        TABLES.SERVICES, row.replica_id,
+      );
+      assert.equal(lifecycle, null);
+      assert.equal(fixture.handler.replicaCreateAdmissionRecoveryRearmOwner.current(), null);
+    } finally {
+      await fixture.handler.shutdown();
+    }
+  }));
