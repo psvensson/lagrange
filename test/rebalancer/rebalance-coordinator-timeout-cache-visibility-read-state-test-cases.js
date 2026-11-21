@@ -409,6 +409,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
               replica_id: 'partition-1-r2',
               partition_id: 'partition-1',
               node_id: 'node-2',
+              service_type: 'partition',
               status: 'active',
             };
           },
@@ -428,6 +429,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           async readRows() {
             return {
               success: true,
+              rowSetComplete: true,
               rows: [],
               affectedRows: 0,
             };
@@ -538,6 +540,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
               return {
                 success: true,
                 rows: [{...authoritativeLearnerRow}],
+                rowSetComplete: true,
                 affectedRows: 1,
               };
             }

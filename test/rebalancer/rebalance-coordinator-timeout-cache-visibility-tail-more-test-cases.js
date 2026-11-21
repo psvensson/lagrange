@@ -1,3 +1,4 @@
+import {createCoordinatorSqlStore} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
 
@@ -677,9 +678,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       const TEST_SERVE_ELIGIBLE_DIMENSION = 'serveEligible';
       const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
       const TEST_SERVICES_TABLE = 'services';
-      const TEST_UPDATE_REPLICA_OPERATIONS_SQL =
-      'UPDATE replica_operations SET';
-      const TEST_SELECT_REPLICA_OPERATIONS_SQL = 'FROM replica_operations';
       const TEST_PENDING_STEP = 'PENDING';
       const TEST_SENDING_STEP = 'SENDING';
       const TEST_CREATING_STEP = 'CREATING';
@@ -691,8 +689,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       const TEST_PENDING_STEP_OFFSET_MS = 1000;
       const TEST_SENDING_STEP_OFFSET_MS = 900;
       const TEST_CREATING_STEP_OFFSET_MS = 800;
-      const TEST_UPDATE_AFFECTED_ROWS = 1;
-      const TEST_READ_AFFECTED_ROWS = 0;
       const TEST_MIN_REPLICA_COUNT = 3;
       const TEST_EXPECTED_MIN_GATEWAY_CALLS = 2;
 
@@ -797,35 +793,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       };
       const gatewayCalls = [];
 
-      const sqlQueryEngine = {
-        async executeQuery(sql, params) {
-          if (sql.includes(TEST_UPDATE_REPLICA_OPERATIONS_SQL)) {
-            operationRow.status = params[0];
-            operationRow.workflow_step = params[1];
-            operationRow.updated_at = params[2];
-            operationRow.completed_at = params[3];
-            operationRow.error_message = params[4];
-            operationRow.steps_history = params[5];
-            operationRow.replica_id = params[6];
-            return {
-              success: true,
-              affectedRows: TEST_UPDATE_AFFECTED_ROWS,
-            };
-          }
-          if (sql.includes(TEST_SELECT_REPLICA_OPERATIONS_SQL)) {
-            return {
-              success: true,
-              rows: [{...operationRow}],
-              affectedRows: TEST_READ_AFFECTED_ROWS,
-            };
-          }
-          return {
-            success: true,
-            rows: [],
-            affectedRows: TEST_READ_AFFECTED_ROWS,
-          };
-        },
-      };
+      const store = createCoordinatorSqlStore({
+        getAll: (table) => table === TEST_REPLICA_OPERATIONS_TABLE ? [operationRow] : [],
+        upsert: (_table, row) => Object.assign(operationRow, row),
+      });
 
       const coordinator = createCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
@@ -876,21 +847,14 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           },
         },
         controlPlaneSystemTableGateway: {
-          async readRows(tableName, sql, params, options) {
-            gatewayCalls.push({
-              tableName,
-              sql: String(sql),
-              params: [...(Array.isArray(params) ? params : [])],
-              options,
-            });
-            return {
-              success: true,
-              rows: [],
-              affectedRows: TEST_READ_AFFECTED_ROWS,
-            };
+          async readAuthoritativeRows(tableName, sql, params, options) {
+            gatewayCalls.push({tableName, sql, options});
+            // The ledger is present and current; only SERVICES misses the
+            // cache-visible target. These are distinct owner observations.
+            return store.execute(sql, params);
           },
           async executeQuery(sql, params) {
-            return sqlQueryEngine.executeQuery(sql, params);
+            return store.execute(sql, params);
           },
         },
         messageRouter: {
@@ -903,7 +867,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
             return {targetReplicaCount: 3, minReplicaCount: TEST_MIN_REPLICA_COUNT};
           },
         },
-        sqlQueryEngine,
         enableTimeouts: false,
       });
 
@@ -935,6 +898,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         );
       } finally {
         await coordinator.shutdown();
+        store.suspend();
       }
     },
   );
