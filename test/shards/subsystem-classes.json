@@ -28,7 +28,7 @@
   "censusSize": 2713,
   "digest": "fnv1a32-1220ab5d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8872cd2b",
+  "observationDigest": "fnv1a32-efecec20",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3479,8 +3479,7 @@
     },
     "test/bootstrap/management-v1-l4-l3.test.js": {
       "files": [
-        "src/bootstrap/owners/management-v1-constants.js",
-        "src/bootstrap/owners/support-envelope-owner.js"
+        "src/bootstrap/owners/management-v1-constants.js"
       ]
     },
     "test/bootstrap/management-v1-route-authority.test.js": {
@@ -4158,11 +4157,21 @@
     "test/bootstrap/support-envelope-owner.test.js": {
       "files": [
         "docs/support-envelope.json",
+        "scripts/quest-evidence/support-envelope-execution.js",
+        "scripts/run-classified-test-files.js",
         "src/bootstrap/owners/management-v1-constants.js",
         "test/distributed/run.js"
       ],
       "directories": [
+        "scripts/checks",
+        "solve",
+        "solve/changes/evidence-relocation",
+        "solve/epics",
+        "solve/quests",
         "test/distributed/config"
+      ],
+      "env": [
+        "LAGRANGE_PROBE"
       ]
     },
     "test/bootstrap/system-partition-classification-owner.test.js": {
@@ -14493,6 +14502,7 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-reconcile-outcome.js",
         "src/rebalancer/operation-workflow-replace-target-binding.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
@@ -18219,6 +18229,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/rebalancer/committed-node-remove-safety-fixture.js"
@@ -18228,6 +18239,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-committed-node-floor.js",
         "src/rebalancer/priority-publication-safety-topology.js",
@@ -18955,7 +18967,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/rebalancer/failed-create-cleanup-token.js"
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-reconcile-outcome.js"
       ]
     },
     "test/rebalancer/readiness-fixture-custody.test.js": {
@@ -19176,6 +19189,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/rebalancer/committed-node-remove-safety-fixture.js"

@@ -11,6 +11,7 @@ documentClass: generated
 - [base-error.js](base-error.js) - BaseError - Foundation class for custom errors. (importers: many)
 - [canonical-json-data.js](canonical-json-data.js) - Intrinsics-independent canonical JSON data: admission predicates, index-based collection processing, owned... (importers: many)
 - [cause-id.js](cause-id.js) - No leading comment; first export: getOrCreateCauseId. (importers: many)
+- [certification-evidence-record.js](certification-evidence-record.js) - The distributed certification archive's reader. (importers: few)
 - [correlation.js](correlation.js) - HTTP header name for correlation ID propagation. (importers: many)
 - [deep-freeze.js](deep-freeze.js) - Idempotent deep-freeze for JSON-shaped cache rows. (importers: few)
 - [fast-json-clone.js](fast-json-clone.js) - Structural clone for JSON-shaped values, matching JSON.parse(JSON.stringify(value)) semantics without the... (importers: many)
