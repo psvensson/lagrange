@@ -443,18 +443,19 @@ test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
 
 // Necessity witness (owner instruction 2026-11-21: an alternate path for one
 // decision must prove it is needed). The leader-removal gate of a priority
-// REPLACE also reads the SERVICES raft_role of the source, of the target and
-// of the source's co-located voter siblings (census #3 and #4), beside the
-// partitions row's leader_node_id. Partition SERVICES rows never publish
+// REPLACE read the SERVICES raft_role of the source, of the target and of the
+// source's co-located voter siblings (census #3 and #4), beside the
+// partitions row's leader_node_id; at 65ca4c2c3 this witness showed that no
+// such role (siblings included) and no leader_node_id changed the decision,
+// and the role reads were deleted. Partition SERVICES rows never publish
 // leader (decision table leadership-authority-projection) and the decision
-// belongs to the fresh witness (BR11). Every role the enum owns, on every one
-// of those rows, and every leader_node_id the row could name, leaves the
+// belongs to the fresh witness (BR11). Every role the enum owns on the source
+// and target rows, and every leader_node_id the row could name, leaves the
 // decision unchanged; the witness alone moves it (the anchor that keeps this
 // from passing vacuously). Options mirror the remove-safety evaluator's call.
 const LEADER_REMOVAL_ROW_INPUTS = Object.freeze({
   sourceRole: Object.values(RAFT_ROLE),
   targetRole: Object.values(RAFT_ROLE),
-  siblingRole: Object.values(RAFT_ROLE),
   leaderNodeId: [null, SOURCE_NODE_ID, TARGET_NODE_ID, PEER_NODE_B],
   completionSafe: [true, false],
 });
@@ -473,22 +474,14 @@ test('necessity: the priority REPLACE leader-removal decision reads only ' +
     [OPERATION_WORKFLOW_OWNER_SHARED.REMOVE_SAFETY_SQL.SELECT_PARTITION_ROW]:
       partitionRead,
   }});
-  const siblingReplicaId = `${PARTITION_ID}-r5`;
   const decide = (inputs) => {
     partitionRead.rows = inputs.leaderNodeId === null ? [] :
       [{partition_id: PARTITION_ID, leader_node_id: inputs.leaderNodeId}];
-    const source = serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID,
-      inputs.sourceRole);
-    const target = serviceRow(TARGET_REPLICA_ID, TARGET_NODE_ID,
-      inputs.targetRole);
-    const sibling = serviceRow(siblingReplicaId, SOURCE_NODE_ID,
-      inputs.siblingRole);
-    const peer = serviceRow(PEER_REPLICA_B, PEER_NODE_B, RAFT_ROLE.FOLLOWER);
     return harness.owner.evaluatePriorityPublicationLeaderRemoveSafety(
-      harness.operation, source, target, {
-        currentVoterReadyRows: [source, sibling, peer, target],
-        priorityRecoveryCompletionSafe: inputs.completionSafe,
-      });
+      harness.operation,
+      serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID, inputs.sourceRole),
+      serviceRow(TARGET_REPLICA_ID, TARGET_NODE_ID, inputs.targetRole),
+      {priorityRecoveryCompletionSafe: inputs.completionSafe});
   };
   const combinations = rowInputCombinations(LEADER_REMOVAL_ROW_INPUTS);
   try {

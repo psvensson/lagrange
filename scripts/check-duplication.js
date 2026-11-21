@@ -300,8 +300,10 @@ const RATCHET_TARGETS = [
     // 2026-11-18 (fix-removal-cleanup): tightened 21898 -> 21888 on the checker hint.
     // 2026-11-19: tightened 612/21888 -> 610/21830 on the checker hint.
     // 2026-11-21: measured after the SQLite fixture migration.
-    baselineCloneGroupCount: 609,
-    baselineDuplicatedLineCount: 21780,
+    // 2026-11-21 (leader-role dead arms): tightened 609/21780 -> 606/21632
+    // on the checker hint.
+    baselineCloneGroupCount: 606,
+    baselineDuplicatedLineCount: 21632,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

@@ -265,7 +265,6 @@ t.test(
       sourceLeadershipReleaseObserved: true,
       replacementTopologyVoterSufficient: true,
       partitionLeaderStillSource: false,
-      coLocatedLeaderSiblingObserved: false,
       publicationPartition: false,
     };
     t.equal(
@@ -287,7 +286,7 @@ t.test(
         partitionLeaderStillSource: true,
       }).state,
       PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_STATE.HOLD,
-      'a partition leader still on the source without a co-located sibling HOLDs',
+      'a partition leader still published on the source node HOLDs',
     );
     t.equal(
       decidePriorityPublicationFollowerSourceRemovalSafety({

@@ -9,8 +9,6 @@ import {CANONICAL_LEADER_IDENTITY_STATE} from
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PartitionServiceRowOwner} from
   '../../src/partition/partition-service-row-owner.js';
-import {BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG} from
-  '../../src/bootstrap/owners/bootstrap-topology-snapshot-owner-contract.js';
 
 const SEED_NODE_ID = 'seed-node-1';
 const PARTITION_ID = 'nodes-p1';
@@ -866,14 +864,15 @@ test(
   },
 );
 
-// Necessity witness for the envelope's "no partition leaders" diagnostic
-// (leader-authority census #6). It counted SERVICES rows whose raft_role is
-// leader; the partition row owner never publishes one (decision table
-// leadership-authority-projection), so over the rows the producer builds it
-// fires on every envelope whatever role each replica tracks, while every
-// partition row names its leader: it carries no information and nothing
-// consumes it. The anchor (a raw leader row, which no partition producer
-// emits, silences it) shows this probe observes the role arm.
+// Necessity witness for the envelope's former "no partition leaders"
+// diagnostic (leader-authority census #6). It counted SERVICES rows whose
+// raft_role is leader; the partition row owner never publishes one (decision
+// table leadership-authority-projection), so at 65ca4c2c3 this witness showed
+// it warned on every envelope built from producer rows, whatever role each
+// replica tracked, while every partition row named its leader. It carried no
+// information and nothing consumed it, so it was deleted: the envelope's
+// warnings no longer depend on any replica row role, not even a raw leader
+// row that no partition producer emits.
 const SNAPSHOT_PARTITION_ROWS = Object.freeze([
   CACHE_PARTITION_ROW,
   Object.freeze({
@@ -904,7 +903,7 @@ function producedPartitionServiceRows(trackedRole) {
   ];
 }
 
-function noPartitionLeaderWarningsOf(cacheServiceRows) {
+function envelopeWarningsOf(cacheServiceRows) {
   const warnings = [];
   const owner = createOwner({
     partitionRows: [...SNAPSHOT_PARTITION_ROWS],
@@ -924,24 +923,22 @@ function noPartitionLeaderWarningsOf(cacheServiceRows) {
   assert.ok(envelope.systemTableSnapshots[TABLES.PARTITIONS].every((row) =>
     row[COLUMN.LEADER_NODE_ID] === SEED_NODE_ID),
   'every partition row of the envelope names its published leader');
-  return warnings.filter((entry) => entry.message ===
-    BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG.NO_PARTITION_LEADERS_FOUND_IN_SYSTEM_CACHE);
+  return warnings.map((entry) => entry.message);
 }
 
-test('necessity: the envelope\'s no-partition-leaders diagnostic is ' +
-  'constant over the rows the partition producer builds', async (t) => {
+test('necessity: the envelope logs no replica-role leader diagnostic; its ' +
+  'warnings do not depend on any row role', async (t) => {
   for (const trackedRole of Object.values(RAFT_ROLE)) {
     const rows = producedPartitionServiceRows(trackedRole);
     t.notOk(rows.some((row) => row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER),
       `tracked ${trackedRole}: the producer publishes no leader role`);
-    t.equal(noPartitionLeaderWarningsOf(rows).length, 1,
-      `tracked ${trackedRole}: the diagnostic warns although every ` +
-        'partition publishes its leader');
+    t.same(envelopeWarningsOf(rows), [],
+      `tracked ${trackedRole}: an envelope whose partitions publish their ` +
+        'leaders warns about nothing');
   }
   const [leaderRow, followerRow] =
     producedPartitionServiceRows(RAFT_ROLE.FOLLOWER);
-  t.equal(noPartitionLeaderWarningsOf([
+  t.same(envelopeWarningsOf([
     {...leaderRow, [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER}, followerRow,
-  ]).length, 0, 'anchor: only a raw leader row, which no partition ' +
-    'producer emits, silences it');
+  ]), [], 'a raw leader row changes nothing either');
 });

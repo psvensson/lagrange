@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-158ad62f",
+  "observationDigest": "fnv1a32-59eed798",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3229,7 +3229,6 @@
     },
     "test/bootstrap/bootstrap-topology-snapshot-owner.test.js": {
       "files": [
-        "src/bootstrap/owners/bootstrap-topology-snapshot-owner-contract.js",
         "src/bootstrap/owners/bootstrap-topology-snapshot-owner.js",
         "src/constants/index.js",
         "src/partition/partition-service-row-owner.js",
