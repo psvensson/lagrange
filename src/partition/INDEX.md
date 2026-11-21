@@ -63,7 +63,7 @@ documentClass: generated
 - [partition-cdc-owed-admission.js](partition-cdc-owed-admission.js) - Admission of work that can add durable CDC debt. (importers: many)
 - [partition-cdc-parameterized-sql.js](partition-cdc-parameterized-sql.js) - Parameterized SQL helpers for PartitionCDCGenerator. (importers: few)
 - [partition-committed-command-admission.js](partition-committed-command-admission.js) - The one owner of "may this committed command enter consensus": every path in the partition that proposes a committed... (importers: many)
-- [partition-committed-log.js](partition-committed-log.js) - The partition's committed log, as the rs-raft durable store holds it. (importers: few)
+- [partition-committed-log.js](partition-committed-log.js) - The partition's committed log, as the rs-raft durable store holds it. (importers: many)
 - [partition-committed-peer-address.js](partition-committed-peer-address.js) - The partition's binding of the one committed peer address (raft-rs-committed-peer-address.js): the raft-rs port... (importers: few)
 - [partition-committed-statement-outcome-constants.js](partition-committed-statement-outcome-constants.js) - The vocabulary of the committed-statement outcome owner (partition-committed-statement-outcome.js): its durable... (importers: hub)
 - [partition-committed-statement-outcome.js](partition-committed-statement-outcome.js) - The terminal outcome of every committed statement: the one owner of what a committed statement's result is, for the... (importers: hub)

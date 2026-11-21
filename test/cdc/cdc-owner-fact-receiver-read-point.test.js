@@ -5,8 +5,10 @@
 // Real: the fixture's three-replica raft-rs ledger group and per-node read
 // surfaces (cdc-owner-fact-group-fixture.js). Substituted, per case and
 // named there: raft traffic held back from one replica (a fresh leader that
-// has not committed an entry of its own term), and a leader's statement held
-// at a gate so that an event lands while its read is in flight.
+// has not committed an entry of its own term), raft sends left pending (a
+// leader whose core turn is pending at a peer send), a leader's statement held
+// at a gate so that an event lands while its read is in flight, and a SQLite
+// transaction opened on a replica's own connection by the test.
 // Ceiling: one process; a held statement stands for a read that spans an
 // event, it does not make SQLite slow.
 import {
@@ -15,12 +17,37 @@ import {
   ownerFactRows,
   readOwnerFact,
 } from '../../src/control-plane/control-plane-owner-fact-read.js';
+import {setTimeout as delay} from 'node:timers/promises';
+
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION as DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE as MODE,
+  CONTROL_PLANE_READ_LEADER_MODE as LEADER,
+} from '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {readPartitionAppliedIndex} from '../../src/partition/partition-committed-log.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {READ_SQL, TABLE, openLedgerGroupSurface, ownerFactRequestTo} from
-  './cdc-owner-fact-group-fixture.js';
+import {
+  READ_SQL,
+  READ_TIMEOUT_MS,
+  TABLE,
+  openLedgerGroupSurface,
+  ownerFactDraft,
+  ownerFactRequestTo,
+} from './cdc-owner-fact-group-fixture.js';
 
 const TEST_TIMEOUT_MS = 120000;
 const OPERATION = 'read-point-operation';
+const DELETE_SQL = 'DELETE FROM replica_operations WHERE operation_id = ?';
+// Reasons this round adds (literal: a witness must not pass on an undefined name).
+const FOREIGN_TRANSACTION = 'owner_fact_foreign_transaction';
+const FLOOR_OTHER_PARTITION = 'owner_fact_floor_other_partition';
+// Long enough for an unshared owner fact to be answered, far below the
+// plain read's own deadline.
+const OWN_ANSWER_WAIT_MS = 1000;
 
 function requestFor(operationId) {
   return {tableName: TABLE, sql: READ_SQL, params: [operationId],
@@ -39,23 +66,30 @@ function decisionOf(answer) {
 
 // Hold the next statement a replica executes until released; the hold sits
 // before the statement (beforeRead) or after it ran (afterRead).
+// readAt() is the replica's durable applied index read in the same
+// synchronous run as the statement (immediately before it).
 function holdNextStatement(service, placement) {
   const original = service.executeQuery;
   const entered = Promise.withResolvers();
   const released = Promise.withResolvers();
+  let readAt = null;
+  const run = (args) => {
+    readAt = Number(readPartitionAppliedIndex(service));
+    return original.apply(service, args);
+  };
   service.executeQuery = async function heldOnce(...args) {
     service.executeQuery = original;
     if (placement === 'beforeRead') {
       entered.resolve();
       await released.promise;
-      return original.apply(service, args);
+      return run(args);
     }
-    const result = await original.apply(service, args);
+    const result = await run(args);
     entered.resolve();
     await released.promise;
     return result;
   };
-  return {entered: entered.promise, release: () => released.resolve()};
+  return {entered: entered.promise, release: () => released.resolve(), readAt: () => readAt};
 }
 
 test('readOwnerFact: a fresh leader that has not applied its election log refuses typed, ' +
@@ -137,37 +171,180 @@ test('readOwnerFact: leadership moving while the leader reads never yields the o
   'the old leader refused after its read, shipping no rows');
 });
 
-test('readOwnerFact: an apply landing while the leader reads never mis-states the witness',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
-    const group = await openLedgerGroupSurface(t, import.meta.url);
-    const [leader] = group.services;
-    await group.settleLeader(leader);
-    const surface = await group.surfaceOf(leader.nodeId, {leaderNodeId: leader.nodeId});
-    // beforeRead: the row applies after the receiver observed its core and
-    // before the statement reads; afterRead: after the statement read and
-    // before the receiver answers.
+test('readOwnerFact: an apply landing between the receiver\'s observation and its statement, ' +
+  'or after the statement, is READY at the position the rows reflect, in process and remote',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader, reader] = group.services;
+  await group.settleLeader(leader);
+  const surfaces = {
+    'in process': await group.surfaceOf(leader.nodeId, {leaderNodeId: leader.nodeId}),
+    'remote': await group.surfaceOf(reader.nodeId, {leaderNodeId: leader.nodeId}),
+  };
+  // beforeRead: the row applies after the receiver observed its core and
+  // before the statement reads; afterRead: after the statement read and
+  // before the receiver answers.
+  for (const [path, surface] of Object.entries(surfaces)) {
     for (const placement of ['beforeRead', 'afterRead']) {
-      const operationId = `${OPERATION}-${placement}`;
+      const label = `${path}, ${placement}`;
+      const operationId = `${OPERATION}-${path.replace(' ', '-')}-${placement}`;
       const held = holdNextStatement(leader, placement);
       const pending = readOwnerFact(surface.readLeaderRequired, requestFor(operationId));
       await held.entered;
       const writtenAt = await group.writeRow(leader, operationId);
       held.release();
       const answer = await pending;
-      t.ok([STATE.READY, STATE.UNAVAILABLE].includes(answer.state), `${placement}: typed`);
-      if (answer.state === STATE.READY) {
-        t.equal(ownerFactRows(answer).length === 1, answer.witness.appliedIndex >= writtenAt,
-          `${placement}: the witness names the applied position of the rows it carries`);
-      } else {
-        t.equal(answer.reason, REASON.READ_POINT_MOVED,
-          `${placement}: the receiver cannot name the snapshot it read, so it refuses`);
-      }
-      const after = await readOwnerFact(surface.readLeaderRequired, requestFor(operationId));
-      t.equal(after.state, STATE.READY, `${placement}: a read that spans no apply is READY`);
-      t.same(ownerFactRows(after), [{operation_id: operationId, workflow_step: leader.replicaId}]);
-      t.ok(after.witness.appliedIndex >= writtenAt);
+      t.equal(answer.state, STATE.READY, `${label}: READY, the position is read, not inferred`);
+      t.equal(answer.witness?.appliedIndex, held.readAt(),
+        `${label}: the witness names the applied position the statement read at`);
+      const when = placement === 'beforeRead' ? 'before' : 'after';
+      t.equal(held.readAt() >= writtenAt, placement === 'beforeRead',
+        `${label}: the write applied ${when} that position`);
+      t.same(answer.state === STATE.READY ? ownerFactRows(answer) : null,
+        placement === 'beforeRead' ?
+          [{operation_id: operationId, workflow_step: leader.replicaId}] : [],
+        `${label}: the rows are those of that position`);
     }
-  });
+  }
+});
+
+test('readOwnerFact: a leader whose core has stepped its successor\'s term while its own turn ' +
+  'is pending refuses typed, in process and over the transport',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [old, successor, other] = group.services;
+  await group.settleLeader(old);
+  for (const service of group.services) group.seedRow(service, OPERATION);
+  const oldTerm = Number(old.raft.readStatus().term);
+  // Whatever the old leader sends once its core knows a newer term (its vote
+  // for the successor) stays pending: the turn that stepped the successor's
+  // message does not finish.
+  const held = group.holdPendingSendsOf(old, (message) => Number(message.term) > oldTerm);
+  await group.requestLeadershipTransfer(old, successor);
+  t.equal(await group.waitFor(() => held.held() > 0 &&
+    successor.raft.readStatus().role === RAFT_ROLE.LEADER), true,
+  'setup: the old leader\'s core answered the successor\'s term, and that send is pending');
+  t.equal(old.raft.readStatus().role, RAFT_ROLE.LEADER,
+    'setup: the status the old leader reports is still its last announced observation');
+  const request = ownerFactRequestTo(old, [OPERATION]);
+  const local = decisionOf(await old.handleRemoteQuery(structuredClone(request)));
+  const remote = decisionOf(
+    await group.deliverOverTransport(other.nodeId, old, structuredClone(request)));
+  t.equal(local.failureCode, REASON.NOT_LEADER, 'in process: its core no longer leads, so it refuses');
+  t.equal(local.shipsRows, false, 'in process: no rows');
+  t.same(remote, local, 'over the transport: the same typed answer');
+  held.release();
+});
+
+test('readOwnerFact: an owner fact arriving while a plain strict read of the same statement is ' +
+  'in flight gets its own decided answer', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader, reader] = group.services;
+  await group.settleLeader(leader);
+  for (const service of group.services) group.seedRow(service, OPERATION);
+  const surface = await group.surfaceOf(reader.nodeId, {leaderNodeId: leader.nodeId});
+  const held = holdNextStatement(leader, 'afterRead');
+  const sentBefore = group.transit.length;
+  const plain = surface.readLeaderRequired(TABLE, READ_SQL, [OPERATION], {
+    authoritativeReadMode: MODE.OWNER_RPC_REQUIRED, leaderMode: LEADER.REQUIRED});
+  await held.entered;
+  const ownerFact = readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+  const answer = await Promise.race([ownerFact, delay(OWN_ANSWER_WAIT_MS).then(() => null)]);
+  held.release();
+  await plain;
+  await ownerFact;
+  t.not(answer, null, 'it does not wait on the plain read\'s flight');
+  const decided = group.transit.slice(sentBefore).filter(({targetNodeId, leaderRead}) =>
+    targetNodeId === leader.nodeId && leaderRead?.kind === 'owner_fact');
+  t.equal(decided.length, 1, 'the leader received the owner-fact request and decided it');
+  t.equal(answer?.state, STATE.READY);
+  t.equal(answer?.witness?.leaderRead?.kind, 'owner_fact',
+    'the answer echoes an owner-fact decision');
+  t.same(answer?.witness?.leaderRead, decided[0]?.leaderRead,
+    'the answer echoes exactly the request its receiver decided');
+});
+
+test('readOwnerFact: a read on a connection inside a transaction the receiver did not open is ' +
+  'refused typed, never answered with the staged rows', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader, reader] = group.services;
+  await group.settleLeader(leader);
+  for (const service of group.services) group.seedRow(service, OPERATION);
+  const surfaces = {
+    'in process': await group.surfaceOf(leader.nodeId, {leaderNodeId: leader.nodeId}),
+    'remote': await group.surfaceOf(reader.nodeId, {leaderNodeId: leader.nodeId}),
+  };
+  // A staged, never-committed DELETE of a committed row on the leader's own
+  // connection: read through that connection it is a false absence.
+  leader.db.prepare('BEGIN').run();
+  try {
+    leader.db.prepare(DELETE_SQL).run(OPERATION);
+    for (const [path, surface] of Object.entries(surfaces)) {
+      const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+      t.equal(answer.state, STATE.UNAVAILABLE, `${path}: never the staged absence`);
+      t.equal(answer.reason, FOREIGN_TRANSACTION, `${path}: typed`);
+      t.equal(Object.hasOwn(answer, 'rows'), false, `${path}: no rows`);
+    }
+  } finally {
+    leader.db.prepare('ROLLBACK').run();
+  }
+  const after = await readOwnerFact(surfaces['in process'].readLeaderRequired,
+    requestFor(OPERATION));
+  t.equal(after.state, STATE.READY, 'with the transaction gone the leader answers');
+  t.same(after.state === STATE.READY ? ownerFactRows(after) : null,
+    [{operation_id: OPERATION, workflow_step: leader.replicaId}]);
+});
+
+test('readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of ' +
+  'another group', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader, reader] = group.services;
+  await group.settleLeader(leader);
+  for (const service of group.services) group.seedRow(service, OPERATION);
+  const otherGroup = {
+    partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES], index: 0, term: 0};
+  const direct = await leader.handleRemoteQuery(
+    ownerFactRequestTo(leader, [OPERATION], otherGroup));
+  t.equal(direct?.failureCode, FLOOR_OTHER_PARTITION, 'the receiver refuses it typed');
+  t.equal(direct?.rowSet === undefined && direct?.rows === undefined, true, 'with no rows');
+  const surface = await group.surfaceOf(reader.nodeId, {leaderNodeId: leader.nodeId});
+  const answer = await readOwnerFact(surface.readLeaderRequired,
+    ownerFactDraft([OPERATION], {floor: otherGroup}));
+  t.equal(answer.state, STATE.UNAVAILABLE);
+  t.equal(answer.reason, FLOOR_OTHER_PARTITION, 'readOwnerFact names it');
+  const own = await readOwnerFact(surface.readLeaderRequired, ownerFactDraft([OPERATION]));
+  t.equal(own.state, STATE.READY, 'a floor of the read partition is answered');
+});
+
+test('readOwnerFact: the deadline and the routing class are required and travel to the ' +
+  'query owner', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader, reader] = group.services;
+  await group.settleLeader(leader);
+  for (const service of group.services) group.seedRow(service, OPERATION);
+  const surface = await group.surfaceOf(reader.nodeId, {leaderNodeId: leader.nodeId});
+  const seen = [];
+  const executeOnPartition = surface.queryExecutor.executeOnPartition;
+  surface.queryExecutor.executeOnPartition = function observed(...args) {
+    seen.push(args[6]);
+    return executeOnPartition.apply(this, args);
+  };
+  const timeoutMs = READ_TIMEOUT_MS - 300;
+  const answer = await readOwnerFact(surface.readLeaderRequired, ownerFactDraft([OPERATION], {
+    deadline: {timeoutMs}, routingReadinessDimension: DIMENSION.CONTROL_PLANE_PUBLISHED}));
+  t.equal(answer.state, STATE.READY);
+  t.equal(seen.at(-1)?.routingReadinessDimension, DIMENSION.CONTROL_PLANE_PUBLISHED,
+    'the caller\'s routing class reaches the query owner');
+  t.equal(seen.at(-1)?.readAuthority?.routingReadinessDimension,
+    DIMENSION.CONTROL_PLANE_PUBLISHED, 'and its frozen read authority');
+  t.ok(seen.at(-1)?.timeoutMs > 0 && seen.at(-1)?.timeoutMs <= timeoutMs,
+    'the caller\'s deadline bounds the query owner\'s');
+  const {deadline: _deadline, ...withoutDeadline} = ownerFactDraft([OPERATION]);
+  const calls = seen.length;
+  await t.rejects(readOwnerFact(surface.readLeaderRequired, withoutDeadline),
+    {name: 'OwnerFactRequestRefusal', field: 'deadline'}, 'a call without a deadline is refused');
+  t.equal(seen.length, calls, 'and issues no read');
+});
 
 test('readOwnerFact: the caller verifies what it received; a successful empty answer ' +
   'carrying a follower\'s witness is not absence', {timeout: TEST_TIMEOUT_MS}, async (t) => {
