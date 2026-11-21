@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2351,
+    "unit": 2352,
     "integration": 125,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2709,
-  "digest": "fnv1a32-2ab20585",
+  "censusSize": 2710,
+  "digest": "fnv1a32-0142a1b3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2015,6 +2015,7 @@
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": "unit",
     "test/rebalancer/planning-sweep-memoization.test.js": "unit",
     "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js": "unit",
+    "test/rebalancer/priority-dispatch-pending-shutdown.test.js": "unit",
     "test/rebalancer/priority-follow-up-target-readiness.test.js": "unit",
     "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": "unit",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": "unit",

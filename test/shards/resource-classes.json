@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2683,
+    "ordinary": 2684,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2709,
-  "digest": "fnv1a32-4d64f0dc",
+  "censusSize": 2710,
+  "digest": "fnv1a32-ed635616",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2014,6 +2014,7 @@
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": "ordinary",
     "test/rebalancer/planning-sweep-memoization.test.js": "ordinary",
     "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js": "ordinary",
+    "test/rebalancer/priority-dispatch-pending-shutdown.test.js": "ordinary",
     "test/rebalancer/priority-follow-up-target-readiness.test.js": "ordinary",
     "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": "ordinary",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": "ordinary",

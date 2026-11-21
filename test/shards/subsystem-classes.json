@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 289,
+    "placement-rebalance": 290,
     "query-sql": 205,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2709,
-  "digest": "fnv1a32-d3fed9df",
+  "censusSize": 2710,
+  "digest": "fnv1a32-84005842",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4610de96",
+  "observationDigest": "fnv1a32-fdf64723",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2034,6 +2034,7 @@
     "test/rebalancer/planner-target-authority-divergence-probe.test.js": "placement-rebalance",
     "test/rebalancer/planning-sweep-memoization.test.js": "placement-rebalance",
     "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js": "placement-rebalance",
+    "test/rebalancer/priority-dispatch-pending-shutdown.test.js": "placement-rebalance",
     "test/rebalancer/priority-follow-up-target-readiness.test.js": "placement-rebalance",
     "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": "placement-rebalance",
@@ -18730,6 +18731,13 @@
       ]
     },
     "test/rebalancer/planning-sweep-memoization.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/priority-dispatch-pending-shutdown.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
