@@ -73,7 +73,7 @@ function extractSystemTableNameFromSql(sql) {
   const normalizedSql = sql.trim();
   for (const matcher of [
     /^\s*select\b[\s\S]*?\bfrom\s+([a-zA-Z_][\w]*)/i,
-    /^\s*insert(?:\s+or\s+replace)?\s+into\s+([a-zA-Z_][\w]*)/i,
+    /^\s*insert(?:\s+or\s+(?:ignore|replace))?\s+into\s+([a-zA-Z_][\w]*)/i,
     /^\s*update\s+([a-zA-Z_][\w]*)/i,
     /^\s*delete\s+from\s+([a-zA-Z_][\w]*)/i,
   ]) {

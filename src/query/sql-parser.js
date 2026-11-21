@@ -17,6 +17,7 @@ const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
 const {Parser: SQLiteParser} = sqliteNodeSqlParser;
 const {Parser: PostgreSQLParser} = postgresqlNodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
+import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
 import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
@@ -63,6 +64,9 @@ const PARSER_ERROR_MSG = Object.freeze({
   UNSUPPORTED_DROP_TYPE_PREFIX: 'Unsupported DROP type: ',
   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
   RESERVED_PARAMETER_NAME: 'The parameter name is reserved by the SQL front end',
+  MUTATION_TARGET_UNSUPPORTED: 'A mutation requires one supported table target',
+  MUTATION_QUALIFIER_UNSUPPORTED: 'Unsupported qualifier on mutation target',
+  MUTATION_DELETE_TARGET_MISMATCH: 'DELETE target and FROM table must denote the same table',
   RESULT_COLUMN_SPANS_UNREADABLE:
     'The result column names of this statement cannot be read from its text',
 });
@@ -111,6 +115,31 @@ function createTypedParseError(code, message) {
     error.details = Object.freeze({sqlState: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED});
   }
   return error;
+}
+
+function readMutationTarget(ast, targets) {
+  if (!Array.isArray(targets) || targets.length !== 1) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, PARSER_ERROR_MSG.MUTATION_TARGET_UNSUPPORTED);
+  }
+  const [target] = targets;
+  if (typeof target?.table !== 'string' || target.table.length === 0 || target.join != null) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, PARSER_ERROR_MSG.MUTATION_TARGET_UNSUPPORTED);
+  }
+  if (ast.db != null || ast.schema != null || target.schema != null) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, PARSER_ERROR_MSG.MUTATION_QUALIFIER_UNSUPPORTED);
+  }
+  if (target.db == null) return target.table;
+  // The global system namespace is the only supported separate qualifier.
+  // Single quoted identifiers keep their exact catalog spelling.
+  const qualified = `${target.db}.${target.table}`;
+  if (resolveSystemTableName(qualified) === null) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, PARSER_ERROR_MSG.MUTATION_QUALIFIER_UNSUPPORTED);
+  }
+  return qualified;
 }
 
 /**
@@ -589,7 +618,7 @@ class SQLParser {
   }
 
   convertInsert(ast) {
-    const tableName = ast.table[0].table;
+    const tableName = readMutationTarget(ast, ast.table);
     const columns = Array.isArray(ast.columns) ?
       ast.columns.map((column) => externalSchemaIdentifier(column)) :
       null;
@@ -658,7 +687,7 @@ class SQLParser {
   }
 
   convertUpdate(ast) {
-    const tableName = ast.table[0].table;
+    const tableName = readMutationTarget(ast, ast.table);
     const assignments = ast.set.map((s) => ({
       column: externalSchemaIdentifier(s.column),
       value: this.convertMutationValue(s.value, {allowColumns: true}),
@@ -673,7 +702,11 @@ class SQLParser {
   }
 
   convertDelete(ast) {
-    const tableName = ast.from[0].table;
+    const tableName = readMutationTarget(ast, ast.from);
+    if (ast.table != null && readMutationTarget(ast, ast.table) !== tableName) {
+      throw createTypedParseError(
+        QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, PARSER_ERROR_MSG.MUTATION_DELETE_TARGET_MISMATCH);
+    }
     return {
       type: AST_TYPE.DELETE,
       table: tableName,

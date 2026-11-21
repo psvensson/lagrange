@@ -22,6 +22,9 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {TABLES} from '../../src/constants/index.js';
+import {CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE} from
+  '../../src/control-plane/control-plane-write-identity.js';
+import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
 import {
   NODE_REGISTRATION_OUTCOME,
@@ -45,6 +48,7 @@ import {
   createOperation,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  CASE_SENSITIVE_USER_TABLE,
   COUNTER_TABLE,
   JOINER_ID,
   JOIN_WRITE_OPTIONS,
@@ -54,6 +58,7 @@ import {
   USER_TABLE,
   appliedRow,
   authoritativeLeaderReads,
+  limitSurfaceWriteAttempt,
   nodeRow,
   rowsOf,
   releaseTrapOnAuthoritativeRead,
@@ -112,10 +117,10 @@ async () => {
     deliveries, of}) => {
     const surface = of(TABLES.STORAGE_RESERVATIONS);
     const now = Date.now();
-    const birth = (bytes) => gateway.executeQuery(RESERVATION_INSERT,
+    const birth = (bytes, options = {}) => gateway.executeQuery(RESERVATION_INSERT,
       ['res-op-v3', 'op-v3', 'partition', 'p-1', 'p-1', 'n-1', bytes, 1,
         'active', now, now, now + 1000],
-      {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`});
+      {...options, writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`});
     const {first} = await spendFirstAttempt({engine, surface,
       attempt: () => birth(111)});
     assert.equal(first.success, false, 'setup: the first birth is unknown');
@@ -126,17 +131,133 @@ async () => {
       ['res-op-v3'], {});
     assert.equal(removed.success, true, 'setup: the row is deleted');
     const firstEntry = deliveries[0].entryId;
-    const again = await birth(222);
+    const rebirthMark = deliveries.length;
+    const again = await birth(222, {
+      controlPlaneTableName: TABLES.REPLICA_OPERATIONS,
+      controlPlaneOperationKind: 'read',
+    });
     assert.deepEqual(selectRows(surface.dbPath, 'SELECT reservation_id, ' +
       `estimated_bytes FROM ${TABLES.STORAGE_RESERVATIONS}`),
     [{reservation_id: 'res-op-v3', estimated_bytes: 222}],
     `the second birth executed (${JSON.stringify(again)})`);
     assert.equal(again.success, true, 'and is answered applied');
     assert.equal(again.affectedRows, 1, 'with its own count');
+    assert.equal(deliveries[rebirthMark]?.entryId, firstEntry,
+      'the statement still resolves its prior exact write despite conflicting hints');
     assert.ok(deliveries.at(-1).entryId !== firstEntry,
       'under its own entry, never the first birth\'s');
   });
 });
+
+test('a quoted named SQL write retains its entry until its own participant answers',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    await withSurface([TABLES.NODES, TABLES.STORAGE_RESERVATIONS],
+      async ({engine, gateway, deliveries, of}) => {
+        const nodes = of(TABLES.NODES);
+        const other = of(TABLES.STORAGE_RESERVATIONS);
+        const node = {...nodeRow(), boot_incarnation: BOOT_INCARNATION};
+        const insert = (table, row) => gateway.insertSystemTableRow(
+          table, row, JOIN_WRITE_OPTIONS);
+        assert.equal((await insert(TABLES.NODES, node)).success, true);
+        const sql = 'UPDATE "global.nodes" SET node_address = ? WHERE node_id = ?';
+        const params = ['ws://quoted:2', JOINER_ID];
+        const options = {writeIdentity: 'quoted-nodes-update'};
+        const execute = engine.executeQuery.bind(engine);
+        const keys = [];
+        let foreign;
+        engine.executeQuery = async (statement, args, executionOptions) => {
+          keys.push(executionOptions.idempotencyKey);
+          if (keys.length === 1) {
+            foreign = await execute(
+              'UPDATE storage_reservations SET updated_at = ? WHERE reservation_id = ?',
+              [1, 'absent'], executionOptions);
+            return foreign;
+          }
+          return execute(statement, args, executionOptions);
+        };
+        try {
+          const refused = await gateway.querySystemTable(TABLES.NODES, sql, params, options);
+          assert.equal(foreign.success, true, 'the other native participant really committed');
+          assert.equal(foreign.partitions[0], other.partitionId);
+          assert.equal(refused.success, false, 'a foreign committed receipt cannot settle NODES');
+          assert.equal(refused.failureCode, OUTCOME_UNKNOWN);
+          assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
+            [{node_address: node.node_address}], 'no NODES effect from the foreign receipt');
+
+          const invalid = await gateway.querySystemTable(
+            TABLES.NODES, 'UPDATE "nodes"', [], options);
+          assert.equal(invalid.success, false, 'an unavailable SQL subject is refused');
+          assert.equal(keys.length, 1, 'invalid SQL never enters execution or spends the held key');
+
+          const confirmed = await gateway.querySystemTable(TABLES.NODES, sql, params, options);
+          assert.equal(confirmed.success, true);
+          assert.equal(confirmed.affectedRows, 1);
+          assert.equal(keys[1], keys[0], 'the proved target resolves the original named write');
+          assert.equal(deliveries.at(-1).answer.durableCommitWitness.partitionId,
+            nodes.partitionId);
+          assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
+            [{node_address: params[0]}], 'the real quoted target is updated');
+        } finally {
+          engine.executeQuery = execute;
+        }
+        const conflict = await gateway.querySystemTable(TABLES.NODES,
+          'INSERT INTO "nodes" (node_id, node_address) VALUES ($1, $2) ' +
+          'ON CONFLICT (node_id) DO NOTHING', [JOINER_ID, 'ws://unapplied:3'],
+          {writeIdentity: 'quoted-nodes-pg-conflict', dialect: PARSER_DIALECT.POSTGRESQL});
+        assert.equal(conflict.success, true, 'the supported PostgreSQL conflict form executes');
+        assert.equal(conflict.affectedRows, 0);
+        assert.deepEqual(selectRows(nodes.dbPath, 'SELECT node_address FROM nodes'),
+          [{node_address: params[0]}], 'conflict DO NOTHING preserves the committed target');
+      });
+  });
+
+test('exact-case user SQL cannot spend the named system write path',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    await withSurface([TABLES.LOGS, CASE_SENSITIVE_USER_TABLE],
+      async ({engine, gateway, deliveries, of}) => {
+        const system = of(TABLES.LOGS);
+        const user = of(CASE_SENSITIVE_USER_TABLE);
+        const userSql = 'UPDATE "Logs" SET n = ? WHERE id = ?';
+        const options = {writeIdentity: 'catalog-identity-control', tableName: TABLES.LOGS};
+        const originalUserValue = 1;
+        const entryId = 'case-collision';
+        const seed = await engine.executeQuery('INSERT INTO "Logs" (id, n) VALUES (?, ?)',
+          [entryId, originalUserValue]);
+        assert.equal(seed.success, true, 'the exact-case user table exists and accepts writes');
+        const mark = deliveries.length;
+
+        const refusal = await gateway.executeQuery(userSql, [2, entryId], options);
+        assert.equal(refusal.success, false, 'the system name cannot authorize a user effect');
+        assert.equal(refusal.errorCode, CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE);
+        const conflicting = await gateway.executeQuery(userSql, [2, entryId],
+          {...options, idempotencyKey: 'provided-key-does-not-change-the-domain'});
+        assert.equal(conflicting.errorCode, CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE);
+        assert.equal(deliveries.length, mark, 'no participant saw the named user statement');
+        assert.deepEqual(selectRows(user.dbPath, 'SELECT n FROM "Logs"'), [{n: originalUserValue}]);
+
+        const systemInsert = await gateway.executeQuery(
+          'INSERT INTO "global.logs" (log_id, timestamp, level, node_id, message, created_at) ' +
+          'VALUES (?, ?, ?, ?, ?, ?)', [entryId, 1, 'info', NODE_ID, 'new system log', 1], options);
+        assert.equal(systemInsert.success, true, 'the same name can bind its real system owner');
+        assert.equal(systemInsert.partitions[0], system.partitionId);
+        assert.deepEqual(selectRows(system.dbPath, 'SELECT message FROM logs'),
+          [{message: 'new system log'}]);
+
+        const structuredMark = deliveries.length;
+        await assert.rejects(gateway.updateSystemTableRow(CASE_SENSITIVE_USER_TABLE,
+          {log_id: entryId}, {message: 'wrong subject'}, {...options, ...JOIN_WRITE_OPTIONS}),
+        /requires a valid system table name/);
+        assert.equal(deliveries.length, structuredMark, 'structured ingress cannot fold case');
+        assert.deepEqual(selectRows(system.dbPath, 'SELECT message FROM logs'),
+          [{message: 'new system log'}]);
+
+        const userUpdate = await engine.executeQuery(userSql, [2, entryId],
+          {idempotencyKey: 'user-logs-exact-key'});
+        assert.equal(userUpdate.success, true, 'the direct user SQL owner accepts its own key');
+        assert.equal(userUpdate.partitions[0], user.partitionId);
+        assert.deepEqual(selectRows(user.dbPath, 'SELECT n FROM "Logs"'), [{n: 2}]);
+      });
+  });
 
 // The reservation birth V3 writes, under its name.
 function reservationBirth(gateway, bytes, now) {
@@ -162,16 +283,25 @@ test('a re-drive refused before it was proposed does not end an instance ' +
     surface.partition.handleRemoteQuery = async () => ({success: false,
       partitionId: surface.partitionId, failureCode: NOT_LEADER,
       error: 'No leader available for write operation'});
+    const refusalMark = deliveries.length;
+    const restoreLimit = limitSurfaceWriteAttempt(engine);
     let refused;
     try {
       refused = await withMutedConsoleError(() =>
         reservationBirth(gateway, 111, now));
     } finally {
+      restoreLimit();
       surface.partition.handleRemoteQuery = handle;
     }
-    assert.equal(refused.success, false, 'setup: the re-drive is refused');
-    assert.ok(!JSON.stringify(refused).includes(OUTCOME_UNKNOWN),
-      'setup: a refusal before proposal, nothing unknown in it');
+    const refusals = deliveries.slice(refusalMark);
+    assert.ok(refusals.length > 0, 'setup: the re-drive reached the participant');
+    assert.ok(refusals.every(({answer}) => answer.failureCode === NOT_LEADER &&
+      answer.committed !== true), 'the re-drive attempts were refused before proposal');
+    assert.equal(refused.success, false, 'the owner did not receive an applied answer');
+    assert.equal(refused.failureCode, OUTCOME_UNKNOWN,
+      'a new refusal leaves the original possibility of effect unresolved');
+    assert.equal(refused.pendingInstance?.entryId, deliveries[0].entryId,
+      'the retained obligation is the original entry');
     engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
     const again = await reservationBirth(gateway, 111, now);
     assert.equal(again.success, true, 'answered applied ' +
@@ -414,7 +544,7 @@ for (const [label, pinClock] of [['new timestamps', false],
     'row', {timeout: TEST_TIMEOUT_MS}, async () => {
     await withSurface([TABLES.REPLICA_OPERATIONS,
       TABLES.STORAGE_RESERVATIONS], async ({engine, gateway, messageRouter,
-      cdcIntegrationService, of}) => {
+      cdcIntegrationService, deliveries, of}) => {
       const surface = of(TABLES.STORAGE_RESERVATIONS);
       const coordinator = reservationCoordinator({engine, gateway,
         messageRouter, cdcIntegrationService});
@@ -424,10 +554,12 @@ for (const [label, pinClock] of [['new timestamps', false],
       {entityType: 'partition', entityId: 'p-rel'});
       await coordinator.persistNewOperation(operation);
       const authorityReads = releaseTrapOnAuthoritativeRead(gateway);
-      const clock = pinnedStamps();
-      const stamp = () => (pinClock ? clock.stamp() : undefined);
+      if (pinClock) {
+        const pinnedNow = Date.now();
+        coordinator.nowFn = () => pinnedNow;
+      }
       {
-        stamp();
+        const birthMark = deliveries.length;
         const {first} = await spendFirstAttempt({engine, surface,
           attempt: () => coordinator.createReservationForOperation(
             operation)});
@@ -436,13 +568,35 @@ for (const [label, pinClock] of [['new timestamps', false],
         assert.ok(await appliedRow(surface, 'res-op-rel'),
           'setup: it commits');
         engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
+        const releaseMark = deliveries.length;
         const released = await coordinator.transitionActiveReservationById(
           'res-op-rel', 'released', Date.now());
-        assert.equal(released.changed, true, 'setup: released');
+        const releaseReceipts = deliveries.slice(releaseMark).filter(({table}) =>
+          table === TABLES.STORAGE_RESERVATIONS).map(({entryId, answer}) => ({
+          entryId,
+          failureCode: answer?.failureCode,
+          witness: answer?.durableCommitWitness,
+          settledReplay: answer?.settledReplay,
+        }));
+        const [terminal] = selectRows(surface.dbPath, 'SELECT status FROM ' +
+          TABLES.STORAGE_RESERVATIONS);
+        assert.equal(terminal?.status, 'released', 'setup: the release committed');
+        assert.ok(releaseReceipts.some(({entryId, witness}) =>
+          witness?.entryId === entryId && witness.partitionId === surface.partitionId),
+        `setup: native owner issued the bound release receipt (${JSON.stringify(releaseReceipts)})`);
+        assert.equal(released.changed, true,
+          `setup: owner acknowledges the release (${JSON.stringify(released)})`);
         authorityReads.length = 0;
-        stamp();
+        const reensureMark = deliveries.length;
         const again = await coordinator.createReservationForOperation(
           operation);
+        const firstBirth = deliveries[birthMark];
+        const nextBirth = deliveries.slice(reensureMark).find(({table, sql}) =>
+          table === TABLES.STORAGE_RESERVATIONS && /^\s*INSERT\b/iu.test(sql));
+        assert.ok(nextBirth, `the release permits its next attempt (${JSON.stringify(again)})`);
+        assert.notEqual(nextBirth.entryId, firstBirth.entryId, 'the released birth ends its key');
+        assert.equal(nextBirth.answer.changes, 0,
+          `the native insert saw the terminal row (${JSON.stringify(nextBirth.answer)})`);
         const [row] = selectRows(surface.dbPath, 'SELECT status FROM ' +
           TABLES.STORAGE_RESERVATIONS);
         assert.equal(row.status, 'released', 'setup: the row stays released');
@@ -453,7 +607,9 @@ for (const [label, pinClock] of [['new timestamps', false],
           read.options?.authoritativeReadMode ===
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED &&
           read.result?.success === true), true,
-        'the released-row answer consumes the strict durable operation owner');
+        'the released-row answer consumes the strict durable operation owner ' +
+          `(${JSON.stringify({again, reads: authorityReads.map(({tableName, result}) =>
+            [tableName, result?.success, result?.error])})})`);
       }
       await coordinator.shutdown();
     }, {cdc: true});
@@ -531,14 +687,14 @@ for (const [label, sql, params] of [
 }
 
 // ---------------------------------------------------------------------------
-// B2: a non-idempotent UPDATE behind the generic retry helper, across a
+// B2: a non-idempotent user UPDATE with the caller's explicit key, across a
 // forced runtime replacement, applies exactly once and is answered with its
 // original count; a cas-from UPDATE keeps one entry across the retry loop.
 
-test('a counter UPDATE behind the generic retry helper across a runtime ' +
+test('a user counter UPDATE under its explicit write key across a runtime ' +
   'replacement applies exactly once, answered with its original count',
 {timeout: TEST_TIMEOUT_MS}, async () => {
-  await withSurface([COUNTER_TABLE], async ({engine, gateway, deliveries,
+  await withSurface([COUNTER_TABLE], async ({engine, deliveries,
     of}) => {
     const surface = of(COUNTER_TABLE);
     await engine.executeQuery(`INSERT INTO ${COUNTER_TABLE} (id, n) ` +
@@ -546,9 +702,9 @@ test('a counter UPDATE behind the generic retry helper across a runtime ' +
     deliveries.length = 0;
     const {result, trap} = await spendOneBudget({engine, surface,
       attempt: () => runRetryableControlPlaneWrite((identity) =>
-        gateway.executeQuery(COUNTER_INCREMENT, [1, 'c', 0],
+        engine.executeQuery(COUNTER_INCREMENT, [1, 'c', 0],
           {...identity}),
-      {timeoutMs: SETTLE_BUDGET_MS, baseDelayMs: 20})});
+      {idempotencyKey: 'user-counter-exact-key', timeoutMs: SETTLE_BUDGET_MS, baseDelayMs: 20})});
     assert.ok(trap.count >= 1, 'setup: the core trapped the UPDATE');
     assert.equal(result?.success, true,
       `the helper ends applied (${JSON.stringify(result?.error ?? null)})`);

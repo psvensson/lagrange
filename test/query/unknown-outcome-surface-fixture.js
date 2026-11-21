@@ -57,6 +57,7 @@ const TRAP_MESSAGE = 'unreachable';
 const JOINER_ID = 'uo-joiner';
 const USER_TABLE = 'uo_rows';
 const COUNTER_TABLE = 'uo_counters';
+const CASE_SENSITIVE_USER_TABLE = 'Logs';
 const SURFACE_INSERT = `INSERT INTO ${USER_TABLE} (node_id, value) ` +
   'VALUES (?, ?)';
 const ACTIVE_PARTITION_VERSION = 1;
@@ -122,7 +123,7 @@ function partitionSchemaOf(table) {
       {name: 'value', type: 'TEXT'},
     ]};
   }
-  if (table === COUNTER_TABLE) {
+  if (table === COUNTER_TABLE || table === CASE_SENSITIVE_USER_TABLE) {
     return {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'n', type: 'INTEGER'},
@@ -319,7 +320,8 @@ async function withSurface(tables, body, {cdc = false} = {}) {
     }
     const gateway = createControlPlaneRuntimeBundle({nodeId: NODE_ID,
       sqlQueryEngine: engine, messageRouter,
-      ...(cdcIntegrationService ? {cdcIntegrationService} : {}),
+      ...(cdc ? {cdcIntegrationService} :
+        {startupSqlMutationPhase: CONTROL_PLANE_PHASE_SCOPE.JOIN}),
     }).controlPlaneSystemTableGateway;
     const of = (table) => [...surfaces.values()].find((surface) =>
       surface.table === table);
@@ -360,10 +362,24 @@ function nodeRow() {
     latency_assignment_state: 'unassigned', created_at: now};
 }
 
+// Bound the real executor attempt inside the longer named caller wait.
+function limitSurfaceWriteAttempt(engine) {
+  const executeQuery = engine.executeQuery;
+  engine.executeQuery = (sql, params, options = {}) => {
+    const writeOptions = /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql) ?
+      {...options, timeoutMs: Math.min(options.timeoutMs ?? SPENT_BUDGET_MS, SPENT_BUDGET_MS)} :
+      options;
+    return executeQuery.call(engine, sql, params, writeOptions);
+  };
+  return () => {
+    engine.executeQuery = executeQuery;
+  };
+}
+
 // The budget-spent shape (the lab chain): the trap outlasts the executor's
 // budget, so the attempt ends unknown; the entry commits once it is gone.
 async function spendFirstAttempt({engine, surface, attempt}) {
-  engine.queryExecutor.queryTimeoutMs = SPENT_BUDGET_MS;
+  const restoreLimit = limitSurfaceWriteAttempt(engine);
   const warnings = [];
   const logger = engine.queryExecutor.logger;
   engine.queryExecutor.logger = {...logger,
@@ -375,6 +391,7 @@ async function spendFirstAttempt({engine, surface, attempt}) {
     first = await withMutedConsoleError(attempt);
   } finally {
     trap.release();
+    restoreLimit();
     engine.queryExecutor.logger = logger;
   }
   return {first, trap, warnings};
@@ -385,7 +402,7 @@ async function spendFirstAttempt({engine, surface, attempt}) {
 // replaced runtime commits the entry while the call goes on (its owner's
 // readback, its retry loop).
 async function spendOneBudget({engine, surface, attempt}) {
-  engine.queryExecutor.queryTimeoutMs = SPENT_BUDGET_MS;
+  const restoreLimit = limitSurfaceWriteAttempt(engine);
   const trap = trapCore(surface.partitionId, {once: false});
   const logger = engine.queryExecutor.logger;
   engine.queryExecutor.logger = {...logger, debug: () => undefined,
@@ -400,6 +417,7 @@ async function spendOneBudget({engine, surface, attempt}) {
     result = await withMutedConsoleError(attempt);
   } finally {
     trap.release();
+    restoreLimit();
     engine.queryExecutor.logger = logger;
   }
   return {result, trap};
@@ -608,6 +626,7 @@ async function driveNativeR2Election(services) {
 }
 
 export {
+  CASE_SENSITIVE_USER_TABLE,
   COUNTER_TABLE,
   EXECUTOR_RETRY_DELAY_MS,
   JOINER_ID,
@@ -623,6 +642,7 @@ export {
   releaseTrapOnAuthoritativeRead,
   reservationCoordinator,
   lastLogIndexOf,
+  limitSurfaceWriteAttempt,
   logEntriesOf,
   loseFirstAnswerFromR1,
   nodeRow,

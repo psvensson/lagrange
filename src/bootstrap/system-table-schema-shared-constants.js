@@ -86,13 +86,21 @@ function resolveLogicalTableName(tableName) {
 }
 
 /**
- * The one system-table predicate uses exact logical catalog identity.
+ * Resolve a declared system table using exact logical catalog identity.
+ * @param {*} tableName
+ * @return {string|null}
+ */
+function resolveSystemTableName(tableName) {
+  const canonical = resolveLogicalTableName(tableName);
+  return SYSTEM_TABLE_NAMES.has(canonical) ? canonical : null;
+}
+
+/**
  * @param {*} tableName
  * @return {boolean}
  */
 function isSystemTableName(tableName) {
-  const canonical = resolveLogicalTableName(tableName);
-  return canonical !== null && SYSTEM_TABLE_NAMES.has(canonical);
+  return resolveSystemTableName(tableName) !== null;
 }
 
 export {
@@ -100,4 +108,5 @@ export {
   SYSTEM_TABLE_NAME,
   isSystemTableName,
   resolveLogicalTableName,
+  resolveSystemTableName,
 };

@@ -69,6 +69,8 @@ import {
 //     is forgotten and re-born blind.
 const CONTROL_PLANE_WRITE_ROUTE = Object.freeze({SQL: 'sql', CDC: 'cdc'});
 const CONTROL_PLANE_WRITE_KEY_PREFIX = 'cpw-';
+const CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE = 'CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED';
+const NAMED_WRITE_SCOPE_REQUIRED = 'A named control-plane write requires a declared system partition';
 const MAX_HELD_WRITE_INSTANCES = 4096;
 const CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE =
   'CONTROL_PLANE_WRITE_IDENTITY_CAPACITY';
@@ -134,7 +136,8 @@ function controlPlaneWriteIdentity(...parts) {
 function controlPlaneWriteRoute(family, nodeId, tableName) {
   return {
     id: controlPlaneWriteIdentity(family, nodeId, tableName),
-    partitionId: INITIAL_PARTITION_IDS[tableName] ?? null,
+    partitionId: Object.hasOwn(INITIAL_PARTITION_IDS, tableName) ?
+      INITIAL_PARTITION_IDS[tableName] : null,
   };
 }
 
@@ -452,15 +455,24 @@ function observedWriteResult(record, {answer, state}, pendingInstance) {
  * @param {Function} attempt - (content, idempotencyKey) => Promise of the answer.
  * @return {Promise<*>} The attempt's answer.
  */
+function hasControlPlaneWriteName(options) {
+  return isNonEmptyString(options?.writeIdentity);
+}
+
 function isNamedControlPlaneWrite(options) {
-  return !isNonEmptyString(options?.idempotencyKey) && isNonEmptyString(options?.writeIdentity);
+  return !isNonEmptyString(options?.idempotencyKey) && hasControlPlaneWriteName(options);
 }
 
 function runControlPlaneWrite(options, content, route, attempt) {
+  const hasName = hasControlPlaneWriteName(options);
+  if (hasName && !isNonEmptyString(route.partitionId)) {
+    return Promise.resolve({success: false,
+      error: NAMED_WRITE_SCOPE_REQUIRED, errorCode: CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE});
+  }
   if (isNonEmptyString(options?.idempotencyKey)) {
     return attempt(content, options.idempotencyKey);
   }
-  if (!isNonEmptyString(options?.writeIdentity)) {
+  if (!hasName) {
     return attempt(content, mintControlPlaneWriteKey());
   }
   return runNamedControlPlaneWrite(options, serialize(content), route, attempt,
@@ -502,11 +514,13 @@ function isControlPlaneWriteDefinitivelyUnappliedError(error) {
 }
 
 export {
+  CONTROL_PLANE_NAMED_WRITE_SCOPE_REQUIRED_CODE,
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
   CONTROL_PLANE_WRITE_ROUTE,
   captureControlPlaneWriteConfirmation,
   controlPlaneWriteIdentity,
   controlPlaneWriteRoute,
+  hasControlPlaneWriteName,
   isControlPlaneWriteDefinitivelyUnappliedError,
   isControlPlaneWriteOutcomeUnknown,
   isNamedControlPlaneWrite,

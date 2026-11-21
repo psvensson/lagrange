@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2362,
+    "unit": 2363,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2721,
-  "digest": "fnv1a32-d36db8c5",
+  "censusSize": 2722,
+  "digest": "fnv1a32-91c0714e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1691,6 +1691,7 @@
     "test/query/service-read-locality-routing.test.js": "unit",
     "test/query/settled-replay-sql-surface.test.js": "unit",
     "test/query/sql-boolean-and-parameter-binding.test.js": "unit",
+    "test/query/sql-dml-target-namespace-native.test.js": "unit",
     "test/query/sql-execution-guard.test.js": "unit",
     "test/query/sql-front-end-fidelity.test.js": "unit",
     "test/query/sql-mutation-and-constraint-stabilization.test.js": "unit",

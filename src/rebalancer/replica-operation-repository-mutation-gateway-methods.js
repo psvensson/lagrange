@@ -13,6 +13,9 @@ import {reportOperationMutationRetrySpent} from
   './replica-operation-repository-mutation-retry-observability.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const DATA_DESCRIPTOR_VALUE = 'value';
+const MUTATION_RECEIPT_PARTITION_RESULT = 'partitionResult';
+const MUTATION_RECEIPT_COUNT_FIELDS = Object.freeze(['changes', 'affectedRows']);
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
   'replica-operation';
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
@@ -643,7 +646,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.mergePolicy ||
           CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
         ...(options.ignoreExisting === true ? {ignoreExisting: true} : {}),
-        controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         controlPlaneOperationKind: REPLICA_OPERATION_REPOSITORY_LITERAL.WRITE,
         ...(coalescingKey ? {coalescingKey} : {}),
         ...(deliverySource ? {deliverySource} : {}),
@@ -723,16 +725,19 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
     extractMutationChangeCount(result) {
       if (!result || typeof result !== 'object') return null;
-      const partitionDescriptor = Object.getOwnPropertyDescriptor(result, 'partitionResult');
-      if (partitionDescriptor && !Object.hasOwn(partitionDescriptor, 'value')) return null;
+      const partitionDescriptor = Object.getOwnPropertyDescriptor(result,
+        MUTATION_RECEIPT_PARTITION_RESULT);
+      if (partitionDescriptor && !Object.hasOwn(partitionDescriptor, DATA_DESCRIPTOR_VALUE)) {
+        return null;
+      }
       const records = [result, partitionDescriptor?.value];
       const counts = [];
       for (const record of records) {
         if (!record || typeof record !== 'object') continue;
-        for (const field of ['changes', 'affectedRows']) {
+        for (const field of MUTATION_RECEIPT_COUNT_FIELDS) {
           const descriptor = Object.getOwnPropertyDescriptor(record, field);
           if (!descriptor) continue;
-          if (!Object.hasOwn(descriptor, 'value') ||
+          if (!Object.hasOwn(descriptor, DATA_DESCRIPTOR_VALUE) ||
               !Number.isSafeInteger(descriptor.value) || descriptor.value < 0) return null;
           counts.push(descriptor.value);
         }

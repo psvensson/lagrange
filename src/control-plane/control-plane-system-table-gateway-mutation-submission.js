@@ -1,3 +1,4 @@
+import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -11,7 +12,6 @@ import {
   normalizeCoalescingToken,
   normalizeMutationOperation,
   normalizePhaseScope,
-  normalizeSystemTableName,
 } from './control-plane-system-table-gateway-shared.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -167,7 +167,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
    */
   async submitMutation(mutation = {}, options = {}) {
     const operation = normalizeMutationOperation(mutation?.operation);
-    const tableName = normalizeSystemTableName(mutation?.tableName);
+    const tableName = resolveSystemTableName(mutation?.tableName);
     if (!operation) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_OPERATION_REQUIRED);
     }

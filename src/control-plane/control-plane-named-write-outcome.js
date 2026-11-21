@@ -28,7 +28,7 @@ function hasAffectedRows(result) {
 
 function belongsToNamedWrite(result, {key, partitionId}) {
   return hasText(result.partitionId) &&
-    (partitionId === null || result.partitionId === partitionId) &&
+    result.partitionId === partitionId &&
     result.entryId === deriveParticipantEntryId(key, result.partitionId);
 }
 
@@ -57,7 +57,7 @@ function isPartitionPreProposalRefusal(result, attempt) {
   return result.committed !== true && isPartitionWriteFailureCode(result.failureCode) &&
     !NON_REFUSAL_CODES.has(result.failureCode) &&
     hasText(result.partitionId) &&
-    (attempt.partitionId === null || result.partitionId === attempt.partitionId) &&
+    result.partitionId === attempt.partitionId &&
     (result.entryId == null || belongsToNamedWrite(result, attempt));
 }
 
@@ -90,8 +90,7 @@ function distributedAffectedRowsAgree(result, attempt) {
   if (participantResults.length === 0) {
     return !attempt.unresolved && result.affectedRows === 0;
   }
-  if (attempt.partitionId !== null &&
-      (partitions.length !== 1 || mirrorPartitions.length !== 0)) return false;
+  if (partitions.length !== 1 || mirrorPartitions.length !== 0) return false;
   const primaryResults = participantResults.filter((entry) =>
     partitions.includes(entry.partitionId));
   if (primaryResults.some(isAppliedWithUnknownCount)) return isAppliedWithUnknownCount(result);
