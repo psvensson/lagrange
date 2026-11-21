@@ -909,7 +909,7 @@ function captureTerminalWrite(world, row) {
   }));
 }
 
-function startCoordinator(world) {
+function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
   const coordinator = createTestCoordinator({
     nodeId: world.ownerNodeId,
     enableTimeouts: false,
@@ -917,6 +917,7 @@ function startCoordinator(world) {
     committedMembershipFixture: false,
     systemTableCache: world.cache,
     onCommittedOperationWrite: (row) => captureTerminalWrite(world, row),
+    controlPlaneSystemTableGatewayFactory,
     messageRouter: {
       deliver: (target, payload) => deliver(world, target, payload),
       getConnectionState: () => 'connected',
@@ -1140,10 +1141,15 @@ function electAmongLive(world) {
  * @param {Object} [options] - createReplaceWorld options.
  * @return {Promise<Object>}
  */
+function coordinatorGatewayFactory(options, world) {
+  if (options.controlPlaneSystemTableGatewayFactory === undefined) return undefined;
+  return (gateway) => options.controlPlaneSystemTableGatewayFactory(gateway, world);
+}
+
 async function openReplaceWorld(options = {}) {
   const world = createReplaceWorld(options);
   try {
-    startCoordinator(world);
+    startCoordinator(world, coordinatorGatewayFactory(options, world));
     if (options.initializeOperation) await options.initializeOperation(world);
     else await createReplace(world);
   } catch (error) {

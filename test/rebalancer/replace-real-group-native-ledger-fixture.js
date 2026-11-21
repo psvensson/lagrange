@@ -33,8 +33,7 @@ function routeLedgerMessages(coordinator, ledger) {
     partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'});
 }
 
-function ledgerGatewayForWorld(world, ledger) {
-  const original = world.coordinator.controlPlaneSystemTableGateway;
+function ledgerGatewayForWorld(world, ledger, original, incumbentId) {
   const gateway = Object.create(original);
   for (const method of ['readAuthoritativeRows', 'readRows']) {
     gateway[method] = (tableName, ...args) => tableName === 'replica_operations' ?
@@ -48,7 +47,7 @@ function ledgerGatewayForWorld(world, ledger) {
     // Explicit delivery of the incumbent's real committed row. The historical
     // owner's insert CDC remains withheld, as the fault sequence requires.
     const row = ledger.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
-      .get(world.operation.operationId);
+      .get(incumbentId);
     if (row) world.cache.upsert('replica_operations', row);
     return answer;
   };
@@ -92,11 +91,18 @@ async function withNativeLedgerReplace(measure) {
       assert.equal(answer.placementResult.outcome, 'ADMITTED');
       const admitted = ledger.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
         .get(answer.placementResult.operationIds[0]);
+      let nativeGateway;
       world = await openReplaceWorld({partitionId: PARTITION_ID,
         targetReplicaId: admitted.replica_id,
+        controlPlaneSystemTableGatewayFactory(original, candidate) {
+          nativeGateway = ledgerGatewayForWorld(candidate, ledger, original, admitted.operation_id);
+          return nativeGateway;
+        },
         async initializeOperation(candidate) {
-          const gateway = ledgerGatewayForWorld(candidate, ledger);
-          candidate.coordinator.syncOwnerDependencies({controlPlaneSystemTableGateway: gateway});
+          assert.equal(candidate.coordinator.controlPlaneSystemTableGateway, nativeGateway);
+          assert.equal(candidate.coordinator.repository.controlPlaneSystemTableGateway,
+            nativeGateway,
+            'the construction-only repository owner is the actual routed ledger gateway');
           routeLedgerMessages(candidate.coordinator, ledger);
           candidate.operation = candidate.coordinator.repository.rowToOperation(admitted);
           // The real group admitted this exact target. As in the existing
@@ -109,6 +115,10 @@ async function withNativeLedgerReplace(measure) {
           const persisted = await candidate.coordinator.repository.persistOperationUpdate(active,
             {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
           assert.equal(persisted.persisted, true);
+          const actual = ledger.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+            .get(admitted.operation_id);
+          assert.equal(actual.workflow_step, WORKFLOW_STEP.ACTIVE,
+            'actual file-backed apply, not another fixture store, committed the ACTIVE milestone');
           candidate.operation = persisted.operation;
         }});
       await settleTurns();
