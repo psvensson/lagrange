@@ -272,15 +272,15 @@ answer is re-founding, never a retry.
 
 ### Support-envelope policy and evidence
 
-[`support-envelope.json`](support-envelope.json) declares a version pair,
-topology bounds, rollback cutoff and five drill shapes. The builder currently
-supplies default `executed: true` values, literal measurements and placeholder
-dependency receipt strings. These are synthetic policy/fixture records, not
-original physical measurements, and cannot certify upgrade, rollback or recovery.
+[`support-envelope.json`](support-envelope.json) declares the version pair,
+topology, protocol and schema boundaries, rebuild limits and rollback cutoff.
+The authenticated transport boundary is a policy requirement. Current node
+transport remains plain WebSocket.
 
-The management policy can refuse out-of-envelope inputs with
-`OUTSIDE_SUPPORT_ENVELOPE` and post-cutoff rollback with
-`ROLLBACK_CUTOFF_EXCEEDED`. Passing that policy does not establish support.
+Management reports policy validity and physical evidence availability
+separately. Upgrade admission requires physical evidence. Management can refuse
+an upgrade with `OUTSIDE_SUPPORT_ENVELOPE` and a rollback past the cutoff with
+`ROLLBACK_CUTOFF_EXCEEDED`.
 The upgrade and recovery owner
 retains qualification of actual old/new artifacts, rolling upgrade, rollback
 boundary, node failure, wiped-replica rebuild and service-artifact upgrade.

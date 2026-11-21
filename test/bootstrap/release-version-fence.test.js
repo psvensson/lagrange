@@ -42,7 +42,7 @@ import {CONFIG_KEY} from '../../src/config/config-constants.js';
 import {ENTRYPOINT_ENV} from '../../src/constants/entrypoint.js';
 import {
   CLUSTER_FORMAT_REVISION, CLUSTER_FORMAT_REVISION_FIELD,
-  SUPPORT_ENVELOPE_DRILL_ID, SUPPORT_ENVELOPE_REASON_CODE,
+  SUPPORT_ENVELOPE_REASON_CODE,
   SupportEnvelopeOwner, assertCurrentClusterFormatDeclaration,
   buildSupportEnvelopeRecord, clusterFormatRevisionClaim,
   computeSupportEnvelopeDigest, evaluateRollbackEligibility,
@@ -607,7 +607,7 @@ test('W-FENCE (F2/F4): adversarial carriers, non-integers, inherited claims, ' +
   const summary = new SupportEnvelopeOwner({envelope: flipEnvGoodFirst.target})
     .getManagementSummary();
   assert.equal(flipEnvGoodFirst.getReads(), 1);
-  assert.equal(summary.valid, true);
+  assert.equal(summary.policyValid, true);
   assert.equal(summary.clusterFormatRevision, CLUSTER_FORMAT_REVISION);
 });
 
@@ -620,68 +620,45 @@ function envelopeOfRevision(revision, versionPair) {
   return {...other, envelopeDigest: computeSupportEnvelopeDigest(other)};
 }
 
-test('W-FENCE: in-place upgrade and downgrade are admitted only by a certified ' +
-  'envelope of this build\'s revision; absent, other or uncertified is refused', () => {
+test('W-FENCE: declarations do not authorize a release transition', () => {
   const pair = {sourceVersion: '0.4.1', targetVersion: '0.5.0'};
   const current = buildSupportEnvelopeRecord({versionPair: pair});
   const other = envelopeOfRevision(OTHER_REVISION, pair);
   const partial = {[CLUSTER_FORMAT_REVISION_FIELD]: CLUSTER_FORMAT_REVISION, versionPair: pair};
-  const flatLegacy = {[CLUSTER_FORMAT_REVISION_FIELD]: CLUSTER_FORMAT_REVISION, ...pair};
+  const flat = {[CLUSTER_FORMAT_REVISION_FIELD]: CLUSTER_FORMAT_REVISION, ...pair};
   const digestTampered = {
     ...buildSupportEnvelopeRecord({versionPair: {sourceVersion: '0.4.1', targetVersion: '0.4.2'}}),
     versionPair: pair,
   };
-  const dataLossUncertified = buildSupportEnvelopeRecord({
-    versionPair: pair,
-    drills: {
-      ...current.drills,
-      [SUPPORT_ENVELOPE_DRILL_ID.ROLLING_UPGRADE]: {
-        ...current.drills[SUPPORT_ENVELOPE_DRILL_ID.ROLLING_UPGRADE],
-        lostAcknowledgedWrites: 1,
-      },
-    },
-  });
 
-  assert.equal(validateSupportEnvelopeRecord(current).valid, true);
-  assert.deepEqual(validateSupportEnvelopeRecord(other).reasonCodes, [OUTSIDE],
+  assert.equal(validateSupportEnvelopeRecord(current).policyValid, true);
+  assert.equal(validateSupportEnvelopeRecord(other).reasonCode, OUTSIDE,
     'a validly digested envelope of another revision is outside');
-  assert.equal(validateVersionPairAdmission(current, pair).admitted, true);
-  assert.equal(evaluateRollbackEligibility(current,
-    {targetVersion: pair.sourceVersion}).eligible, true);
-  assert.equal(validateMixedVersionNodeAdmission(current,
-    {localVersion: pair.sourceVersion, peerVersion: pair.targetVersion}).admitted, true);
 
   for (const envelope of [null, undefined, other]) {
     assert.equal(validateVersionPairAdmission(envelope, pair).reasonCode, OUTSIDE);
     assert.equal(evaluateRollbackEligibility(envelope,
       {targetVersion: pair.sourceVersion}).reasonCode, OUTSIDE);
   }
-  for (const uncertified of [partial, flatLegacy, digestTampered, dataLossUncertified]) {
-    assert.equal(validateSupportEnvelopeRecord(uncertified).valid, false);
-    assert.equal(validateVersionPairAdmission(uncertified, pair).admitted, false);
-    assert.equal(evaluateRollbackEligibility(uncertified,
-      {targetVersion: pair.sourceVersion}).eligible, false);
-    assert.equal(validateMixedVersionNodeAdmission(uncertified,
-      {localVersion: pair.sourceVersion, peerVersion: pair.targetVersion}).admitted, false);
-  }
-  assert.equal(new SupportEnvelopeOwner().getManagementSummary().valid, false);
-  assert.equal(new SupportEnvelopeOwner({envelope: null}).getManagementSummary().valid, false);
 
   const snapshot = {nodeIds: ['n1', 'n2', 'n3'], readyNodeIds: ['n1', 'n2', 'n3'],
     underReplicatedPartitionCount: 0, hasPartitionQuorum: true};
   const params = {targetVersion: pair.targetVersion};
   const ports = {currentVersion: pair.sourceVersion,
     onDrainNodeLeadership: () => {}, onTriggerNodeRestart: () => {}};
-  assert.equal(new RollingUpgradeOwner({...ports, supportEnvelope: current})
-    .evaluatePreflight(params, snapshot).ok, true);
-  for (const supportEnvelope of [
-    undefined, other, partial, flatLegacy, digestTampered, dataLossUncertified,
-  ]) {
-    const owner = new RollingUpgradeOwner({...ports, supportEnvelope});
+
+  for (const envelope of [undefined, current, other, partial, flat, digestTampered]) {
+    assert.equal(validateSupportEnvelopeRecord(envelope).valid, false);
+    assert.equal(validateVersionPairAdmission(envelope, pair).admitted, false);
+    assert.equal(evaluateRollbackEligibility(envelope,
+      {targetVersion: pair.sourceVersion}).eligible, false);
+    assert.equal(validateMixedVersionNodeAdmission(envelope,
+      {localVersion: pair.sourceVersion, peerVersion: pair.targetVersion}).admitted, false);
+
+    const supportEnvelopeOwner = new SupportEnvelopeOwner({envelope});
+    const owner = new RollingUpgradeOwner({...ports, supportEnvelopeOwner});
     assert.equal(owner.evaluatePreflight(params, snapshot).reasonCode,
       L4_ROLLING_UPGRADE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
-    const rollback = owner.executeRollback({targetVersion: pair.sourceVersion});
-    assert.equal(rollback.ok, false);
-    assert.notEqual(rollback.reasonCode, SUPPORT_ENVELOPE_REASON_CODE.OK);
+    assert.equal(owner.executeRollback({targetVersion: pair.sourceVersion}).ok, false);
   }
 });

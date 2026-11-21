@@ -22,53 +22,26 @@
  * `solve note` line after EVERY certification run.
  */
 
-import {createHash} from 'node:crypto';
-import {existsSync, readFileSync, readdirSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {basename, dirname, join, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {evaluateCertificationStreak} from './scenario-certification.js';
 import {SCENARIO_OUTCOME} from './scenario-outcome.js';
+import {
+  EVIDENCE_FILE, NO_MANIFEST, certificationRunIdentity, parseCertificationRecords,
+  safeName, sha256, verifyEvidenceDir,
+} from '../../../src/utils/certification-evidence-record.js';
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySort = Function.call.bind(Array.prototype.sort);
-const stringReplace = Function.call.bind(String.prototype.replace);
-const stringSplit = Function.call.bind(String.prototype.split);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
-const stringTrim = Function.call.bind(String.prototype.trim);
-const regExpExec = Function.call.bind(RegExp.prototype.exec);
-const jsonStringify = JSON.stringify;
 
 const ZERO = 0;
 const UTF8 = 'utf8';
-const SHA256 = 'sha256';
-const HEX = 'hex';
-const RUN_IDENTITY_SEPARATOR = '|';
-const HOST_SEPARATOR = ',';
-const UNSAFE_NAME = /[^0-9A-Za-z_-]/gu;
-const SAFE_REPLACEMENT = '-';
-const NO_SHA = 'no-sha';
-const NO_MANIFEST = 'none';
-const LOGS_PREFIX = 'logs/';
 const CERTIFICATION_EVIDENCE_ROOT = fileURLToPath(new URL(
   '../../../test-output/certification', import.meta.url));
-
-const EVIDENCE_FILE = Object.freeze({
-  CERTIFICATION: 'certification.json',
-  ENTRY: 'report-entry.json',
-  GATES: 'gates.json',
-  LOGS: 'logs',
-  MANIFEST: 'manifest.json',
-  MANIFEST_DIGEST: 'manifest.json.sha256',
-  STARTED: 'started.json',
-});
-
-// One recorded certification run, as the runner prints it for
-// `solve note --kind evidence` (formatCertificationRecord).
-const RECORD_PATTERN = new RegExp('certification-run scenario=(\\S+) ' +
-  'sha=(\\S+) start=(\\S+) outcome=(\\S+) manifest=([0-9a-f]{64}|none)', 'u');
 
 const SAMPLE_FAILURE = Object.freeze({
   RECORDED_DIGEST_DIFFERS: 'its manifest digest is not the recorded one',
@@ -81,25 +54,6 @@ const FAILED_SAMPLE_ENTRY = Object.freeze({
   certification: Object.freeze({certified: false, requested: true}),
   outcome: SCENARIO_OUTCOME.FAILED, passed: false});
 
-function sha256(bytes) {
-  return createHash(SHA256).update(bytes).digest(HEX);
-}
-
-function safeName(value) {
-  return stringReplace(String(value), UNSAFE_NAME, SAFE_REPLACEMENT);
-}
-
-/**
- * One run's identity: its start, the requested sha and its host set.
- * @param {{runStartedAt: string, requestedSha: ?string, hostSet: string[]}}
- *   input
- * @return {string}
- */
-function certificationRunIdentity({runStartedAt, requestedSha, hostSet}) {
-  return [String(runStartedAt), String(requestedSha ?? NO_SHA),
-    (hostSet || []).join(HOST_SEPARATOR)].join(RUN_IDENTITY_SEPARATOR);
-}
-
 function listDirs(path) {
   try {
     return arrayMap(arrayFilter(readdirSync(path, {withFileTypes: true}),
@@ -107,68 +61,6 @@ function listDirs(path) {
   } catch (_error) {
     return [];
   }
-}
-
-function readVerifiedJson(dir, path, manifest) {
-  const listed = arrayFind(manifest.files || [], (file) => file.path === path);
-  const bytes = readFileSync(join(dir, path));
-  if (!listed || listed.sha256 !== sha256(bytes)) {
-    throw new Error(`${path} does not match its manifest digest`);
-  }
-  return JSON.parse(bytes.toString(UTF8));
-}
-
-// A node log may live outside the directory (a committed copy keeps only
-// the verdict files; the logs are bound by the manifest's digests).
-function verifyListedFiles(dir, manifest, logsByDigest) {
-  for (const file of manifest.files || []) {
-    const path = join(dir, file.path);
-    if (logsByDigest && stringStartsWith(String(file.path), LOGS_PREFIX) &&
-        !existsSync(path)) {
-      continue;
-    }
-    if (sha256(readFileSync(path)) !== file.sha256) {
-      throw new Error(`${file.path} does not match its manifest digest`);
-    }
-  }
-}
-
-function verifyStarted(dir, manifest) {
-  const started = readVerifiedJson(dir, EVIDENCE_FILE.STARTED, manifest);
-  if (started.runStartedAt !== manifest.runStartedAt ||
-      started.requestedSha !== manifest.requestedSha ||
-      started.scenario !== manifest.scenario) {
-    throw new Error('started.json is not the manifest\'s run');
-  }
-}
-
-/**
- * Verify one run directory against its manifest; throws naming what does
- * not verify.
- * @param {string} dir
- * @param {{logsByDigest?: boolean}} [options]
- * @return {{entry, manifest, manifestDigest}}
- */
-function verifyEvidenceDir(dir, {logsByDigest = false} = {}) {
-  const manifestBytes = readFileSync(join(dir, EVIDENCE_FILE.MANIFEST));
-  const recorded = stringSplit(stringTrim(readFileSync(join(dir,
-    EVIDENCE_FILE.MANIFEST_DIGEST)).toString(UTF8)), ' ')[ZERO];
-  if (recorded !== sha256(manifestBytes)) {
-    throw new Error('manifest.json does not match manifest.json.sha256');
-  }
-  const manifest = JSON.parse(manifestBytes.toString(UTF8));
-  verifyListedFiles(dir, manifest, logsByDigest);
-  if (manifest.runIdentity !== certificationRunIdentity(manifest)) {
-    throw new Error('manifest runIdentity is not its run start, sha and hosts');
-  }
-  verifyStarted(dir, manifest);
-  const entry = readVerifiedJson(dir, EVIDENCE_FILE.ENTRY, manifest);
-  const certification = readVerifiedJson(dir, EVIDENCE_FILE.CERTIFICATION,
-    manifest);
-  if (jsonStringify(entry.certification) !== jsonStringify(certification)) {
-    throw new Error('certification.json is not the entry\'s certification');
-  }
-  return {entry, manifest, manifestDigest: recorded};
 }
 
 function readStartedLoosely(dir) {
@@ -232,18 +124,6 @@ function readCertificationEvidence({root = CERTIFICATION_EVIDENCE_ROOT,
  * @param {Array<string>} texts
  * @return {Array<{scenario, sha, start, outcome, manifestDigest}>}
  */
-function parseCertificationRecords(texts) {
-  const records = [];
-  for (const text of texts || []) {
-    const match = regExpExec(RECORD_PATTERN, String(text));
-    if (match !== null) {
-      records.push({manifestDigest: match[5] === NO_MANIFEST ? null : match[5],
-        outcome: match[4], scenario: match[1], sha: match[2], start: match[3]});
-    }
-  }
-  return records;
-}
-
 function sameRun(sample, record) {
   return sample.key === safeName(record.start) &&
     sample.shaDir === safeName(record.sha);

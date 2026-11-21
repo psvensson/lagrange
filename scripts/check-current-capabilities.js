@@ -27,7 +27,7 @@ import {
   generate,
 } from './generate-current-capabilities-doc.js';
 import {
-  validateSupportEnvelopeRecord,
+  validateSupportEnvelopePolicy,
 } from '../src/bootstrap/owners/support-envelope-owner.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -325,11 +325,11 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
     AUDIT_MARKER.SERVICE_CONTRACT_MISMATCH);
 
   const supportEnvelope = readJson(SUPPORT_ENVELOPE_PATH, root);
-  const envelopeValidation = validateSupportEnvelopeRecord(supportEnvelope);
+  const envelopeValidation = validateSupportEnvelopePolicy(supportEnvelope);
   addProblem(
     problems,
     envelopeValidation.valid,
-    `support envelope contract is invalid (${envelopeValidation.reasonCode})`,
+    `support envelope policy is invalid (${envelopeValidation.reasonCode})`,
   );
 
   const expectedDocument = generate(root);

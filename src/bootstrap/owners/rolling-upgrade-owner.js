@@ -8,8 +8,8 @@ import {
   TERMINAL_MANAGEMENT_OPERATION_STATES as TERM_STATES,
 } from './management-v1-constants.js';
 import {
+  SupportEnvelopeOwner,
   evaluateRollbackEligibility,
-  validateVersionPairAdmission,
 } from './support-envelope-owner.js';
 
 const UNSET = null;
@@ -35,7 +35,7 @@ const OWNER_DEFAULTS = Object.freeze({
   onDrainNodeLeadership: UNSET, onSetNodeReadyz: UNSET,
   onTriggerNodeRestart: UNSET, onPersistState: UNSET, activeOperation: UNSET,
   nodePlan: UNSET, currentNodeIndex: -1, versionSkew: false,
-  initialOperationState: OP_STATE.ACCEPTED, supportEnvelope: UNSET,
+  initialOperationState: OP_STATE.ACCEPTED, supportEnvelopeOwner: UNSET,
 });
 
 function createNodeVersionsMap(source) {
@@ -103,6 +103,8 @@ function resolveReadyCount(snap) {
 /** An absent or incomplete snapshot is never read as a ready cluster. */
 function isSnapshotIncomplete(snap) {
   return !snap || !Array.isArray(snap.nodeIds) || snap.nodeIds.length === 0 ||
+    new Set(snap.nodeIds).size !== snap.nodeIds.length ||
+    !snap.nodeIds.every((nodeId) => typeof nodeId === 'string' && nodeId.length > 0) ||
     !isCount(snap.underReplicatedPartitionCount);
 }
 function isClusterNotReady(snap) {
@@ -113,27 +115,66 @@ function isClusterNotReady(snap) {
 // certified by a support envelope of this build's cluster format revision is
 // admitted. Without a configured envelope nothing is certified, so the pair
 // is refused (fail closed), never admitted by the semver rule alone.
-function isOutsideSupportEnvelope(owner, targetVersion) {
-  const check = validateVersionPairAdmission(owner.supportEnvelope, {
+function supportAdmission(owner, parameters, nodeCount, retainedBinding = UNSET) {
+  if (!SupportEnvelopeOwner.isOwner(owner.supportEnvelopeOwner)) return UNSET;
+  return SupportEnvelopeOwner.prototype.validateUpgradePair.call(owner.supportEnvelopeOwner, {
     sourceVersion: owner.currentVersion,
-    targetVersion,
+    sourceArtifactDigest: owner.currentArtifactDigest,
+    targetVersion: parameters.targetVersion,
+    targetArtifactDigest: parameters.targetArtifactDigest,
+    nodeCount,
+    retainedBinding,
   });
-  return !check.admitted;
 }
-function findPreflightFailure(owner, params, snap) {
+function retainedOperationIdentityMatches(owner, op, binding) {
+  return op.kind === OP_KIND.TRANSITION_RELEASE && typeof op.operationId === 'string' &&
+    op.operationId.length > 0 && owner.operations.get(op.operationId) === op &&
+    binding && binding.operationId === op.operationId &&
+    binding.lagrangeOperationId === op.lagrangeOperationId &&
+    binding.sourceVersion === owner.currentVersion &&
+    typeof op.parameters?.targetVersion === 'string' &&
+    binding.targetVersion === op.parameters.targetVersion;
+}
+
+function samePlanIdentity(binding, parameters, plan) {
+  return Array.isArray(plan) && Array.isArray(binding.nodeIds) &&
+    binding.nodeIds.length === plan.length &&
+    new Set(binding.nodeIds).size === plan.length &&
+    plan.every((node, index) => typeof node?.nodeId === 'string' &&
+      node.nodeId.length > 0 && node.nodeId === binding.nodeIds[index] &&
+      node.targetVersion === parameters.targetVersion);
+}
+
+function copyOperation(operation) {
+  if (!operation) return UNSET;
+  const {parameters, nodePlan, supportBinding} = operation;
+  return {...operation,
+    parameters: {...parameters},
+    nodePlan: Array.isArray(nodePlan) ? nodePlan.map((node) => ({...node})) : UNSET,
+    ...(supportBinding ? {supportBinding: {
+      ...supportBinding,
+      nodeIds: Array.isArray(supportBinding.nodeIds) ? [...supportBinding.nodeIds] : UNSET,
+      executionReferences: Array.isArray(supportBinding.executionReferences) ?
+        [...supportBinding.executionReferences] : UNSET,
+    }} : {}),
+  };
+}
+
+function findPreflightFailure(owner, params, snap, admission) {
   const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
   if (!owner.capabilitySupported) return L4_CODE.UPGRADE_CAPABILITY_UNSUPPORTED;
   if (isSnapshotIncomplete(snap)) return L4_CODE.CLUSTER_NOT_READY;
   const hit = [
     [snap.hasActiveOperation === true || owner.hasActiveUpgrade(),
       L4_CODE.CONCURRENT_OPERATION_ACTIVE],
-    [isOutsideSupportEnvelope(owner, tVer), L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
     [!owner.checkVersionCompatible(tVer), L4_CODE.RELEASE_VERSION_INCOMPATIBLE],
     [Boolean(tDig && !owner.checkArtifactDigest(tVer, tDig)), L4_CODE.ARTIFACT_DIGEST_MISMATCH],
     [isClusterNotReady(snap), L4_CODE.CLUSTER_NOT_READY],
     [snap.hasPartitionQuorum !== true, L4_CODE.QUORUM_SAFETY_HALT],
     [snap.underReplicatedPartitionCount > 0, L4_CODE.UNDER_REPLICATED_PARTITIONS],
     [snap.capacityState === FACTS.CAPACITY_PRESSURED, L4_CODE.STORAGE_CAPACITY_PRESSURED],
+    [admission?.admitted !== true,
+      L4_CODE.OUTSIDE_SUPPORT_ENVELOPE],
   ].find(([failed]) => failed);
   return hit ? hit[1] : UNSET;
 }
@@ -180,22 +221,25 @@ function buildOperationRecord(
 }
 function commitActiveOp(owner, opId, op) {
   owner.operations.set(opId, op);
-  owner.activeOperation = op;
+  if (op.state !== OP_STATE.REJECTED || !owner.hasActiveUpgrade()) owner.activeOperation = op;
   owner.onPersistState?.(owner.getPersistedState());
-  return op;
+  return copyOperation(op);
 }
 function restorePersistedCollections(owner, s) {
   objectAssign(owner, {
     nodeVersions: s.nodeVersions ? createNodeVersionsMap(s.nodeVersions) : owner.nodeVersions,
-    operations: new Map(s.operations || []),
-    activeOperation: s.activeOperation ? {...s.activeOperation} : UNSET,
-    nodePlan: s.nodePlan ? s.nodePlan.map((n) => ({...n})) : UNSET,
+    operations: new Map(Array.isArray(s.operations) ?
+      s.operations.map(([id, op]) => [id, copyOperation(op)]) : []),
+    activeOperation: copyOperation(s.activeOperation),
+    nodePlan: Array.isArray(s.nodePlan) ? s.nodePlan.map((n) => ({...n})) : UNSET,
   });
   const op = owner.activeOperation;
   if (op) owner.operations.set(op.operationId, op);
 }
 
 class RollingUpgradeOwner {
+  #restoredSourceMatches = true;
+
   /**
    * @param {Object} [options] - Rolling upgrade is supported only when both
    *   physical ports, onDrainNodeLeadership and onTriggerNodeRestart, are
@@ -224,21 +268,27 @@ class RollingUpgradeOwner {
     return Boolean(this.activeOperation && !TERM_STATES.includes(this.activeOperation.state));
   }
   evaluatePreflight(parameters, clusterSnapshot) {
-    const code = findPreflightFailure(this, parameters, clusterSnapshot);
+    const admission = isSnapshotIncomplete(clusterSnapshot) ? null :
+      supportAdmission(this, parameters ?? {}, clusterSnapshot.nodeIds.length);
+    const code = findPreflightFailure(this, parameters, clusterSnapshot, admission);
     return code ? {ok: false, valid: false, reasonCode: code} : PREFLIGHT_SUCCESS;
   }
   startUpgrade({operationId, lagrangeOperationId, parameters, clusterSnapshot, nowMs}) {
     const timeMs = Number.isFinite(nowMs) ? nowMs : Date.now();
     if (this.operations.has(operationId)) return this.getOperationStatus(operationId);
     const snap = clusterSnapshot ?? UNSET;
-    const code = findPreflightFailure(this, parameters, snap);
+    const admission = isSnapshotIncomplete(snap) ? null :
+      supportAdmission(this, parameters ?? {}, snap.nodeIds.length);
+    const code = findPreflightFailure(this, parameters, snap, admission);
     if (code) {
       return commitActiveOp(this, operationId, buildOperationRecord(
         operationId, lagrangeOperationId, OP_STATE.REJECTED, code, parameters, timeMs, timeMs));
     }
-    return this.initiatePlan(operationId, lagrangeOperationId, parameters, snap, timeMs);
+    this.#restoredSourceMatches = true;
+    return this.#initiatePlan(operationId, lagrangeOperationId, parameters, snap, timeMs,
+      admission.binding);
   }
-  initiatePlan(opId, lagrangeOpId, params, snap, timeMs) {
+  #initiatePlan(opId, lagrangeOpId, params, snap, timeMs, supportBinding) {
     const [tVer, tDig] = [params?.targetVersion, params?.targetArtifactDigest];
     const nodeIds = snap.nodeIds;
     for (const id of nodeIds) {
@@ -257,14 +307,32 @@ class RollingUpgradeOwner {
       startedAtMs: timeMs, updatedAtMs: timeMs, readyzWithdrawn: false, leadershipDrained: false,
     }));
     this.currentNodeIndex = 0;
-    const op = commitActiveOp(this, opId, buildOperationRecord(
-      opId, lagrangeOpId, this.initialOperationState, UNSET, params, timeMs, UNSET, this.nodePlan));
-    this.drainNodeAtIndex(0, timeMs);
-    return op;
+    const record = buildOperationRecord(
+      opId, lagrangeOpId, this.initialOperationState, UNSET, params, timeMs, UNSET, this.nodePlan);
+    record.supportBinding = {...supportBinding, operationId: opId,
+      lagrangeOperationId: record.lagrangeOperationId, sourceVersion: this.currentVersion,
+      targetVersion: tVer, nodeIds: [...nodeIds]};
+    commitActiveOp(this, opId, record);
+    this.#drainCurrentNode(timeMs);
+    return this.getOperationStatus(opId);
   }
-  drainNodeAtIndex(index, timeMs) {
-    const node = this.nodePlan?.[index];
-    if (!node) return UNSET;
+  #forwardSupportValid() {
+    const op = this.activeOperation;
+    const binding = op?.supportBinding;
+    return this.#restoredSourceMatches && this.capabilitySupported && this.hasActiveUpgrade() &&
+      retainedOperationIdentityMatches(this, op, binding) &&
+      samePlanIdentity(binding, op.parameters, op.nodePlan) &&
+      samePlanIdentity(binding, op.parameters, this.nodePlan) &&
+      supportAdmission(this, op.parameters, this.nodePlan.length, binding)?.admitted === true;
+  }
+  #heldForwardProgress() {
+    return {...this.getOperationStatus(this.activeOperation?.operationId),
+      reasonCode: L4_CODE.OUTSIDE_SUPPORT_ENVELOPE};
+  }
+  #drainCurrentNode(timeMs) {
+    if (!this.#forwardSupportValid()) return this.#heldForwardProgress();
+    const node = this.getActiveNode();
+    if (node?.step !== NODE_STEP.PENDING) return UNSET;
     objectAssign(node, {
       step: NODE_STEP.AWAITING_RESTART, leadershipDrained: true, readyzWithdrawn: true,
       startedAtMs: timeMs, updatedAtMs: timeMs,
@@ -284,22 +352,27 @@ class RollingUpgradeOwner {
     const safety = checkSafetyFailure(
       stepCall.quorumHealthy, stepCall.mixedVersionInvariantViolated);
     if (safety) return haltAndFail(this, node, safety, stepCall.timeMs);
-    const drained = this.drainNodeAtIndex(this.currentNodeIndex, stepCall.timeMs);
-    if (drained) touchActiveOp(this, stepCall.timeMs);
+    const drained = this.#drainCurrentNode(stepCall.timeMs);
+    if (drained === node) touchActiveOp(this, stepCall.timeMs);
     return drained;
   }
   recordNodeRestarted(nodeId, details = {}) {
-    const {version, artifactDigest: _d, nowMs} = details;
+    const {version, artifactDigest, nowMs} = details;
     const timeMs = Number.isFinite(nowMs) ? nowMs : Date.now();
-    const node = this.nodePlan?.find((n) => n.nodeId === nodeId);
-    if (!node || !this.hasActiveUpgrade()) return UNSET;
-    this.drainingNodeIds.delete(nodeId);
+    const node = this.getActiveNode();
+    if (node?.nodeId !== nodeId || !this.hasActiveUpgrade()) return UNSET;
     if (objectHasOwn(details, QUORUM_HEALTHY_FIELD) && details.quorumHealthy !== true) {
       return haltAndFail(this, node, L4_CODE.QUORUM_SAFETY_HALT, timeMs);
     }
     if (version !== node.targetVersion) {
       return haltAndFail(this, node, L4_CODE.MIXED_VERSION_INVARIANT_VIOLATED, timeMs);
     }
+    if (!this.#forwardSupportValid()) return this.#heldForwardProgress();
+    if (node.step !== NODE_STEP.AWAITING_RESTART) return UNSET;
+    if (artifactDigest !== this.activeOperation.parameters.targetArtifactDigest) {
+      return haltAndFail(this, node, L4_CODE.ARTIFACT_DIGEST_MISMATCH, timeMs);
+    }
+    this.drainingNodeIds.delete(nodeId);
     node.step = NODE_STEP.CATCHING_UP; node.updatedAtMs = timeMs;
     this.nodeVersions[nodeId] = version;
     touchActiveOp(this, timeMs);
@@ -310,15 +383,17 @@ class RollingUpgradeOwner {
     const timeMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
     const safety = checkSafetyFailure(
       options.quorumHealthy, options.mixedVersionInvariantViolated);
-    const node = this.nodePlan?.find((n) => n.nodeId === nodeId);
+    const node = this.getActiveNode();
     if (safety) return haltAndFail(this, node, safety, timeMs);
-    if (!node) return UNSET;
+    if (node?.nodeId !== nodeId) return UNSET;
+    if (!this.#forwardSupportValid()) return this.#heldForwardProgress();
+    if (node.step !== NODE_STEP.CATCHING_UP) return UNSET;
     if ((options.underReplicatedPartitionCount || 0) > 0) {
       return handleCatchUpLag(this, node, options, timeMs);
     }
-    return this.finalizeCatchUp(node, timeMs);
+    return this.#finalizeCatchUp(node, timeMs);
   }
-  finalizeCatchUp(node, timeMs) {
+  #finalizeCatchUp(node, timeMs) {
     this.onSetNodeReadyz?.(node.nodeId, true);
     objectAssign(node, {readyzWithdrawn: false, step: NODE_STEP.COMPLETED, updatedAtMs: timeMs});
     this.nodeVersions[node.nodeId] = node.targetVersion;
@@ -359,18 +434,19 @@ class RollingUpgradeOwner {
   }
   resumeFromPersistedState(s, _nowMs) {
     if (!s) return UNSET;
-    this.currentVersion = s.currentVersion || this.currentVersion;
-    this.currentArtifactDigest = s.currentArtifactDigest || this.currentArtifactDigest;
+    // A retained record cannot replace the installed source identity.
+    this.#restoredSourceMatches = s.currentVersion === this.currentVersion &&
+      s.currentArtifactDigest === this.currentArtifactDigest;
     this.versionSkew = Boolean(s.versionSkew);
     restorePersistedCollections(this, s);
     const idx = this.nodePlan ? this.nodePlan.findIndex((n) => n.step !== NODE_STEP.COMPLETED) : -1;
     this.currentNodeIndex = idx >= 0 ? idx : (s.currentNodeIndex || -1);
-    return this.activeOperation;
+    return copyOperation(this.activeOperation);
   }
   getPersistedState() {
     return {
-      activeOperation: this.activeOperation ? {...this.activeOperation} : UNSET,
-      operations: Array.from(this.operations.entries()),
+      activeOperation: copyOperation(this.activeOperation),
+      operations: Array.from(this.operations, ([id, op]) => [id, copyOperation(op)]),
       nodePlan: this.nodePlan ? this.nodePlan.map((n) => ({...n})) : UNSET,
       currentNodeIndex: this.currentNodeIndex, currentVersion: this.currentVersion,
       currentArtifactDigest: this.currentArtifactDigest, nodeVersions: {...this.nodeVersions},
@@ -386,10 +462,13 @@ class RollingUpgradeOwner {
     return this.versionSkew === true;
   }
   getReleaseFacts() {
+    const owner = this.supportEnvelopeOwner;
+    const certified = SupportEnvelopeOwner.isOwner(owner) &&
+      SupportEnvelopeOwner.prototype.validateEnvelope.call(owner).valid;
     return {
       version: this.currentVersion, artifactDigest: this.currentArtifactDigest,
       versionSkew: this.isVersionSkewActive(),
-      rollingUpgrade: this.capabilitySupported ?
+      rollingUpgrade: this.capabilitySupported && certified ?
         FACTS.CAPABILITY_SUPPORTED : FACTS.CAPABILITY_UNSUPPORTED,
     };
   }
@@ -406,12 +485,19 @@ class RollingUpgradeOwner {
   getOperationStatus(opId) {
     const op = this.operations.get(opId) ||
       (this.activeOperation?.operationId === opId ? this.activeOperation : UNSET);
-    return op ? {...op} : UNSET;
+    return copyOperation(op);
   }
   // A downgrade is admitted only back to the source of a pair certified at
   // this build's cluster format revision; without an envelope it is refused.
   executeRollback(options = {}) {
-    const eligibility = evaluateRollbackEligibility(this.supportEnvelope, options);
+    const owner = this.supportEnvelopeOwner;
+    const eligibility = SupportEnvelopeOwner.isOwner(owner) ?
+      SupportEnvelopeOwner.prototype.evaluateRollback.call(owner, {
+        ...options, activeBinding: this.activeOperation?.supportBinding,
+        cutoffExceeded: options.cutoffExceeded === true || !this.hasActiveUpgrade(),
+        currentArtifactDigest: this.currentArtifactDigest,
+      }) :
+      evaluateRollbackEligibility(null, options);
     if (!eligibility.eligible) {
       return {
         message: eligibility.message,
@@ -421,6 +507,7 @@ class RollingUpgradeOwner {
       };
     }
     this.currentVersion = eligibility.targetVersion;
+    this.currentArtifactDigest = eligibility.targetArtifactDigest;
     for (const nodeId of Object.keys(this.nodeVersions)) {
       this.nodeVersions[nodeId] = eligibility.targetVersion;
     }

@@ -184,10 +184,9 @@ back. Qualify the selected ingress and resource cleanup in the
 [pilot operations gate](operations-readiness.md#pilot-operations-gate).
 
 The version pair and rollback cutoff in
-[`support-envelope.json`](support-envelope.json) are policy/fixture data, not
-physical upgrade or rollback certification. Its default drill values and
-placeholder receipt strings do not authorize `0.5.0 -> 0.4.1` rollback or imply
-a usable certified snapshot. The
+[`support-envelope.json`](support-envelope.json) declare policy. Physical
+execution evidence establishing `0.5.0 -> 0.4.1` rollback or a certified
+snapshot is unavailable. The
 [upgrade and recovery contract](operations-readiness.md#support-envelope-policy-and-evidence)
 must qualify actual artifacts and retain original drill outputs before a pair
 is advertised. Cluster-format refusal remains in force; see
