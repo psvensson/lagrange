@@ -239,6 +239,7 @@ async function deliver(world, target, payload) {
     }
     return buildDeliveryEnvelope({acknowledged: true}, {
       status: ReplicaOperationResponseStatus.INITIATED,
+      operationId: payload.operationId, replicaId: payload.replicaId, nodeId: SOURCE_NODE_ID,
     });
   }
   if (payload?.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
