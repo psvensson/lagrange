@@ -171,6 +171,30 @@ worker, and a readable conflicting founding operation still requires the
 guarded FAILED and claimed REMOVE path. This prospective proof correction
 remains open through its managed run and independent review.
 
+Run `f540550c` on clean `e7e978450` missed the same 420-second
+gate. Serving lanes opened at 2.069 seconds. By expiry, two snapshot reads
+were unavailable and a serving view was ineligible; the scenario recorded
+37 failed reads. The subsequent public CREATE remained pending, then
+timed out. Snapshot sampling stopped early, so the final available
+database snapshot cannot establish the last ledger state. Coordinator logs
+through the deadline identify 17 completed ADDs and five completed growth
+operations. A prior-existence read refusal for `pl-tables-p1-182-0`
+was followed by completion of that exact ADD and release of its reservation.
+A different ADD, `pl-services-p1-291-0`, timed out in SENDING after
+152,777 ms. Its target reported loss of custody ten seconds later.
+
+This composition also encountered an immutable operation in a path that
+mutates the workflow mirror. From seed startup through the original
+deadline the three node logs contain 127 such errors across 13 operation
+keys. The first occurred on the coordinator's remote handoff. The same
+message is absent from the three preceding physical archives. The
+bootstrap binding returns an immutable committed snapshot to a path that
+updates the dispatch operation after a write. The dispatch owner is
+reproducing that boundary with an actual acknowledgement and guarded
+SQLite transition. Keep committed results immutable, and preserve one
+writable mirror per dispatch attempt. Verify the first write, duplicate
+handoff and authoritative replay before repeating the fleet trial.
+
 The prior three-host runs shared a failure to reach global quiet. Within
 the original deadlines, `e068cbdc` completed 70 of 73 admitted ADDs with
 zero REMOVE admissions. `57e4db30` completed 39 of 43 and admitted one
