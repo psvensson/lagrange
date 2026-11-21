@@ -1,4 +1,4 @@
-import {NUM, TABLES} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {canonicalizeSystemTableRow} from './system-row-normalizers.js';
 import {
@@ -27,6 +27,7 @@ import {
   CONTROL_PLANE_MUTATION_OUTCOME_POLICY,
   CONTROL_PLANE_MUTATION_TERMINAL_ESCALATION_BEHAVIOR,
   CONTROL_PLANE_MUTATION_WAKE_SOURCE,
+  GATEWAY_ERROR_MSG,
 } from './control-plane-system-table-gateway-constants.js';
 import {
   normalizeDistinctStringArray,
@@ -126,26 +127,16 @@ function canonicalizeControlPlaneMutation(
     }
   }
 
-  let whereClause = mutation?.whereClause;
-  if (
-    whereClause &&
-    typeof whereClause === 'object' &&
-    (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
-      operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE)
-  ) {
-    // A publication predicate names stored SQLite values. Decoding a complete
-    // data row here would deserialize JSON TEXT and add unrelated defaults.
-    const canonicalized = tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ?
-      whereClause : canonicalizeSystemTableRow(tableName, whereClause);
-    if (allowedColumns) {
-      whereClause = {};
-      for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== 'undefined') {
-          whereClause[key] = value;
-        }
-      }
-    } else {
-      whereClause = canonicalized;
+  const whereClause = mutation?.whereClause;
+  if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
+      operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE) {
+    // Predicates name stored SQL values, not a partially populated data row.
+    if (!whereClause || typeof whereClause !== 'object' || Object.keys(whereClause).length === 0) {
+      throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
+    }
+    if (Object.entries(whereClause).some(([key, value]) =>
+      value === undefined || (allowedColumns && !allowedColumns.has(key)))) {
+      throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_INVALID);
     }
   }
 
