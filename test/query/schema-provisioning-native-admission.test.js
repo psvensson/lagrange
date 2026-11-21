@@ -49,8 +49,8 @@ function recordNativeDispatch(engine, coordinator, initialNodeIds = []) {
   return dispatched;
 }
 
-for (const caseName of ['lost', 'refused', 'malformed']) {
-  test(`schema job retains only typed ambiguous native FOUND (${caseName})`, (t) =>
+for (const caseName of ['lost', 'refused', 'malformed', 'invalid', 'refused-lost']) {
+  test(`schema job settles native FOUND from ledger evidence (${caseName})`, (t) =>
     onLedgerLeader(async (leader, proposed) => {
       const stop = attachAutoCommitLoop(leader, proposed);
       try {
@@ -63,14 +63,19 @@ for (const caseName of ['lost', 'refused', 'malformed']) {
             return requestPlacementAdmission(leader, message);
           }
           messages.push({entryId: message.entryId, body: message.body});
-          if (caseName === 'malformed') return {};
-          if (caseName === 'refused') {
+          if (caseName === 'invalid') {
+            return requestPlacementAdmission(leader, {...message,
+              body: {...message.body, moves: []}});
+          }
+          if ((caseName === 'refused' || caseName === 'refused-lost') &&
+              messages.length === 1) {
             await requestPlacementAdmission(leader, {entryId: 'other-founder',
               body: {...message.body, foundingIntentId: 'different-job'}});
           }
           const native = await requestPlacementAdmission(leader, message);
-          return caseName === 'lost' && messages.length === 1 ?
-            buildRejectedProposedWriteAnswer(new Error('ambiguous native reply'), {
+          if (caseName === 'malformed' && messages.length === 1) return {};
+          return (caseName === 'lost' || caseName === 'refused-lost') &&
+            messages.length === 1 ? buildRejectedProposedWriteAnswer(new Error('ambiguous native reply'), {
               partitionId: LEDGER_PARTITION_ID, entryId: message.entryId,
             }) : native;
         });
@@ -86,19 +91,24 @@ for (const caseName of ['lost', 'refused', 'malformed']) {
         const key = `schema_operations:${first.outcome.jobId}`;
         t.equal(messages.length, 1);
         t.equal(dispatched.length, 0);
-        if (caseName === 'lost') {
+        if (['lost', 'malformed', 'refused-lost'].includes(caseName)) {
           const firstRows = ledgerRows(leader);
           t.equal(firstRows.length, 3);
           t.equal(gateway.rows.get(key)?.status, 'PENDING');
           t.equal(first.outcome.contractState, OWNER_CONTRACT_STATE.PENDING);
           const second = await query();
           t.equal(second.outcome.jobId, first.outcome.jobId);
-          t.equal(gateway.rows.get(key)?.status, 'SUCCEEDED');
+          const expected = caseName === 'refused-lost' ? 'FAILED' : 'SUCCEEDED';
+          t.equal(gateway.rows.get(key)?.status, expected);
           t.same(messages, [messages[0], messages[0]], 'real router redelivers the same command');
-          t.same(dispatched.map(({operationId}) => operationId).sort(),
-            firstRows.map(({operation_id: operationId}) => operationId).sort());
+          if (caseName === 'refused-lost') t.same(dispatched, []);
+          else {
+            t.same(dispatched.map(({operationId}) => operationId).sort(),
+              firstRows.map(({operation_id: operationId}) => operationId).sort());
+          }
         } else {
           t.equal(gateway.rows.get(key)?.status, 'FAILED');
+          if (caseName === 'invalid') t.same(ledgerRows(leader), []);
           const second = await query();
           t.equal(second.outcome.jobId, first.outcome.jobId);
           t.equal(gateway.rows.get(key)?.status, 'FAILED');
