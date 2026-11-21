@@ -154,7 +154,11 @@ const PLACEMENT_WAITING_REASON = Object.freeze({
 
 // Every trigger of the owner's pass (design section 2.3). RESYNC is the one
 // declared cadence and never a clearing trigger (owner decision D5).
+// TERM_START_APPLIED is the ledger port's APPLIED_PROGRESS while a tenure's
+// term-start barrier is pending (the barrier is a pass stop, not a waiting
+// reason: replica-placement-owner-tenure.js).
 const PLACEMENT_TRIGGER = Object.freeze({
+  TERM_START_APPLIED: 'TERM_START_APPLIED',
   LEDGER_COMMIT: 'LEDGER_COMMIT',
   NODES_OR_FORMATION: 'NODES_OR_FORMATION',
   SERVICES_CHANGED: 'SERVICES_CHANGED',
