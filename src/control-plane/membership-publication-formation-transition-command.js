@@ -1,6 +1,5 @@
 // FORMATION_TRANSITION committed command builders, admission/proposal, and
 // state-machine applier on control_plane_publications-p1.
-import {createHash} from 'node:crypto';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -12,8 +11,6 @@ import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {eventCdcSourceScope} from '../cdc/cdc-source-scope-evidence.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
-  admitCommittedCommand,
-  committedCommandRefusalResult,
   registerFormationCommandValidator,
 } from '../partition/partition-committed-command-admission.js';
 import {
@@ -28,11 +25,16 @@ import {
   insertCdcObligation,
 } from '../partition/partition-cdc-obligation-ledger.js';
 import {
-  readCommittedStatementOutcome,
+  ownerCommandPrelude,
+  readSettledOwnerCommandIn,
   recordCommittedStatementOutcome,
+  trackPendingOwnerCommand,
 } from '../partition/partition-committed-statement-outcome.js';
-import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
-  '../partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_OWNER_COMMAND_PRELUDE as PRELUDE,
+  PARTITION_SETTLED_COMMAND_STATE as SETTLED,
+  committedCommandDigest,
+} from '../partition/partition-committed-statement-outcome-constants.js';
 import {
   advancePartitionWriteGeneration,
   isPartitionReserved,
@@ -77,11 +79,6 @@ const PUBLICATIONS_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
 const EMPTY_JSON_ARRAY = '[]';
 const EVENT_KEY_SEPARATOR = ':';
-const FINGERPRINT_HEX_LENGTH = 12;
-const HEX_RADIX = 16;
-const HASH_ALGORITHM = 'sha256';
-const HASH_ENCODING = 'hex';
-const PENDING_FINGERPRINTS_FIELD = 'pendingFormationCommandFingerprints';
 const FORMATION_ROW_COUNT = 1;
 const FORMATION_REASON_DECLARED = 'FORMATION_DECLARED';
 const FORMATION_REASON_LATCHED = 'FORMATION_LATCHED';
@@ -448,31 +445,19 @@ function decideFormationTransition(db, command) {
     applyFormationLatchIn(db, body, existingRow);
 }
 
-function pendingFingerprintsOf(service) {
-  let map = service[PENDING_FINGERPRINTS_FIELD];
-  if (map === undefined) {
-    map = new Map();
-    service[PENDING_FINGERPRINTS_FIELD] = map;
-  }
-  return map;
+// The identity a formation command's outcome record carries (the outcome
+// owner's digest of its type and pinned body text).
+function formationCommandDigestOf(command) {
+  return committedCommandDigest(command.type, command.bodyText);
 }
 
-function commandFingerprintOf(command) {
-  return Number.parseInt(
-    createHash(HASH_ALGORITHM)
-      .update(`${command.type}:${command.bodyText}`)
-      .digest(HASH_ENCODING)
-      .slice(0, FINGERPRINT_HEX_LENGTH),
-    HEX_RADIX,
-  );
-}
-
-function isSameCommandReplay(recorded, command) {
-  return (
-    Number.isSafeInteger(recorded.lastInsertRowid) &&
-    recorded.lastInsertRowid === commandFingerprintOf(command)
-  );
-}
+// The write kernel's answers the owner-command prelude asks (registered by
+// the partition layer, partition-service-entry-apply-base.js).
+const FORMATION_PRELUDE_KERNEL = Object.freeze({
+  leadershipRefusalOf: (service) =>
+    formationPartitionApplyHooks.partitionWriteLeadershipRefusalOf(service),
+  pausedAnswerOf: (service) => formationPartitionApplyHooks.pausedWriteAnswerOf(service),
+});
 
 function refusal(service, failureCode) {
   return {
@@ -511,54 +496,34 @@ function recordedAnswer(service, recorded) {
   });
 }
 
+// The leader-local proposal: the owner-command prelude (leadership,
+// admission, exact settled replay, cutover pause, pending join; any other
+// record or pending write under the entry is INVALID_COMMAND), then one
+// proposal through the write kernel.
 async function proposeFormationCommand(service, command) {
-  const hooks = formationPartitionApplyHooks;
-  const leadership = hooks.partitionWriteLeadershipRefusalOf(service);
-  if (leadership !== null) {
-    return leadership;
-  }
-  const paused = hooks.pausedWriteAnswerOf(service);
-  if (paused !== null) {
-    return paused;
-  }
-  const admission = admitCommittedCommand(command, {
+  const commandDigest = formationCommandDigestOf(command);
+  const prelude = ownerCommandPrelude(service, {
+    command,
+    commandDigest,
     origin: PARTITION_COMMITTED_COMMAND_ORIGIN.FORMATION_OWNER,
+    kernel: FORMATION_PRELUDE_KERNEL,
+    answerSettled: (recorded) => recordedAnswer(service, recorded),
+    answerCollision: () =>
+      refusal(service, FORMATION_REFUSAL_REASON.INVALID_COMMAND),
   });
-  if (!admission.admitted) {
-    return committedCommandRefusalResult(admission, service.partitionId);
+  if (prelude.state === PRELUDE.ANSWERED) {
+    return prelude.answer;
   }
-  const recorded = readCommittedStatementOutcome(
+  return trackPendingOwnerCommand(
     service,
-    service.getCommittedEntryKey(command),
+    {command, commandDigest},
+    formationPartitionApplyHooks.startPartitionRaftWriteCommit(service, {
+      entry: command,
+      phaseTimings: null,
+      applyStartMs: service.timeSource.now(),
+      park: isPartitionReserved(service.db),
+    }),
   );
-  if (recorded.state === RECORD.SETTLED) {
-    return isSameCommandReplay(recorded, command) ?
-      recordedAnswer(service, recorded) :
-      refusal(service, FORMATION_REFUSAL_REASON.INVALID_COMMAND);
-  }
-  const fingerprint = commandFingerprintOf(command);
-  const pendingFingerprints = pendingFingerprintsOf(service);
-  const pending = service.getPendingCommittedWriteOutcome(command.entryId);
-  if (pending !== null) {
-    return pendingFingerprints.get(command.entryId) === fingerprint ?
-      pending :
-      refusal(service, FORMATION_REFUSAL_REASON.INVALID_COMMAND);
-  }
-  pendingFingerprints.set(command.entryId, fingerprint);
-  const commitPromise = hooks.startPartitionRaftWriteCommit(service, {
-    entry: command,
-    phaseTimings: null,
-    applyStartMs: service.timeSource.now(),
-    park: isPartitionReserved(service.db),
-  });
-  Promise.resolve(commitPromise)
-    .finally(() => {
-      if (pendingFingerprints.get(command.entryId) === fingerprint) {
-        pendingFingerprints.delete(command.entryId);
-      }
-    })
-    .catch(() => {});
-  return commitPromise;
 }
 
 async function executeFormationTransitionOnService(service, payload) {
@@ -681,12 +646,18 @@ function applyFormationTransitionCommand(service, committed) {
     throw new Error(FORMATION_REFUSAL_REASON.INVALID_COMMAND);
   }
   const entryKey = service.getCommittedEntryKey(command);
-  const recorded = readCommittedStatementOutcome(service, entryKey);
-  if (recorded.state === RECORD.SETTLED) {
-    if (!isSameCommandReplay(recorded, command)) {
-      throw new Error(FORMATION_REFUSAL_REASON.INVALID_COMMAND);
-    }
-    const answer = recordedAnswer(service, recorded);
+  const commandDigest = formationCommandDigestOf(command);
+  const settled = readSettledOwnerCommandIn(service.db, {
+    entryId: command.entryId,
+    commandDigest,
+  });
+  // Another record under this entry: fails the application closed, the same
+  // verdict on every replica (the record is replicated state).
+  if (settled.state === SETTLED.OTHER_RECORD) {
+    throw new Error(FORMATION_REFUSAL_REASON.INVALID_COMMAND);
+  }
+  if (settled.state === SETTLED.SAME_COMMAND) {
+    const answer = recordedAnswer(service, settled.recorded);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }
@@ -717,9 +688,10 @@ function applyFormationTransitionCommand(service, committed) {
       term,
       result: {
         changes: rows.length,
-        lastInsertRowid: commandFingerprintOf(command),
+        lastInsertRowid: null,
       },
       ownerResultText: JSON.stringify(result),
+      commandDigest,
     });
     if (rows.length > 0) {
       recordFormationOperationCdc(

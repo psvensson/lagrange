@@ -5,8 +5,22 @@
 // Recovery / wake entry: reconcilePlacementAttempts on PLACEMENT_TRIGGER.LEADERSHIP_START.
 // Representative production tests: test/rebalancer/replica-placement-owner-core.test.js.
 import {PLACEMENT_DISPATCH_HOLD} from './replica-placement-owner-constants.js';
+import {readSettledOwnerCommandIn} from '../partition/partition-committed-statement-outcome.js';
+import {PARTITION_SETTLED_COMMAND_STATE as SETTLED} from
+  '../partition/partition-committed-statement-outcome-constants.js';
+import {placementBodyDigestOf} from '../partition/partition-placement-admission-command.js';
+import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
+  '../partition/partition-placement-admission-constants.js';
 
+const ENTRY_KIND_ADMIT = 'admit';
 const ENTRY_KIND_RELEASE = 'release';
+const ATTEMPT_KEY_SEPARATOR = ':';
+// The committed command each attempt kind proposes (replica-placement-owner.js
+// resolveAttempt keys an attempt `${kind}:${targetId}`).
+const ATTEMPT_COMMAND_TYPE = Object.freeze({
+  [ENTRY_KIND_ADMIT]: PLACEMENT_ADMIT_TYPE,
+  [ENTRY_KIND_RELEASE]: PLACEMENT_RELEASE_HOLD_TYPE,
+});
 const CREATE_ATTEMPTS_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS _placement_owner_unresolved_attempts (
     attempt_key TEXT PRIMARY KEY NOT NULL,
@@ -25,11 +39,6 @@ const DELETE_ATTEMPT_SQL =
 const SELECT_ALL_ATTEMPTS_SQL =
   'SELECT attempt_key, intent_key, entry_id, body_text ' +
   'FROM _placement_owner_unresolved_attempts ORDER BY attempt_key ASC';
-const SELECT_OUTCOMES_TABLE_SQL =
-  'SELECT 1 AS present FROM sqlite_master ' +
-  'WHERE type = \'table\' AND name = \'_partition_statement_outcomes\' LIMIT 1';
-const SELECT_OUTCOME_BY_KEY_SQL =
-  'SELECT 1 AS settled FROM _partition_statement_outcomes WHERE entry_key = ? LIMIT 1';
 
 const isFunction = (value) => typeof value === 'function';
 
@@ -73,10 +82,17 @@ function hydrateUnresolvedPlacementAttempts(db, uncertainEntryIds) {
   }
 }
 
-function isSettledInStatementOutcomes(db, entryId) {
+// Exact settlement: the outcome record under the attempt's entry settles it
+// only when it carries the attempt's own command (its kind's type and its
+// body, as the partition pins them). Another record under that entry - of
+// another command, owner or statement - settles nothing.
+function isSettledInStatementOutcomes(db, attemptKey, attempt) {
   if (!canUseAttemptStore(db)) return false;
-  if (db.prepare(SELECT_OUTCOMES_TABLE_SQL).get() === undefined) return false;
-  return db.prepare(SELECT_OUTCOME_BY_KEY_SQL).get(`entry:${entryId}`) !== undefined;
+  const kind = attemptKey.slice(0, attemptKey.indexOf(ATTEMPT_KEY_SEPARATOR));
+  if (!Object.hasOwn(ATTEMPT_COMMAND_TYPE, kind)) return false;
+  const commandDigest = placementBodyDigestOf(ATTEMPT_COMMAND_TYPE[kind], attempt.body);
+  return commandDigest !== null && readSettledOwnerCommandIn(db,
+    {entryId: attempt.entryId, commandDigest}).state === SETTLED.SAME_COMMAND;
 }
 
 function isSettledInCensus(refreshedCensus, attemptKey, attempt) {
@@ -89,7 +105,7 @@ function isSettledInCensus(refreshedCensus, attemptKey, attempt) {
 function reconcilePlacementAttempts(db, uncertainEntryIds, refreshedCensus) {
   hydrateUnresolvedPlacementAttempts(db, uncertainEntryIds);
   for (const [attemptKey, attempt] of [...uncertainEntryIds.entries()]) {
-    if (isSettledInStatementOutcomes(db, attempt.entryId) ||
+    if (isSettledInStatementOutcomes(db, attemptKey, attempt) ||
         isSettledInCensus(refreshedCensus, attemptKey, attempt)) {
       uncertainEntryIds.delete(attemptKey);
       deleteUnresolvedPlacementAttempt(db, attemptKey);

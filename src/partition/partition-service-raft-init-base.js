@@ -48,8 +48,10 @@ import {
   refusePartitionConsensusStartup,
   openPartitionConsensusPort,
 } from './partition-consensus-port-opening.js';
-import {createCommittedStatementOutcomeTable} from
-  './partition-committed-statement-outcome.js';
+import {committedStatementOutcomeFormatError, createCommittedStatementOutcomeTable,
+  detectCommittedStatementOutcomeFormat} from './partition-committed-statement-outcome.js';
+import {PARTITION_COMMITTED_STATEMENT_FORMAT} from
+  './partition-committed-statement-outcome-constants.js';
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
@@ -247,6 +249,15 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.db = null;
         throw legacyPartitionConsensusStateError(
           legacyConsensusState, this.partitionId);
+      }
+      // Before any DDL: an outcome table of another format (a store written
+      // by another build format, or reached through a snapshot image of one)
+      // is refused typed and never migrated.
+      const outcomeFormat = detectCommittedStatementOutcomeFormat(this.db);
+      if (outcomeFormat.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
+        this.db.close();
+        this.db = null;
+        throw committedStatementOutcomeFormatError(outcomeFormat, this.partitionId);
       }
       createCommittedStatementOutcomeTable(this.db);
       openParticipantTransactionStore(this.db);

@@ -25,7 +25,7 @@ import {PARTICIPANT_TRANSACTION_COMMAND as PARTICIPANT_COMMAND,
 import {insertParticipantTransactionRow, readParticipantTransactionCensusIn,
   readPartitionWriteOriginHistory, openParticipantTransactionStore} from
   '../../src/partition/partition-participant-transaction-store.js';
-import {readCommittedStatementCensusIn, createCommittedStatementOutcomeTable} from
+import {readCommittedStatementCensusIn} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {RETAINED_STORE_ERROR} from '../../src/partition/partition-retained-store-observation.js';
 import {cdcObligationLedgerExists, readCdcObligationCensusIn,
@@ -321,7 +321,8 @@ test('participant, origin, generation and statement outcomes are one observed ex
       REASON.OUTCOME],
     ['zero changed rows', `UPDATE ${OUTCOMES} SET changes = 0`, REASON.OUTCOME],
     ['lost insert identity', `UPDATE ${OUTCOMES} SET last_insert_rowid = NULL`, REASON.OUTCOME],
-    ['foreign owner result', `UPDATE ${OUTCOMES} SET owner_result_text = '{}'`, REASON.OUTCOME],
+    ['foreign owner result', `UPDATE ${OUTCOMES} SET owner_result_text = '{}', ` +
+      'command_digest = \'foreign\'', REASON.OUTCOME],
     ['stray outcome', `INSERT INTO ${OUTCOMES} (entry_key, outcome, log_index, term) ` +
       `VALUES ('stray', '${OUTCOME.APPLIED}', 1, 3)`, REASON.OUTCOME],
     ['extra generation', `UPDATE ${GENERATION} SET generation = 2`, REASON.GENERATION],
@@ -933,9 +934,9 @@ test('the generation owner rejects a second persisted singleton under unchanged 
 
 test('actual old-owner ALTER upgrades retain schema compatibility for the read-only observer',
   async (t) => {
+    // The statement outcome table has one format and no upgrade: a table of
+    // another format is refused at store open (placement-outcome-format.test.js).
     const upgrades = [
-      [OUTCOMES, /,\s*changes INTEGER,\s*last_insert_rowid INTEGER,\s*owner_result_text TEXT/u,
-        createCommittedStatementOutcomeTable, ['changes', 'last_insert_rowid', 'owner_result_text']],
       [GENERATION, /,\s*origin_index INTEGER,\s*origin_term INTEGER/u,
         openParticipantTransactionStore, ['origin_index', 'origin_term']],
     ];

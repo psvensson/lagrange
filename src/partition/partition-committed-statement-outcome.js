@@ -55,14 +55,20 @@ import {
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
 import {
+  PARTITION_COMMITTED_STATEMENT_COLUMNS,
+  PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
+  PARTITION_COMMITTED_STATEMENT_FORMAT,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
-  PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
+  PARTITION_OWNER_COMMAND_PRELUDE,
+  PARTITION_SETTLED_COMMAND_STATE,
   PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
+import {admitCommittedCommand, committedCommandRefusalResult} from
+  './partition-committed-command-admission.js';
 import {buildDurableCommitWitness} from './partition-write-kernel.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
@@ -73,6 +79,10 @@ import {
 } from './partition-statement-admission-constants.js';
 
 const NO_COMMITTED_STATEMENT_KEY = null;
+const COLUMN_LIST_SEPARATOR = ', ';
+const FORMAT_UNSUPPORTED_REMEDY =
+  'format is refused, never migrated; re-found the data directory';
+const OWNER_IDENTITY_RULE = 'an owner result is recorded with exactly its command digest';
 
 // The same identity is used by apply, replay answers and cold observation.
 // The one key is the command's entryId; a command without one (not a
@@ -89,17 +99,28 @@ function committedStatementEntryKey(command) {
 }
 
 // Exact read-only census. Positions/result integers never round through Number.
+// An owner result and its command identity are stored together or not at all.
+function isCensusOwnerIdentityValid(row) {
+  return isStoredNullableText(row.owner_result_text) &&
+    isStoredNullableText(row.command_digest) &&
+    (row.owner_result_text === null) === (row.command_digest === null);
+}
+
+function isCensusRowValid(row) {
+  return typeof row.entry_key === 'string' && row.entry_key.length > 0 &&
+    typeof row.outcome === 'string' && isStoredInteger(row.log_index, 1n) &&
+    isStoredInteger(row.term, 1n) && isStoredNullableInteger(row.changes, 0n) &&
+    isStoredNullableInteger(row.last_insert_rowid) &&
+    isStoredNullableText(row.failure_code) && isStoredNullableText(row.failure_message) &&
+    isCensusOwnerIdentityValid(row);
+}
+
 function readCommittedStatementCensusIn(db) {
   const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
   const rows = readRetainedStoreRowsIn(db, {table: sql.TABLE,
     select: sql.SELECT_ALL, create: sql.CREATE_TABLE});
   for (const row of rows) {
-    if (typeof row.entry_key !== 'string' || row.entry_key.length === 0 ||
-        typeof row.outcome !== 'string' || !isStoredInteger(row.log_index, 1n) ||
-        !isStoredInteger(row.term, 1n) || !isStoredNullableInteger(row.changes, 0n) ||
-        !isStoredNullableInteger(row.last_insert_rowid) ||
-        !isStoredNullableText(row.failure_code) || !isStoredNullableText(row.failure_message) ||
-        !isStoredNullableText(row.owner_result_text)) {
+    if (!isCensusRowValid(row)) {
       throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, sql.TABLE);
     }
   }
@@ -110,26 +131,62 @@ function readCommittedStatementCensusIn(db) {
     changes: row.changes === null ? null : String(row.changes),
     lastInsertRowid: row.last_insert_rowid === null ? null : String(row.last_insert_rowid),
     ownerResultText: row.owner_result_text,
+    commandDigest: row.command_digest,
   }));
 }
 
 /**
- * Create the outcome table (DDL; run once at partition initialization, after
- * the legacy-state detector). A table created before APPLIED rows retained
- * their result gains the result columns here; the rows it holds keep NULL
- * there (they retain no result).
+ * The table-format decision at store open, read-only (no DDL): ABSENT when
+ * the store holds no outcome table, CURRENT when its columns are exactly the
+ * owner's, UNSUPPORTED for any other column set (a store of another format).
+ * @param {Object} db - The partition's opened database.
+ * @return {{outcome: string, columns: Array<string>}} Frozen decision; the
+ *   outcome is a PARTITION_COMMITTED_STATEMENT_FORMAT value.
+ */
+function detectCommittedStatementOutcomeFormat(db) {
+  const columns = Object.freeze(db
+    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
+    .all().map((column) => column.name));
+  const owned = PARTITION_COMMITTED_STATEMENT_COLUMNS;
+  let outcome = PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED;
+  if (columns.length === 0) {
+    outcome = PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT;
+  } else if (columns.length === owned.length &&
+      owned.every((column) => columns.includes(column))) {
+    outcome = PARTITION_COMMITTED_STATEMENT_FORMAT.CURRENT;
+  }
+  return Object.freeze({outcome, columns});
+}
+
+/**
+ * The typed store-open refusal for an UNSUPPORTED table format.
+ * @param {{columns: Array<string>}} decision - An UNSUPPORTED decision.
+ * @param {string|null} partitionId - The partition refused, when known.
+ * @return {Error} An Error whose `code` is FORMAT_UNSUPPORTED.
+ */
+function committedStatementOutcomeFormatError(decision, partitionId = null) {
+  const error = new Error(`${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} of ` +
+    `partition ${partitionId} has columns [${decision.columns.join(COLUMN_LIST_SEPARATOR)}], ` +
+    `not [${PARTITION_COMMITTED_STATEMENT_COLUMNS.join(COLUMN_LIST_SEPARATOR)}]: a store of ` +
+    `another ${FORMAT_UNSUPPORTED_REMEDY}`);
+  error.code = PARTITION_COMMITTED_STATEMENT_ERROR_CODE.FORMAT_UNSUPPORTED;
+  error.columns = decision.columns;
+  return error;
+}
+
+/**
+ * Create the outcome table on a store that has none (DDL; run once at
+ * partition initialization, after the legacy-state detector). A store whose
+ * table has another format is refused, typed, before any DDL.
  * @param {Object} db - The partition's connection.
  */
 function createCommittedStatementOutcomeTable(db) {
-  db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
-  const present = new Set(db
-    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
-    .all().map((column) => column.name));
-  for (const [column, addColumn] of Object.entries(
-    PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS)) {
-    if (!present.has(column)) {
-      db.exec(addColumn);
-    }
+  const format = detectCommittedStatementOutcomeFormat(db);
+  if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.UNSUPPORTED) {
+    throw committedStatementOutcomeFormatError(format);
+  }
+  if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
+    db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   }
 }
 
@@ -137,18 +194,8 @@ const UNSETTLED_RECORD = Object.freeze({
   state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
 });
 
-/**
- * The recorded terminal outcome of an entry key: SETTLED with the record, or
- * UNSETTLED when no committed statement with that key has been settled.
- * @param {Object} service - The partition (its `db`).
- * @param {string} entryKey - The committed entry key.
- * @return {Object} Frozen {state} (a PARTITION_COMMITTED_STATEMENT_RECORD_STATE)
- *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage,
- *   changes, lastInsertRowid}; the last two are null for a row that retains
- *   no result.
- */
-function readCommittedStatementOutcome(service, entryKey) {
-  const row = sqliteConnectionState(service.db)
+function readCommittedStatementOutcomeIn(db, entryKey) {
+  const row = sqliteConnectionState(db)
     .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY)
     .get(entryKey);
   if (row === undefined) {
@@ -163,20 +210,150 @@ function readCommittedStatementOutcome(service, entryKey) {
     failureMessage: row.failure_message,
     changes: row.changes,
     lastInsertRowid: row.last_insert_rowid,
-    ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text}),
+    ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text,
+      commandDigest: row.command_digest}),
   });
+}
+
+/**
+ * The recorded terminal outcome of an entry key: SETTLED with the record, or
+ * UNSETTLED when no committed statement with that key has been settled.
+ * @param {Object} service - The partition (its `db`).
+ * @param {string} entryKey - The committed entry key.
+ * @return {Object} Frozen {state} (a PARTITION_COMMITTED_STATEMENT_RECORD_STATE)
+ *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage,
+ *   changes, lastInsertRowid}; the last two are null for a row that retains
+ *   no statement result; an owner command's record adds {ownerResultText,
+ *   commandDigest}.
+ */
+function readCommittedStatementOutcome(service, entryKey) {
+  return readCommittedStatementOutcomeIn(service.db, entryKey);
+}
+
+const UNSETTLED_COMMAND = Object.freeze({
+  state: PARTITION_SETTLED_COMMAND_STATE.UNSETTLED,
+});
+const OTHER_RECORD = Object.freeze({
+  state: PARTITION_SETTLED_COMMAND_STATE.OTHER_RECORD,
+});
+
+/**
+ * Exact settlement of one owner command, from the store: a durable outcome
+ * settles only the exact command it proves. SAME_COMMAND (with the record)
+ * only when the record under the command's entry key carries its digest;
+ * OTHER_RECORD for any other record under that key; UNSETTLED for none.
+ * @param {Object} db - The partition's connection.
+ * @param {{entryId: string, commandDigest: string}} command - The command's
+ *   entryId and its committedCommandDigest.
+ * @return {Object} Frozen {state} (a PARTITION_SETTLED_COMMAND_STATE) and,
+ *   when SAME_COMMAND, {recorded}.
+ */
+function readSettledOwnerCommandIn(db, {entryId, commandDigest}) {
+  const recorded = readCommittedStatementOutcomeIn(db, committedStatementEntryKey({entryId}));
+  if (recorded.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED) {
+    return UNSETTLED_COMMAND;
+  }
+  return recorded.commandDigest === commandDigest ?
+    Object.freeze({state: PARTITION_SETTLED_COMMAND_STATE.SAME_COMMAND, recorded}) :
+    OTHER_RECORD;
+}
+
+const PENDING_OWNER_COMMAND_DIGESTS = 'pendingOwnerCommandDigests';
+const PROPOSE = Object.freeze({state: PARTITION_OWNER_COMMAND_PRELUDE.PROPOSE});
+
+function pendingOwnerCommandDigestsOf(service) {
+  let digests = service[PENDING_OWNER_COMMAND_DIGESTS];
+  if (digests === undefined) {
+    digests = new Map();
+    service[PENDING_OWNER_COMMAND_DIGESTS] = digests;
+  }
+  return digests;
+}
+
+function answered(answer) {
+  return Object.freeze({state: PARTITION_OWNER_COMMAND_PRELUDE.ANSWERED, answer});
+}
+
+/**
+ * The one request prelude of an owner command (placement, formation) on its
+ * partition, in its one order: leadership; the committed-command admission;
+ * the exact settled replay (a settled E0 answers its ORIGINAL receipt, also
+ * under a cutover pause - reading an existing outcome is not a new write);
+ * the cutover pause; the join of the same command already pending. A record
+ * or a pending write of anything else under the entry key is the collision.
+ * @param {Object} service - The partition.
+ * @param {Object} request - {command, commandDigest, origin, kernel:
+ *   {leadershipRefusalOf, pausedAnswerOf} (the write kernel's answers),
+ *   answerSettled(recorded), answerCollision()}.
+ * @return {Object} Frozen {state} (a PARTITION_OWNER_COMMAND_PRELUDE) and,
+ *   when ANSWERED, {answer}.
+ */
+function ownerCommandPrelude(service, request) {
+  const {command, commandDigest, origin, kernel} = request;
+  const leadership = kernel.leadershipRefusalOf(service);
+  if (leadership !== null) return answered(leadership);
+  const admission = admitCommittedCommand(command, {origin});
+  if (!admission.admitted) {
+    return answered(committedCommandRefusalResult(admission, service.partitionId));
+  }
+  const settled = readSettledOwnerCommandIn(service.db,
+    {entryId: command.entryId, commandDigest});
+  if (settled.state === PARTITION_SETTLED_COMMAND_STATE.SAME_COMMAND) {
+    return answered(request.answerSettled(settled.recorded));
+  }
+  if (settled.state === PARTITION_SETTLED_COMMAND_STATE.OTHER_RECORD) {
+    return answered(request.answerCollision());
+  }
+  const paused = kernel.pausedAnswerOf(service);
+  if (paused !== null) return answered(paused);
+  const pending = service.getPendingCommittedWriteOutcome(command.entryId);
+  if (pending === null) return PROPOSE;
+  return answered(pendingOwnerCommandDigestsOf(service).get(command.entryId) ===
+    commandDigest ? pending : request.answerCollision());
+}
+
+/**
+ * Hold a proposed owner command's digest as its entry's pending identity
+ * until its commit settles, so a second request joins only the same command.
+ * @param {Object} service - The partition.
+ * @param {{command: Object, commandDigest: string}} proposed - The command.
+ * @param {Promise<Object>} commitPromise - Its commit.
+ * @return {Promise<Object>} The commit.
+ */
+function trackPendingOwnerCommand(service, {command, commandDigest}, commitPromise) {
+  const digests = pendingOwnerCommandDigestsOf(service);
+  digests.set(command.entryId, commandDigest);
+  Promise.resolve(commitPromise).finally(() => {
+    if (digests.get(command.entryId) === commandDigest) digests.delete(command.entryId);
+  }).catch(() => {});
+  return commitPromise;
+}
+
+// An owner command records its typed result with its command digest, both or
+// neither (the table CHECK holds the same rule).
+function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
+  const ownerRecord = typeof ownerResultText === 'string' &&
+    typeof commandDigest === 'string' && commandDigest.length > 0;
+  if (ownerRecord || (ownerResultText === null && commandDigest === null)) return;
+  const error = new Error(`${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE} ${entryKey}: ` +
+    OWNER_IDENTITY_RULE);
+  error.code = PARTITION_COMMITTED_STATEMENT_ERROR_CODE.OWNER_IDENTITY_INVALID;
+  throw error;
 }
 
 /**
  * Record an entry key's terminal outcome, inside the application
  * transaction.
  * @param {Object} service - The partition (its `db`).
- * @param {Object} outcome - {entryKey, outcome, index, term, error, result};
- *   `error` only for STATEMENT_FAILED, `result` (the statement's retained
- *   {changes, lastInsertRowid}, committedStatementResult) only for APPLIED.
+ * @param {Object} outcome - {entryKey, outcome, index, term, error, result,
+ *   ownerResultText, commandDigest}; `error` only for STATEMENT_FAILED,
+ *   `result` (the statement's retained {changes, lastInsertRowid},
+ *   committedStatementResult) only for APPLIED; an owner command records its
+ *   typed result with its committedCommandDigest, both or neither.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null, result = null, ownerResultText = null}) {
+  term, error = null, result = null, ownerResultText = null, commandDigest = null}) {
+  assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
   const insert = sqliteConnectionState(service.db)
     .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
   insert.run(
@@ -185,7 +362,7 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     error === null ? null : String(error.message),
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
-    ownerResultText);
+    ownerResultText, commandDigest);
 }
 
 /**
@@ -396,8 +573,12 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
 
 export {
   committedStatementEntryKey,
+  committedStatementOutcomeFormatError,
+  detectCommittedStatementOutcomeFormat,
   isCommittedStatementKeyed,
+  ownerCommandPrelude,
   readCommittedStatementCensusIn,
+  readSettledOwnerCommandIn,
   answerSettledStatement,
   createCommittedStatementOutcomeTable,
   isDeterministicStatementFailure,
@@ -406,4 +587,5 @@ export {
   settleFailedCommittedStatement,
   settleRecordedCommittedStatement,
   statementEnvironmentFailure,
+  trackPendingOwnerCommand,
 };

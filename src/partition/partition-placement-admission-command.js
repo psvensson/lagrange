@@ -11,6 +11,7 @@ import {PLACEMENT_STATEMENT_VALIDITY as VALIDITY, canonicalPlacementStatement} f
 import {canonicalRetainedPlacementRepair} from './partition-placement-retained-repair.js';
 import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
   './partition-placement-admission-constants.js';
+import {committedCommandDigest} from './partition-committed-statement-outcome-constants.js';
 
 const FIELDS = Object.freeze(['type', 'entryId', 'partitionId', 'body',
   'bodyText', 'timestamp', 'proposedBy', 'proposedAt']);
@@ -94,6 +95,30 @@ function isPinnedPlacementCommand(input) {
 }
 
 /**
+ * The identity a placement command's outcome record carries: the outcome
+ * owner's digest of its type and pinned body text.
+ * @param {Object} command - A built or pinned placement command.
+ * @return {string} The command digest.
+ */
+function placementCommandDigestOf(command) {
+  return committedCommandDigest(command.type, command.bodyText);
+}
+
+/**
+ * The same identity for a command not yet built: its type and the body the
+ * owner proposes, canonicalized exactly as buildPlacementCommand pins it.
+ * @param {string} type - A placement command type.
+ * @param {*} body - The proposed body.
+ * @return {string|null} The command digest, or null for a body that is not
+ *   a valid placement body (it never becomes a command).
+ */
+function placementBodyDigestOf(type, body) {
+  const canonical = canonicalPlacementBody(type, body);
+  return canonical.validity === VALIDITY.VALID ?
+    committedCommandDigest(type, JSON.stringify(canonical.statement)) : null;
+}
+
+/**
  * The rows a placement command would insert or change, counted against the
  * CDC owed bound at request and at apply (design section 2.5, R3): one per
  * admitted move (the whole founding set for FOUND), one for a hold release.
@@ -105,4 +130,5 @@ function placementCommandRowCount(command) {
     RELEASE_ROW_COUNT;
 }
 
-export {buildPlacementCommand, isPinnedPlacementCommand, placementCommandRowCount};
+export {buildPlacementCommand, isPinnedPlacementCommand, placementBodyDigestOf,
+  placementCommandDigestOf, placementCommandRowCount};
