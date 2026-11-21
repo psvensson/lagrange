@@ -10,6 +10,7 @@ import {
   waitForNamedWriteDelivery,
 } from './control-plane-named-write-wait.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_MUTATION_OUTCOME} from './control-plane-system-table-gateway-constants.js';
 import {ERRORS} from '../constants/errors.js';
 import {OWNER_CONTRACT_NEXT_ACTION, OWNER_CONTRACT_STATE} from './owner-contract-outcome.js';
 import {
@@ -86,10 +87,6 @@ const PENDING_INSTANCE_OUTCOME = Object.freeze({
   FAILED: 'failed',
   UNKNOWN: 'unknown',
 });
-// The gateway's classification of the transport answer an unresolved
-// instance wraps: it describes that answer, not the unknown write, so it never
-// travels on the unknown answer (it would say "applied").
-const TRANSPORT_CLASSIFICATION_FIELDS = Object.freeze(['outcome', 'completionState']);
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
 const KEY_DIGEST_LENGTH = 32;
@@ -349,41 +346,60 @@ function capacityRefusal(name) {
   };
 }
 
-// The held instance of a name, resolved under its own entry by re-delivering
-// its own content: the pending instance it was, or - still unresolved - the
-// answer naming it as the typed unknown (what the re-delivery threw is
-// thrown again, carrying the pending instance).
-// The one shape of an unresolved named write: the typed unknown naming its
-// pending instance, accepted into consensus but not proven (contract PENDING),
-// whose owned next action is the re-send under the same key (RETRY).
-function unresolvedAnswer(record, answer) {
+// The one shape of an unresolved named write, whether its producer ANSWERED
+// without proof (a success without its durable commit receipt) or its
+// transport THREW the typed unknown: the named outcome UNKNOWN - accepted
+// into consensus, not proven (contract PENDING) - whose owned next action is
+// the re-send under the same key (RETRY), with the typed failure code and the
+// pending instance it names (its own). What the producer answered or threw
+// travels unchanged as its cause, and only there: its fields describe that
+// answer (a count, the gateway's classification of it), not this write.
+function unresolvedAnswer(record, observed = null) {
   const pendingInstance = describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
-  const carried = {...answer};
-  for (const field of TRANSPORT_CLASSIFICATION_FIELDS) delete carried[field];
   return {
-    ...carried,
     success: false,
+    outcome: CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN,
+    completionState: CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN,
     deferRetry: true,
-    error: someLinkedAnswer(answer, isWriteOutcomeUnknown) ?
-      answer.error : ERRORS.WRITE_OUTCOME_UNKNOWN,
+    error: unresolvedErrorText(observed),
     failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
     entryId: pendingInstance.entryId,
     contractState: OWNER_CONTRACT_STATE.PENDING,
     nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
     pendingInstance,
+    cause: observed,
   };
 }
 
+function unresolvedErrorText(observed) {
+  const text = observed instanceof Error ? observed.message : observed?.error;
+  return someLinkedAnswer(observed, isWriteOutcomeUnknown) && isNonEmptyString(text) ?
+    text : ERRORS.WRITE_OUTCOME_UNKNOWN;
+}
+
+// Whether an observed attempt leaves its instance unresolved: its answer did
+// not settle it, or it threw the typed unknown. A thrown failure that names no
+// unknown (a refusal before delivery, an internal error) is the transport's
+// own failure and is thrown on as it was.
+function isUnresolvedObservation(record, state, answer) {
+  return record.settlement === null && (state === WRITE_DELIVERY.ANSWER ||
+    someLinkedAnswer(answer, isWriteOutcomeUnknown));
+}
+
+// The held instance of a name, resolved under its own entry by re-delivering
+// its own content: the pending instance it was, or - still unresolved - the
+// one unresolved answer naming it (what the re-delivery threw otherwise is
+// thrown again, carrying the pending instance).
 async function resolvePendingInstance(record, attempt, caller) {
   const delivery = await observeDelivery(record, attempt, caller);
   const {answer, state} = delivery;
   if (state === WRITE_DELIVERY.WAIT_INTERRUPTED) throw answer;
   if (record.settlement === null) {
-    const pending = describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
-    if (state === WRITE_DELIVERY.ERROR) {
-      throw rememberWriteReceipt(withPendingInstance(answer, pending), record);
+    if (isUnresolvedObservation(record, state, answer)) {
+      return {unresolved: unresolvedAnswer(record, answer)};
     }
-    return {unresolved: unresolvedAnswer(record, answer)};
+    const pending = describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
+    throw rememberWriteReceipt(withPendingInstance(answer, pending), record);
   }
   const outcome = record.settlement === NAMED_WRITE_ATTEMPT.APPLIED ?
     PENDING_INSTANCE_OUTCOME.APPLIED : PENDING_INSTANCE_OUTCOME.FAILED;
@@ -447,11 +463,15 @@ async function runNamedControlPlaneWrite(options, content, route, attempt, calle
   return observedWriteResult(record, observation, pendingInstance);
 }
 
+// An unresolved attempt - answered or thrown - is the one unresolved answer,
+// which names its own pending instance; a settled one is its answer, carrying
+// the earlier instance resolved before it was issued.
 function observedWriteResult(record, {answer, state}, pendingInstance) {
   if (state === WRITE_DELIVERY.WAIT_INTERRUPTED) throw answer;
-  const result = state === WRITE_DELIVERY.ANSWER && record.settlement === null ?
-    unresolvedAnswer(record, answer) : answer;
-  const observed = rememberWriteReceipt(withPendingInstance(result, pendingInstance), record);
+  if (isUnresolvedObservation(record, state, answer)) {
+    return rememberWriteReceipt(unresolvedAnswer(record, answer), record);
+  }
+  const observed = rememberWriteReceipt(withPendingInstance(answer, pendingInstance), record);
   if (state === WRITE_DELIVERY.ERROR) throw observed;
   return observed;
 }

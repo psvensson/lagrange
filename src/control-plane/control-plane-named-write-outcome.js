@@ -69,9 +69,13 @@ const NON_REFUSAL_CODES = new Set([
   PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED,
 ]);
 
+// NOT_PROPOSED: a typed refusal on the attempt's own partition, before
+// proposal. A refusal that carries a durable commit witness contradicts
+// itself and proves neither (UNKNOWN).
 function isPartitionPreProposalRefusal(result, attempt) {
   return isRecord(result) && isDeclaredAttempt(attempt) &&
-    result.committed !== true && isPartitionWriteFailureCode(result.failureCode) &&
+    result.committed !== true && result.durableCommitWitness == null &&
+    isPartitionWriteFailureCode(result.failureCode) &&
     !NON_REFUSAL_CODES.has(result.failureCode) &&
     hasText(result.partitionId) &&
     result.partitionId === attempt.partitionId &&
@@ -111,10 +115,11 @@ function hasCompleteDistributedParticipants(result) {
 
 function distributedAffectedRowsAgree(result, attempt) {
   const {participantResults, partitions, mirrorPartitions} = result;
-  if (!hasAffectedRows(result) || !participantResults.every(
-    (entry) => isCommittedPartitionSuccess(entry, attempt))) return false;
-  if (participantResults.length === 0) {
-    return !attempt.unresolved && result.affectedRows === 0;
+  // An answer without a participant (a plan with no partition) proves
+  // nothing of the named entry on its declared partition: never APPLIED.
+  if (participantResults.length === 0 || !hasAffectedRows(result) ||
+      !participantResults.every((entry) => isCommittedPartitionSuccess(entry, attempt))) {
+    return false;
   }
   if (partitions.length !== 1 || mirrorPartitions.length !== 0) return false;
   const primaryResults = participantResults.filter((entry) =>
@@ -132,7 +137,9 @@ function judgeDistributedAnswer(result, attempt) {
   const {participantResults} = result;
   if (result.success === true && result.deferRetry !== true &&
       distributedAffectedRowsAgree(result, attempt)) return NAMED_WRITE_ATTEMPT.APPLIED;
-  if (result.success !== false || participantResults.length === 0) {
+  // A thrown distributed answer is a failed one (as for a partition answer).
+  const failed = result.success === false || result instanceof Error;
+  if (!failed || participantResults.length === 0) {
     return NAMED_WRITE_ATTEMPT.UNKNOWN;
   }
   const verdicts = participantResults.map((entry) => judgePartitionAnswer(entry, attempt));
@@ -140,17 +147,26 @@ function judgeDistributedAnswer(result, attempt) {
   return verdicts.every((verdict) => verdict === first) ? first : NAMED_WRITE_ATTEMPT.UNKNOWN;
 }
 
-function judgeNamedWriteOutcome(answer, attempt) {
-  if (!isRecord(answer) || !isDeclaredAttempt(attempt)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
+// The CDC service wraps one engine or partition answer once; a deeper chain
+// is no producer's answer.
+const MAX_WRAPPED_ANSWER_DEPTH = 2;
+
+function judgeAnswer(answer, attempt, depth) {
+  if (!isRecord(answer) || !isDeclaredAttempt(attempt) ||
+      depth > MAX_WRAPPED_ANSWER_DEPTH) return NAMED_WRITE_ATTEMPT.UNKNOWN;
   if (answer.code === CDC_ERROR_CODE.SHUT_DOWN &&
       answer.writeOutcome === CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED) {
     return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
   }
   if (answer.partitionResult && answer.success === true && answer.committed === true) {
-    return judgeNamedWriteOutcome(answer.partitionResult, attempt);
+    return judgeAnswer(answer.partitionResult, attempt, depth + 1);
   }
   if (Array.isArray(answer.participantResults)) return judgeDistributedAnswer(answer, attempt);
   return judgePartitionAnswer(answer, attempt);
+}
+
+function judgeNamedWriteOutcome(answer, attempt) {
+  return judgeAnswer(answer, attempt, 0);
 }
 
 export {NAMED_WRITE_ATTEMPT, belongsToNamedWrite, judgeNamedWriteOutcome};

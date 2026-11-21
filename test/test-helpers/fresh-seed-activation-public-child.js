@@ -24,7 +24,9 @@ import {createRightsSampler, everyRightTransferred, readIssuedDeclaration,
 
 // R27: a solver probe never starts a seed.
 refuseUnderProbe('a fresh seed runtime');
-const [mode, directory, nodeId, portsJson, host] = process.argv.slice(2);
+// The log level is optional (default error): a witness that reads the
+// seed's own warnings asks for them.
+const [mode, directory, nodeId, portsJson, host, logLevel = 'error'] = process.argv.slice(2);
 const ports = JSON.parse(portsJson);
 // Periodic sampling is bounded to one sample per macrotask and interval.
 // The committed transition observer below also samples each durable change,
@@ -256,7 +258,7 @@ try {
       admin: {websocketPort: ports.adminWebSocketPort},
       transport: {wsHost: host},
       partition: {defaultReplicaCount: 1},
-      logging: {level: 'error'},
+      logging: {level: logLevel},
       storage: {dataDir: directory},
     },
     environment: {NODE_ID: nodeId, NODE_HOST_ID: hostname(),

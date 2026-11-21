@@ -19,6 +19,7 @@ import {
 import {
   CONTROL_PLANE_WRITE_ROUTE,
   controlPlaneWriteRoute,
+  isControlPlaneWriteOutcomeUnknown,
   isNamedControlPlaneWrite,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
@@ -439,6 +440,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       this.recordMutationTelemetry(telemetryContext, result);
       return result;
     } catch (error) {
+      const outcome = thrownMutationOutcome(error);
       this.recordControlPlaneOperation({
         operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
         tableName,
@@ -446,8 +448,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         routingReadinessDimension:
           writeOptions?.routingReadinessDimension ||
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-        outcome:
-          error?.outcome || CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+        outcome,
         success: false,
         affectedRows: 0,
         error: error?.message || String(error),
@@ -456,15 +457,25 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
           operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
         }),
       });
-      this.recordMutationTelemetry(telemetryContext, {
-        success: false,
-        outcome:
-          error?.outcome || CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-      });
+      this.recordMutationTelemetry(telemetryContext, {success: false, outcome});
       throw error;
     }
   },
 };
+
+// The named outcome of a mutation that threw. A named write's unknown is
+// answered, never thrown (control-plane-write-identity.js); an unnamed
+// write's transport unknown is thrown by its producer with the kernel's typed
+// code on it or a linked answer: UNKNOWN, never owner_not_ready.
+function thrownMutationOutcome(error) {
+  if (isControlPlaneWriteOutcomeUnknown(error)) {
+    return CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN;
+  }
+  if (typeof error?.outcome === 'string' && error.outcome.length > 0) {
+    return error.outcome;
+  }
+  return CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
+}
 
 function assignControlPlaneSystemTableGatewayMutationSubmission(targetClass) {
   Object.assign(

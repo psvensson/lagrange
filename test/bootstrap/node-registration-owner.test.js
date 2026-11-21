@@ -701,6 +701,9 @@ test(
         {success: false, accepted: true, withdrawalDeferred: true},
       [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED]:
         {success: false, accepted: true, withdrawalDeferred: true},
+      // Handed over, not proven: not withdrawn, the withdrawal deferred.
+      [CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN]:
+        {success: false, accepted: true, withdrawalDeferred: true},
     });
     t.same(
       Object.keys(expectedByOutcome).sort(),
