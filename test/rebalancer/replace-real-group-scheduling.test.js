@@ -51,7 +51,7 @@ import {
 import {
   RAFT_MEMBERSHIP_OPERATION,
 } from '../../src/raft/raft-operation-port-constants.js';
-import {createMockCache, createTestRebalancer} from './test-helpers.js';
+import {createMockCache, createTestCoordinator, createTestRebalancer} from './test-helpers.js';
 import {
   NODE,
   ORDINARY_PARTITION_ID,
@@ -572,6 +572,62 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     t.equal(world.removeEffects.length, 2,
       'the pending removal is re-sent once after the holder settles');
   } finally {
+    await disposeWorld(world);
+  }
+});
+
+test('S11: a retained REMOVE reinserted after SAFE blocks before CDC sees it', async (t) => {
+  const world = await openReplaceWorld();
+  let holderOwner;
+  try {
+    // Preserve a historical owner's exact preimage across authoritative row
+    // loss. This is the repository's retained update path, not fresh placement.
+    await commitConcurrentRemove(t, world);
+    const holder = await readConcurrentRemove(world);
+    const gateway = world.coordinator.controlPlaneSystemTableGateway;
+    const missing = await gateway.submitMutation({tableName: 'replica_operations',
+      operation: 'delete', whereClause: {operation_id: holder.operationId}});
+    t.match(missing, {success: true, partitionResult: {affectedRows: 1}});
+    t.equal(await readConcurrentRemove(world), undefined,
+      'complete SQL observation confirms the prior holder row is missing');
+    holderOwner = createTestCoordinator({nodeId: holder.sourceNodeId,
+      controlPlaneSystemTableGateway: gateway});
+    t.ok(holderOwner.repository.isOperationLocallyOwned(holder),
+      'an independent real coordinator owns the retained REMOVE');
+    await world.coordinator.executeOperation(await readPersisted(world));
+    await settleTurns();
+    world.eventsSuppressed = true;
+    world.group.settle(() => world.group.leader() === world.targetReplicaId);
+    await settleTurns();
+
+    const owner = world.coordinator.workflowOwner;
+    const evaluate = owner.evaluateRemoveSafety.bind(owner);
+    const publish = world.cache.upsert.bind(world.cache);
+    world.cache.upsert = (table, row, ...args) =>
+      table === 'replica_operations' && row.operation_id === holder.operationId ?
+        undefined : publish(table, row, ...args);
+    owner.evaluateRemoveSafety = async (operation) => {
+      const evaluation = await evaluate(operation);
+      owner.evaluateRemoveSafety = evaluate;
+      t.notOk(evaluation.error, 'normal removal safety had read a clear ledger');
+      const result = await holderOwner.repository.persistOperationUpdate(holder,
+        {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+      t.equal(result.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
+        'the retained owner path commits the exact missing row after SAFE');
+      t.same((await readConcurrentRemove(world))?.operationId, holder.operationId,
+        'the new holder is visible in committed SQLite');
+      t.notOk(world.cache.get('replica_operations', holder.operationId),
+        'this coordinator has not received the competitor through CDC');
+      return evaluation;
+    };
+    await world.coordinator.executeOperation(await readPersisted(world));
+    await settleTurns();
+    t.equal(world.removeEffects.length, 0, 'no REMOVE leaves while the SQL holder is active');
+    await failConcurrentRemove(t, world);
+    await entry(world);
+    t.equal(world.removeEffects.length, 1, 'the exact committed release permits removal');
+  } finally {
+    await holderOwner?.shutdown();
     await disposeWorld(world);
   }
 });
