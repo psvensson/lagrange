@@ -1,3 +1,5 @@
+import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {
   createCommittedTimeoutLedger, createTimeoutVisibilityCache,
@@ -499,6 +501,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
     'checkTimeouts retains creating operations until exact ACTIVE services handoff',
     async (t) => {
       const nowMs = Date.now();
+      const timeSource = new VirtualTimeSource({startMs: nowMs});
       const staleUpdatedAtMs = nowMs - 70000;
       const observedServiceRow = {
         service_id: 'partition-1-r2',
@@ -568,6 +571,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           },
         },
         enableTimeouts: false,
+        timeSource,
         setTimeoutFn: (callback) => ({callback}),
         clearTimeoutFn() {},
       });
@@ -597,11 +601,32 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           consumed = successor;
         }
 
+        if (consumed) {
+          await retry.timeoutHandle.callback();
+          t.equal(pendingRetry()?.timeoutHandle, consumed.timeoutHandle,
+            'a stale callback cannot clear or re-arm a later handle');
+          const readsBeforeExpiry = gatewayCalls.length;
+          timeSource.advance(TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS);
+          await consumed.timeoutHandle.callback();
+          t.equal(gatewayCalls.length, readsBeforeExpiry,
+            'the delayed timer cannot start a fresh owner turn after the original deadline');
+          t.equal(pendingRetry(), undefined);
+          t.equal(ledger.read().workflow_step, 'CREATING',
+            'spent timer ownership leaves the exact durable operation for CDC recovery');
+        }
+
         activeAuthority = true;
-        cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, authorityRow);
-        for (const deliver of notifications.splice(0)) deliver();
-        await owner.operationWorkflowRunExclusive(
-          owner.getOperationOwnerSingleFlightKey(operationId), () => null);
+        t.ok(cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, authorityRow),
+          'the service event is accepted through the real cache mutation owner');
+        t.same(owner.findObservedProgressOperationIds(authorityRow, CDC_OPERATION.UPSERT),
+          [operationId], 'the real CDC subject maps to the original operation');
+        const pendingNotifications = notifications.splice(0);
+        t.ok(pendingNotifications.length > 0, 'the cache queues its accepted CDC notification');
+        for (const deliver of pendingNotifications) deliver();
+        const completedTurn = owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey
+          .get(owner.getOperationOwnerSingleFlightKey(operationId));
+        t.ok(completedTurn, 'the cache event starts the real operation owner turn');
+        await completedTurn;
         const committed = ledger.read();
         t.equal(committed.workflow_step, 'ACTIVE', 'the real services CDC wakes and completes the original ADD');
         t.equal(committed.status, 'active');

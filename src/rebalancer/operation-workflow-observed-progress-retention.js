@@ -191,12 +191,14 @@ function withObservedProgressRetention(Base) {
       tableName,
       cacheOperation,
       delayMs = OBSERVED_PROGRESS_RETRY_DELAY_MS,
+      deadlineMs = null,
     ) {
       return this.armObservedProgressRetry({
         operationId,
         tableName,
         cacheOperation,
         delayMs,
+        deadlineMs,
       });
     }
 
@@ -204,13 +206,11 @@ function withObservedProgressRetention(Base) {
       const deadlineMs = operation.createdAt + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
       const remainingMs = deadlineMs - this.resolveTimeoutCheckNowMs();
       if (!Number.isFinite(remainingMs) || remainingMs <= 0) return false;
-      return this.armObservedProgressRetry({
-        operationId: operation.operationId,
-        tableName: SYSTEM_TABLE_NAME.SERVICES,
-        cacheOperation: OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
-        delayMs: Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs),
-        deadlineMs,
-      });
+      return this.scheduleObservedProgressRetry(
+        operation.operationId, SYSTEM_TABLE_NAME.SERVICES,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+        Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs), deadlineMs,
+      );
     }
 
     isDeliveredCreateProgressRetentionCandidate(
@@ -325,6 +325,12 @@ function withObservedProgressRetention(Base) {
       });
     }
 
+    isActiveReplicaHandoffRetrySpent(retryEntry) {
+      return retryEntry.kind === OBSERVED_PROGRESS_RETRY_KIND.OBSERVED_PROGRESS &&
+        Number.isFinite(retryEntry.deadlineMs) &&
+        retryEntry.deadlineMs <= this.resolveTimeoutCheckNowMs();
+    }
+
     runObservedProgressRetry(operationId, expectedTimeoutHandle = null) {
       const retryEntry =
         this.observedProgressRetryTimerByOperationId.get(operationId);
@@ -336,7 +342,7 @@ function withObservedProgressRetention(Base) {
         return;
       }
       this.observedProgressRetryTimerByOperationId.delete(operationId);
-      if (this.isShuttingDown) {
+      if (this.isShuttingDown || this.isActiveReplicaHandoffRetrySpent(retryEntry)) {
         return;
       }
       if (!this.isInitialized || this.isOperationOwnerLaneHeld(operationId)) {
@@ -347,7 +353,11 @@ function withObservedProgressRetention(Base) {
         retryEntry.kind ===
           OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS ?
           () => this.reconcileDeliveredCreateProgress(retryEntry) :
-          () => this.reconcileObservedProgressOperation(operationId);
+          () => {
+            if (!this.isActiveReplicaHandoffRetrySpent(retryEntry)) {
+              return this.reconcileObservedProgressOperation(operationId);
+            }
+          };
       return this.operationWorkflowRunExclusive(
         this.getOperationOwnerSingleFlightKey(operationId),
         reconcile,
@@ -379,13 +389,10 @@ function withObservedProgressRetention(Base) {
           retryEntry.deadlineMs - this.resolveTimeoutCheckNowMs() :
           OBSERVED_PROGRESS_RETRY_DELAY_MS;
         if (remainingMs <= 0) return;
-        this.armObservedProgressRetry({
-          operationId,
-          tableName: retryEntry.tableName,
-          cacheOperation: retryEntry.cacheOperation,
-          delayMs: Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs),
-          deadlineMs: retryEntry.deadlineMs,
-        });
+        this.scheduleObservedProgressRetry(
+          operationId, retryEntry.tableName, retryEntry.cacheOperation,
+          Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs), retryEntry.deadlineMs,
+        );
       }
     }
   };
