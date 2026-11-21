@@ -10,6 +10,7 @@ import {canonicalizeSchemaProvisioningIntent} from
   '../../src/query/schema-provisioning-intent.js';
 import {createTimeoutBudget} from
   '../../src/control-plane/timeout-budget.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SYSTEM_TABLE_NAME} from
@@ -553,6 +554,26 @@ for (const explicit of [false, true]) {
         partitionId: 'admission-unknown-p1', replicaCount: 2,
         ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
       }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE});
+      t.same(native.checked, ['serve-a']);
+      t.same(native.proposals, []);
+    });
+}
+
+for (const explicit of [false, true]) {
+  test(`cancelled prechecks cannot examine another target (explicit: ${explicit})`,
+    async (t) => {
+      const {engine, readiness} = createServeRefreshFixture(t, createGateway());
+      await readiness.readServeEligibility();
+      const cancellationToken = new CancellationToken();
+      const native = captureFoundingAdmission(engine, () => {
+        cancellationToken.cancel('provisioning test cancelled');
+        return {allowed: true};
+      });
+      await t.rejects(engine.provisionInitialTablePartition({
+        partitionId: 'cancelled-admission-p1', replicaCount: 2,
+        cancellationToken,
+        ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
+      }), {message: 'provisioning test cancelled'});
       t.same(native.checked, ['serve-a']);
       t.same(native.proposals, []);
     });
