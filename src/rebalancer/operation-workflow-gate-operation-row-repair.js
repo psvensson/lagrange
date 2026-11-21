@@ -29,14 +29,13 @@ const GATE_REPAIR_ROW_FAILED_LOG =
  * @private
  */
 async function repairOperationRowForGateRepairedReservation(owner, operation) {
-  if (typeof owner.repository?.persistNewOperation !== 'function' ||
+  if (typeof owner.repository?.repairRetainedOperation !== 'function' ||
       operationCarriesReplicaCreateAdmission(operation) ||
       operationCarriesMessageGroupMembership(operation)) {
     return false;
   }
   try {
-    await owner.repository.persistNewOperation(operation);
-    return true;
+    return await owner.repository.repairRetainedOperation(operation);
   } catch (error) {
     owner.logger?.warn?.(
       GATE_REPAIR_ROW_FAILED_LOG,
@@ -45,7 +44,7 @@ async function repairOperationRowForGateRepairedReservation(owner, operation) {
         error: error?.message || String(error),
       },
     );
-    return true;
+    return false;
   }
 }
 

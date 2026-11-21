@@ -1,3 +1,4 @@
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {buildReplicaInventorySnapshot} from './replica-inventory.js';
@@ -349,6 +350,7 @@ class RebalanceCoordinatorLifecycle {
       options.repository ||
       new ReplicaOperationRepository({
         nodeId: this.nodeId,
+        repairRetainedPlacement: (payload) => this.submitRetainedPlacementRepair(payload),
         // The membership owner claim is bound to this process's issued boot
         // incarnation, the one the router carries and the nodes row publishes.
         membershipOwnerBootIncarnation:
@@ -532,6 +534,10 @@ class RebalanceCoordinatorLifecycle {
     }
     if (!this.cacheChangeListener) {
       this.cacheChangeListener = (tableName, operation, record) => {
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+            tableName === SYSTEM_TABLE_NAME.SERVICES) {
+          this.repository.observeRetainedPlacementRepairCommit(tableName, record);
+        }
         this.handleObservedReplicaStateChange(tableName, operation, record);
       };
     }

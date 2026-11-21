@@ -7,7 +7,8 @@
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {PLACEMENT_STATEMENT_VALIDITY as VALIDITY, canonicalPlacementStatement} from
   '../rebalancer/replica-placement-owner-admission-statement.js';
-import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
+import {canonicalRetainedPlacementRepair} from './partition-placement-retained-repair.js';
+import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE} from
   './partition-placement-admission-constants.js';
 
 const FIELDS = Object.freeze(['type', 'entryId', 'partitionId', 'body',
@@ -40,6 +41,7 @@ function canonicalHoldRelease(input) {
  *   or {validity: INVALID}.
  */
 function canonicalPlacementBody(type, body) {
+  if (type === PLACEMENT_REPAIR_TYPE) return canonicalRetainedPlacementRepair(body);
   if (type === PLACEMENT_ADMIT_TYPE) return canonicalPlacementStatement(body);
   return type === PLACEMENT_RELEASE_HOLD_TYPE ? canonicalHoldRelease(body) :
     INVALID_BODY;

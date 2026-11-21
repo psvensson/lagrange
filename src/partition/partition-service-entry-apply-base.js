@@ -42,9 +42,9 @@ import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
 import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
   './partition-coordinator-settlement.js';
 import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
-import {applyPlacementCommand, requestPlacementAdmission} from
+import {requestPlacementRepair, applyPlacementCommand, requestPlacementAdmission} from
   './partition-placement-admission.js';
-import {PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
+import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
   './partition-placement-admission-constants.js';
 import {
   FORMATION_TRANSITION_TYPE,
@@ -90,6 +90,7 @@ const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
 const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [COORDINATOR_SETTLEMENT_TYPE]: requestCoordinatorSettlement,
   [PLACEMENT_ADMIT_TYPE]: requestPlacementAdmission,
+  [PLACEMENT_REPAIR_TYPE]: requestPlacementRepair,
   [FORMATION_TRANSITION_TYPE]: requestFormationTransition,
 });
 
@@ -444,6 +445,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
     case COORDINATOR_SETTLEMENT_TYPE:
+    case PLACEMENT_REPAIR_TYPE:
     case PLACEMENT_ADMIT_TYPE:
     case FORMATION_TRANSITION_TYPE:
       return true;

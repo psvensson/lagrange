@@ -36,7 +36,8 @@ import {LEDGER_PARTITION_ID, decideHoldRelease, decidePlacementAdmission} from
   './partition-placement-admission-decision.js';
 import {placementOperationIdOf, placementReplicaIdOf} from
   './partition-placement-admission-identity.js';
-import {PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADMIT_TYPE,
+import {decideRetainedPlacementRepair} from './partition-placement-retained-repair.js';
+import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADMIT_TYPE,
   PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_RESULT_FIELD} from
   './partition-placement-admission-constants.js';
 
@@ -284,6 +285,10 @@ async function requestPlacementCommand(service, type, payload) {
  *   its admission statement.
  * @return {Promise<Object>|Object} The typed answer.
  */
+function requestPlacementRepair(service, payload) {
+  return requestPlacementCommand(service, PLACEMENT_REPAIR_TYPE, payload);
+}
+
 function requestPlacementAdmission(service, payload) {
   return requestPlacementCommand(service, PLACEMENT_ADMIT_TYPE, payload);
 }
@@ -340,6 +345,10 @@ function decide(service, committed) {
       reason: PLACEMENT_REFUSAL.CDC_CAPACITY}), rows: [], operation: null};
   }
   const {command, index} = committed;
+  if (command.type === PLACEMENT_REPAIR_TYPE) {
+    return {...decideRetainedPlacementRepair(service.db, command.body),
+      operation: OPERATION.INSERT};
+  }
   if (command.type === PLACEMENT_ADMIT_TYPE) {
     return {...decidePlacementAdmission(service.db,
       {command, statement: command.body, index}), operation: OPERATION.INSERT};
@@ -395,5 +404,5 @@ function applyPlacementCommand(service, committed) {
   }
 }
 
-export {applyPlacementCommand, requestPlacementAdmission,
+export {requestPlacementRepair, applyPlacementCommand, requestPlacementAdmission,
   requestPlacementHoldRelease, routePlacementAdmission};

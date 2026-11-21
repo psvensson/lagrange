@@ -576,7 +576,8 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
         if (
-          options.elapsedWorkflowPreimage || options.requireExactCreateTarget === true ||
+          options.elapsedWorkflowPreimage || options.expectedStepsHistory !== undefined ||
+          options.requireExactCreateTarget === true ||
           operationCarriesReplicaCreateAdmission(operation) ||
           operationCarriesMessageGroupMembership(operation)
         ) {
@@ -587,7 +588,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           });
         }
         try {
-          const reinserted = await this.persistNewOperationUnlocked(operation);
+          const reinserted = await this.repairRetainedOperation(operation);
           if (reinserted) {
             this.syncIncompleteOperationObservation(operation);
             return buildOperationUpdateOutcome({

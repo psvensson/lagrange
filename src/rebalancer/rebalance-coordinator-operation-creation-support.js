@@ -9,6 +9,7 @@ import {
   resolveRuntimeServiceIntentKey,
   requireCreationReplayOutcome,
 } from './replica-operation-creation-request.js';
+import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
@@ -18,11 +19,13 @@ import {AddressManager} from '../address/address-manager.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
 import {
+  PLACEMENT_REPAIR_TYPE,
   PLACEMENT_ADMISSION_ERROR,
   PLACEMENT_RESULT_FIELD,
   RETAINED_PLACEMENT_ATTEMPT,
 } from '../partition/partition-placement-admission-constants.js';
 import {
+  requestPlacementRepair,
   requestPlacementAdmission,
   routePlacementAdmission,
 } from '../partition/partition-placement-admission.js';
@@ -335,6 +338,18 @@ const operationCreationSupportMethods = {
       });
     }
     return {key, entryId, statement};
+  },
+
+  async submitRetainedPlacementRepair(payload) {
+    const localLeader = this.resolveActiveLocalLedgerLeaderService();
+    if (localLeader) return requestPlacementRepair(localLeader, payload);
+    const leaderAddress = this.resolveRemoteLedgerLeaderAddress();
+    const transport = wrapPlacementTransport(this.messageRouter);
+    if (!leaderAddress || !transport) return null;
+    const delivered = await transport.deliver(leaderAddress,
+      {type: PLACEMENT_REPAIR_TYPE, ...payload},
+      {timeoutMs: DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS});
+    return deliveryReadingOf(delivered);
   },
 
   async submitPlacementPayload(payload, timeoutMs) {
@@ -651,11 +666,13 @@ const operationCreationSupportMethods = {
       this.ledgerPartitionServices = new Set();
     }
     this.ledgerPartitionServices.add(partitionService);
+    this.repository.bindRetainedPlacementRepairWake(partitionService);
     this.placementAdmissionEnabled = true;
     if (this.workflowOwner) this.workflowOwner.placementAdmissionEnabled = true;
   },
 
   unregisterLedgerPartitionService(partitionService) {
+    this.repository.unbindRetainedPlacementRepairWake(partitionService);
     if (this.ledgerPartitionServices instanceof Set) {
       this.ledgerPartitionServices.delete(partitionService);
     }

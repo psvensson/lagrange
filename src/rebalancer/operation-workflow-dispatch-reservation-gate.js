@@ -81,9 +81,9 @@ function isDispatchReservationGateEngaged(owner) {
  */
 async function repairGateRepairedOperationRow(owner, operation, attempt) {
   if (attempt?.outcome !== OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED) {
-    return;
+    return true;
   }
-  await repairOperationRowForGateRepairedReservation(owner, operation);
+  return repairOperationRowForGateRepairedReservation(owner, operation);
 }
 
 function handleTerminalReservationAttempt(owner, operation, attempt) {
@@ -133,8 +133,13 @@ async function ensureDispatchReservationOrSkip(owner, operation, options = {}) {
     (options.allowCreateReservation !== false &&
       attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED)
   ) {
-    await repairGateRepairedOperationRow(owner, operation, attempt);
-    return null;
+    const repaired = await repairGateRepairedOperationRow(owner, operation, attempt);
+    if (repaired) return null;
+    return owner.buildSkippedOperationResult(
+      OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+      operation.operationId,
+      {error: 'retained operation row repair refused'},
+    );
   }
   if (
     attempt?.error === STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL
