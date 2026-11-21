@@ -177,7 +177,10 @@ Three contracts link the physical symptoms to the current repairs.
   late-history violations across the native and SQL readers. The SQL owner
   repaired both at `7024f677d`. Four affected files passed on two hosts
   (191 assertions), and a separate three-process public SQL journey passed
-  on tv-dator in 37.658 seconds. Recovery of an unresolved native proposal
+  on tv-dator in 37.658 seconds. Ten additional caller files passed on the
+  same source across adam-laptop and adams-gamla (571 assertions).
+  [Split, merge and query caller results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--founder-7024-caller-census-nov21.tar.gz).
+  Recovery of an unresolved native proposal
   across the loss of the proposing process remains unmeasured.
   [Founding and caller identity originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--founding-identity-sqlite-6294-nov21.tar.gz).
 * A timeout and a late reply must settle the operation they observed. At
@@ -188,11 +191,39 @@ Three contracts link the physical symptoms to the current repairs.
   assertions. At `dfa871208`, one stale PENDING timeout failed a fresh
   SENDING row. A second schedule preserved SENDING but counted a refused
   write as a timeout. The initial deferred-read test stopped before its
-  intended race. The timeout owner must bind the original phase at the
-  conditional write and preserve the valid unchanged-row timeout on REPLACE.
-  Classified closure
-  and review on the composed source remain open (historical receipt 4/6).
-  [Epoch controls and native timeout original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-epoch-ownership-0ae5-nov21.tar.gz).
+  intended race. The corrected original reached the conditional write.
+  At `a19dcce06`, the owner compared the expired operation at the actual
+  SQLite write and retained the unchanged REPLACE positive. A separate
+  periodic sweep could still enter lifecycle recovery after a required
+  exact operation read failed. On `e789948f3` that sweep durably changed
+  SENDING to FAILED. At `8cee2237e` all 22 native cases passed, including
+  the held and restored read. The ledger census now schedules work and the
+  exact current operation authorizes its owner turn.
+  [Timeout predecessor outputs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--timeout-point-matched-predecessors-nov21.tar.gz).
+
+  Target state is a separate decision. The cache visibility suite failed on
+  both adam-laptop and adams-gamla. Its fixture omitted the CDC refresh
+  required to confirm ACTIVE. The two ADD cases retained their nonterminal
+  rows. The PENDING REPLACE committed FAILED after the target read was
+  unavailable. The timeout and placement owners must distinguish complete
+  absence from an unavailable target, preserve terminal and release debt
+  where effects remain possible, and exercise both arrival orders through
+  the real mutation and CDC ports. The retry-grace control also needs to
+  reach the intended owner turn.
+  [Current point-read and cache results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--timeout-current-read-8cee-nov21.tar.gz).
+
+The separate 65-file composition run on `3b929de6a` passed 61 files and
+reported 3,100 assertions. The four failures cover the native point-read
+witness, growth-promotion mutation ingress, the self-move read-pressure
+probe, and interception of a refused ledger hold release. Exercise the
+production read and conditional mutation paths for each outstanding control.
+The registered 85-file strict selection on `95676fa6d` is split between
+managed requests `97415f58-e030-4f7f-a2f8-e611edeffdc6` on adams-gamla
+and `62a3377f-3334-42e9-b9af-264236e5b07f` on adam-laptop. The
+integration owner collects both originals, including failing and unmeasured
+files. The strict Quest's historical receipt remains at four of six
+obligations.
+[Release control and 65-file composition output](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-release-a516-and-complement-3b929-nov21.tar.gz).
 
 The bounded support-evidence correction is integrated on the WIP. The actual
 upgrade and management owners refuse policy-only forward or resumed effects;
