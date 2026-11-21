@@ -18,6 +18,7 @@ documentClass: generated
 - [phase-base.js](phase-base.js) - PhaseBase - Base class for phase-based operations. (importers: few)
 - [phase-state-machine.js](phase-state-machine.js) - PhaseStateMachine - Generic state machine for phase-based operations. (importers: few)
 - [replica-creation-progress-reporter.js](replica-creation-progress-reporter.js) - ReplicaCreationProgressReporter renders a single-line spinner when running in an interactive terminal, and falls... (importers: few)
+- [replica-lifecycle-version.js](replica-lifecycle-version.js) - Select the persisted compare version for a SERVICES lifecycle generation. (importers: few)
 - [safe-integer.js](safe-integer.js) - Language-level numeric guards, shared by every owner that needs one. (importers: few)
 - [state-field-read.js](state-field-read.js) - The one reader of an optional state field (status, role, raft role, workflow step, phase, step) on a record whose... (importers: hub)
 - [strict-own-data.js](strict-own-data.js) - No leading comment; first export: copyDenseOwnDataArray. (importers: hub)

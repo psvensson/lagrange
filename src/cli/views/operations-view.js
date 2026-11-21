@@ -7,6 +7,7 @@
  * Requirements: 4.4, 9.3
  */
 
+import {isTerminalReplicaOperationRecord} from '../../rebalancer/replica-operation-progress.js';
 import {
   BaseView,
   DISPLAY_STATE,
@@ -191,13 +192,7 @@ export class OperationsView extends BaseView {
    * @return {boolean} True if operation is in progress
    */
   isInProgress(operation) {
-    const terminalStatuses = [
-      OPERATION_STATUS.ACTIVE,
-      OPERATION_STATUS.REMOVED,
-      OPERATION_STATUS.FAILED,
-      OPERATION_STATUS.SUPERSEDED,
-    ];
-    return !terminalStatuses.includes(operation.status);
+    return !isTerminalReplicaOperationRecord(operation);
   }
 
   /**

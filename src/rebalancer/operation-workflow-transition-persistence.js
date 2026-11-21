@@ -1,3 +1,4 @@
+import {REPLICA_OPERATION_SUPERSEDED_STATUS} from './replica-operation-progress.js';
 import {releaseCompletedLearnerRetirementCleanup} from
   './operation-workflow-placement-learner-retirement.js';
 import {releaseOperationLedgerSelfMoveHoldAfterTerminal} from './operation-workflow-dispatch-ledger-self-move-gate.js';
@@ -369,7 +370,9 @@ class OperationWorkflowTransitionPersistence
     if (!releaseState) throw new Error('Terminal release owner is shutting down');
     if ((outcome.committed || releaseState.pendingCommitCredit) && !releaseState.commitCounted) {
       if (operation.workflowStep === WORKFLOW_STEP.FAILED) this.stats.operationsFailed++;
-      else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) this.stats.operationsCompleted++;
+      else if (operation.workflowStep !== WORKFLOW_STEP.SUPERSEDED) {
+        this.stats.operationsCompleted++;
+      }
       releaseState.commitCounted = true;
       releaseState.pendingCommitCredit = false;
     }
@@ -390,7 +393,8 @@ class OperationWorkflowTransitionPersistence
     if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
       event = REBALANCE_COORDINATOR_EVENT.OPERATION_SUPERSEDED;
     }
-    this.emitter.emit(event, failed ? {operation, errorMessage: operation.errorMessage} : {operation});
+    const eventPayload = failed ? {operation, errorMessage: operation.errorMessage} : {operation};
+    this.emitter.emit(event, eventPayload);
     clearTerminalTransitionRepair(this, operation.operationId);
     armFailedCreateCleanupRelease(this, operation);
   }
@@ -508,7 +512,8 @@ class OperationWorkflowTransitionPersistence
       await this.releaseDurableTerminalOperation(operation, replay);
       return replay;
     }
-    if (operation.type !== OperationType.REMOVE || operation.workflowStep !== expectedWorkflowStep) {
+    if (operation.type !== OperationType.REMOVE ||
+        operation.workflowStep !== expectedWorkflowStep) {
       return null;
     }
     const now = Date.now();
@@ -518,7 +523,7 @@ class OperationWorkflowTransitionPersistence
     const projectedOperation = {
       ...operation,
       workflowStep: finalStep,
-      status: ReplicaStatus.SUPERSEDED,
+      status: REPLICA_OPERATION_SUPERSEDED_STATUS,
       updatedAt: now,
       completedAt: now,
       errorMessage: null,

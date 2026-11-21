@@ -26,6 +26,17 @@ function placementOperationIdOf(partitionId, applyIndex, ordinal) {
     `${PLACEMENT_OPERATION_ID_SEPARATOR}${ordinal}`;
 }
 
+function isPlacementOperationForPartition(operationId, partitionId) {
+  if (typeof operationId !== 'string' || typeof partitionId !== 'string') return false;
+  const prefix = `${PLACEMENT_OPERATION_ID_PREFIX}${partitionId}${PLACEMENT_OPERATION_ID_SEPARATOR}`;
+  if (!operationId.startsWith(prefix)) return false;
+  const [applyIndex, ordinal] = operationId.slice(prefix.length)
+    .split(PLACEMENT_OPERATION_ID_SEPARATOR).map(Number);
+  return Number.isSafeInteger(applyIndex) && applyIndex > 0 &&
+    Number.isSafeInteger(ordinal) && ordinal >= 0 &&
+    placementOperationIdOf(partitionId, applyIndex, ordinal) === operationId;
+}
+
 /**
  * The replica identity an operation creates, derived from its operation id.
  * @param {string} operationId - The operation id.
@@ -36,4 +47,4 @@ function placementReplicaIdOf(operationId) {
     .digest(HASH_ENCODING).slice(0, ID_DIGEST_LENGTH);
 }
 
-export {placementOperationIdOf, placementReplicaIdOf};
+export {isPlacementOperationForPartition, placementOperationIdOf, placementReplicaIdOf};

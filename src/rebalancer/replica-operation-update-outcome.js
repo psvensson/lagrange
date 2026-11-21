@@ -4,7 +4,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {
   OperationType, ReplicaStatus, WORKFLOW_STEP_TO_STATUS,
-  isCoordinatorOwnedOperationType, isTerminalStep, isValidWorkflowStep,
+  COORDINATOR_OWNED_OPERATION_TYPES, isTerminalStep, isValidWorkflowStep,
 } from './replica-operation-progress.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
   './replica-operation-update-disposition.js';
@@ -107,7 +107,7 @@ function assertOperationUpdateRecord(operation, {terminal = false} = {}) {
     requireOutcome(operation.partitionId === operation.entityId, 'partition entity differs');
   }
   requireOutcome((isValidWorkflowStep(operation.type, operation.workflowStep) ||
-    (isCoordinatorOwnedOperationType(operation.type) &&
+    (COORDINATOR_OWNED_OPERATION_TYPES.includes(operation.type) &&
       operation.workflowStep === WORKFLOW_STEP.FAILED)), 'invalid operation type or step');
   const status = operation.workflowStep === WORKFLOW_STEP.FAILED ?
     ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[operation.workflowStep];

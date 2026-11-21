@@ -80,7 +80,7 @@ documentClass: generated
 - [operation-workflow-owner-state.js](operation-workflow-owner-state.js) - Explicit operation workflow progress states and absence variants. (importers: one)
 - [operation-workflow-owner.js](operation-workflow-owner.js) - Owner contract: Owner: OperationWorkflowOwner owns replica-operation workflow lifecycle progress. (importers: many)
 - [operation-workflow-persistence.js](operation-workflow-persistence.js) - Real persistence binding for the rebalancer's operation-workflow DurableWorkflowCoordinator (verified-audit findings... (importers: few)
-- [operation-workflow-placement-learner-retirement.js](operation-workflow-placement-learner-retirement.js) - A placement REMOVE that was authorized for a learner has two effects. (importers: few)
+- [operation-workflow-placement-learner-retirement.js](operation-workflow-placement-learner-retirement.js) - A placement REMOVE that was authorized for a learner has two effects. (importers: many)
 - [operation-workflow-port-freshness.js](operation-workflow-port-freshness.js) - Lease-freshness and publication-fence resolution for the operation workflow owner ports (verified-audit findings... (importers: few)
 - [operation-workflow-priority-recovery-errors.js](operation-workflow-priority-recovery-errors.js) - Build priority recovery superseded target error message. (importers: few)
 - [operation-workflow-priority-recovery-superseded-target-decision.js](operation-workflow-priority-recovery-superseded-target-decision.js) - No leading comment; first export: resolvePriorityRecoverySupersededTargetDecision. (importers: one)

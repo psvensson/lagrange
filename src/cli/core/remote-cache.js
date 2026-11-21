@@ -1,3 +1,4 @@
+import {isTerminalReplicaOperationRecord} from '../../rebalancer/replica-operation-progress.js';
 import {
   collectEndpointNodeIds,
   countHealthyEndpoints,
@@ -543,8 +544,7 @@ export class RemoteCache {
       operations = operations.filter((op) => op.target_node_id === filter.targetNodeId);
     }
     if (filter.inFlightOnly) {
-      const terminalStatuses = ['active', 'removed', 'failed'];
-      operations = operations.filter((op) => !terminalStatuses.includes(op.status));
+      operations = operations.filter((operation) => !isTerminalReplicaOperationRecord(operation));
     }
 
     // Sort by updated_at descending (most recent first)

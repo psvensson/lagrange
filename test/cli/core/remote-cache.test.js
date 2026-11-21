@@ -477,3 +477,20 @@ test('RemoteCache - applyCDCEvent handles unknown operation', async (t) => {
 
   t.equal(result.applied, false, 'event was not applied');
 });
+
+test('operation filtering retains only unfinished workflow phases', async (t) => {
+  const cache = new RemoteCache();
+  const operations = [
+    {operation_id: 'superseded', type: 'REMOVE', workflow_step: 'SUPERSEDED', status: 'superseded'},
+    {operation_id: 'removed', type: 'REMOVE', workflow_step: 'REMOVED', status: 'removed'},
+    {operation_id: 'failed', type: 'REMOVE', workflow_step: 'FAILED', status: 'failed'},
+    {operation_id: 'stopping', type: 'REMOVE', workflow_step: 'STOPPING', status: 'removing'},
+    {operation_id: 'retiring', type: 'REPLACE', workflow_step: 'ACTIVE', status: 'active'},
+    {operation_id: 'added', type: 'ADD', workflow_step: 'ACTIVE', status: 'active'},
+  ];
+  cache.loadFromDump({replica_operations: operations});
+  t.same(cache.getOperations().map((row) => row.operation_id), operations.map((row) =>
+    row.operation_id), 'supersession remains visible in operation history');
+  t.same(cache.getOperations({inFlightOnly: true}).map((row) => row.operation_id),
+    ['stopping', 'retiring'], 'only real unfinished obligations remain in flight');
+});

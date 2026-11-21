@@ -24,7 +24,7 @@ import {
   STATE,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
-import {durableRowVersion} from '../node/replica-state-machine-lifecycle-observation.js';
+import {durableRowVersion} from '../utils/replica-lifecycle-version.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   isCatchupLearnerRaftRole,

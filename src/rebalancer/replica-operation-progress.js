@@ -11,15 +11,16 @@ const ReplicaStatus = {
   ACTIVE: 'active',
   REMOVING: 'removing',
   REMOVED: 'removed',
-  SUPERSEDED: 'superseded',
   FAILED: 'failed',
   HELD: 'held',
 };
 
+const REPLICA_OPERATION_SUPERSEDED_STATUS = 'superseded';
+
 const TERMINAL_STATUSES = [
   ReplicaStatus.ACTIVE,
   ReplicaStatus.REMOVED,
-  ReplicaStatus.SUPERSEDED,
+  REPLICA_OPERATION_SUPERSEDED_STATUS,
   ReplicaStatus.FAILED,
 ];
 
@@ -39,7 +40,7 @@ const WORKFLOW_STEP_TO_STATUS = {
   [WORKFLOW_STEP.ACTIVE]: ReplicaStatus.ACTIVE,
   [WORKFLOW_STEP.STOPPING]: ReplicaStatus.REMOVING,
   [WORKFLOW_STEP.REMOVED]: ReplicaStatus.REMOVED,
-  [WORKFLOW_STEP.SUPERSEDED]: ReplicaStatus.SUPERSEDED,
+  [WORKFLOW_STEP.SUPERSEDED]: REPLICA_OPERATION_SUPERSEDED_STATUS,
 };
 
 const REPLICA_OPERATION_SEMANTIC_PHASE = Object.freeze({
@@ -177,7 +178,7 @@ const OPERATION_TERMINAL_STATUSES_BY_TYPE = Object.freeze(
       OperationType.REMOVE,
       Object.freeze(new Set([
         ReplicaStatus.REMOVED,
-        ReplicaStatus.SUPERSEDED,
+        REPLICA_OPERATION_SUPERSEDED_STATUS,
         ReplicaStatus.FAILED,
       ])),
     ],
@@ -296,7 +297,7 @@ const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(new Map([
     phaseRule(PHASE.ACCEPTED, TARGET_BUILD_WORKFLOW_STEPS, TARGET_BUILD_STATUSES),
   ])],
   [OperationType.REMOVE, Object.freeze([
-    phaseRule(PHASE.SUPERSEDED, [WORKFLOW_STEP.SUPERSEDED], [ReplicaStatus.SUPERSEDED]),
+    phaseRule(PHASE.SUPERSEDED, [WORKFLOW_STEP.SUPERSEDED], [REPLICA_OPERATION_SUPERSEDED_STATUS]),
     phaseRule(PHASE.SETTLED, [WORKFLOW_STEP.REMOVED], [ReplicaStatus.REMOVED]),
     phaseRule(PHASE.SOURCE_RETIRING, SOURCE_RETIRING_WORKFLOW_STEPS, SOURCE_RETIRING_STATUSES),
   ])],
@@ -429,13 +430,7 @@ function getNextWorkflowStep(operationType, currentStep) {
   return steps[currentIndex + 1];
 }
 
-/**
- * Check if a workflow step is a terminal step (final step or FAILED).
- *
- * @param {string} operationType - The operation type (ADD or REMOVE).
- * @param {string} step - The workflow step to check.
- * @return {boolean} True if the step is terminal.
- */
+/* A terminal outcome may close the obligation outside its progress steps. */
 function isTerminalStep(operationType, step) {
   if (step === WORKFLOW_STEP.FAILED) {
     return true;
@@ -769,6 +764,7 @@ export {
   TERMINAL_STATUSES,
   TERMINAL_STATUS_SQL_CLAUSE,
   REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE,
+  REPLICA_OPERATION_SUPERSEDED_STATUS,
   ADJUST_DIRECTION,
   WORKFLOW_STEP_TO_STATUS,
   REPLICA_OPERATION_SEMANTIC_PHASE,
