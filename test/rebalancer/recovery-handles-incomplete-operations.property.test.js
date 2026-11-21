@@ -13,6 +13,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {managedTimeout} from '../../src/test-helpers/managed-timers.js';
+import {TIME_MS} from '../../src/constants/time.js';
 import fc from 'fast-check';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {REBALANCE_COORDINATOR_EVENT, REBALANCE_COORDINATOR_LOG_MSG} from
@@ -38,6 +40,7 @@ import {
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const {OPERATION_OWNER_ACTION} = OPERATION_WORKFLOW_OWNER_SHARED;
+const RECOVERY_LANE_ENTRY_TIMEOUT_MS = 2 * TIME_MS.SECOND;
 
 /**
  * Create a mock operation row for the SQL engine.
@@ -211,9 +214,20 @@ test('recovery reports the committed terminal branch and leaves pending outcomes
   coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
     ({operation}) => completedEvents.push(operation.operationId));
   coordinator.initialize();
+  const recovery = coordinator.handleRecovery();
+  const deadline = Promise.withResolvers();
+  const timeout = managedTimeout(t, () => {
+    deadline.reject(new Error('recovery never entered the held PENDING turn'));
+  }, RECOVERY_LANE_ENTRY_TIMEOUT_MS);
   try {
-    const recovery = coordinator.handleRecovery();
-    const pending = await pendingEntered.promise;
+    const pending = await Promise.race([
+      pendingEntered.promise,
+      recovery.then(() => {
+        throw new Error('recovery settled before it reached the held PENDING turn');
+      }),
+      deadline.promise,
+    ]);
+    clearTimeout(timeout);
     const joiningAction = owner.runOperationOwnerAction(OPERATION_OWNER_ACTION.EXECUTE, pending);
     resumePending.resolve();
     const summary = await recovery;
@@ -246,6 +260,8 @@ test('recovery reports the committed terminal branch and leaves pending outcomes
       'direct recovery reports no progress without a terminal or advancing outcome');
     t.same(failedEvents, ['syncing-fails'], 'direct recovery does not emit a second terminal failure');
   } finally {
+    clearTimeout(timeout);
+    resumePending.resolve();
     await coordinator.shutdown();
   }
 });
