@@ -13,6 +13,10 @@ import {
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildFailedCreateCleanupToken} from '../../src/rebalancer/failed-create-cleanup-token.js';
@@ -28,6 +32,8 @@ import {
 import {
   NODE, commitLedgerStatement, ledgerRows, onLedgerLeader,
 } from '../partition/placement-admission-fixture.js';
+import {readLeaderBootstrapStamp} from '../raft/raft-rs-backend/founding-growth-test-support.js';
+import {PartitionNodeCluster} from '../raft/raft-rs-backend/partition-node-cluster.js';
 import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {
   createCoordinatorSqlStore, createMockCache, createMockControlPlaneSystemTableGateway,
@@ -37,6 +43,7 @@ import {
 const OPERATION_ID = 'op-create-timeout-admission';
 const PARTITION_ID = 'create-timeout-race-p1';
 const REPLICA_ID = `${PARTITION_ID}-r2`;
+const SOURCE_ID = `${PARTITION_ID}-r1`;
 const OWNER_BOOT = 101;
 const planner = new ControlPlaneSystemTableGateway();
 
@@ -59,9 +66,17 @@ function createRequest(row) {
   };
 }
 
-async function withExpiredStep(measure, {step = WORKFLOW_STEP.SENDING} = {}) {
+async function withExpiredStep(measure, {
+  step = WORKFLOW_STEP.SENDING, sourceStamp = null,
+} = {}) {
   await onLedgerLeader(async (leader) => {
-    const cache = createMockCache();
+    const source = sourceStamp ? {
+      service_id: SOURCE_ID, replica_id: SOURCE_ID, node_id: NODE.A,
+      partition_id: PARTITION_ID, group_id: null, service_type: SERVICE_TYPE.PARTITION,
+      status: ReplicaStatus.ACTIVE, raft_role: RAFT_ROLE.LEADER,
+      address: `${NODE.A}/partition/${SOURCE_ID}`,
+    } : null;
+    const cache = createMockCache({services: source ? [source] : []});
     const otherTables = createCoordinatorSqlStore(cache);
     const sql = {async executeQuery(statement, params = []) {
       if (/\breplica_operations\b/u.test(statement)) {
@@ -114,12 +129,20 @@ async function withExpiredStep(measure, {step = WORKFLOW_STEP.SENDING} = {}) {
       const elapsedMs = owner.getTimeoutForStep(step, {partitionId: PARTITION_ID}) + 1;
       assert.ok(elapsedMs < TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS);
       const startedAt = now - elapsedMs;
+      const first = {step, timestamp: startedAt};
+      if (sourceStamp) {
+        first[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] = SOURCE_ID;
+        first[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] = sourceStamp;
+        first[OPERATION_METADATA_KEY.REPLICA_IDS] = [SOURCE_ID, REPLICA_ID];
+        first[OPERATION_METADATA_KEY.PEER_ADDRESSES] = [source.address];
+      }
       const initial = {
         operation_id: OPERATION_ID, partition_id: PARTITION_ID, replica_id: REPLICA_ID,
-        type: OperationType.ADD, entity_type: SERVICE_TYPE.PARTITION, entity_id: PARTITION_ID,
+        type: sourceStamp ? OperationType.REPLACE : OperationType.ADD,
+        entity_type: SERVICE_TYPE.PARTITION, entity_id: PARTITION_ID,
         source_node_id: NODE.A, target_node_id: NODE.B, status: WORKFLOW_STEP_TO_STATUS[step],
         workflow_step: step, created_at: startedAt, updated_at: startedAt, completed_at: null,
-        steps_history: JSON.stringify([{step, timestamp: startedAt}]),
+        steps_history: JSON.stringify([first]),
       };
       commitMutation({operation: 'insert', tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         row: initial});
@@ -136,7 +159,7 @@ async function withExpiredStep(measure, {step = WORKFLOW_STEP.SENDING} = {}) {
         ({operation: failed}) => failures.push(failed));
       const request = createRequest(row());
       await measure({
-        owner, target, request, row, reservation, failures, failWrites,
+        owner, target, request, row, reservation, failures, failWrites, operation,
         expire: () => owner.reconcileTimeoutOperation(operation(), now),
         interceptFailureWrite: (intercept) => {
           nextFailureWrite = intercept;
@@ -264,5 +287,152 @@ test('an observed claimed target failure still settles through ordinary failure 
         history.at(-1)[OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION];
       assert.equal(claim?.create_attempt_token, failed.attemptToken);
       assert.equal(claim?.created_at, failed.replicaCreatedAt);
+    });
+  });
+
+function admissionRequestOf(payload) {
+  return {
+    operationId: payload[ReplicaOperationField.OPERATION_ID],
+    operationType: payload[ReplicaOperationField.OPERATION_TYPE],
+    entityType: payload[ReplicaOperationField.ENTITY_TYPE],
+    entityId: payload[ReplicaOperationField.ENTITY_ID],
+    partitionId: payload[ReplicaOperationField.PARTITION_ID],
+    replicaId: payload[ReplicaOperationField.REPLICA_ID],
+    admissionToken: payload[ReplicaOperationField.CREATE_ADMISSION_TOKEN],
+    attemptToken: payload[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN],
+    attemptSeq: payload[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ],
+    workflowUpdatedAt: payload[ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT],
+  };
+}
+
+function assertSourceVoter(cluster) {
+  const source = cluster.node(SOURCE_ID).readStatus();
+  assert.equal(source.role, RAFT_ROLE.LEADER);
+  assert.ok(source.confState.voters.includes(source.peerId), 'the source remains a native voter');
+}
+
+async function withHeldReplaceCreate(measure) {
+  const cluster = new PartitionNodeCluster({
+    partitionId: PARTITION_ID, replicaIds: [SOURCE_ID], founderNodeIds: {[SOURCE_ID]: NODE.A},
+  });
+  try {
+    cluster.node(SOURCE_ID).campaign();
+    assert.ok(cluster.settle(() => {
+      const status = cluster.node(SOURCE_ID).readStatus();
+      return status.role === RAFT_ROLE.LEADER && status.appliedIndex > 0;
+    }), 'the native source elected and committed');
+    const sourceStamp = readLeaderBootstrapStamp(cluster, SOURCE_ID);
+    await withExpiredStep(async (run) => {
+      const delivered = Promise.withResolvers();
+      const reply = Promise.withResolvers();
+      run.owner.messageRouter = {async deliver(address, payload) {
+        assert.equal(payload.type, ReplicaOperationMessageType.CREATE_REPLICA);
+        assert.equal(address, `${NODE.B}/service/replica-handler`);
+        assert.deepEqual(payload[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP], sourceStamp);
+        delivered.resolve(admissionRequestOf(payload));
+        return buildDeliveryEnvelope({acknowledged: true}, await reply.promise);
+      }};
+      const execution = run.owner.executeOperationInternal(run.operation(), {});
+      try {
+        const request = await Promise.race([delivered.promise, execution.then((result) => {
+          assert.fail(`the sender returned before delivering held CREATE: ${JSON.stringify(result)}`);
+        })]);
+        assert.deepEqual(request, run.request, 'the receiver consumes the actual dispatch tuple');
+        assert.equal(run.operation().sourceReplicaId, SOURCE_ID);
+        assertSourceVoter(cluster);
+        await measure({...run, request, execution, reply: reply.resolve});
+        assert.equal(run.operation().sourceReplicaId, SOURCE_ID);
+        assertSourceVoter(cluster);
+      } finally {
+        reply.resolve({status: ReplicaOperationResponseStatus.ERROR});
+        await execution;
+      }
+    }, {sourceStamp});
+  } finally {
+    cluster.dispose();
+  }
+}
+
+test('pre-remove REPLACE admission wins against its sender timeout CAS and can progress', async () => {
+  await withHeldReplaceCreate(async (run) => {
+    let admitted;
+    let worker;
+    run.interceptFailureWrite(async (commit) => {
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.SENDING);
+      assert.equal(run.row().create_admission_state, null);
+      admitted = await run.target.claim(run.request);
+      worker = await run.target.claimPhysicalWorker(admitted);
+      assert.ok(worker, 'the actual target owns the original physical attempt');
+      return commit();
+    });
+    try {
+      assert.equal(await run.expire(), OPERATION_RECONCILE_OUTCOME.WAITING);
+      assertRetained(run, admitted);
+      assert.equal(await run.target.revalidatePhysicalWorker(worker), true);
+      assert.equal(run.failWrites[0].whereClause.create_admission_state, null);
+      const materialized = await run.target.markMaterialized(admitted);
+      assert.ok(materialized);
+      run.reply({status: ReplicaOperationResponseStatus.INITIATED});
+      assert.equal((await run.execution).success, true);
+      run.reportTarget(materialized, ReplicaStatus.SYNCING);
+      const wake = run.owner.observedProgressRetryTimerByOperationId.get(OPERATION_ID);
+      assert.ok(wake, 'the retained REPLACE still has an observation wake');
+      run.owner.clearTimeoutFn(wake.timeoutHandle);
+      await run.owner.runObservedProgressRetry(OPERATION_ID, wake.timeoutHandle);
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.SYNCING);
+      assertRetained(run, materialized);
+    } finally {
+      if (worker) run.target.releasePhysicalWorker(worker);
+    }
+  });
+});
+
+test('a pre-remove REPLACE sender timeout that wins before admission rejects the held CREATE',
+  async () => {
+    await withHeldReplaceCreate(async (run) => {
+      await run.expire();
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED);
+      assert.ok(Number.isFinite(run.reservation().released_at));
+      assert.equal(run.failures.length, 1);
+      await assert.rejects(run.target.claim(run.request),
+        {code: CREATE_ADMISSION_ERROR_CODE.REFUSED_TERMINAL});
+      run.reply({status: ReplicaOperationResponseStatus.ERROR,
+        error: CREATE_ADMISSION_ERROR_CODE.REFUSED_TERMINAL});
+      assert.equal((await run.execution).success, false);
+      assert.equal(run.row().create_admission_state, null);
+    });
+  });
+
+test('repair of a refused pre-remove REPLACE timeout yields to later admitted CREATE', async () => {
+  await withHeldReplaceCreate(async (run) => {
+    run.interceptFailureWrite(async () => ({success: false, error: 'injected refused write'}));
+    await assert.rejects(run.expire(), /injected refused write/u);
+    assert.ok(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID));
+    const admitted = await run.target.claim(run.request);
+    await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
+    assertRetained(run, admitted);
+    assert.equal(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID), false);
+    run.reply({status: ReplicaOperationResponseStatus.INITIATED});
+    assert.equal((await run.execution).success, true);
+    assert.equal(run.row().workflow_step, WORKFLOW_STEP.CREATING);
+  });
+});
+
+test('a positively claimed pre-remove REPLACE target failure settles with the source still voting',
+  async () => {
+    await withHeldReplaceCreate(async (run) => {
+      const admitted = await run.target.claim(run.request);
+      const failed = await run.target.markProgress(admitted, CREATE_ADMISSION_STATE.FAILED);
+      assert.ok(failed);
+      run.reportTarget(failed, ReplicaStatus.FAILED);
+      await run.expire();
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED);
+      assert.ok(Number.isFinite(run.reservation().released_at));
+      const history = JSON.parse(run.row().steps_history);
+      const claim =
+        history.at(-1)[OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION];
+      assert.equal(claim?.create_attempt_token, failed.attemptToken);
+      run.reply({status: ReplicaOperationResponseStatus.ERROR, error: 'confirmed target failure'});
+      assert.equal((await run.execution).success, false);
     });
   });
