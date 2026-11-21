@@ -127,7 +127,29 @@ product features.
 | Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
 | Which operation may a caller replay? | The native CREATE owner now refuses a durably FAILED creation and replays a matching ACTIVE creation. The composed terminal-replay file at `e7e978450` checks that the exact failed attempt releases its lane for its successor. | Preserve the distinction between a confirmed terminal row and an unreadable or mismatched result through reconstruction. |
 | When may placement retire an existing learner? | The 24 native retirement assertions passed on `e89e3dccf` and on `e7e978450`. The cases cover a newer boot or replica birth, late promotion, a neutral durable SUPERSEDED result and continued custody of an uncertain dispatched REMOVE. | Check neutral retirement and release through the normal dispatch and recensus path when composing further changes. |
-| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. The two earlier physical trials exhausted the formation bound. | The integration owner measures the same commit on tv-dator, adam-laptop and adams-gamla, one node per host. Three consecutive successes with the original deadline, quiet window, cleanup and SQL predicates precede comparative smoke. |
+| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. Physical run `4ef9154c` on this commit failed the same bound. | The placement/workflow owners reproduce the pre-send failure below. The provisioning owner traces the failed user partition. Three consecutive passing runs on the named hosts precede comparative smoke. |
+
+On `4ef9154c`, all three serving lanes opened after 3.930 seconds. The
+last formation poll ended at 420.001 seconds. Two control snapshots were
+unreadable and the third reported operations in flight. There were 32 polls
+and 33 read failures. The harness sent CREATE and COUNT through its seed
+SQL connection. Provisioning reported unreachable quorum for
+`tbl-5aa54f3c91d485c621cb384f40619318-p1`, and COUNT failed. The public
+write/readback gate remained unmet. All three containers were removed.
+[Physical report and node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-4ef9154c-nov21.tar.gz).
+
+The final ledger row for `pl-nodes-p1-333-0` contains PENDING, SENDING
+and FAILED. Its founding entry has no CREATE membership stamp, and every
+receiver admission field is null. While the stamp was unavailable, the
+sender deferred dispatch. The ledger later recorded a SENDING timeout
+with 256,812 ms of the operation budget remaining. Both PENDING and SENDING
+currently have a 30-second step limit. The next workflow proof must
+distinguish bootstrap preparation from a runnable dispatch, preserve
+the original operation deadline and exercise both ordinary and priority
+claims. A different operation, `pl-sql_write_operations-p1-195-0`, crossed
+a local PENDING timeout, then the same CREATE reached ACTIVE and completed.
+Its duplicate timeout callbacks produced no second durable change. The
+provisioning failure still needs its own causal trace.
 
 Three-host run `e5deee2a` on clean `9e7184a3b` exhausted the 420-second
 formation bound and the 120-second public routability bound. The harness
