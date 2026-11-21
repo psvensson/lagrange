@@ -4,7 +4,6 @@ import {
 } from './operation-workflow-owner-create-budget-dispatch.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
-import {isGenesisFoundingCreateOperation} from './replica-operation-constants.js';
 import {COPY_PHASE_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {
   PLACEMENT_COPY_CAPACITY,
@@ -29,7 +28,7 @@ function isOccupyingTargetCopyOperation(operation, targetNodeId) {
   if (operation.entityType && operation.entityType !== UNIFIED_SERVICE_TYPE.PARTITION) {
     return false;
   }
-  if (isGenesisFoundingCreateOperation(operation)) {
+  if (operation.founder) {
     return false;
   }
   return COPY_PHASE_WORKFLOW_STEPS.has(operation.workflowStep);

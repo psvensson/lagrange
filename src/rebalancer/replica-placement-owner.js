@@ -224,18 +224,19 @@ function moveIntentKeyOf(partitionId, move) {
     `${move.sourceReplicaId ?? ''}:${move.replicaId ?? ''}:${move.copySourceNodeId ?? ''}`;
 }
 
-function promotedVoterReplicaIdsOf(census) {
-  const promoted = new Set();
+function promotedVoterReplicaIdsByPartition(census) {
+  const byPartition = new Map();
   for (const row of census) {
-    if (row.type !== OperationType.GROWTH_PROMOTE || row.incomplete ||
-        row.step !== WORKFLOW_STEP.ACTIVE || !Array.isArray(row.promoteReplicaIds)) {
+    if (row.entityType !== UNIFIED_SERVICE_TYPE.PARTITION ||
+        row.type !== OperationType.GROWTH_PROMOTE || row.incomplete ||
+        row.step !== WORKFLOW_STEP.ACTIVE || row.promoteReplicaIds === null) {
       continue;
     }
-    for (const replicaId of row.promoteReplicaIds) {
-      if (typeof replicaId === 'string' && replicaId.length > 0) promoted.add(replicaId);
-    }
+    const promoted = byPartition.get(row.entityId) ?? new Set();
+    for (const replicaId of row.promoteReplicaIds) promoted.add(replicaId);
+    byPartition.set(row.entityId, promoted);
   }
-  return promoted;
+  return byPartition;
 }
 
 class ReplicaPlacementOwner {
@@ -547,10 +548,7 @@ class ReplicaPlacementOwner {
     return excluded;
   }
 
-  evaluateAllPartitions(
-    nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets,
-    promotedVoterReplicaIds = null,
-  ) {
+  readPartitionPlacementRows() {
     const servicesByPartition = new Map();
     for (const row of this.systemTableCache.getAll(TABLES.SERVICES)) {
       const partitionId = row[COLUMN.PARTITION_ID];
@@ -559,9 +557,20 @@ class ReplicaPlacementOwner {
       list.push(row);
       servicesByPartition.set(partitionId, list);
     }
+    return {
+      partitionRows: this.systemTableCache.getAll(TABLES.PARTITIONS),
+      servicesByPartition,
+    };
+  }
+
+  evaluateAllPartitions(
+    nodeInput, busyPartitions, saturatedTargetNodeIds, storageExcludedTargets,
+    promotedByPartition,
+  ) {
+    const {partitionRows, servicesByPartition} = this.readPartitionPlacementRows();
     const evaluations = [];
     const inputsByPartition = new Map();
-    for (const partitionRow of this.systemTableCache.getAll(TABLES.PARTITIONS)) {
+    for (const partitionRow of partitionRows) {
       const partitionId = partitionRow[COLUMN.PARTITION_ID];
       const status = readLowerStateField(partitionRow[COLUMN.STATUS]);
       if (!partitionId || SKIPPED_PARTITION_STATUSES.has(status)) continue;
@@ -571,7 +580,7 @@ class ReplicaPlacementOwner {
         servicesByPartition.get(partitionId) || [],
         partitionRow[COLUMN.LEADER_NODE_ID],
         isBusy,
-        promotedVoterReplicaIds,
+        promotedByPartition.get(partitionId),
       );
       inputsByPartition.set(partitionId, {replicationFactor, replicaRows});
       const evaluation = evaluatePartitionDeficit({
@@ -624,11 +633,11 @@ class ReplicaPlacementOwner {
 
   preparePassOrderedCandidates(
     nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
-    promotedVoterReplicaIds = null,
+    promotedByPartition,
   ) {
     const {evaluations, inputsByPartition} = this.evaluateAllPartitions(
       nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
-      promotedVoterReplicaIds,
+      promotedByPartition,
     );
     const repairWaitingSourceNodeIds = repairSourceNodeIdsOf(
       evaluations.filter((e) => !e.isBusy).map((e) => e.evaluation),
@@ -735,11 +744,11 @@ class ReplicaPlacementOwner {
     const occupancy = summarizeCopyOccupancy(census);
     const saturatedTargets = saturatedTargetsOf(occupancy.byTarget);
     const storageExcludedTargets = this.readStorageExcludedTargets(nodeInput, nowMs);
-    const promotedVoterReplicaIds = promotedVoterReplicaIdsOf(census);
+    const promotedByPartition = promotedVoterReplicaIdsByPartition(census);
     const {ordered, inputsByPartition, repairWaitingSourceNodeIds} =
       this.preparePassOrderedCandidates(
         nodeInput, busyPartitions, saturatedTargets, storageExcludedTargets,
-        promotedVoterReplicaIds);
+        promotedByPartition);
     const admitted = await this.admitOrderedCandidates({
       ordered, inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets,

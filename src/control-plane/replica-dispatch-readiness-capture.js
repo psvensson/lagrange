@@ -10,30 +10,22 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from '../rebalancer/rebalancer-entity-identity.js';
-import {
-  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
-  assertMembershipPublicationEpochBinding,
-} from '../rebalancer/replica-operation-membership-epoch-binding.js';
+import {decodeReplicaOperationRow} from '../rebalancer/replica-operation-repository-row-methods.js';
+import {buildReplicaOperationWakeRow} from
+  '../rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {
   isBootstrapTopologyDispatchDeferred as isBootstrapTopologyDispatchDeferredFn,
 } from '../rebalancer/replica-status.js';
 
 const {
-  COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
   ControlPlaneField,
   ControlPlaneReadinessService,
   DISPATCH_QUEUE_NAME,
   DISPATCH_READINESS_MESSAGE,
   DISPATCH_READINESS_REASON,
-  OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  ReplicaOperationField,
-  STRING,
   classifySystemPartition,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
   isRetryableControlPlaneError,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -42,7 +34,6 @@ const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 ]);
-const DISPATCH_ROW_EPOCH_BINDING_SOURCE = 'replica dispatch row';
 
 class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
   /**
@@ -125,83 +116,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   buildOperationFromRow(row) {
-    const stepsHistory = row.steps_history ? JSON.parse(row.steps_history) : [];
-    const operation = {
-      operationId: row.operation_id,
-      type: row.type,
-      partitionId: row.partition_id,
-      entityType: row[COLUMN.ENTITY_TYPE],
-      entityId: row[COLUMN.ENTITY_ID],
-      replicaId: row.replica_id,
-      targetClaimKey: row.target_claim_key ?? null,
-      sourceNodeId: row.source_node_id,
-      targetNodeId: row.target_node_id,
-      status: row.status,
-      workflowStep: row.workflow_step,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      completedAt: row.completed_at,
-      errorMessage: row.error_message,
-      stepsHistory,
-    };
-    const membershipPublicationEpochBinding =
-      assertMembershipPublicationEpochBinding(
-        row.membership_publication_epoch,
-        {
-          source: DISPATCH_ROW_EPOCH_BINDING_SOURCE,
-          operationId: row.operation_id,
-        },
-      );
-    if (
-      membershipPublicationEpochBinding.state ===
-        MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.BOUND
-    ) {
-      operation.membershipPublicationEpoch =
-        membershipPublicationEpochBinding.epoch;
-    }
-    assertCanonicalRebalancerEntityIdentity(operation);
-    const sourceReplicaId = getOperationMetadataString(
-      stepsHistory,
-      OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
-    );
-    if (
-      typeof sourceReplicaId === 'string' &&
-      sourceReplicaId.length > 0
-    ) {
-      operation.sourceReplicaId = sourceReplicaId;
-    }
-    const replicaIds = getOperationMetadataStringArray(
-      stepsHistory,
-      OPERATION_METADATA_KEY.REPLICA_IDS,
-    );
-    if (replicaIds.length > 0) {
-      operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
-    }
-    const peerAddresses = getOperationMetadataStringArray(
-      stepsHistory,
-      OPERATION_METADATA_KEY.PEER_ADDRESSES,
-    );
-    if (peerAddresses.length > 0) {
-      operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
-    }
-    // The bootstrap metadata objects, the committed-membership stamp among
-    // them, cross from the row unchanged.
-    for (const [metadataKey, field] of [
-      [OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
-        ReplicaOperationField.BOOTSTRAP_TABLE_METADATA],
-      [OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
-        ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA],
-      [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
-        ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
-      [OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
-        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
-    ]) {
-      const metadata = getOperationMetadataObject(stepsHistory, metadataKey);
-      if (metadata) {
-        operation[field] = metadata;
-      }
-    }
-    return operation;
+    return decodeReplicaOperationRow(row);
   }
 
   /**
@@ -211,33 +126,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   buildOperationRowFromCoordinator(operation) {
-    let stepsHistory = operation.stepsHistory;
-    if (typeof stepsHistory !== 'string') {
-      stepsHistory = Array.isArray(stepsHistory) ?
-        JSON.stringify(stepsHistory) :
-        STRING.EMPTY_JSON_ARRAY;
-    }
-
-    return {
-      operation_id: operation.operationId,
-      type: operation.type,
-      partition_id: operation.partitionId,
-      replica_id: operation.replicaId,
-      target_claim_key: operation.targetClaimKey || null,
-      source_node_id: operation.sourceNodeId,
-      target_node_id: operation.targetNodeId,
-      status: operation.status,
-      workflow_step: operation.workflowStep,
-      created_at: operation.createdAt,
-      updated_at: operation.updatedAt,
-      completed_at: operation.completedAt,
-      error_message: operation.errorMessage,
-      steps_history: stepsHistory,
-      [COLUMN.ENTITY_TYPE]: operation.entityType,
-      [COLUMN.ENTITY_ID]: operation.entityId,
-      membership_publication_epoch:
-        operation.membershipPublicationEpoch ?? null,
-    };
+    return buildReplicaOperationWakeRow(operation);
   }
 
   /**

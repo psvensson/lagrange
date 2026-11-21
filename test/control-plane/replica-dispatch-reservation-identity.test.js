@@ -69,8 +69,8 @@ test('dispatch projection preserves the exact reservation identity through ' +
   });
   const operation = buildRuntimeServiceOperation();
   seedAuthoritativeOperation(sqlEngine, operation);
-  sqlEngine.operations.get(OPERATION_ID).membership_publication_epoch =
-    MEMBERSHIP_PUBLICATION_EPOCH;
+  t.equal(sqlEngine.getOperationRow(OPERATION_ID).membership_publication_epoch,
+    MEMBERSHIP_PUBLICATION_EPOCH, 'the exact planning epoch was seeded in SQLite');
 
   try {
     const initialReservation =

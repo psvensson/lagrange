@@ -1,3 +1,7 @@
+import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohort,
+} from './growth-promotion-subject.js';
+import {invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
 import {assertOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
 import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
@@ -68,33 +72,12 @@ function isHeldGrowthPromoteOperation(operation) {
   );
 }
 
-function resolveGrowthPromoteReplicaIds(operation) {
-  const explicit = operation?.[ReplicaOperationField.PROMOTE_REPLICA_IDS];
-  if (Array.isArray(explicit) && explicit.length > 0) {
-    return explicit.filter((id) => typeof id === 'string' && id.length > 0);
-  }
-  const fromHistory = Array.isArray(operation?.stepsHistory) ?
-    operation.stepsHistory
-      .map((entry) => entry?.[ReplicaOperationField.PROMOTE_REPLICA_IDS])
-      .find((list) => Array.isArray(list) && list.length > 0) :
-    null;
-  if (Array.isArray(fromHistory) && fromHistory.length > 0) {
-    return fromHistory.filter((id) => typeof id === 'string' && id.length > 0);
-  }
-  return [operation?.replicaId, operation?.sourceReplicaId].filter(
-    (id) => typeof id === 'string' && id.length > 0,
-  );
-}
-
 function applyGrowthPromoteRequestFields(request, operation) {
-  const promoteReplicaIds = resolveGrowthPromoteReplicaIds(operation);
-  let sourceReplicaId = null;
-  if (operation.sourceReplicaId) {
-    sourceReplicaId = operation.sourceReplicaId;
-  } else if (promoteReplicaIds.length > 1) {
-    sourceReplicaId = promoteReplicaIds[1];
+  const promoteReplicaIds = readGrowthPromotionCohort(operation);
+  if (promoteReplicaIds === null) {
+    throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED);
   }
-  request[ReplicaOperationField.SOURCE_REPLICA_ID] = sourceReplicaId;
+  request[ReplicaOperationField.SOURCE_REPLICA_ID] = operation.sourceReplicaId;
   request[ReplicaOperationField.PROMOTE_REPLICA_IDS] = promoteReplicaIds;
   if (operation[ReplicaOperationField.EXPECTED_BASE_CONFIG]) {
     request[ReplicaOperationField.EXPECTED_BASE_CONFIG] =
@@ -147,7 +130,7 @@ function canEnterGrowthSettlementPersistence(owner, operation, options = {}) {
     );
   }
   if (options?.requireProvenance === true) return false;
-  return resolveGrowthPromoteReplicaIds(operation).length > 0;
+  return readGrowthPromotionCohort(operation) !== null;
 }
 
 function buildGrowthSettlementResult(phase, reconcileOutcome, committed, disposition) {
@@ -414,7 +397,8 @@ function hasValidGrowthPromoteCompletionProvenance(operation, response) {
   ) {
     return false;
   }
-  const expectedReplicaIds = resolveGrowthPromoteReplicaIds(operation);
+  const expectedReplicaIds = readGrowthPromotionCohort(operation);
+  if (expectedReplicaIds === null) return false;
   const presentCandidateLists = [
     response[ReplicaOperationField.PROMOTE_REPLICA_IDS],
     response.promotedReplicaIds,
@@ -575,7 +559,6 @@ export {
   reconcileGrowthPromoteDispatchResponse,
   reconcileGrowthPromoteLifecycle,
   redirectGrowthPromoteTargetNode,
-  resolveGrowthPromoteReplicaIds,
   resolveGrowthPromoteTargetNodeId,
   settleGrowthPromoteCompletion,
 };

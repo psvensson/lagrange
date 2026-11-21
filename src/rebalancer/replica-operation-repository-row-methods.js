@@ -1,12 +1,26 @@
-import {decodePersistedOperationHistory} from './replica-operation-update-outcome.js';
+import {
+  decodePersistedOperationHistory,
+  invalidOperationPersistenceOutcome,
+} from './replica-operation-update-outcome.js';
+import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohortFromRow,
+} from './growth-promotion-subject.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {
   readOperationRecordWorkflowStep,
 } from './replica-operation-progress.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
 import {
+  OPERATION_METADATA_KEY,
+  OperationType,
+  buildReplicaOperationSemanticWitnesses,
+  getOperationMetadataObject,
+  getOperationMetadataString,
+  getOperationMetadataStringArray,
   readOriginalCreateBootstrapMembership,
   readOperationTargetNodeBootIncarnation,
   readOperationTargetNodeStorageIncarnation,
+  resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
 import {
   assertCanonicalRebalancerEntityIdentity,
@@ -44,42 +58,222 @@ function nullableValue(value) {
   return value ?? null;
 }
 
+function getReplaceSourceReplicaId(operation) {
+  if (!operation || operation.type !== OperationType.REPLACE) {
+    return null;
+  }
+  if (operation.sourceReplicaId) {
+    return operation.sourceReplicaId;
+  }
+  if (!Array.isArray(operation.stepsHistory)) {
+    return null;
+  }
+  return getOperationMetadataString(
+    operation.stepsHistory,
+    OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
+  );
+}
+
+function attachFailedCreateTargetCleanupPrecondition(
+  operation,
+  stepsHistory,
+) {
+  const precondition = getOperationMetadataObject(
+    stepsHistory,
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+  );
+  if (precondition) {
+    operation[
+      ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+    ] = precondition;
+  }
+}
+
+// SQL, CDC replay, and serialized wakeups all decode the same row subject.
+function decodeReplicaOperationRow(row, onHistoryError) {
+  let stepsHistory;
+  try {
+    stepsHistory = decodePersistedOperationHistory(row.steps_history);
+  } catch (error) {
+    onHistoryError?.(error);
+    if (row.type === OperationType.GROWTH_PROMOTE) {
+      throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED, error);
+    }
+    throw error;
+  }
+  const {entityType, entityId} =
+    assertCanonicalRebalancerEntityIdentity({
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+    });
+  const operation = {
+    operationId: row.operation_id,
+    type: row.type,
+    partitionId: row.partition_id,
+    entityType,
+    entityId,
+    replicaId: row.replica_id,
+    targetClaimKey: nullableValue(row.target_claim_key),
+    sourceNodeId: row.source_node_id,
+    targetNodeId: row.target_node_id,
+    status: row.status,
+    workflowStep: row.workflow_step,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at,
+    errorMessage: row.error_message,
+    stepsHistory,
+    sourceReplicaId: nullableValue(row.source_replica_id),
+    messageGroupMembershipLaneKey:
+      nullableValue(row.message_group_membership_lane_key),
+    messageGroupMembershipPhase:
+      nullableValue(row.message_group_membership_phase),
+    messageGroupMembershipObligationState:
+      nullableValue(row.message_group_membership_obligation_state),
+    messageGroupMembershipIdentity:
+      nullableValue(row.message_group_membership_identity),
+    messageGroupMembershipOwnerClaim:
+      nullableValue(row.message_group_membership_owner_claim),
+    messageGroupMembershipPermit:
+      nullableValue(row.message_group_membership_permit),
+    messageGroupLearnerStamp:
+      nullableValue(row.message_group_learner_stamp),
+    messageGroupVoterStamp:
+      nullableValue(row.message_group_voter_stamp),
+    messageGroupRemovalStamp:
+      nullableValue(row.message_group_removal_stamp),
+    messageGroupSourceLifecycleClaim:
+      nullableValue(row.message_group_source_lifecycle_claim),
+    createAdmissionState: nullableValue(row.create_admission_state),
+    createAdmissionToken: nullableValue(row.create_admission_token),
+    createAdmissionReplicaCreatedAt: nullableSafeInteger(
+      row.create_admission_replica_created_at,
+    ),
+    createAdmissionAttemptToken:
+      nullableValue(row.create_admission_attempt_token),
+    createAdmissionPreviousAttemptToken:
+      nullableValue(row.create_admission_previous_attempt_token),
+    createAdmissionAttemptSeq: nullableSafeInteger(
+      row.create_admission_attempt_seq,
+    ),
+    createAdmissionWorkflowUpdatedAt: nullableSafeInteger(
+      row.create_admission_workflow_updated_at,
+    ),
+    createAdmissionOwnerIncarnation: nullableSafeInteger(
+      row.create_admission_owner_incarnation,
+    ),
+  };
+  // Durable planning-epoch binding: SQL NULL / absent column stays
+  // unbound (field omitted), a non-negative integer binds (zero stays
+  // zero), and anything else fails closed at this decode boundary.
+  const membershipPublicationEpochBinding =
+    assertMembershipPublicationEpochBinding(
+      row.membership_publication_epoch,
+      {
+        source: DURABLE_ROW_EPOCH_BINDING_SOURCE,
+        operationId: row.operation_id,
+      },
+    );
+  if (
+    membershipPublicationEpochBinding.state ===
+      MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.BOUND
+  ) {
+    operation.membershipPublicationEpoch =
+      membershipPublicationEpochBinding.epoch;
+  }
+  // Durable owner lease (audit findings 5+14): the row's lease_expires_at
+  // is the persisted owner heartbeat; resolveOperationOwnerNodeId stays
+  // the structural owner for unfenced rows.
+  const leaseExpiresAt = Number(row.lease_expires_at);
+  if (Number.isFinite(leaseExpiresAt) && leaseExpiresAt > 0) {
+    operation.ownerLeaseExpiresAt = leaseExpiresAt;
+  }
+  operation.semanticPhase = resolveReplicaOperationSemanticPhase(
+    operation.type,
+    operation.workflowStep,
+    operation.status,
+  );
+  operation.witnesses = buildReplicaOperationSemanticWitnesses(
+    operation.type,
+    operation.workflowStep,
+    operation.status,
+  );
+  if (operation.type === OperationType.GROWTH_PROMOTE) {
+    const cohort = readGrowthPromotionCohortFromRow(row, stepsHistory);
+    if (cohort === null) {
+      throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED);
+    }
+    operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] = cohort;
+  } else if (operation.type === OperationType.REPLACE) {
+    operation.sourceReplicaId = getReplaceSourceReplicaId(operation);
+  }
+  const replicaIds = getOperationMetadataStringArray(
+    stepsHistory,
+    OPERATION_METADATA_KEY.REPLICA_IDS,
+  );
+  if (replicaIds.length > 0) {
+    operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
+  }
+  const peerAddresses = getOperationMetadataStringArray(
+    stepsHistory,
+    OPERATION_METADATA_KEY.PEER_ADDRESSES,
+  );
+  if (peerAddresses.length > 0) {
+    operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
+  }
+  const bootstrapTableMetadata = getOperationMetadataObject(
+    stepsHistory,
+    OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
+  );
+  if (bootstrapTableMetadata) {
+    operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] = bootstrapTableMetadata;
+  }
+  const bootstrapPartitionMetadata = getOperationMetadataObject(
+    stepsHistory,
+    OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
+  );
+  if (bootstrapPartitionMetadata) {
+    operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] = bootstrapPartitionMetadata;
+  }
+  const bootstrapMembership = readOriginalCreateBootstrapMembership(stepsHistory);
+  if (bootstrapMembership && typeof bootstrapMembership === OBJECT_TYPE &&
+      !Array.isArray(bootstrapMembership)) {
+    operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
+  }
+  const targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
+    row,
+    stepsHistory,
+  );
+  if (targetNodeBootIncarnation !== null) {
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
+      targetNodeBootIncarnation;
+  }
+  const targetNodeStorageIncarnation =
+    readOperationTargetNodeStorageIncarnation(row, stepsHistory);
+  if (targetNodeStorageIncarnation !== null) {
+    operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
+      targetNodeStorageIncarnation;
+  }
+  if (typeof row.copy_source_node_id === 'string') {
+    operation.copySourceNodeId = row.copy_source_node_id;
+  }
+  attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
+  return operation;
+}
+
 function assignReplicaOperationRepositoryRowMethods(
   ReplicaOperationRepository,
   options = {},
 ) {
   const {
-    OPERATION_METADATA_KEY,
-    OperationType,
     REBALANCE_COORDINATOR_LOG_MSG,
     REPLICA_OPERATION_SEMANTIC_PHASE,
-    ReplicaOperationField,
     SYSTEM_TABLE_NAME,
     WORKFLOW_STEP,
-    buildReplicaOperationSemanticWitnesses,
     classifySystemPartition,
-    getOperationMetadataObject,
-    getOperationMetadataString,
-    getOperationMetadataStringArray,
     isReplaceRemoveDispatchPhase,
     isTerminalReplicaOperationRecord,
-    resolveReplicaOperationSemanticPhase,
   } = options;
-
-  function attachFailedCreateTargetCleanupPrecondition(
-    operation,
-    stepsHistory,
-  ) {
-    const precondition = getOperationMetadataObject(
-      stepsHistory,
-      OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
-    );
-    if (precondition) {
-      operation[
-        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
-      ] = precondition;
-    }
-  }
 
   class ReplicaOperationRepositoryRowMethods {
   /**
@@ -88,187 +282,12 @@ function assignReplicaOperationRepositoryRowMethods(
    * @return {object}
    */
     rowToOperation(row) {
-      let stepsHistory;
-      try {
-        stepsHistory = decodePersistedOperationHistory(row.steps_history);
-      } catch (error) {
+      return decodeReplicaOperationRow(row, (error) => {
         this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.STEPS_HISTORY_PARSE_ERROR, {
           operationId: row.operation_id,
           error: error.message,
         });
-        throw error;
-      }
-      const {entityType, entityId} =
-        assertCanonicalRebalancerEntityIdentity({
-          entityType: row.entity_type,
-          entityId: row.entity_id,
-        });
-      const operation = {
-        operationId: row.operation_id,
-        type: row.type,
-        partitionId: row.partition_id,
-        entityType,
-        entityId,
-        replicaId: row.replica_id,
-        targetClaimKey: nullableValue(row.target_claim_key),
-        sourceNodeId: row.source_node_id,
-        targetNodeId: row.target_node_id,
-        status: row.status,
-        workflowStep: row.workflow_step,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        completedAt: row.completed_at,
-        errorMessage: row.error_message,
-        stepsHistory,
-        sourceReplicaId: nullableValue(row.source_replica_id),
-        messageGroupMembershipLaneKey:
-          nullableValue(row.message_group_membership_lane_key),
-        messageGroupMembershipPhase:
-          nullableValue(row.message_group_membership_phase),
-        messageGroupMembershipObligationState:
-          nullableValue(row.message_group_membership_obligation_state),
-        messageGroupMembershipIdentity:
-          nullableValue(row.message_group_membership_identity),
-        messageGroupMembershipOwnerClaim:
-          nullableValue(row.message_group_membership_owner_claim),
-        messageGroupMembershipPermit:
-          nullableValue(row.message_group_membership_permit),
-        messageGroupLearnerStamp:
-          nullableValue(row.message_group_learner_stamp),
-        messageGroupVoterStamp:
-          nullableValue(row.message_group_voter_stamp),
-        messageGroupRemovalStamp:
-          nullableValue(row.message_group_removal_stamp),
-        messageGroupSourceLifecycleClaim:
-          nullableValue(row.message_group_source_lifecycle_claim),
-        createAdmissionState: nullableValue(row.create_admission_state),
-        createAdmissionToken: nullableValue(row.create_admission_token),
-        createAdmissionReplicaCreatedAt: nullableSafeInteger(
-          row.create_admission_replica_created_at,
-        ),
-        createAdmissionAttemptToken:
-          nullableValue(row.create_admission_attempt_token),
-        createAdmissionPreviousAttemptToken:
-          nullableValue(row.create_admission_previous_attempt_token),
-        createAdmissionAttemptSeq: nullableSafeInteger(
-          row.create_admission_attempt_seq,
-        ),
-        createAdmissionWorkflowUpdatedAt: nullableSafeInteger(
-          row.create_admission_workflow_updated_at,
-        ),
-        createAdmissionOwnerIncarnation: nullableSafeInteger(
-          row.create_admission_owner_incarnation,
-        ),
-      };
-      // Durable planning-epoch binding: SQL NULL / absent column stays
-      // unbound (field omitted), a non-negative integer binds (zero stays
-      // zero), and anything else fails closed at this decode boundary.
-      const membershipPublicationEpochBinding =
-        assertMembershipPublicationEpochBinding(
-          row.membership_publication_epoch,
-          {
-            source: DURABLE_ROW_EPOCH_BINDING_SOURCE,
-            operationId: row.operation_id,
-          },
-        );
-      if (
-        membershipPublicationEpochBinding.state ===
-          MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.BOUND
-      ) {
-        operation.membershipPublicationEpoch =
-          membershipPublicationEpochBinding.epoch;
-      }
-      // Durable owner lease (audit findings 5+14): the row's lease_expires_at
-      // is the persisted owner heartbeat; resolveOperationOwnerNodeId stays
-      // the structural owner for unfenced rows.
-      const leaseExpiresAt = Number(row.lease_expires_at);
-      if (Number.isFinite(leaseExpiresAt) && leaseExpiresAt > 0) {
-        operation.ownerLeaseExpiresAt = leaseExpiresAt;
-      }
-      operation.semanticPhase = resolveReplicaOperationSemanticPhase(
-        operation.type,
-        operation.workflowStep,
-        operation.status,
-      );
-      operation.witnesses = buildReplicaOperationSemanticWitnesses(
-        operation.type,
-        operation.workflowStep,
-        operation.status,
-      );
-      if (operation.type === OperationType.GROWTH_PROMOTE) {
-        operation.sourceReplicaId =
-          operation.sourceReplicaId ||
-          getOperationMetadataString(
-            stepsHistory,
-            OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
-          ) ||
-          null;
-        const promoteReplicaIdsFromHistory = getOperationMetadataStringArray(
-          stepsHistory,
-          ReplicaOperationField.PROMOTE_REPLICA_IDS,
-        );
-        const promoteReplicaIds = promoteReplicaIdsFromHistory.length > 0 ?
-          promoteReplicaIdsFromHistory :
-          [operation.replicaId, operation.sourceReplicaId].filter(Boolean);
-        if (promoteReplicaIds.length > 0) {
-          operation[ReplicaOperationField.PROMOTE_REPLICA_IDS] =
-            promoteReplicaIds;
-        }
-      } else {
-        operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
-      }
-      const replicaIds = getOperationMetadataStringArray(
-        stepsHistory,
-        OPERATION_METADATA_KEY.REPLICA_IDS,
-      );
-      if (replicaIds.length > 0) {
-        operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
-      }
-      const peerAddresses = getOperationMetadataStringArray(
-        stepsHistory,
-        OPERATION_METADATA_KEY.PEER_ADDRESSES,
-      );
-      if (peerAddresses.length > 0) {
-        operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
-      }
-      const bootstrapTableMetadata = getOperationMetadataObject(
-        stepsHistory,
-        OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
-      );
-      if (bootstrapTableMetadata) {
-        operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] = bootstrapTableMetadata;
-      }
-      const bootstrapPartitionMetadata = getOperationMetadataObject(
-        stepsHistory,
-        OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
-      );
-      if (bootstrapPartitionMetadata) {
-        operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] = bootstrapPartitionMetadata;
-      }
-      const bootstrapMembership = readOriginalCreateBootstrapMembership(stepsHistory);
-      if (bootstrapMembership && typeof bootstrapMembership === OBJECT_TYPE &&
-          !Array.isArray(bootstrapMembership)) {
-        operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
-      }
-      const targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(
-        row,
-        stepsHistory,
-      );
-      if (targetNodeBootIncarnation !== null) {
-        operation[OPERATION_METADATA_KEY.TARGET_NODE_BOOT_INCARNATION] =
-          targetNodeBootIncarnation;
-      }
-      const targetNodeStorageIncarnation =
-        readOperationTargetNodeStorageIncarnation(row, stepsHistory);
-      if (targetNodeStorageIncarnation !== null) {
-        operation[OPERATION_METADATA_KEY.TARGET_NODE_STORAGE_INCARNATION] =
-          targetNodeStorageIncarnation;
-      }
-      if (typeof row.copy_source_node_id === 'string') {
-        operation.copySourceNodeId = row.copy_source_node_id;
-      }
-      attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
-      return operation;
+      });
     }
     /**
    * Check whether an operation is in a terminal state.
@@ -401,19 +420,7 @@ function assignReplicaOperationRepositoryRowMethods(
    * @return {string|null}
    */
     getReplaceSourceReplicaId(operation) {
-      if (!operation || operation.type !== OperationType.REPLACE) {
-        return null;
-      }
-      if (operation.sourceReplicaId) {
-        return operation.sourceReplicaId;
-      }
-      if (!Array.isArray(operation.stepsHistory)) {
-        return null;
-      }
-      return getOperationMetadataString(
-        operation.stepsHistory,
-        OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
-      );
+      return getReplaceSourceReplicaId(operation);
     }
     /**
    * Check whether a REPLACE operation is in the remove phase.
@@ -532,4 +539,4 @@ function assignReplicaOperationRepositoryRowMethods(
   }
 }
 
-export {assignReplicaOperationRepositoryRowMethods};
+export {assignReplicaOperationRepositoryRowMethods, decodeReplicaOperationRow};

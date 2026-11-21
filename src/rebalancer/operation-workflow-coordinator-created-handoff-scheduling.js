@@ -201,35 +201,6 @@ function buildCoordinatorCreatedDispatchIngress(nodeId) {
   return `${normalizedNodeId}/service/replica-dispatch`;
 }
 
-function buildCoordinatorCreatedDispatchRow(operation) {
-  let stepsHistory = operation?.stepsHistory;
-  if (typeof stepsHistory !== 'string') {
-    stepsHistory = Array.isArray(stepsHistory) ?
-      JSON.stringify(stepsHistory) :
-      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_JSON_ARRAY;
-  }
-  return {
-    operation_id: operation?.operationId || null,
-    type: operation?.type || null,
-    partition_id: operation?.partitionId || null,
-    replica_id: operation?.replicaId,
-    target_claim_key: operation?.targetClaimKey || null,
-    source_node_id: operation?.sourceNodeId,
-    target_node_id: operation?.targetNodeId,
-    status: operation?.status,
-    workflow_step: readStateField(operation?.workflowStep),
-    created_at: operation?.createdAt,
-    updated_at: operation?.updatedAt,
-    completed_at: operation?.completedAt,
-    error_message: operation?.errorMessage,
-    steps_history: stepsHistory,
-    entity_type: operation?.entityType,
-    entity_id: operation?.entityId,
-    membership_publication_epoch:
-      operation?.membershipPublicationEpoch ?? null,
-  };
-}
-
 function isInitialCoordinatorCreatedRemoteHandoffEligible(operation) {
   const partitionId = operation?.partitionId || null;
   const partitionClassification = classifySystemPartition({partitionId});
@@ -532,7 +503,6 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
 export {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
   buildCoordinatorCreatedDispatchIngress,
-  buildCoordinatorCreatedDispatchRow,
   buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
   canContinueCoordinatorCreatedRemoteHandoff,
   cloneOperationSnapshot,

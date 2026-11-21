@@ -6,7 +6,9 @@ import {
 import {
   getWorkflowSteps,
   isTerminalReplicaOperationRecord,
+  OperationType,
 } from '../rebalancer/replica-status.js';
+import {assertOperationUpdateSubject} from '../rebalancer/replica-operation-update-outcome.js';
 
 const {
   COLUMN,
@@ -200,6 +202,12 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       return this.resolveNonRefreshReconcileRow(operationId, contextRow);
     }
     const refreshedRow = await this.getReplicaOperationRow(operationId);
+    if (contextRow && refreshedRow &&
+        (contextRow.type === OperationType.GROWTH_PROMOTE ||
+          refreshedRow.type === OperationType.GROWTH_PROMOTE)) {
+      assertOperationUpdateSubject(this.buildOperationFromRow(contextRow),
+        this.buildOperationFromRow(refreshedRow));
+    }
     if (shouldPreferRuntimeTargetProgressRow(
       this,
       refreshedRow,

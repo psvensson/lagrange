@@ -46,11 +46,13 @@ import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
   ReplicaOperationField,
+  ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
@@ -75,25 +77,23 @@ import {
   buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
 import {
+  createCoordinatorSqlStore,
   createMockCache,
   createMockCdcService,
+  createMockControlPlaneSystemTableGateway,
   createMockMessageRouter,
   createMockPolicyService,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
-  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
-import {createRegisteredPartitionFactoryFixture} from
-  '../test-helpers/replica-handler-identity-fixture.js';
-import {buildDeliveryEnvelope} from
-  '../../src/transport/transport-semantic-outcome.js';
+import {
+  createRegisteredPartitionFactoryFixture,
+  registerCompletedFreshCreateReleaseFixture,
+} from '../test-helpers/replica-handler-identity-fixture.js';
+import {waitForCondition} from '../partition/partition-service-test-support.js';
+import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {runtimeBuildProvenance} from
   '../../src/diagnostics/runtime-build-provenance.js';
-import {
-  PARTICIPANT_CUTOVER_OUTCOME,
-  PARTICIPANT_RELEASE_RESULT_FIELD,
-  PARTICIPANT_RELEASE_ROUTE_SUFFIX,
-} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 
 const TEST_SCHEMA = Object.freeze({
   columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
@@ -101,6 +101,7 @@ const TEST_SCHEMA = Object.freeze({
 const ESTABLISHED_PARTITION_AGE_MS = 60000;
 const ESTABLISHED_PARTITION_UPDATE_DELAY_MS = 5000;
 const HANDLER_SYNC_TIMEOUT_MS = 250;
+const CREATE_EVENT_OBSERVATION_MS = HANDLER_SYNC_TIMEOUT_MS * 2;
 const COORDINATOR_VISIBILITY_TIMEOUT_MS = 25;
 const COORDINATOR_VISIBILITY_RETRY_DELAY_MS = 5;
 
@@ -230,25 +231,12 @@ function createJoinHandler({cache, captured}) {
     cdcIntegrationService: createLifecycleCdcServiceForCache(cache),
     systemTableCache: cache,
     controlPlaneSystemTableGateway,
-    messageRouter: {
-      async deliver(address) {
-        if (address === `${JOIN_NODE_ID}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`) {
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            [PARTICIPANT_RELEASE_RESULT_FIELD]: {
-              outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER,
-            },
-          });
-        }
-        return buildDeliveryEnvelope({
-          acknowledged: false,
-          noHandler: true,
-          error: 'No handler',
-        });
-      },
-    },
     dataDir: getTempDir(),
     createPartitionService: createCapturingPartitionServiceFactory(captured),
   });
+  // The capturing factory has no native cutover. Isolate topology while
+  // exercising the exact registered release route and admission identity.
+  registerCompletedFreshCreateReleaseFixture(handler);
   handler.initialize();
   handler.testOperationRows = operationRows;
   handler.syncTimeoutMs = HANDLER_SYNC_TIMEOUT_MS;
@@ -295,13 +283,27 @@ function admittedCreateRequest(handler, request) {
   };
 }
 
-function waitForReplicaEvent(handler, successEvent, failureEvent) {
-  return new Promise((resolve, reject) => {
-    handler.once(successEvent, resolve);
-    handler.once(failureEvent, (event) => {
-      reject(new Error(event?.error || 'operation failed'));
-    });
-  });
+function observeCreateEvents(handler) {
+  const events = [];
+  const created = (event) => events.push({created: true, event});
+  const failed = (event) => events.push({created: false, event});
+  handler.on('replicaCreated', created);
+  handler.on('replicaCreationFailed', failed);
+  return {
+    events,
+    close() {
+      handler.off('replicaCreated', created);
+      handler.off('replicaCreationFailed', failed);
+    },
+  };
+}
+
+async function closeJoinHandler(handler) {
+  try {
+    await handler.shutdown();
+  } finally {
+    fs.rmSync(handler.dataDir, {recursive: true, force: true});
+  }
 }
 
 // --- self-only-cohort-add-deferred ---
@@ -318,42 +320,18 @@ async (t) => {
   const captured = {options: null};
   const handler = createJoinHandler({cache, captured});
 
+  const observed = observeCreateEvents(handler);
   try {
-    // No hydration authority is wired in this fixture: the retry loop
-    // exhausts its budget and surfaces the retryable topology-missing class,
-    // which is exactly the deferral contract (the operation is re-driven
-    // after authoritative hydration rather than dispatched self-only).
-    let failure = null;
-    handler.once('replicaCreationFailed', (event) => {
-      failure = event;
-    });
-    const unexpectedCreate = waitForReplicaEvent(
-      handler,
-      'replicaCreated',
-      'replicaCreated',
-    ).then(() => {
-      throw new Error('self-only ADD must not create a replica');
-    });
     await handler.handleCreateReplica(admittedCreateRequest(handler, {
       operationId: 'op-add-self-only',
       operationType: OperationType.ADD,
       partitionId: ADD_PARTITION_ID,
       replicaId: ADD_REPLICA_ID,
     }));
-    await Promise.race([
-      unexpectedCreate,
-      new Promise((resolve) => {
-        const deadline = Date.now() + HANDLER_SYNC_TIMEOUT_MS * 2;
-        const poll = () => {
-          if (failure || Date.now() >= deadline) {
-            resolve();
-            return;
-          }
-          setTimeout(poll, HANDLER_SYNC_TIMEOUT_MS / 10);
-        };
-        poll();
-      }),
-    ]);
+    const settled = await waitForCondition(
+      () => observed.events.length > 0, CREATE_EVENT_OBSERVATION_MS);
+    t.ok(settled, 'CREATE reported its topology refusal');
+    t.equal(observed.events[0]?.created, false, 'self-only ADD did not create a replica');
 
     t.equal(
       captured.options,
@@ -361,13 +339,14 @@ async (t) => {
       'no partition service created — self-only ADD bootstrap deferred',
     );
     t.match(
-      String(failure?.error || ''),
+      String(observed.events[0]?.event?.error ?? ''),
       /membership-stamp-invalid/,
       'a create without a committed-membership stamp is refused ' +
         'STAMP_INVALID (O1)',
     );
   } finally {
-    await handler.shutdown();
+    observed.close();
+    await closeJoinHandler(handler);
   }
 });
 
@@ -395,32 +374,35 @@ async (t) => {
   const captured = {options: null};
   const handler = createJoinHandler({cache, captured});
 
+  const observed = observeCreateEvents(handler);
   try {
-    const outcome = waitForReplicaEvent(
-      handler,
-      'replicaCreated',
-      'replicaCreationFailed',
-    );
-    await handler.handleCreateReplica(admittedCreateRequest(handler,
+    const response = await handler.handleCreateReplica(admittedCreateRequest(handler,
       withBootstrapStamp({
         operationId: 'op-add-fresh',
         operationType: OperationType.ADD,
         partitionId: ADD_PARTITION_ID,
         replicaId: ADD_REPLICA_ID,
       }, genesisStampFor([ADD_REPLICA_ID]))));
-    await outcome;
+    t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+      'the founder request was admitted');
+    const settled = await waitForCondition(
+      () => observed.events.length > 0, CREATE_EVENT_OBSERVATION_MS);
+    t.ok(settled, 'CREATE completed through its registered release route');
+    t.equal(observed.events[0]?.created, true,
+      observed.events[0]?.event?.error ?? 'CREATE activated the founder');
 
     t.ok(
       captured.options,
       'fresh-bootstrap ADD still creates the partition service',
     );
     t.equal(
-      captured.options.isJoiningExistingGroup,
+      captured.options?.isJoiningExistingGroup,
       false,
       'fresh cohort formation keeps voter bootstrap mode',
     );
   } finally {
-    await handler.shutdown();
+    observed.close();
+    await closeJoinHandler(handler);
   }
 });
 
@@ -468,7 +450,7 @@ async (t) => {
       );
     }
   } finally {
-    await handler.shutdown();
+    await closeJoinHandler(handler);
   }
 });
 
@@ -488,56 +470,6 @@ function createCohortServiceRow(replicaId, nodeId) {
   };
 }
 
-function createCohortSqlEngine({authoritativeServices}) {
-  const operations = new Map();
-  const executeQuery = async (sql, params = []) => {
-    if (
-      sql.includes('SELECT * FROM services') &&
-        sql.includes('service_type = ?')
-    ) {
-      const rows = authoritativeServices.filter(
-        (row) => row.partition_id === params[1],
-      );
-      return {success: true, rowSetComplete: true, rows};
-    }
-    if (sql.includes('INSERT INTO replica_operations')) {
-      const [
-        operationId, type, partitionId, replicaId, targetClaimKey,
-        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-        entityId,
-      ] = params;
-      operations.set(operationId, {
-        operation_id: operationId,
-        type,
-        partition_id: partitionId,
-        replica_id: replicaId,
-        target_claim_key: targetClaimKey,
-        source_node_id: sourceNodeId,
-        target_node_id: targetNodeId,
-        status,
-        workflow_step: workflowStep,
-        created_at: createdAt,
-        updated_at: updatedAt,
-        completed_at: completedAt,
-        error_message: errorMessage,
-        steps_history: stepsHistory,
-        entity_type: entityType,
-        entity_id: entityId,
-      });
-      return {success: true, changes: 1};
-    }
-    if (sql.includes('replica_operations')) {
-      return {success: true, rows: [...operations.values()]};
-    }
-    return {success: true, rows: []};
-  };
-  return {
-    operations,
-    executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
-  };
-}
-
 test('cohort-stamp-authoritative-read: a standard-path ADD persists the ' +
   'authoritative cohort while the cache view lags the services owner',
 async (t) => {
@@ -549,24 +481,22 @@ async (t) => {
   // Cache lag: the local cache shows NO sibling service rows for the
   // partition; only the authoritative owner read knows the group.
   const cache = createMockCache({services: []});
-  const sqlEngine = createCohortSqlEngine({authoritativeServices});
+  const authority = createMockCache({services: authoritativeServices});
+  const ledger = createCoordinatorSqlStore(authority);
+  const sqlEngine = {executeQuery: async (sql, params) => ledger.execute(sql, params)};
+  const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
+  gateway.submitMutation = (mutation) => ledger.submitMutation(mutation);
+  installCommittedOperationMutationFixture(gateway);
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-cohort-coordinator',
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
-    controlPlaneSystemTableGateway: {
-      readAuthoritativeRows: async (_tableName, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-      readRows: async (_tableName, sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-      executeQuery: async (sql, params = []) =>
-        sqlEngine.executeQuery(sql, params),
-    },
+    controlPlaneSystemTableGateway: gateway,
     tablePolicyService: createMockPolicyService(),
     // The group's leader answers the committed-membership read with the
     // committed configuration: the services owner's authoritative members.
     messageRouter: withFixtureCommittedMembership(createMockMessageRouter(),
-      createMockCache({services: authoritativeServices})),
+      authority),
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
@@ -617,12 +547,26 @@ async (t) => {
       'the stamp names the leader\'s committed members, which the lagging ' +
         'cache could not see, plus the target',
     );
+    const persisted = ledger.execute(
+      'SELECT * FROM replica_operations WHERE operation_id = ?', [operation.operationId]);
+    t.equal(persisted.rowSetComplete, true, 'the committed exact operation lookup is complete');
+    t.equal(persisted.rows?.length, 1, 'one operation is committed for the returned identity');
+    const [first] = JSON.parse(persisted.rows?.[0]?.steps_history ?? '[]');
+    t.same(
+      first?.[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP],
+      operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
+      'the committed history carries the exact bootstrap membership',
+    );
     t.equal(
       createdEvents.length,
       1,
       'the operation persisted and emitted its created event',
     );
   } finally {
-    await coordinator.shutdown();
+    try {
+      await coordinator.shutdown();
+    } finally {
+      ledger.suspend();
+    }
   }
 });

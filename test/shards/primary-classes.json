@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2352,
+    "unit": 2354,
     "integration": 125,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2710,
-  "digest": "fnv1a32-186c382e",
+  "censusSize": 2712,
+  "digest": "fnv1a32-86aae631",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1511,8 +1511,10 @@
     "test/partition/placement-admission-found.test.js": "unit",
     "test/partition/placement-admission-routed-cdc.test.js": "unit",
     "test/partition/placement-create-bootstrap-binding.test.js": "unit",
+    "test/partition/placement-create-dispatch-execution-mirror.test.js": "unit",
     "test/partition/placement-creation-terminal-replay.test.js": "unit",
     "test/partition/placement-founding-and-runtime-service-admission.test.js": "unit",
+    "test/partition/placement-growth-dispatch-identity.test.js": "unit",
     "test/partition/proposal-queue-capacity.property.test.js": "unit",
     "test/partition/proposal-queue-size-invariant.property.test.js": "unit",
     "test/partition/proposal-queue.test.js": "unit",
