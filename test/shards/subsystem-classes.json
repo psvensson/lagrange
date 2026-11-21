@@ -28,7 +28,7 @@
   "censusSize": 2709,
   "digest": "fnv1a32-efd762f3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-17b74c8a",
+  "observationDigest": "fnv1a32-511f166e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11503,6 +11503,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11512,6 +11513,8 @@
         "src/rebalancer/operation-workflow-replace-terminal-admission.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/partition/partition-service-test-support.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -18301,11 +18304,16 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/diagnostics/runtime-build-provenance.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/transport/transport-semantic-outcome.js",
         "test/rebalancer/committed-membership-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
