@@ -461,7 +461,7 @@ function instrumentOwner(node) {
   const probe = {nodeId: node.nodeId, passes: [], constructions: [], capacityChecks: [],
     candidateChecks: [], admissionAttempts: [], releaseAttempts: [], inFlight: 0,
     gates: {admitPlacement: {before: null, answer: null},
-      releasePlacementHold: {before: null, answer: null}}};
+      releasePlacementHold: {before: null, answer: null}, admissibility: {before: null}}};
   const context = () => {
     const status = ledger.raft?.readStatus?.() ?? {};
     return {ownerIsLeader: owner.isLeader, tenure: ledger.leadershipTenure ?? null,
@@ -495,8 +495,17 @@ function instrumentOwner(node) {
   };
   wrap('readPartitionPlacementRows', () => probe.constructions.push(context()));
   wrap('readStorageExcludedTargets', () => probe.capacityChecks.push(context()));
-  wrap('isCandidateAdmissibleNow', (candidate) => probe.candidateChecks.push({...context(),
-    partitionId: candidate.partitionId}));
+  // The admissibility read (await A3): recorded, and held by its gate.
+  const admissible = owner.isCandidateAdmissibleNow;
+  owner.isCandidateAdmissibleNow = async function heldAdmissibility(candidate, ...rest) {
+    probe.candidateChecks.push({...context(), partitionId: candidate.partitionId});
+    const gate = takeGate(probe.gates.admissibility, 'before');
+    if (gate) {
+      gate.reached.resolve({...context(), partitionId: candidate.partitionId});
+      await gate.release.promise;
+    }
+    return admissible.call(this, candidate, ...rest);
+  };
   instrumentSubmitter(owner, 'admitPlacement', {attempts: probe.admissionAttempts,
     gates: probe.gates.admitPlacement, context});
   instrumentSubmitter(owner, 'releasePlacementHold', {attempts: probe.releaseAttempts,
@@ -516,6 +525,12 @@ function armSubmitterGate(node, name, kind, skip = 0) {
 // check and the admission boundary (requestPlacementAdmission).
 function holdNextAdmission(node, {skip = 0} = {}) {
   return armSubmitterGate(node, 'admitPlacement', 'before', skip);
+}
+
+// Hold the next admissibility read of a node's owner (await A3): the pass has
+// constructed its moves and read capacity, and has not attempted an admission.
+function holdNextAdmissibilityCheck(node) {
+  return armSubmitterGate(node, 'admissibility', 'before');
 }
 
 // Hold the answer of the next admission (await A4): the entry is proposed and
@@ -1096,6 +1111,7 @@ export {
   transferReport,
   THREE_NODES,
   holdLeadershipStartDrives,
+  holdNextAdmissibilityCheck,
   holdNextAdmission,
   holdNextAdmissionAnswer,
   holdNextHoldRelease,

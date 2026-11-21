@@ -24,7 +24,9 @@
 // Await points of ReplicaPlacementOwner.runPass (replica-placement-owner.js),
 // enumerated from the code:
 //  A1 reconcileUnresolvedAttemptsOnLeadershipStart -> cdcDelivery
-//     .driveCdcObligations(LEADERSHIP_START) (LEADERSHIP_START passes only)
+//     .driveCdcObligations(LEADERSHIP_START): since stage 2 (lead ruling 4)
+//     REQUESTED and not awaited, so no pass is suspended there; its late
+//     answer is witnessed below
 //  A2 submitReleaseIfCopyIdle -> submitHoldRelease (only with an engaged
 //     ledger dispatch hold)
 //  A3 isCandidateAdmissibleNow (a microtask for ADD/REPLACE; canAdmitRemove's
@@ -32,9 +34,10 @@
 //  A4 submitCandidateAdmission -> admitPlacement (the proposal and its commit)
 //     and A4' its retained-REFUSED fresh re-admission
 //  A5 submitHoldRelease after a ledger-class admission
-// Covered here: A1 (held drive) and the A3/A4 boundary (held between the last
-// per-candidate check and requestPlacementAdmission). Not covered: A2, A5
-// (need an engaged ledger copy hold) and the REMOVE awaits of A3.
+// Covered here: A3 (the admissibility read, held; re-staged 2026-11-21 from
+// A1, lead ruling), the A3/A4 boundary (held between the last per-candidate
+// check and requestPlacementAdmission) and A1's late answer. A2, A4->A5 and
+// the REMOVE awaits of A3: placement-owner-authority-await-points.test.js.
 //
 // Fixture: placement-owner-authority-fixture.js (production construction per
 // node; controllable consensus with a fixture-owned ledger log; evidence
@@ -44,8 +47,9 @@ import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {
   LEDGER, THREE_NODES, admittedOperations, attemptOutcomeOf, boundaryTenureOf, decisionTenureOf,
-  holdLeadershipStartDrives, holdNextAdmission, holdNextLeadershipStartDrive, ownerOf,
-  startThreeNodeLedger, transferReport, waitUntil, withPlacementWorld,
+  holdLeadershipStartDrives, holdNextAdmissibilityCheck, holdNextAdmission,
+  holdNextLeadershipStartDrive, ownerOf, startThreeNodeLedger, transferReport, waitUntil,
+  withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {
@@ -167,18 +171,18 @@ test('P4 delayed role event of the new leader: nobody schedules while no owner l
   assert.ok(elapsedMs < PROGRESS_BOUND_MS, `property 4: ${elapsedMs} ms; ${report}`);
 }));
 
-test('P4 pass suspended at A1 (LEADERSHIP_START CDC drive) across a graceful transfer: the ' +
+test('P4 pass suspended at A3 (its admissibility read) across a graceful transfer: the ' +
   'successor admits while it is suspended; the obsolete pass checks its tenure after the wait',
 (t) => withPlacementWorld(SPEC, async (world) => {
   const nodes = await startThreeNodeLedger(world);
   const [a, b] = nodes;
-  const drive = holdNextLeadershipStartDrive(a);
+  const held = holdNextAdmissibilityCheck(a);
   await world.electLedger(a);
-  await drive.reached.promise;
+  await held.reached.promise;
   await world.electLedger(b);
   await world.idle({except: [a]});
   const admittedWhileSuspended = admittedOperations(world, b, DEFICIT).length;
-  drive.release.resolve();
+  held.release.resolve();
   await world.idle();
   const report = reportOf(t, world);
   assert.equal(admittedWhileSuspended, 1, `property 4; ${report}`);
@@ -186,8 +190,8 @@ test('P4 pass suspended at A1 (LEADERSHIP_START CDC drive) across a graceful tra
   assert.deepEqual(expiredTenureAdmissions(nodes), [], `property 1; ${report}`);
   assert.equal(attemptsOf(a).length, 0, `no admission attempt by the obsolete pass; ${report}`);
   // The contract: the captured tenure is checked after asynchronous waits.
-  // Today the per-candidate boolean is the first check after A1: the move
-  // construction (s8) and the capacity reads (s7) of every partition run first.
+  // Held at A3, the pass constructed and read capacity under its live tenure
+  // before the wait; nothing of either may follow the wait.
   assert.equal(workAfterTenureEnded(a.probe.constructions), 0,
     `property 3: no move construction after the tenure ended during A1; ${report}`);
   assert.equal(workAfterTenureEnded(a.probe.capacityChecks), 0,
@@ -197,7 +201,7 @@ test('P4 pass suspended at A1 (LEADERSHIP_START CDC drive) across a graceful tra
 async function heldAcrossABA(world, holdAt) {
   const nodes = await startThreeNodeLedger(world);
   const [a, b] = nodes;
-  const gate = holdAt === 'A1' ? holdNextLeadershipStartDrive(a) : holdNextAdmission(a);
+  const gate = holdAt === 'A3' ? holdNextAdmissibilityCheck(a) : holdNextAdmission(a);
   await world.electLedger(a);
   await gate.reached.promise;
   const firstTenure = a.ledger.leadershipTenure;
@@ -211,10 +215,10 @@ async function heldAcrossABA(world, holdAt) {
   return {nodes, a, b, gate, firstTenure};
 }
 
-test('P5 A->B->A with an old continuation held at A1 across both changes: the old pass ' +
+test('P5 A->B->A with an old continuation held at A3 across both changes: the old pass ' +
   'must find its tenure expired and admit nothing', (t) => withPlacementWorld(SPEC,
   async (world) => {
-    const {nodes, a, gate, firstTenure} = await heldAcrossABA(world, 'A1');
+    const {nodes, a, gate, firstTenure} = await heldAcrossABA(world, 'A3');
     gate.release.resolve();
     await world.idle();
     const report = reportOf(t, world);
@@ -227,8 +231,8 @@ test('P5 A->B->A with an old continuation held at A1 across both changes: the ol
   }));
 
 test('P5 A->B->A: the successor tenure progresses while the obsolete continuation is still ' +
-  'suspended at A1', (t) => withPlacementWorld(SPEC, async (world) => {
-  const {nodes, a, gate} = await heldAcrossABA(world, 'A1');
+  'suspended at A3', (t) => withPlacementWorld(SPEC, async (world) => {
+  const {nodes, a, gate} = await heldAcrossABA(world, 'A3');
   const currentTenure = a.ledger.leadershipTenure;
   let progressed = false;
   try {
@@ -477,5 +481,30 @@ test('P4 bound over repeated transfers: N transfers with every leadership-start 
   assert.ok(window.every(({timers}) => timers.length === window[0].timers.length),
     `property 3: the live timer set does not grow with N after the admission (from transfer ${
       window[0].transfer}); ${JSON.stringify(timerCensus)}; ${report}`);
+  assertOneAdmitted(world, nodes, report);
+}));
+
+// A1 since stage 2: the leadership-start pass requests the ledger's CDC drive
+// and does not wait for it. Its answer may arrive after the custody ended; it
+// must act on nothing (no pass, no attempt on the deposed owner).
+test('A1 request answered late: a leadership-start CDC drive answered after the custody ' +
+  'ended starts nothing on the deposed owner', (t) => withPlacementWorld(SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a, b] = nodes;
+  const drive = holdNextLeadershipStartDrive(a);
+  await world.electLedger(a);
+  await drive.reached.promise;
+  await world.idle();
+  await world.electLedger(b);
+  await world.idle();
+  const passesBefore = a.probe.passes.length;
+  const attemptsBefore = a.probe.admissionAttempts.length;
+  drive.release.resolve();
+  await world.idle();
+  const report = reportOf(t, world);
+  assert.equal(a.probe.passes.length, passesBefore,
+    `the late drive answer starts no pass on the deposed owner; ${report}`);
+  assert.equal(a.probe.admissionAttempts.length, attemptsBefore,
+    `the late drive answer makes no admission attempt; ${report}`);
   assertOneAdmitted(world, nodes, report);
 }));
