@@ -92,11 +92,14 @@ async function withAdmissionGroup(t, routerClock) {
   const stamp = committedStampOfAnswer(await leader.raft.readCommittedMembership({
     purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
   assert.ok(stamp, 'the leader serves its actual committed membership stamp');
-  const learner = create(LEARNER, {replicaIds: [LEADER, LEARNER],
-    bootstrapMembership: stamp, isJoiningExistingGroup: true});
+  const createLearner = (options = {}) => create(LEARNER, {
+    replicaIds: [LEADER, LEARNER], bootstrapMembership: stamp, isJoiningExistingGroup: true,
+    ...options,
+  });
+  const learner = createLearner();
   await learner.initialize();
   assert.equal(learner.role, RAFT_ROLE.LEARNER);
-  return {leader, learner, directory, router};
+  return {leader, learner, directory, router, createLearner, stamp};
 }
 
 function runLearnerCadenceTurn(learner) {
@@ -247,7 +250,7 @@ test('the first real admission delivery cannot renew the original CREATE budget'
     OBSERVATION_BOUND_MS), true, 'the answering leader still owns any native effect');
   });
 
-function createMaterializedJoinAuthority(learner, ownerIncarnation) {
+function createMaterializedJoinAuthority(stamp, ownerIncarnation) {
   const {operation_id: operationId} = committedAddOperation(PARTITION, [LEARNER, NODE]);
   const admissionToken = buildReplicaCreateAdmissionToken({
     operationId, replicaId: LEARNER, targetNodeId: NODE, workflowUpdatedAt: 11,
@@ -258,7 +261,7 @@ function createMaterializedJoinAuthority(learner, ownerIncarnation) {
     create_admission_attempt_token: buildReplicaCreateAttemptToken(admissionToken, 1),
     create_admission_owner_incarnation: TEST_BOOT_INCARNATION,
     steps_history: JSON.stringify([{
-      [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]: learner.bootstrapMembership,
+      [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]: stamp,
     }]),
   });
   const cache = new SystemTableCache();
@@ -290,26 +293,38 @@ for (const treatment of [
   {name: 'reconstruction with held initial delivery', rejoin: true},
   {name: 'learner readiness waits after a deferred delivery', readiness: true},
   {name: 'native work is fenced during shutdown', shutdown: true},
+  {name: 'budget expires before the first delivery', beforeDelivery: true},
 ]) {
   test(`materialized native CREATE retains its learner at expiry: ${treatment.name}`,
     {timeout: TEST_TIMEOUT_MS}, async (t) => {
       const createClock = new VirtualTimeSource({startMs: 1000});
-      const {leader, learner, directory, router} =
-      await withAdmissionGroup(t, new VirtualTimeSource());
+      const {leader, learner: previous, directory, router, createLearner, stamp} =
+        await withAdmissionGroup(t, new VirtualTimeSource());
+      await previous.shutdown();
       const ownerIncarnation = treatment.rejoin ? TEST_BOOT_INCARNATION + 1 : TEST_BOOT_INCARNATION;
-      const {row, cache, authority} = createMaterializedJoinAuthority(learner, ownerIncarnation);
+      const {row, cache, authority} = createMaterializedJoinAuthority(stamp, ownerIncarnation);
       const replicaStateMachine = new ReplicaStateMachine({nodeId: NODE, ownerIncarnation,
         cdcIntegrationService: {}, controlPlaneSystemTableGateway: authority.gateway,
         systemTableCache: cache, timeSource: createClock});
       const outcomes = [];
       let opened = 0;
+      let learner;
       const handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation, dataDir: directory,
         replicaStateMachine, systemTableCache: cache, cdcIntegrationService: {},
         controlPlaneSystemTableGateway: authority.gateway, timeSource: createClock,
         executorOutcomeEmitter: {emitOutcome: (_type, _id, step) => outcomes.push(step)},
         createPartitionService: async (options) => {
           opened += 1;
-          return completePartitionConstructionFixture(learner, options);
+          assert.equal(options.identityExisted, true);
+          learner = createLearner({...options, dbPath: previous.dbPath,
+            systemTableCache: cache, replicaStateMachine});
+          completePartitionConstructionFixture(learner, options);
+          await learner.initialize();
+          assert.equal(router.getRegisteredHandler(learner.unifiedAddress),
+            learner.transportHandler);
+          assert.equal(learner.resolveHandlerRetirementLane(), replicaStateMachine);
+          if (treatment.beforeDelivery) createClock.advance(CREATE_BUDGET_MS);
+          return learner;
         },
       });
       handler.registerWithRouter(router);
@@ -338,10 +353,17 @@ for (const treatment of [
           await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
         } else {
           await handler.handleCreateReplica({...routedCreateRequest(row),
-            [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: learner.bootstrapMembership});
+            [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: stamp});
         }
-        assert.equal(await waitForCondition(() => leaderReads > 0, OBSERVATION_BOUND_MS), true,
-          `the real leader operation read engaged: ${JSON.stringify(outcomes)}`);
+        if (treatment.beforeDelivery) {
+          assert.equal(await waitForCondition(() =>
+            opened > 0 && handler.operationTasks.size === 0, OBSERVATION_BOUND_MS), true,
+          'the attached CREATE stops before beginning its native delivery');
+          assert.equal(leaderReads, 0);
+        } else {
+          assert.equal(await waitForCondition(() => leaderReads > 0, OBSERVATION_BOUND_MS), true,
+            `the real leader operation read engaged: ${JSON.stringify(outcomes)}`);
+        }
         if (treatment.readiness) {
           assert.equal(await waitForCondition(() =>
             learner.replicaAdmissionRequest?.lastOutcome === 'authority_unavailable',
@@ -356,7 +378,7 @@ for (const treatment of [
         const claim = owner.activePhysicalWorkerOperationIds.get(row.operation_id);
         assert.ok(tracker && claim);
         worker = Promise.all([...handler.operationTasks]);
-        createClock.advance(CREATE_BUDGET_MS);
+        if (!treatment.beforeDelivery) createClock.advance(CREATE_BUDGET_MS);
         assert.equal(await waitForCondition(() =>
           handler.operationTasks.size === 0, OBSERVATION_BOUND_MS), true,
         'the original CREATE task settles before the held request returns');
@@ -384,6 +406,10 @@ for (const treatment of [
             'the spent readiness wait parks without a rearm loop');
         }
         const previousRecovery = handler.replicaCreateAdmissionRecoveryTask;
+        if (treatment.beforeDelivery) {
+          assert.ok(handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+            'undelivered admission is owed to the existing rearm owner');
+        }
         held.resolve();
         const cadence = treatment.readiness ? runLearnerCadenceTurn(learner) : null;
         assert.equal(await waitForCondition(() => leader.raft.readStatus().peers.some(

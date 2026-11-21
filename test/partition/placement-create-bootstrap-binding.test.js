@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {readCommittedStatementOutcome} from
@@ -8,7 +9,11 @@ import {bindReplaceCreateTargetReplicaId} from
   '../../src/rebalancer/operation-workflow-replace-target-binding.js';
 import {placementReplicaIdOf} from
   '../../src/partition/partition-placement-admission-identity.js';
-import {OPERATION_METADATA_KEY} from '../../src/rebalancer/replica-operation-progress.js';
+import {replicaIdsOfStamp} from '../../src/raft/raft-committed-membership-stamp.js';
+import {
+  OPERATION_METADATA_KEY, WORKFLOW_STEP_TO_STATUS,
+} from '../../src/rebalancer/replica-operation-progress.js';
+import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
@@ -26,7 +31,7 @@ const PARTITION_ID = 'placement-bootstrap-p1';
 const VOTER_ID = `${PARTITION_ID}-r1`;
 const planner = new ControlPlaneSystemTableGateway();
 
-function createBindingCoordinator(leader, readMembership) {
+function createBindingCoordinator(leader, readMembership, deliverCreate = null) {
   let nextMutation = 0;
   const sqlEngine = {
     async executeQuery(sql, params = []) {
@@ -49,7 +54,10 @@ function createBindingCoordinator(leader, readMembership) {
     nodeId: NODE.A, sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway,
   });
   coordinator.workflowOwner.messageRouter = {
-    async deliver(_address, request) {
+    async deliver(address, request) {
+      if (request.type === ReplicaOperationMessageType.CREATE_REPLICA && deliverCreate) {
+        return deliverCreate(address, request);
+      }
       assert.equal(request.type, ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP);
       assert.equal(request.partitionId, PARTITION_ID);
       return buildDeliveryEnvelope({acknowledged: true}, {
@@ -99,15 +107,22 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
       const history = JSON.parse(durable.steps_history);
       assert.deepEqual(history[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP], stamp,
         'retained CREATE must find the original committed stamp in native ledger history');
-      assert.deepEqual(history[0][OPERATION_METADATA_KEY.REPLICA_IDS], [VOTER_ID, row.replica_id]);
+      const replicaIds = replicaIdsOfStamp(stamp, row.replica_id);
+      assert.deepEqual(history[0][OPERATION_METADATA_KEY.REPLICA_IDS], replicaIds);
       assert.deepEqual(history[0][OPERATION_METADATA_KEY.PEER_ADDRESSES],
         [`${NODE.B}/partition/${row.replica_id}`]);
       assert.equal(durable.operation_id, row.operation_id);
       assert.equal(durable.workflow_step, row.workflow_step);
 
+      const emittedRequests = [];
       const reconstructed = createBindingCoordinator(leader, () => {
         membershipReads += 1;
         return committedStampFor([VOTER_ID], {appliedIndex: stamp.appliedIndex + 1});
+      }, (address, request) => {
+        emittedRequests.push({address, request});
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: false, reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        });
       });
       try {
         const recovered = await bind(reconstructed,
@@ -115,6 +130,29 @@ test('native ADD dispatch bootstrap is durable and reused by a fresh workflow', 
         assert.deepEqual(recovered[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP], stamp);
         assert.equal(membershipReads, 1, 'reconstruction reuses the original stamp');
         assert.deepEqual(ledgerRows(leader), [durable], 'recovery does not rewrite the row');
+
+        // Model the separately committed dispatch claim, as in the normal
+        // reservation-cleared path, before the first target wire delivery.
+        const at = durable.updated_at + 1;
+        const step = WORKFLOW_STEP.SENDING;
+        assert.equal(commitLedgerStatement(leader, 'bootstrap:dispatch-claim',
+          `UPDATE replica_operations SET workflow_step = ?, status = ?, updated_at = ?,
+           steps_history = json_insert(steps_history, '$[#]', json(?))
+           WHERE operation_id = ?`,
+          [step, WORKFLOW_STEP_TO_STATUS[step], at,
+            JSON.stringify({step, timestamp: at}), row.operation_id]), null);
+        const [sending] = ledgerRows(leader);
+        await reconstructed.workflowOwner.executeOperationInternal(
+          reconstructed.repository.rowToOperation(sending), {},
+        );
+        assert.equal(emittedRequests.length, 1, 'the real workflow delivered one CREATE');
+        const [{address, request}] = emittedRequests;
+        assert.equal(address, `${NODE.B}/service/replica-handler`);
+        assert.equal(request.operationId, row.operation_id);
+        assert.equal(request.replicaId, row.replica_id);
+        assert.deepEqual(request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP], stamp);
+        assert.deepEqual(request[ReplicaOperationField.REPLICA_IDS], replicaIds);
+        assert.equal(membershipReads, 1, 'the delivered CREATE uses original custody');
       } finally {
         await reconstructed.shutdown();
       }
