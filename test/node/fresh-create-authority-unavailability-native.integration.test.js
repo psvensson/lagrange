@@ -17,6 +17,7 @@ import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-ow
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
+  PARTICIPANT_CUTOVER_BOUND,
   PARTICIPANT_CUTOVER_OUTCOME as RELEASE_OUTCOME,
   PARTICIPANT_RELEASE_ACTION,
   PARTICIPANT_RELEASE_MISSING_FACT,
@@ -149,6 +150,7 @@ function faultingGateway(cache, operationRow, releaseRead, fault) {
         } else if (fault.remaining > 0) {
           fault.remaining -= 1;
           fault.refused += 1;
+          release.authorityRefused = true;
           return ROUTING_REFUSAL;
         }
       }
@@ -382,17 +384,24 @@ test('prompt release refusals exhaust the original CREATE retry window and recov
   const settledAtMs = await observeOriginalReturn(run, 'the original deferral-only worker returned');
   const {deadlineAtMs} = run.original;
   const attempts = run.releases.filter(({request}) => request.deadlineAtMs === deadlineAtMs);
-  assert.ok(attempts.length > 1, 'the original caller retried the release');
-  assert.equal(run.fault.refused, attempts.length);
+  const refusedReads = attempts.filter(({authorityRefused}) => authorityRefused);
+  assert.ok(refusedReads.length > 1, 'the original caller reread the refused authority');
+  assert.deepEqual(attempts.filter(isAuthorityDeferral), refusedReads,
+    'every injected refusal returned the matching typed authority answer');
   for (const attempt of attempts) {
-    assert.ok(isAuthorityDeferral(attempt), 'every original request returned typed UNAVAILABLE');
+    // Committed membership and current leader are prerequisites to the
+    // authority read. Their retryable refusals still spend the same deadline.
+    assert.ok(attempt.answer?.outcome === RELEASE_OUTCOME.UNAVAILABLE ||
+      attempt.answer?.outcome === RELEASE_OUTCOME.NOT_LEADER, JSON.stringify(attempt.answer));
     assert.equal(attempt.origin, null, 'authority refusal did not permit cutover');
     assert.ok(attempt.answeredAtMs >= attempt.sentAtMs && attempt.answeredAtMs <= deadlineAtMs,
       'each routed reply returned inside the original deadline');
   }
   const last = attempts.at(-1);
-  assert.ok(last.answer.retryAfterMs > 0);
-  const nextRetryAtMs = last.answeredAtMs + last.answer.retryAfterMs;
+  const retryAfterMs = last.answer.outcome === RELEASE_OUTCOME.NOT_LEADER ?
+    PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS : last.answer.retryAfterMs;
+  assert.ok(retryAfterMs > 0, JSON.stringify(last.answer));
+  const nextRetryAtMs = last.answeredAtMs + retryAfterMs;
   // A scheduled final retry can also wake at the deadline. In that case no
   // request reaches the route, and the worker returns at or after the deadline.
   assert.ok(nextRetryAtMs >= deadlineAtMs || settledAtMs >= deadlineAtMs,
