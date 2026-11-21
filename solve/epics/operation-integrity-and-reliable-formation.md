@@ -114,8 +114,9 @@ invalid evidence before integration.
 
 ## Core integration handoff, 21 November 2026
 
-The latest three-host diagnostic measured `e3e0164d6` in run `bd3bfd82`.
-The preceding trial `4ef9154c` measured `3d910d700`. Current integration proceeds on
+The targeted three-host diagnostic `eca9c75a` measured early SERVICES reads
+on `174398543`. Its predecessors `bd3bfd82` and `4ef9154c` ran on
+`e3e0164d6` and `3d910d700` respectively. Current integration proceeds on
 `wip/core-formation-followup-20261121`. Its reviewed components and active
 repairs have distinct proof in the two Quest logs. Resolve the remote
 branch tip before resuming. The shared candidate
@@ -321,6 +322,18 @@ new-revision admission require distinct controls. The physical runs did
 not record the apply order of these writes.
 [Original managed run](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-ack-native-original-0e7c-nov21.tar.gz).
 
+Independent reviews held `a38ead1b8` and `ff1a075bd`. A conditional
+update can detect a changed row and still overwrite its new meaning on
+retry. For example, a delayed ACK carries the old membership summary.
+Merging that whole row by timestamp can erase a refresh that committed
+while the ACK was in flight. The three ordinary callers persist an ACK,
+a new publication, or a metadata refresh. Each must keep its original
+intent through retry. The next native check delays each producer in turn
+and compares the reopened ACK set, lifecycle, placement metadata and
+closure history to both acknowledged operations.
+[Publication coordinator](../../src/control-plane/membership-publication-coordinator-persist.js)
+· [Reconciliation producer](../../src/control-plane/membership-publication-coordinator-reconcile.js).
+
 Across the three node logs in each complete recording, the query executor
 reported the following unresolved write deliveries. Each line with the exact
 message `Partition write outcome still unknown when its delivery budget was spent`
@@ -356,13 +369,36 @@ answers, and a causal overload claim still needs the paired observation.
 [Amazon Builders’ Library](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) ·
 [Google SRE, Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/).
 
-The transport and query owners should trace one failing `services-p1` read
-from sender to receiver, ACK, partition dispatch and response with the same
-query, envelope and connection identities. The membership-publication and
-write owners should reconcile the exact entry and epoch across durable apply,
-cutover release and the provisioner's next authoritative read. This would
-distinguish a lost answer after commit from a write still owed after a pause.
-Keep the formation, observation and public SQL bounds unchanged.
+In `eca9c75a`, query 12 on adam-laptop sent wire request
+`1c5bd0d9-6c81-4edf-9d09-8e086abb7511` at 05:37:11.711 UTC. The seed
+parsed it, dispatched it and completed its response write in one local
+millisecond. The caller expired the ACK wait at 05:37:12.713 and parsed both
+frames on the original connection at 05:37:18.237. All three replies to
+this read eventually arrived after their waiters retired. Query 10, with
+wire ID `dae77259-b241-45f6-9afc-18334e912729`, succeeded on the same
+connection with a nearly identical ACK budget. The other joining node
+completed a SERVICES read against the seed during the delay.
+
+At 05:42:34 UTC a kernel observation on tv-dator recorded 304,080 bytes
+in the TCP send queue toward adam-laptop, including 291,048 unsent bytes.
+It sampled a later connection. The hosts routed peer traffic over Wi-Fi.
+The early application trace does not identify which frames occupied the
+link, when their bytes reached the other kernel or who issued the failed
+read. Both queries 12 and 13 failed before the first recorder warning.
+The recorder queries partition services on each reachable node and bulk
+reads the operation ledger on its anchor. Its 250 ms timer joins an
+outstanding capture. The harness also streams Docker logs over these
+hosts’ network throughout a physical trial. Attribute those bytes separately
+from database peer bytes. [Playback owner](../../test/distributed/harness/playback-recorder.js)
+· [Physical log capture](../../test/distributed/harness/cluster-class-lifecycle-base.js)
+· [Node socket write semantics](https://nodejs.org/api/net.html#socketwritedata-encoding-callback).
+
+The transport and query owners will measure encoded bytes by message family
+on the exact connection leading into a failed and a successful read, including
+the caller origin where known. The membership-publication and write owners
+will reconcile the entry and epoch across durable apply, cutover release and
+the provisioner's next authoritative read. The 420-second formation bound,
+quiet window and public SQL predicates continue to apply.
 
 In the earlier `4ef9154c` trial, the final ledger row for
 `pl-nodes-p1-333-0` contains PENDING, SENDING
