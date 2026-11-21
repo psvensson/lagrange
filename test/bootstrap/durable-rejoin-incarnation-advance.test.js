@@ -18,7 +18,7 @@ import {
   buildAuthoritativeRowSourceUnavailableError,
   buildNodeRegistrationRow,
 } from '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
-import {getSchemaByTableName} from
+import {getSchemaByTableName, INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {MembershipPublicationRuntimeOwner} from
   '../../src/control-plane/owners/membership-publication-runtime-owner.js';
@@ -1086,22 +1086,32 @@ function createBlindBirthReplayHarness(initialRow) {
   let dropInsertAckOnce = true;
   let physicalInserts = 0;
 
-  base.gateway.readAuthoritativeRows = async (tableName = TABLES.NODES) => {
-    if (authorityDown) {
+  const readStoredRows = base.gateway.readAuthoritativeRows;
+  base.gateway.readAuthoritativeRows = async (tableName = TABLES.NODES, _sql, params = []) => {
+    if (tableName === TABLES.NODES && authorityDown) {
       return {success: false, error: 'leader_not_ready'};
     }
-    const row = tableName === TABLES.NODES ? base.current() : null;
-    return {success: true, rows: row ? [{...row}] : []};
+    const stored = await readStoredRows(tableName);
+    const keyColumn = tableName === TABLES.NODES ? COLUMN.NODE_ID : COLUMN.ENDPOINT_ID;
+    const rows = params.length === 0 ? stored.rows :
+      stored.rows.filter((row) => row[keyColumn] === params[0]);
+    return {...stored, rows, rowSetComplete: true};
   };
 
   const rawInsert = base.gateway.insertSystemTableRow;
-  base.gateway.insertSystemTableRow = (tableName, row, options = {}) =>
-    runControlPlaneWrite(options, {tableName, row}, {id: tableName, partitionId: 'nodes-p1'},
-      async ({tableName, row}, idempotencyKey) => {
-        const partitionId = 'nodes-p1';
+  base.gateway.insertSystemTableRow = (tableName, row, options = {}) => {
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    return runControlPlaneWrite(options, {tableName, row}, {id: tableName, partitionId},
+      async ({row}, idempotencyKey) => {
         const entryId = deriveParticipantEntryId(idempotencyKey, partitionId);
+        if (tableName !== TABLES.NODES) {
+          const inserted = await rawInsert(tableName, row);
+          return {...inserted, committed: true,
+            partitionResult: {...inserted.partitionResult, success: inserted.success, partitionId,
+              durableCommitWitness: {partitionId, entryId, term: 1, logIndex: 1}}};
+        }
         let replayed = true;
-        if (tableName === TABLES.NODES && !outcomesByKey.has(idempotencyKey)) {
+        if (!outcomesByKey.has(idempotencyKey)) {
           replayed = false;
           physicalInserts += 1;
           if (base.current()) {
@@ -1127,10 +1137,8 @@ function createBlindBirthReplayHarness(initialRow) {
               },
             });
           }
-        } else if (tableName !== TABLES.NODES) {
-          return rawInsert(tableName, row);
         }
-        if (tableName === TABLES.NODES && dropInsertAckOnce) {
+        if (dropInsertAckOnce) {
           dropInsertAckOnce = false;
           return {
             success: false,
@@ -1144,6 +1152,7 @@ function createBlindBirthReplayHarness(initialRow) {
           {...stored, settledReplay: 'outcome_retained'} :
           {...stored};
       });
+  };
 
   return {
     durable: base,
@@ -1185,6 +1194,8 @@ test('R2-1 (4C): blind BIRTH lost-ACK + unavailable reread replays held ' +
     '4C-ours preserves Call 1 committed updated_at_hlc');
   t.equal(ours.getPhysicalInserts(), 1,
     '4C-ours executes one physical INSERT and settles Call 2 by replay');
+  t.same(ours.durable.endpoints().map((row) => row[COLUMN.BOOT_INCARNATION]),
+    [THIS_BOOT, THIS_BOOT], 'both endpoint tables publish the healed boot');
   t.equal(oursOwner.registrationIssueRecord.issuedAtIncarnation, THIS_BOOT);
   t.equal(oursOwner.registrationIssueRecord.indeterminateMode, null);
 
@@ -1216,6 +1227,7 @@ test('R2-1 (4C): blind BIRTH lost-ACK + unavailable reread replays held ' +
   t.equal(foreignErr?.knownIncarnation, THIS_BOOT);
   t.equal(foreignOwner.registrationIssueRecord.issuedAtIncarnation, null);
   t.equal(foreignOwner.registrationIssueRecord.indeterminateMode, null);
+  t.same(foreign.durable.current(), foreignRow, 'the unrelated NODES owner stays intact');
 });
 
 // ---------------------------------------------------------------------------
