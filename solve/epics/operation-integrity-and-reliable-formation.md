@@ -114,8 +114,11 @@ invalid evidence before integration.
 
 ## Core integration handoff, 21 November 2026
 
-The integration owner is building on `wip/core-runtime-composed-20261120`.
-Resolve its current remote commit before resuming. The shared candidate
+The last physically measured source is `3d910d700` on
+`wip/core-runtime-composed-20261120`. Current integration proceeds on
+`wip/core-formation-followup-20261121`. Its reviewed components and active
+repairs have distinct proof in the two Quest logs. Resolve the remote
+branch tip before resuming. The shared candidate
 `candidate/reconciliation-20261119` remains at `edbf84c2d`, and the
 accepted main reference checked on 21 November is `5edfcadb5`. The
 complete original dirty checkout is preserved at `b914991bd`.
@@ -308,6 +311,10 @@ formation and smoke gates. Snapshot, backup and PITR keep their existing
 milestone allocations.
 
 ## Current integration summary (20 November 2026 - reliability and agent usability)
+
+This section records programme adoption and its dated starting position. Use
+the [21 November integration handoff](#core-integration-handoff-21-november-2026)
+for current source, measured results, and outstanding decisions.
 
 - **Owner and checked source:** the current Codex root session owns integration,
   taking over the stopped Antigravity session. The clean starting candidate is
