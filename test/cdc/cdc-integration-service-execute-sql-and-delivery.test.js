@@ -36,6 +36,7 @@ import {
 import {
   createMockSqlQueryEngine,
 } from './cdc-integration-service-test-support.js';
+import {createBootstrapLaneReplica} from '../test-helpers/bootstrap-lane-replica.js';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -65,30 +66,23 @@ test('CDCIntegrationService - executeSQL switches from bootstrap to normal mode'
     });
     service.initialize();
 
-    let directCallCount = 0;
-    const mockPartitionService = {
-      partitionId: 'services-p1',
-      initialized: true,
-      isLeader: true,
-      executeLocalQuery: async (_sql, _params) => {
-        directCallCount++;
-        return {success: true, affectedRows: 1};
-      },
-    };
+    const replica = createBootstrapLaneReplica({partitionId: 'services-p1'});
 
     const mockPartitionServices = new Map();
-    mockPartitionServices.set('services-p1', mockPartitionService);
+    mockPartitionServices.set('services-p1', replica);
 
     // Enable bootstrap mode
     service.setBootstrapMode(true, mockPartitionServices);
 
-    // First insert should go direct to partition
+    // First insert goes to the local partition, through its raft lane
     await service.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
       service_id: 'service-1',
       address: 'node1/service/1',
     });
 
-    t.equal(directCallCount, 1, 'should call direct partition in bootstrap mode');
+    t.equal(replica.raftWrites.length, 1,
+      'the bootstrap write goes through the local partition\'s raft lane exactly once');
+    t.equal(replica.outsideRaft.length, 0, 'nothing is executed outside raft');
     t.equal(
       mockSqlEngine.executedQueries.length,
       0,
@@ -105,10 +99,11 @@ test('CDCIntegrationService - executeSQL switches from bootstrap to normal mode'
     });
 
     t.equal(
-      directCallCount,
+      replica.raftWrites.length,
       1,
-      'should not call direct partition after bootstrap mode disabled',
+      'should not call the local partition after bootstrap mode disabled',
     );
+    t.equal(replica.outsideRaft.length, 0, 'nothing is executed outside raft');
     t.equal(
       mockSqlEngine.executedQueries.length,
       1,
@@ -153,17 +148,9 @@ test('CDCIntegrationService - executeSQL single code path based on mode flag',
     });
     service.initialize();
 
-    const mockPartitionService = {
-      partitionId: 'nodes-p1',
-      initialized: true,
-      isLeader: true,
-      executeLocalQuery: async (_sql, _params) => {
-        return {success: true, affectedRows: 1};
-      },
-    };
-
     const mockPartitionServices = new Map();
-    mockPartitionServices.set('nodes-p1', mockPartitionService);
+    mockPartitionServices.set('nodes-p1',
+      createBootstrapLaneReplica({partitionId: 'nodes-p1'}));
 
     // Test 1: Bootstrap mode enabled - should use direct path
     service.setBootstrapMode(true, mockPartitionServices);

@@ -28,7 +28,7 @@
   "censusSize": 2734,
   "digest": "fnv1a32-7ae6fb5a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5743ae02",
+  "observationDigest": "fnv1a32-2348e372",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3194,6 +3194,12 @@
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
+    "test/bootstrap/bootstrap-mode.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
+      ]
+    },
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
@@ -4282,6 +4288,12 @@
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
       ]
     },
+    "test/cdc/bootstrap-mode-routing.property.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
+      ]
+    },
     "test/cdc/cdc-authoritative-catchup-hydration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -4340,9 +4352,17 @@
     },
     "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js": {
       "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js"
+      ]
+    },
+    "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
       ]
     },
     "test/cdc/cdc-integration-service-sql-route-metrics.test.js": {
