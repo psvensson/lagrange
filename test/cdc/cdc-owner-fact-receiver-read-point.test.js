@@ -58,7 +58,7 @@ function holdNextStatement(service, placement) {
   return {entered: entered.promise, release: () => released.resolve()};
 }
 
-test('readOwnerFact: a leader without an applied entry of its own term refuses typed, ' +
+test('readOwnerFact: a fresh leader that has not applied its election log refuses typed, ' +
   'in process and routed', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   const group = await openLedgerGroupSurface(t, import.meta.url);
   const [previous, other, fresh] = group.services;
@@ -67,12 +67,12 @@ test('readOwnerFact: a leader without an applied entry of its own term refuses t
   const inProcess = await group.surfaceOf(fresh.nodeId, {leaderNodeId: fresh.nodeId});
   const hosted = await readOwnerFact(inProcess.readLeaderRequired, requestFor(OPERATION));
   t.equal(hosted.state, STATE.UNAVAILABLE, 'in process: never READY without the row');
-  t.equal(hosted.reason, REASON.CURRENT_TERM_NOT_APPLIED);
+  t.equal(hosted.reason, REASON.ELECTION_LOG_NOT_APPLIED);
   t.equal(Object.hasOwn(hosted, 'rows'), false);
   const routedSurface = await group.surfaceOf(other.nodeId, {leaderNodeId: fresh.nodeId});
   const routed = await readOwnerFact(routedSurface.readLeaderRequired, requestFor(OPERATION));
   t.equal(routed.state, STATE.UNAVAILABLE, 'routed: never READY without the row');
-  t.equal(routed.reason, REASON.CURRENT_TERM_NOT_APPLIED);
+  t.equal(routed.reason, REASON.ELECTION_LOG_NOT_APPLIED);
   t.ok(group.transit.filter(({targetNodeId}) => targetNodeId === fresh.nodeId)
     .every(({answer}) => answer?.success === false && answer?.rowSet === undefined),
   'the fresh leader ships no rows');
@@ -100,7 +100,7 @@ test('one receiver contract: the same owner-fact request gets the same typed ans
   t.equal(followerAnswer.leaderAddress, first.unifiedAddress, 'names the leader it knows');
   await group.freshLeaderBehindCommit(first, second, `${OPERATION}-fresh`);
   const insufficient = await compare('insufficiently applied leader', second, follower.nodeId);
-  t.equal(insufficient.failureCode, REASON.CURRENT_TERM_NOT_APPLIED);
+  t.equal(insufficient.failureCode, REASON.ELECTION_LOG_NOT_APPLIED);
   t.equal(insufficient.shipsRows, false);
   const deposed = await compare('deposed leader', first, follower.nodeId);
   t.equal(deposed.failureCode, REASON.NOT_LEADER);

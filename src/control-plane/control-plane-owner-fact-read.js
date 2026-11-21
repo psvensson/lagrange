@@ -214,14 +214,15 @@ function ownerFactAnswerOf(answer, request) {
  *
  * READY is a leader-local read point: the serving replica's core said, in one
  * observation taken in the same synchronous step as the row read, that it
- * leads, has applied its commit index, has applied an entry of its own term,
- * and meets the floors; after the read it still led in that term with an
- * unmoved applied index. It is not linearizable: the leader may already have
+ * leads, has applied its commit index, has applied every entry its log held
+ * when it was elected (so every entry an earlier leader committed), and meets
+ * the floors; after the read it still led in that term with an unmoved
+ * applied index. It is not linearizable: the leader may already have
  * been deposed (stale by at most its check_quorum bound plus transit).
  *
  * PRECONDITION for consumers: an empty READY is absence only because the
- * receiver refuses an insufficient read point (apply behind commit, no entry
- * of its own term applied) with a typed reason; that refusal is witnessed in
+ * receiver refuses an insufficient read point (apply behind commit, election
+ * log not applied) with a typed reason; that refusal is witnessed in
  * test/cdc/cdc-owner-fact-receiver-read-point.test.js. A consumer that
  * concludes absence from an empty result may migrate onto this function, and
  * onto no other leader-REQUIRED read (whose receiver does not refuse an

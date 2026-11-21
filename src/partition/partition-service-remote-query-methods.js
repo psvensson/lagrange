@@ -197,8 +197,16 @@ function safeIndexOf(value) {
 
 // The serving replica described from ONE observation of its consensus core
 // (readOwnRaftStatus: CORE_OK, this group, this replica): role, term, the
-// applied and commit index and whether an entry of its own term has applied
-// all come from that observation, never from the event-derived service role.
+// applied and commit index and whether it has applied every entry its log
+// held when it was elected all come from that observation, never from the
+// event-derived service role. raft-rs sets its pending configuration index to
+// the last log index on becoming leader and only raises it while leading
+// (raft-rs-status-observation.js currentTermApplied, raft-0.7.0 raft.rs
+// 1227-1232), so a leader with no configuration change pending past its
+// applied index has applied that whole log, which holds every entry an
+// earlier leader committed. This is the raft owner's own fallback test of an
+// applied own-term read point (raft-rs-conf-change-admission.js
+// hasAppliedOwnTermEntry); its applied-term test is not in the status.
 function readAuthorityWitnessOf(service, status) {
   return {
     state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
@@ -208,7 +216,7 @@ function readAuthorityWitnessOf(service, status) {
     term: safeIndexOf(status?.term),
     appliedIndex: safeIndexOf(status?.appliedIndex),
     commitIndex: safeIndexOf(status?.commitIndex),
-    currentTermApplied: status?.currentTermApplied === true,
+    electionLogApplied: status?.confChangePending === false,
     // A replica whose core gave no usable observation claims no role.
     role: readStateField(status?.role),
     // The witness records WHEN THIS REPLICA observed its own authority, so

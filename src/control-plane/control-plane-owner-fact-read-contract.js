@@ -23,9 +23,10 @@ const OWNER_FACT_UNAVAILABLE_REASON = Object.freeze({
   NOT_LEADER: 'owner_fact_not_leader',
   // A leader whose applied index is not its commit index.
   APPLY_BEHIND_COMMIT: 'owner_fact_apply_behind_commit',
-  // A leader that has not yet applied an entry of its own term: entries an
-  // earlier leader committed may still be missing from its state.
-  CURRENT_TERM_NOT_APPLIED: 'owner_fact_current_term_not_applied',
+  // A leader that has not applied every entry its log held when it was
+  // elected: entries an earlier leader committed may still be missing from
+  // its state (raft-rs commits them only through an entry of its own term).
+  ELECTION_LOG_NOT_APPLIED: 'owner_fact_election_log_not_applied',
   // The leader's applied index moved while it read: the receiver cannot name
   // the applied position of the snapshot its rows came from.
   READ_POINT_MOVED: 'owner_fact_read_point_moved',
@@ -119,8 +120,8 @@ function ownerFactPointRefusal(witness, read) {
   if (!isIndexPosition(witness) || witness.commitIndex !== witness.appliedIndex) {
     return OWNER_FACT_UNAVAILABLE_REASON.APPLY_BEHIND_COMMIT;
   }
-  if (witness.currentTermApplied !== true) {
-    return OWNER_FACT_UNAVAILABLE_REASON.CURRENT_TERM_NOT_APPLIED;
+  if (witness.electionLogApplied !== true) {
+    return OWNER_FACT_UNAVAILABLE_REASON.ELECTION_LOG_NOT_APPLIED;
   }
   if (witness.appliedIndex < read.minimumIndex) {
     return OWNER_FACT_UNAVAILABLE_REASON.BELOW_INDEX_FLOOR;
@@ -136,8 +137,9 @@ function ownerFactPointRefusal(witness, read) {
  * The one witness predicate of a leader-qualified read. A leader-required
  * read asks only that the witness names a leader of the partition; an
  * owner-fact read also asks for an applied read point that is the leader's
- * commit index, includes an entry of its own term and meets the caller's
- * floors (and, when pinned, the expected serving replica).
+ * commit index, covers every entry the leader's log held when it was
+ * elected, and meets the caller's floors (and, when pinned, the expected
+ * serving replica).
  * @param {Object} witness - The serving replica's readAuthorityWitness.
  * @param {Object} expectation - {partitionId, read}; read is a parsed
  *   leaderRead, optionally with expectedReplica.

@@ -169,10 +169,11 @@ conditional committed write that revalidates its own predicate.
 The safe read point of an owner fact is decided by the replica that answers,
 at its receiver (`PartitionService.handleRemoteQuery`), on one observation of
 its own raft-rs core: it leads; its applied index equals its commit index; it
-has applied an entry of its own term (so, by Raft's rule that a leader commits
-entries of earlier terms only through an entry of its own, its commit index
-covers every entry committed before its term); and it meets the caller's index
-and term floors. The rows are read at that applied position on the replica's
+has applied every entry its log held when it was elected (raft-rs sets its
+pending configuration index to that last index on becoming leader; by Raft's
+leader completeness that log holds every entry an earlier leader committed,
+and the leader commits them only through an entry of its own term); and it
+meets the caller's index and term floors. The rows are read at that applied position on the replica's
 one SQLite connection, where committed entries and the applied index are
 written in one synchronous transaction, and after the read the replica must
 still lead in the same term and runtime with an unmoved applied index;

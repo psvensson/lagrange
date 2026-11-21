@@ -46,7 +46,7 @@ test('FINDING (open): a leader-REQUIRED read that is not an owner fact answers a
   t.comment(JSON.stringify({observed: {success: answer.success, rows: answer.rows,
     failureCode: answer.failureCode ?? null, witness: answer.readAuthorityWitness ?? null,
     committedIndex, freshLeader: {role: status.role, commitIndex: status.commitIndex,
-      appliedIndex: status.appliedIndex, currentTermApplied: status.currentTermApplied}}}));
+      appliedIndex: status.appliedIndex, confChangePending: status.confChangePending}}}));
   t.notOk(answer.success === true && Array.isArray(answer.rows) && answer.rows.length === 0,
     'a committed row is never answered as absent (OPEN: the plain leader-REQUIRED read ' +
     'has no read-point refusal; consumers must migrate to readOwnerFact)');

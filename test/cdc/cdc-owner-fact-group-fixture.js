@@ -359,8 +359,8 @@ async function openLedgerGroupSurface(t, testFileUrl) {
       assert.equal(await group.waitFor(() => {
         const status = service.raft.readStatus();
         return status.role === RAFT_ROLE.LEADER && service.role === RAFT_ROLE.LEADER &&
-          status.currentTermApplied === true && hasAppliedItsCommit(service);
-      }), true, 'setup: the leader has applied an entry of its term and everything it committed');
+          status.confChangePending === false && hasAppliedItsCommit(service);
+      }), true, 'setup: the leader has applied its election log and everything it committed');
     },
     /**
      * Make `to` a leader that holds, unapplied, a row `from` committed, and
@@ -390,8 +390,8 @@ async function openLedgerGroupSurface(t, testFileUrl) {
         packet?.message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND);
       await transferLeadership(from, to);
       const status = to.raft.readStatus();
-      assert.equal(status.currentTermApplied, false,
-        'setup: the new leader has not applied an entry of its own term');
+      assert.equal(status.confChangePending, true,
+        'setup: the new leader has not applied the log it held when elected');
       assert.equal(status.commitIndex < committedIndex, true,
         'setup: the new leader has not applied the row its predecessor committed');
       return {committedIndex};
