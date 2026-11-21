@@ -6,103 +6,133 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from '../../src/rebalancer/replica-operation-update-disposition.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {createReplaceWitness} from './replace-witness-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   createTestCoordinator,
   installActualReplicaObservationResolver,
 } from './test-helpers.js';
 
+function createCriticalReplaceCreateReplay({
+  answerCreateReplay = async () => ReplicaOperationResponseStatus.COMPLETED,
+  answerRemove = {status: ReplicaOperationResponseStatus.INITIATED},
+  witness,
+} = {}) {
+  const PARTITION_ID = 'nodes-p1';
+  const SOURCE_NODE_ID = 'node-a';
+  const TARGET_NODE_ID = 'node-d';
+  const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
+  const deliveries = [];
+  let createDispatchCount = 0;
+  const messageRouter = {
+    async deliver(target, payload) {
+      const witnessAnswer = witness?.deliveryFor(payload);
+      if (witnessAnswer) return witnessAnswer;
+      deliveries.push({target, payload});
+      if (payload?.type ===
+          ReplicaOperationMessageType.CREATE_REPLICA) {
+        createDispatchCount += 1;
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          status: createDispatchCount === 1 ?
+            ReplicaOperationResponseStatus.INITIATED :
+            await answerCreateReplay(payload),
+        });
+      }
+      return buildDeliveryEnvelope({acknowledged: true}, answerRemove);
+    },
+    getConnectionState: () => 'connected',
+    pingNode: async () => true,
+    isOutboundQueueAvailable: () => true,
+  };
+
+  const coordinator = createTestCoordinator({
+    nodeId: TARGET_NODE_ID,
+    enableTimeouts: false,
+    replaceWitness: !witness,
+    messageRouter,
+    cacheData: {
+      nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
+        (nodeId) => ({
+          node_id: nodeId,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: Date.now() + 60_000,
+        }),
+      ),
+      services: [
+        {
+          service_id: SOURCE_REPLICA_ID,
+          replica_id: SOURCE_REPLICA_ID,
+          service_type: 'partition',
+          partition_id: PARTITION_ID,
+          node_id: SOURCE_NODE_ID,
+          status: 'active',
+          address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
+        },
+        {
+          service_id: `${PARTITION_ID}-r2`,
+          replica_id: `${PARTITION_ID}-r2`,
+          service_type: 'partition',
+          partition_id: PARTITION_ID,
+          node_id: 'node-b',
+          status: 'active',
+          raft_role: 'follower',
+          address: `node-b/partition/${PARTITION_ID}-r2`,
+        },
+        {
+          service_id: `${PARTITION_ID}-r3`,
+          replica_id: `${PARTITION_ID}-r3`,
+          service_type: 'partition',
+          partition_id: PARTITION_ID,
+          node_id: 'node-c',
+          status: 'active',
+          raft_role: 'follower',
+          address: `node-c/partition/${PARTITION_ID}-r3`,
+        },
+      ],
+    },
+  });
+  coordinator.initialize();
+  installActualReplicaObservationResolver(coordinator, null);
+
+  const create = () => coordinator.createOperation({
+    type: OperationType.REPLACE,
+    partitionId: PARTITION_ID,
+    entityType: 'partition',
+    entityId: PARTITION_ID,
+    nodeId: TARGET_NODE_ID,
+    sourceNodeId: SOURCE_NODE_ID,
+    replicaId: SOURCE_REPLICA_ID,
+  });
+  return {coordinator, create, deliveries, sourceReplicaId: SOURCE_REPLICA_ID};
+}
+
+function observeCommittedSteps(coordinator, operationId) {
+  const writes = [];
+  const persist = coordinator.repository.persistOperationUpdate.bind(coordinator.repository);
+  coordinator.repository.persistOperationUpdate = async (candidate, options) => {
+    const outcome = await persist(candidate, options);
+    if (candidate.operationId === operationId &&
+        outcome.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED) {
+      writes.push({
+        expectedStep: options?.expectedWorkflowStep,
+        committedStep: outcome.operation.workflowStep,
+      });
+    }
+    return outcome;
+  };
+  return writes;
+}
+
 export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
   await t.test(
     'RebalanceCoordinator re-arms critical REPLACE create dispatch from ' +
       'CREATING when visibility stays empty',
     async (t) => {
-      const PARTITION_ID = 'nodes-p1';
-      const SOURCE_NODE_ID = 'node-a';
-      const TARGET_NODE_ID = 'node-d';
-      const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
-      const deliveries = [];
-      let createDispatchCount = 0;
-      const messageRouter = {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          if (payload?.type ===
-              ReplicaOperationMessageType.CREATE_REPLICA) {
-            createDispatchCount += 1;
-            return buildDeliveryEnvelope({acknowledged: true}, {
-              status: createDispatchCount === 1 ?
-                ReplicaOperationResponseStatus.INITIATED :
-                ReplicaOperationResponseStatus.COMPLETED,
-            });
-          }
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            status: ReplicaOperationResponseStatus.INITIATED,
-          });
-        },
-        getConnectionState: () => 'connected',
-        pingNode: async () => true,
-        isOutboundQueueAvailable: () => true,
-      };
-
-      const coordinator = createTestCoordinator({
-        nodeId: TARGET_NODE_ID,
-        enableTimeouts: false,
-        messageRouter,
-        cacheData: {
-          nodes: [SOURCE_NODE_ID, 'node-b', 'node-c', TARGET_NODE_ID].map(
-            (nodeId) => ({
-              node_id: nodeId,
-              status: 'active',
-              connection_state: 'ready',
-              ready_lease_expires_at: Date.now() + 60_000,
-            }),
-          ),
-          services: [
-            {
-              service_id: SOURCE_REPLICA_ID,
-              replica_id: SOURCE_REPLICA_ID,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: SOURCE_NODE_ID,
-              status: 'active',
-              address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ID}`,
-            },
-            {
-              service_id: `${PARTITION_ID}-r2`,
-              replica_id: `${PARTITION_ID}-r2`,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: 'node-b',
-              status: 'active',
-              raft_role: 'follower',
-              address: `node-b/partition/${PARTITION_ID}-r2`,
-            },
-            {
-              service_id: `${PARTITION_ID}-r3`,
-              replica_id: `${PARTITION_ID}-r3`,
-              service_type: 'partition',
-              partition_id: PARTITION_ID,
-              node_id: 'node-c',
-              status: 'active',
-              raft_role: 'follower',
-              address: `node-c/partition/${PARTITION_ID}-r3`,
-            },
-          ],
-        },
-      });
-      coordinator.initialize();
-      installActualReplicaObservationResolver(coordinator, null);
-
+      const {coordinator, create, deliveries, sourceReplicaId} =
+        createCriticalReplaceCreateReplay();
       try {
-        const operation = await coordinator.createOperation({
-          type: OperationType.REPLACE,
-          partitionId: PARTITION_ID,
-          entityType: 'partition',
-          entityId: PARTITION_ID,
-          nodeId: TARGET_NODE_ID,
-          sourceNodeId: SOURCE_NODE_ID,
-          replicaId: SOURCE_REPLICA_ID,
-        });
+        const operation = await create();
 
         await coordinator.executeOperation(operation);
 
@@ -116,19 +146,18 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
           .queryReplicaOperationPersistenceAuthorityOperation(operation);
         t.equal(persistedBeforeReconcile.workflowStep, WORKFLOW_STEP.CREATING,
           'the authoritative preimage is still CREATING');
-        const writes = [];
-        const persist = coordinator.repository.persistOperationUpdate
-          .bind(coordinator.repository);
-        coordinator.repository.persistOperationUpdate = async (candidate, options) => {
-          const outcome = await persist(candidate, options);
-          if (candidate.operationId === operation.operationId &&
-              outcome.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED) {
-            writes.push({
-              expectedStep: options?.expectedWorkflowStep,
-              committedStep: outcome.operation.workflowStep,
-            });
+        const writes = observeCommittedSteps(coordinator, operation.operationId);
+
+        const dispatchResults = new Map();
+        const owner = coordinator.workflowOwner;
+        const execute = owner.executeOperationFromReconcilePath.bind(owner);
+        owner.executeOperationFromReconcilePath = async (current) => {
+          const entryStep = current.workflowStep;
+          const result = await execute(current);
+          if (current.operationId === operation.operationId) {
+            dispatchResults.set(entryStep, result);
           }
-          return outcome;
+          return result;
         };
 
         const progressed =
@@ -145,6 +174,11 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
           OPERATION_RECONCILE_OUTCOME.ADVANCED,
           'reconciliation reports its committed progress while source retirement remains pending',
         );
+        t.equal(operation.workflowStep, WORKFLOW_STEP.CREATING,
+          'the caller still holds its original CREATING mirror');
+        t.equal(dispatchResults.get(WORKFLOW_STEP.CREATING)?.reconcileOutcome,
+          OPERATION_RECONCILE_OUTCOME.ADVANCED,
+          'the CREATE result carries the dispatch owner’s committed progress');
         t.equal(
           deliveries.length,
           3,
@@ -167,7 +201,7 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
         );
         t.equal(
           deliveries[2]?.payload?.replicaId,
-          SOURCE_REPLICA_ID,
+          sourceReplicaId,
           'source removal should still target the retiring replica',
         );
         t.equal(
@@ -457,4 +491,159 @@ export async function registerReplaceReplicaWorkflowCreateReplayTests(t) {
       }
     },
   );
+
+  await t.test('a same-step CREATE replay leaves the exact CREATING row waiting',
+    async (t) => {
+      const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay({
+        answerCreateReplay: async () => ReplicaOperationResponseStatus.INITIATED,
+      });
+      try {
+        const operation = await create();
+        await coordinator.executeOperation(operation);
+        const writes = observeCommittedSteps(coordinator, operation.operationId);
+        const result = await coordinator.reconcileOperationLifecycle(operation);
+        const durable = await coordinator.repository
+          .queryReplicaOperationPersistenceAuthorityOperation(operation);
+        t.equal(result, OPERATION_RECONCILE_OUTCOME.WAITING);
+        t.equal(durable.workflowStep, WORKFLOW_STEP.CREATING);
+        t.same(writes, [], 'the idempotent CREATING reprojection changes no SQLite row');
+        t.same(deliveries.map(({payload}) => payload.type), [
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        ]);
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test('a different writer winning ACTIVE does not report a replayed promotion',
+    async (t) => {
+      const witness = createReplaceWitness({available: false});
+      let externalOutcome;
+      let operation;
+      const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay({
+        witness,
+        async answerCreateReplay() {
+          const externalMirror = structuredClone(operation);
+          externalOutcome = await coordinator.updateStep(externalMirror, WORKFLOW_STEP.ACTIVE);
+          return ReplicaOperationResponseStatus.COMPLETED;
+        },
+      });
+      try {
+        operation = await create();
+        await coordinator.executeOperation(operation);
+        const writes = observeCommittedSteps(coordinator, operation.operationId);
+        const result = await coordinator.reconcileOperationLifecycle(operation);
+        const durable = await coordinator.repository
+          .queryReplicaOperationPersistenceAuthorityOperation(operation);
+        t.equal(externalOutcome, OPERATION_RECONCILE_OUTCOME.ADVANCED,
+          'the opposing writer wins the earlier ACTIVE CAS');
+        t.same(writes, [
+          {expectedStep: WORKFLOW_STEP.CREATING, committedStep: WORKFLOW_STEP.ACTIVE},
+        ], 'only the opposing writer commits; retirement authority remains unavailable');
+        t.equal(result, OPERATION_RECONCILE_OUTCOME.WAITING,
+          'observing the opposing write does not credit a new local promotion');
+        t.equal(durable.workflowStep, WORKFLOW_STEP.ACTIVE);
+        t.same(deliveries.map(({payload}) => payload.type), [
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        ]);
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test('an uncertain promotion leaves the pre-removal row waiting',
+    async (t) => {
+      const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay();
+      try {
+        const operation = await create();
+        await coordinator.executeOperation(operation);
+        const writes = observeCommittedSteps(coordinator, operation.operationId);
+        const persist = coordinator.repository.persistOperationUpdate.bind(coordinator.repository);
+        coordinator.repository.persistOperationUpdate = async (candidate, options) => {
+          if (candidate.operationId === operation.operationId &&
+              candidate.workflowStep === WORKFLOW_STEP.ACTIVE) {
+            const error = new Error('control_plane_pressure_degraded');
+            error.retryAfterMs = 10;
+            throw error;
+          }
+          return persist(candidate, options);
+        };
+        const result = await coordinator.reconcileOperationLifecycle(operation);
+        const durable = await coordinator.repository
+          .queryReplicaOperationPersistenceAuthorityOperation(operation);
+        t.equal(result, OPERATION_RECONCILE_OUTCOME.WAITING);
+        t.equal(durable.workflowStep, WORKFLOW_STEP.CREATING);
+        t.equal(durable.completedAt, null);
+        t.same(writes, [], 'the timed promotion reached no confirmed SQLite write');
+        t.same(deliveries.map(({payload}) => payload.type), [
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        ], 'source retirement requires a committed promotion');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test('a guarded terminal winner during CREATE replay remains FAILED',
+    async (t) => {
+      let failed;
+      let operation;
+      const {coordinator, create, deliveries} = createCriticalReplaceCreateReplay({
+        async answerCreateReplay() {
+          failed = await coordinator.failOperation(structuredClone(operation),
+            'target failed before removal intent');
+          return ReplicaOperationResponseStatus.COMPLETED;
+        },
+      });
+      try {
+        operation = await create();
+        await coordinator.executeOperation(operation);
+        const writes = observeCommittedSteps(coordinator, operation.operationId);
+        const result = await coordinator.reconcileOperationLifecycle(operation);
+        const durable = await coordinator.repository
+          .queryReplicaOperationPersistenceAuthorityOperation(operation);
+        t.equal(failed.committed, true, 'the other owner action actually commits FAILED');
+        t.same(writes.map(({committedStep}) => committedStep), [WORKFLOW_STEP.FAILED],
+          'the late CREATE answer never commits promotion or advances retirement');
+        t.equal(result, OPERATION_RECONCILE_OUTCOME.FAILED);
+        t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED);
+        t.ok(Number.isFinite(durable.completedAt));
+        t.same(deliveries.map(({payload}) => payload.type), [
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          ReplicaOperationMessageType.CREATE_REPLICA,
+        ]);
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test('a late failed REMOVE effect preserves the earlier durable CREATE progress',
+    async (t) => {
+      const {coordinator, create, deliveries, sourceReplicaId} =
+        createCriticalReplaceCreateReplay({
+          answerRemove: {status: ReplicaOperationResponseStatus.ERROR, error: 'source effect rejected'},
+        });
+      try {
+        const operation = await create();
+        await coordinator.executeOperation(operation);
+        const writes = observeCommittedSteps(coordinator, operation.operationId);
+        const result = await coordinator.reconcileOperationLifecycle(operation);
+        const durable = await coordinator.repository
+          .queryReplicaOperationPersistenceAuthorityOperation(operation);
+        t.same(writes, [
+          {expectedStep: WORKFLOW_STEP.CREATING, committedStep: WORKFLOW_STEP.ACTIVE},
+          {expectedStep: WORKFLOW_STEP.ACTIVE, committedStep: WORKFLOW_STEP.STOPPING},
+        ], 'the same turn commits pre-removal promotion and removal intent');
+        t.equal(result, OPERATION_RECONCILE_OUTCOME.ADVANCED);
+        t.equal(durable.workflowStep, WORKFLOW_STEP.STOPPING);
+        t.equal(durable.completedAt, null, 'a failed effect cannot settle a post-intent REPLACE');
+        t.same(deliveries.filter(({payload}) => payload.type ===
+          ReplicaOperationMessageType.REMOVE_REPLICA).map(({payload}) => payload.replicaId),
+        [sourceReplicaId], 'the attempt is for the exact retiring source');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
 }
