@@ -153,46 +153,48 @@ and ACTIVE in that order on one receiver attempt. All three eventually
 completed. A repeated or late dispatch must preserve the phase that
 already committed.
 
-The integrating decision is when a prepared native ADD or REPLACE may send
-CREATE, hold off a competing ledger move, or release its reservation. While
-the founding membership is unreadable, the operation can still resume.
-The same durable fact must govern the dispatch claim, timeout recovery and
-exclusion of competing writers. Red native tests at `e0b1308a6` reached
-SENDING before binding membership on normal and priority paths. At
-`59f0bdad0` three managed files passed on the original host, including
-restart and stale ADD dispatch. Source review found a remaining conflict at
-this pin. The timeout owner retains an unstamped placement until its original
-operation deadline, while the concurrent-operation check can discard the same
-row after the shorter step timeout. The workflow owner must exercise both
-arrival orders against a real competing ledger move and preserve the existing
-clearing event before composing this repair.
+The shared placement decision is whether an admitted ADD or REPLACE still owns
+its operation and can exclude a competing move. A late sender can observe
+PENDING after the receiver has already committed CREATING. Dispatch,
+expiration and removal must agree on the original deadline and the last
+committed phase. The real native cases at `55b950023` reached the competing
+writers in both orders. At `a243a75cf`, native bootstrap, required entity
+observation and three removal floor files passed on two lab hosts. The
+SQLite owner now supplies a complete entity read before REMOVE or REPLACE
+retires a replica. A preceding candidate still failed broader retirement and
+recovery cases. The placement owner is tracing those paths through their
+committed rows and owned wake before this unit is integrated.
+[Placement evidence](../quests/fresh-formation-user-table-routability/log.ndjson).
 
-For user-partition CREATE, the physical refusal preceded native founding. Its
-empty reason list does not identify which scheduling condition was missing.
-Managed SQL and PG tests at `642ac7e42` reproduced inconsistent observations
-across admission. At `6130b04a2` the owning SQL path selects nodes and explains
-its decision from the same observation and checks freshness after prechecks.
-Four affected files passed on adams-gamla. A further managed test at
-`af391f8b6` showed healthy RF3/5 and RF1/3 cases checking and founding more
-nodes than requested, and an expired attempt still reaching native FOUND.
-The explicit target-order control passed. The SQL owner must bound the actual
-effect by the requested width and original attempt budget. The three-host
-run does not establish over-selection as its cause.
+For user-partition CREATE, the physical refusal preceded native founding.
+Its empty reason list leaves the cause of the missing quorum unknown.
+The SQL owner reproduced width, stale admission and reply-loss cases
+separately. At `83c857249`, twelve files passed across three machines,
+including RF3/5, RF1/3, managed split deadlines and definitive refusal.
+At `b5118ced8`, SQLite recorded FOUND before a lost or malformed reply,
+and the schema owner nevertheless reported a terminal failure. Another
+witness observed a fresh ADD after the target's READY lease expired.
+The positive replay setup did not prove an identical retained command.
+The SQL owner must reconcile that exact native entry before allowing any
+new effect and recheck the target at the final local handoff.
+[Native SQL originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--native-schema-admission-b511-red-nov21.tar.gz).
 
-The reviewed strict-outcome evidence at `2eda158e8` exercises three
-previously failing SQLite fixture families (621 assertions). The 85-file
-consumer selection on `7dfbdedd9` remains incomplete. One completed shard
-failed four files and another shard stopped at the lab thermal limit.
-The strict-outcome receipt admits four of six obligations. Its owners still
-owe classified closure and independent review on the composed source.
-[Strict outcome record](../quests/strict-operation-outcomes/log.ndjson).
+The strict-outcome owner now has a managed positive and opposing-order
+control for late CREATE. At `7898f95a6`, a separate coordinator committed
+FAILED to the shared SQLite ledger before the late response arrived.
+Public dispatch returned the original failure and issued no REMOVE.
+A confirmed promotion and persisted STOPPING reported progress. Five files
+passed with 735 assertions on two hosts. Independent source and execution
+review approved this interaction. The 85-file selection and composed
+review remain open. The strict receipt still admits four of six obligations.
+[Strict outcome originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-dispatch-sqlite-7898-nov21.tar.gz).
 
-The separate support-evidence branch `wip/upgrade-support-admission-nov21`
-at `c435d5cb6` retains five managed files with 495 assertions for the
-forward upgrade admission and resumption decisions. Runtime source at
-`86112a282` prevents policy fields from authorizing those effects. The
-integration owner still owes composition of this correction. The pilot owner
-retains rollback and physical upgrade qualification under item 14.
+The support-evidence branch `wip/upgrade-support-admission-nov21` at
+`c435d5cb6` retains five managed files with 495 assertions for forward
+upgrade admission and resumption. Composing this change triggered existing
+static limits on the evidence reader and upgrade policy. The support owner
+is simplifying these boundaries before integration. The pilot owner retains
+rollback and physical upgrade qualification under item 14.
 [Managed support admission originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-resume-authority-8611-nov21.tar.gz).
 
 The next composed trial still requires the original 420-second gate and
