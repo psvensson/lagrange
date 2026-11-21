@@ -7,6 +7,7 @@ import {
   LEARNER_ADMISSION_WAIT_OUTCOME,
 } from './replica-handler-voter-readiness-methods.js';
 import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
+import {hasSystemCacheChangeReader} from '../cache/system-cache-client.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recovery.js';
 import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
@@ -15,6 +16,7 @@ import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
 import {REPLICA_HANDLER_DEFAULT, REPLICA_HANDLER_PROGRESS, REPLICA_HANDLER_TYPEOF} from
   './replica-handler-constants.js';
 
+const CREATE_VOTER_CACHE_REQUIRED = 'CREATE voter readiness requires a subscribable SERVICES cache';
 const FRESH_CREATE_RELEASE_ROUTE_UNAVAILABLE = 'Fresh CREATE participant release route unavailable';
 
 function requireFreshCreateReleaseRoute(handler) {
@@ -53,6 +55,7 @@ function replicaCreateWork(handler, request) {
   const {operationId, replicaId, partitionId, createPhysicalWorkerClaim: claim} = request;
   return {
     operationId, replicaId, partitionId, claim,
+    createAdmissionEvidence: request.createAdmissionEvidence,
     tracker: handler.inProgressOperations.get(operationId),
     service: handler.getTrackedService(replicaId),
     openedService: null,
@@ -125,12 +128,22 @@ function stopCreateReadinessWake(work) {
 
 function hasDecidedCreateWorkReadiness(handler, work) {
   return hasDecidedCreateReadiness(handler, work.service, work.replicaId,
-    work.voterReadinessRequired, work.tracker.retainedActivation.evidence);
+    work.voterReadinessRequired, work.createAdmissionEvidence);
+}
+
+function requireVoterReadinessInputs(handler, request) {
+  if (request.createAdmissionEvidence &&
+      !hasSystemCacheChangeReader(handler.systemTableCache) &&
+      handler.shouldGateActivationOnVoterReadiness(request.partitionId,
+        request.operationId, false, request.explicitOperationType)) {
+    throw new Error(CREATE_VOTER_CACHE_REQUIRED);
+  }
 }
 
 function retainCreateReadinessWake(handler, work) {
   const {operationId, replicaId, service, voterReadinessRequired} = work;
   const cache = handler.systemTableCache;
+  if (voterReadinessRequired && !hasSystemCacheChangeReader(cache)) return;
   const wake = () => {
     if (!handler.shuttingDown && !service.isShutdown &&
         work.retained && ownsReplicaCreateWork(handler, work) &&
@@ -196,7 +209,7 @@ async function waitForMaterializedCreateReadiness(
     await handler.waitForVoterReadyActivation(replicaId, partitionId, {
       deadlineAtMs,
       expectedService: service,
-      retainedAdmission: work.tracker?.retainedActivation?.evidence,
+      createAdmissionEvidence: work.createAdmissionEvidence,
       isCreateCurrent: () => ownsReplicaCreateWork(handler, work) && !handler.shuttingDown,
     });
   } else if (joining) {
@@ -243,6 +256,7 @@ export {
   ownsReplicaCreateWork,
   releaseReplicaCreateWork,
   replicaCreateWork,
+  requireVoterReadinessInputs,
   requireFreshCreateReleaseRoute,
   requireReplicaCreateWork,
   retainCreateReadinessWake,

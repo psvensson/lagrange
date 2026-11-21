@@ -59,13 +59,14 @@ function isReplicaAdmissionRefused(service) {
 }
 
 function hasDecidedCreateReadiness(handler, service, replicaId, voterRequired, evidence) {
-  const voterBinding = voterRequired ? {expectedService: service, retainedAdmission: evidence} : {};
+  const voterBinding = voterRequired ?
+    {expectedService: service, createAdmissionEvidence: evidence} : {};
   return isReplicaAdmissionRefused(service) ||
     handler.isReplicaVoterReady(replicaId, voterBinding) ||
     (!voterRequired && isLearnerAdmittedToGroup(service, replicaId));
 }
 
-function isExactRetainedVoterRow(row, service, evidence) {
+function isExactCreateVoterRow(row, service, evidence) {
   return service && !service.isShutdown &&
     row.service_type === SERVICE_TYPE.PARTITION && row.service_id === evidence.replicaId &&
     row.replica_id === evidence.replicaId && row.node_id === evidence.targetNodeId &&
@@ -579,11 +580,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
     /**
      * Check if a local replica is voter-ready and routable.
      * @param {string} replicaId - Replica ID.
-     * @param {Object} [options] - Exact observed service and retained admission.
+     * @param {Object} [options] - Exact observed service and CREATE admission.
      * @return {boolean} True when replica is non-learner with routable address.
      * @private
      */
-    isReplicaVoterReady(replicaId, {expectedService, retainedAdmission} = {}) {
+    isReplicaVoterReady(replicaId, {expectedService, createAdmissionEvidence} = {}) {
       const normalizedRole = this.getTrackedReplicaRole(replicaId);
       if (!isVoterRaftRole(normalizedRole)) {
         return false;
@@ -593,8 +594,8 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         replicaId,
       );
       if (!serviceRow || !serviceRow.address ||
-          (retainedAdmission && (this.getTrackedService(replicaId) !== expectedService ||
-            !isExactRetainedVoterRow(serviceRow, expectedService, retainedAdmission)))) {
+          (createAdmissionEvidence && (this.getTrackedService(replicaId) !== expectedService ||
+            !isExactCreateVoterRow(serviceRow, expectedService, createAdmissionEvidence)))) {
         return false;
       }
       if (
