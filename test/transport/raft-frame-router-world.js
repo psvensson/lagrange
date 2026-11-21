@@ -125,6 +125,7 @@ class RaftRouterWorld {
       [pairKey(left, right), extraMs]));
     this.blackedOut = new Set();
     this.dials = [];
+    this.refusedDials = [];
     this.network = createVirtualNetwork({startMs: 0});
     this.frames = [];
     this.raftSends = [];
@@ -193,8 +194,14 @@ class RaftRouterWorld {
       ...base,
       hasEndpoint: (portKey) => !this.blackedOut.has(this.portNode(portKey)) &&
         base.hasEndpoint(portKey),
-      lookupEndpoint: (portKey) => this.blackedOut.has(this.portNode(portKey)) ?
-        undefined : base.lookupEndpoint(portKey),
+      lookupEndpoint: (portKey) => {
+        if (!this.blackedOut.has(this.portNode(portKey))) {
+          return base.lookupEndpoint(portKey);
+        }
+        this.refusedDials.push({atMs: this.network.now(),
+          to: this.portNode(portKey)});
+        return undefined;
+      },
       createConnectionPair: (context) => {
         const pair = base.createConnectionPair(context);
         if (context.localNodeId !== context.remoteNodeId) {
