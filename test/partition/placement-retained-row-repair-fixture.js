@@ -39,23 +39,35 @@ async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID,
         return {success: true, partitionResult: {affectedRows: result.changes}};
       };
       installCommittedOperationMutationFixture(gateway);
-      const coordinator = createTestCoordinator({nodeId,
-        sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway});
-      coordinator.registerLedgerPartitionService(leader);
+      const compose = () => {
+        const coordinator = createTestCoordinator({nodeId,
+          sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway});
+        coordinator.registerLedgerPartitionService(leader);
+        return coordinator;
+      };
       const commands = [];
       leader.controllablePort.setProposeHandler(async (entry) => {
         proposed.push({...entry});
         commands.push(entry);
         queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
       });
-      const world = {leader, coordinator, gateway, commands, partitionId, partitionRows};
+      const world = {leader, coordinator: compose(), gateway, commands, partitionId, partitionRows};
       attachCurrentCopyOwner(world);
+      // A process restart of the ledger node: every volatile owner is rebuilt
+      // over the same durable ledger, node, replica and address.
+      world.restartCoordinator = async () => {
+        world.placementOwner?.shutdown();
+        leader.setRebalancerLeadershipSink(null);
+        await world.coordinator.shutdown();
+        world.coordinator = compose();
+        attachCurrentCopyOwner(world);
+      };
       try {
         await measure(world);
       } finally {
         world.placementOwner?.shutdown();
         leader.setRebalancerLeadershipSink(null);
-        await coordinator.shutdown();
+        await world.coordinator.shutdown();
       }
     }, {dbPath: temporary.dbPath, replicaId, nodeId: serviceNodeId, releaseAdmission});
   } finally {

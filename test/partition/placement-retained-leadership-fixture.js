@@ -12,7 +12,7 @@ import {resumeFixtureParticipantAdmission, send, settleTicks} from '../test-help
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 
-async function withRetainedLeadershipPair(measure) {
+async function withRetainedLeadershipPair(measure, {initialEndpoints} = {}) {
   await withRepairLedger(async (a) => withRepairLedger(async (b) => {
     const nodes = [a, b];
     for (const node of nodes) {
@@ -55,8 +55,45 @@ async function withRetainedLeadershipPair(measure) {
       };
       node.coordinator.syncOwnerDependencies({messageRouter: router});
     }
-    async function elect(next, {resume = true, publicationOrder = 'partition-first',
-      afterFirstPublication} = {}) {
+    // Publication primitives: each row enters both coordinators' caches through
+    // real cache admission. Normal service registration publishes follower even
+    // for the actual leader; PARTITIONS owns routing. A missing endpoint is a row
+    // that was never published, never a wrong-address row.
+    function publishRow(table, row) {
+      for (const receiver of nodes) {
+        receiver.coordinator.systemTableCache.applySystemTableChange(table,
+          CACHE_CDC_OPERATIONS.UPSERT, row);
+      }
+    }
+    function publishLeader(next) {
+      publishRow('partitions', {partition_id: next.leader.partitionId,
+        leader_node_id: next.leader.nodeId});
+      for (const receiver of nodes) {
+        assert.equal(receiver.coordinator.systemTableCache.get('partitions',
+          next.leader.partitionId).leader_node_id, next.leader.nodeId);
+      }
+    }
+    function publishEndpoint(peer, overrides = {}) {
+      peer.lastRolePublication = Math.max(peer.leader.timeSource.now(),
+        peer.lastRolePublication + 1);
+      const row = {service_id: peer.leader.replicaId, replica_id: peer.leader.replicaId,
+        node_id: peer.leader.nodeId, partition_id: 'replica_operations-p1',
+        service_type: 'partition', address: peer.address, group_id: null,
+        status: 'active', raft_role: RAFT_ROLE.FOLLOWER, cleanup_token: null,
+        create_attempt_token: null, created_at: peer.serviceBirth,
+        updated_at: peer.lastRolePublication, ...overrides};
+      assert.equal(row.raft_role, RAFT_ROLE.FOLLOWER,
+        'a partition SERVICES row never publishes leader');
+      publishRow('services', row);
+      for (const receiver of nodes) {
+        const published = receiver.coordinator.systemTableCache.get('services', row.service_id);
+        assert.equal(published.created_at, row.created_at);
+        assert.equal(published.raft_role, RAFT_ROLE.FOLLOWER);
+        assert.equal(receiver.coordinator.systemTableCache.get('services', undefined), undefined);
+      }
+      return row;
+    }
+    async function changeRoles(next, {resume = true} = {}) {
       if (leader !== next) term += 1;
       leader = next;
       for (const node of nodes) {
@@ -66,36 +103,13 @@ async function withRetainedLeadershipPair(measure) {
       await settleTicks();
       for (const node of nodes) assert.equal(node.leader.isLeader, node === next);
       if (resume) await resumeFixtureParticipantAdmission(next.leader);
-      // Normal service registration publishes follower even for the actual leader.
-      // PARTITIONS owns routing; the two publication channels may arrive either way.
-      const publishPartition = () => {
-        for (const receiver of nodes) {
-          receiver.coordinator.systemTableCache.applySystemTableChange('partitions',
-            CACHE_CDC_OPERATIONS.UPSERT, {partition_id: next.leader.partitionId,
-              leader_node_id: next.leader.nodeId});
-          assert.equal(receiver.coordinator.systemTableCache.get('partitions',
-            next.leader.partitionId).leader_node_id, next.leader.nodeId);
-        }
-      };
+    }
+    async function elect(next, {resume = true, publicationOrder = 'partition-first',
+      afterFirstPublication, endpoints = nodes} = {}) {
+      await changeRoles(next, {resume});
+      const publishPartition = () => publishLeader(next);
       const publishServices = () => {
-        for (const peer of nodes) {
-          peer.lastRolePublication = Math.max(peer.leader.timeSource.now(),
-            peer.lastRolePublication + 1);
-          const row = {service_id: peer.leader.replicaId, replica_id: peer.leader.replicaId,
-            node_id: peer.leader.nodeId, partition_id: 'replica_operations-p1',
-            service_type: 'partition', address: peer.address, group_id: null,
-            status: 'active', raft_role: RAFT_ROLE.FOLLOWER, cleanup_token: null,
-            create_attempt_token: null, created_at: peer.serviceBirth,
-            updated_at: peer.lastRolePublication};
-          for (const receiver of nodes) {
-            const cache = receiver.coordinator.systemTableCache;
-            cache.applySystemTableChange('services', CACHE_CDC_OPERATIONS.UPSERT, row);
-            const published = cache.get('services', row.service_id);
-            assert.equal(published.created_at, peer.serviceBirth);
-            assert.equal(published.raft_role, RAFT_ROLE.FOLLOWER);
-            assert.equal(cache.get('services', undefined), undefined);
-          }
-        }
+        for (const peer of endpoints) publishEndpoint(peer);
       };
       const publications = publicationOrder === 'partition-first' ?
         [publishPartition, publishServices] : [publishServices, publishPartition];
@@ -109,8 +123,8 @@ async function withRetainedLeadershipPair(measure) {
     a.address = 'node-a/partition/replica_operations-p1-a';
     b.address = 'node-b/partition/replica_operations-p1-b';
     try {
-      await elect(a);
-      await measure({a, b, messages, elect});
+      await elect(a, {endpoints: initialEndpoints === 'leader-only' ? [a] : nodes});
+      await measure({a, b, messages, elect, changeRoles, publishLeader, publishEndpoint});
     } finally {
       for (const node of nodes) node.leader.controllablePort.commit = commits.get(node);
     }

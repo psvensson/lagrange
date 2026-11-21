@@ -1,5 +1,3 @@
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as READ_MODE} from
-  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {withRepairLedger, attachCurrentCopyOwner, stepRetainedLedgerRow} from './placement-retained-row-repair-fixture.js';
 // File-backed SQLite, real PartitionService committed apply, statement outcomes,
 // CDC ledger and repository/workflow producers. Consensus transport is a
@@ -964,66 +962,9 @@ for (const lane of ['source', 'target']) {
     }));
 }
 
-const invalidCensusAnswers = [
-  ['partial', (answer) => ({...answer, partial: true})],
-  ['failed', (answer) => ({...answer, success: false, rowSetComplete: false})],
-  ['stale', (answer) => ({...answer,
-    readAuthorityWitness: {...answer.readAuthorityWitness, appliedIndex: 0}})],
-  ['wrong-partition', (answer) => ({...answer,
-    readAuthorityWitness: {...answer.readAuthorityWitness, partitionId: 'foreign-ledger-p1'}})],
-];
-for (const [name, corrupt] of invalidCensusAnswers) {
-  test(`${name} capacity census cannot spend or retire remote repair debt`, () =>
-    withRepairLedger(async (world) => {
-      const retained = await retainMissing(world, OperationType.ADD);
-      const holders = await occupyCopyLane(world, 'target');
-      const remote = remoteCaller(world);
-      const sender = remote.coordinator.repository;
-      try {
-        assert.equal(await sender.repairRetainedOperation(retained), false);
-        const held = sender.retainedPlacementRepairs.get(retained.operationId);
-        assert.ok(held.occupancy);
-        const receiver = world.coordinator.repository;
-        const read = receiver.executeReplicaOperationsRead;
-        let reads = 0;
-        receiver.executeReplicaOperationsRead = async (...args) => {
-          const answer = await read.apply(receiver, args);
-          if (args[2]?.authoritativeReadMode !== READ_MODE.OWNER_RPC_REQUIRED) return answer;
-          reads += 1;
-          return corrupt(answer);
-        };
-        await stepRetainedLedgerRow(world, holders[0], WORKFLOW_STEP.FAILED);
-        const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
-          .get(holders[0]);
-        await observeBurst(sender, cleared);
-        assert.equal(reads, 1, 'one bounded authoritative read for the whole release burst');
-        assert.equal(sender.retainedPlacementRepairs.get(retained.operationId), held,
-          'partial, stale or foreign authority cannot retire or replace the exact retained record');
-        assert.equal(world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
-          .get(retained.operationId), undefined, 'unqualified census cannot authorize the native write');
-        const restored = new Promise((resolve) => {
-          const onCommitted = ({command}) => {
-            if (command.type !== 'PLACEMENT_REPAIR') return;
-            world.leader.off(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommitted);
-            resolve();
-          };
-          world.leader.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommitted);
-        });
-        assert.notEqual(receiver.retainedPlacementRepairReadRetry, null);
-        receiver.executeReplicaOperationsRead = read;
-        await restored;
-        await settleRepair(world);
-        const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
-          .get(retained.operationId);
-        assert.ok(row, 'registered owner-read continuation recovers when the actual dependency returns');
-        await observeBurst(sender, row);
-        assert.equal(sender.retainedPlacementRepairs.size, 0,
-          'a genuine correctly scoped successor observation can still confirm the actual winner');
-      } finally {
-        await remote.coordinator.shutdown();
-      }
-    }));
-}
+// The four invalid-authority census cases (partial, failed, stale and
+// wrong-partition) are witnessed on the virtual clock, as overlapping and as
+// sequential arrivals, in placement-retained-continuation.test.js.
 
 test('incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes', () =>
   withRepairLedger(async (world) => {
