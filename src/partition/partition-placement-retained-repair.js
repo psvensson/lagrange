@@ -12,7 +12,7 @@ import {operationCarriesMessageGroupMembership} from
   '../rebalancer/replica-operation-message-group-membership-fields.js';
 import {canonicalPlacementStatement, PLACEMENT_STATEMENT_VALIDITY as VALIDITY} from
   '../rebalancer/replica-placement-owner-admission-statement.js';
-import {classifyPlacementClass} from '../rebalancer/replica-placement-owner-order.js';
+import {classifyPlacementClass} from '../bootstrap/system-partition-classification.js';
 import {OPERATION_METADATA_KEY} from '../rebalancer/replica-operation-progress.js';
 import {getOperationMetadataValue} from '../rebalancer/replica-status.js';
 import {PLACEMENT_TRANSITION_KIND, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
