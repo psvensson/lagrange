@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 238,
+    "storage-partition": 239,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2706,
-  "digest": "fnv1a32-4488d5ef",
+  "censusSize": 2707,
+  "digest": "fnv1a32-875bcc78",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d962cf14",
+  "observationDigest": "fnv1a32-3f12c41c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1528,6 +1528,7 @@
     "test/partition/placement-admission-copy-occupancy.test.js": "storage-partition",
     "test/partition/placement-admission-found.test.js": "storage-partition",
     "test/partition/placement-admission-routed-cdc.test.js": "storage-partition",
+    "test/partition/placement-creation-terminal-replay.test.js": "storage-partition",
     "test/partition/placement-founding-and-runtime-service-admission.test.js": "storage-partition",
     "test/partition/proposal-queue-capacity.property.test.js": "storage-partition",
     "test/partition/proposal-queue-size-invariant.property.test.js": "storage-partition",
@@ -14426,6 +14427,37 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/placement-creation-terminal-replay.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
+        "src/rebalancer/replica-operation-update-outcome.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "test/partition/placement-admission-fixture.js",
+        "test/partition/placement-create-with-ledger-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/placement-founding-and-runtime-service-admission.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -14454,9 +14486,11 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-operation-update-outcome.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/partition/placement-create-with-ledger-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -18856,6 +18890,7 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-status.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },

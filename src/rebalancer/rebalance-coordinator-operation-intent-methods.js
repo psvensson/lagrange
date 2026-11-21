@@ -3,7 +3,7 @@ import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {getOperationMetadataObject} from './replica-status.js';
 import {
   operationMatchesCreationRequest,
-  supersededPlacementOperationError,
+  requireCreationReplayOutcome,
 } from './replica-operation-creation-request.js';
 import {
   assertMembershipPublicationEpochBinding,
@@ -220,22 +220,15 @@ class RebalanceCoordinatorOperationIntentMethods {
       }
       if (sameSubject) {
         if (this.isRecentOperationIntentTerminal(operation)) {
-          if (retireRecentHint || allowAbsent) {
+          if ((retireRecentHint || allowAbsent) && !move.entryId && !move.operationIntentId) {
             this.pruneRecentOperationIntentsForOperation(operation);
             return null;
-          }
-          if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
-            throw supersededPlacementOperationError(operation);
-          }
-          if (operation.workflowStep === WORKFLOW_STEP.FAILED) {
-            throw this.createDeferredOperationVisibilityError(
-              this.normalizeMoveType(move.type), observation, move,
-            );
           }
         }
         if (!this.operationMatchesCreationRequest(operation, move, placementIntent)) {
           return this.refuseConflictingCreation(operation, move);
         }
+        requireCreationReplayOutcome(operation);
         return operation;
       }
     }
@@ -309,6 +302,7 @@ class RebalanceCoordinatorOperationIntentMethods {
         {allowAbsent: result.error !== null, placementIntent: result.placementIntent},
       );
       if (existing) {
+        if (requireCreationReplayOutcome(existing)) return existing;
         if (result.error) await this.ensureReservationForOperation(existing);
         return this.maybeRearmReusedPendingOperation(existing);
       }

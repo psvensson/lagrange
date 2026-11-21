@@ -4,14 +4,9 @@ import {
   replaceIntentPredecessorMatches,
 } from './rebalance-replace-intent-identity.js';
 import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js';
-import {
-  isTerminalSuccessfulCreateOperation,
-} from './replica-operation-progress.js';
+import {requireCreationReplayOutcome} from './replica-operation-creation-request.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const TERMINAL_INTENT_COLLISION_ERROR_PREFIX =
-  'Operation persistence collision winner is durably terminal for ' +
-  'deterministic intent';
 
 class RebalanceCoordinatorOperationPersistenceCollision {
   /**
@@ -45,25 +40,9 @@ class RebalanceCoordinatorOperationPersistenceCollision {
         !this.operationMatchesCreationRequest(existing, requestedMove)) {
       return this.refuseConflictingCreation(existing, requestedMove);
     }
-    // Deterministic-intent creators retry the SAME operation id, so a
-    // durable terminal winner is the prior attempt's outcome, not an
-    // in-flight operation. Rearming it re-drives an idempotent create
-    // against a completed replica and livelocks the terminal-transition
-    // repair (round-10: local lone-seed phase-1 DDL admission). A
-    // terminal-successful winner IS the create result; a terminal-failed
-    // winner cannot be cured under the same intent id and must surface.
-    if (
-      context.move?.operationIntentId && terminal
-    ) {
-      if (isTerminalSuccessfulCreateOperation(existing)) {
-        return existing;
-      }
-      throw new Error(
-        `${TERMINAL_INTENT_COLLISION_ERROR_PREFIX} ` +
-          `${context.move.operationIntentId}: ` +
-          `${existing.status}`,
-      );
-    }
+    // A durable terminal winner is the prior attempt's outcome. Only a
+    // live operation still owns reservation or dispatch work.
+    if (requireCreationReplayOutcome(existing)) return existing;
     if (context.replaceIntentIdentity) {
       await this.ensureReservationForOperation(existing);
     }

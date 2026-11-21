@@ -1,6 +1,7 @@
 import {SERVICE_TYPE} from '../constants/service.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {OperationType} from './replica-operation-progress.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {OperationType, isTerminalReplicaOperationRecord} from './replica-operation-progress.js';
 import {MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE} from
   './replica-operation-membership-epoch-binding.js';
 
@@ -126,12 +127,25 @@ function buildPartitionPlacementMove(move, normalizedMoveType, resolvedSourceNod
   };
 }
 
-function supersededPlacementOperationError(operation) {
-  return Object.assign(new Error(`Placement operation ${operation.operationId} was superseded`), {
-    code: 'PLACEMENT_OPERATION_SUPERSEDED',
-    reasonCode: 'placement_operation_superseded',
-    operationId: operation.operationId,
-  });
+function requireCreationReplayOutcome(operation) {
+  if (!isTerminalReplicaOperationRecord(operation)) return false;
+  if (WORKFLOW_STEP.SUPERSEDED && operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
+    throw Object.assign(new Error(`Placement operation ${operation.operationId} was superseded`), {
+      code: 'PLACEMENT_OPERATION_SUPERSEDED',
+      reasonCode: 'placement_operation_superseded',
+      operationId: operation.operationId,
+    });
+  }
+  if (operation.workflowStep === WORKFLOW_STEP.FAILED) {
+    throw Object.assign(new Error(
+      `Replica creation ${operation.operationId} is durably terminal: ${operation.status}`,
+    ), {
+      code: 'REPLICA_CREATION_FAILED',
+      reasonCode: 'replica_creation_failed',
+      operationId: operation.operationId,
+    });
+  }
+  return true;
 }
 
 export {
@@ -141,5 +155,5 @@ export {
   readCreationRequestIdentity,
   resolvePartitionPlacementIntentKey,
   resolveRuntimeServiceIntentKey,
-  supersededPlacementOperationError,
+  requireCreationReplayOutcome,
 };
