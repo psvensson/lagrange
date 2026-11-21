@@ -126,7 +126,7 @@ function buildCoordinatorWithConcurrentOp(concurrentOp, {pingNode}) {
   });
 
   coordinator.initialize();
-  coordinator.repository.getOperationsByEntity = async () => [concurrentOp];
+  coordinator.repository.getRequiredOperationsByEntity = async () => [concurrentOp];
   return coordinator;
 }
 
