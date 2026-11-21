@@ -99,7 +99,7 @@ documentClass: generated
 - [partition-placement-admission-command.js](partition-placement-admission-command.js) - The pinned committed form of the placement owner's two commands (quest replica-placement-admission-owner, design... (importers: many)
 - [partition-placement-admission-constants.js](partition-placement-admission-constants.js) - The placement owner's committed command types at the partition boundary (quest replica-placement-admission-owner,... (importers: many)
 - [partition-placement-admission-decision.js](partition-placement-admission-decision.js) - Public entry: decidePlacementAdmission, decideHoldRelease, readPlacementCensus, isOccupyingCopy, LEDGER_PARTITION_ID. (importers: many)
-- [partition-placement-admission-identity.js](partition-placement-admission-identity.js) - The identity of every operation the placement admission applier admits (quest replica-placement-admission-owner,... (importers: few)
+- [partition-placement-admission-identity.js](partition-placement-admission-identity.js) - The identity of every operation the placement admission applier admits (quest replica-placement-admission-owner,... (importers: many)
 - [partition-placement-admission.js](partition-placement-admission.js) - Public entry: requestPlacementAdmission, requestPlacementHoldRelease, routePlacementAdmission, applyPlacementCommand. (importers: many)
 - [partition-raft-storage.js](partition-raft-storage.js) - Partition Raft Storage - SQLite-backed Raft log storage for partitions. (importers: many)
 - [partition-read-statement-owner.js](partition-read-statement-owner.js) - Retain one most-recent SELECT statement per SQLite database handle. (importers: one)

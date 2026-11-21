@@ -1,5 +1,10 @@
 import {buildOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
 import {COLUMN, TABLES} from '../constants/index.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from '../control-plane/control-plane-system-table-gateway-constants.js';
+import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
 import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {
@@ -10,6 +15,7 @@ import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
+import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {OPERATION_METADATA_KEY} from './replica-operation-progress.js';
 import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
 import {OperationType} from './replica-status.js';
@@ -24,39 +30,20 @@ function needsReplaceCreateTargetBinding(
     (!operation.replicaId || operation.replicaId === sourceReplicaId);
 }
 
-function isPlacementCreateOperation(operation, replaceRemoveDispatchPhase) {
-  if (!operation || replaceRemoveDispatchPhase === true) {
-    return false;
-  }
-  if (
-    operation.type !== OperationType.ADD &&
-    operation.type !== OperationType.REPLACE
-  ) {
+function requiresPlacementCreateBootstrapTopology(
+  operation,
+  replaceRemoveDispatchPhase,
+) {
+  if (!operation || replaceRemoveDispatchPhase === true ||
+      (operation.type !== OperationType.ADD &&
+        operation.type !== OperationType.REPLACE) ||
+      operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+      operation.entityType === UNIFIED_SERVICE_TYPE.MESSAGE_GROUP) {
     return false;
   }
   const placementAdmission =
     operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
-  return (
-    placementAdmission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT
-  );
-}
-
-function needsPlacementCreateBootstrapTopology(
-  operation,
-  replaceRemoveDispatchPhase,
-) {
-  if (
-    !isPlacementCreateOperation(operation, replaceRemoveDispatchPhase) ||
-    Boolean(operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP])
-  ) {
-    return false;
-  }
-  return (
-    operation.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
-    operation.entityType !== UNIFIED_SERVICE_TYPE.MESSAGE_GROUP &&
-    typeof operation.partitionId === 'string' &&
-    operation.partitionId.length > 0
-  );
+  return placementAdmission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT;
 }
 
 function readServiceRowsForBootstrap(owner, partitionId) {
@@ -69,54 +56,94 @@ function readServiceRowsForBootstrap(owner, partitionId) {
   );
 }
 
-function stampOperationBootstrapTopology(operation, topology) {
-  operation[ReplicaOperationField.REPLICA_IDS] = topology.replicaIds;
-  operation[ReplicaOperationField.PEER_ADDRESSES] = topology.peerAddresses;
-  operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
-    topology.bootstrapMembership;
-  const firstStep = Array.isArray(operation.stepsHistory) ?
-    operation.stepsHistory[0] : null;
-  if (firstStep) {
-    firstStep[OPERATION_METADATA_KEY.REPLICA_IDS] = topology.replicaIds;
-    firstStep[OPERATION_METADATA_KEY.PEER_ADDRESSES] = topology.peerAddresses;
-    firstStep[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
-      topology.bootstrapMembership;
-  }
+function projectBootstrapTopology(operation, topology) {
+  const firstStep = {
+    ...operation.stepsHistory[0],
+    [OPERATION_METADATA_KEY.REPLICA_IDS]: topology.replicaIds,
+    [OPERATION_METADATA_KEY.PEER_ADDRESSES]: topology.peerAddresses,
+    [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP]: topology.bootstrapMembership,
+  };
+  return {
+    ...operation,
+    stepsHistory: [firstStep, ...operation.stepsHistory.slice(1)],
+    [ReplicaOperationField.REPLICA_IDS]: topology.replicaIds,
+    [ReplicaOperationField.PEER_ADDRESSES]: topology.peerAddresses,
+    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: topology.bootstrapMembership,
+  };
 }
 
-async function ensurePlacementCreateBootstrapTopology(
-  owner,
-  operation,
-  replaceRemoveDispatchPhase,
-) {
-  if (
-    !needsPlacementCreateBootstrapTopology(
-      operation,
-      replaceRemoveDispatchPhase,
-    )
-  ) {
-    return operation;
+function deferPlacementBootstrapBinding(owner, operation, reason, source) {
+  const error = new Error(reason, {cause: source});
+  error.deferRetry = true;
+  error.retryAfterMs = source?.retryAfterMs;
+  owner.deferDispatchRetry(operation, error);
+  return null;
+}
+
+async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId) {
+  const observation = await owner.repository.queryAuthoritativeOperationVisibilityObservation(
+    operation.operationId,
+    {
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      requireCompleteExactKey: true,
+    },
+  );
+  if (observation.deferredOutcome) {
+    return deferPlacementBootstrapBinding(owner, operation,
+      'Placement CREATE bootstrap row is unavailable', observation.deferredOutcome);
   }
-  const topology = await buildCommittedBootstrapTopology({
-    partitionId: operation.partitionId,
-    targetNodeId: operation.targetNodeId,
-    targetReplicaId: operation.replicaId,
-    readStamp: () => readCommittedMembershipStamp(
-      owner,
-      operation.partitionId,
-    ),
-    readAddressBook: () => Promise.resolve(
-      readServiceRowsForBootstrap(owner, operation.partitionId),
-    ),
-  }).catch((error) => {
-    owner.deferDispatchRetry(operation, error);
-    return null;
-  });
-  if (!topology) {
+  const current = observation.operation;
+  if (!current || current.completedAt !== null) return null;
+  assertOperationUpdateSubject(operation, current);
+  if (!requiresPlacementCreateBootstrapTopology(current, false) ||
+      !current.replicaId || current.replicaId !== operation.replicaId ||
+      current.createdAt !== operation.createdAt ||
+      current.membershipPublicationEpoch !== operation.membershipPublicationEpoch ||
+      current.replicaId === sourceReplicaId) {
     return null;
   }
-  stampOperationBootstrapTopology(operation, topology);
-  return operation;
+
+  if (operation.createAdmissionState != null && current.createAdmissionState == null) {
+    return deferPlacementBootstrapBinding(owner, operation,
+      'Placement CREATE admission is not yet observable');
+  }
+  const recordedStamp = current[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
+  if (committedStampOfAnswer(recordedStamp) !== null) return current;
+  // Once CREATE has been admitted, an absent stamp cannot be reconstructed
+  // from a newer view of Raft membership. Retain that operation as unresolved.
+  if (recordedStamp != null || current.createAdmissionState != null ||
+      (current.workflowStep !== WORKFLOW_STEP.PENDING &&
+        current.workflowStep !== WORKFLOW_STEP.SENDING)) {
+    return deferPlacementBootstrapBinding(owner, operation,
+      'Original placement CREATE bootstrap topology is unresolved');
+  }
+
+  try {
+    const topology = await buildCommittedBootstrapTopology({
+      partitionId: current.partitionId,
+      targetNodeId: current.targetNodeId,
+      targetReplicaId: current.replicaId,
+      readStamp: () => readCommittedMembershipStamp(owner, current.partitionId),
+      readAddressBook: () => readServiceRowsForBootstrap(owner, current.partitionId),
+    });
+    const projected = projectBootstrapTopology(current, topology);
+    const persisted = await owner.repository.persistOperationUpdate(projected, {
+      ...owner.buildOperationTransitionPersistOptions(),
+      expectedWorkflowStep: current.workflowStep,
+      expectedStepsHistory: current.stepsHistory,
+      requireCreateAdmissionAbsent: true,
+      requireExactCreateTarget: true,
+    });
+    const outcome = buildOperationTransitionOutcome(persisted,
+      {repository: owner.repository, requestedOperation: projected});
+    if (outcome.committed) return outcome.operation;
+  } catch (error) {
+    return deferPlacementBootstrapBinding(owner, operation,
+      'Placement CREATE bootstrap binding was not confirmed', error);
+  }
+  return deferPlacementBootstrapBinding(owner, operation,
+    'Placement CREATE bootstrap compare-and-set did not commit');
 }
 
 /**
@@ -134,16 +161,15 @@ async function bindReplaceCreateTargetReplicaId(
   replaceRemoveDispatchPhase,
   sourceReplicaId,
 ) {
+  if (requiresPlacementCreateBootstrapTopology(operation, replaceRemoveDispatchPhase)) {
+    return bindPlacementBootstrapTopology(owner, operation, sourceReplicaId);
+  }
   if (!needsReplaceCreateTargetBinding(
     operation,
     replaceRemoveDispatchPhase,
     sourceReplicaId,
   )) {
-    return ensurePlacementCreateBootstrapTopology(
-      owner,
-      operation,
-      replaceRemoveDispatchPhase,
-    );
+    return operation;
   }
   // An admitted CREATE is already bound to the exact durable replica_id.
   // Never rotate that identity from a later in-memory dispatch snapshot.
@@ -161,11 +187,7 @@ async function bindReplaceCreateTargetReplicaId(
     // The PENDING -> SENDING CAS below persists this target in the same write
     // that establishes the admission workflow anchor.
     operation.replicaId = replicaId;
-    return ensurePlacementCreateBootstrapTopology(
-      owner,
-      operation,
-      replaceRemoveDispatchPhase,
-    );
+    return operation;
   }
   const projectedOperation = {...operation, replicaId};
   const persisted = await owner.repository.persistOperationUpdate(
@@ -179,11 +201,7 @@ async function bindReplaceCreateTargetReplicaId(
     {repository: owner.repository, requestedOperation: projectedOperation});
   if (!outcome.committed) return null;
   operation.replicaId = replicaId;
-  return ensurePlacementCreateBootstrapTopology(
-    owner,
-    operation,
-    replaceRemoveDispatchPhase,
-  );
+  return operation;
 }
 
-export {bindReplaceCreateTargetReplicaId};
+export {bindReplaceCreateTargetReplicaId, requiresPlacementCreateBootstrapTopology};

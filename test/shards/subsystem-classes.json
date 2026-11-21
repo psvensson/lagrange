@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 239,
+    "storage-partition": 240,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2707,
-  "digest": "fnv1a32-875bcc78",
+  "censusSize": 2708,
+  "digest": "fnv1a32-b46ecbf6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9ec3eae5",
+  "observationDigest": "fnv1a32-16eada00",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1528,6 +1528,7 @@
     "test/partition/placement-admission-copy-occupancy.test.js": "storage-partition",
     "test/partition/placement-admission-found.test.js": "storage-partition",
     "test/partition/placement-admission-routed-cdc.test.js": "storage-partition",
+    "test/partition/placement-create-bootstrap-binding.test.js": "storage-partition",
     "test/partition/placement-creation-terminal-replay.test.js": "storage-partition",
     "test/partition/placement-founding-and-runtime-service-admission.test.js": "storage-partition",
     "test/partition/proposal-queue-capacity.property.test.js": "storage-partition",
@@ -14427,6 +14428,39 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/placement-create-bootstrap-binding.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-identity.js",
+        "src/partition/partition-placement-admission.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-replace-target-binding.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-placement-owner-admission-statement.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/placement-creation-terminal-replay.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -14540,6 +14574,8 @@
     "test/partition/replica-admission-delivery-lifetime.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schema-sql.js",
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
@@ -14556,9 +14592,13 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-create-admission-recovery-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },

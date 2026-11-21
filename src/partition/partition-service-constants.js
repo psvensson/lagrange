@@ -234,6 +234,7 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   SHUTDOWN_STARTED: 'shutdownStarted',
   SHUTDOWN: 'shutdown',
   CONSENSUS_OBSERVED: 'consensusObserved',
+  REPLICA_ADMISSION_SETTLED: 'replicaAdmissionSettled',
   // The partition's mutation admission reopened (the participant cutover
   // pause released): a writer that waited on it may propose again.
   WRITE_PATH_RELEASED: 'writePathReleased',

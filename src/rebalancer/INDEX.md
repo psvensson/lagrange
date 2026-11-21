@@ -106,7 +106,7 @@ documentClass: generated
 - [operation-workflow-replace-owner.js](operation-workflow-replace-owner.js) - Owner contract: Owner: the REPLACE owner's source-removal decisions (quest replace-source-removal-owner, amendment-1... (importers: hub)
 - [operation-workflow-replace-replay.js](operation-workflow-replace-replay.js) - Replays REPLACE source-removal from authoritative replica row. (importers: one)
 - [operation-workflow-replace-surviving-membership.js](operation-workflow-replace-surviving-membership.js) - Owner contract: Owner: the REPLACE owner's completion authority (quest replace-source-removal-owner, R-1a as amended... (importers: few)
-- [operation-workflow-replace-target-binding.js](operation-workflow-replace-target-binding.js) - Bind a REPLACE target through the workflow owner's durable row before CREATE admission can claim it. (importers: one)
+- [operation-workflow-replace-target-binding.js](operation-workflow-replace-target-binding.js) - Bind a REPLACE target through the workflow owner's durable row before CREATE admission can claim it. (importers: few)
 - [operation-workflow-replace-terminal-admission.js](operation-workflow-replace-terminal-admission.js) - Owner contract: Owner: the post-intent admission of terminal writes of a create (quest replace-source-removal-owner;... (importers: few)
 - [operation-workflow-replace-witness.js](operation-workflow-replace-witness.js) - Owner contract: Owner: the REPLACE owner's transport to its witness replica (quest replace-source-removal-owner,... (importers: few)
 - [operation-workflow-reservation-recovery.js](operation-workflow-reservation-recovery.js) - No leading comment; first export: reconcileReservationBackedPendingOperation. (importers: one)

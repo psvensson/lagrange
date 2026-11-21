@@ -2,12 +2,17 @@
 // which operation and physical worker may use this tracked incarnation.
 import {CREATE_ADMISSION_ERROR_CODE} from './replica-create-admission-owner.js';
 import {isSupersededAdmissionError} from './replica-create-admission-retained-recovery.js';
-import {awaitBoundedReplicaAdmission} from './replica-handler-voter-readiness-methods.js';
+import {
+  awaitBoundedReplicaAdmission, hasDecidedCreateReadiness, learnerAdmissionWaitError,
+  LEARNER_ADMISSION_WAIT_OUTCOME,
+} from './replica-handler-voter-readiness-methods.js';
+import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
 import {FRESH_CREATE_RELEASE_UNAVAILABLE} from './replica-handler-release-recovery.js';
 import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
 import {PARTICIPANT_RELEASE_ROUTE_SUFFIX} from
   '../partition/partition-participant-transaction-cutover-constants.js';
-import {REPLICA_HANDLER_DEFAULT, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
+import {REPLICA_HANDLER_DEFAULT, REPLICA_HANDLER_PROGRESS, REPLICA_HANDLER_TYPEOF} from
+  './replica-handler-constants.js';
 
 const FRESH_CREATE_RELEASE_ROUTE_UNAVAILABLE = 'Fresh CREATE participant release route unavailable';
 
@@ -77,6 +82,7 @@ function requireReplicaCreateWork(handler, work) {
 function releaseReplicaCreateWork(handler, work) {
   if (work.released) return;
   work.released = true;
+  stopCreateReadinessWake(work);
   const {operationId, replicaId, progress, tracker, claim, owner} = work;
   if (progress && handler.creationProgressByReplica?.get(replicaId) === progress) {
     handler.clearReplicaCreationProgress(progress);
@@ -92,7 +98,7 @@ function deferredCreateActivation(work) {
     {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED});
 }
 
-async function observeCreateActivation(handler, work, deadlineAtMs, observe) {
+async function observeCreateActivation(handler, work, deadlineAtMs, observe, onExpiry) {
   if (work.activationObservation) throw deferredCreateActivation(work);
   let observed;
   const withinBudget = await awaitBoundedReplicaAdmission(handler, () => {
@@ -107,8 +113,92 @@ async function observeCreateActivation(handler, work, deadlineAtMs, observe) {
       }
     });
   }, deadlineAtMs);
-  if (!withinBudget) throw deferredCreateActivation(work);
+  if (!withinBudget) throw (onExpiry ? onExpiry() : deferredCreateActivation(work));
   return observed;
+}
+
+function stopCreateReadinessWake(work) {
+  work.stopReadinessWake?.();
+  work.stopReadinessWake = null;
+}
+
+function hasDecidedCreateWorkReadiness(handler, work) {
+  return hasDecidedCreateReadiness(handler, work.service, work.replicaId,
+    work.voterReadinessRequired);
+}
+
+function retainCreateReadinessWake(handler, work) {
+  const {operationId, replicaId, service} = work;
+  const wake = () => {
+    if (work.retained && ownsReplicaCreateWork(handler, work) &&
+        hasDecidedCreateWorkReadiness(handler, work)) {
+      armCreateAdmissionRecoveryRearm(handler);
+    }
+  };
+  // Only real consensus evidence or a settled request can wake a parked
+  // readiness observer. The service's existing learner cadence owns delivery.
+  const stopConsensus = handler.consensusEvents.subscribe((event) => {
+    if (event.replicaId === replicaId) wake();
+  });
+  const admissionSettled = (event) => {
+    if (event.operationId === operationId) wake();
+  };
+  const serviceWithdrawn = () => armCreateAdmissionRecoveryRearm(handler);
+  service.on?.(PARTITION_SERVICE_EVENT.REPLICA_ADMISSION_SETTLED, admissionSettled);
+  service.on?.(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, serviceWithdrawn);
+  const stopService = handler.localServices.subscribeServiceChanges((event) => {
+    if (event.replicaId !== replicaId || event.previous !== service || event.service === service) {
+      return;
+    }
+    stopCreateReadinessWake(work);
+    armCreateAdmissionRecoveryRearm(handler);
+  });
+  work.stopReadinessWake = () => {
+    stopConsensus();
+    stopService();
+    service.off?.(PARTITION_SERVICE_EVENT.REPLICA_ADMISSION_SETTLED, admissionSettled);
+    service.off?.(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, serviceWithdrawn);
+  };
+  wake();
+}
+
+async function waitForMaterializedCreateReadiness(
+  handler, work, request, deadlineAtMs, isJoiningExistingGroup) {
+  const {replicaId, operationId, partitionId, service, progress} = work;
+  const persistLifecycle = !request.skipLifecycleStatusPersistence;
+  const joining = isJoiningExistingGroup && persistLifecycle;
+  const requireDelivery = joining && typeof operationId === REPLICA_HANDLER_TYPEOF.STRING &&
+    operationId.length > 0;
+  if (requireDelivery && !work.admissionRequested) {
+    await observeCreateActivation(handler, work, deadlineAtMs, async () => {
+      await service.requestReplicaAdmission(operationId);
+      work.admissionRequested = true;
+    }, () => learnerAdmissionWaitError(
+      replicaId, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED));
+    requireReplicaCreateWork(handler, work);
+  }
+  const voterRequired = handler.shouldGateActivationOnVoterReadiness(
+    partitionId, operationId, isJoiningExistingGroup, request.explicitOperationType);
+  work.waitingForReadiness = voterRequired || joining;
+  work.voterReadinessRequired = voterRequired;
+  if (voterRequired) {
+    handler.updateReplicaCreationProgress(progress, {
+      stage: REPLICA_HANDLER_PROGRESS.STAGE_WAITING_VOTER_READY,
+    });
+    await handler.waitForVoterReadyActivation(replicaId, partitionId, {
+      deadlineAtMs,
+      expectedService: service,
+      isCreateCurrent: () => ownsReplicaCreateWork(handler, work) && !handler.shuttingDown,
+    });
+  } else if (joining) {
+    const result = await handler.waitForLearnerAdmissionActivation(replicaId, partitionId,
+      {deadlineAtMs});
+    requireReplicaCreateWork(handler, work);
+    if (result?.ready !== true) throw learnerAdmissionWaitError(replicaId, result?.outcome);
+  }
+  requireReplicaCreateWork(handler, work);
+  work.waitingForReadiness = false;
+  work.admissionReady = true;
 }
 
 function canRetainCreateActivation(handler, work, error) {
@@ -137,6 +227,7 @@ function retireReplicaCreateWork(handler, work, error) {
 export {
   armCreateAdmissionRecoveryRearm,
   canRetainCreateActivation,
+  hasDecidedCreateWorkReadiness,
   lostBootPhysicalWorkerError,
   matchesRetainedCreateActivation,
   observeCreateActivation,
@@ -145,5 +236,8 @@ export {
   replicaCreateWork,
   requireFreshCreateReleaseRoute,
   requireReplicaCreateWork,
+  retainCreateReadinessWake,
   retireReplicaCreateWork,
+  stopCreateReadinessWake,
+  waitForMaterializedCreateReadiness,
 };

@@ -19,16 +19,13 @@ import {
   isSupersededAdmissionError,
   retireSupersededCreateAdmissionRuntime,
 } from './replica-create-admission-retained-recovery.js';
-import {
-  LEARNER_ADMISSION_WAIT_OUTCOME,
-  awaitBoundedReplicaAdmission,
-  readHandlerNowMs,
-} from './replica-handler-voter-readiness-methods.js';
+import {readHandlerNowMs} from './replica-handler-voter-readiness-methods.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
 import {
   armCreateAdmissionRecoveryRearm,
   canRetainCreateActivation,
+  hasDecidedCreateWorkReadiness,
   lostBootPhysicalWorkerError,
   matchesRetainedCreateActivation,
   observeCreateActivation,
@@ -37,7 +34,10 @@ import {
   replicaCreateWork,
   requireFreshCreateReleaseRoute,
   requireReplicaCreateWork,
+  retainCreateReadinessWake,
   retireReplicaCreateWork,
+  stopCreateReadinessWake,
+  waitForMaterializedCreateReadiness,
 } from './replica-handler-create-work.js';
 import * as priorExistence from './replica-prior-existence.js';
 import {
@@ -81,10 +81,6 @@ const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
 // never opened; SYNCING is the ack-loss wedge, resumed at its own row (F3 c).
 const RESTARTABLE_CREATE_STATUSES = new Set([
   ReplicaStatus.PENDING, ReplicaStatus.SYNCING]);
-
-function learnerAdmissionWaitError(replicaId, outcome) {
-  return new Error(`Learner admission wait failed for replica ${replicaId}: ${outcome}`);
-}
 
 async function settleCreateAdmissionProgress(
   handler,
@@ -271,7 +267,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       if (!retained) return false;
       const {work, activate, failCreate, release} = retained;
       if (!matchesRetainedCreateActivation(retained.evidence, evidence) ||
-          !ownsReplicaCreateWork(this, work)) {
+          !ownsReplicaCreateWork(this, work) || work.openedService?.isShutdown === true) {
         try {
           await retireReplicaCreateWork(this, work);
         } finally {
@@ -279,7 +275,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         }
         return true;
       }
-      if (work.activationObservation) return true;
+      if (work.activationObservation ||
+          work.waitingForReadiness && !hasDecidedCreateWorkReadiness(this, work)) return true;
       // The old caller has settled. This existing recovery turn has its own
       // bound and begins with a fresh observation of the same admitted work.
       try {
@@ -607,46 +604,6 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             service: partitionService,
           });
         }
-        // The SYNCING fact is committed: ask the partition leader to admit
-        // this replica from its committed operation (quest
-        // replica-admission-from-committed-operation). A pending answer is
-        // re-sent on the learner-promotion cadence. The original CREATE
-        // budget bounds this caller's wait independently of delivery effects.
-        requireReplicaCreateWork(this, work);
-        if (isJoiningExistingGroup && !skipLifecycleStatusPersistence &&
-            typeof operationId === 'string' && operationId.length > 0) {
-          const completed = await awaitBoundedReplicaAdmission(
-            this, () => partitionService.requestReplicaAdmission(operationId),
-            activationDeadlineAtMs);
-          requireReplicaCreateWork(this, work);
-          if (!completed) {
-            throw learnerAdmissionWaitError(
-              replicaId, LEARNER_ADMISSION_WAIT_OUTCOME.DEADLINE_EXCEEDED);
-          }
-        }
-        this.throwIfShuttingDown();
-        if (this.shouldGateActivationOnVoterReadiness(
-          partitionId, operationId, isJoiningExistingGroup, explicitOperationType,
-        )) {
-          this.updateReplicaCreationProgress(progress, {
-            stage: REPLICA_HANDLER_PROGRESS.STAGE_WAITING_VOTER_READY,
-          });
-          await this.waitForVoterReadyActivation(replicaId, partitionId, {
-            deadlineAtMs: activationDeadlineAtMs, expectedService: partitionService,
-            isCreateCurrent,
-          });
-        } else if (isJoiningExistingGroup && !skipLifecycleStatusPersistence) {
-          const admissionWait = await this.waitForLearnerAdmissionActivation(
-            replicaId, partitionId, {
-              deadlineAtMs: activationDeadlineAtMs,
-            },
-          );
-          if (admissionWait?.ready !== true) {
-            requireReplicaCreateWork(this, work);
-            throw learnerAdmissionWaitError(replicaId, admissionWait?.outcome);
-          }
-        }
-        requireReplicaCreateWork(this, work);
         // A retained local identity, an ACTIVE-runtime repair, or bootstrap
         // without operation admission already belongs to its own release
         // owner. Fresh materialized CREATE always enters the release protocol.
@@ -655,8 +612,15 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         let participantReleased = !requiresParticipantRelease;
         const activate = async (deadlineAtMs) => {
           work.retained = false;
+          stopCreateReadinessWake(work);
           try {
             requireReplicaCreateWork(this, work);
+            // SYNCING owns the attached runtime. The caller's budget bounds
+            // observation, while the service owns and drives the same request.
+            if (!work.admissionReady) {
+              await waitForMaterializedCreateReadiness(
+                this, work, request, deadlineAtMs, isJoiningExistingGroup);
+            }
             // The named release operation owns a committed origin even when
             // this caller cannot observe its reply. Only a current, timely
             // answer advances the local activation checkpoint.
@@ -740,7 +704,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               deadlineAtMs: activationDeadlineAtMs,
               release: () => releaseReplicaCreateWork(this, work),
             };
-            armCreateAdmissionRecoveryRearm(this);
+            if (work.waitingForReadiness) retainCreateReadinessWake(this, work);
+            else if (work.admissionReady || !work.activationObservation) {
+              armCreateAdmissionRecoveryRearm(this);
+            }
           }
         };
         await activate(activationDeadlineAtMs);

@@ -15,7 +15,9 @@ import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-ident
 import {isBoundMembershipPublicationEpoch} from './replica-operation-membership-epoch-binding.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken} from './replica-create-admission-token.js';
-import {bindReplaceCreateTargetReplicaId} from './operation-workflow-replace-target-binding.js';
+import {
+  bindReplaceCreateTargetReplicaId, requiresPlacementCreateBootstrapTopology,
+} from './operation-workflow-replace-target-binding.js';
 import {
   isRetainedCreateDeliveryResolution, resolveAmbiguousCreateDeliveryFailure,
   scheduleUnretainedCreateDelivery,
@@ -178,10 +180,9 @@ function allowCreateDispatchAuthority(operation) {
 /**
  * Re-read the operation owner's row before every CREATE delivery. The first
  * SENDING delivery normally observes no admission and proceeds with its
- * deterministic proposed token. Once the handler has admitted the operation,
- * every retry adopts that exact durable tuple instead of rebuilding a token
- * from mutable workflow updated_at. This also makes a terminal-first row stop
- * before a late delivery reaches the handler.
+ * deterministic proposed token. After admission, every retry adopts the
+ * durable tuple so mutable workflow timestamps cannot rebuild its token.
+ * Native placement binding already observed its exact committed record.
  * @param {Object} owner
  * @param {Object} operation
  * @param {boolean} replaceRemoveDispatchPhase
@@ -216,10 +217,9 @@ async function refreshCreateDispatchAuthority(
   operation,
   replaceRemoveDispatchPhase,
 ) {
-  if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase)) {
-    return allowCreateDispatchAuthority(operation);
-  }
-  if (DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep)) {
+  if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) ||
+      DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep) ||
+      requiresPlacementCreateBootstrapTopology(operation, replaceRemoveDispatchPhase)) {
     return allowCreateDispatchAuthority(operation);
   }
   const observation =
