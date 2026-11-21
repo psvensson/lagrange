@@ -197,6 +197,9 @@ class BootstrapService extends EventEmitter {
         undefined;
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
+    // The declared host identity (topology/node-host-identity.js); the seed's
+    // NODES registration refuses without it.
+    this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.wsPort = options.wsPort || null;
     this.config = {...BOOTSTRAP_DEFAULT, ...options.config};

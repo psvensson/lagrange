@@ -9,6 +9,7 @@
  * - Shared setup ownership boundaries remain intact (Req 9.5, 11.1)
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {describe, it, beforeEach} from 'node:test';
 import assert from 'node:assert';
 import {
@@ -483,6 +484,7 @@ describe('Shared setup ownership (Req 9.5, 11.1)', () => {
     );
 
     const joiner = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'join-owner-node',
       nodeAddress: 'ws://localhost:9000',

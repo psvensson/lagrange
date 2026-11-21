@@ -5,6 +5,7 @@ import {resolveListenerPorts} from './config/listener-port-model.js';
 import {TRANSPORT_CONFIG_KEY} from './constants/transport.js';
 import {resolveAdvertisedWebSocketAddress} from
   './transport/node-address-resolution.js';
+import {requireDeclaredNodeHostId} from './topology/node-host-identity.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_ENV,
@@ -142,10 +143,22 @@ function resolveRuntimeAddresses(config) {
   };
 }
 
+/**
+ * The node's declared host identity (NODE_HOST_ID, config node.hostId): a
+ * required boot-time value. Absent or malformed, the start is refused with
+ * the typed configuration error of topology/node-host-identity.js.
+ * @param {Object} config
+ * @return {string}
+ */
+function resolveRuntimeHostId(config) {
+  return requireDeclaredNodeHostId(config.get(CONFIG_KEY.NODE_HOST_ID));
+}
+
 export {
   checkVersionFlag,
   parseCommandLineArgs,
   parsePositiveTimeoutMs,
   resolveRuntimeAddresses,
+  resolveRuntimeHostId,
   resolveRolloutControlsFromEnvironment,
 };

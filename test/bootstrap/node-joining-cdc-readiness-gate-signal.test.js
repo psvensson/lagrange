@@ -5,6 +5,7 @@
  * active. If timeout expires, advertise with degraded status.
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -39,6 +40,7 @@ test('awaitCdcSubscriptionsForReadiness - passes immediately when active',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
@@ -65,6 +67,7 @@ test('awaitCdcSubscriptionsForReadiness - waits until flag becomes true',
 
     let sleepCallCount = 0;
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
@@ -115,6 +118,7 @@ test('awaitCdcSubscriptionsForReadiness - proceeds after timeout with warning',
 
     const logMessages = [];
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
@@ -172,6 +176,7 @@ test('signalReadyForReplicas - calls awaitCdcSubscriptionsForReadiness',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',

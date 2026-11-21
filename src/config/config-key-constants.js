@@ -11,6 +11,9 @@ const CONFIG_KEY = Object.freeze({
   NODE_FAILURE_DETECTION_INTERVAL_MS: 'node.failureDetectionIntervalMs',
   NODE_ADDRESS: 'node.address',
   NODE_ADVERTISED_WS_ADDRESS: 'node.advertisedWsAddress',
+  // The machine this node runs on (topology/node-host-identity.js): required
+  // at boot, no default.
+  NODE_HOST_ID: 'node.hostId',
   NODE_SEED_NODE_ADDRESS: 'node.seedNodeAddress',
   NODE_SEED_NODE_WS_ADDRESS: 'node.seedNodeWsAddress',
 

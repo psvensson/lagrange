@@ -12,6 +12,7 @@
 // boundaries production already has - an event the router emits, a delegate
 // the phase calls, a field the bootstrap service sets - and nothing
 // production does depends on whether anyone is watching.
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {reserveSimulatedBootIncarnation} from
   './formation-sim-boot-incarnation.js';
@@ -350,6 +351,7 @@ function createProductionSeedSimHostSync(environment, options = {}) {
   let bootstrap;
   try {
     bootstrap = new BootstrapService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId, nodeAddress, wsPort,
       dataDir,
       dataDirectoryManager,

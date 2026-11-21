@@ -27,6 +27,8 @@
  * (`version`, `bootedSrcFingerprint`).
  */
 import {REQUEST_CELL_AUTH} from './constants.js';
+import {requireDeclaredNodeHostId} from
+  '../../../src/topology/node-host-identity.js';
 import {
   DateConstructor,
   arrayFilter,
@@ -144,9 +146,9 @@ function nodeIdOf(index) {
   return `${NODE_ID_PREFIX}${stringPadStart(stringOf(index + 1), NODE_ID_WIDTH, '0')}`;
 }
 
-function nodeEnv({nodeId, host, seedHost, connection}) {
+function nodeEnv({nodeId, host, hostName, seedHost, connection}) {
   const env = {
-    NODE_ID: nodeId, DATA_DIR, NODE_ADDRESS: `${host}:${PORT.REST}`,
+    NODE_ID: nodeId, NODE_HOST_ID: hostName, DATA_DIR, NODE_ADDRESS: `${host}:${PORT.REST}`,
     REST_API_PORT: PORT.REST, ADMIN_WS_PORT: PORT.ADMIN, TRANSPORT_WS_PORT: PORT.TRANSPORT,
     TRANSPORT_WS_HOST: '0.0.0.0', ADMIN_WS_HOST: '0.0.0.0',
     ADMIN_ALLOW_INSECURE_EXTERNAL_BIND: 'true',
@@ -542,13 +544,31 @@ function exhaustedEndpoint(listener, roles) {
     port: listener.port, containerId: node.containerId, binding: null};
 }
 
+// The host identity a node declares (NODE_HOST_ID, required at boot; owner
+// decision D3 2026-11-17): the name of the machine its container runs on,
+// observed on that machine. An unreadable or invalid answer refuses the node
+// before it starts; the name is never derived from the address.
+const HOST_NAME_COMMAND = 'hostname';
+
+async function observeHostName({sshRun, opts, host}) {
+  const answer = stringTrim(stringOf(await sshRun(host, opts, HOST_NAME_COMMAND) ?? ''));
+  try {
+    return requireDeclaredNodeHostId(answer);
+  } catch (error) {
+    throw deploymentFailure(DEPLOYMENT_FAILURE.DEPLOYMENT_COMMAND_FAILED,
+      `host ${host} answered ${HOST_NAME_COMMAND} ${JSON.stringify(answer)}: ${error.message}`,
+      {host, reason: 'host_name_unreadable', answer});
+  }
+}
+
 async function startLagrangeNode({sshRun, opts, host, seedHost, image, connection, campaignId,
   index}) {
   const nodeId = nodeIdOf(index);
+  const hostName = await observeHostName({sshRun, opts, host});
   const started = await dockerRunDetached({sshRun, opts, host, campaignId, role: NODE_ROLE,
     ordinal: index + 1, image: imageForHost(opts, host, image),
     dockerArgs: [...storageArgs(opts, campaignId, index),
-      ...nodeEnv({nodeId, host, seedHost, connection})]});
+      ...nodeEnv({nodeId, host, hostName, seedHost, connection})]});
   return {role: NODE_ROLE, host, containerId: started.containerId, nodeId};
 }
 

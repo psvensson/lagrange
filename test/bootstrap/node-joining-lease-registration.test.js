@@ -3,6 +3,7 @@
  * before the explicit ready-signal checkpoint runs.
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -88,6 +89,7 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
     };
 
     const service = new NodeJoiningService({
+      hostId: LOCAL_MACHINE_HOST_ID,
       nodeId: 'joining-test-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

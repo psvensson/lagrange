@@ -22,6 +22,8 @@ import {
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
 } from './node-registration-owner-constants.js';
+import {requireDeclaredNodeHostId} from
+  '../../topology/node-host-identity.js';
 
 // The error code a registration failure surfaces: the direct `code` when
 // present, else the alternate `errorCode` carrier, else nothing.
@@ -73,6 +75,10 @@ class NodeRegistrationOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.nodeAddress = options.nodeAddress;
+    // The declared host identity (topology/node-host-identity.js): every
+    // NODES row this owner writes carries it; without it the node refuses to
+    // register.
+    this.hostId = options.hostId;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
     this.authoritativeControlPlaneView = null;
@@ -94,6 +100,9 @@ class NodeRegistrationOwner {
     const now = this.delegates.getNow()();
 
     try {
+      // Refused before any registration effect: no NODES row is written
+      // without the node's declared host.
+      requireDeclaredNodeHostId(this.hostId);
       const existingMembership =
         await this.resolveExistingDurableRejoinMembership(now);
       if (existingMembership) {
@@ -237,6 +246,7 @@ class NodeRegistrationOwner {
     return buildNodeRegistrationRow({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      hostId: this.hostId,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
       bootIncarnation: this.getRegistrationBootIncarnation(),
       storageIncarnation: this.getRegistrationStorageIncarnation(),

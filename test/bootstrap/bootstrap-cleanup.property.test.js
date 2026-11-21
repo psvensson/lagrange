@@ -12,6 +12,7 @@
  * Feature: architecture-violations-cleanup, Property 3
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
@@ -74,6 +75,7 @@ const PHASE_CLEANUP_INCLUDES = Object.freeze({
  */
 function createTrackedBootstrapService(cleanupContext) {
   const service = new BootstrapService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId: 'test-seed-node',
     nodeAddress: 'http://localhost:3000',

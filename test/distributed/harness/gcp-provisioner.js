@@ -462,6 +462,10 @@ class GCPProvisioner {
         hostInfo: arrayMap(ips, (externalIp, i) => ({
           externalIp,
           internalIp: internalIps[i],
+          // The VM's name, which GCE also makes its hostname: the host
+          // identity its nodes declare (scenario-host-topology.js
+          // resolveProviderHostName).
+          hostName: this._vmNames[i],
         })),
         tls: clientTls,
       };

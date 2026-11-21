@@ -199,9 +199,21 @@ function lagrangeSystemTableRules(nodeIds, hosts) {
   ];
 }
 
+// Each data host's machine name, as `hostname` answers on it: the host
+// identity the deployer declares for the node it starts there.
+function dataHostName(host) {
+  return `data-host-${arrayJoin(stringSplit(host, '.'), '-')}`;
+}
+
+// Every data host answers `hostname` with its machine name.
+function dataHostNameRules() {
+  return [[/^hostname$/u, (command, host) => dataHostName(host)]];
+}
+
 function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.3']} = {}) {
   const seedHost = hosts[0];
   return [
+    ...dataHostNameRules(),
     // --storage-root: the node directory preparation (a fresh directory).
     [/^docker run --rm .*chown 10001:10001 \/campaign\//u, '\n__exit_code=0'],
     ...lagrangeSystemTableRules(LAGRANGE_NODE_IDS.slice(0, hosts.length), hosts),
@@ -296,6 +308,8 @@ export {
   postgresHealthyRules,
   tidbHealthyRules,
   createContainerLedger,
+  dataHostName,
+  dataHostNameRules,
   dockerRules,
   http,
   lagrangeHealthyRules,

@@ -6,6 +6,7 @@
  * node leases; projection reason codes never grant floor credit.
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildClusterIncarnationFence,
@@ -744,6 +745,7 @@ test('NodeRegistrationOwner + UnifiedRebalancer storageIncarnation continuity co
         },
       );
       const owner = new NodeRegistrationOwner({
+        hostId: LOCAL_MACHINE_HOST_ID,
         nodeId: TEST_JOINER_NODE_ID_B,
         nodeAddress: `ws://${TEST_JOINER_NODE_ID_B}:9000`,
         membershipPublicationRuntimeOwner,

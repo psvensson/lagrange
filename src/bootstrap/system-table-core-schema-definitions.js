@@ -170,6 +170,12 @@ const NODES_SCHEMA = {
       defaultValue: `'${LATENCY_ASSIGNMENT_STATE.UNASSIGNED}'`,
     },
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    // The node's declared host identity (topology/node-host-identity.js),
+    // written by every registration from the required boot-time value. No
+    // default: a row an older version wrote has none and reads as
+    // HOST_UNDECLARED. Last, so an existing table gains it in place
+    // (partition-service-table-bootstrap.js) with the same DDL text.
+    {name: 'host_id', type: COLUMN_TYPE.TEXT},
   ],
   indices: [
     {name: 'idx_nodes_address', columns: ['node_address']},

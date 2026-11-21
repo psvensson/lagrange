@@ -166,7 +166,7 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
 
   const sourceDryRun = await runEntrypoint(mainEntrypoint, {
     args: ['--dry-run'],
-    env: {LOG_LEVEL: 'error'},
+    env: {LOG_LEVEL: 'error', NODE_HOST_ID: os.hostname()},
     timeoutMs: 15000,
   });
   t.equal(sourceDryRun.exitCode, 0, 'source entrypoint dry-run exits cleanly');
@@ -178,7 +178,7 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
 
   const bundleDryRun = await runEntrypoint(mainBundle, {
     args: ['--dry-run'],
-    env: {LOG_LEVEL: 'error'},
+    env: {LOG_LEVEL: 'error', NODE_HOST_ID: os.hostname()},
     timeoutMs: 15000,
   });
   t.equal(bundleDryRun.exitCode, 0, 'bundle dry-run exits cleanly');
@@ -192,7 +192,7 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
   // it by its own runtime owner: the dry run reports that owner's verdict. A
   // real process, so the report is read after the dry run has finished.
   const bundleBinding = await runSpawnedBundle(['--dry-run'],
-    {LOG_LEVEL: 'info'});
+    {LOG_LEVEL: 'info', NODE_HOST_ID: os.hostname()});
   const bindingCompletion = dryRunCompletion(bundleBinding.stdout);
   const bindingReport = bindingCompletion?.raftRsBinding;
   t.equal(bundleBinding.exitCode, 0, 'bundle binding dry-run exits cleanly');
@@ -207,7 +207,8 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
   // the dry run must refuse, at the quietest ordinary log level.
   const unstagedRoot = fs.mkdtempSync(join(os.tmpdir(), 'lagrange-sea-unstaged-'));
   t.teardown(() => fs.rmSync(unstagedRoot, {recursive: true, force: true}));
-  const unstagedRun = await runSpawnedBundle(['--dry-run'], {LOG_LEVEL: 'error'},
+  const unstagedRun = await runSpawnedBundle(['--dry-run'],
+    {LOG_LEVEL: 'error', NODE_HOST_ID: os.hostname()},
     {bundle: layOutBundleWithoutBinding(unstagedRoot)});
   const unstagedCompletion = dryRunCompletion(unstagedRun.stdout);
   t.not(unstagedRun.exitCode, 0,

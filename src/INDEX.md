@@ -63,7 +63,7 @@ documentClass: generated
 - [entrypoint-runtime-shutdown-lifecycle.js](entrypoint-runtime-shutdown-lifecycle.js) - Connect structured logging persistence to the replicated logs table. (importers: few)
 - [entrypoint-startup-acquisition-ledger.js](entrypoint-startup-acquisition-ledger.js) - No leading comment; first export: acquireStartupOwner. (importers: many)
 - [index.js](index.js) - Daemon-only process adapter. (importers: one)
-- [lagrange-runtime-process-claim.js](lagrange-runtime-process-claim.js) - No leading comment; first export: claimProcessRuntime. (importers: few)
+- [lagrange-runtime-process-claim.js](lagrange-runtime-process-claim.js) - No leading comment; first export: claimProcessRuntime. (importers: many)
 - [lagrange-runtime-startup.js](lagrange-runtime-startup.js) - No leading comment; first export: startLagrangeRuntime. (importers: many)
 - [public-api.js](public-api.js) - Side-effect-free public API for embedding Lagrange components. (importers: few)
 - [sea-entry.js](sea-entry.js) - Single Executable Application Entry Point This entry point handles version/help flags before loading the main... (importers: none)

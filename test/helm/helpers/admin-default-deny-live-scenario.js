@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {mkdir, writeFile} from 'node:fs/promises';
+import {hostname} from 'node:os';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
@@ -66,6 +67,7 @@ const MANIFEST = Object.freeze({
   VALUE_PROPERTY: 'value',
   POD_NAME_FIELD: 'metadata.name',
   POD_NAMESPACE_FIELD: 'metadata.namespace',
+  NODE_NAME_FIELD: 'spec.nodeName',
 });
 
 const RUNTIME = Object.freeze({
@@ -316,6 +318,9 @@ function resolveRenderedEnvironment(container) {
   const fieldValues = {
     [MANIFEST.POD_NAME_FIELD]: LIVE_PROOF.POD_NAME,
     [MANIFEST.POD_NAMESPACE_FIELD]: LIVE_PROOF.NAMESPACE,
+    // The proof container runs on this machine: the Kubernetes node it
+    // stands in for (the chart's NODE_HOST_ID).
+    [MANIFEST.NODE_NAME_FIELD]: hostname(),
   };
   for (const entry of container.env || []) {
     if (Object.hasOwn(entry, MANIFEST.VALUE_PROPERTY)) {

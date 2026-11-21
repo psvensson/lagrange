@@ -314,6 +314,9 @@ export async function buildRemoteConfig(baseConfigPath, nodes, ports, outputPath
       hostInfo: nodes.map((node, index) => ({
         internalIp: node.ip,
         externalIp: node.ip,
+        // The lab host name: the host identity the node declares
+        // (scenario-host-topology.js resolveProviderHostName).
+        hostName: node.name,
         ...(machineIds ? {machineId: machineIds[index]} : {}),
       })),
       buildOnHosts: true,

@@ -11,6 +11,7 @@
  * Feature: bootstrap-architecture-refactoring, Property 7: Return Value Completeness
  */
 
+import {LOCAL_MACHINE_HOST_ID} from '../test-helpers/declared-node-host.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeService} from '../../src/node/node-service.js';
@@ -207,6 +208,7 @@ const SHORT_LEADERSHIP_WAIT = Object.freeze({
 // failure result structure the API contract names.
 async function unseededJoinResult(nodeId) {
   const joiningService = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId,
     nodeAddress: 'localhost:9999',
@@ -257,6 +259,7 @@ function createMockHttpPost(nodeId) {
 // success and is skipped, as before).
 async function mockedJoinResult(nodeId, wsPort) {
   const joiningService = new NodeJoiningService({
+    hostId: LOCAL_MACHINE_HOST_ID,
     bootIncarnation: 1,
     nodeId,
     nodeAddress: `localhost:${wsPort}`,
