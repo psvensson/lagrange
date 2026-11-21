@@ -2,8 +2,13 @@ import {createHash, randomUUID} from 'node:crypto';
 import {deserialize, serialize} from 'node:v8';
 import {NAMED_WRITE_ATTEMPT, belongsToNamedWrite, judgeNamedWriteOutcome} from
   './control-plane-named-write-outcome.js';
-import {createNamedWriteCaller, requireNamedWriteWaitBudget, waitForNamedWriteDelivery} from
-  './control-plane-named-write-wait.js';
+import {
+  completeNamedWriteDelivery,
+  createNamedWriteCaller,
+  createNamedWriteDelivery,
+  requireNamedWriteWaitBudget,
+  waitForNamedWriteDelivery,
+} from './control-plane-named-write-wait.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {ERRORS} from '../constants/errors.js';
 import {
@@ -257,7 +262,14 @@ function deliveryObservation(state, answer) {
 // All joiners see the one real transport answer. Each waiter owns its own
 // deadline and cancellation, while the exposed delivery keeps its custody.
 function beginDelivery(record, attempt, caller) {
-  const delivery = Promise.resolve().then(async () => {
+  const delivery = createNamedWriteDelivery();
+  record.delivery = delivery;
+  const complete = (observation) => {
+    record.delivery = null;
+    releaseSettledInstance(record);
+    completeNamedWriteDelivery(delivery, observation);
+  };
+  Promise.resolve().then(async () => {
     try {
       requireNamedWriteWaitBudget(caller);
     } catch (answer) {
@@ -274,11 +286,10 @@ function beginDelivery(record, attempt, caller) {
       settleInstance(record, answer);
       return deliveryObservation(WRITE_DELIVERY.ERROR, answer);
     }
-  }).finally(() => {
-    record.delivery = null;
-    releaseSettledInstance(record);
+  }).then(complete, (error) => {
+    record.unresolved = true;
+    complete(deliveryObservation(WRITE_DELIVERY.ERROR, error));
   });
-  record.delivery = delivery;
   return delivery;
 }
 

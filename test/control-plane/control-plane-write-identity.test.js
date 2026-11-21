@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
+import {completeNamedWriteDelivery, createNamedWriteCaller, createNamedWriteDelivery,
+  waitForNamedWriteDelivery} from '../../src/control-plane/control-plane-named-write-wait.js';
 
 import {
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
@@ -363,4 +365,28 @@ test('authoritative confirmation during delivery survives a late refusal', async
     await Promise.allSettled([first, successor]);
     releaseControlPlaneWriteIdentities(SCOPE);
   }
+});
+
+test('cancelled and expired observers detach before the transport answers', async () => {
+  const delivery = createNamedWriteDelivery();
+  const clock = new VirtualTimeSource();
+  for (let turn = 0; turn < 10; turn += 1) {
+    const cancellationToken = new CancellationToken();
+    const cancelled = assert.rejects(waitForNamedWriteDelivery(delivery,
+      createNamedWriteCaller({timeSource: clock, cancellationToken})), /observer cancelled/);
+    const expired = assert.rejects(waitForNamedWriteDelivery(delivery,
+      createNamedWriteCaller({timeSource: clock, timeoutMs: 7})), {errorCode: 'TIMEOUT'});
+    assert.equal(delivery.waiters.size, 2);
+    cancellationToken.cancel('observer cancelled');
+    clock.advance(7);
+    await Promise.all([cancelled, expired]);
+    assert.equal(delivery.waiters.size, 0);
+    assert.equal(clock.pendingTimerCount(), 0);
+  }
+  const live = waitForNamedWriteDelivery(delivery, createNamedWriteCaller({timeSource: clock}));
+  const answer = {success: true};
+  completeNamedWriteDelivery(delivery, answer);
+  assert.equal(await live, answer);
+  assert.equal(delivery.waiters.size, 0);
+  assert.equal(clock.pendingTimerCount(), 0);
 });
