@@ -37,6 +37,7 @@ import {
 import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../../src/cdc/cdc-integration-service.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
+  createOperationAt,
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   TERMINAL_STATUSES,
@@ -56,6 +57,14 @@ import {PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER} from
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
+import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
+import {PLACEMENT_REFUSAL} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {NODE as PLACEMENT_NODE, placementStatement} from
+  '../partition/placement-admission-fixture.js';
+import {stepRetainedLedgerRow, withRepairLedger} from
+  '../partition/placement-retained-row-repair-fixture.js';
 import {createCoordinatorSqlStore, createMockCache, createTestCoordinator} from './test-helpers.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './replica-operation-repository-deferred-visibility-test-cases.js';
@@ -889,45 +898,67 @@ test('zero-change operation insert collision rejects mismatched leader content',
   });
 
 
-test('CL-017(b): zero-row update with missing authoritative row re-inserts the owner copy', async (t) => {
-  const executedSql = [];
-  const repo = createTestRepository({
-    authoritativeVisibilityTimeoutMs: 0,
-    controlPlaneSystemTableGateway: {
-      executeQuery: async (sql) => {
-        executedSql.push(sql);
-        if (sql.trim().toUpperCase().startsWith('INSERT')) {
-          return {success: true, changes: 1};
-        }
-        // The UPDATE commits but affects zero rows — the row is missing
-        // from the partition state that applied the write (the post-churn
-        // divergence witness).
-        return {success: true, changes: 0};
-      },
-      readRows: async () => ({success: true, rows: []}),
-    },
-  });
-  const operation = repo.rowToOperation(
-    makeRow({
-      status: TEST_PENDING_STATUS,
-      workflow_step: WORKFLOW_STEP.SENDING,
-    }),
-  );
+test('CL-017(b): zero-row update restores a missing ordinary copy through native admission',
+  (t) => withRepairLedger(async (world) => {
+    const {leader, coordinator, gateway, partitionId, commands} = world;
+    const {repository} = coordinator;
+    const operationId = 'cl017-retained-copy';
+    const operation = createOperationAt({
+      operationId, type: OperationType.ADD, partitionId,
+      replicaId: `${partitionId}-retained`, sourceNodeId: PLACEMENT_NODE.A,
+      targetNodeId: PLACEMENT_NODE.B, membershipPublicationEpoch: 7,
+      targetNodeBootIncarnation: 1, targetNodeStorageIncarnation: 1,
+    }, Date.now());
+    operation.entityType = SERVICE_TYPE.PARTITION;
+    operation.entityId = partitionId;
+    operation.copySourceNodeId = PLACEMENT_NODE.A;
+    await repository.persistNewOperation(operation);
+    await stepRetainedLedgerRow(world, operationId, WORKFLOW_STEP.CREATING);
+    const sending = await stepRetainedLedgerRow(world, operationId, WORKFLOW_STEP.SENDING);
+    const retained = repository.rowToOperation(sending);
+    const read = leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?');
+    const loseCommittedRow = async () => {
+      const answer = await gateway.submitMutation({
+        tableName: 'replica_operations', operation: 'delete',
+        whereClause: {operation_id: operationId},
+      });
+      t.equal(answer.partitionResult.affectedRows, 1, 'the actual row was removed');
+      t.equal(read.get(operationId), undefined, 'the ledger now has no retained row');
+    };
+    const repair = () => repository.persistOperationUpdate(retained, {
+      expectedWorkflowStep: WORKFLOW_STEP.CREATING,
+    });
+    await loseCommittedRow();
+    const restored = await repair();
+    t.equal(restored.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+    t.match(read.get(operationId), {
+      operation_id: operationId, replica_id: retained.replicaId,
+      created_at: retained.createdAt, workflow_step: WORKFLOW_STEP.SENDING,
+    }, 'the native owner restored the identical retained SENDING row');
+    t.same(commands.map(({type}) => type), ['PLACEMENT_REPAIR'],
+      'the zero-row update used the committed placement repair command');
 
-  const persisted = await repo.persistOperationUpdate(operation, {
-    expectedWorkflowStep: WORKFLOW_STEP.CREATING,
-  });
-
-  t.equal(
-    persisted.disposition,
-    REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
-    'divergence path recovers by re-inserting instead of failing',
-  );
-  t.ok(
-    executedSql.some((sql) => sql.trim().toUpperCase().startsWith('INSERT')),
-    'owner copy re-inserted after the zero-row update',
-  );
-});
+    await loseCommittedRow();
+    const competitor = await requestPlacementAdmission(leader, {
+      entryId: 'cl017-competing-remove',
+      body: placementStatement({
+        partitionId, type: OperationType.REMOVE, target: PLACEMENT_NODE.C,
+        replicaId: `${partitionId}-r2`,
+        voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1},
+      }),
+    });
+    const competitorId = competitor.placementResult.operationIds[0];
+    t.ok(read.get(competitorId), 'an actual committed competitor owns the live lane');
+    const refused = await repair();
+    t.equal(refused.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED);
+    t.equal(read.get(operationId), undefined, 'the missing owner copy cannot overtake the incumbent');
+    const settlement = commands.at(-1);
+    const recorded = readCommittedStatementOutcome(leader, leader.getCommittedEntryKey(settlement));
+    t.match(JSON.parse(recorded.ownerResultText), {
+      reason: PLACEMENT_REFUSAL.PARTITION_BUSY,
+      operationIds: [competitorId],
+    }, 'the committed native refusal names the exact competing holder');
+  }));
 
 test('missing authoritative row never resurrects a stale create admission tuple',
   async (t) => {
