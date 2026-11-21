@@ -113,8 +113,10 @@ function assertBeforeOrder(result, cell) {
   assert.ok(acceptedVote.order < call.order, 'V is accepted before the selected turn begins');
   const selected = selectedEntries(result, cell);
   if (cell.decision === 'D3') {
-    assert.equal(selected.length, 1, 'the pre-capture proposal reaches its native refusal');
-    assert.ok(vote.order < selected[0].order, 'V enters native before the proposal');
+    // A core that no longer leads never proposes (raft-rs-proposal-term.js):
+    // the proposal is refused, with the core's own answer, before any native
+    // propose.
+    assert.deepEqual(selected, [], 'the proposal after V never reaches native propose');
   } else {
     assert.deepEqual(selected, [], 'refused transfers never invoke a native transfer step');
   }
