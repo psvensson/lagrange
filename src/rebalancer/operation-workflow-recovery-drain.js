@@ -18,8 +18,10 @@ import {reconcileReservationBackedPendingOperation} from
 import {
   REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
   isPartitionReplace,
-  isTargetFailureDetectorDead,
 } from './operation-workflow-replace-owner.js';
+import {buildElapsedOperationFailureGuard} from
+  './operation-workflow-replace-terminal-admission.js';
+
 const {
   FAILURE_LOG_LEVEL, OPERATION_LIFECYCLE_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType, PRIORITY_RECOVERY_BLOCKER_REASON, PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -673,6 +675,25 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
+  async settleStalePriorityRecoveryDrain(operation, ownerState) {
+    const confirmedTargetDeath = this.isReplaceDrainOwnerUnavailableWithDeadTarget(
+      operation,
+      {remoteOwnerUnavailable: ownerState ===
+        PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED},
+    );
+    const error = confirmedTargetDeath ? REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED :
+      OPERATION_WORKFLOW_OWNER_LITERAL
+        .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE;
+    const guard = confirmedTargetDeath ? null : buildElapsedOperationFailureGuard(operation);
+    const outcome = await this.failOperation(
+      operation, error, {logLevel: FAILURE_LOG_LEVEL.WARN, ...guard},
+    );
+    if (outcome?.createAdmissionWon === true) {
+      this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation);
+    }
+    return isTerminalTransitionOutcomeSettled(outcome);
+  }
+
   async reconcilePriorityRecoveryOperationDrain(
     operation,
     drainSnapshot = null,
@@ -717,19 +738,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation,
         resolvedDrainSnapshot,
       );
-      return isTerminalTransitionOutcomeSettled(
-        await this.failOperation(
-          operation,
-          // R-1c names its own settlement; step-age staleness before the
-          // intent keeps the drain's message.
-          isPartitionReplace(operation) &&
-            isTargetFailureDetectorDead(this, operation) ?
-            REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED :
-            OPERATION_WORKFLOW_OWNER_LITERAL
-              .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
-          {logLevel: FAILURE_LOG_LEVEL.WARN},
-        ),
-      );
+      return this.settleStalePriorityRecoveryDrain(operation, resolvedDrainSnapshot.ownerState);
     }
     if (
       resolvedDrainSnapshot.action !==

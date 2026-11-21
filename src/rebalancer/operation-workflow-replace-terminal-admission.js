@@ -27,6 +27,8 @@ import {
   REPLACE_POST_INTENT_FAILURE,
   decideReplaceCompletion,
   isPartitionReplace,
+  isReplaceExemptFromTimeBudget,
+  isReplacePromotionInLog,
   isReplaceRemovalIntentDurable,
 } from './operation-workflow-replace-owner.js';
 
@@ -123,6 +125,20 @@ function isPartitionAdd(operation) {
     (operation?.entityType === undefined ||
       operation?.entityType === null ||
       operation?.entityType === SERVICE_TYPE.PARTITION);
+}
+
+const ELAPSED_CREATE_FAILURE_GUARD = Object.freeze({
+  requireCreateAdmissionAbsent: true,
+  deferWhenCreateAdmissionWins: true,
+});
+
+function buildElapsedOperationFailureGuard(operation) {
+  // Age cannot establish target failure. Serialize against admission while
+  // the CREATE owns the next effect. Promotion and removal have distinct owners.
+  const replaceBuildingTarget = isPartitionReplace(operation) &&
+    !isReplaceExemptFromTimeBudget(operation) && !isReplacePromotionInLog(operation);
+  return isPartitionAdd(operation) || replaceBuildingTarget ?
+    ELAPSED_CREATE_FAILURE_GUARD : null;
 }
 
 /**
@@ -596,6 +612,7 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
 export {
   admitCreateTerminalFailure,
   admitReplaceTerminalRepair,
+  buildElapsedOperationFailureGuard,
   decideFailedCreateTargetCleanup,
   revalidateCreateTerminalFailure,
 };
