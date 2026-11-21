@@ -238,6 +238,7 @@ documentClass: generated
 - [replica-placement-owner-deficits.js](replica-placement-owner-deficits.js) - The placement deficit model of the one replica placement owner (quest replica-placement-admission-owner, design... (importers: many)
 - [replica-placement-owner-order.js](replica-placement-owner-order.js) - The one admission order of the replica placement owner (quest replica-placement-admission-owner, design section... (importers: many)
 - [replica-placement-owner-pass-observation.js](replica-placement-owner-pass-observation.js) - Public entry: createPlacementObservation, beginPlacementPass, placementPassSnapshot, PLACEMENT_PASS_CHECKPOINT and... (importers: few)
+- [replica-placement-owner-proposal-knowledge.js](replica-placement-owner-proposal-knowledge.js) - Public entry: createProposalProgress, recordProposalHandover, recordProposalAnswer, classifyCandidateFailure,... (importers: one)
 - [replica-placement-owner-remove.js](replica-placement-owner-remove.js) - Public entry: canAdmitRemoveUnderPass. (importers: one)
 - [replica-placement-owner-retained-repair-routing.js](replica-placement-owner-retained-repair-routing.js) - No leading comment; first export: prepareRetainedPlacementRepairBody. (importers: one)
 - [replica-placement-owner-retained-repair-statement.js](replica-placement-owner-retained-repair-statement.js) - No leading comment; first export: buildCurrentRetainedCopyPolicy. (importers: few)

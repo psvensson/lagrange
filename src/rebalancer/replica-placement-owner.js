@@ -49,9 +49,13 @@ import {
   PLACEMENT_PASS_CHECKPOINT as CHECKPOINT, beginPlacementPass, completePass,
   createPlacementObservation, directSubmissionRecord, markPassStale, markPassWaiting,
   placementPassSnapshot, recordCapacityCheck, recordFenced,
-  recordNodeAuthorityWait, recordPassEvaluations,
-  recordCandidateFailure, recordPassFailure, recordProposal, recordSubmissionAnswer,
+  recordAdmittedOperation, recordNodeAuthorityWait, recordPassEvaluations,
+  recordPassFailure, recordProposal, recordSubmissionAnswer,
 } from './replica-placement-owner-pass-observation.js';
+import {
+  CANDIDATE_FAILED, classifyCandidateFailure, createProposalProgress, recordProposalAnswer,
+  recordProposalHandover,
+} from './replica-placement-owner-proposal-knowledge.js';
 import {
   PLACEMENT_TERM_START, createTenureCustody, isTermStartApplied, requestLeadershipStartCdcDrive,
   tenureFenceRefusal,
@@ -63,8 +67,6 @@ const ENTRY_KIND_ADMIT = 'admit';
 const SKIPPED_PARTITION_STATUSES = Object.freeze(new Set(['splitting', 'merging']));
 const LOG_PASS_FAILED = 'Replica placement pass failed; its triggers wait for the next wake';
 const LOG_CANDIDATE_FAILED = 'Replica placement candidate failed; the pass goes on';
-// The typed answer of a candidate whose proposal threw (recorded for it).
-const CANDIDATE_FAILED = Object.freeze({state: 'CANDIDATE_FAILED'});
 
 function rowSignatureOf(row) {
   return `${row.workflow_step}:${row.status}:${row.steps_history}`;
@@ -311,8 +313,9 @@ class ReplicaPlacementOwner {
     return custody.running;
   }
 
-  // A pass that throws (it aborts: a failure outside the candidate loop)
-  // keeps its triggers in the custody for the next pass and ends the drain:
+  // A pass that throws (it aborts: a failure outside the candidate loop, or a
+  // candidate admitted or of unknown answer whose step then failed) keeps its
+  // triggers in the custody for the next pass and ends the drain:
   // the next one starts only on the next wake (a trigger or the resync), so
   // repeated failures run at most one pass per wake. A failed CANDIDATE
   // retains nothing: planning re-derives it from the census on the next wake,
@@ -384,11 +387,14 @@ class ReplicaPlacementOwner {
     return propose({entryId, body});
   }
 
-  async submitPlacementAttempt(attempt, submitFn, pass) {
+  // `progress` records what is known of this proposal (handed over, answered).
+  async submitPlacementAttempt(attempt, submitFn, pass, progress) {
     const {attemptKey, entryId, body} = attempt;
     this.ownEntryIds.add(entryId);
     try {
+      recordProposalHandover(progress);
       const answer = await submitFn({entryId, body, pass});
+      recordProposalAnswer(progress, answer);
       recordSubmissionAnswer(pass, answer);
       // An obsolete continuation leaves the retained attempt to the current
       // custody (its reconciliation and the settled outcome resolve it).
@@ -406,38 +412,28 @@ class ReplicaPlacementOwner {
 
   async submitHoldRelease(operationId, pass) {
     if (!this.checkpoint(pass, CHECKPOINT.BEFORE_HOLD_RELEASE)) return null;
-    const attempt = this.resolveAttempt(
-      ENTRY_KIND_RELEASE,
-      operationId,
-      operationId,
-      () => Object.freeze({operationId}),
-    );
-    return this.submitPlacementAttempt(attempt, this.releasePlacementHold, pass);
+    const attempt = this.resolveAttempt(ENTRY_KIND_RELEASE, operationId, operationId,
+      () => Object.freeze({operationId}));
+    return this.submitPlacementAttempt(attempt, this.releasePlacementHold, pass,
+      createProposalProgress());
   }
 
   // A4, and A4' (a retained attempt the ledger refused is admitted afresh).
-  async submitCandidateAdmission(candidate, buildStatement, pass) {
+  async submitCandidateAdmission(candidate, buildStatement, pass, progress) {
     const intentKey = moveIntentKeyOf(candidate.partitionId, candidate.move);
     const attemptKey = `${ENTRY_KIND_ADMIT}:${candidate.partitionId}`;
     const hadRetained = this.uncertainEntryIds.get(attemptKey)?.intentKey === intentKey;
-    const attempt = this.resolveAttempt(
-      ENTRY_KIND_ADMIT,
-      candidate.partitionId,
-      intentKey,
-      buildStatement,
-    );
-    const answer = await this.submitPlacementAttempt(attempt, this.admitPlacement, pass);
+    const attempt = this.resolveAttempt(ENTRY_KIND_ADMIT, candidate.partitionId, intentKey,
+      buildStatement);
+    const answer = await this.submitPlacementAttempt(attempt, this.admitPlacement, pass, progress);
     if (!this.checkpoint(pass, CHECKPOINT.AFTER_ADMISSION) || !hadRetained ||
         !isCommittedRefusal(answer)) {
       return answer;
     }
-    const fresh = this.resolveAttempt(
-      ENTRY_KIND_ADMIT,
-      candidate.partitionId,
-      intentKey,
-      buildStatement,
-    );
-    const freshAnswer = await this.submitPlacementAttempt(fresh, this.admitPlacement, pass);
+    const fresh = this.resolveAttempt(ENTRY_KIND_ADMIT, candidate.partitionId, intentKey,
+      buildStatement);
+    const freshAnswer = await this.submitPlacementAttempt(fresh, this.admitPlacement, pass,
+      progress);
     this.checkpoint(pass, CHECKPOINT.AFTER_READMISSION);
     return freshAnswer;
   }
@@ -447,6 +443,7 @@ class ReplicaPlacementOwner {
       {partitionId: statement.partitionId, move: statement.moves[0]},
       () => statement,
       directSubmissionRecord(this.observation, this.custody),
+      createProposalProgress(),
     );
   }
 
@@ -598,7 +595,7 @@ class ReplicaPlacementOwner {
     };
   }
 
-  async proposeOrderedCandidate(rawCandidate, context) {
+  async proposeOrderedCandidate(rawCandidate, context, progress) {
     const {inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets, pass} = context;
     if (busyPartitions.has(rawCandidate.partitionId)) return null;
@@ -623,23 +620,27 @@ class ReplicaPlacementOwner {
         formationLatchEpoch: nodeInput.formation.latchEpoch,
         membershipPublicationEpoch: null,
         positions: {nodesEpoch: nodeInput.epoch?.publicationEpoch ?? null},
-      }), pass);
+      }), pass, progress);
     const result = answer?.[PLACEMENT_RESULT_FIELD];
     if (!this.isPassCurrent(pass) || result?.outcome !== PLACEMENT_OUTCOME.ADMITTED) return null;
     const [operationId] = result.operationIds;
     return {candidate, operationId};
   }
 
-  // A failure attributable to this candidate is recorded for it (once per
-  // pass, so at most once per wake) and the pass goes on with the others.
+  // A candidate's failure is classified by what is known of its proposal
+  // (replica-placement-owner-proposal-knowledge.js): not proposed or refused,
+  // recorded for it (once per pass, so at most once per wake) and the pass
+  // goes on; admitted or of unknown answer, the pass aborts (typed throw).
   async proposeCandidateIsolated(rawCandidate, context) {
+    const progress = createProposalProgress();
     try {
-      return await this.proposeOrderedCandidate(rawCandidate, context);
+      return await this.proposeOrderedCandidate(rawCandidate, context, progress);
     } catch (error) {
-      recordCandidateFailure(context.pass, rawCandidate.partitionId, error);
+      const failed = classifyCandidateFailure(context.pass, rawCandidate.partitionId, progress,
+        error);
       this.logger.warn(LOG_CANDIDATE_FAILED, {nodeId: this.nodeId,
         partitionId: rawCandidate.partitionId, error: error?.message ?? String(error)});
-      return CANDIDATE_FAILED;
+      return failed;
     }
   }
 
@@ -659,7 +660,6 @@ class ReplicaPlacementOwner {
       copyCount: context.copyCount,
       ledgerIncomplete: context.ledgerIncomplete,
     };
-    const operationIds = [];
     for (const rawCandidate of ordered) {
       if (!this.checkpoint(pass, CHECKPOINT.CANDIDATE) ||
           shouldStopPlacementPass(rawCandidate, state)) {
@@ -669,7 +669,7 @@ class ReplicaPlacementOwner {
       if (proposal === null || proposal === CANDIDATE_FAILED) continue;
       const {candidate, operationId} = proposal;
       if (resyncOnly) this.placementResyncAdmissions += 1;
-      operationIds.push(operationId);
+      recordAdmittedOperation(pass, operationId);
       busyPartitions.add(candidate.partitionId);
       state.incompleteCount += 1;
       state.copyCount += recordAdmittedCopyOccupancy(candidate, occupancy, saturatedTargets);
@@ -678,7 +678,6 @@ class ReplicaPlacementOwner {
         break;
       }
     }
-    return operationIds;
   }
 
   // The census after the custody's one leadership-start reconciliation and an
@@ -744,8 +743,8 @@ class ReplicaPlacementOwner {
       recordNodeAuthorityWait(pass, nodeInput);
       return;
     }
-    const admitted = await this.planAndAdmit(pass, census, nodeInput, nowMs, triggers);
-    completePass(pass, SERVE_ELIGIBILITY_STATE.READY, admitted);
+    await this.planAndAdmit(pass, census, nodeInput, nowMs, triggers);
+    completePass(pass, SERVE_ELIGIBILITY_STATE.READY);
   }
 
   // One pass under the custody current at its start (the drain's own).
