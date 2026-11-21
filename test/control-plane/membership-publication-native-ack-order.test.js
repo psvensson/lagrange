@@ -813,3 +813,62 @@ test('the explicit SQL gateway recovers original statement parameters through th
       await Promise.allSettled([first.engine.shutdown(), replacement.engine.shutdown()]);
     }
   }));
+
+test('replacement publication gateway observes the existing write before its first answer',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const {leader} = ledger;
+    const row = publicationRow(9, NODES, WRITER_TIME);
+    await writer.coordinator.persistPublicationBirth(row);
+    const preimage = await writer.owner.getPublication(row.publication_id);
+    const mutation = {...preimage, reason_code: 'first effect'};
+    const writeIdentity = controlPlaneWriteIdentity('overlap-publication-fixture', row.publication_id);
+    const replacement = createPublicationWriter(leader, NODES[0], WRITER_TIME);
+    const answeredByPartition = Promise.withResolvers();
+    const releaseReply = Promise.withResolvers();
+    const executeQuery = leader.executeQuery.bind(leader);
+    const arrivals = [];
+    let joined;
+    leader.executeQuery = async (sql, params, options) => {
+      if (!options?.idempotencyKey) return executeQuery(sql, params, options);
+      arrivals.push(options.entryId);
+      if (arrivals.length !== 1) return executeQuery(sql, params, options);
+      const committed = await executeQuery(sql, params, options);
+      answeredByPartition.resolve(committed);
+      await releaseReply.promise;
+      return committed;
+    };
+    const persist = (owner) => owner.upsertPublication(mutation, {
+      expectedPublicationRow: preimage, writeIdentity,
+    });
+    const first = track(persist(writer.owner));
+    try {
+      const heldAnswer = await Promise.race([
+        answeredByPartition.promise, first.promise.then(() => null),
+        settleTicks().then(() => null),
+      ]);
+      assert.equal(heldAnswer?.success, true, 'the real partition committed before reply release');
+      assert.equal(first.settled, false);
+      assert.equal(leader.db.prepare(SELECT_ROW).get(row.publication_id).reason_code, 'first effect');
+      writer.cdc.markShuttingDown();
+      joined = track(persist(replacement.owner));
+      await settleTicks();
+      assert.equal(arrivals.length, 1, 'the replacement has sent no second attempt');
+      assert.equal(joined.settled, false, 'the replacement is waiting on the actual reply');
+      releaseReply.resolve();
+      const answers = await Promise.all([first.promise, joined.promise]);
+      assert.deepEqual(answers.map((answer) => answer.success), [true, true]);
+      assert.equal(ledger.applied.filter(({entryId}) => entryId === arrivals[0]).length, 1);
+
+      const current = leader.db.prepare(SELECT_ROW).get(row.publication_id);
+      await replacement.owner.upsertPublication({...current, reason_code: 'next effect'}, {
+        expectedPublicationRow: current, writeIdentity,
+      });
+      assert.notEqual(arrivals[1], arrivals[0]);
+      assert.equal(leader.db.prepare(SELECT_ROW).get(row.publication_id).reason_code, 'next effect');
+    } finally {
+      releaseReply.resolve();
+      await Promise.allSettled([first.promise, joined?.promise]);
+      leader.executeQuery = executeQuery;
+      replacement.cdc.markShuttingDown();
+    }
+  }));

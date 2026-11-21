@@ -1,3 +1,4 @@
+import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
@@ -29,6 +30,7 @@ import {
 import {
   CONTROL_PLANE_WRITE_ROUTE,
   controlPlaneWriteRoute,
+  isNamedControlPlaneWrite,
   runControlPlaneWrite,
 } from './control-plane-write-identity.js';
 
@@ -369,7 +371,9 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
         tableName: descriptor.tableName,
       });
     }
-    const queryKey = this.buildExecuteQueryKey(
+    const named = descriptor.operationKind === CONTROL_PLANE_SQL_OPERATION.WRITE &&
+      isNamedControlPlaneWrite(options);
+    const queryKey = named ? null : this.buildExecuteQueryKey(
       descriptor,
       sql,
       params,
@@ -386,15 +390,20 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     const route = controlPlaneWriteRoute(CONTROL_PLANE_WRITE_ROUTE.SQL,
       this.nodeId, descriptor.tableName);
     const command = {sql, params, sessionId: queryOptions.sessionId};
-    const execute = (statement, idempotencyKey) => this.assertSqlQueryEngine().executeQuery(
-      statement.sql, statement.params, {
-        ...queryOptions, sessionId: statement.sessionId, idempotencyKey,
+    const execute = (statement, idempotencyKey, timeoutBudget) => {
+      const timeoutMs = resolveControlPlaneQueryTimeoutMs({
+        requestedTimeoutMs: queryOptions.timeoutMs, timeoutBudget, now: this.now,
       });
+      return this.assertSqlQueryEngine().executeQuery(statement.sql, statement.params, {
+        ...queryOptions, sessionId: statement.sessionId, idempotencyKey, timeoutBudget, timeoutMs,
+      });
+    };
     const result = await this.runSingleFlight(
       this.inFlightQueryRequestsByKey,
       queryKey,
       () => (descriptor.operationKind === CONTROL_PLANE_SQL_OPERATION.WRITE ?
-        runControlPlaneWrite(options, command, route, execute) :
+        runControlPlaneWrite({...options, timeoutMs: queryOptions.timeoutMs, now: this.now},
+          command, route, execute) :
         this.assertSqlQueryEngine().executeQuery(sql, params, queryOptions)),
       {
         joinMetricName: 'querySingleFlightJoinCount',

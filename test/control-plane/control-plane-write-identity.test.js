@@ -4,6 +4,8 @@
 // re-drive is still its own entry (never a blind second write).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 
 import {
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
@@ -177,6 +179,188 @@ test('only the bound named verdict can prove an incarnation write unapplied', as
     }));
     assert.equal(isControlPlaneWriteDefinitivelyUnappliedError(failed), true);
   } finally {
+    releaseControlPlaneWriteIdentities(SCOPE);
+  }
+});
+
+for (const firstCommits of [true, false]) {
+  test(firstCommits ?
+    'overlapping refusal cannot release the held delivery that reached consensus' :
+    'overlapping callers share a definitive first refusal before getting a fresh entry', async () => {
+    const name = controlPlaneWriteIdentity(SCOPE, firstCommits);
+    const route = {id: SCOPE, partitionId: PARTITION_ID};
+    const firstEntered = Promise.withResolvers();
+    const releaseFirst = Promise.withResolvers();
+    const refusal = (key) => ({success: false, partitionId: PARTITION_ID,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+      entryId: deriveParticipantEntryId(key, PARTITION_ID)});
+    const initial = runControlPlaneWrite({writeIdentity: name}, {value: 'prior'}, route,
+      async (_body, key) => {
+        firstEntered.resolve(key);
+        await releaseFirst.promise;
+        return firstCommits ? replyFor(key) : refusal(key);
+      });
+    const entered = await Promise.race([
+      firstEntered.promise, initial.then(() => null),
+      new Promise((resolve) => setImmediate(() => resolve(null))),
+    ]);
+    assert.ok(entered, 'the first transport is held');
+    let secondEntered = false;
+    let secondFinished = false;
+    const overlap = runControlPlaneWrite({writeIdentity: name}, {value: 'prior'}, route,
+      async (_body, key) => {
+        secondEntered = true;
+        return refusal(key);
+      }).then((answer) => {
+      secondFinished = true;
+      return answer;
+    });
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(secondEntered, false, 'the second route does not deliver in the first turn');
+      assert.equal(secondFinished, false, 'the second caller waits for the actual first receipt');
+      releaseFirst.resolve();
+      const [left, right] = await Promise.all([initial, overlap]);
+      assert.equal(left.success, firstCommits);
+      assert.equal(right.success, firstCommits);
+      assert.equal(isControlPlaneWriteDefinitivelyUnappliedError(right), !firstCommits);
+      const next = await runControlPlaneWrite({writeIdentity: name}, {value: 'fresh'}, route,
+        async (_body, key) => replyFor(key));
+      assert.notEqual(next.idempotencyKey, entered);
+    } finally {
+      releaseFirst.resolve();
+      await Promise.allSettled([initial, overlap]);
+      releaseControlPlaneWriteIdentities(SCOPE);
+    }
+  });
+}
+
+test('cancelling an overlapping waiter leaves the live delivery in custody', async () => {
+  const name = controlPlaneWriteIdentity(SCOPE, 'cancel-overlap');
+  const route = {id: SCOPE, partitionId: PARTITION_ID};
+  const releaseFirst = Promise.withResolvers();
+  const token = new CancellationToken();
+  let firstKey;
+  let waiterDispatched = false;
+  const initial = runControlPlaneWrite({writeIdentity: name}, {value: 'prior'}, route,
+    async (_body, key) => {
+      firstKey = key;
+      await releaseFirst.promise;
+      return {...UNKNOWN_ANSWER, partitionId: PARTITION_ID,
+        entryId: deriveParticipantEntryId(key, PARTITION_ID)};
+    });
+  const waiter = runControlPlaneWrite({writeIdentity: name, cancellationToken: token},
+    {value: 'prior'}, route, async () => {
+      waiterDispatched = true;
+      return UNKNOWN_ANSWER;
+    });
+  try {
+    const abandoned = Promise.allSettled([waiter]);
+    token.cancel('cancelled observer');
+    const settlement = await Promise.race([
+      abandoned,
+      new Promise((resolve) => setImmediate(() => resolve(null))),
+    ]);
+    assert.ok(settlement, 'the cancelled waiter settles while the live transport is held');
+    assert.equal(waiterDispatched, false);
+    releaseFirst.resolve();
+    await initial;
+    const recovered = await runControlPlaneWrite({writeIdentity: name}, {value: 'prior'}, route,
+      async (_body, key) => replyFor(key));
+    assert.equal(recovered.idempotencyKey, firstKey,
+      'the next authorized route redrives the original entry');
+  } finally {
+    releaseFirst.resolve();
+    await Promise.allSettled([initial, waiter]);
+    releaseControlPlaneWriteIdentities(SCOPE);
+  }
+});
+
+test('an expired waiter budget does not release the original pending delivery', async () => {
+  const name = controlPlaneWriteIdentity(SCOPE, 'exclusive-wait-budget');
+  const route = {id: SCOPE, partitionId: PARTITION_ID};
+  const releaseFirst = Promise.withResolvers();
+  const clock = new VirtualTimeSource();
+  let firstKey;
+  let secondInvoked = false;
+  const first = runControlPlaneWrite({writeIdentity: name}, {value: 'old'}, route,
+    async (_body, key) => {
+      firstKey = key;
+      await releaseFirst.promise;
+      return {...UNKNOWN_ANSWER, partitionId: PARTITION_ID,
+        entryId: deriveParticipantEntryId(key, PARTITION_ID)};
+    });
+  const waiter = runControlPlaneWrite({
+    writeIdentity: name, timeSource: clock, timeoutMs: 7,
+  }, {value: 'fresh'}, route, async (_body, key) => {
+    secondInvoked = true;
+    return replyFor(key);
+  });
+  const expired = assert.rejects(waiter, {errorCode: 'TIMEOUT'});
+  try {
+    clock.advance(7);
+    await expired;
+    assert.equal(secondInvoked, false);
+    assert.equal(clock.pendingTimerCount(), 0);
+    releaseFirst.resolve();
+    await first;
+
+    const deliveries = [];
+    await runControlPlaneWrite({writeIdentity: name}, {value: 'fresh'}, route,
+      async (body, key) => {
+        deliveries.push({body, key});
+        return replyFor(key);
+      });
+    assert.deepEqual(deliveries.map(({body}) => body.value), ['old', 'fresh']);
+    assert.equal(deliveries[0].key, firstKey);
+    assert.notEqual(deliveries[1].key, firstKey);
+  } finally {
+    releaseFirst.resolve();
+    await Promise.allSettled([first, waiter, expired]);
+    releaseControlPlaneWriteIdentities(SCOPE);
+  }
+});
+
+test('authoritative confirmation during delivery survives a late refusal', async () => {
+  const name = controlPlaneWriteIdentity(SCOPE, 'confirm-before-answer');
+  const route = {id: SCOPE, partitionId: PARTITION_ID};
+  const releaseFirst = Promise.withResolvers();
+  const entered = Promise.withResolvers();
+  const first = runControlPlaneWrite({
+    writeIdentity: name, confirmWriteEffect: (observation) => observation === 'committed value',
+  }, {value: 'old'}, route, async (_body, key) => {
+    entered.resolve(key);
+    await releaseFirst.promise;
+    return {success: false, partitionId: PARTITION_ID,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+      entryId: deriveParticipantEntryId(key, PARTITION_ID)};
+  });
+  let successor;
+  try {
+    const firstKey = await Promise.race([
+      entered.promise, first.then(() => null),
+      new Promise((resolve) => setImmediate(() => resolve(null))),
+    ]);
+    assert.ok(firstKey);
+    assert.equal(captureControlPlaneWriteConfirmation(name)('committed value'), true);
+    const deliveries = [];
+    successor = runControlPlaneWrite({writeIdentity: name}, {value: 'fresh'}, route,
+      async (body, key) => {
+        deliveries.push({body, key});
+        return replyFor(key);
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(deliveries, [], 'confirmed effect does not retire live delivery custody early');
+    releaseFirst.resolve();
+    const late = await first;
+    assert.equal(isControlPlaneWriteDefinitivelyUnappliedError(late), false);
+    const next = await successor;
+    assert.equal(next.pendingInstance.outcome, 'applied');
+    assert.deepEqual(deliveries.map(({body}) => body.value), ['fresh']);
+    assert.notEqual(deliveries[0].key, firstKey);
+  } finally {
+    releaseFirst.resolve();
+    await Promise.allSettled([first, successor]);
     releaseControlPlaneWriteIdentities(SCOPE);
   }
 });
