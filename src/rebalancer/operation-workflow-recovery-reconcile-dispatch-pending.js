@@ -406,21 +406,21 @@ function isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) {
 }
 
 function schedulePriorityDispatchPendingContinuation(owner, operation, scope, run) {
-  // The continuation may enter the operation lane later. Its own key keeps
-  // shutdown joining it without recursively acquiring that lane.
+  // Keep shutdown joining these tasks on a distinct, generation-bound lane.
   if (owner.isShuttingDown) return false;
   const fenceEpoch = owner.getOperationOwnershipFenceEpoch();
-  // Scope finalizers to their generation after a spent join and restart.
   const identity = JSON.stringify([fenceEpoch, operation.operationId]);
   const key = owner.buildOperationSingleFlightKey(scope, identity);
   if (owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey.has(key)) return false;
-  owner.operationWorkflowRunExclusive(key, () => Promise.resolve().then(() => {
-    return isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch) ? run(fenceEpoch) : false;
-  }).catch((error) => {
-    if (isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) {
-      owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(operation, error);
+  owner.operationWorkflowRunExclusive(key, async () => {
+    try {
+      return await run(fenceEpoch);
+    } catch (error) {
+      if (isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) {
+        owner.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(operation, error);
+      }
     }
-  }));
+  });
   return true;
 }
 
@@ -437,25 +437,27 @@ function applyPriorityRecoveryDispatchPendingReentryAction(
       owner, operation, PRIORITY_DISPATCH_PENDING_LANE_SCOPE.ARM, async (fenceEpoch) => {
         await waitForTimer(0);
         if (!isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) return false;
-        return owner.applyPriorityRecoveryDispatchPendingOwnerProgress(
-          operation, decisionSnapshot, options,
-        );
+        return owner.applyPriorityRecoveryDispatchPendingOwnerProgress(operation,
+          decisionSnapshot, options);
       },
     );
   }
   if (action === PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.RETRY_AFTER_OWNER_LANE) {
-    return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
-      operation, TRANSITION_RETRY_DELAY_MS,
-    );
+    return owner.scheduleCoordinatorCreatedRemoteHandoffFollowUp(operation,
+      TRANSITION_RETRY_DELAY_MS);
   }
   if (action === PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTION.RECORD_REMOTE_RETRY_PROGRESS) {
     if (!operation?.operationId ||
         hasPriorityRecoveryDispatchPendingRemoteRetryProgress(owner, operation)) return false;
     schedulePriorityDispatchPendingContinuation(
       owner, operation, PRIORITY_DISPATCH_PENDING_LANE_SCOPE.RECORD_RETRY_PROGRESS,
-      () => owner.runOperationWorkflowOwnerAdapter(
-        operation, {mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE},
-      ),
+      async (fenceEpoch) => {
+        await Promise.resolve();
+        if (!isDispatchPendingOwnerFenceCurrent(owner, fenceEpoch)) return false;
+        return owner.runOperationWorkflowOwnerAdapter(
+          operation, {mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE},
+        );
+      },
     );
   }
   return false;
@@ -798,16 +800,13 @@ function schedulePriorityRecoveryDispatchPendingReentry(
   options = {},
 ) {
   if (owner.isShuttingDown) return false;
-  const operation = owner.selectPriorityRecoveryDispatchPendingReentryOperation(
-    snapshot, operations,
-  );
+  const operation =
+    owner.selectPriorityRecoveryDispatchPendingReentryOperation(snapshot, operations);
   if (!operation?.operationId) return false;
-  const action = owner.resolvePriorityRecoveryDispatchPendingReentryAction(
-    snapshot, operation, options,
-  );
-  return owner.applyPriorityRecoveryDispatchPendingReentryAction(
-    operation, action, snapshot, options,
-  );
+  const action =
+    owner.resolvePriorityRecoveryDispatchPendingReentryAction(snapshot, operation, options);
+  return owner.applyPriorityRecoveryDispatchPendingReentryAction(operation, action, snapshot,
+    options);
 }
 
 function resolvePriorityRecoveryDispatchPendingOwnerEffectAction(
