@@ -52,7 +52,10 @@ import {
   withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
-import {PLACEMENT_ADMIT_TYPE} from '../../src/partition/partition-placement-admission-constants.js';
+import {
+  PLACEMENT_ADMIT_TYPE, PLACEMENT_RESULT_FIELD,
+} from '../../src/partition/partition-placement-admission-constants.js';
+import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
 import {
   clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipantAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
@@ -563,4 +566,71 @@ test('A1 request answered late: a leadership-start CDC drive answered after the 
   assert.equal(a.probe.admissionAttempts.length, attemptsBefore,
     `the late drive answer makes no admission attempt; ${report}`);
   assertOneAdmitted(world, nodes, report);
+}));
+
+// Corrective round 2, item 4 (verifier N5): record row 2c (the retained-
+// REFUSED re-admission, A4') has a schedule. A's admission E of the deficit
+// is dropped (proposed, never committed); B is elected and deposed inside its
+// holdoff, so E's write is released and E stays retained; A leads again and
+// its pass is held at A3 while an admission of the same partition commits
+// through the entry that carries no tenure (requestPlacementAdmission on A's
+// ledger); released, the pass re-proposes E, the applier answers REFUSED
+// PARTITION_BUSY, and the pass proposes a fresh attempt F (A4'); F is dropped
+// and A transfers to B: F's write is released and the pass, its tenure ended
+// across A4', stops at A4R_AFTER_READMISSION and admits nothing.
+test('A4\' retained-REFUSED re-admission across a transfer: the pass whose tenure ended ' +
+  'across the fresh proposal stops at A4R_AFTER_READMISSION and admits nothing; one ' +
+  'admission of the deficit in total', (t) => withPlacementWorld(SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a, b] = nodes;
+  const owner = ownerOf(a);
+  const attemptKey = `admit:${DEFICIT}`;
+  const dropped = [];
+  const dropFromA = (except = null) => {
+    world.log.dropNext = (node, entry) => {
+      const drop = node === a && entry.body?.partitionId === DEFICIT && entry.entryId !== except;
+      if (drop) dropped.push(entry.entryId);
+      return drop;
+    };
+  };
+  dropFromA();
+  await world.electLedger(a);
+  await waitUntil(() => dropped.length === 1, 'A proposed E and it was dropped');
+  const retainedE = owner.uncertainEntryIds.get(attemptKey);
+  const gate = holdNextAdmissibilityCheck(a);
+  await world.electLedger(b, {awaitOwner: false});
+  await world.electLedger(a);
+  await gate.reached.promise;
+  assert.equal(b.probe.passes.length, 0, 'premise: B\'s owner never ran a pass');
+  assert.equal(owner.uncertainEntryIds.get(attemptKey)?.entryId, retainedE?.entryId,
+    'premise: E stays retained across A->B->A (never committed)');
+  // The competing admission through the tenure-less entry, committed while
+  // A's pass is held at A3.
+  const competing = await requestPlacementAdmission(a.ledger, {
+    entryId: `fixture:competing:${DEFICIT}`, body: retainedE.body});
+  assert.equal(competing?.[PLACEMENT_RESULT_FIELD]?.outcome, 'ADMITTED',
+    `premise: the competing admission committed; ${JSON.stringify(competing)}`);
+  dropFromA(retainedE.entryId);
+  const staleBefore = owner.observation.totals.staleStops.A4R_AFTER_READMISSION ?? 0;
+  gate.release.resolve();
+  await waitUntil(() => dropped.length === 2, 'A proposed the fresh attempt F and it was dropped');
+  const reproposedE = world.log.proposals.filter((proposal) =>
+    proposal.entryId === retainedE.entryId);
+  await world.electLedger(b);
+  await world.idle();
+  const report = JSON.stringify({dropped, reproposedE: reproposedE.length,
+    staleStops: owner.observation.totals.staleStops, transfer: transferReport(world, DEFICIT)});
+  t.diagnostic(report);
+  assert.equal(reproposedE.length, 2, `premise: E was proposed again after A3; ${report}`);
+  const outcomeOfE = attemptsOf(a).filter((attempt) => attempt.entryId === retainedE.entryId)
+    .map(attemptOutcomeOf);
+  assert.ok(outcomeOfE.includes('REFUSED'),
+    `premise: E's re-proposal was answered REFUSED (the partition is busy); ${report}`);
+  assert.notEqual(dropped[1], retainedE.entryId, `premise: F is a fresh entry; ${report}`);
+  assert.equal((owner.observation.totals.staleStops.A4R_AFTER_READMISSION ?? 0) - staleBefore, 1,
+    `the pass stops at the A4' checkpoint (its tenure ended across F); ${report}`);
+  for (const node of nodes) {
+    assert.equal(admittedOperations(world, node, DEFICIT).length, 1,
+      `${node.nodeId}: one admission of the deficit (the competing one); ${report}`);
+  }
 }));

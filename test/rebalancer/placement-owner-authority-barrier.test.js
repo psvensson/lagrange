@@ -113,3 +113,50 @@ test('drain start: a status read that announces applied progress inside the firs
     `one pass of the custody at a time (max in flight ${a.probe.maxInFlight}); ${report}`);
   assert.equal(admittedOperations(world, a, DEFICIT).length, 1, report);
 }));
+
+// Corrective round 2, item 5: the barrier's status read is foreign code (it
+// may run a consensus turn). A custody that ends inside that read (here the
+// leadership sink re-driven false then true inside it: the old custody ends,
+// a new custody of the same tenure begins) must not be used past the barrier
+// by the pass that latched it: that pass stops stale at the barrier, before
+// its census read, its leadership-start CDC drive request and its attempt
+// reconciliation. Fails if the re-check after the latch is removed (the
+// obsolete pass then reads its census and reconciles under the ended custody
+// and stops at AFTER_CENSUS). Reachability in production stays INFERRED
+// (record section 23 and the verifier: near-unreachable); the schedule is the
+// fixture's.
+test('barrier re-check: a custody that ended inside the barrier\'s status read is not used ' +
+  'past the barrier; the new custody admits once', (t) => withPlacementWorld(SPEC,
+  async (world) => {
+    const nodes = await startThreeNodeLedger(world);
+    const [a] = nodes;
+    const owner = ownerOf(a);
+    const censusReads = [];
+    const readPassCensus = owner.readPassCensus;
+    owner.readPassCensus = function recordedCensusRead(pass) {
+      censusReads.push({current: this.isPassCurrent(pass), sequence: pass.sequence});
+      return readPassCensus.call(this, pass);
+    };
+    let endedCustody = null;
+    a.statusHookAtNextPass = () => {
+      endedCustody = owner.custody;
+      owner.setLeader(false);
+      owner.setLeader(true);
+    };
+    await world.electLedger(a);
+    await waitUntil(() => admittedOperations(world, a, DEFICIT).length === 1,
+      'the new custody admits', PROGRESS_BOUND_MS);
+    await world.idle();
+    const report = JSON.stringify({censusReads, staleStops: owner.observation.totals.staleStops,
+      endedReconciled: endedCustody?.reconciled ?? null, snapshot: owner.lastPassSnapshot});
+    t.diagnostic(report);
+    assert.ok(endedCustody !== null && endedCustody !== owner.custody,
+      `premise: the custody ended inside the barrier's status read; ${report}`);
+    assert.equal(owner.observation.totals.staleStops.TERM_START_BARRIER, 1,
+      `the pass that latched the barrier stops stale at its re-check; ${report}`);
+    assert.deepEqual(censusReads.filter((read) => !read.current), [],
+      `no census read by a pass whose custody ended; ${report}`);
+    assert.equal(endedCustody.reconciled, false,
+      `no attempt reconciliation under the ended custody; ${report}`);
+    assert.equal(admittedOperations(world, a, DEFICIT).length, 1, report);
+  }));

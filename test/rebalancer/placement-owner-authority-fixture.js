@@ -429,6 +429,12 @@ function withTermStartStatus(port, currentTermApplied, node) {
       node.statusReadWake = false;
       node.ledger.controllablePort.emitEvent(RAFT_EVENT.APPLIED_PROGRESS);
     }
+    // Foreign code that runs inside one status read (armed once by a witness).
+    if (typeof node.statusReadHook === 'function') {
+      const hook = node.statusReadHook;
+      node.statusReadHook = null;
+      hook();
+    }
     return deepFreeze({...port.readStatus(), currentTermApplied: currentTermApplied()});
   }});
 }
@@ -512,6 +518,10 @@ function instrumentOwner(node) {
     if (node.statusWakeAtNextPass === true) {
       node.statusWakeAtNextPass = false;
       node.statusReadWake = true;
+    }
+    if (typeof node.statusHookAtNextPass === 'function') {
+      node.statusReadHook = node.statusHookAtNextPass;
+      node.statusHookAtNextPass = null;
     }
     probe.inFlight += 1;
     probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
