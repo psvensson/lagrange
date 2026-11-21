@@ -53,6 +53,8 @@ import {createGroupRetirementRedrive} from
   '../../src/partition/group-retirement-redrive.js';
 import {PartitionServiceRowOwner} from
   '../../src/partition/partition-service-row-owner.js';
+import {MessageGroupServiceRowOwner} from
+  '../../src/message-group/message-group-service-row-owner.js';
 import {
   TABLE_ID,
   createWorkflowOwner,
@@ -527,6 +529,24 @@ test('necessity: a member services-row change re-runs the retirement step ' +
     await emit('services', {...memberRow(null), raft_role: role});
     t.equal(triggers.length - before, 1,
       `a row carrying ${role} re-runs the step exactly once`);
+  }
+  // Message-group services rows reach the same wake, and their row owner
+  // still publishes leader for a live leader; a retirement step is a
+  // partition group's, so no message-group row re-runs one, whatever role it
+  // carries (the arm is decision-dead for that service type too).
+  const messageGroupRow = (service) => MessageGroupServiceRowOwner
+    .buildServiceRow({groupId: 'mg-wake', replicaId: 'mg-wake-r1',
+      nodeId: 'node-b', service, status: 'active', timestamp: 1});
+  const messageGroupRows = [messageGroupRow({isLeader: true}),
+    ...Object.values(RAFT_ROLE).map((trackedRole) =>
+      messageGroupRow({getRole: () => trackedRole}))];
+  t.equal(messageGroupRows[0].raft_role, RAFT_ROLE.LEADER,
+    'the message-group row owner publishes leader for its live leader');
+  for (const row of messageGroupRows) {
+    const before = [triggers.length, unavailableTriggers.length];
+    await emit('services', row);
+    t.same([triggers.length, unavailableTriggers.length], before,
+      `message-group row (${row.raft_role}) re-runs no retirement step`);
   }
   await emit('partitions', {partition_id: unavailablePartitionId,
     leader_node_id: 'node-c'});
