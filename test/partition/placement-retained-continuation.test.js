@@ -831,9 +831,14 @@ test('T1 one obligation has one continuation owner: an uncommitted answer carryi
     const owners = () => `receiver ${receiverClock.pendingTimerCount()}, ` +
       `sender ${senderClock.pendingTimerCount()}`;
     try {
+      // The sender's own route rows reach its deferred cache listener before
+      // the record exists: no publication hint follows the answer below.
+      await idleRepairs(sender, receiver);
       assert.equal(await bounded(sender.repairRetainedOperation(retained),
         'backpressure at the receiver'), false);
       const attempt = sender.retainedPlacementRepairs.get(retained.operationId);
+      assert.ok(attempt, 'the delegated sender keeps the obligation it handed to the custodian ' +
+        `(${repairCommands(world).length} proposals; continuations: ${owners()})`);
       assert.equal(attempt.custody.state, 'delegated',
         'the receiver attested custody of the exact uncommitted entry');
       assert.equal(repairCommands(world).length, 0, 'an uncommitted answer proposes nothing');
