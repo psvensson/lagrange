@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {setImmediate as nextTurn} from 'node:timers/promises';
 import {CDC_OPERATION, TABLES, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -16,6 +17,21 @@ const TARGET = 'node-b';
 function exactOperationRead(sql, params) {
   return sql.includes('FROM replica_operations WHERE operation_id = ?') &&
     params[0] === OPERATION_ID;
+}
+
+async function driveRepositoryBackoff(timeSource, callback) {
+  let settled = false;
+  const result = Promise.resolve(callback()).finally(() => {
+    settled = true;
+  });
+  // The real repository owns these backoff sleeps. Advance only the injected
+  // fixture clock while waiting for this exact retry turn.
+  for (let turn = 0; turn < 200 && !settled; turn += 1) {
+    timeSource.advance(20);
+    await nextTurn();
+  }
+  assert.ok(settled, 'the repository turn settles within its existing read retry window');
+  return result;
 }
 
 async function withWaitingHandoff(measure) {
@@ -154,7 +170,7 @@ test('deferred exact operation visibility preserves the registered ACTIVE handof
       let current = f.retry();
       f.deferOperationRead();
       for (let turn = 0; turn < 2; turn += 1) {
-        await current.timeoutHandle.callback();
+        await driveRepositoryBackoff(f.timeSource, current.timeoutHandle.callback);
         assert.ok(f.visibility.at(-1).deferredOutcome, 'the repository emits typed deferral');
         assert.equal(f.visibility.at(-1).operation, null);
         assert.deepEqual(f.row(), original);
@@ -174,6 +190,18 @@ test('deferred exact operation visibility preserves the registered ACTIVE handof
       assert.deepEqual(f.deliveries, []);
     });
   });
+
+test('a current operation completes from its own registered ACTIVE handoff timer', async () => {
+  await withWaitingHandoff(async (f) => {
+    const original = f.row();
+    f.restoreServices();
+    await f.retry().timeoutHandle.callback();
+    assert.equal(f.row().workflow_step, WORKFLOW_STEP.ACTIVE);
+    assert.equal(f.row().created_at, original.created_at);
+    assert.equal(f.retry(), undefined);
+    assert.deepEqual(f.deliveries, []);
+  });
+});
 
 test('a complete exact absence retires the stale ACTIVE handoff timer', async () => {
   await withWaitingHandoff(async (f) => {
