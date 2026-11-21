@@ -1,0 +1,17 @@
+placement-shell=2894895
+placement-head=119a6a2d9287a957229b6ccb36cba88ce3c6247a
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.4 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2895350
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+ok test/partition/partition-service-row-owner.test.js (212 assertions, 608ms)
+# test-files total=1 pass=1 fail=0 assertions=212
+placement-results={"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":608,"retriedOnce":false,"firstFailureLine":null}

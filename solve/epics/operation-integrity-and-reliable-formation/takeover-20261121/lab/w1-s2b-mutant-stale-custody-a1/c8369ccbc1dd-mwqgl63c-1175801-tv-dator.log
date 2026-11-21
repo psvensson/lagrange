@@ -1,0 +1,21 @@
+placement-shell=2950094
+placement-head=c8369ccbc1dd99ba380f0c4b101fad0e7789c04f
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2950947
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/partition/placement-retained-leadership.test.js (5 assertions, 3817ms)
+ok test/partition/placement-retained-continuation.test.js (21 assertions, 4566ms)
+ok test/partition/placement-retained-row-repair.test.js (45 assertions, 6004ms)
+# test-files total=3 pass=3 fail=0 assertions=71
+placement-results={"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3817,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":4566,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":6004,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,7 @@
+{"phases": [
+  {"name": "P1_bootstrap_to_priority_spread", "from": "2026-11-21T13:16:58.720Z", "to": "2026-11-21T13:19:44.937Z"},
+  {"name": "P2_system_formation", "from": "2026-11-21T13:19:44.937Z", "to": "2026-11-21T13:26:55.977Z"},
+  {"name": "P3_post_drain_idle_tail", "from": "2026-11-21T13:26:55.977Z", "to": "2026-11-21T13:28:17.849Z"},
+  {"name": "scenario_whole", "from": "2026-11-21T13:16:58.611Z", "to": "2026-11-21T13:28:17.849Z"}
+ ],
+ "idleWindow": {"from": "2026-11-21T13:27:00.000Z", "to": "2026-11-21T13:28:00.000Z"}}

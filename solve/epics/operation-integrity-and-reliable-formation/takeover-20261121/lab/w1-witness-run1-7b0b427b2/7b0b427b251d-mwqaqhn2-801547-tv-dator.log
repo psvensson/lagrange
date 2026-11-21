@@ -1,0 +1,834 @@
+placement-shell=2736897
+placement-head=7b0b427b251d01c389f301d64533352be084b7ff
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2737892
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 58C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+ok test/partition/placement-retained-leadership.test.js (5 assertions, 4429ms)
+not ok test/partition/placement-retained-publication.test.js (6 assertions, 4599ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+ok 1 - W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+  ---
+  duration_ms: 2619.14063
+  type: 'test'
+  ...
+# Subtest: W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+ok 2 - W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+  ---
+  duration_ms: 148.144381
+  type: 'test'
+  ...
+# Subtest: W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+ok 3 - W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+  ---
+  duration_ms: 114.456787
+  type: 'test'
+  ...
+# Subtest: W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+ok 4 - W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+  ---
+  duration_ms: 98.869953
+  type: 'test'
+  ...
+# Subtest: W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+not ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+  ---
+  duration_ms: 103.385622
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-publication.test.js:168:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the origin as ledger leader evaluates the known blocker first: zero native proposals
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-publication.test.js:183:12
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: W9 a route publication during an in-flight read is queued and applied after that decision
+not ok 6 - W9 a route publication during an in-flight read is queued and applied after that decision
+  ---
+  duration_ms: 123.22477
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-publication.test.js:192:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a qualified answer read under the B binding is judged against that binding: the queued route change does not turn it into an unavailable read with a backoff
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-publication.test.js:210:12
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 4
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3213.374404
+# time=4599ms
+not ok test/partition/placement-retained-continuation.test.js (17 assertions, 5176ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+not ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+  ---
+  duration_ms: 2591.642256
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:67:1'
+  failureType: 'testCodeFailure'
+  error: 'a later caller finds no receiver tenure: custody is not trusted and the sender itself owns the owed reconsideration'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:83:14
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+not ok 2 - W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+  ---
+  duration_ms: 125.953176
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:106:1'
+  failureType: 'testCodeFailure'
+  error: 'after the receiver restart: the retained row is restored'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    assertRestoredOnce (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:47:10)
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:125:7
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W6 one real release and one transient read failure complete the original repair exactly once
+ok 3 - W6 one real release and one transient read failure complete the original repair exactly once
+  ---
+  duration_ms: 89.349196
+  type: 'test'
+  ...
+# Subtest: W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+not ok 4 - W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+  ---
+  duration_ms: 104.830912
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:173:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a permanent read failure reaches an explicit bounded stop (still armed after 200 continuation turns and 201 reads)
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:188:12
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+not ok 5 - W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+  ---
+  duration_ms: 66.708683
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:212:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a failed read owes revalidation; it does not rewrite what the committed refusal waits for
+    + actual - expected
+    
+    + 'LEADERSHIP_START'
+    - 'LEDGER_COMMIT'
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'LEDGER_COMMIT'
+  actual: 'LEADERSHIP_START'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:230:14
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+not ok 6 - W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+  ---
+  duration_ms: 82.868924
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:239:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a consumed unavailable observation owes revalidation; the blocker trigger is unchanged
+    + actual - expected
+    
+    + 'LEADERSHIP_START'
+    - 'LEDGER_COMMIT'
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'LEDGER_COMMIT'
+  actual: 'LEADERSHIP_START'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:265:14
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+not ok 7 - W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+  ---
+  duration_ms: 66.21562
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:283:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the failed post-resolution read owes revalidation; the committed trigger is unchanged
+    + actual - expected
+    
+    + 'LEADERSHIP_START'
+    - 'LEDGER_COMMIT'
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'LEDGER_COMMIT'
+  actual: 'LEADERSHIP_START'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:311:12
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W8 shutdown with an armed continuation leaves nothing to fire
+ok 8 - W8 shutdown with an armed continuation leaves nothing to fire
+  ---
+  duration_ms: 70.437988
+  type: 'test'
+  ...
+# Subtest: W8 retirement with an armed continuation leaves nothing to fire
+ok 9 - W8 retirement with an armed continuation leaves nothing to fire
+  ---
+  duration_ms: 69.909843
+  type: 'test'
+  ...
+# Subtest: partial authority, overlapping arrivals: one owned decision and one qualified read
+not ok 10 - partial authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 82.808656
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:422:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    a later legitimate trigger obtains fresh authority after an earlier unavailable result
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    assertFreshAuthorityRecovers (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:413:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:438:9
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: partial authority, sequential arrivals: a bounded later decision with a fresh read
+not ok 11 - partial authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 83.011108
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:445:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    an arrival after settlement starts one fresh decision: an unavailable result is not reused
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:458:16
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: failed authority, overlapping arrivals: one owned decision and one qualified read
+not ok 12 - failed authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 74.039292
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:422:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    a later legitimate trigger obtains fresh authority after an earlier unavailable result
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    assertFreshAuthorityRecovers (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:413:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:438:9
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: failed authority, sequential arrivals: a bounded later decision with a fresh read
+not ok 13 - failed authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 69.859827
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:445:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    an arrival after settlement starts one fresh decision: an unavailable result is not reused
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:458:16
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: stale authority, overlapping arrivals: one owned decision and one qualified read
+not ok 14 - stale authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 68.136114
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:422:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    a later legitimate trigger obtains fresh authority after an earlier unavailable result
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    assertFreshAuthorityRecovers (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:413:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:438:9
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: stale authority, sequential arrivals: a bounded later decision with a fresh read
+not ok 15 - stale authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 52.460863
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:445:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    an arrival after settlement starts one fresh decision: an unavailable result is not reused
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:458:16
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+not ok 16 - wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+  ---
+  duration_ms: 56.892552
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:422:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    a later legitimate trigger obtains fresh authority after an earlier unavailable result
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    assertFreshAuthorityRecovers (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:413:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:438:9
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+not ok 17 - wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+  ---
+  duration_ms: 45.914318
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:445:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    an arrival after settlement starts one fresh decision: an unavailable result is not reused
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-continuation.test.js:458:16
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 3
+# fail 14
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3808.858322
+# time=5176ms
+not ok test/partition/placement-retained-row-repair.test.js (45 assertions, 6695ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+{"level":50,"time":"2026-11-21T11:02:37.176Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+{"level":50,"time":"2026-11-21T11:02:37.281Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: native entity repair and ordinary admission serialize: normal first
+ok 1 - native entity repair and ordinary admission serialize: normal first
+  ---
+  duration_ms: 2598.375377
+  type: 'test'
+  ...
+# Subtest: native entity repair and ordinary admission serialize: retained first
+ok 2 - native entity repair and ordinary admission serialize: retained first
+  ---
+  duration_ms: 89.934036
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:37.433Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+{"level":50,"time":"2026-11-21T11:02:37.563Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: reservation gate consumes native repair refusal and retains the original reservation
+ok 3 - reservation gate consumes native repair refusal and retains the original reservation
+  ---
+  duration_ms: 83.718206
+  type: 'test'
+  ...
+# Subtest: lost committed answer reuses pinned bytes and preserves the retained lease
+ok 4 - lost committed answer reuses pinned bytes and preserves the retained lease
+  ---
+  duration_ms: 68.180934
+  type: 'test'
+  ...
+# Subtest: exact existing row succeeds; changed birth and history refuse without replacement
+ok 5 - exact existing row succeeds; changed birth and history refuse without replacement
+  ---
+  duration_ms: 62.336702
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:37.636Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"FAILED","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+{"level":50,"time":"2026-11-21T11:02:37.716Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: a clearing holder commit during the old BUSY reply owns a successor attempt
+ok 6 - a clearing holder commit during the old BUSY reply owns a successor attempt
+  ---
+  duration_ms: 68.748098
+  type: 'test'
+  ...
+# Subtest: terminal evidence restoration does not consume the live entity or copy lane
+ok 7 - terminal evidence restoration does not consume the live entity or copy lane
+  ---
+  duration_ms: 69.227588
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:38.147Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: current actual deficit policy preserves same-ID copies and native capacity clearing
+ok 8 - current actual deficit policy preserves same-ID copies and native capacity clearing
+  ---
+  duration_ms: 97.05021
+  type: 'test'
+  ...
+# Subtest: foreign and malformed native answers retain one exact unknown attempt
+ok 9 - foreign and malformed native answers retain one exact unknown attempt
+  ---
+  duration_ms: 266.327005
+  type: 'test'
+  ...
+# Subtest: shutdown retires volatile custody and late committed replies cannot rearm it
+ok 10 - shutdown retires volatile custody and late committed replies cannot rearm it
+  ---
+  duration_ms: 50.007878
+  type: 'test'
+  ...
+# Subtest: an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+ok 11 - an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+  ---
+  duration_ms: 48.309055
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:38.207Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: retained ledger self-move global exclusion: normal first
+ok 12 - retained ledger self-move global exclusion: normal first
+  ---
+  duration_ms: 56.18475
+  type: 'test'
+  ...
+# Subtest: retained ledger self-move global exclusion: ledger first
+ok 13 - retained ledger self-move global exclusion: ledger first
+  ---
+  duration_ms: 49.357402
+  type: 'test'
+  ...
+# Subtest: remote-only current copy preparation succeeds and changed target boot stays debt
+ok 14 - remote-only current copy preparation succeeds and changed target boot stays debt
+  ---
+  duration_ms: 50.429989
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:38.348Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+  ---
+  duration_ms: 45.296639
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair.test.js:411:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair.test.js:432:14
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+{"level":50,"time":"2026-11-21T11:02:38.395Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: a retained ordinary copy consumes source capacity and resumes on its actual release
+ok 16 - a retained ordinary copy consumes source capacity and resumes on its actual release
+  ---
+  duration_ms: 50.113625
+  type: 'test'
+  ...
+# Subtest: retained-copy-first occupies the ordinary target lane until its own committed release
+ok 17 - retained-copy-first occupies the ordinary target lane until its own committed release
+  ---
+  duration_ms: 46.051427
+  type: 'test'
+  ...
+# Subtest: different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+ok 18 - different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+  ---
+  duration_ms: 47.907327
+  type: 'test'
+  ...
+# Subtest: remote E2 joins active E1 and retains renewed BUSY without spending its entry
+ok 19 - remote E2 joins active E1 and retains renewed BUSY without spending its entry
+  ---
+  duration_ms: 60.097574
+  type: 'test'
+  ...
+# Subtest: remote E2 owns one authoritative own-row observation: CDC-before-answer
+ok 20 - remote E2 owns one authoritative own-row observation: CDC-before-answer
+  ---
+  duration_ms: 48.331531
+  type: 'test'
+  ...
+# Subtest: remote E2 owns one authoritative own-row observation: answer-before-CDC
+ok 21 - remote E2 owns one authoritative own-row observation: answer-before-CDC
+  ---
+  duration_ms: 44.431057
+  type: 'test'
+  ...
+# Subtest: an in-flight stale own-row observation reads absence once; genuine successor still confirms
+ok 22 - an in-flight stale own-row observation reads absence once; genuine successor still confirms
+  ---
+  duration_ms: 42.988143
+  type: 'test'
+  ...
+# Subtest: remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+ok 23 - remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+  ---
+  duration_ms: 44.677472
+  type: 'test'
+  ...
+# Subtest: remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+ok 24 - remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+  ---
+  duration_ms: 43.456335
+  type: 'test'
+  ...
+# Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+ok 25 - still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+  ---
+  duration_ms: 43.944982
+  type: 'test'
+  ...
+# Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+ok 26 - still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+  ---
+  duration_ms: 43.28507
+  type: 'test'
+  ...
+# Subtest: remote ordinary source capacity release crosses entities: CDC-before-answer
+ok 27 - remote ordinary source capacity release crosses entities: CDC-before-answer
+  ---
+  duration_ms: 48.805191
+  type: 'test'
+  ...
+# Subtest: remote ordinary source capacity release crosses entities: answer-before-CDC
+ok 28 - remote ordinary source capacity release crosses entities: answer-before-CDC
+  ---
+  duration_ms: 50.336547
+  type: 'test'
+  ...
+# Subtest: remote ordinary target capacity release crosses entities: CDC-before-answer
+ok 29 - remote ordinary target capacity release crosses entities: CDC-before-answer
+  ---
+  duration_ms: 59.01642
+  type: 'test'
+  ...
+# Subtest: remote ordinary target capacity release crosses entities: answer-before-CDC
+ok 30 - remote ordinary target capacity release crosses entities: answer-before-CDC
+  ---
+  duration_ms: 45.677176
+  type: 'test'
+  ...
+# Subtest: impossible source capacity answer preserves original entry until genuine same-pin outcome
+ok 31 - impossible source capacity answer preserves original entry until genuine same-pin outcome
+  ---
+  duration_ms: 40.124747
+  type: 'test'
+  ...
+# Subtest: impossible target capacity answer preserves original entry until genuine same-pin outcome
+ok 32 - impossible target capacity answer preserves original entry until genuine same-pin outcome
+  ---
+  duration_ms: 41.997216
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:39.190Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+ok 33 - incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+  ---
+  duration_ms: 43.072778
+  type: 'test'
+  ...
+{"level":50,"time":"2026-11-21T11:02:39.237Z","nodeId":"test-node","pid":2737928,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+# Subtest: mutation shares serial repair decision when clearing is sender-first
+ok 34 - mutation shares serial repair decision when clearing is sender-first
+  ---
+  duration_ms: 46.821754
+  type: 'test'
+  ...
+# Subtest: mutation shares serial repair decision when clearing is receiver-first
+ok 35 - mutation shares serial repair decision when clearing is receiver-first
+  ---
+  duration_ms: 46.082333
+  type: 'test'
+  ...
+# Subtest: ACTIVE-reservation shares serial repair decision when clearing is sender-first
+ok 36 - ACTIVE-reservation shares serial repair decision when clearing is sender-first
+  ---
+  duration_ms: 44.170367
+  type: 'test'
+  ...
+# Subtest: ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+ok 37 - ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+  ---
+  duration_ms: 44.789857
+  type: 'test'
+  ...
+# Subtest: queued real E2 joins E1 winner and confirms exact authority without relabeling
+ok 38 - queued real E2 joins E1 winner and confirms exact authority without relabeling
+  ---
+  duration_ms: 42.170561
+  type: 'test'
+  ...
+# Subtest: queued real E2 joins E1 winner and confirms changed authority without relabeling
+ok 39 - queued real E2 joins E1 winner and confirms changed authority without relabeling
+  ---
+  duration_ms: 53.609356
+  type: 'test'
+  ...
+# Subtest: queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+not ok 40 - queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+  ---
+  duration_ms: 40.970769
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair.test.js:1108:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair.test.js:1147:18
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:66:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/7b0b427b251d-mwqaqhn2-801547/test/partition/placement-retained-row-repair-fixture.js:25:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+ok 41 - real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+  ---
+  duration_ms: 44.948301
+  type: 'test'
+  ...
+# Subtest: unknown native BUSY retains its only clearing observation: clear-before-answer
+ok 42 - unknown native BUSY retains its only clearing observation: clear-before-answer
+  ---
+  duration_ms: 44.393639
+  type: 'test'
+  ...
+# Subtest: unknown native BUSY retains its only clearing observation: answer-before-clear
+ok 43 - unknown native BUSY retains its only clearing observation: answer-before-clear
+  ---
+  duration_ms: 46.367592
+  type: 'test'
+  ...
+# Subtest: registered owner read backoff recovers without a new caller or row/role event
+ok 44 - registered owner read backoff recovers without a new caller or row/role event
+  ---
+  duration_ms: 147.070865
+  type: 'test'
+  ...
+# Subtest: shutdown cancels actual registered read-dependency wake and cannot rearm replaced debt
+ok 45 - shutdown cancels actual registered read-dependency wake and cannot rearm replaced debt
+  ---
+  duration_ms: 43.452248
+  type: 'test'
+  ...
+1..45
+# tests 45
+# suites 0
+# pass 43
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5204.799627
+# time=6695ms
+# test-files total=4 pass=1 fail=3 assertions=73
+placement-results={"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":4429,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":4599,"retriedOnce":false,"firstFailureLine":"not ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing"}
+placement-results={"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":17,"durationMs":5176,"retriedOnce":false,"firstFailureLine":"not ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender"}
+placement-results={"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":false,"assertions":45,"durationMs":6695,"retriedOnce":false,"firstFailureLine":"not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED"}

@@ -1,0 +1,24 @@
+lab test: tv-dator: ordinary (4 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=2754319
+[tv-dator] placement-head=316671f87352e16e7cbd8dfaa74ed0af234ded36
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2754759
+[tv-dator] # test-files planned=4
+[tv-dator] classified lane ordinary: 4 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/scripts/fallback-branch-census.test.js (38 assertions, 8844ms)
+[tv-dator] ok test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (5 assertions, 15375ms)
+[tv-dator] ok test/scripts/check-fast-static.test.js (6 assertions, 19953ms)
+[tv-dator] ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 34415ms)
+[tv-dator] # test-files total=4 pass=4 fail=0 assertions=50
+lab test: tv-dator: # test-files total=4 pass=4 fail=0 assertions=50
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=4 pass=4 fail=0 assertions=50
+exit=0

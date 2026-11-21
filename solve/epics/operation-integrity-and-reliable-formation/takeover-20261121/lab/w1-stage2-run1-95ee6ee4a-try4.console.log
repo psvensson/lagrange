@@ -1,0 +1,10 @@
+file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2689
+    throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
+          ^
+
+Error: tv-dator is not a ready lab machine this run: ready
+    at placeLabLanes (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2689:11)
+    at runLabTest (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2973:21)
+    at async file:///mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs:22:18
+
+Node.js v22.23.2

@@ -1,0 +1,957 @@
+lab test: adam-laptop: bootstrap, exclusive (5 files) cores=8 mem=15.5GiB speed x2.03
+[adam-laptop] placement-shell=3308173
+[adam-laptop] placement-head=f580579a509293e50b0344d1c7e742b10fbf2aac
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3309234
+[adam-laptop] # test-files planned=5
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: hold cpu 79C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/cdc-source-occurrence-delivery.integration.test.js (5 assertions, 15091ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=5
+[adam-laptop] classified lane exclusive: 4 file(s), jobs=1
+[adam-laptop] thermal: ok cpu 56C (coretemp/Package id 0) nvme 22C (nvme/Composite)
+[adam-laptop] not ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2788ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] TAP version 13
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: C6: real RuntimeServiceHandler + manager + runtime + native lifecycle on three hosts
+[adam-laptop]     # Subtest: C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+[adam-laptop]     not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 754.221776
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:116:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:143:7)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Promise.all (index 0)
+[adam-laptop]         async Suite.run (node:internal/test_runner/test:1442:7)
+[adam-laptop]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]       ...
+[adam-laptop]     # Subtest: C6-7 REMOVE withdraws endpoint before CLOSED and the row after; C6-8 closed:false holds; C6-9 restart
+[adam-laptop]     not ok 2 - C6-7 REMOVE withdraws endpoint before CLOSED and the row after; C6-8 closed:false holds; C6-9 restart
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 596.51111
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:195:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:84:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:197:17)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop]     1..2
+[adam-laptop] not ok 1 - C6: real RuntimeServiceHandler + manager + runtime + native lifecycle on three hosts
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1352.234937
+[adam-laptop]   type: 'suite'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:115:1'
+[adam-laptop]   failureType: 'subtestsFailed'
+[adam-laptop]   error: '2 subtests failed'
+[adam-laptop]   code: 'ERR_TEST_FAILURE'
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 2
+[adam-laptop] # suites 1
+[adam-laptop] # pass 0
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 1358.98985
+[adam-laptop] # time=2788ms
+[adam-laptop] not ok test/wasm-service/bound-creation-physical-custody.integration.test.js (20 assertions, 7167ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: U1 services-row publication: a current retained origin admits one PRESENT mark
+[adam-laptop] ok 1 - U1 services-row publication: a current retained origin admits one PRESENT mark
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 158.127607
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 physical owner: CREATED, STARTING and READY are current; fenced objects remain held
+[adam-laptop] ok 2 - U1 physical owner: CREATED, STARTING and READY are current; fenced objects remain held
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 142.482526
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 physical owner: full intent identity is compared even when the token is identical
+[adam-laptop] ok 3 - U1 physical owner: full intent identity is compared even when the token is identical
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 86.434435
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 physical owner: actual failed cleanup is unavailable while its resource custody stays live
+[adam-laptop] ok 4 - U1 physical owner: actual failed cleanup is unavailable while its resource custody stays live
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 93.823623
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement custody: registration precedes a synchronously reentrant shutdown
+[adam-laptop] ok 5 - U1 retirement custody: registration precedes a synchronously reentrant shutdown
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 78.510555
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement custody: equal requests coalesce and an operation-id body collision is refused
+[adam-laptop] ok 6 - U1 retirement custody: equal requests coalesce and an operation-id body collision is refused
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 77.329931
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 retirement custody: shutdown retry preserves a failed retirement tombstone obligation
+[adam-laptop] ok 7 - U1 retirement custody: shutdown retry preserves a failed retirement tombstone obligation
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 104.016998
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement custody: joining an ordinary stop retains debt when that stop fails
+[adam-laptop] ok 8 - U1 retirement custody: joining an ordinary stop retains debt when that stop fails
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 84.832309
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 physical admission: a directly stopping object blocks a second bound object
+[adam-laptop] ok 9 - U1 physical admission: a directly stopping object blocks a second bound object
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 82.978507
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 retirement finality: lost metadata history with RETIRED storage
+[adam-laptop] ok 10 - U1 retirement finality: lost metadata history with RETIRED storage
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 91.958574
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 retirement finality: lost metadata history with missing storage
+[adam-laptop] ok 11 - U1 retirement finality: lost metadata history with missing storage
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 70.560847
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 driver admission: a stale prepared origin cannot start the physically current successor
+[adam-laptop] ok 12 - U1 driver admission: a stale prepared origin cannot start the physically current successor
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 71.307615
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement debt: throw STOPPED projection cannot complete the original journal
+[adam-laptop] not ok 13 - U1 retirement debt: throw STOPPED projection cannot complete the original journal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 542.299375
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:451:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:453:17)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement debt: retained STOPPED projection cannot complete the original journal
+[adam-laptop] not ok 14 - U1 retirement debt: retained STOPPED projection cannot complete the original journal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 537.527796
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:451:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:453:17)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement debt: absent STOPPED projection cannot complete the original journal
+[adam-laptop] not ok 15 - U1 retirement debt: absent STOPPED projection cannot complete the original journal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 583.884763
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:451:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:453:17)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 actual return: old driver READY cannot replace the manager state of a HELD successor
+[adam-laptop] not ok 16 - U1 actual return: old driver READY cannot replace the manager state of a HELD successor
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 596.329192
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:703:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:705:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 actual return: old physical PUBLISHED cannot mark a HELD successor running in the driver
+[adam-laptop] not ok 17 - U1 actual return: old physical PUBLISHED cannot mark a HELD successor running in the driver
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 556.78676
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:734:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:736:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 actual return: old authoritative PUBLISHED confirmation cannot overwrite successor state
+[adam-laptop] not ok 18 - U1 actual return: old authoritative PUBLISHED confirmation cannot overwrite successor state
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 608.59498
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:765:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:767:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 actual return: completed services effect cannot authorize the next owner after replacement
+[adam-laptop] not ok 19 - U1 actual return: completed services effect cannot authorize the next owner after replacement
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 524.248733
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:809:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:811:17)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 actual return: completed endpoint effect cannot authorize the next owner after replacement
+[adam-laptop] not ok 20 - U1 actual return: completed endpoint effect cannot authorize the next owner after replacement
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 578.839804
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:809:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'custody founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:811:17)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..20
+[adam-laptop] # tests 20
+[adam-laptop] # suites 0
+[adam-laptop] # pass 12
+[adam-laptop] # fail 8
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 5678.992934
+[adam-laptop] # time=7167ms
+[adam-laptop] not ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 16816ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] TAP version 13
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+[adam-laptop]     # Subtest: P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+[adam-laptop]     not ok 1 - P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 559.392252
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:164:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:181:19)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Promise.all (index 0)
+[adam-laptop]         async Suite.run (node:internal/test_runner/test:1442:7)
+[adam-laptop]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+[adam-laptop]     not ok 2 - P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 388.020536
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:187:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'host-3 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:204:5)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+[adam-laptop]     not ok 3 - P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 656.736388
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:209:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:222:5)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+[adam-laptop]     not ok 4 - P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 618.034293
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:233:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:236:15)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+[adam-laptop]     not ok 5 - P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 595.632175
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:268:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:271:15)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+[adam-laptop]     not ok 6 - P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 588.254819
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:292:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:298:17)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R8 in-process: terminal creation does not reopen physical custody; idempotent REMOVE returns COMPLETED synchronously with no duplicate outcome, and after restart missing physical custody is NOT_FOUND
+[adam-laptop]     not ok 7 - P-R8 in-process: terminal creation does not reopen physical custody; idempotent REMOVE returns COMPLETED synchronously with no duplicate outcome, and after restart missing physical custody is NOT_FOUND
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 572.402416
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:359:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:362:15)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+[adam-laptop]     not ok 8 - P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 549.953102
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:389:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:392:15)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+[adam-laptop]     ok 9 - P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 205.412191
+[adam-laptop]       type: 'test'
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+[adam-laptop]     not ok 10 - P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 348.316749
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:469:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:497:5)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+[adam-laptop]     not ok 11 - P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 422.796353
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:534:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:552:5)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+[adam-laptop]     ok 12 - P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 303.449721
+[adam-laptop]       type: 'test'
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+[adam-laptop]     not ok 13 - P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 411.003158
+[adam-laptop]       type: 'test'
+[adam-laptop]       location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:572:3'
+[adam-laptop]       failureType: 'testCodeFailure'
+[adam-laptop]       error: 'removed: did not settle within the declared rounds'
+[adam-laptop]       code: 'ERR_ASSERTION'
+[adam-laptop]       name: 'AssertionError'
+[adam-laptop]       operator: 'fail'
+[adam-laptop]       stack: |-
+[adam-laptop]         e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]         async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:581:5)
+[adam-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]       ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop]     # Subtest: P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+[adam-laptop]     ok 14 - P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 295.888326
+[adam-laptop]       type: 'test'
+[adam-laptop]       ...
+[adam-laptop]     1..14
+[adam-laptop] not ok 1 - recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 6517.91012
+[adam-laptop]   type: 'suite'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:163:1'
+[adam-laptop]   failureType: 'subtestsFailed'
+[adam-laptop]   error: '11 subtests failed'
+[adam-laptop]   code: 'ERR_TEST_FAILURE'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+[adam-laptop]     # Subtest: R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+[adam-laptop]     ok 1 - R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+[adam-laptop]       ---
+[adam-laptop]       duration_ms: 120.944321
+[adam-laptop]       type: 'test'
+[adam-laptop]       ...
+[adam-laptop]     1..1
+[adam-laptop] ok 2 - recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 121.134479
+[adam-laptop]   type: 'suite'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+[adam-laptop] ok 3 - independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 166.618993
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"oldStopped":true,"resumedAfterCustodyTransfer":[],"oldInFlight":[],"newCompositionOwnsDirectory":true}
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+[adam-laptop] not ok 4 - independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 589.470618
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:692:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:693:13)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+[adam-laptop] not ok 5 - independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 555.852538
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:726:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:727:13)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+[adam-laptop] not ok 6 - independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 582.431173
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:771:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:772:13)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: predecessor-first inventory preserves both predecessor cleanup and successor reentry
+[adam-laptop] not ok 7 - independent U1: predecessor-first inventory preserves both predecessor cleanup and successor reentry
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 555.958074
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:814:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:815:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: successor-first inventory preserves both predecessor cleanup and successor reentry
+[adam-laptop] not ok 8 - independent U1: successor-first inventory preserves both predecessor cleanup and successor reentry
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 597.388253
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:814:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:815:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: predecessor-first older ABSENT reentry cannot hide the successor
+[adam-laptop] ok 9 - independent U1: predecessor-first older ABSENT reentry cannot hide the successor
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 245.459947
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"order":"predecessor-first","plans":[["operation-1","ABSENT_UNCLAIMED","REENTER"],["z-live-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["operation-1","z-live-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"z-live-1","origin":{"operationId":"z-live-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"00fb300e7d36f42c0548cd5f81c364f9979a5f6b72197d83754f4c1858e7bbf7","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"9575bd07d742ef06dec2025f4729caf90b1fd76210acdf502cf4aaa79fe41cf0","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005c","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"a6e0fd3ba3565d19ab766cbd970dda63caf73dac3b9d3e25006b06a1551da272","revisionId":"service-revision-d6eeac103aebc2f8f938834aa0c65ae994a7d0b64af86791178d16b501a1ea49","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"z-live-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"9b3c63d3b456fbe37e2518ad1b0285790937eaa8c9be936df1d619becc54f900","bodyDigest":"0f8f2bda3d067bf5002f75d6f0f99490ea0212aeef334af21da012b5fa0c6a17","operationId":"z-live-1","ordinal":1,"slot":1}}}}
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1: successor-first older ABSENT reentry cannot hide the successor
+[adam-laptop] ok 10 - independent U1: successor-first older ABSENT reentry cannot hide the successor
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 254.498093
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"order":"successor-first","plans":[["a-live-1","ABSENT_UNCLAIMED","REENTER"],["operation-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["a-live-1","operation-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"a-live-1","origin":{"operationId":"a-live-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"00fb300e7d36f42c0548cd5f81c364f9979a5f6b72197d83754f4c1858e7bbf7","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"9575bd07d742ef06dec2025f4729caf90b1fd76210acdf502cf4aaa79fe41cf0","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005c","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"a6e0fd3ba3565d19ab766cbd970dda63caf73dac3b9d3e25006b06a1551da272","revisionId":"service-revision-d6eeac103aebc2f8f938834aa0c65ae994a7d0b64af86791178d16b501a1ea49","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"a-live-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"9b3c63d3b456fbe37e2518ad1b0285790937eaa8c9be936df1d619becc54f900","bodyDigest":"d040db924399daa7348ae2ffa74652b807b790bb2bc793a0095e825bb5682339","operationId":"a-live-1","ordinal":1,"slot":1}}}}
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1 control: restart invokes the retained operation id without a scan identity
+[adam-laptop] ok 11 - independent U1 control: restart invokes the retained operation id without a scan identity
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 174.993584
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1 control: a RETIRED startup plan enters one bound stop
+[adam-laptop] not ok 12 - independent U1 control: a RETIRED startup plan enters one bound stop
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 537.509527
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:908:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:909:13)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles
+[adam-laptop] not ok 13 - independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 568.179748
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:924:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:925:13)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 v3 D1: original future CREATE retries itself while held belongs to J
+[adam-laptop] ok 14 - U1 v3 D1: original future CREATE retries itself while held belongs to J
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 281.129527
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 v3 D1: original future CREATE retries itself while active belongs to J
+[adam-laptop] not ok 15 - U1 v3 D1: original future CREATE retries itself while active belongs to J
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 551.658477
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:953:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:955:55)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 v3: a local inspection suspended past shutdown has no late handler effect
+[adam-laptop] ok 16 - U1 v3: a local inspection suspended past shutdown has no late handler effect
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 213.635968
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 v3: RETIRED physical closure keeps startup debt until original journal confirms
+[adam-laptop] not ok 17 - U1 v3: RETIRED physical closure keeps startup debt until original journal confirms
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 525.208179
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1048:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1050:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once
+[adam-laptop] ok 18 - U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 146.618078
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 v3: duplicate journal observation is folded by identity
+[adam-laptop] ok 19 - U1 v3: duplicate journal observation is folded by identity
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 182.818795
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 v3: duplicate journal observation is refused by identity
+[adam-laptop] ok 20 - U1 v3: duplicate journal observation is refused by identity
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 148.646866
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 memo wake: real HELD J retains one wake behind exact F through handler gate release
+[adam-laptop] ok 21 - U1 memo wake: real HELD J retains one wake behind exact F through handler gate release
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 186.578206
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 memo wake: memo replacement refuses stale J admission at gate settlement
+[adam-laptop] ok 22 - U1 memo wake: memo replacement refuses stale J admission at gate settlement
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 190.527156
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 memo wake: physical replacement refuses stale J admission at gate settlement
+[adam-laptop] ok 23 - U1 memo wake: physical replacement refuses stale J admission at gate settlement
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 208.354944
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome
+[adam-laptop] not ok 24 - U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 556.959323
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1300:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1302:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 retirement identity: changed full body with the active token has no owner or file effect
+[adam-laptop] ok 25 - U1 retirement identity: changed full body with the active token has no owner or file effect
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 215.581414
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 projection debt: the actual stopped projection owner cannot complete an old journal
+[adam-laptop] not ok 26 - U1 projection debt: the actual stopped projection owner cannot complete an old journal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 513.415797
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1381:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'founders active: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1383:15)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..26
+[adam-laptop] # tests 39
+[adam-laptop] # suites 2
+[adam-laptop] # pass 17
+[adam-laptop] # fail 22
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 15398.924506
+[adam-laptop] # time=16816ms
+[adam-laptop] not ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 2716ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] TAP version 13
+[adam-laptop] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: U1 bound REMOVE exact endpoint await preserves old physical custody and successor exclusion
+[adam-laptop] not ok 1 - U1 bound REMOVE exact endpoint await preserves old physical custody and successor exclusion
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 729.138172
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:48:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'real bound founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async dispatchCreates (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:116:3)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:131:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:50:28)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: U1 bound handler REMOVE retains failed native close debt and retries its original resource
+[adam-laptop] not ok 2 - U1 bound handler REMOVE retains failed native close debt and retries its original resource
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 560.262639
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:135:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'real bound founders published: did not settle within the declared rounds'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+[adam-laptop]     async dispatchCreates (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:116:3)
+[adam-laptop]     async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:131:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:137:28)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..2
+[adam-laptop] # tests 2
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 1295.392287
+[adam-laptop] # time=2716ms
+[adam-laptop] # test-files total=4 pass=0 fail=4 assertions=66
+lab test: adam-laptop: # test-files total=5 pass=1 fail=4 assertions=71
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=5 pass=1 fail=4 assertions=71
+exit=1

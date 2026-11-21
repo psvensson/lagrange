@@ -1,0 +1,19 @@
+{
+  "sha": "6a23e4abd5d59f2816abe90b4ad17f48e6ac00b6",
+  "host": "adams-gamla",
+  "checkBase": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "files": [
+    "test/partition/placement-settled-replay-cutover-pause.test.js",
+    "test/control-plane/formation-transition-settled-replay.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/formation-transition-settled-replay.test.js",
+        "test/partition/placement-settled-replay-cutover-pause.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

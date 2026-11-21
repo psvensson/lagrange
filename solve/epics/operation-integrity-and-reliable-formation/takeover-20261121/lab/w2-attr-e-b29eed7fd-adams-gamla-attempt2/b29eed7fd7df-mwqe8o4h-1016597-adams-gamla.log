@@ -1,0 +1,15 @@
+placement-shell=1621547
+placement-head=b29eed7fd7dfd3d63070bda8e4aab89234a76313
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1622988
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=3
+thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+ok test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (5 assertions, 26110ms)
+ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 37607ms)
+# test-files total=2 pass=2 fail=0 assertions=6
+placement-results={"file":"test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":26110,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-owed-admission-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":37607,"retriedOnce":false,"firstFailureLine":null}

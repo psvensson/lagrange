@@ -1,0 +1,17 @@
+{
+  "sha": "119a6a2d9287a957229b6ccb36cba88ce3c6247a",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-service-row-owner.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-service-row-owner.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

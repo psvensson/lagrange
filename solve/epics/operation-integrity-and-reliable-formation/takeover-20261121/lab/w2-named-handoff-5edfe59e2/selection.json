@@ -1,0 +1,17 @@
+{
+  "sha": "5edfe59e2e42b0b6e04566a941e22d217c5ac35b",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/replace-named-handoff-attempt.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/replace-named-handoff-attempt.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

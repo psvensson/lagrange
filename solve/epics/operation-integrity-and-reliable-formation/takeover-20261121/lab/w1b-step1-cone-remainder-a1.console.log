@@ -1,0 +1,5 @@
+lab test: adams-gamla: ordinary, external-toolchain, bootstrap, exclusive (76 files) cores=4 mem=15.6GiB speed x2.02
+[adams-gamla] placement-shell=1611205
+lab test: adams-gamla: # test-files total=76 pass=0 fail=76 assertions=0
+lab test: adams-gamla: 76 file(s) reported no result: exit 97
+# test-files total=76 pass=0 fail=76 assertions=0

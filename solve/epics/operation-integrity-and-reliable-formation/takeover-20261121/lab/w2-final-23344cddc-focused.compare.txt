@@ -1,0 +1,308 @@
+test/control-plane/active-node-projection.test.js
+   M:pass(105)
+   prev:pass(105)
+   base:not-run
+test/control-plane/read-model-contract.test.js
+   M:pass(92)
+   prev:pass(92)
+   base:not-run
+test/control-plane/readiness-snapshot-persistence.test.js
+   M:pass(57)
+   prev:pass(57)
+   base:not-run
+test/convergence/dt-ledger-completion-continuity-discriminator.test.js
+   M:pass(64)
+   prev:not-run
+   base:not-run
+test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js
+   M:pass(30)
+   prev:pass(30)
+   base:pass(30)
+test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js
+   M:FAIL(94) «should be equal»
+   prev:FAIL(94) «should be equal»
+   base:FAIL(94) «should be equal»
+test/partition/partition-service-row-owner.test.js
+   M:pass(212)
+   prev:not-run
+   base:not-run
+test/node/group-retirement-redrive.test.js
+   M:pass(117)
+   prev:not-run
+   base:not-run
+test/partition/partition-service.test.js
+   M:pass(136)
+   prev:pass(136)
+   base:not-run
+test/partition/partition-write-typed-releases.test.js
+   M:pass(5)
+   prev:pass(5)
+   base:not-run
+test/partition/placement-creation-terminal-replay.test.js
+   M:pass(2)
+   prev:pass(2)
+   base:not-run
+test/partition/placement-founder-origin.test.js
+   M:pass(4)
+   prev:pass(4)
+   base:not-run
+test/partition/placement-retained-leadership.test.js
+   M:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   prev:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   base:pass(4)
+test/partition/placement-founding-and-runtime-service-admission.test.js
+   M:pass(23)
+   prev:pass(23)
+   base:FAIL(15) «routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN»
+test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js
+   M:pass(5)
+   prev:FAIL(5) «R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entir»
+   base:pass(5)
+test/query/schema-provisioning-native-admission.test.js
+   M:pass(158)
+   prev:pass(158)
+   base:FAIL(122) «Cannot read properties of undefined (reading 'has')»
+test/raft/leadership-transfer-single-path.test.js
+   M:pass(3)
+   prev:pass(3)
+   base:not-run
+test/rebalancer/admission-real-size-estimates.test.js
+   M:FAIL(23) «Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)»
+   prev:FAIL(23) «Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)»
+   base:FAIL(23) «Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)»
+test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js
+   M:pass(3)
+   prev:pass(3)
+   base:not-run
+test/rebalancer/application-write-formation-authority.test.js
+   M:pass(84)
+   prev:pass(84)
+   base:not-run
+test/query/replica-operation-structured-mutation-native.test.js
+   M:pass(2)
+   prev:pass(2)
+   base:not-run
+test/rebalancer/canonical-replica-completion-observation.test.js
+   M:pass(5)
+   prev:pass(5)
+   base:not-run
+test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+   M:FAIL(97) «a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)»
+   prev:FAIL(97) «a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)»
+   base:pass(97)
+test/rebalancer/coordinator-created-operation-progress.test.js
+   M:FAIL(41) «the resumed owner path should continue into dispatch after claiming the operation»
+   prev:FAIL(41) «the resumed owner path should continue into dispatch after claiming the operation»
+   base:FAIL(41) «the resumed owner path should continue into dispatch after claiming the operation»
+test/rebalancer/assignment-epoch-fencing.test.js
+   M:pass(26)
+   prev:pass(26)
+   base:pass(26)
+test/partition/partition-cdc-owed-admission-native.test.js
+   M:pass(1)
+   prev:FAIL(1) «native RF3 bounds owed admission and commits drain markers on every replica»
+   base:pass(1)
+test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js
+   M:pass(7)
+   prev:pass(7)
+   base:pass(7)
+test/rebalancer/duplicate-operation-prevention.property.test.js
+   M:FAIL(40) «Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)»
+   prev:FAIL(40) «Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)»
+   base:FAIL(40) «Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)»
+test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js
+   M:pass(28)
+   prev:pass(28)
+   base:not-run
+test/rebalancer/coordinator-reservation-lifecycle.test.js
+   M:pass(101)
+   prev:pass(101)
+   base:not-run
+test/rebalancer/late-dispatch-honored-stops-redrive.test.js
+   M:pass(12)
+   prev:pass(12)
+   base:not-run
+test/rebalancer/message-group-membership-operation-lane.test.js
+   M:FAIL(8) «canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps»
+   prev:FAIL(8) «canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps»
+   base:FAIL(8) «canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps»
+test/rebalancer/message-group-membership-branch-authorization.test.js
+   M:pass(115)
+   prev:pass(115)
+   base:not-run
+test/rebalancer/operation-workflow-observed-progress-lane-held.test.js
+   M:pass(21)
+   prev:pass(21)
+   base:not-run
+test/rebalancer/orphaned-operation-reconcile-redrive.test.js
+   M:pass(14)
+   prev:pass(14)
+   base:pass(14)
+test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+   M:FAIL(313) «priority SQL re-dispatch should persist the SENDING and CREATING transitions»
+   prev:FAIL(313) «priority SQL re-dispatch should persist the SENDING and CREATING transitions»
+   base:pass(315)
+test/rebalancer/operation-ownership-lease-fencing.test.js
+   M:pass(231)
+   prev:pass(231)
+   base:not-run
+test/rebalancer/quorum-conditioned-remove-safety.test.js
+   M:FAIL(179) «remove should dispatch once replacement becomes voter-ready»
+   prev:FAIL(179) «remove should dispatch once replacement becomes voter-ready»
+   base:FAIL(179) «remove should dispatch once replacement becomes voter-ready»
+test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+   M:pass(49)
+   prev:pass(49)
+   base:pass(49)
+test/rebalancer/rebalance-coordinator-operation-ownership.test.js
+   M:pass(233)
+   prev:pass(233)
+   base:not-run
+test/rebalancer/remove-active-dispatch-redrive.test.js
+   M:pass(181)
+   prev:pass(181)
+   base:not-run
+test/rebalancer/rebalance-coordinator-topology-guard.test.js
+   M:FAIL(105) «createOperation should fail closed when the target node already hosts the partition»
+   prev:FAIL(105) «createOperation should fail closed when the target node already hosts the partition»
+   base:FAIL(105) «createOperation should fail closed when the target node already hosts the partition»
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js
+   M:pass(293)
+   prev:pass(293)
+   base:pass(293)
+test/rebalancer/replace-named-handoff-attempt.test.js
+   M:pass(52)
+   prev:not-run
+   base:FAIL(32) «one handoff was issued»
+test/rebalancer/replica-operation-insert-retry-idempotency.test.js
+   M:FAIL(8) «Authoritative replica operation not confirmed: op-idem-1»
+   prev:FAIL(8) «Authoritative replica operation not confirmed: op-idem-1»
+   base:FAIL(8) «Authoritative replica operation not confirmed: op-idem-1»
+test/rebalancer/replica-operation-confirmation-authority-read.test.js
+   M:pass(82)
+   prev:pass(82)
+   base:not-run
+test/rebalancer/replica-operation-observation-contract.test.js
+   M:pass(31)
+   prev:pass(31)
+   base:not-run
+test/rebalancer/replica-operation-membership-epoch-binding.test.js
+   M:FAIL(124) «src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode o»
+   prev:FAIL(124) «src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode o»
+   base:FAIL(130) «src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode o»
+test/rebalancer/replica-operation-repository-owner-clock-waits.test.js
+   M:pass(49)
+   prev:pass(49)
+   base:not-run
+test/rebalancer/replica-operation-repository-time-authority.test.js
+   M:pass(5)
+   prev:pass(5)
+   base:not-run
+test/rebalancer/replica-operation-retained-owner-turn.test.js
+   M:FAIL(15) «the exact command owns the next turn»
+   prev:FAIL(15) «the exact command owns the next turn»
+   base:FAIL(15) «the exact command owns the next turn»
+test/rebalancer/replica-operation-terminal-cas.test.js
+   M:pass(61)
+   prev:pass(61)
+   base:not-run
+test/rebalancer/replica-operations-single-writer.test.js
+   M:pass(49)
+   prev:pass(49)
+   base:pass(49)
+test/rebalancer/replace-real-group-native-ledger-recovery.test.js
+   M:pass(10)
+   prev:pass(10)
+   base:not-run
+test/rebalancer/required-entity-operation-observation.test.js
+   M:pass(177)
+   prev:pass(177)
+   base:pass(177)
+test/rebalancer/reservation-expiry-operation-aware.test.js
+   M:FAIL(8) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   prev:FAIL(8) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   base:FAIL(8) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js
+   M:FAIL(7) «Unsupported rebalancer entity type: undefined»
+   prev:FAIL(7) «Unsupported rebalancer entity type: undefined»
+   base:FAIL(7) «Unsupported rebalancer entity type: undefined»
+test/rebalancer/spread-cure-transition-authorization-production-path.test.js
+   M:pass(2)
+   prev:pass(2)
+   base:pass(2)
+test/rebalancer/spread-cure-transition-authorization-row.test.js
+   M:pass(1)
+   prev:pass(1)
+   base:not-run
+test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+   M:FAIL(87) «Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)»
+   prev:FAIL(87) «Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)»
+   base:FAIL(87) «Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)»
+test/rebalancer/surplus-drain-prefers-non-leader-source.test.js
+   M:pass(33)
+   prev:not-run
+   base:not-run
+test/rebalancer/terminal-failed-add-target-cleanup.test.js
+   M:pass(109)
+   prev:pass(109)
+   base:not-run
+test/runtime/runtime-replica-state-projection-wiring.test.js
+   M:pass(27)
+   prev:pass(27)
+   base:not-run
+test/scripts/check-runtime-grammar-contracts.test.js
+   M:pass(70)
+   prev:not-run
+   base:not-run
+test/rebalancer/unified-rebalancer.test.js
+   M:pass(221)
+   prev:pass(221)
+   base:not-run
+test/rebalancer/replica-operation-repository.test.js
+   M:pass(466)
+   prev:pass(466)
+   base:not-run
+test/scripts/fallback-branch-census.test.js
+   M:pass(38)
+   prev:pass(38)
+   base:pass(38)
+test/workflow/monotonic-workflow-regression.test.js
+   M:pass(100)
+   prev:pass(100)
+   base:not-run
+test/scripts/check-fast-static.test.js
+   M:pass(6)
+   prev:pass(6)
+   base:pass(6)
+test/scripts/repository-legacy-fallback-closure.test.js
+   M:pass(5)
+   prev:pass(5)
+   base:not-run
+test/bootstrap/bootstrap-topology-snapshot.test.js
+   M:pass(8)
+   prev:pass(8)
+   base:not-run
+test/bootstrap/bootstrap-topology-snapshot-owner.test.js
+   M:pass(65)
+   prev:not-run
+   base:not-run
+test/bootstrap/node-joining-service.test.js
+   M:pass(98)
+   prev:pass(98)
+   base:not-run
+test/bootstrap/cdc-source-occurrence-delivery.integration.test.js
+   M:pass(5)
+   prev:not-run
+   base:pass(5)
+test/integration/message-group-fresh-identity-replacement.integration.test.js
+   M:pass(1)
+   prev:pass(1)
+   base:not-run
+test/rebalancer/active-handoff-operation-visibility.integration.test.js
+   M:pass(6)
+   prev:pass(6)
+   base:not-run
+test/rebalancer/message-group-operation-routing.integration.test.js
+   M:FAIL(20) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   prev:FAIL(20) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   base:FAIL(21) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»

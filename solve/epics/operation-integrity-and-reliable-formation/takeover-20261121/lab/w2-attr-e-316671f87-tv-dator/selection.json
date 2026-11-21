@@ -1,0 +1,23 @@
+{
+  "sha": "316671f87352e16e7cbd8dfaa74ed0af234ded36",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js",
+    "test/partition/partition-cdc-owed-admission-native.test.js",
+    "test/scripts/check-fast-static.test.js",
+    "test/scripts/fallback-branch-census.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/check-fast-static.test.js",
+        "test/partition/partition-cdc-owed-admission-native.test.js",
+        "test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js",
+        "test/scripts/fallback-branch-census.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

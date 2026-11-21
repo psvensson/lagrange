@@ -1,0 +1,1539 @@
+{
+ "report": {
+  "outcome": "failed",
+  "passed": false,
+  "durationMs": 674010,
+  "verdict": "BLOCK_EVIDENCE_INCOMPLETE",
+  "verdictReason": "log_window_coverage_incomplete",
+  "startedAt": "2026-11-21T13:16:58.611Z",
+  "error": "fresh-formation-user-table-routability: first unmet predicate c-replica-operations-quiet (projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4, projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03, projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa, replica_operations_in_flight); unmet: c-replica-operations-quiet, e-write-readback-every-node; time-to-serve-lane 1277ms, time-to-user-table-routable 479383ms",
+  "metadata": {
+   "srcFingerprint": "e340b3b9144f4515",
+   "executionTarget": "lab",
+   "executionHosts": [
+    "lagrange-fdiag-1",
+    "lagrange-fdiag-2",
+    "lagrange-fdiag-3"
+   ],
+   "configPath": "/home/peter/lagrange/.tmp/home-lab/fresh-formation-user-table-routability-2026-11-21T13-08-50-390Z.json"
+  }
+ },
+ "routability": {
+  "pollCount": 198,
+  "routabilityPolls": 1,
+  "readFailureCount": 0,
+  "reasonCodeTally": {
+   "authority_not_spread:control_plane_publications-p1:1/3": 31,
+   "authority_not_spread:replica_operations-p1:1/3": 10,
+   "authority_not_spread:schema_operations-p1:1/3": 34,
+   "authority_not_spread:sql_transaction_participants-p1:1/3": 31,
+   "authority_not_spread:sql_transactions-p1:1/3": 38,
+   "authority_not_spread:sql_write_operations-p1:1/3": 50,
+   "projection_not_spread:95ce5141-d400-429a-b8d8-52431313d8a4": 50,
+   "projection_not_spread:c14b47ee-4648-49d4-bffd-552bd8ca9b03": 51,
+   "projection_not_spread:d1162379-5f5e-444b-b0ff-19ce9533e6aa": 51,
+   "projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4": 197,
+   "projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03": 197,
+   "projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa": 197,
+   "replica_operations_in_flight": 197,
+   "replica_operations_observation_incomplete": 4,
+   "partitions_observation_incomplete": 4,
+   "serve_ineligible": 2,
+   "serve_lane_serve_not_eligible": 2
+  },
+  "timings": {
+   "formationSatisfiedSinceScenarioStartMs": null,
+   "seedProcessStartAt": "2026-11-21T13:17:13.776Z",
+   "timeToServeLaneSinceScenarioStartMs": 1277,
+   "timeToServeLaneSinceSeedStartMs": 52163,
+   "timeToUserTableRoutableSinceScenarioStartMs": 479383,
+   "timeToUserTableRoutableSinceSeedStartMs": 530269
+  },
+  "firstUnmet": {
+   "id": "c-replica-operations-quiet",
+   "reasonCodes": [
+    "projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4",
+    "projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+    "projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+    "replica_operations_in_flight"
+   ]
+  },
+  "formationSatisfied": false,
+  "userTableIssuedAfterFormationSatisfied": false,
+  "createAttempts": [
+   {
+    "contractState": "pending",
+    "nextAction": "retry",
+    "reasonCodes": [
+     "schema_replica_convergence_pending"
+    ],
+    "atMs": 1795267520291
+   },
+   {
+    "contractState": "pending",
+    "nextAction": "retry",
+    "reasonCodes": [
+     "schema_replica_convergence_pending"
+    ],
+    "atMs": 1795267555900
+   },
+   {
+    "contractState": "under_replicated",
+    "nextAction": "proceed",
+    "reasonCodes": [
+     "schema_provisioning_complete"
+    ],
+    "atMs": 1795267562165
+   }
+  ],
+  "predicates": [
+   {
+    "id": "a-serve-lane-open",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "b-priority-spread",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "c-replica-operations-quiet",
+    "met": false,
+    "reasonCodes": [
+     "projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4",
+     "projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+     "projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+     "replica_operations_in_flight"
+    ]
+   },
+   {
+    "id": "d-user-table-routable",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "e-write-readback-every-node",
+    "met": false,
+    "reasonCodes": [
+     "insert_failed:public_pg_unavailable: Timed out waiting for healthy public PostgreSQL wire endpoint",
+     "readback_coverage:null",
+     "readback_row_mismatch:admin:95ce5141-d400-429a-b8d8-52431313d8a4",
+     "readback_row_mismatch:admin:c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+     "readback_row_mismatch:admin:d1162379-5f5e-444b-b0ff-19ce9533e6aa"
+    ]
+   },
+   {
+    "id": "f-no-learner-address-unresolvable-for-committed-row",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "g-projection-agrees-with-authority",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "observation-integrity",
+    "met": true,
+    "reasonCodes": []
+   }
+  ]
+ },
+ "nodes": {
+  "95ce5141-d400-429a-b8d8-52431313d8a4": {
+   "file": "95ce5141-d400-429a-b8d8-52431313d8a4.log.gz",
+   "lines": 6291,
+   "unparsed": 12,
+   "host": "lagrange-fdiag-1",
+   "firstTime": "2026-11-21T13:17:02.339Z",
+   "lastTime": "2026-11-21T13:28:17.657Z",
+   "counts": {
+    "wait_bound_spent": 234,
+    "failed_to_send_message": 10,
+    "ack_timeout_quarantine_skip": 0,
+    "named_cp_write_wait_expired": 0
+   },
+   "first": {
+    "wait_bound_spent": "{\"level\":50,\"time\":\"2026-11-21T13:17:58.901Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"message-router\",\"event\":\"wait_bound_spent\",\"wait\":\"MESSAGE_TIMEOUT_MS (remaining SERVICE_RESPONSE grant after ACK)\",\"awaited\":\"SERVICE_RESPONSE from the target node for an acknowledged message\",\"boundMs\":4383,\"elapsedMs\":5103,\"lastObserved\":{\"targetConnectionState\":\"connected\",\"deliverySource\":\"replica_operation_dispatch\",\"responseContext\":null,\"pendingResponses\":1},\"scope\":{\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"targetNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"messageId\":\"0a3691dc-0727-4bfc-aa74-2028c0ed7a0a\"},\"repeats\":0,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Wait bound spent\"}",
+    "failed_to_send_message": "{\"level\":50,\"time\":\"2026-11-21T13:22:32.465Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"6586d8cc-72a8-4d54-8843-03569b6d0985\",\"targetService\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03/partition/replace-replica-d110b25e5e9c59da34ec410bd0093430\",\"error\":\"Recovery read delivery closed\",\"deferRetry\":false,\"retryAfterMs\":null,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Failed to send message\"}"
+   },
+   "router_ack_first": "{\"level\":50,\"time\":\"2026-11-21T13:18:04.560Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"message-router\",\"event\":\"wait_bound_spent\",\"wait\":\"MESSAGE_TIMEOUT_MS (delivery ACK)\",\"awaited\":\"ACK from the target node for a sent SERVICE_MESSAGE\",\"boundMs\":499,\"elapsedMs\":1864,\"lastObserved\":{\"connectionId\":\"4a432093-6a3e-409b-b0dd-4b65921dfc86\",\"activeConnectionId\":\"4a432093-6a3e-409b-b0dd-4b65921dfc86\",\"activeConnectionState\":\"connected\",\"sameConnection\":true,\"quarantineOwnerChanged\":false},\"scope\":{\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"targetNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"messageId\":\"4fc26a26-b781-4915-9105-a1f881bdd8ef\"},\"repeats\":0,\"nodeId\":",
+   "loop_gaps": 55,
+   "loop_gap_first": "{\"level\":40,\"time\":\"2026-11-21T13:17:13.012Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"resource-diagnostics\",\"gapMs\":1499,\"taggedExclusiveMs\":0,\"unexplainedMs\":1499,\"memory\":{\"heapUsedMb\":76,\"heapTotalMb\":108,\"rssMb\":625,\"externalMb\":447},\"eventLoopUtilization\":0.9925,\"openSections\":[],\"siteDeltas\":[],\"cumulative\":{\"gapCount\":1,\"totalGapMs\":1499,\"maxGapMs\":1499,\"totalUnexplainedMs\":1499,\"maxUnexplainedGapMs\":1499,\"blockedPercentOfWall\":13.46},\"nodeId\":\"95ce5141-d400-4",
+   "leadership": {
+    "artifact_payload_chunks-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.852Z",
+       1
+      ]
+     ]
+    },
+    "artifact_payloads-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.864Z",
+       1
+      ]
+     ]
+    },
+    "call_activation_leases-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.871Z",
+       1
+      ]
+     ]
+    },
+    "call_cell_reduce_results-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.878Z",
+       1
+      ]
+     ]
+    },
+    "call_cell_reduce_slots-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.886Z",
+       1
+      ]
+     ]
+    },
+    "code-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.894Z",
+       1
+      ]
+     ]
+    },
+    "config-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.901Z",
+       1
+      ]
+     ]
+    },
+    "contexts-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.907Z",
+       1
+      ]
+     ]
+    },
+    "control_plane_publications-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.915Z",
+       1
+      ]
+     ]
+    },
+    "debug_breakpoints-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.923Z",
+       1
+      ]
+     ]
+    },
+    "debug_sessions-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.930Z",
+       1
+      ]
+     ]
+    },
+    "debug_snapshots-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.936Z",
+       1
+      ]
+     ]
+    },
+    "indices-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:15.942Z",
+       1
+      ]
+     ]
+    },
+    "inter_group_latencies-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.004Z",
+       1
+      ]
+     ]
+    },
+    "latency_groups-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.068Z",
+       1
+      ]
+     ]
+    },
+    "live_queries-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.088Z",
+       1
+      ]
+     ]
+    },
+    "logs-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.108Z",
+       1
+      ]
+     ]
+    },
+    "message_groups-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.128Z",
+       1
+      ]
+     ]
+    },
+    "module_dependency_locks-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.154Z",
+       1
+      ]
+     ]
+    },
+    "module_manifests-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.176Z",
+       1
+      ]
+     ]
+    },
+    "node_endpoints-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.198Z",
+       1
+      ]
+     ]
+    },
+    "nodes-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.219Z",
+       1
+      ]
+     ]
+    },
+    "package_registry_mappings-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.241Z",
+       1
+      ]
+     ]
+    },
+    "package_registry_overrides-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.268Z",
+       1
+      ]
+     ]
+    },
+    "partitions-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.290Z",
+       1
+      ]
+     ]
+    },
+    "replica_operations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.312Z",
+       1
+      ]
+     ]
+    },
+    "schema_migration_partitions-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.331Z",
+       1
+      ]
+     ]
+    },
+    "schema_migrations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.349Z",
+       1
+      ]
+     ]
+    },
+    "schema_operations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.370Z",
+       1
+      ]
+     ]
+    },
+    "service_bindings-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.396Z",
+       1
+      ]
+     ]
+    },
+    "service_definitions-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.419Z",
+       1
+      ]
+     ]
+    },
+    "service_endpoints-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.439Z",
+       1
+      ]
+     ]
+    },
+    "service_install_failures-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.459Z",
+       1
+      ]
+     ]
+    },
+    "service_installations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.477Z",
+       1
+      ]
+     ]
+    },
+    "service_instances-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.502Z",
+       1
+      ]
+     ]
+    },
+    "service_packages-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.521Z",
+       1
+      ]
+     ]
+    },
+    "service_partition_access-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.542Z",
+       1
+      ]
+     ]
+    },
+    "service_revisions-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.561Z",
+       1
+      ]
+     ]
+    },
+    "service_timers-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.581Z",
+       1
+      ]
+     ]
+    },
+    "services-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.603Z",
+       1
+      ]
+     ]
+    },
+    "sql_transaction_participants-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.627Z",
+       1
+      ]
+     ]
+    },
+    "sql_transactions-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.651Z",
+       1
+      ]
+     ]
+    },
+    "sql_write_operations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.675Z",
+       1
+      ]
+     ]
+    },
+    "storage_reservations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.698Z",
+       1
+      ]
+     ]
+    },
+    "tables-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.717Z",
+       1
+      ]
+     ]
+    },
+    "wasm_operations-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:17:16.741Z",
+       1
+      ]
+     ]
+    }
+   }
+  },
+  "c14b47ee-4648-49d4-bffd-552bd8ca9b03": {
+   "file": "c14b47ee-4648-49d4-bffd-552bd8ca9b03.log.gz",
+   "lines": 17625,
+   "unparsed": 8609,
+   "host": "lagrange-fdiag-2",
+   "firstTime": "2026-11-21T13:17:36.011Z",
+   "lastTime": "2026-11-21T13:28:18.088Z",
+   "counts": {
+    "wait_bound_spent": 356,
+    "failed_to_send_message": 27,
+    "ack_timeout_quarantine_skip": 17,
+    "named_cp_write_wait_expired": 0
+   },
+   "first": {
+    "wait_bound_spent": "{\"level\":50,\"time\":\"2026-11-21T13:17:47.839Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"rebalance-coordinator\",\"event\":\"wait_bound_spent\",\"wait\":\"REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS\",\"awaited\":\"authoritative replica_operations read without a retryable failure\",\"boundMs\":1000,\"elapsedMs\":1000,\"lastObserved\":{\"errorCode\":null,\"error\":\"authoritative_row_source_unavailable\",\"attempts\":9,\"coalescingKey\":null},\"scope\":{\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\"},\"repeats\":0,\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"msg\":\"Wait bound spent\"}",
+    "ack_timeout_quarantine_skip": "{\"level\":40,\"time\":\"2026-11-21T13:19:04.146Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"ac889716-b1af-46ea-99a4-4f53e6171822\",\"targetAddress\":\"95ce5141-d400-429a-b8d8-52431313d8a4/partition/control_plane_publications-p1-r1\",\"targetNodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"localNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"connectionId\":\"b6afb6eb-01c5-4bdb-b80b-4bdc8cf2dfd8\",\"ackTimeoutStreak\":2,\"ackTimeoutQuarantineThreshold\":2,\"lastInboundAgoMs\":883,\"livenessWindowMs\":30000,\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"msg\":\"Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)\"}",
+    "failed_to_send_message": "{\"level\":50,\"time\":\"2026-11-21T13:19:58.245Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"c8c270c2-8733-4568-a73b-c347f450f61d\",\"targetService\":\"95ce5141-d400-429a-b8d8-52431313d8a4/partition/services-p1-r1\",\"error\":\"Recovery read delivery closed\",\"deferRetry\":false,\"retryAfterMs\":null,\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"msg\":\"Failed to send message\"}"
+   },
+   "router_ack_first": "{\"level\":50,\"time\":\"2026-11-21T13:17:52.300Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"message-router\",\"event\":\"wait_bound_spent\",\"wait\":\"MESSAGE_TIMEOUT_MS (delivery ACK)\",\"awaited\":\"ACK from the target node for a sent SERVICE_MESSAGE\",\"boundMs\":499,\"elapsedMs\":511,\"lastObserved\":{\"connectionId\":\"b6afb6eb-01c5-4bdb-b80b-4bdc8cf2dfd8\",\"activeConnectionId\":\"b6afb6eb-01c5-4bdb-b80b-4bdc8cf2dfd8\",\"activeConnectionState\":\"connected\",\"sameConnection\":true,\"quarantineOwnerChanged\":false},\"scope\":{\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"targetNodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"messageId\":\"711950e1-2524-41fd-901a-43cb70fa3942\"},\"repeats\":0,\"nodeId\":\"",
+   "loop_gaps": 5,
+   "loop_gap_first": "{\"level\":40,\"time\":\"2026-11-21T13:17:44.894Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"resource-diagnostics\",\"gapMs\":1355,\"taggedExclusiveMs\":0,\"unexplainedMs\":1355,\"memory\":{\"heapUsedMb\":71,\"heapTotalMb\":88,\"rssMb\":609,\"externalMb\":447},\"eventLoopUtilization\":0.988,\"openSections\":[],\"siteDeltas\":[],\"cumulative\":{\"gapCount\":1,\"totalGapMs\":1355,\"maxGapMs\":1355,\"totalUnexplainedMs\":1355,\"maxUnexplainedGapMs\":1355,\"blockedPercentOfWall\":14.8},\"nodeId\":\"c14b47ee-4648-49d4",
+   "leadership": {
+    "sql_transaction_participants-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:19:17.547Z",
+       2
+      ]
+     ]
+    },
+    "partitions-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:19:59.848Z",
+       2
+      ]
+     ]
+    },
+    "sql_write_operations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:20:01.951Z",
+       2
+      ]
+     ]
+    },
+    "artifact_payload_chunks-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:20:23.274Z",
+       2
+      ]
+     ]
+    },
+    "tables-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:20:38.705Z",
+       2
+      ]
+     ]
+    },
+    "call_activation_leases-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:20:52.404Z",
+       2
+      ]
+     ]
+    },
+    "call_cell_reduce_results-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:21:07.501Z",
+       2
+      ]
+     ]
+    },
+    "call_cell_reduce_slots-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:21:09.189Z",
+       2
+      ]
+     ]
+    },
+    "code-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:21:15.345Z",
+       2
+      ]
+     ]
+    },
+    "contexts-p1": {
+     "elections": 2,
+     "maxTerm": 3,
+     "terms": [
+      [
+       "2026-11-21T13:21:46.587Z",
+       2
+      ],
+      [
+       "2026-11-21T13:23:21.229Z",
+       3
+      ]
+     ]
+    },
+    "debug_breakpoints-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:21:53.895Z",
+       2
+      ]
+     ]
+    },
+    "debug_snapshots-p1": {
+     "elections": 2,
+     "maxTerm": 3,
+     "terms": [
+      [
+       "2026-11-21T13:22:09.419Z",
+       2
+      ],
+      [
+       "2026-11-21T13:23:12.403Z",
+       3
+      ]
+     ]
+    },
+    "indices-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:22:21.106Z",
+       2
+      ]
+     ]
+    },
+    "inter_group_latencies-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:22:27.661Z",
+       2
+      ]
+     ]
+    },
+    "latency_groups-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:22:42.901Z",
+       2
+      ]
+     ]
+    },
+    "module_dependency_locks-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:23:54.379Z",
+       2
+      ]
+     ]
+    },
+    "module_manifests-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:24:04.203Z",
+       2
+      ]
+     ]
+    },
+    "node_endpoints-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:24:04.558Z",
+       2
+      ]
+     ]
+    },
+    "schema_migrations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:24:36.992Z",
+       2
+      ]
+     ]
+    },
+    "package_registry_overrides-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:24:46.948Z",
+       2
+      ]
+     ]
+    },
+    "service_bindings-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:25:03.150Z",
+       2
+      ]
+     ]
+    },
+    "service_endpoints-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:25:16.185Z",
+       2
+      ]
+     ]
+    },
+    "service_install_failures-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:25:33.445Z",
+       2
+      ]
+     ]
+    },
+    "tbl-5aa54f3c91d485c621cb384f40619318-p1": {
+     "elections": 1,
+     "maxTerm": 1,
+     "terms": [
+      [
+       "2026-11-21T13:25:51.093Z",
+       1
+      ]
+     ]
+    },
+    "service_instances-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:26:00.682Z",
+       2
+      ]
+     ]
+    },
+    "service_packages-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:26:27.047Z",
+       2
+      ]
+     ]
+    },
+    "service_partition_access-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:26:28.761Z",
+       2
+      ]
+     ]
+    },
+    "service_timers-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:26:54.004Z",
+       2
+      ]
+     ]
+    },
+    "service_revisions-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:26:57.644Z",
+       2
+      ]
+     ]
+    },
+    "services-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:27:01.844Z",
+       2
+      ]
+     ]
+    }
+   }
+  },
+  "d1162379-5f5e-444b-b0ff-19ce9533e6aa": {
+   "file": "d1162379-5f5e-444b-b0ff-19ce9533e6aa.log.gz",
+   "lines": 27281,
+   "unparsed": 16830,
+   "host": "lagrange-fdiag-3",
+   "firstTime": "2026-11-21T13:17:36.437Z",
+   "lastTime": "2026-11-21T13:28:18.638Z",
+   "counts": {
+    "wait_bound_spent": 404,
+    "failed_to_send_message": 37,
+    "ack_timeout_quarantine_skip": 25,
+    "named_cp_write_wait_expired": 0
+   },
+   "first": {
+    "wait_bound_spent": "{\"level\":50,\"time\":\"2026-11-21T13:17:50.936Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"rebalance-coordinator\",\"event\":\"wait_bound_spent\",\"wait\":\"REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS\",\"awaited\":\"authoritative replica_operations read without a retryable failure\",\"boundMs\":1000,\"elapsedMs\":1002,\"lastObserved\":{\"errorCode\":null,\"error\":\"authoritative_row_source_unavailable\",\"attempts\":9,\"coalescingKey\":null},\"scope\":{\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\"},\"repeats\":0,\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"msg\":\"Wait bound spent\"}",
+    "ack_timeout_quarantine_skip": "{\"level\":40,\"time\":\"2026-11-21T13:18:23.489Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"d9e104a9-e86e-4e1e-bb14-acb6afb366ef\",\"targetAddress\":\"95ce5141-d400-429a-b8d8-52431313d8a4/partition/replica_operations-p1-r1\",\"targetNodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"localNodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"connectionId\":\"56ede538-09fd-43dc-9851-52e100c3c31b\",\"ackTimeoutStreak\":2,\"ackTimeoutQuarantineThreshold\":2,\"lastInboundAgoMs\":943,\"livenessWindowMs\":30000,\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"msg\":\"Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)\"}",
+    "failed_to_send_message": "{\"level\":50,\"time\":\"2026-11-21T13:20:04.518Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"129ccdc9-49e9-4b5e-b720-19e269beb963\",\"targetService\":\"95ce5141-d400-429a-b8d8-52431313d8a4/partition/partitions-p1-r1\",\"error\":\"Recovery read delivery closed\",\"deferRetry\":false,\"retryAfterMs\":null,\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"msg\":\"Failed to send message\"}"
+   },
+   "router_ack_first": "{\"level\":50,\"time\":\"2026-11-21T13:18:03.003Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"message-router\",\"event\":\"wait_bound_spent\",\"wait\":\"MESSAGE_TIMEOUT_MS (delivery ACK)\",\"awaited\":\"ACK from the target node for a sent SERVICE_MESSAGE\",\"boundMs\":499,\"elapsedMs\":500,\"lastObserved\":{\"connectionId\":\"56ede538-09fd-43dc-9851-52e100c3c31b\",\"activeConnectionId\":\"56ede538-09fd-43dc-9851-52e100c3c31b\",\"activeConnectionState\":\"connected\",\"sameConnection\":true,\"quarantineOwnerChanged\":false},\"scope\":{\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"targetNodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"messageId\":\"1f366af5-d94d-4f17-844b-2b2ddca4ddf1\"},\"repeats\":0,\"nodeId\":\"",
+   "loop_gaps": 7,
+   "loop_gap_first": "{\"level\":40,\"time\":\"2026-11-21T13:17:46.600Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"resource-diagnostics\",\"gapMs\":1376,\"taggedExclusiveMs\":0,\"unexplainedMs\":1376,\"memory\":{\"heapUsedMb\":70,\"heapTotalMb\":85,\"rssMb\":609,\"externalMb\":447},\"eventLoopUtilization\":1,\"openSections\":[],\"siteDeltas\":[],\"cumulative\":{\"gapCount\":1,\"totalGapMs\":1376,\"maxGapMs\":1376,\"totalUnexplainedMs\":1376,\"maxUnexplainedGapMs\":1376,\"blockedPercentOfWall\":13.22},\"nodeId\":\"d1162379-5f5e-444b-b0",
+   "leadership": {
+    "replica_operations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:18:23.373Z",
+       2
+      ]
+     ]
+    },
+    "control_plane_publications-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:19:11.028Z",
+       2
+      ]
+     ]
+    },
+    "schema_operations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:19:26.181Z",
+       2
+      ]
+     ]
+    },
+    "sql_transactions-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:19:29.109Z",
+       2
+      ]
+     ]
+    },
+    "artifact_payloads-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:20:39.648Z",
+       2
+      ]
+     ]
+    },
+    "config-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:21:35.800Z",
+       2
+      ]
+     ]
+    },
+    "debug_sessions-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:21:50.192Z",
+       2
+      ]
+     ]
+    },
+    "inter_group_latencies-p1": {
+     "elections": 1,
+     "maxTerm": 3,
+     "terms": [
+      [
+       "2026-11-21T13:23:13.595Z",
+       3
+      ]
+     ]
+    },
+    "live_queries-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:23:16.506Z",
+       2
+      ]
+     ]
+    },
+    "message_groups-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:23:31.525Z",
+       2
+      ]
+     ]
+    },
+    "latency_groups-p1": {
+     "elections": 1,
+     "maxTerm": 3,
+     "terms": [
+      [
+       "2026-11-21T13:23:31.844Z",
+       3
+      ]
+     ]
+    },
+    "package_registry_mappings-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:24:14.639Z",
+       2
+      ]
+     ]
+    },
+    "schema_migration_partitions-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:24:24.615Z",
+       2
+      ]
+     ]
+    },
+    "service_definitions-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:25:07.810Z",
+       2
+      ]
+     ]
+    },
+    "service_installations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:25:32.627Z",
+       2
+      ]
+     ]
+    },
+    "wasm_operations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:27:00.814Z",
+       2
+      ]
+     ]
+    },
+    "storage_reservations-p1": {
+     "elections": 1,
+     "maxTerm": 2,
+     "terms": [
+      [
+       "2026-11-21T13:27:06.938Z",
+       2
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "leadershipByPartition": {
+  "artifact_payload_chunks-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "artifact_payloads-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "call_activation_leases-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "call_cell_reduce_results-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "call_cell_reduce_slots-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "code-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "config-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "contexts-p1": {
+   "elections": 3,
+   "maxTerm": 3,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 2
+   }
+  },
+  "control_plane_publications-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "debug_breakpoints-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "debug_sessions-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "debug_snapshots-p1": {
+   "elections": 3,
+   "maxTerm": 3,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 2
+   }
+  },
+  "indices-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "inter_group_latencies-p1": {
+   "elections": 3,
+   "maxTerm": 3,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1,
+    "d1162379": 1
+   }
+  },
+  "latency_groups-p1": {
+   "elections": 3,
+   "maxTerm": 3,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1,
+    "d1162379": 1
+   }
+  },
+  "live_queries-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "logs-p1": {
+   "elections": 1,
+   "maxTerm": 1,
+   "byNode": {
+    "95ce5141": 1
+   }
+  },
+  "message_groups-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "module_dependency_locks-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "module_manifests-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "node_endpoints-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "nodes-p1": {
+   "elections": 1,
+   "maxTerm": 1,
+   "byNode": {
+    "95ce5141": 1
+   }
+  },
+  "package_registry_mappings-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "package_registry_overrides-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "partitions-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "replica_operations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "schema_migration_partitions-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "schema_migrations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "schema_operations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "service_bindings-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_definitions-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "service_endpoints-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_install_failures-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_installations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "service_instances-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_packages-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_partition_access-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_revisions-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "service_timers-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "services-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "sql_transaction_participants-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "sql_transactions-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "sql_write_operations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "storage_reservations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "tables-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "c14b47ee": 1
+   }
+  },
+  "wasm_operations-p1": {
+   "elections": 2,
+   "maxTerm": 2,
+   "byNode": {
+    "95ce5141": 1,
+    "d1162379": 1
+   }
+  },
+  "tbl-5aa54f3c91d485c621cb384f40619318-p1": {
+   "elections": 1,
+   "maxTerm": 1,
+   "byNode": {
+    "c14b47ee": 1
+   }
+  }
+ },
+ "ledger": {
+  "elections": 2,
+  "maxTerm": 2,
+  "byNode": {
+   "95ce5141": 1,
+   "d1162379": 1
+  }
+ }
+}

@@ -1,0 +1,180 @@
+lab test: adams-gamla: ordinary (3 files) cores=4 mem=15.6GiB speed x2.04
+[adams-gamla] placement-shell=1523565
+[adams-gamla] placement-head=5cac30b6ef6a1e906778ed857c9f1a7f98de50e8
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1524021
+[adams-gamla] # test-files planned=3
+[adams-gamla] classified lane ordinary: 3 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 43C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/partition/placement-admission-trigger-coverage.test.js (2 assertions, 341ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: every outcome code the native placement admission owner can answer has a clearing-trigger row
+[adams-gamla] not ok 1 - every outcome code the native placement admission owner can answer has a clearing-trigger row
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3.512287
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-admission-trigger-coverage.test.js:43:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly deep-equal:
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + [
+[adams-gamla]     +   'PLACEMENT_ADMISSION_ERROR.ORIGIN=placement_admission_origin_refused',
+[adams-gamla]     +   'PLACEMENT_ADMISSION_ERROR.BYTES=placement_admission_bytes_invalid',
+[adams-gamla]     +   'PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE=placement_outcome_identity_unavailable',
+[adams-gamla]     +   'PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED=placement_remove_intent_unscoped',
+[adams-gamla]     +   'PLACEMENT_ADMISSION_ERROR.TARGET=placement_admission_target_invalid',
+[adams-gamla]     +   'PLACEMENT_ADMISSION_ERROR.RESULT=placement_admission_result_unavailable'
+[adams-gamla]     + ]
+[adams-gamla]     - []
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]   actual:
+[adams-gamla]     0: 'PLACEMENT_ADMISSION_ERROR.ORIGIN=placement_admission_origin_refused'
+[adams-gamla]     1: 'PLACEMENT_ADMISSION_ERROR.BYTES=placement_admission_bytes_invalid'
+[adams-gamla]     2: 'PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE=placement_outcome_identity_unavailable'
+[adams-gamla]     3: 'PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED=placement_remove_intent_unscoped'
+[adams-gamla]     4: 'PLACEMENT_ADMISSION_ERROR.TARGET=placement_admission_target_invalid'
+[adams-gamla]     5: 'PLACEMENT_ADMISSION_ERROR.RESULT=placement_admission_result_unavailable'
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-admission-trigger-coverage.test.js:45:10)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.start (node:internal/test_runner/test:944:17)
+[adams-gamla]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the coverage check names a code added without a row, and every row names a declared trigger or a definite answer
+[adams-gamla] ok 2 - the coverage check names a code added without a row, and every row names a declared trigger or a definite answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.53949
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 30.506888
+[adams-gamla] # time=341ms
+[adams-gamla] ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 5331ms)
+[adams-gamla] not ok test/partition/placement-outcome-format.test.js (3 assertions, 5368ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] {"level":50,"time":"2026-11-21T11:03:10.154Z","nodeId":"test-node","pid":1524042,"subsystem":"partition","partitionId":"replica_operations-p1","error":"NOT NULL constraint failed: replica_operations.type","sql":"UPDATE replica_operations SET type = NULL WHERE operation_id = ?","params":["pl-tables-p1-3-0"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+[adams-gamla] # Subtest: a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format
+[adams-gamla] not ok 1 - a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3627.460888
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:78:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a current-format applied record of another owner must be the collision at request and at apply, never an old placement outcome format
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   appliedIndexAdvance: 1,
+[adams-gamla]     +   apply: null,
+[adams-gamla]     +   request: 'placement_outcome_identity_unavailable'
+[adams-gamla]     -   appliedIndexAdvance: 0,
+[adams-gamla]     -   apply: 'placement_admission_bytes_invalid',
+[adams-gamla]     -   request: 'placement_admission_bytes_invalid'
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     request: 'placement_admission_bytes_invalid'
+[adams-gamla]     apply: 'placement_admission_bytes_invalid'
+[adams-gamla]     appliedIndexAdvance: 0
+[adams-gamla]   actual:
+[adams-gamla]     request: 'placement_outcome_identity_unavailable'
+[adams-gamla]     apply: ~
+[adams-gamla]     appliedIndexAdvance: 1
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     assertForeignRecordIsCollision (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:68:10)
+[adams-gamla]     async file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:85:5
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: a current-format statement-failure record (no result) under the same entry key is the collision, never an old placement format
+[adams-gamla] not ok 2 - a current-format statement-failure record (no result) under the same entry key is the collision, never an old placement format
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 84.904137
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:89:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     a current-format statement_failed record of another owner must be the collision at request and at apply, never an old placement outcome format
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   appliedIndexAdvance: 1,
+[adams-gamla]     +   apply: null,
+[adams-gamla]     +   request: 'placement_outcome_identity_unavailable'
+[adams-gamla]     -   appliedIndexAdvance: 0,
+[adams-gamla]     -   apply: 'placement_admission_bytes_invalid',
+[adams-gamla]     -   request: 'placement_admission_bytes_invalid'
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     request: 'placement_admission_bytes_invalid'
+[adams-gamla]     apply: 'placement_admission_bytes_invalid'
+[adams-gamla]     appliedIndexAdvance: 0
+[adams-gamla]   actual:
+[adams-gamla]     request: 'placement_outcome_identity_unavailable'
+[adams-gamla]     apply: ~
+[adams-gamla]     appliedIndexAdvance: 1
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     assertForeignRecordIsCollision (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:68:10)
+[adams-gamla]     async file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:101:5
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request
+[adams-gamla] not ok 3 - an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 74.648611
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:105:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'the store opened with a placement outcome row that carries no command identity; the hot path then answers placement_outcome_identity_unavailable (clearing-trigger row: false)'
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   operator: 'fail'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/5cac30b6ef6a-mwqatthg-806548/test/partition/placement-outcome-format.test.js:130:16)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] 1..3
+[adams-gamla] # tests 3
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 3
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3796.446671
+[adams-gamla] # time=5368ms
+[adams-gamla] # test-files total=3 pass=1 fail=2 assertions=7
+lab test: adams-gamla: # test-files total=3 pass=1 fail=2 assertions=7
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=3 pass=1 fail=2 assertions=7

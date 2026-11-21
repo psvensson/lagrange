@@ -1,0 +1,25 @@
+{
+  "sha": "645c70cf1d13d2510d27c8a0715f433c4b48ff5a",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-settled-replay-cutover-pause.test.js",
+    "test/partition/placement-outcome-format.test.js",
+    "test/partition/placement-admission-trigger-coverage.test.js",
+    "test/partition/placement-admission-apply.test.js",
+    "test/rebalancer/replica-placement-owner-clearing-triggers.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-admission-trigger-coverage.test.js",
+        "test/partition/placement-outcome-format.test.js",
+        "test/partition/placement-settled-replay-cutover-pause.test.js",
+        "test/partition/placement-admission-apply.test.js",
+        "test/rebalancer/replica-placement-owner-clearing-triggers.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+lab test: adams-gamla: ordinary (8 files) cores=4 mem=15.6GiB speed x2.00
+[adams-gamla] placement-shell=1626970
+[adams-gamla] placement-head=b213e5e79b5f03e357e42bb88872824553d6f8a7
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1627426
+[adams-gamla] # test-files planned=8
+[adams-gamla] classified lane ordinary: 8 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/partition/coordinator-settlement-exact-settlement.test.js (2 assertions, 2107ms)
+[adams-gamla] ok test/control-plane/formation-transition-settled-replay.test.js (2 assertions, 6627ms)
+[adams-gamla] not ok test/partition/committed-outcome-identity-boundary.test.js (2 assertions, 6857ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: replica_operations-p1: the recorded identity survives store reopen and the checkpoint image, and settles only the exact command
+[adams-gamla] not ok 1 - replica_operations-p1: the recorded identity survives store reopen and the checkpoint image, and settles only the exact command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4774.08143
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/partition/committed-outcome-identity-boundary.test.js:141:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'fixture participant release refused: origin_replication_pending'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     resumeFixtureParticipantAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/test-helpers/participant-transaction-fixture.js:554:11)
+[adams-gamla]     async startLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/test-helpers/participant-transaction-fixture.js:466:7)
+[adams-gamla]     async onStore (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/partition/committed-outcome-identity-boundary.test.js:132:30)
+[adams-gamla]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/partition/committed-outcome-identity-boundary.test.js:162:7)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: control_plane_publications-p1: the recorded identity survives store reopen and the checkpoint image, and settles only the exact command
+[adams-gamla] not ok 2 - control_plane_publications-p1: the recorded identity survives store reopen and the checkpoint image, and settles only the exact command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 149.49744
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/partition/committed-outcome-identity-boundary.test.js:141:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'fixture participant release refused: origin_replication_pending'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     resumeFixtureParticipantAdmission (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/test-helpers/participant-transaction-fixture.js:554:11)
+[adams-gamla]     async startLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/test-helpers/participant-transaction-fixture.js:466:7)
+[adams-gamla]     async onStore (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/partition/committed-outcome-identity-boundary.test.js:132:30)
+[adams-gamla]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b213e5e79b5f-mwqebyx0-1023561/test/partition/committed-outcome-identity-boundary.test.js:162:7)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] 1..2
+[adams-gamla] # tests 2
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 4931.954136
+[adams-gamla] # time=6857ms
+[adams-gamla] ok test/partition/placement-admission-apply.test.js (9 assertions, 9964ms)
+[adams-gamla] ok test/partition/placement-outcome-format.test.js (4 assertions, 6724ms)
+[adams-gamla] ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 6515ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (1 assertions, 1678ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 5189ms)
+[adams-gamla] # test-files total=8 pass=7 fail=1 assertions=26
+lab test: adams-gamla: # test-files total=8 pass=7 fail=1 assertions=26
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=8 pass=7 fail=1 assertions=26

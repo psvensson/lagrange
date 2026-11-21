@@ -1,0 +1,7 @@
+lab test: adams-gamla: ordinary (9 files) cores=4 mem=15.6GiB speed x1.68
+[adams-gamla] placement-shell=1704672
+[adams-gamla] machine-lock-busy={"project":"lagrange","agent":"claude:w1b-format","controller":"peter-System-Product-Name","purpose":"test:ordinary,exclusive","sha":"080223004532d0bd380602a88c175932c3885698","startedAt":"2026-11-21T13:32:06Z","expectedMinutes":1,"pid":1704236}
+placement: host-busy adams-gamla held-by claude:w1b-format since 2026-11-21T13:32:06Z
+lab test: adams-gamla: # test-files total=9 pass=0 fail=9 assertions=0
+lab test: adams-gamla: 9 file(s) reported no result: exit 98
+# test-files total=9 pass=0 fail=9 assertions=0

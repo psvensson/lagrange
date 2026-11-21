@@ -1,0 +1,90 @@
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+=== npx eslint scripts/check-runtime-grammar-contracts.js src/bootstrap/owners/bootstrap-topology-snapshot-owner-contract.js src/bootstrap/owners/bootstrap-topology-snapshot-owner-published-views.js src/partition/group-retirement-redrive.js src/partition/partition-service-row-owner.js src/rebalancer/operation-workflow-remove-safety-evaluator.js src/rebalancer/priority-publication-leader-safety.js src/rebalancer/priority-publication-safety-shared.js src/rebalancer/priority-publication-safety-topology.js test/bootstrap/bootstrap-topology-snapshot-owner.test.js test/convergence/dt-ledger-completion-continuity-discriminator.test.js test/partition/partition-service-row-owner.test.js test/rebalancer/replace-named-handoff-attempt.test.js test/scripts/check-runtime-grammar-contracts.test.js 
+=== rc=0
+=== node scripts/check-runtime-grammar-contracts.js
+Scanned 18 JavaScript files
+Found 0 runtime-grammar-contract violations
+=== rc=0
+=== node scripts/check-file-size-thresholds.js
+2411 src/raft/raft-rs-runtime-owner.js (threshold 800)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+1890 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1863 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1781 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1704 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1671 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1615 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1533 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1242 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+1095 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1042 src/rebalancer/move-planner-move-calculation-methods.js (threshold 800)
+991 src/raft/raft-rs-replica-lifecycle-owner.js (threshold 800)
+971 src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js (threshold 800)
+Per-file size comparison base: 49495f7e47ff7fc03d2a1bbdf92ab92e9fc09778
+=== rc=0
+=== node scripts/check-duplication.js
+[32mJSON report saved to test-output/analysis/jscpd-src-scripts/jscpd-report.json[39m
+[32mJSON report saved to test-output/analysis/jscpd-test/jscpd-report.json[39m
+[src+scripts] Duplication ratchet OK: 35/35 clone group(s), 1109/1109 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-src-scripts/jscpd-report.json.
+[test] Duplication ratchet OK: 606/609 clone group(s), 21632/21780 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-test/jscpd-report.json.
+Baseline can be tightened from 609 to 606 in scripts/check-duplication.js [test] clone baseline: scripts/check-duplication.js.
+Baseline can be tightened from 21780 to 21632 in scripts/check-duplication.js [test] duplicated-line baseline: scripts/check-duplication.js.
+=== rc=0
+=== node scripts/check-unused-exports.js
+Unused-export ratchet OK: 1316/1319 unused export(s) across 328 file(s).
+Baseline can be tightened from 1319 to 1316 in scripts/check-unused-exports.js baseline: scripts/check-unused-exports.js.
+=== rc=0
+=== node scripts/check-guideline-navigability.js
+- src/rebalancer/operation-workflow-executor-outcome-redrive.js: 1
+- src/rebalancer/operation-workflow-placement-learner-retirement.js: 1
+- src/rebalancer/operation-workflow-reentry-authority.js: 1
+- src/rebalancer/operation-workflow-terminal-reservation-release.js: 1
+- src/rebalancer/priority-recovery-observation.js: 1
+- src/rebalancer/replica-operation-creation-request.js: 1
+src/bootstrap/node-joining-message-group-runtime-delegation.js:60 requireCurrent two_source_fallback_reads: one fact read from two sources; read the one authority for that fact
+src/bootstrap/node-joining-publication-activation.js:148 ensureDurableRejoinPartitionRuntimes legacy_term_identifiers: legacy vocabulary in an identifier; retire the legacy path and its name
+src/bootstrap/node-joining-publication-activation.js:149 ensureDurableRejoinPartitionRuntimes legacy_term_identifiers: legacy vocabulary in an identifier; retire the legacy path and its name
+src/bootstrap/node-joining-publication-activation.js:151 ensureDurableRejoinPartitionRuntimes legacy_term_identifiers: legacy vocabulary in an identifier; retire the legacy path and its name
+src/node/replica-cleanup-tombstone-owner.js:120 observeScopedLearnerCleanup catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/node/replica-handler-learner-retirement-authority.js:127 handOffAbsentLearnerCleanup catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-executor-outcome-redrive.js:59 redriveExecutorOutcomeReconcile catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-placement-learner-retirement.js:77 readSupersededDispatchReplay catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-reentry-authority.js:26 matchesRemoteReentryOperation catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/operation-workflow-terminal-reservation-release.js:9 isTerminalTransitionOutcomeSettled catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/priority-recovery-observation.js:88 selectAuthoritativePartitionOperations catch_returns_default: catch that returns a default; surface a typed refusal instead
+src/rebalancer/replica-operation-creation-request.js:84 operationMatchesCreationRequest two_source_fallback_reads: one fact read from two sources; read the one authority for that fact
+Matched 8261 inherited navigability baseline violations
+Baseline can be tightened from 2008 to 1974 in navigability owner_port_feature_detection: scripts/check-guideline-navigability-baseline-owner_port_feature_detection.json.
+Baseline can be tightened from 82 to 81 in navigability identity_keyed_module_state: scripts/check-guideline-navigability-baseline-identity_keyed_module_state.json.
+Baseline can be tightened from 682 to 680 in navigability row_field_alias_reads: scripts/check-guideline-navigability-baseline-row_field_alias_reads.json.
+Baseline can be tightened from 1686 to 1660 in navigability two_source_fallback_reads: scripts/check-guideline-navigability-baseline-two_source_fallback_reads.json.
+Baseline can be tightened from 594 to 587 in navigability typeof_dual_paths: scripts/check-guideline-navigability-baseline-typeof_dual_paths.json.
+Baseline can be tightened from 2835 to 2763 in navigability legacy_term_identifiers: scripts/check-guideline-navigability-baseline-legacy_term_identifiers.json.
+=== rc=1
+=== node scripts/check-guideline-decision-boundaries.js
+Scanned 2572 JavaScript files
+Found 10 decision-boundary guideline violations
+Top files:
+- src/rebalancer/operation-workflow-priority-recovery-errors.js: 3
+- scripts/checks/changed-paths.js: 1
+- src/node/replica-handler-learner-retirement-authority.js: 1
+- src/rebalancer/operation-workflow-executor-outcome-redrive.js: 1
+- src/rebalancer/operation-workflow-reentry-authority.js: 1
+- src/rebalancer/operation-workflow-transition-outcome.js: 1
+- src/rebalancer/priority-recovery-observation.js: 1
+- src/rebalancer/replica-operation-retained-repair-record.js: 1
+Matched 690 inherited decision-boundary baseline violations
+=== rc=1
+done rc=0

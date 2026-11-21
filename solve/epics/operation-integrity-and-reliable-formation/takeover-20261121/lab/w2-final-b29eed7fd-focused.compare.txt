@@ -1,0 +1,276 @@
+test/control-plane/active-node-projection.test.js
+   final:pass(105)
+   tip30e:pass(105)
+   base:not-run
+test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js
+   final:pass(30)
+   tip30e:pass(30)
+   base:pass(30)
+test/control-plane/read-model-contract.test.js
+   final:pass(92)
+   tip30e:pass(92)
+   base:not-run
+test/control-plane/readiness-snapshot-persistence.test.js
+   final:pass(57)
+   tip30e:pass(57)
+   base:not-run
+test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js
+   final:FAIL(94) «should be equal»
+   tip30e:FAIL(94) «should be equal»
+   base:FAIL(94) «should be equal»
+test/partition/partition-service.test.js
+   final:pass(136)
+   tip30e:pass(136)
+   base:not-run
+test/partition/partition-write-typed-releases.test.js
+   final:pass(5)
+   tip30e:pass(5)
+   base:not-run
+test/partition/placement-creation-terminal-replay.test.js
+   final:pass(2)
+   tip30e:pass(2)
+   base:not-run
+test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js
+   final:FAIL(5) «R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entir»
+   tip30e:FAIL(5) «R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entir»
+   base:pass(5)
+test/partition/placement-founder-origin.test.js
+   final:pass(4)
+   tip30e:pass(4)
+   base:not-run
+test/partition/placement-retained-leadership.test.js
+   final:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   tip30e:FAIL(4) «A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B»
+   base:pass(4)
+test/partition/placement-founding-and-runtime-service-admission.test.js
+   final:pass(23)
+   tip30e:pass(23)
+   base:FAIL(15) «routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN»
+test/raft/leadership-transfer-single-path.test.js
+   final:pass(3)
+   tip30e:pass(3)
+   base:not-run
+test/query/schema-provisioning-native-admission.test.js
+   final:pass(158)
+   tip30e:pass(158)
+   base:FAIL(122) «Cannot read properties of undefined (reading 'has')»
+test/rebalancer/admission-real-size-estimates.test.js
+   final:FAIL(23) «Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)»
+   tip30e:FAIL(23) «Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)»
+   base:FAIL(23) «Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)»
+test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js
+   final:pass(3)
+   tip30e:pass(3)
+   base:not-run
+test/query/replica-operation-structured-mutation-native.test.js
+   final:pass(2)
+   tip30e:pass(2)
+   base:not-run
+test/rebalancer/canonical-replica-completion-observation.test.js
+   final:pass(5)
+   tip30e:pass(5)
+   base:not-run
+test/rebalancer/application-write-formation-authority.test.js
+   final:pass(84)
+   tip30e:pass(84)
+   base:not-run
+test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+   final:FAIL(97) «a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)»
+   tip30e:FAIL(97) «a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)»
+   base:pass(97)
+test/rebalancer/coordinator-created-operation-progress.test.js
+   final:FAIL(41) «the resumed owner path should continue into dispatch after claiming the operation»
+   tip30e:FAIL(41) «the resumed owner path should continue into dispatch after claiming the operation»
+   base:FAIL(41) «the resumed owner path should continue into dispatch after claiming the operation»
+test/rebalancer/assignment-epoch-fencing.test.js
+   final:pass(26)
+   tip30e:FAIL(23) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   base:pass(26)
+test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js
+   final:pass(7)
+   tip30e:FAIL(7) «the sibling SYNCING->ACTIVE ledger write starts while the unrelated INSERT remains frozen»
+   base:pass(7)
+test/rebalancer/coordinator-reservation-lifecycle.test.js
+   final:pass(101)
+   tip30e:pass(101)
+   base:not-run
+test/rebalancer/duplicate-operation-prevention.property.test.js
+   final:FAIL(40) «Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)»
+   tip30e:FAIL(40) «Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)»
+   base:FAIL(40) «Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)»
+test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js
+   final:pass(28)
+   tip30e:pass(28)
+   base:not-run
+test/rebalancer/late-dispatch-honored-stops-redrive.test.js
+   final:pass(12)
+   tip30e:pass(12)
+   base:not-run
+test/rebalancer/message-group-membership-operation-lane.test.js
+   final:FAIL(8) «canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps»
+   tip30e:FAIL(8) «canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps»
+   base:FAIL(8) «canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps»
+test/rebalancer/message-group-membership-branch-authorization.test.js
+   final:pass(115)
+   tip30e:pass(115)
+   base:not-run
+test/partition/partition-cdc-owed-admission-native.test.js
+   final:FAIL(1) «native RF3 bounds owed admission and commits drain markers on every replica»
+   tip30e:pass(1)
+   base:pass(1)
+test/rebalancer/operation-workflow-observed-progress-lane-held.test.js
+   final:pass(21)
+   tip30e:pass(21)
+   base:not-run
+test/rebalancer/orphaned-operation-reconcile-redrive.test.js
+   final:pass(14)
+   tip30e:pass(14)
+   base:pass(14)
+test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js
+   final:FAIL(313) «priority SQL re-dispatch should persist the SENDING and CREATING transitions»
+   tip30e:FAIL(298) «priority SQL timeout reconciliation should dispatch the local-owner operation once»
+   base:pass(315)
+test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+   final:pass(49)
+   tip30e:FAIL(47) «should be equal»
+   base:pass(49)
+test/rebalancer/operation-ownership-lease-fencing.test.js
+   final:pass(231)
+   tip30e:pass(231)
+   base:not-run
+test/rebalancer/quorum-conditioned-remove-safety.test.js
+   final:FAIL(179) «remove should dispatch once replacement becomes voter-ready»
+   tip30e:FAIL(179) «remove should dispatch once replacement becomes voter-ready»
+   base:FAIL(179) «remove should dispatch once replacement becomes voter-ready»
+test/rebalancer/rebalance-coordinator-operation-ownership.test.js
+   final:pass(233)
+   tip30e:pass(233)
+   base:not-run
+test/rebalancer/remove-active-dispatch-redrive.test.js
+   final:pass(181)
+   tip30e:pass(181)
+   base:not-run
+test/rebalancer/rebalance-coordinator-topology-guard.test.js
+   final:FAIL(105) «createOperation should fail closed when the target node already hosts the partition»
+   tip30e:FAIL(105) «createOperation should fail closed when the target node already hosts the partition»
+   base:FAIL(105) «createOperation should fail closed when the target node already hosts the partition»
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js
+   final:pass(293)
+   tip30e:pass(293)
+   base:pass(293)
+test/rebalancer/replica-operation-insert-retry-idempotency.test.js
+   final:FAIL(8) «Authoritative replica operation not confirmed: op-idem-1»
+   tip30e:FAIL(8) «Authoritative replica operation not confirmed: op-idem-1»
+   base:FAIL(8) «Authoritative replica operation not confirmed: op-idem-1»
+test/rebalancer/replica-operation-confirmation-authority-read.test.js
+   final:pass(82)
+   tip30e:pass(82)
+   base:not-run
+test/rebalancer/replica-operation-observation-contract.test.js
+   final:pass(31)
+   tip30e:pass(31)
+   base:not-run
+test/rebalancer/replica-operation-membership-epoch-binding.test.js
+   final:FAIL(124) «src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode o»
+   tip30e:FAIL(124) «src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode o»
+   base:FAIL(130) «src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode o»
+test/rebalancer/replica-operation-repository-owner-clock-waits.test.js
+   final:pass(49)
+   tip30e:pass(49)
+   base:not-run
+test/rebalancer/replica-operation-repository-time-authority.test.js
+   final:pass(5)
+   tip30e:pass(5)
+   base:not-run
+test/rebalancer/replica-operation-retained-owner-turn.test.js
+   final:FAIL(15) «the exact command owns the next turn»
+   tip30e:FAIL(15) «the exact command owns the next turn»
+   base:FAIL(15) «the exact command owns the next turn»
+test/rebalancer/replica-operation-terminal-cas.test.js
+   final:pass(61)
+   tip30e:pass(61)
+   base:not-run
+test/rebalancer/replace-real-group-native-ledger-recovery.test.js
+   final:pass(10)
+   tip30e:pass(10)
+   base:not-run
+test/rebalancer/replica-operations-single-writer.test.js
+   final:pass(49)
+   tip30e:FAIL(35) «Authoritative replica operation not confirmed: op-sw-1»
+   base:pass(49)
+test/rebalancer/required-entity-operation-observation.test.js
+   final:pass(177)
+   tip30e:pass(177)
+   base:pass(177)
+test/rebalancer/reservation-expiry-operation-aware.test.js
+   final:FAIL(8) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   tip30e:FAIL(8) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   base:FAIL(8) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js
+   final:FAIL(7) «Unsupported rebalancer entity type: undefined»
+   tip30e:FAIL(7) «Unsupported rebalancer entity type: undefined»
+   base:FAIL(7) «Unsupported rebalancer entity type: undefined»
+test/rebalancer/spread-cure-transition-authorization-production-path.test.js
+   final:pass(2)
+   tip30e:FAIL(2) «one authorization travels the real planner, coordinator and row»
+   base:pass(2)
+test/rebalancer/spread-cure-transition-authorization-row.test.js
+   final:pass(1)
+   tip30e:pass(1)
+   base:not-run
+test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+   final:FAIL(87) «Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)»
+   tip30e:FAIL(87) «Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)»
+   base:FAIL(87) «Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)»
+test/rebalancer/terminal-failed-add-target-cleanup.test.js
+   final:pass(109)
+   tip30e:pass(109)
+   base:not-run
+test/rebalancer/unified-rebalancer.test.js
+   final:pass(221)
+   tip30e:pass(221)
+   base:not-run
+test/runtime/runtime-replica-state-projection-wiring.test.js
+   final:pass(27)
+   tip30e:pass(27)
+   base:not-run
+test/scripts/fallback-branch-census.test.js
+   final:pass(38)
+   tip30e:pass(38)
+   base:pass(38)
+test/rebalancer/replica-operation-repository.test.js
+   final:pass(466)
+   tip30e:pass(466)
+   base:not-run
+test/workflow/monotonic-workflow-regression.test.js
+   final:pass(100)
+   tip30e:pass(100)
+   base:not-run
+test/scripts/check-fast-static.test.js
+   final:pass(6)
+   tip30e:pass(6)
+   base:pass(6)
+test/scripts/repository-legacy-fallback-closure.test.js
+   final:pass(5)
+   tip30e:pass(5)
+   base:not-run
+test/bootstrap/bootstrap-topology-snapshot.test.js
+   final:pass(8)
+   tip30e:pass(8)
+   base:not-run
+test/bootstrap/node-joining-service.test.js
+   final:pass(98)
+   tip30e:pass(98)
+   base:not-run
+test/integration/message-group-fresh-identity-replacement.integration.test.js
+   final:pass(1)
+   tip30e:pass(1)
+   base:not-run
+test/rebalancer/active-handoff-operation-visibility.integration.test.js
+   final:pass(6)
+   tip30e:pass(6)
+   base:not-run
+test/rebalancer/message-group-operation-routing.integration.test.js
+   final:FAIL(20) «Invalid replica operation persistence outcome: persisted operation history is not JSON text»
+   tip30e:not-run
+   base:not-run

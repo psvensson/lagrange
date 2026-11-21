@@ -1,0 +1,52 @@
+placement-shell=3142399
+placement-head=4a1bd640d1e5d403ca4d85fc2b41730812caf48e
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3143448
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/query/replica-operation-structured-mutation-native.test.js (2 assertions, 19721ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: structured operation writes do not switch to routable SQL when CDC is unavailable
+ok 1 - structured operation writes do not switch to routable SQL when CDC is unavailable
+  ---
+  duration_ms: 18107.628699
+  type: 'test'
+  ...
+# Subtest: every repository constructor refuses a gateway without the structured port; the canonical writer applies and fences
+not ok 2 - every repository constructor refuses a gateway without the structured port; the canonical writer applies and fences
+  ---
+  duration_ms: 106.361179
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/replica-operation-structured-mutation-native.test.js:63:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    code: 'replica_operation_mutation_port_required'
+  operator: 'throws'
+  stack: |-
+    withSurface.cdc (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/replica-operation-structured-mutation-native.test.js:76:16)
+    withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/unknown-outcome-surface-fixture.js:328:11)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/replica-operation-structured-mutation-native.test.js:65:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18225.562651
+# time=19721ms
+# test-files total=1 pass=0 fail=1 assertions=2
+placement-results={"file":"test/query/replica-operation-structured-mutation-native.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":19721,"retriedOnce":false,"firstFailureLine":"not ok 2 - every repository constructor refuses a gateway without the structured port; the canonical writer applies and fences"}

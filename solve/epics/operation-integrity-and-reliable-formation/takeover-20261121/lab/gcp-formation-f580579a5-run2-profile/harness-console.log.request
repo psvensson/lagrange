@@ -1,0 +1,2 @@
+requested 2026-11-21T13:08:49Z sha=f580579a509293e50b0344d1c7e742b10fbf2aac dirty_lines=0 env: LAGRANGE_FORMATION_ATTRIBUTION=1 LAGRANGE_FORMATION_ATTRIBUTION_DEADLINE_MS=640000 LAGRANGE_FORMATION_PROFILE_DIR=/data/formation-profile  cmd: nice -n 19 node scripts/lab.js harness run fresh-formation-user-table-routability --nodes lagrange-fdiag-1,lagrange-fdiag-2,lagrange-fdiag-3 --nodes-per-host 1 -- --capture-logs
+exit=1 finished 2026-11-21T13:28:22Z

@@ -1,0 +1,213 @@
+files=84 ok=16 notok=68 assertions=4418
+
+NOT OK test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (12 assertions)
+  not ok 1 - NodeRegistrationOwner requires a getSystemTableCache delegate function | stack: > | stack: >
+
+NOT OK test/control-plane/heartbeat-liveness-at-commit.test.js (7 assertions)
+  not ok 2 - beat 1 does not fail (Cannot read properties of undefined (reading 'partitionId')) | stack: > | stack: >
+
+NOT OK test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js (53 assertions)
+  not ok 1 - first reporter heartbeat should establish one successful visibility proof | stack: > | stack: |
+
+NOT OK test/control-plane/heartbeat-storage-budget-preservation.test.js (40 assertions)
+  not ok 6 - endpoint upserts should reuse the same coalesced deferred write contract | stack: >
+
+NOT OK test/control-plane/heartbeat-periodic-writes.property.test.js (41 assertions)
+  not ok 2 - unchanged endpoint should be upserted once during the burst | stack: | | stack: |
+
+NOT OK test/control-plane/membership-count-neutral-steady-trim.test.js (30 assertions)
+  not ok 1 - owner.getPublication is not a function | stack: >
+
+NOT OK test/control-plane/heartbeat-memory-trend.test.js (144 assertions)
+  not ok 2 - should avoid repeated endpoint upserts inside refresh window | stack: | | stack: |
+
+NOT OK test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (2 assertions)
+  not ok 1 - Unsupported rebalancer entity type: undefined | stack: | | code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+
+NOT OK test/control-plane/membership-publication-first-epoch-members.test.js (11 assertions)
+  not ok 11 - every reader of a membership publication's member list derives from the owner's reads | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: | actual:
+
+NOT OK test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js (24 assertions)
+  not ok 6 - the deferred dispatch-service pass must traverse the canonical owner delivery sink instead of simulating a successful duplicate | stack: > | stack: >
+
+NOT OK test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js (54 assertions)
+  not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text | stack: | | code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+
+NOT OK test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js (34 assertions)
+  not ok 2 - partial priority cache coverage should enqueue cached and authoritative rows | stack: | | stack: |
+
+NOT OK test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js (54 assertions)
+  not ok 3 - authoritative rediscovery should still re-enter the canonical per-operation queue
+
+NOT OK test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js (30 assertions)
+  not ok 1 - Unsupported rebalancer entity type: undefined | stack: | | code: UNSUPPORTED_REBALANCER_ENTITY_TYPE | stack: |
+
+NOT OK test/control-plane/runtime-access-settled-replay-projection.test.js (1 assertions)
+  not ok 1 - a retry answered from the settled row proves no position: the DDL answers typed unavailable, the write stays committed, and a client retry is a new write with a real position | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 'runtime_access_policy_projection_unavailable' | operator: 'strictEqual'
+
+NOT OK test/control-plane/service-instance-selection-admission.test.js (23 assertions)
+  not ok 23 - closed-slot contention is re-decided and closes only the exact token in the same call | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: | actual:
+
+NOT OK test/control-plane/service-instance-creation-cas.test.js (31 assertions)
+  not ok 19 - CAS-A6 a selection UPDATE that loses to a slot mutation stays single-shot STATE_CHANGED | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: | actual:
+
+NOT OK test/control-plane/replica-dispatch-routing.property.test.js (2 assertions)
+  not ok 1 - Property failed after 1 tests { seed: 1469093519, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [{"operation_id":"op-xxxxx","type":"ADD","partition_id":"part-xxx","replica_id":"rep-xxx","source_node_id":"node-xxx","target_node_id":"tgt-xxx","status":"pending","workflow_step":"PENDING","created_at":1000000000000,"updated_at":1000000000000,"entity_type":"partition","entity_id":"part-xxx"}] Shrunk 25 time(s) Got error: Invalid replica operation persistence outcome: persisted operation history is not JSON text     at invalidOperationPersistenceOutcome (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/src/rebalancer/replica-operation-update-outcome.js:67:17)     at requireOutcome (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/src/rebalancer/replica-operation-update-outcome.js:74:25)     at decodePersistedOperationHistory (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/src/rebalancer/replica-operation-update-outcome.js:97:3)     at decodeReplicaOperationRow (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/src/rebalancer/replica-operation-repository-row-methods.js:96:20)     at ReplicaDispatchService.buildOperationFromRow (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/src/control-plane/replica-dispatch-readiness-capture.js:119:12)     at ReplicaDispatchService.dispatchOperationRow (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/src/control-plane/replica-dispatch-operation-execution.js:219:31)     at file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqbxxsu-871419/test/control-plane/replica-dispatch-routing.property.test.js:206:25     at AsyncProperty.predicate (file:///mnt/old/lab/lagrange-repo/node_modules/fast-check/lib/esm/check/property/AsyncProperty.js:14:59)     at AsyncProperty.run (file:///mnt/old/lab/lagrange-repo/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:39)     at asyncRunIt (file:///mnt/old/lab/lagrange-repo/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:36)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run | stack: |
+
+NOT OK test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js (94 assertions)
+  not ok 2 - should be equal | stack: | | stack: | | stack: |
+
+NOT OK test/distributed/harness/__tests__/real-product-remote-shell-and-attribution.test.js (38 assertions)
+  not ok 2 - rejects as timedOut & observerInfrastructure even when child traps SIGTERM and exits 0 or 143 | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 0 | actual: ~
+
+NOT OK test/node/fresh-create-resumed-syncing-claim.test.js (3 assertions)
+  not ok 1 - B1: a create resumed on its durable SYNCING row that fails deferRetry at runtime-step keeps the failed-create cleanup claim, is failed (not re-dispatched) and is removed | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: true | actual: false
+
+NOT OK test/node/node-reintegration-service.test.js (79 assertions)
+  not ok 1 - should emit nodeReintegrated event | stack: | | stack: | | stack: |
+
+NOT OK test/partition/durable-voter-visibility-role-write.test.js (20 assertions)
+  not ok 3 - ControlPlaneSystemTableGateway requires defined, schema-owned predicate columns | stack: | | stack: |
+
+NOT OK test/convergence/dt-formation-declared-size-latch.test.js (8 assertions)
+  not ok 4 - W1: late joiner with D=3 never latches at 2 hosts and latches to FORMED in frozen time once the 3rd host arrives and priority partitions spread | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 2 | actual: 1
+
+NOT OK test/convergence/dt-placement-owner-formation-drain.test.js (11 assertions)
+  not ok 4 - A4 quiescence in frozen time: the drain completes with no placement timer firing, no bound spent and mg-1 unchanged | error: |-
+
+NOT OK test/partition/placement-create-bootstrap-binding.test.js (14 assertions)
+  not ok 12 - ledger self-move dispatch waits for unstamped native ADD in PENDING | error: 'an unreachable destination cannot discharge source-side bootstrap custody' | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: | actual: 'Entity partition/placement-bootstrap-p1 operation ledger is unavailable for removal arbitration: Required entity operation observation is incomplete'
+
+NOT OK test/partition/placement-founding-and-runtime-service-admission.test.js (15 assertions)
+  not ok 1 - routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN | error: "Cannot read properties of undefined (reading 'has')" | code: 'ERR_TEST_FAILURE' | name: 'TypeError' | stack: |-
+
+NOT OK test/partition/placement-retained-row-repair.test.js (45 assertions)
+  not ok 33 - partial capacity census cannot spend or retire remote repair debt | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 1 | actual: 2
+
+NOT OK test/query/sql-query-engine-create-table-quorum.test.js (2 assertions)
+  not ok 1 - provisioning below quorum is rejected without lowering the quorum minimum
+
+NOT OK test/query/schema-provisioning-native-admission.test.js (122 assertions)
+  not ok 1 - Cannot read properties of undefined (reading 'has') | stack: |
+
+NOT OK test/raft/raft-rs-backend/committed-membership-census.test.js (9 assertions)
+  not ok 4 - T7: the stamp origins - the leader's COMMITTED answer at creation, and the GENESIS founding sets of the provisioner and the seed | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: | actual:
+
+NOT OK test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js (29 assertions)
+  not ok 24 - terminal settlement after admission preserves the exact install | stack: > | stack: >
+
+NOT OK test/rebalancer/admission-real-size-estimates.test.js (23 assertions)
+  not ok 1 - Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete) | stack: |
+
+NOT OK test/raft/snapshot-dispatcher-wiring.test.js (13 assertions)
+  not ok 1 - ReplicaHandlerSetup requires systemTableCache | stack: > | stack: >
+
+NOT OK test/rebalancer/coordinator-created-operation-progress.test.js (41 assertions)
+  not ok 5 - the resumed owner path should continue into dispatch after claiming the operation | stack: >
+
+NOT OK test/rebalancer/duplicate-operation-prevention.property.test.js (40 assertions)
+  not ok 1 - Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete) | stack: | | stack: |
+
+NOT OK test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js (20 assertions)
+  not ok 2 - the deferred dispatch retry registered by the ACK-swallowed wake actually fires a re-wake, or the planner rearm is not suppressed (deliveries=1, rearmAction=skip_live_deferred_retry, retryStillLive=true) | stack: >
+
+NOT OK test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions)
+  not ok 40 - should be equal | stack: | | stack: |
+
+NOT OK test/rebalancer/message-group-membership-operation-lane.test.js (8 assertions)
+  not ok 5 - canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: true | actual: false
+
+NOT OK test/rebalancer/executor-bypasses-workflow-owner.test.js (7 assertions)
+  not ok 1 - coordinator should advance to CREATING after dispatch | stack: > | stack: >
+
+NOT OK test/rebalancer/node-storage-budget-service.test.js (24 assertions)
+  not ok 1 - The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent | stack: > | cause: | error: The proposal was accepted into consensus and its outcome is not known to
+
+NOT OK test/rebalancer/operation-record-step-shape.test.js (5 assertions)
+  not ok 5 - the pre-sync REPLACE target state reads the step of either shape | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 'unmaterialized' | actual: 'evidence_unavailable'
+
+NOT OK test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js (15 assertions)
+  not ok 1 - removal leaving the floor satisfied is safe | stack: |
+
+NOT OK test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js (20 assertions)
+  not ok 1 - target-sync active target progress should expose owner progress | stack: | | stack: |
+
+NOT OK test/rebalancer/placement-admission-cross-coordinator-target-census.test.js (4 assertions)
+  not ok 1 - W-T: with B at capacity through A's copies, C's copy onto B is refused although C's cache has not received them | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: true | actual: false
+
+NOT OK test/rebalancer/quorum-conditioned-remove-safety.test.js (179 assertions)
+  not ok 9 - remove should dispatch once replacement becomes voter-ready | stack: >
+
+NOT OK test/rebalancer/rebalance-coordinator-topology-guard.test.js (105 assertions)
+  not ok 1 - createOperation should fail closed when the target node already hosts the partition | stack: > | stack: >
+
+NOT OK test/rebalancer/rebalancer-entity-interaction-contract.test.js (31 assertions)
+  not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function | stack: > | stack: >
+
+NOT OK test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js (52 assertions)
+  not ok 2 - Storage reservation creation failed for operation replace-op-28ef8f4bf921b28d8d8bd3eccb05c2a9: reservation insert rejected | stack: |
+
+NOT OK test/rebalancer/replace-in-flight-blocks-planning.test.js (235 assertions)
+  not ok 45 - the STOPPING owner waits while the witness counts the source | stack: > | cause: 'terminal_release_pending',
+
+NOT OK test/rebalancer/replace-named-handoff-attempt.test.js (32 assertions)
+  not ok 1 - one handoff was issued | stack: | | stack: >
+
+NOT OK test/rebalancer/replica-operation-insert-retry-idempotency.test.js (8 assertions)
+  not ok 1 - Authoritative replica operation not confirmed: op-idem-1 | stack: |
+
+NOT OK test/rebalancer/replica-operation-membership-epoch-binding.test.js (130 assertions)
+  not ok 8 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough | stack: >
+
+NOT OK test/rebalancer/replica-operation-retained-owner-turn.test.js (15 assertions)
+  not ok 2 - the exact command owns the next turn | stack: > | stack: >
+
+NOT OK test/rebalancer/replace-owner-lease-verdict-property.test.js (25 assertions)
+  # TAP assertions failed; test process exited 1
+
+NOT OK test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions)
+  not ok 1 - F11: every refusal and waiting reason maps to a trigger whose subscription exists, and none clears on RESYNC or a retry delay | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: | actual:
+
+NOT OK test/rebalancer/replica-status-completeness.property.test.js (119 assertions)
+  not ok 8 - Step 'SUPERSEDED' should map to valid status 'superseded' | stack: >
+
+NOT OK test/convergence/dt-formation-joint-admission-release-liveness.test.js (12 assertions)
+  not ok 11 - join-core-coupling: joiner-restart-wiped-data-dir re-replicates and converges to TRAFFIC_READY without deleting REPLICA_OPERATIONS history | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: true | actual: false
+
+NOT OK test/rebalancer/reservation-expiry-operation-aware.test.js (8 assertions)
+  not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text | stack: > | code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+
+NOT OK test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (7 assertions)
+  not ok 1 - Unsupported rebalancer entity type: undefined | stack: | | code: UNSUPPORTED_REBALANCER_ENTITY_TYPE
+
+NOT OK test/rebalancer/replica-placement-owner-core.test.js (20 assertions)
+  not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold | error: "Cannot read properties of undefined (reading 'partitionId')" | code: 'ERR_TEST_FAILURE' | stack: |-
+
+NOT OK test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js (47 assertions)
+  not ok 20 - public coordinator dispatch accepts the runtime create | stack: |
+
+NOT OK test/rebalancer/terminal-status-constants.test.js (25 assertions)
+  not ok 1 - TERMINAL_STATUSES should have exactly 3 entries | stack: |
+
+NOT OK test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (87 assertions)
+  not ok 1 - Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete) | stack: |
+
+NOT OK test/runtime/service-runtime-consensus-publication.test.js (16 assertions)
+  not ok 1 - PUBLISHED projects the services row and the endpoint row, then marks PRESENT by token | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 'PUBLISHED' | actual: 'PUBLISHED_UNPROJECTED'
+
+NOT OK test/scripts/check-operation-dispatch-completion-owner.test.js (30 assertions)
+  not ok 1 - the checked-in owner cutover has zero structural violations | stack: >
+
+NOT OK test/scripts/check-guideline-navigability.test.js (12 assertions)
+  not ok 12 - the real audit over src reports only inherited violations | error: |- | code: 'ERR_ASSERTION' | name: 'AssertionError' | expected: 0 | actual: 1
+
+NOT OK test/rebalancer/strict-operation-outcomes.test.js (627 assertions)
+  not ok 7 - should be equal | stack: | | stack: |
+
+--- tail ---
+# test-files total=84 pass=16 fail=68 assertions=4418
+lab test: adam-laptop: # test-files total=84 pass=16 fail=68 assertions=4418
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=84 pass=16 fail=68 assertions=4418
+exit=1
+

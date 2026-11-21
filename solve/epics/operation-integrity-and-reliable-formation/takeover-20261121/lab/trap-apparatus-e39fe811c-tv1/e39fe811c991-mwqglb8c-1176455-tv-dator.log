@@ -1,0 +1,21 @@
+placement-shell=2950541
+placement-head=e39fe811c9918551f557c2c7636dff7aa8aa4d68
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2951088
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 69C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/scripts/fallback-necessity-trap.test.js (12 assertions, 743ms)
+ok test/scripts/fallback-read-closure.test.js (9 assertions, 1672ms)
+ok test/scripts/quest-evidence-harness-expected-tests.test.js (9 assertions, 4306ms)
+# test-files total=3 pass=3 fail=0 assertions=30
+placement-results={"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":743,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1672,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/quest-evidence-harness-expected-tests.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":4306,"retriedOnce":false,"firstFailureLine":null}

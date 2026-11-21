@@ -1,0 +1,17 @@
+{
+  "sha": "efd35b4bd986e772eb139c7375255a0d54db55db",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/placement-owner-authority-disruptions.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/placement-owner-authority-disruptions.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

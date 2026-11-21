@@ -1,0 +1,46 @@
+site	bucket	row	slice	families_or_check	producer_history_verdict
+admin/admin-runtime-service-views.js:109	N1	two_source_fallback_reads	NS-49	SHAPE:runtime_kind/runtimeKind	
+bootstrap/owners/bootstrap-node-ready-rebalance-owner.js:149	N1	two_source_fallback_reads	NS-21	SHAPE:node_id/nodeId	
+bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js:457	N1	typeof_dual_paths	NS-21	SHAPE:table_name/tableName	
+control-plane/control-plane-publication-merge.js:384	N1	two_source_fallback_reads	NS-01	SHAPE:publication_id/publicationId	
+control-plane/heartbeat-service-lifecycle-methods.js:511	N1	two_source_fallback_reads	NS-03	SHAPE:node_address/nodeAddress	
+control-plane/heartbeat-service-publication-methods.js:121	N1	two_source_fallback_reads	NS-03	SHAPE:node_address/nodeAddress	
+control-plane/replica-dispatch-operation-execution.js:115	N1	two_source_fallback_reads	NS-07	SHAPE:partition_id/partitionId	
+control-plane/replica-dispatch-operation-execution.js:156	N1	two_source_fallback_reads	NS-07	SHAPE:partition_id/partitionId	
+control-plane/replica-dispatch-replay-readiness.js:625	N1	two_source_fallback_reads	NS-08	SHAPE:source_node_id/sourceNodeId	
+index-management/index-service-global-methods.js:41	N1	two_source_fallback_reads	NS-37	SHAPE:table_name/tableName	
+index-management/index-service-global-methods.js:45	N1	two_source_fallback_reads	NS-37	SHAPE:column_names/columnNames	
+index-management/index-service-global-methods.js:51	N1	two_source_fallback_reads	NS-37	SHAPE:index_id/indexId	
+index-management/index-service-partition-methods.js:306	N1	two_source_fallback_reads	NS-37	SHAPE:table_name/tableName	
+index-management/index-service-partition-methods.js:385	N1	two_source_fallback_reads	NS-37	SHAPE:table_name/tableName	
+live-query/live-query-manager.js:633	N1	two_source_fallback_reads	NS-47	SHAPE:table_name/tableName	
+node/replica-handler-status-methods.js:223	N1	two_source_fallback_reads	NS-29	SHAPE:node_id/nodeId	
+node/runtime-service-call-cell-handler.js:230	N1	two_source_fallback_reads	NS-29	SHAPE:active_partition_version/activePartitionVersion	
+partition/managed-merge-workflow.js:540	N1	two_source_fallback_reads	NS-16	LEADER_NODE_ID,SHAPE:leader_node_id/leaderNodeId	value-contract: leader_node_id is the canonical leader publication; the `|| this.nodeId` arm (assume self) never ran; delete for a typed unavailable, not producer-killed
+partition/managed-split-workflow.js:459	N1	two_source_fallback_reads	NS-16	LEADER_NODE_ID,SHAPE:leader_node_id/leaderNodeId	
+query/query-executor-shared.js:205	N1	two_source_fallback_reads	NS-25	SHAPE:node_id/nodeId	
+rebalancer/priority-publication-safety-topology.js:180	N1	two_source_fallback_reads	NS-11	SHAPE:partition_id/partitionId	
+rebalancer/rebalance-coordinator-replica-identity-methods.js:152	N1	typeof_dual_paths	NS-13	REPLACE_SOURCE	P2 getReplaceSourceReplicaId produced (28 occurrences); probe for reduced fixtures
+rebalancer/rebalance-coordinator-replica-identity-methods.js:205	N1	typeof_dual_paths	NS-13	REPLACE_SOURCE	
+rebalancer/rebalance-coordinator-replica-identity-methods.js:309	N1	typeof_dual_paths	NS-13	REPLACE_SOURCE	
+rebalancer/unified-rebalancer-priority-recovery-coordination.js:157	N1	two_source_fallback_reads	NS-15	SHAPE:partition_id/partitionId	
+rebalancer/unified-rebalancer-replica-state.js:756	N1	two_source_fallback_reads	NS-15	SHAPE:operation_type/operationType	
+transport/message-router-shared-vocabulary.js:399	N1	two_source_fallback_reads	NS-34	SHAPE:node_id/nodeId	
+bootstrap/join-cleanup-handler.js:709	N2	typeof_dual_paths	NS-20	N2-primary-dead-history	P? not determined: getSqlQueryEngine has 52 head occurrences; the join-cleanup delegates object was not traced
+bootstrap/node-joining-owner-construction.js:193	N2	typeof_dual_paths	NS-20	N2-primary-dead-history	P0 never produced: every commit since 2026-02-28 has only consumer-side occurrences
+bootstrap/phases/seed-partitions-phase.js:651	N2	typeof_dual_paths	NS-22	N2-primary-dead-history	P2 produced at head (seed delegates :388) but shadowed by the getSystemTableCacheRef arm; fixture-only third tier
+bootstrap/shared/message-group-service-activation.js:98	N2	typeof_dual_paths	NS-23	N2-primary-dead-history	P1 producer removed: c93265e10 (2026-03-21, removing system confusion after refactoring) deleted the only resolveExtraFields producer in node-joining-service.js; verify that removal retired the capability, then delete the consumer
+bootstrap/shared/startup-sql-runtime-handoff.js:124	N2	typeof_dual_paths	NS-23	N2-primary-dead-history	P0 never produced (introduced e2797b6c8 consumer-only)
+bootstrap/startup-workflow-store.js:176	N2	typeof_dual_paths	NS-23	N2-primary-dead-history	P0 never produced (introduced 86b7b178c consumer-only)
+cdc/cdc-confirmation-tracker.js:73	N2	typeof_dual_paths	NS-30	N2-primary-dead-history	P? predicate: is generic; callers not traced
+control-plane/control-plane-system-table-gateway-read-contracts.js:267	N2	typeof_dual_paths	NS-03	N2-primary-dead-history	P2 option key exists in read-strategies only; callers pass explicit strategies (implicit inference unused)
+control-plane/control-plane-system-table-gateway-read-contracts.js:270	N2	typeof_dual_paths	NS-03	N2-primary-dead-history	P2 readFromCache/cachePredicate produced (system-metadata-owner-base.js, policy) but those callers bypass this inference
+control-plane/control-plane-system-table-gateway-read-strategies.js:132	N2	typeof_dual_paths	NS-03	N2-primary-dead-history	P2 cachePredicate produced elsewhere; never a function on this path
+control-plane/control-plane-system-table-gateway-read-strategies.js:542	N2	typeof_dual_paths	NS-03	N2-primary-dead-history	P2 same as read-contracts :267
+control-plane/readiness-planning-semantic-currency-methods.js:173	N2	typeof_dual_paths	NS-07	N2-primary-dead-history	P2 method exists on the readiness snapshot store; which object is this.service not traced
+index-management/global-index-lifecycle-coordinator.js:738	N2	typeof_dual_paths	NS-37	N2-primary-dead-history	P0 never produced (introduced 94cb49a19 2026-10-30 consumer-only)
+partition/managed-merge-workflow.js:514	N2	typeof_dual_paths	NS-16	N2-primary-dead-history	P2 createExecutionTimeoutBudget produced by topology adapters; not on this object
+partition/partition-service-core-base.js:211	N2	typeof_dual_paths	NS-17	N2-primary-dead-history	second wiring path, not broken: snapshot-catchup-wiring.js:121 assigns service.onSnapshotCatchupNeeded after construction (369c45e64, 2026-11-21); the constructor option is the dead duplicate
+rebalancer/move-planner-state-methods.js:491	N2	typeof_dual_paths	NS-09	N2-primary-dead-history	P0 never produced (introduced ee815842e 2026-05-14; phantom method)
+rebalancer/replica-operation-message-group-removal.js:645	N2	typeof_dual_paths	NS-13	N2-primary-dead-history	P0 never produced (introduced 54dd2d7ce 2026-10-28 consumer-only)
+workflow/epoch-lazy-feature-backfill.js:50	N2	typeof_dual_paths	NS-38	N2-primary-dead-history	P0 never produced: partition-feature-rollup-store.js:132 passes options.customAttributeExtractor through, nothing sets it

@@ -1,0 +1,49 @@
+# identity check run 2 vs run 1 (baseline-identity.json), 2026-11-21T13:38:57Z
+generated config run2 sha256 7cadc129e8cc1bf0a179083f78afff996d950eb4595a28bbc4f7e02f5049d6af  baseline 0e84949de047bfa1bb735504fb5e6ee13de6d4edfc62777d4f141a6abcf07a19
+-- diff (baseline content vs run2), only the docker block differs:
+5,7c5,7
+<    "tcp://127.0.0.1:34057",
+<    "tcp://127.0.0.1:37191",
+<    "tcp://127.0.0.1:35069"
+---
+>    "tcp://127.0.0.1:39039",
+>    "tcp://127.0.0.1:33631",
+>    "tcp://127.0.0.1:33971"
+11,12c11,12
+<     "internalIp": "10.166.15.206",
+<     "externalIp": "10.166.15.206",
+---
+>     "internalIp": "10.166.15.209",
+>     "externalIp": "10.166.15.209",
+14c14
+<     "machineId": "boot:71e33ccd-53d1-4f9e-bea1-28e2eb58bc1e"
+---
+>     "machineId": "boot:67679655-11fc-48ac-bffa-7f5d6e4bcba0"
+17,18c17,18
+<     "internalIp": "10.166.15.205",
+<     "externalIp": "10.166.15.205",
+---
+>     "internalIp": "10.166.15.208",
+>     "externalIp": "10.166.15.208",
+20c20
+<     "machineId": "boot:b8ebcb68-f3a7-4aa8-90f4-c03e9a19892d"
+---
+>     "machineId": "boot:9dc0db16-2074-4c9d-a1dd-8c5f377c0540"
+23,24c23,24
+<     "internalIp": "10.166.15.204",
+<     "externalIp": "10.166.15.204",
+---
+>     "internalIp": "10.166.15.207",
+>     "externalIp": "10.166.15.207",
+26c26
+<     "machineId": "boot:ae95358e-3bbb-4b18-9993-71fbb165a135"
+---
+>     "machineId": "boot:41d75187-1219-481a-adde-c28961808005"
+-- /app content manifest sha256 (7928 files each):
+run2 fdiag-1 56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c files=7928
+run2 fdiag-2 56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c files=7928
+run2 fdiag-3 56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c files=7928
+run1 all     56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c files=7928
+cmp run2 fdiag-1 manifest == run1 fdiag-1 manifest: identical
+-- base images (all three VMs): node:22-slim sha256:e9f565d3... distroless nodejs22-debian12 sha256:8a3e96fe... (= run 1)
+-- source: commit f580579a509293e50b0344d1c7e742b10fbf2aac tree a5c09a1bec57bc92b2b1d7ebcef0fa63fb2e92db

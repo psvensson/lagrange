@@ -1,0 +1,8 @@
+[
+ {"name": "FORMATION (profile start -> last formation operation completed, seed log 13:26:55.977Z)", "from": "2026-11-21T13:17:00.000Z", "to": "2026-11-21T13:26:55.977Z"},
+ {"name": "POST-DRAIN (last formation operation completed -> profile end)", "from": "2026-11-21T13:26:55.977Z", "to": "2026-11-21T13:28:30.000Z"},
+ {"name": "W1 bootstrap -> priority spread first met (poll at formation+100.275 s)", "from": "2026-11-21T13:17:00.000Z", "to": "2026-11-21T13:19:44.937Z"},
+ {"name": "W2 system-partition formation (priority spread met -> last formation operation completed)", "from": "2026-11-21T13:19:44.937Z", "to": "2026-11-21T13:26:55.977Z"},
+ {"name": "W3 idle tail = POST-DRAIN", "from": "2026-11-21T13:26:55.977Z", "to": "2026-11-21T13:28:30.000Z"},
+ {"name": "WHOLE PROFILE", "from": "2026-11-21T13:17:00.000Z", "to": "2026-11-21T13:28:30.000Z"}
+]

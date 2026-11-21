@@ -1,0 +1,69 @@
+{
+  "sha": "316671f87352e16e7cbd8dfaa74ed0af234ded36",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/bootstrap/bootstrap-api.test.js",
+    "test/bootstrap/move-replica-assignment-token.test.js",
+    "test/bootstrap/node-joining-lease-registration.test.js",
+    "test/bootstrap/node-joining-service-message-group-activation.test.js",
+    "test/bootstrap/node-registration-idempotency.test.js",
+    "test/bootstrap/register-node-in-cluster.test.js",
+    "test/bootstrap/register-service-move-handoff-refused.test.js",
+    "test/bootstrap/storage-budget-bootstrap.test.js",
+    "test/cdc/cdc-owner-required-authoritative-routing.test.js",
+    "test/integration/control-plane-log-marker.integration.test.js",
+    "test/integration/control-plane-node-terminal-removal.integration.test.js",
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+    "test/integration/control-plane-rebalance.integration.test.js",
+    "test/integration/lagrange-server-npm-package.integration.test.js",
+    "test/integration/membership-consistency.integration.test.js",
+    "test/integration/message-group-learner-join.integration.test.js",
+    "test/integration/node-join-replica-activation.integration.test.js",
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js",
+    "test/rebalancer/message-group-operation-routing.integration.test.js",
+    "test/scripts/select-change-tests.test.js",
+    "test/topology/node-host-identity-start-site-census.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-owner-required-authoritative-routing.test.js",
+        "test/scripts/select-change-tests.test.js",
+        "test/topology/node-host-identity-start-site-census.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/move-replica-assignment-token.test.js",
+        "test/bootstrap/bootstrap-api.test.js",
+        "test/bootstrap/storage-budget-bootstrap.test.js",
+        "test/bootstrap/node-joining-service-message-group-activation.test.js",
+        "test/bootstrap/register-node-in-cluster.test.js",
+        "test/bootstrap/register-service-move-handoff-refused.test.js",
+        "test/bootstrap/node-registration-idempotency.test.js",
+        "test/bootstrap/node-joining-lease-registration.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/membership-consistency.integration.test.js",
+        "test/integration/control-plane-node-terminal-removal.integration.test.js",
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/integration/control-plane-log-marker.integration.test.js",
+        "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js",
+        "test/integration/control-plane-rebalance.integration.test.js",
+        "test/rebalancer/message-group-operation-routing.integration.test.js",
+        "test/integration/node-join-replica-activation.integration.test.js",
+        "test/integration/message-group-learner-join.integration.test.js",
+        "test/integration/lagrange-server-npm-package.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

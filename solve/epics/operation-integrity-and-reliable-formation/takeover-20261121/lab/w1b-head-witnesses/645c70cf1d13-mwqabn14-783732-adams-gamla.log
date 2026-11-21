@@ -1,0 +1,292 @@
+placement-shell=1522019
+placement-head=645c70cf1d13d2510d27c8a0715f433c4b48ff5a
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1522475
+# test-files planned=5
+classified lane ordinary: 5 file(s), jobs=3
+thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+not ok test/partition/placement-admission-trigger-coverage.test.js (2 assertions, 373ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: every outcome code the native placement admission owner can answer has a clearing-trigger row
+not ok 1 - every outcome code the native placement admission owner can answer has a clearing-trigger row
+  ---
+  duration_ms: 3.568282
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-admission-trigger-coverage.test.js:43:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   'PLACEMENT_ADMISSION_ERROR.ORIGIN=placement_admission_origin_refused',
+    +   'PLACEMENT_ADMISSION_ERROR.BYTES=placement_admission_bytes_invalid',
+    +   'PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE=placement_outcome_identity_unavailable',
+    +   'PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED=placement_remove_intent_unscoped',
+    +   'PLACEMENT_ADMISSION_ERROR.TARGET=placement_admission_target_invalid',
+    +   'PLACEMENT_ADMISSION_ERROR.RESULT=placement_admission_result_unavailable'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'PLACEMENT_ADMISSION_ERROR.ORIGIN=placement_admission_origin_refused'
+    1: 'PLACEMENT_ADMISSION_ERROR.BYTES=placement_admission_bytes_invalid'
+    2: 'PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE=placement_outcome_identity_unavailable'
+    3: 'PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED=placement_remove_intent_unscoped'
+    4: 'PLACEMENT_ADMISSION_ERROR.TARGET=placement_admission_target_invalid'
+    5: 'PLACEMENT_ADMISSION_ERROR.RESULT=placement_admission_result_unavailable'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-admission-trigger-coverage.test.js:45:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: the coverage check names a code added without a row, and every row names a declared trigger or a definite answer
+ok 2 - the coverage check names a code added without a row, and every row names a declared trigger or a definite answer
+  ---
+  duration_ms: 0.607136
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 32.001723
+# time=373ms
+not ok test/partition/placement-outcome-format.test.js (3 assertions, 6792ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+{"level":50,"time":"2026-11-21T10:50:15.835Z","nodeId":"test-node","pid":1522497,"subsystem":"partition","partitionId":"replica_operations-p1","error":"NOT NULL constraint failed: replica_operations.type","sql":"UPDATE replica_operations SET type = NULL WHERE operation_id = ?","params":["pl-tables-p1-3-0"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+# Subtest: a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format
+not ok 1 - a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format
+  ---
+  duration_ms: 4640.117187
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:78:1'
+  failureType: 'testCodeFailure'
+  error: 'a current-format applied record of another owner is classified as an old placement outcome format'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'placement_outcome_identity_unavailable'
+  actual: 'placement_outcome_identity_unavailable'
+  operator: 'notStrictEqual'
+  stack: |-
+    assertForeignRecordIsCollision (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:65:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:85:5
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-admission-fixture.js:40:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: a current-format statement-failure record (no result) under the same entry key is the collision, never an old placement format
+not ok 2 - a current-format statement-failure record (no result) under the same entry key is the collision, never an old placement format
+  ---
+  duration_ms: 103.184652
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:89:1'
+  failureType: 'testCodeFailure'
+  error: 'a current-format statement_failed record of another owner is classified as an old placement outcome format'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'placement_outcome_identity_unavailable'
+  actual: 'placement_outcome_identity_unavailable'
+  operator: 'notStrictEqual'
+  stack: |-
+    assertForeignRecordIsCollision (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:65:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:101:5
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-admission-fixture.js:40:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request
+not ok 3 - an old-format placement outcome row is refused typed when its store opens; the hot replay path never classifies it per request
+  ---
+  duration_ms: 86.152005
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:105:1'
+  failureType: 'testCodeFailure'
+  error: 'the store opened with a placement outcome row that carries no command identity; the hot path then answers placement_outcome_identity_unavailable (clearing-trigger row: false)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-outcome-format.test.js:130:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4840.706401
+# time=6792ms
+not ok test/partition/placement-settled-replay-cutover-pause.test.js (2 assertions, 6538ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision
+not ok 1 - cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision
+  ---
+  duration_ms: 4578.139916
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-settled-replay-cutover-pause.test.js:39:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a settled E0 is answered with its original receipt
+    + actual - expected
+    
+      {
+    -   acceptingNodeId: 'test-node',
+    -   acknowledgedAtMs: 1795258215959,
+        committed: true,
+        logIndex: 3,
+        partitionId: 'replica_operations-p1',
+        placementResult: {
+          operationIds: [
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    success: true
+    partitionId: 'replica_operations-p1'
+    placementResult:
+      outcome: 'ADMITTED'
+      operationIds:
+        0: 'pl-tables-p1-3-0'
+    committed: true
+    logIndex: 3
+    term: 1
+    acceptingNodeId: 'test-node'
+    acknowledgedAtMs: 1795258215959
+  actual:
+    success: true
+    partitionId: 'replica_operations-p1'
+    placementResult:
+      outcome: 'ADMITTED'
+      operationIds:
+        0: 'pl-tables-p1-3-0'
+    committed: true
+    logIndex: 3
+    term: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-settled-replay-cutover-pause.test.js:58:12
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/partition/placement-admission-fixture.js:40:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: cutover pause: leadership is decided before the settled replay
+ok 2 - cutover pause: leadership is decided before the settled replay
+  ---
+  duration_ms: 82.431713
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4671.779015
+# time=6538ms
+ok test/partition/placement-admission-apply.test.js (10 assertions, 10206ms)
+not ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 5368ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: F11: every refusal and waiting reason maps to a trigger whose subscription exists, and none clears on RESYNC or a retry delay
+not ok 1 - F11: every refusal and waiting reason maps to a trigger whose subscription exists, and none clears on RESYNC or a retry delay
+  ---
+  duration_ms: 66.336941
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/rebalancer/replica-placement-owner-clearing-triggers.test.js:72:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+        'ALREADY_FOUNDED',
+        'HOLD_NOT_HELD',
+        'LEDGER_PARTITION_REQUIRED',
+        'SYSTEM_PARTITION_SEED_FOUNDED',
+        'TARGET_CLAIM_TAKEN',
+    +   'retained_admission_required',
+    +   'retained_identity_changed',
+    +   'retained_row_changed'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'ALREADY_FOUNDED'
+    1: 'HOLD_NOT_HELD'
+    2: 'LEDGER_PARTITION_REQUIRED'
+    3: 'SYSTEM_PARTITION_SEED_FOUNDED'
+    4: 'TARGET_CLAIM_TAKEN'
+  actual:
+    0: 'ALREADY_FOUNDED'
+    1: 'HOLD_NOT_HELD'
+    2: 'LEDGER_PARTITION_REQUIRED'
+    3: 'SYSTEM_PARTITION_SEED_FOUNDED'
+    4: 'TARGET_CLAIM_TAKEN'
+    5: 'retained_admission_required'
+    6: 'retained_identity_changed'
+    7: 'retained_row_changed'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/645c70cf1d13-mwqabn14-783732/test/rebalancer/replica-placement-owner-clearing-triggers.test.js:87:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: WRITE_PATH_RELEASED: the cutover pause refuses the admission typed and its release emits the event once
+ok 2 - WRITE_PATH_RELEASED: the cutover pause refuses the admission typed and its release emits the event once
+  ---
+  duration_ms: 3371.758811
+  type: 'test'
+  ...
+# Subtest: PRESSURE_RELEASED: a watcher of a deferred request is told once when the governor stops deferring it, never while pressure lasts
+ok 3 - PRESSURE_RELEASED: a watcher of a deferred request is told once when the governor stops deferring it, never while pressure lasts
+  ---
+  duration_ms: 289.582013
+  type: 'test'
+  ...
+# Subtest: TARGET_CAPACITY_CHANGED: capacity freed by a released reservation reaches the capacity owner's subscribers
+ok 4 - TARGET_CAPACITY_CHANGED: capacity freed by a released reservation reaches the capacity owner's subscribers
+  ---
+  duration_ms: 85.576177
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 3
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3820.678014
+# time=5368ms
+# test-files total=5 pass=1 fail=4 assertions=21
+placement-results={"file":"test/partition/placement-admission-trigger-coverage.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":373,"retriedOnce":false,"firstFailureLine":"not ok 1 - every outcome code the native placement admission owner can answer has a clearing-trigger row"}
+placement-results={"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":6792,"retriedOnce":false,"firstFailureLine":"not ok 1 - a current-format applied SQL record without an insert rowid under the same entry key is the collision, never an old placement format"}
+placement-results={"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":6538,"retriedOnce":false,"firstFailureLine":"not ok 1 - cutover pause: settled E0 answers its original receipt while new and unresolved E1 stay paused; a changed command under E0 is still the collision"}
+placement-results={"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":10206,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":5368,"retriedOnce":false,"firstFailureLine":"not ok 1 - F11: every refusal and waiting reason maps to a trigger whose subscription exists, and none clears on RESYNC or a retry delay"}

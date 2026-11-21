@@ -1,0 +1,536 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.98
+[adam-laptop] placement-shell=3303523
+[adam-laptop] placement-head=5edfe59e2e42b0b6e04566a941e22d217c5ac35b
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3304471
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 43C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/rebalancer/replace-named-handoff-attempt.test.js (32 assertions, 1926ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead
+[adam-laptop]     not ok 1 - one handoff was issued
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 211
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:211:7)
+[adam-laptop]       source: |2
+[adam-laptop]           try {
+[adam-laptop]             await harness.coordinator.executeOperation(harness.operation);
+[adam-laptop]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[adam-laptop]         ------^
+[adam-laptop]             const request = harness.stepDowns()[0];
+[adam-laptop]             t.ok(request.target.startsWith(TARGET_NODE_ID),
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - Cannot read properties of undefined (reading 'target')
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:213:18)
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 213
+[adam-laptop]         columnNumber: 18
+[adam-laptop]         typeName: Test
+[adam-laptop]         methodName: <anonymous>
+[adam-laptop]         functionName: Test.<anonymous>
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[adam-laptop]             const request = harness.stepDowns()[0];
+[adam-laptop]             t.ok(request.target.startsWith(TARGET_NODE_ID),
+[adam-laptop]         -----------------^
+[adam-laptop]               'the handoff goes to the target node');
+[adam-laptop]             t.equal(request.payload[ReplicaOperationField.REPLICA_ID],
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..2
+[adam-laptop] not ok 1 - named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead # time=126.365ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 205
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('named-target only: while the source leads, the only handoff names the '
+[adam-laptop]     +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'REPLACE\'s own target, and removal waits for the witness to see it lead',
+[adam-laptop]     async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target
+[adam-laptop]     not ok 1 - an accepted, unresolved attempt is not re-issued
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 246
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:246:7)
+[adam-laptop]       source: |2
+[adam-laptop]             await harness.coordinator.executeOperation(harness.operation);
+[adam-laptop]             await harness.coordinator.executeOperation(harness.operation);
+[adam-laptop]             t.equal(harness.stepDowns().length, 1,
+[adam-laptop]         ------^
+[adam-laptop]               'an accepted, unresolved attempt is not re-issued');
+[adam-laptop]             t.equal(readReplaceHandoffAttempt(harness.owner,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - Cannot read properties of null (reading 'answerClass')
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:249:37)
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 249
+[adam-laptop]         columnNumber: 37
+[adam-laptop]         typeName: Test
+[adam-laptop]         methodName: <anonymous>
+[adam-laptop]         functionName: Test.<anonymous>
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]               'an accepted, unresolved attempt is not re-issued');
+[adam-laptop]             t.equal(readReplaceHandoffAttempt(harness.owner,
+[adam-laptop]               harness.operation.operationId).answerClass,
+[adam-laptop]         ------------------------------------^
+[adam-laptop]             REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED, 'the attempt is accepted');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..2
+[adam-laptop] not ok 2 - one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target # time=50.698ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 238
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('one attempt: an unresolved attempt blocks a second handoff; a refused '
+[adam-laptop]     +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'attempt resolves and the next one names the same target', async (t) => {
+[adam-laptop]       let answer = {status: ReplicaOperationResponseStatus.COMPLETED,
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: attemptSeq echo: a late answer of an earlier attempt is dropped
+[adam-laptop]     not ok 1 - Cannot read properties of null (reading 'attemptSeq')
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:288:56)
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 288
+[adam-laptop]         columnNumber: 56
+[adam-laptop]         typeName: Test
+[adam-laptop]         methodName: <anonymous>
+[adam-laptop]         functionName: Test.<anonymous>
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]                 harness.operation.operationId,
+[adam-laptop]                 {status: ReplicaOperationResponseStatus.COMPLETED,
+[adam-laptop]                   [ReplicaOperationField.ATTEMPT_SEQ]: current.attemptSeq - 1},
+[adam-laptop]         -------------------------------------------------------^
+[adam-laptop]                 current.attemptSeq);
+[adam-laptop]               t.equal(applied, false, 'the late answer is not applied');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 3 - attemptSeq echo: a late answer of an earlier attempt is dropped # time=43.942ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 277
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]     test('attemptSeq echo: a late answer of an earlier attempt is dropped',
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const harness = await createHarness({stepDownResponse: () => null});
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding
+[adam-laptop]     not ok 1 - one handoff was issued
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 311
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:311:7)
+[adam-laptop]       source: |2
+[adam-laptop]             const attempt = readReplaceHandoffAttempt(harness.owner,
+[adam-laptop]               harness.operation.operationId);
+[adam-laptop]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[adam-laptop]         ------^
+[adam-laptop]             t.equal(attempt?.answerClass, null,
+[adam-laptop]               'the mismatched answer resolved nothing');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - the mismatched answer resolved nothing
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 312
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:312:7)
+[adam-laptop]       source: |2
+[adam-laptop]               harness.operation.operationId);
+[adam-laptop]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[adam-laptop]             t.equal(attempt?.answerClass, null,
+[adam-laptop]         ------^
+[adam-laptop]               'the mismatched answer resolved nothing');
+[adam-laptop]             t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -null
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 3 - it was counted late
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 314
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:314:7)
+[adam-laptop]       source: |2
+[adam-laptop]             t.equal(attempt?.answerClass, null,
+[adam-laptop]               'the mismatched answer resolved nothing');
+[adam-laptop]             t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+[adam-laptop]         ------^
+[adam-laptop]               lateBefore + 1, 'it was counted late');
+[adam-laptop]             await harness.coordinator.executeOperation(harness.operation);
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 4 - the outstanding attempt blocks a second handoff
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 317
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:317:7)
+[adam-laptop]       source: |2
+[adam-laptop]               lateBefore + 1, 'it was counted late');
+[adam-laptop]             await harness.coordinator.executeOperation(harness.operation);
+[adam-laptop]             t.equal(harness.stepDowns().length, 1,
+[adam-laptop]         ------^
+[adam-laptop]               'the outstanding attempt blocks a second handoff');
+[adam-laptop]             t.equal(harness.removals().length, 0, 'and no removal');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 5 - and no removal
+[adam-laptop]     1..5
+[adam-laptop] not ok 4 - attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding # time=52.321ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 298
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('attemptSeq echo, routed: an answer echoing another attempt through the '
+[adam-laptop]     +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'real dispatch leaves the current attempt outstanding', async (t) => {
+[adam-laptop]       const harness = await createHarness({stepDownResponse: (payload) => ({
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: F-b: no handoff leaves for an operation that became terminal
+[adam-laptop]     ok 1 - the decision was to issue a handoff
+[adam-laptop]     ok 2 - nothing was sent
+[adam-laptop]     ok 3 - no STEP_DOWN left
+[adam-laptop]     1..3
+[adam-laptop] ok 5 - F-b: no handoff leaves for an operation that became terminal # time=40.42ms
+[adam-laptop] 
+[adam-laptop] # Subtest: no retarget: a target that reports its replica missing fails the REPLACE before its removal intent
+[adam-laptop]     not ok 1 - the REPLACE failed before any removal intent
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 354
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:354:7)
+[adam-laptop]       source: |2
+[adam-laptop]             const persisted = await harness.coordinator.queryOperationById(
+[adam-laptop]               harness.operation.operationId);
+[adam-laptop]             t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
+[adam-laptop]         ------^
+[adam-laptop]               'the REPLACE failed before any removal intent');
+[adam-laptop]             t.equal(harness.removals().length, 0, 'no source removal was sent');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -FAILED
+[adam-laptop]         +PENDING
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 2 - no source removal was sent
+[adam-laptop]     not ok 3 - no other replica was asked to lead
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,3 +1,1 @@
+[adam-laptop]         -Array [
+[adam-laptop]         -  "sql_transactions-p1-r4",
+[adam-laptop]         -]
+[adam-laptop]         +Array []
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 357
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:357:7)
+[adam-laptop]       source: |2
+[adam-laptop]               'the REPLACE failed before any removal intent');
+[adam-laptop]             t.equal(harness.removals().length, 0, 'no source removal was sent');
+[adam-laptop]             t.same([...new Set(harness.stepDowns().map((delivery) =>
+[adam-laptop]         ------^
+[adam-laptop]               delivery.payload[ReplicaOperationField.REPLICA_ID]))],
+[adam-laptop]             [TARGET_REPLICA_ID], 'no other replica was asked to lead');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..3
+[adam-laptop] not ok 6 - no retarget: a target that reports its replica missing fails the REPLACE before its removal intent # time=47.592ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 345
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('no retarget: a target that reports its replica missing fails the ' +
+[adam-laptop]     ^
+[adam-laptop]       'REPLACE before its removal intent', async (t) => {
+[adam-laptop]       const harness = await createHarness({stepDownResponse: () => ({
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: BR12: no handoff leaves on a deferred-visibility snapshot
+[adam-laptop]     ok 1 - the deferred snapshot issues no handoff
+[adam-laptop]     ok 2 - control: the fresh copy issues the named-target handoff
+[adam-laptop]     1..2
+[adam-laptop] ok 7 - BR12: no handoff leaves on a deferred-visibility snapshot # time=49.33ms
+[adam-laptop] 
+[adam-laptop] # Subtest: BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff
+[adam-laptop]     ok 1 - a non-source, non-target leader does not authorize the removal
+[adam-laptop]     not ok 2 - one handoff was issued
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 392
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:392:7)
+[adam-laptop]       source: |2
+[adam-laptop]             t.equal(harness.removals().length, 0,
+[adam-laptop]               'a non-source, non-target leader does not authorize the removal');
+[adam-laptop]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[adam-laptop]         ------^
+[adam-laptop]             t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+[adam-laptop]               TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 3 - it names the REPLACE's own target
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 393
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:393:7)
+[adam-laptop]       source: |2
+[adam-laptop]               'a non-source, non-target leader does not authorize the removal');
+[adam-laptop]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[adam-laptop]             t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+[adam-laptop]         ------^
+[adam-laptop]               TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+[adam-laptop]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -sql_transactions-p1-r4
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 4 - the target leading (fresh read) lets removal proceed
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 397
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:397:7)
+[adam-laptop]       source: |2
+[adam-laptop]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[adam-laptop]             await harness.coordinator.executeOperation(harness.operation);
+[adam-laptop]             t.equal(harness.removals().length, 1,
+[adam-laptop]         ------^
+[adam-laptop]               'the target leading (fresh read) lets removal proceed');
+[adam-laptop]           } finally {
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -1
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..4
+[adam-laptop] not ok 8 - BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff # time=49.204ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 384
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]     test('BR11: only a fresh read of the target leading authorizes removal; a ' +
+[adam-laptop]     ^
+[adam-laptop]       'third replica leading gets the named-target handoff', async (t) => {
+[adam-laptop]       const harness = await createHarness();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt
+[adam-laptop]     not ok 1 - Cannot read properties of null (reading 'answerClass')
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:417:21)
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]         lineNumber: 417
+[adam-laptop]         columnNumber: 21
+[adam-laptop]         typeName: Test
+[adam-laptop]         methodName: <anonymous>
+[adam-laptop]         functionName: Test.<anonymous>
+[adam-laptop]       type: TypeError
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: |2
+[adam-laptop]             const attempt = readReplaceHandoffAttempt(harness.owner,
+[adam-laptop]               harness.operation.operationId);
+[adam-laptop]             t.equal(attempt.answerClass, REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED,
+[adam-laptop]         --------------------^
+[adam-laptop]               'setup: attempt accepted');
+[adam-laptop]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..1
+[adam-laptop] not ok 9 - S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt # time=47.006ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[adam-laptop]     lineNumber: 410
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     // target leading (LEADERSHIP_SAFE); a later ACTIVE wait (another check
+[adam-laptop]     // deferring) must not read "attempt unresolved" with no attempt.
+[adam-laptop]     test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
+[adam-laptop]     ^
+[adam-laptop]       'handoff attempt, not an unresolved phase with no attempt', async (t) => {
+[adam-laptop]       const harness = await createHarness();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..9
+[adam-laptop] # { total: 23, pass: 8, fail: 15 }
+[adam-laptop] # time=529.665ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=32
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=32
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=32
+exit=1

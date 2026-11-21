@@ -1,0 +1,13 @@
+{"file":"test/control-plane/formation-transition-settled-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6850,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":7075,"retriedOnce":false,"firstFailureLine":"not ok 1 - replica_operations-p1: the recorded identity survives store reopen and the checkpoint image, and settles only the exact command"}
+{"file":"test/partition/coordinator-settlement-exact-settlement.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2136,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-coordinator-settlement.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2174,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-statement-outcome.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":8989,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":10043,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6727,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1889,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6436,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6630,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":6829,"retriedOnce":false,"firstFailureLine":"not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal"}
+{"file":"test/convergence/dt-formation-declared-size-latch.test.js","attempt":1,"ok":false,"assertions":8,"durationMs":39471,"retriedOnce":false,"firstFailureLine":"not ok 4 - W1: late joiner with D=3 never latches at 2 hosts and latches to FORMED in frozen time once the 3rd host arrives and priority partitions spread"}
+{"file":"test/bootstrap/seed-retained-effects.test.js","attempt":1,"ok":true,"assertions":169,"durationMs":4396,"retriedOnce":false,"firstFailureLine":null}

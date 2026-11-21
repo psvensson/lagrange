@@ -1,0 +1,182 @@
+[
+  {
+    "architecture": "X86_64",
+    "creationTimestamp": "2026-11-21T05:04:42.125-08:00",
+    "enableConfidentialCompute": false,
+    "guestOsFeatures": [
+      {
+        "type": "VIRTIO_SCSI_MULTIQUEUE"
+      },
+      {
+        "type": "SEV_CAPABLE"
+      },
+      {
+        "type": "SEV_SNP_CAPABLE"
+      },
+      {
+        "type": "SEV_LIVE_MIGRATABLE"
+      },
+      {
+        "type": "SEV_LIVE_MIGRATABLE_V2"
+      },
+      {
+        "type": "SNP_SVSM_CAPABLE"
+      },
+      {
+        "type": "IDPF"
+      },
+      {
+        "type": "TDX_CAPABLE"
+      },
+      {
+        "type": "UEFI_COMPATIBLE"
+      },
+      {
+        "type": "GVNIC"
+      }
+    ],
+    "id": "544708414319372294",
+    "kind": "compute#disk",
+    "labelFingerprint": "42WmSpB8rSM=",
+    "lastAttachTimestamp": "2026-11-21T05:04:42.707-08:00",
+    "licenseCodes": [
+      "3242930272766215801"
+    ],
+    "licenses": [
+      "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-2404-lts"
+    ],
+    "name": "lagrange-fdiag-1",
+    "physicalBlockSizeBytes": "4096",
+    "satisfiesPzi": true,
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/disks/lagrange-fdiag-1",
+    "sizeGb": "50",
+    "sourceImage": "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20261105",
+    "sourceImageId": "1892012953239034119",
+    "status": "READY",
+    "type": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/diskTypes/pd-ssd",
+    "users": [
+      "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/instances/lagrange-fdiag-1"
+    ],
+    "zone": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a"
+  },
+  {
+    "architecture": "X86_64",
+    "creationTimestamp": "2026-11-21T05:04:42.111-08:00",
+    "enableConfidentialCompute": false,
+    "guestOsFeatures": [
+      {
+        "type": "VIRTIO_SCSI_MULTIQUEUE"
+      },
+      {
+        "type": "SEV_CAPABLE"
+      },
+      {
+        "type": "SEV_SNP_CAPABLE"
+      },
+      {
+        "type": "SEV_LIVE_MIGRATABLE"
+      },
+      {
+        "type": "SEV_LIVE_MIGRATABLE_V2"
+      },
+      {
+        "type": "SNP_SVSM_CAPABLE"
+      },
+      {
+        "type": "IDPF"
+      },
+      {
+        "type": "TDX_CAPABLE"
+      },
+      {
+        "type": "UEFI_COMPATIBLE"
+      },
+      {
+        "type": "GVNIC"
+      }
+    ],
+    "id": "3128860515425331205",
+    "kind": "compute#disk",
+    "labelFingerprint": "42WmSpB8rSM=",
+    "lastAttachTimestamp": "2026-11-21T05:04:42.624-08:00",
+    "licenseCodes": [
+      "3242930272766215801"
+    ],
+    "licenses": [
+      "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-2404-lts"
+    ],
+    "name": "lagrange-fdiag-2",
+    "physicalBlockSizeBytes": "4096",
+    "satisfiesPzi": true,
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/disks/lagrange-fdiag-2",
+    "sizeGb": "50",
+    "sourceImage": "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20261105",
+    "sourceImageId": "1892012953239034119",
+    "status": "READY",
+    "type": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/diskTypes/pd-ssd",
+    "users": [
+      "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/instances/lagrange-fdiag-2"
+    ],
+    "zone": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a"
+  },
+  {
+    "architecture": "X86_64",
+    "creationTimestamp": "2026-11-21T05:04:42.055-08:00",
+    "enableConfidentialCompute": false,
+    "guestOsFeatures": [
+      {
+        "type": "VIRTIO_SCSI_MULTIQUEUE"
+      },
+      {
+        "type": "SEV_CAPABLE"
+      },
+      {
+        "type": "SEV_SNP_CAPABLE"
+      },
+      {
+        "type": "SEV_LIVE_MIGRATABLE"
+      },
+      {
+        "type": "SEV_LIVE_MIGRATABLE_V2"
+      },
+      {
+        "type": "SNP_SVSM_CAPABLE"
+      },
+      {
+        "type": "IDPF"
+      },
+      {
+        "type": "TDX_CAPABLE"
+      },
+      {
+        "type": "UEFI_COMPATIBLE"
+      },
+      {
+        "type": "GVNIC"
+      }
+    ],
+    "id": "5116515236201637894",
+    "kind": "compute#disk",
+    "labelFingerprint": "42WmSpB8rSM=",
+    "lastAttachTimestamp": "2026-11-21T05:04:42.495-08:00",
+    "licenseCodes": [
+      "3242930272766215801"
+    ],
+    "licenses": [
+      "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-2404-lts"
+    ],
+    "name": "lagrange-fdiag-3",
+    "physicalBlockSizeBytes": "4096",
+    "satisfiesPzi": true,
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/disks/lagrange-fdiag-3",
+    "sizeGb": "50",
+    "sourceImage": "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20261105",
+    "sourceImageId": "1892012953239034119",
+    "status": "READY",
+    "type": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/diskTypes/pd-ssd",
+    "users": [
+      "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a/instances/lagrange-fdiag-3"
+    ],
+    "zone": "https://www.googleapis.com/compute/v1/projects/something-2e584/zones/europe-north1-a"
+  }
+]

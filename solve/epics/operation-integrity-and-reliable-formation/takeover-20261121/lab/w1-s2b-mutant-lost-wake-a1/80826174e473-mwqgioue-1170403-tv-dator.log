@@ -1,0 +1,181 @@
+placement-shell=2945849
+placement-head=80826174e473287f3dbb495be43c607c56141297
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2946302
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+not ok test/partition/placement-retained-real-publication.test.js (1 assertions, 2850ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: real leadership publication through CDC rebinds the retained owner A-B-A; the exact entry completes once
+not ok 1 - real leadership publication through CDC rebinds the retained owner A-B-A; the exact entry completes once
+  ---
+  duration_ms: 1863.956236
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-real-publication.test.js:64:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the consumer rebound from the real publication
+    
+    'local' !== 'remote'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'remote'
+  actual: 'local'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-real-publication.test.js:80:12
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1868.907328
+# time=2850ms
+not ok test/partition/placement-retained-publication.test.js (6 assertions, 3334ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+ok 1 - W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+  ---
+  duration_ms: 1854.80877
+  type: 'test'
+  ...
+# Subtest: W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+not ok 2 - W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+  ---
+  duration_ms: 85.145194
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:100:3'
+  failureType: 'testCodeFailure'
+  error: 'the completing publication alone makes reconsideration reach the current leader B'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    withRetainedLeadershipPair.initialEndpoints (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:122:14)
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+not ok 3 - W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+  ---
+  duration_ms: 71.139865
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:100:3'
+  failureType: 'testCodeFailure'
+  error: 'the completing publication alone makes reconsideration reach the current leader B'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    withRetainedLeadershipPair.initialEndpoints (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:122:14)
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+not ok 4 - W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+  ---
+  duration_ms: 63.841098
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:130:1'
+  failureType: 'testCodeFailure'
+  error: 'the publication that resolves the ambiguity makes reconsideration reach B'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:150:12
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+  ---
+  duration_ms: 81.01926
+  type: 'test'
+  ...
+# Subtest: W9 a route publication during an in-flight read is queued and applied after that decision
+not ok 6 - W9 a route publication during an in-flight read is queued and applied after that decision
+  ---
+  duration_ms: 95.145818
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:193:1'
+  failureType: 'testCodeFailure'
+  error: 'the handoff decision reads through the published B route: settles in bounded event-loop turns, without wall-clock time'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    bounded (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-witness-support.js:36:10)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:201:5
+    async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+    async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+    async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+    async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 2
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2258.350132
+# time=3334ms
+# test-files total=2 pass=0 fail=2 assertions=7
+placement-results={"file":"test/partition/placement-retained-real-publication.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":2850,"retriedOnce":false,"firstFailureLine":"not ok 1 - real leadership publication through CDC rebinds the retained owner A-B-A; the exact entry completes once"}
+placement-results={"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":3334,"retriedOnce":false,"firstFailureLine":"not ok 2 - W2 partition-first: a truly missing endpoint retains the obligation until the publication completes"}

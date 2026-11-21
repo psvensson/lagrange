@@ -1,0 +1,4 @@
+{"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6610,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/formation-transition-settled-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6714,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6858,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":4700,"retriedOnce":false,"firstFailureLine":null}

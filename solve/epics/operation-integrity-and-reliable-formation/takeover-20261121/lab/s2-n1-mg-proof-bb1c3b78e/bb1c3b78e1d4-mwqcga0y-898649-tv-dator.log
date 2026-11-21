@@ -1,0 +1,8 @@
+placement-shell=2756157
+placement-head=bb1c3b78e1d46d22378143fe40a18b784fa4e093
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar

@@ -1,0 +1,613 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.08
+[adams-gamla] placement-shell=1535694
+[adams-gamla] placement-head=b638284d110d2a6b7cd55ebf902a63cb262fa25a
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1536145
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 47C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/cdc/cdc-owner-required-authoritative-routing.test.js (83 assertions, 2370ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: strict CDC reads route to the registered owner while a local query is held
+[adams-gamla]     ok 1 - the remote owner has a live node connection
+[adams-gamla]     ok 2 - native owner is leader
+[adams-gamla]     ok 3 - the exact native owner transport handler is registered
+[adams-gamla] {"level":50,"time":"2026-11-21T11:34:40.988Z","nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","pid":1536160,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":115,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","msg":"Wait bound spent"}
+[adams-gamla]     # Subtest: remote success
+[adams-gamla]         ok 1 - only a permitted local mode enters the held local query
+[adams-gamla]         ok 2 - count local probes
+[adams-gamla]         not ok 3 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 204
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:204:13)
+[adams-gamla]           source: |2
+[adams-gamla]                         'only a permitted local mode enters the held local query');
+[adams-gamla]                       t.equal(calls.localCount, strict ? 0 : 1, 'count local probes');
+[adams-gamla]                       t.equal(answer.success, scenario.success === true);
+[adams-gamla]             ------------^
+[adams-gamla]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adams-gamla]                       t.same(answer.rows, scenario.success ? rows : []);
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -true
+[adams-gamla]             +false
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 4 - should be equivalent
+[adams-gamla]           ---
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,6 +1,1 @@
+[adams-gamla]             -Array [
+[adams-gamla]             -  Object {
+[adams-gamla]             -    "operation_id": "strict-read-operation",
+[adams-gamla]             -    "workflow_step": "OWNER",
+[adams-gamla]             -  },
+[adams-gamla]             -]
+[adams-gamla]             +Array []
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 206
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:206:13)
+[adams-gamla]           source: >2
+[adams-gamla]                       t.equal(answer.success, scenario.success === true);
+[adams-gamla]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adams-gamla]                       t.same(answer.rows, scenario.success ? rows : []);
+[adams-gamla]             ------------^
+[adams-gamla]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adams-gamla]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 5 - should be equal
+[adams-gamla]         ok 6 - should be equal
+[adams-gamla]         ok 7 - should be equal
+[adams-gamla]         ok 8 - should be equal
+[adams-gamla]         ok 9 - should be equal
+[adams-gamla]         not ok 10 - owner routing reaches the real query transport
+[adams-gamla]           ---
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 216
+[adams-gamla]             columnNumber: 15
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+[adams-gamla]           source: >2
+[adams-gamla]                         t.equal(calls.owner.length, 0);
+[adams-gamla]                       } else {
+[adams-gamla]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adams-gamla]             --------------^
+[adams-gamla]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adams-gamla]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 11 - should be equal
+[adams-gamla]         not ok 12 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 223
+[adams-gamla]             columnNumber: 17
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+[adams-gamla]           source: >2
+[adams-gamla]                           t.ok(calls.owner.every(({answer}) => !answer?.success));
+[adams-gamla]                         } else {
+[adams-gamla]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adams-gamla]             ----------------^
+[adams-gamla]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adams-gamla]                         }
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -true
+[adams-gamla]             +undefined
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 13 - one owner delivery
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 224
+[adams-gamla]             columnNumber: 39
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:224:39)
+[adams-gamla]           source: >2
+[adams-gamla]                         } else {
+[adams-gamla]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adams-gamla]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adams-gamla]             --------------------------------------^
+[adams-gamla]                         }
+[adams-gamla]                       }
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -1
+[adams-gamla]             +0
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         1..13
+[adams-gamla]     not ok 4 - remote success # time=170.422ms
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]         lineNumber: 181
+[adams-gamla]         columnNumber: 17
+[adams-gamla]         typeName: Test
+[adams-gamla]       source: |2
+[adams-gamla]               ];
+[adams-gamla]               for (const scenario of cases) {
+[adams-gamla]                 await t.test(scenario.label, async (t) => {
+[adams-gamla]         ----------------^
+[adams-gamla]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adams-gamla]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla] {"level":50,"time":"2026-11-21T11:34:41.146Z","nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","pid":1536160,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":106,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","msg":"Wait bound spent"}
+[adams-gamla]     # Subtest: remote refusal
+[adams-gamla]         ok 1 - only a permitted local mode enters the held local query
+[adams-gamla]         ok 2 - count local probes
+[adams-gamla]         ok 3 - should be equal
+[adams-gamla]         ok 4 - should be equivalent
+[adams-gamla]         ok 5 - should be equal
+[adams-gamla]         ok 6 - should be equal
+[adams-gamla]         ok 7 - should be equal
+[adams-gamla]         ok 8 - should be equal
+[adams-gamla]         ok 9 - should be equal
+[adams-gamla]         not ok 10 - owner routing reaches the real query transport
+[adams-gamla]           ---
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 216
+[adams-gamla]             columnNumber: 15
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+[adams-gamla]           source: >2
+[adams-gamla]                         t.equal(calls.owner.length, 0);
+[adams-gamla]                       } else {
+[adams-gamla]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adams-gamla]             --------------^
+[adams-gamla]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adams-gamla]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 11 - should be equal
+[adams-gamla]         not ok 12 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 223
+[adams-gamla]             columnNumber: 17
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+[adams-gamla]           source: >2
+[adams-gamla]                           t.ok(calls.owner.every(({answer}) => !answer?.success));
+[adams-gamla]                         } else {
+[adams-gamla]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adams-gamla]             ----------------^
+[adams-gamla]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adams-gamla]                         }
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -false
+[adams-gamla]             +undefined
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         1..12
+[adams-gamla]     not ok 5 - remote refusal # time=122.128ms
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]         lineNumber: 181
+[adams-gamla]         columnNumber: 17
+[adams-gamla]         typeName: Test
+[adams-gamla]       source: |2
+[adams-gamla]               ];
+[adams-gamla]               for (const scenario of cases) {
+[adams-gamla]                 await t.test(scenario.label, async (t) => {
+[adams-gamla]         ----------------^
+[adams-gamla]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adams-gamla]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     # Subtest: remote unavailable
+[adams-gamla]         ok 1 - only a permitted local mode enters the held local query
+[adams-gamla]         ok 2 - count local probes
+[adams-gamla]         ok 3 - should be equal
+[adams-gamla]         ok 4 - should be equivalent
+[adams-gamla]         ok 5 - should be equal
+[adams-gamla]         ok 6 - should be equal
+[adams-gamla]         ok 7 - should be equal
+[adams-gamla]         ok 8 - should be equal
+[adams-gamla]         ok 9 - should be equal
+[adams-gamla]         ok 10 - owner routing reaches the real query transport
+[adams-gamla]         not ok 11 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 217
+[adams-gamla]             columnNumber: 15
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:217:15)
+[adams-gamla]           source: >2
+[adams-gamla]                       } else {
+[adams-gamla]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adams-gamla]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adams-gamla]             --------------^
+[adams-gamla]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adams-gamla]                           budget.deliveryPriority === 'critical'));
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 12 - should be equal
+[adams-gamla]         1..12
+[adams-gamla]     not ok 6 - remote unavailable # time=130.877ms
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]         lineNumber: 181
+[adams-gamla]         columnNumber: 17
+[adams-gamla]         typeName: Test
+[adams-gamla]       source: |2
+[adams-gamla]               ];
+[adams-gamla]               for (const scenario of cases) {
+[adams-gamla]                 await t.test(scenario.label, async (t) => {
+[adams-gamla]         ----------------^
+[adams-gamla]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adams-gamla]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     # Subtest: same-host owner
+[adams-gamla]         ok 1 - only a permitted local mode enters the held local query
+[adams-gamla]         ok 2 - count local probes
+[adams-gamla]         ok 3 - should be equal
+[adams-gamla]         ok 4 - should be equivalent
+[adams-gamla]         ok 5 - should be equal
+[adams-gamla]         ok 6 - should be equal
+[adams-gamla]         ok 7 - should be equal
+[adams-gamla]         ok 8 - should be equal
+[adams-gamla]         ok 9 - should be equal
+[adams-gamla]         ok 10 - owner routing reaches the real query transport
+[adams-gamla]         not ok 11 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 217
+[adams-gamla]             columnNumber: 15
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:217:15)
+[adams-gamla]           source: >2
+[adams-gamla]                       } else {
+[adams-gamla]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adams-gamla]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adams-gamla]             --------------^
+[adams-gamla]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adams-gamla]                           budget.deliveryPriority === 'critical'));
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 12 - should be equal
+[adams-gamla]         ok 13 - one owner delivery
+[adams-gamla]         1..13
+[adams-gamla]     not ok 7 - same-host owner # time=33.537ms
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]         lineNumber: 181
+[adams-gamla]         columnNumber: 17
+[adams-gamla]         typeName: Test
+[adams-gamla]       source: |2
+[adams-gamla]               ];
+[adams-gamla]               for (const scenario of cases) {
+[adams-gamla]                 await t.test(scenario.label, async (t) => {
+[adams-gamla]         ----------------^
+[adams-gamla]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adams-gamla]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla] {"level":50,"time":"2026-11-21T11:34:41.457Z","nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","pid":1536160,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":108,"lastObserved":{"attempts":3,"lastError":"router_delivery_lifetime_invalid","lastErrorCode":"router_delivery_lifetime_invalid","lastParticipantNodeId":"strict-read-owner","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"replica_operations-p1","forRead":true,"nodeId":"strict-read-caller"},"repeats":0,"nodeId":"73731f0a-a235-4d7f-9ea5-e0d951bc1364","msg":"Wait bound spent"}
+[adams-gamla]     # Subtest: preferred owner
+[adams-gamla]         ok 1 - only a permitted local mode enters the held local query
+[adams-gamla]         ok 2 - count local probes
+[adams-gamla]         ok 3 - should be equal
+[adams-gamla]         not ok 4 - should be equivalent
+[adams-gamla]           ---
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,6 +1,6 @@
+[adams-gamla]              Array [
+[adams-gamla]                Object {
+[adams-gamla]                  "operation_id": "strict-read-operation",
+[adams-gamla]             -    "workflow_step": "OWNER",
+[adams-gamla]             +    "workflow_step": "LOCAL",
+[adams-gamla]                },
+[adams-gamla]              ]
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 206
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:206:13)
+[adams-gamla]           source: >2
+[adams-gamla]                       t.equal(answer.success, scenario.success === true);
+[adams-gamla]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adams-gamla]                       t.same(answer.rows, scenario.success ? rows : []);
+[adams-gamla]             ------------^
+[adams-gamla]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adams-gamla]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 5 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 207
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:207:13)
+[adams-gamla]           source: >2
+[adams-gamla]                       const rows = scenario.localResult ? [LOCAL_ROW] : [OWNER_ROW];
+[adams-gamla]                       t.same(answer.rows, scenario.success ? rows : []);
+[adams-gamla]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adams-gamla]             ------------^
+[adams-gamla]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -owner_rpc_lane
+[adams-gamla]             +local_partition_replica
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 6 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 208
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:208:13)
+[adams-gamla]           source: >2
+[adams-gamla]                       t.same(answer.rows, scenario.success ? rows : []);
+[adams-gamla]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adams-gamla]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adams-gamla]             ------------^
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.routedToNode,
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -false
+[adams-gamla]             +true
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 7 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 209
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:209:13)
+[adams-gamla]           source: >2
+[adams-gamla]                       t.equal(answer.source, scenario.localResult ? 'local_partition_replica' : 'owner_rpc_lane');
+[adams-gamla]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adams-gamla]             ------------^
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.routedToNode,
+[adams-gamla]                         scenario.localResult ? null : OWNER);
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -false
+[adams-gamla]             +true
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 8 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 210
+[adams-gamla]             columnNumber: 13
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:210:13)
+[adams-gamla]           source: >2
+[adams-gamla]                       t.equal(answer.localReadHit, scenario.localResult === true);
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.localReadHit, scenario.localResult === true);
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.routedToNode,
+[adams-gamla]             ------------^
+[adams-gamla]                         scenario.localResult ? null : OWNER);
+[adams-gamla]                       t.equal(answer.systemTableDiagnostics?.queryTimeoutMs, TIMEOUT_MS);
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -strict-read-owner
+[adams-gamla]             +null
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 9 - should be equal
+[adams-gamla]         not ok 10 - owner routing reaches the real query transport
+[adams-gamla]           ---
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 216
+[adams-gamla]             columnNumber: 15
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:216:15)
+[adams-gamla]           source: >2
+[adams-gamla]                         t.equal(calls.owner.length, 0);
+[adams-gamla]                       } else {
+[adams-gamla]                         t.ok(calls.owner.length > 0, 'owner routing reaches the real query transport');
+[adams-gamla]             --------------^
+[adams-gamla]                         t.ok(calls.owner.every(({address, budget}) => address === ADDRESS &&
+[adams-gamla]                           budget.timeoutMs > 0 && budget.timeoutMs <= TIMEOUT_MS &&
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         ok 11 - should be equal
+[adams-gamla]         not ok 12 - should be equal
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 223
+[adams-gamla]             columnNumber: 17
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:223:17)
+[adams-gamla]           source: >2
+[adams-gamla]                           t.ok(calls.owner.every(({answer}) => !answer?.success));
+[adams-gamla]                         } else {
+[adams-gamla]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adams-gamla]             ----------------^
+[adams-gamla]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adams-gamla]                         }
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -true
+[adams-gamla]             +undefined
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         not ok 13 - one owner delivery
+[adams-gamla]           ---
+[adams-gamla]           compare: ===
+[adams-gamla]           at:
+[adams-gamla]             fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]             lineNumber: 224
+[adams-gamla]             columnNumber: 39
+[adams-gamla]             typeName: Test
+[adams-gamla]           stack: >
+[adams-gamla]             Test.<anonymous>
+[adams-gamla]             (test/cdc/cdc-owner-required-authoritative-routing.test.js:224:39)
+[adams-gamla]           source: >2
+[adams-gamla]                         } else {
+[adams-gamla]                           t.equal(calls.owner[0]?.answer?.success, scenario.success === true);
+[adams-gamla]                           if (scenario.success) t.equal(calls.owner.length, 1, 'one owner delivery');
+[adams-gamla]             --------------------------------------^
+[adams-gamla]                         }
+[adams-gamla]                       }
+[adams-gamla]           diff: |
+[adams-gamla]             --- expected
+[adams-gamla]             +++ actual
+[adams-gamla]             @@ -1,1 +1,1 @@
+[adams-gamla]             -1
+[adams-gamla]             +0
+[adams-gamla]           ...
+[adams-gamla]         
+[adams-gamla]         1..13
+[adams-gamla]     not ok 8 - preferred owner # time=174.833ms
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]         lineNumber: 181
+[adams-gamla]         columnNumber: 17
+[adams-gamla]         typeName: Test
+[adams-gamla]       source: |2
+[adams-gamla]               ];
+[adams-gamla]               for (const scenario of cases) {
+[adams-gamla]                 await t.test(scenario.label, async (t) => {
+[adams-gamla]         ----------------^
+[adams-gamla]                   const router = scenario.localOwner ? ownerRouter : callerRouter;
+[adams-gamla]                   const calls = makeReadCalls(scenario.localOwner ? partition : null);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     # Subtest: preferred local
+[adams-gamla]         ok 1 - only a permitted local mode enters the held local query
+[adams-gamla]         ok 2 - count local probes
+[adams-gamla]         ok 3 - should be equal
+[adams-gamla]         ok 4 - should be equivalent
+[adams-gamla]         ok 5 - should be equal
+[adams-gamla]         ok 6 - should be equal
+[adams-gamla]         ok 7 - should be equal
+[adams-gamla]         ok 8 - should be equal
+[adams-gamla]         ok 9 - should be equal
+[adams-gamla]         ok 10 - should be equal
+[adams-gamla]         1..10
+[adams-gamla]     ok 9 - preferred local # time=4.373ms
+[adams-gamla]     
+[adams-gamla]     1..9
+[adams-gamla] not ok 1 - strict CDC reads route to the registered owner while a local query is held # time=794.222ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-required-authoritative-routing.test.js
+[adams-gamla]     lineNumber: 130
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('strict CDC reads route to the registered owner while a local query is
+[adams-gamla]     held',
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       async (t) => {
+[adams-gamla]         ConfigurationManager.getInstance().initialize({});
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 76, pass: 59, fail: 17 }
+[adams-gamla] # time=806.705ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=83
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=83
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=83

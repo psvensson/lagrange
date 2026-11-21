@@ -1,0 +1,183 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.50
+[tv-dator] placement-shell=2945849
+[tv-dator] placement-head=80826174e473287f3dbb495be43c607c56141297
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2946302
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 62C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/placement-retained-real-publication.test.js (1 assertions, 2850ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: real leadership publication through CDC rebinds the retained owner A-B-A; the exact entry completes once
+[tv-dator] not ok 1 - real leadership publication through CDC rebinds the retained owner A-B-A; the exact entry completes once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1863.956236
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-real-publication.test.js:64:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the consumer rebound from the real publication
+[tv-dator]     
+[tv-dator]     'local' !== 'remote'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'remote'
+[tv-dator]   actual: 'local'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-real-publication.test.js:80:12
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] 1..1
+[tv-dator] # tests 1
+[tv-dator] # suites 0
+[tv-dator] # pass 0
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 1868.907328
+[tv-dator] # time=2850ms
+[tv-dator] not ok test/partition/placement-retained-publication.test.js (6 assertions, 3334ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+[tv-dator] ok 1 - W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1854.80877
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator] not ok 2 - W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 85.145194
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:100:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the completing publication alone makes reconsideration reach the current leader B'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     withRetainedLeadershipPair.initialEndpoints (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:122:14)
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator] not ok 3 - W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 71.139865
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:100:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the completing publication alone makes reconsideration reach the current leader B'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     withRetainedLeadershipPair.initialEndpoints (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:122:14)
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+[tv-dator] not ok 4 - W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+[tv-dator]   ---
+[tv-dator]   duration_ms: 63.841098
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:130:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the publication that resolves the ambiguity makes reconsideration reach B'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:150:12
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+[tv-dator] ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 81.01926
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W9 a route publication during an in-flight read is queued and applied after that decision
+[tv-dator] not ok 6 - W9 a route publication during an in-flight read is queued and applied after that decision
+[tv-dator]   ---
+[tv-dator]   duration_ms: 95.145818
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:193:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the handoff decision reads through the published B route: settles in bounded event-loop turns, without wall-clock time'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     bounded (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-witness-support.js:36:10)
+[tv-dator]     async file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-publication.test.js:201:5
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:127:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/80826174e473-mwqgioue-1170403/test/partition/placement-retained-leadership-fixture.js:16:3)
+[tv-dator]   ...
+[tv-dator] 1..6
+[tv-dator] # tests 6
+[tv-dator] # suites 0
+[tv-dator] # pass 2
+[tv-dator] # fail 4
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2258.350132
+[tv-dator] # time=3334ms
+[tv-dator] # test-files total=2 pass=0 fail=2 assertions=7
+lab test: tv-dator: # test-files total=2 pass=0 fail=2 assertions=7
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=0 fail=2 assertions=7

@@ -1,0 +1,58 @@
+Preparing worktree (new branch 'verify/integration-plus-dead-arms-20261121')
+HEAD is now at df7be8270 test: persist the named-handoff REPLACE's ACTIVE phase before running it
+[merge] kept ours for test/shards/subsystem-classes.json; the merged tree owes: npm run -s test:metadata:refresh and node scripts/generate-global-owner-debt-inventory.js (--refresh when its inputs are absent), then npm run generate:source-owner-index, then commit
+[merge] kept ours for test/shards/impact-graph-seal.json; the merged tree owes: npm run -s test:metadata:refresh and node scripts/generate-global-owner-debt-inventory.js (--refresh when its inputs are absent), then npm run generate:source-owner-index, then commit
+[merge] kept ours for solve/changes/global-owner-debt-inventory/inventory.json; the merged tree owes: npm run -s test:metadata:refresh and node scripts/generate-global-owner-debt-inventory.js (--refresh when its inputs are absent), then npm run generate:source-owner-index, then commit
+Auto-merging solve/changes/global-owner-debt-inventory/inventory.json
+Auto-merging test/rebalancer/replace-named-handoff-attempt.test.js
+Auto-merging test/shards/impact-graph-seal.json
+Auto-merging test/shards/subsystem-classes.json
+Automatic merge went well; stopped before committing as requested
+merge-exit=0
+conflicts-listed-above
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: df7be827008a5f92b96bd47877260f542fb15fa4
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 11 JavaScript files
+Found 0 new literal-guideline violations
+Matched 11 inherited literal-guideline baseline violations
+Scanned 11 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 3 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 8 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 8 JavaScript files
+Found 0 navigability violations
+Matched 49 inherited navigability baseline violations
+Scoped complexity ratchet: 4 violation(s) in 11 target(s) (threshold: 12).
+src/rebalancer/operation-workflow-remove-safety-evaluator.js:196:1 Async function 'evaluatePriorityPublishedMembershipRemoveSafety' has a complexity of 20. Maximum allowed is 12.
+src/rebalancer/operation-workflow-remove-safety-evaluator.js:419:1 Async function 'evaluateRemoveSafetyWithCompetitors' has a complexity of 49. Maximum allowed is 12.
+src/rebalancer/priority-publication-leader-safety.js:25:3 Method 'buildPriorityPublicationLeaderRemoveSafetySnapshot' has a complexity of 51. Maximum allowed is 12.
+src/rebalancer/priority-publication-safety-topology.js:73:3 Async method 'handleStopPhaseSatisfiedResponse' has a complexity of 18. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[verify/integration-plus-dead-arms-20261121 d6959f00e] verify: integration df7be8270 + dead leader-role arms e1e239d30 (assembled for the named-handoff check; not a landing)
+commit-exit=0
+d6959f00e parents=df7be8270 e1e239d30
+[pre-push +0s] >> pushed-refs: reading pushed refs
+[pre-push +0s] >> tag-only-fast-path: tag-only fast path check
+[pre-push +0s] >> branch-preservation-fast-path: non-main branch preservation check
+pre-push: non-main branch preservation push - skipping local proof gate
+pre-push: remote preservation is NOT merge, Quest-land, release, or publication approval
+pre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push
+[pre-push +0s] all stages green
+remote: 
+remote: Create a pull request for 'verify/integration-plus-dead-arms-20261121' on GitHub by visiting:        
+remote:      https://github.com/psvensson/lagrange/pull/new/verify/integration-plus-dead-arms-20261121        
+remote: 
+pushed d6959f00ea86831290d8f85239d67982833c8458
+lab-exit=0 sha=d6959f00ea86831290d8f85239d67982833c8458

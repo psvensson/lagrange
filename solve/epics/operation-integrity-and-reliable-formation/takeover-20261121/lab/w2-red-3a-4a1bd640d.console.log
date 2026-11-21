@@ -1,0 +1,56 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.92
+[adam-laptop] placement-shell=3142399
+[adam-laptop] placement-head=4a1bd640d1e5d403ca4d85fc2b41730812caf48e
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3143448
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/query/replica-operation-structured-mutation-native.test.js (2 assertions, 19721ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: structured operation writes do not switch to routable SQL when CDC is unavailable
+[adam-laptop] ok 1 - structured operation writes do not switch to routable SQL when CDC is unavailable
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 18107.628699
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: every repository constructor refuses a gateway without the structured port; the canonical writer applies and fences
+[adam-laptop] not ok 2 - every repository constructor refuses a gateway without the structured port; the canonical writer applies and fences
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 106.361179
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/replica-operation-structured-mutation-native.test.js:63:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'Missing expected exception.'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     code: 'replica_operation_mutation_port_required'
+[adam-laptop]   operator: 'throws'
+[adam-laptop]   stack: |-
+[adam-laptop]     withSurface.cdc (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/replica-operation-structured-mutation-native.test.js:76:16)
+[adam-laptop]     withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/unknown-outcome-surface-fixture.js:328:11)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/4a1bd640d1e5-mwqcm9jp-906475/test/query/replica-operation-structured-mutation-native.test.js:65:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..2
+[adam-laptop] # tests 2
+[adam-laptop] # suites 0
+[adam-laptop] # pass 1
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 18225.562651
+[adam-laptop] # time=19721ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=2
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=2
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=2
+exit=1

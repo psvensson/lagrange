@@ -1,0 +1,627 @@
+{
+ "lagrange-fdiag-1": {
+  "P1_bootstrap_to_priority_spread": {
+   "from": 1795267021.829,
+   "to": 1795267182.36,
+   "spanS": 160.5,
+   "byClass": {}
+  },
+  "P2_system_formation": {
+   "from": 1795267187.376,
+   "to": 1795267613.823,
+   "spanS": 426.4,
+   "byClass": {
+    "seed@fdiag-1:ADMIN [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 518139,
+     "segsIn": 23646,
+     "retrans": 57,
+     "segsOutPerS": 1215.0,
+     "segsInPerS": 55.4,
+     "totalPerS": 1270.5,
+     "retransPerS": 0.13
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 153783,
+     "segsIn": 152324,
+     "retrans": 1015,
+     "segsOutPerS": 360.6,
+     "segsInPerS": 357.2,
+     "totalPerS": 717.8,
+     "retransPerS": 2.38
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 103948,
+     "segsIn": 82862,
+     "retrans": 1289,
+     "segsOutPerS": 243.8,
+     "segsInPerS": 194.3,
+     "totalPerS": 438.1,
+     "retransPerS": 3.02
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-1, remote loopback]": {
+     "conns": 1,
+     "segsOut": 28,
+     "segsIn": 27,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote loopback]": {
+     "conns": 1,
+     "segsOut": 27,
+     "segsIn": 28,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  },
+  "P3_post_drain_idle_tail": {
+   "from": 1795267618.84,
+   "to": 1795267694.089,
+   "spanS": 75.2,
+   "byClass": {
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 48044,
+     "segsIn": 53081,
+     "retrans": 220,
+     "segsOutPerS": 638.5,
+     "segsInPerS": 705.4,
+     "totalPerS": 1343.9,
+     "retransPerS": 2.92
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 31744,
+     "segsIn": 33061,
+     "retrans": 304,
+     "segsOutPerS": 421.9,
+     "segsInPerS": 439.4,
+     "totalPerS": 861.2,
+     "retransPerS": 4.04
+    },
+    "seed@fdiag-1:REST [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 350,
+     "segsIn": 245,
+     "retrans": 0,
+     "segsOutPerS": 4.7,
+     "segsInPerS": 3.3,
+     "totalPerS": 7.9,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-1, remote loopback]": {
+     "conns": 1,
+     "segsOut": 6,
+     "segsIn": 5,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote loopback]": {
+     "conns": 1,
+     "segsOut": 5,
+     "segsIn": 6,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  },
+  "scenario_whole": {
+   "from": 1795267021.829,
+   "to": 1795267694.089,
+   "spanS": 672.3,
+   "byClass": {}
+  },
+  "idleWindow60s": {
+   "from": 1795267623.857,
+   "to": 1795267679.037,
+   "spanS": 55.2,
+   "byClass": {
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 33482,
+     "segsIn": 38184,
+     "retrans": 164,
+     "segsOutPerS": 606.8,
+     "segsInPerS": 692.0,
+     "totalPerS": 1298.8,
+     "retransPerS": 2.97
+    },
+    "seed@fdiag-1:ADMIN [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 53276,
+     "segsIn": 1974,
+     "retrans": 0,
+     "segsOutPerS": 965.5,
+     "segsInPerS": 35.8,
+     "totalPerS": 1001.3,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 22780,
+     "segsIn": 24675,
+     "retrans": 204,
+     "segsOutPerS": 412.8,
+     "segsInPerS": 447.2,
+     "totalPerS": 860.0,
+     "retransPerS": 3.7
+    },
+    "seed@fdiag-1:REST [listener on lagrange-fdiag-1, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 249,
+     "segsIn": 166,
+     "retrans": 0,
+     "segsOutPerS": 4.5,
+     "segsInPerS": 3.0,
+     "totalPerS": 7.5,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-1, remote loopback]": {
+     "conns": 1,
+     "segsOut": 4,
+     "segsIn": 4,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:TRANSPORT [listener on lagrange-fdiag-1, remote loopback]": {
+     "conns": 1,
+     "segsOut": 4,
+     "segsIn": 4,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  }
+ },
+ "lagrange-fdiag-2": {
+  "P1_bootstrap_to_priority_spread": {
+   "from": 1795267022.084,
+   "to": 1795267182.597,
+   "spanS": 160.5,
+   "byClass": {}
+  },
+  "P2_system_formation": {
+   "from": 1795267187.627,
+   "to": 1795267614.058,
+   "spanS": 426.4,
+   "byClass": {
+    "node@fdiag-2:TRANSPORT [listener on lagrange-fdiag-2, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 204634,
+     "segsIn": 178865,
+     "retrans": 4946,
+     "segsOutPerS": 479.9,
+     "segsInPerS": 419.4,
+     "totalPerS": 899.3,
+     "retransPerS": 11.6
+    },
+    "node@fdiag-2:ADMIN [listener on lagrange-fdiag-2, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 350133,
+     "segsIn": 11984,
+     "retrans": 33,
+     "segsOutPerS": 821.1,
+     "segsInPerS": 28.1,
+     "totalPerS": 849.2,
+     "retransPerS": 0.08
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-2, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 172004,
+     "segsIn": 126523,
+     "retrans": 4212,
+     "segsOutPerS": 403.4,
+     "segsInPerS": 296.7,
+     "totalPerS": 700.1,
+     "retransPerS": 9.88
+    },
+    "node@fdiag-2:TRANSPORT [client on lagrange-fdiag-2, remote loopback]": {
+     "conns": 1,
+     "segsOut": 28,
+     "segsIn": 14,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.0,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-2:TRANSPORT [listener on lagrange-fdiag-2, remote loopback]": {
+     "conns": 1,
+     "segsOut": 14,
+     "segsIn": 28,
+     "retrans": 0,
+     "segsOutPerS": 0.0,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  },
+  "P3_post_drain_idle_tail": {
+   "from": 1795267619.078,
+   "to": 1795267694.324,
+   "spanS": 75.2,
+   "byClass": {
+    "node@fdiag-2:TRANSPORT [listener on lagrange-fdiag-2, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 73483,
+     "segsIn": 64873,
+     "retrans": 713,
+     "segsOutPerS": 976.6,
+     "segsInPerS": 862.1,
+     "totalPerS": 1838.7,
+     "retransPerS": 9.48
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-2, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 58903,
+     "segsIn": 42377,
+     "retrans": 601,
+     "segsOutPerS": 782.8,
+     "segsInPerS": 563.2,
+     "totalPerS": 1346.0,
+     "retransPerS": 7.99
+    },
+    "node@fdiag-2:TRANSPORT [client on lagrange-fdiag-2, remote loopback]": {
+     "conns": 1,
+     "segsOut": 4,
+     "segsIn": 2,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.0,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-2:TRANSPORT [listener on lagrange-fdiag-2, remote loopback]": {
+     "conns": 1,
+     "segsOut": 2,
+     "segsIn": 4,
+     "retrans": 0,
+     "segsOutPerS": 0.0,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  },
+  "scenario_whole": {
+   "from": 1795267022.084,
+   "to": 1795267694.324,
+   "spanS": 672.2,
+   "byClass": {}
+  },
+  "idleWindow60s": {
+   "from": 1795267624.096,
+   "to": 1795267679.276,
+   "spanS": 55.2,
+   "byClass": {
+    "node@fdiag-2:TRANSPORT [listener on lagrange-fdiag-2, remote fdiag-3]": {
+     "conns": 1,
+     "segsOut": 56177,
+     "segsIn": 50149,
+     "retrans": 496,
+     "segsOutPerS": 1018.1,
+     "segsInPerS": 908.8,
+     "totalPerS": 1926.9,
+     "retransPerS": 8.99
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-2, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 42281,
+     "segsIn": 29617,
+     "retrans": 458,
+     "segsOutPerS": 766.2,
+     "segsInPerS": 536.7,
+     "totalPerS": 1303.0,
+     "retransPerS": 8.3
+    },
+    "node@fdiag-2:ADMIN [listener on lagrange-fdiag-2, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 4075,
+     "segsIn": 688,
+     "retrans": 0,
+     "segsOutPerS": 73.8,
+     "segsInPerS": 12.5,
+     "totalPerS": 86.3,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-2:TRANSPORT [client on lagrange-fdiag-2, remote loopback]": {
+     "conns": 1,
+     "segsOut": 4,
+     "segsIn": 2,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.0,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-2:TRANSPORT [listener on lagrange-fdiag-2, remote loopback]": {
+     "conns": 1,
+     "segsOut": 2,
+     "segsIn": 4,
+     "retrans": 0,
+     "segsOutPerS": 0.0,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  }
+ },
+ "lagrange-fdiag-3": {
+  "P1_bootstrap_to_priority_spread": {
+   "from": 1795267023.214,
+   "to": 1795267183.77,
+   "spanS": 160.6,
+   "byClass": {}
+  },
+  "P2_system_formation": {
+   "from": 1795267188.788,
+   "to": 1795267615.276,
+   "spanS": 426.5,
+   "byClass": {
+    "node@fdiag-2:TRANSPORT [client on lagrange-fdiag-3, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 231082,
+     "segsIn": 198705,
+     "retrans": 1699,
+     "segsOutPerS": 541.8,
+     "segsInPerS": 465.9,
+     "totalPerS": 1007.7,
+     "retransPerS": 3.98
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 271463,
+     "segsIn": 73486,
+     "retrans": 2463,
+     "segsOutPerS": 636.5,
+     "segsInPerS": 172.3,
+     "totalPerS": 808.8,
+     "retransPerS": 5.78
+    },
+    "seed@fdiag-1:ADMIN [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 2,
+     "segsOut": 23664,
+     "segsIn": 35511,
+     "retrans": 21,
+     "segsOutPerS": 55.5,
+     "segsInPerS": 83.3,
+     "totalPerS": 138.7,
+     "retransPerS": 0.05
+    },
+    "node@fdiag-3:ADMIN [client on lagrange-fdiag-3, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 21470,
+     "segsIn": 26028,
+     "retrans": 0,
+     "segsOutPerS": 50.3,
+     "segsInPerS": 61.0,
+     "totalPerS": 111.4,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:ADMIN [listener on lagrange-fdiag-3, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 26028,
+     "segsIn": 21470,
+     "retrans": 96,
+     "segsOutPerS": 61.0,
+     "segsInPerS": 50.3,
+     "totalPerS": 111.4,
+     "retransPerS": 0.23
+    },
+    "node@fdiag-2:ADMIN [client on lagrange-fdiag-3, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 11961,
+     "segsIn": 21371,
+     "retrans": 1,
+     "segsOutPerS": 28.0,
+     "segsInPerS": 50.1,
+     "totalPerS": 78.2,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:TRANSPORT [client on lagrange-fdiag-3, remote loopback]": {
+     "conns": 1,
+     "segsOut": 30,
+     "segsIn": 28,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:TRANSPORT [listener on lagrange-fdiag-3, remote loopback]": {
+     "conns": 1,
+     "segsOut": 28,
+     "segsIn": 30,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  },
+  "P3_post_drain_idle_tail": {
+   "from": 1795267620.293,
+   "to": 1795267695.56,
+   "spanS": 75.3,
+   "byClass": {
+    "node@fdiag-2:TRANSPORT [client on lagrange-fdiag-3, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 69565,
+     "segsIn": 67207,
+     "retrans": 309,
+     "segsOutPerS": 924.2,
+     "segsInPerS": 892.9,
+     "totalPerS": 1817.2,
+     "retransPerS": 4.11
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 98151,
+     "segsIn": 26436,
+     "retrans": 486,
+     "segsOutPerS": 1304.0,
+     "segsInPerS": 351.2,
+     "totalPerS": 1655.3,
+     "retransPerS": 6.46
+    },
+    "seed@fdiag-1:REST [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 242,
+     "segsIn": 270,
+     "retrans": 0,
+     "segsOutPerS": 3.2,
+     "segsInPerS": 3.6,
+     "totalPerS": 6.8,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:TRANSPORT [client on lagrange-fdiag-3, remote loopback]": {
+     "conns": 1,
+     "segsOut": 4,
+     "segsIn": 2,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.0,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:TRANSPORT [listener on lagrange-fdiag-3, remote loopback]": {
+     "conns": 1,
+     "segsOut": 2,
+     "segsIn": 4,
+     "retrans": 0,
+     "segsOutPerS": 0.0,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  },
+  "scenario_whole": {
+   "from": 1795267023.214,
+   "to": 1795267695.56,
+   "spanS": 672.3,
+   "byClass": {}
+  },
+  "idleWindow60s": {
+   "from": 1795267620.293,
+   "to": 1795267675.486,
+   "spanS": 55.2,
+   "byClass": {
+    "node@fdiag-2:TRANSPORT [client on lagrange-fdiag-3, remote fdiag-2]": {
+     "conns": 1,
+     "segsOut": 55542,
+     "segsIn": 53475,
+     "retrans": 249,
+     "segsOutPerS": 1006.3,
+     "segsInPerS": 968.9,
+     "totalPerS": 1975.2,
+     "retransPerS": 4.51
+    },
+    "seed@fdiag-1:TRANSPORT [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 70208,
+     "segsIn": 19615,
+     "retrans": 418,
+     "segsOutPerS": 1272.0,
+     "segsInPerS": 355.4,
+     "totalPerS": 1627.4,
+     "retransPerS": 7.57
+    },
+    "seed@fdiag-1:ADMIN [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 2,
+     "segsOut": 1957,
+     "segsIn": 2958,
+     "retrans": 0,
+     "segsOutPerS": 35.5,
+     "segsInPerS": 53.6,
+     "totalPerS": 89.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:ADMIN [client on lagrange-fdiag-3, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 755,
+     "segsIn": 776,
+     "retrans": 0,
+     "segsOutPerS": 13.7,
+     "segsInPerS": 14.1,
+     "totalPerS": 27.7,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:ADMIN [listener on lagrange-fdiag-3, remote fdiag-3]": {
+     "conns": 2,
+     "segsOut": 776,
+     "segsIn": 755,
+     "retrans": 0,
+     "segsOutPerS": 14.1,
+     "segsInPerS": 13.7,
+     "totalPerS": 27.7,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-2:ADMIN [client on lagrange-fdiag-3, remote fdiag-2]": {
+     "conns": 2,
+     "segsOut": 690,
+     "segsIn": 684,
+     "retrans": 0,
+     "segsOutPerS": 12.5,
+     "segsInPerS": 12.4,
+     "totalPerS": 24.9,
+     "retransPerS": 0.0
+    },
+    "seed@fdiag-1:REST [client on lagrange-fdiag-3, remote fdiag-1]": {
+     "conns": 1,
+     "segsOut": 164,
+     "segsIn": 197,
+     "retrans": 0,
+     "segsOutPerS": 3.0,
+     "segsInPerS": 3.6,
+     "totalPerS": 6.5,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:TRANSPORT [client on lagrange-fdiag-3, remote loopback]": {
+     "conns": 1,
+     "segsOut": 4,
+     "segsIn": 2,
+     "retrans": 0,
+     "segsOutPerS": 0.1,
+     "segsInPerS": 0.0,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    },
+    "node@fdiag-3:TRANSPORT [listener on lagrange-fdiag-3, remote loopback]": {
+     "conns": 1,
+     "segsOut": 2,
+     "segsIn": 4,
+     "retrans": 0,
+     "segsOutPerS": 0.0,
+     "segsInPerS": 0.1,
+     "totalPerS": 0.1,
+     "retransPerS": 0.0
+    }
+   }
+  }
+ }
+}

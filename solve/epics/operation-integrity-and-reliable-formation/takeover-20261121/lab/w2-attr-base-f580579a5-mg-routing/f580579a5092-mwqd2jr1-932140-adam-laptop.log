@@ -1,0 +1,163 @@
+placement-shell=3154821
+placement-head=f580579a509293e50b0344d1c7e742b10fbf2aac
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3155772
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 45C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 6830ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Message-group operation routing integration
+    # Subtest: dispatch preserves message-group entity identity for coordinator
+        not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+          ---
+          stack: >
+            invalidOperationPersistenceOutcome
+            (src/rebalancer/replica-operation-update-outcome.js:67:17)
+          
+            requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+          
+            decodePersistedOperationHistory
+            (src/rebalancer/replica-operation-update-outcome.js:97:3)
+          
+            decodeReplicaOperationRow
+            (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+          
+            ReplicaDispatchService.buildOperationFromRow
+            (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+          
+            ReplicaDispatchService.dispatchOperationRow
+            (src/control-plane/replica-dispatch-operation-execution.js:219:31)
+          
+            Test.<anonymous>
+            (test/rebalancer/message-group-operation-routing.integration.test.js:146:23)
+          at:
+            fileName: src/rebalancer/replica-operation-update-outcome.js
+            lineNumber: 67
+            columnNumber: 17
+            functionName: invalidOperationPersistenceOutcome
+          code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+          tapCaught: returnedPromiseRejection
+          source: >
+          
+            function invalidOperationPersistenceOutcome(reason, cause) {
+              const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+            ----------------^
+              error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+              if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+          ...
+        
+        1..1
+    not ok 1 - dispatch preserves message-group entity identity for coordinator # time=23.865ms
+      ---
+      at:
+        fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+        lineNumber: 55
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test(
+        ----------^
+            'dispatch preserves message-group entity identity for coordinator',
+            async (t) => {
+      ...
+    
+    # Subtest: dispatch rehydrates persisted message-group topology metadata
+        ok 1 - dispatch should restore persisted replica ids
+        ok 2 - dispatch should restore persisted peer addresses
+        1..2
+    ok 2 - dispatch rehydrates persisted message-group topology metadata # time=9.325ms
+    
+{"level":50,"time":"2026-11-21T12:06:22.763Z","nodeId":"008bbb7d-0661-44f9-bd7e-2a0c64a9b18f","pid":3156392,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS","awaited":"persisted replica operation authoritatively visible","boundMs":5000,"elapsedMs":5046,"lastObserved":{"expectedWorkflowStep":"SENDING","expectedStatus":"pending","polls":26,"sawVisibilityMismatch":false,"deferredOutcome":true},"scope":{"nodeId":"node-1","partitionId":"mg-1","operationId":"op-mg-route-1"},"repeats":0,"nodeId":"008bbb7d-0661-44f9-bd7e-2a0c64a9b18f","msg":"Wait bound spent"}
+    # Subtest: coordinator routes message-group operation to message-group handler
+        not ok 1 - message-group operation should route to message-group handler
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+            lineNumber: 330
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/message-group-operation-routing.integration.test.js:330:11)
+          source: |2
+                  try {
+                    await coordinator.executeOperation(operation);
+                    t.equal(
+            ----------^
+                      deliveries[0]?.target,
+                      'node-2/service/message-group-handler',
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -node-2/service/message-group-handler
+            +undefined
+          ...
+        
+        1..1
+    not ok 3 - coordinator routes message-group operation to message-group handler # time=5075.441ms
+      ---
+      at:
+        fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+        lineNumber: 266
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          );
+      
+          await t.test(
+        ----------^
+            'coordinator routes message-group operation to message-group handler',
+            async (t) => {
+      ...
+    
+    # Subtest: coordinator persists canonical entity fields for message-group operations
+        ok 1 - should run dedupe query before insert
+        ok 2 - dedupe query should scope by entity_type
+        ok 3 - dedupe query should scope by entity_id
+        ok 4 - dedupe query params should include message_group entity type
+        ok 5 - dedupe query params should include message-group entity id
+        ok 6 - should insert operation row
+        ok 7 - insert query should include entity_type column
+        ok 8 - insert query should include entity_id column
+        ok 9 - insert params should include message_group entity type
+        ok 10 - inserted steps history should persist canonical replica ids
+        1..10
+    ok 4 - coordinator persists canonical entity fields for message-group operations # time=22.334ms
+    
+    # Subtest: coordinator fails closed when message-group topology is unavailable
+        ok 1 - message-group createOperation should fail closed when topology is missing
+        1..1
+    ok 5 - coordinator fails closed when message-group topology is unavailable # time=3.119ms
+    
+    1..5
+not ok 1 - Message-group operation routing integration # time=5352.816ms
+  ---
+  at:
+    fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+    lineNumber: 45
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('Message-group operation routing integration', async (t) => {
+    ^
+      t.beforeEach(async () => {
+        initEnv();
+  ...
+
+1..1
+# { total: 15, pass: 13, fail: 2 }
+# time=5364.188ms
+# test-files total=1 pass=0 fail=1 assertions=21
+placement-results={"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":false,"assertions":21,"durationMs":6830,"retriedOnce":false,"firstFailureLine":"not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text"}

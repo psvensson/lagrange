@@ -1,0 +1,937 @@
+lab test: tv-dator: ordinary, bootstrap (5 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=2748775
+[tv-dator] placement-head=65ca4c2c32d45d1308d9fed8c224914407a86213
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2749770
+[tv-dator] # test-files planned=5
+[tv-dator] classified lane ordinary: 4 file(s), jobs=4
+[tv-dator] thermal: ok cpu 60C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/partition-service-row-owner.test.js (204 assertions, 911ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: PartitionServiceRowOwner - activateReplica delegates lifecycle to ReplicaStateMachine
+[tv-dator]     ok 1 - activation should project active status
+[tv-dator]     ok 2 - activation should use the lifecycle owner exactly once
+[tv-dator]     ok 3 - should be equivalent
+[tv-dator]     ok 4 - activation update should use background delivery
+[tv-dator]     ok 5 - activation update should coalesce by service row
+[tv-dator]     ok 6 - the row owner should only publish its raft-owned leader field
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     ok 8 - should be equivalent
+[tv-dator]     ok 9 - should be equivalent
+[tv-dator]     ok 10 - leader publication should coalesce by partition leader row
+[tv-dator]     1..10
+[tv-dator] ok 1 - PartitionServiceRowOwner - activateReplica delegates lifecycle to ReplicaStateMachine # time=13.675ms
+[tv-dator] 
+[tv-dator] # Subtest: PartitionServiceRowOwner - critical system partitions use critical service-row writes
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - critical system partition activation should use critical delivery
+[tv-dator]     ok 4 - critical system partition activation should use critical work class
+[tv-dator]     ok 5 - critical system partition activation should still coalesce by service row
+[tv-dator]     ok 6 - critical activation should also publish canonical partition leader
+[tv-dator]     ok 7 - critical partition leader publication should use critical delivery
+[tv-dator]     ok 8 - critical partition leader publication should coalesce by partition
+[tv-dator]     1..8
+[tv-dator] ok 2 - PartitionServiceRowOwner - critical system partitions use critical service-row writes # time=1.19ms
+[tv-dator] 
+[tv-dator] # Subtest: PartitionServiceRowOwner - follower activation does not rewrite canonical partition leader
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - follower activation should not publish canonical leader metadata
+[tv-dator]     1..2
+[tv-dator] ok 3 - PartitionServiceRowOwner - follower activation does not rewrite canonical partition leader # time=0.756ms
+[tv-dator] 
+[tv-dator] # Subtest: PartitionServiceRowOwner - registerReplica uses insert-only admission
+[tv-dator]     ok 1 - registration should issue one insert
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     not ok 5 - registration should carry generation-specific diagnostics
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]         lineNumber: 207
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-service-row-owner.test.js:207:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(inserts[0].row.service_id, 'p1-r2');
+[tv-dator]             t.equal(inserts[0].row.service_type, 'partition');
+[tv-dator]             t.equal(
+[tv-dator]         ------^
+[tv-dator]               inserts[0].options?.coalescingKey,
+[tv-dator]               'services:p1-r2:create:1234',
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -services:p1-r2:create:1234
+[tv-dator]         +services:p1-r2:create:1237
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 6 - create admissions must not coalesce across lifetimes
+[tv-dator]     1..6
+[tv-dator] not ok 4 - PartitionServiceRowOwner - registerReplica uses insert-only admission # time=19.774ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]     lineNumber: 184
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('PartitionServiceRowOwner - registerReplica uses insert-only admission',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         const inserts = [];
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: PartitionServiceRowOwner - same-ID recreation cannot reuse a durable registration incarnation
+[tv-dator]     ok 1 - the fixture should model deletion between two applied acquisitions
+[tv-dator]     ok 2 - one process cannot mint the same durable incarnation twice
+[tv-dator]     ok 3 - the recreated STOPPED lifecycle starts at its unique incarnation
+[tv-dator]     1..3
+[tv-dator] ok 5 - PartitionServiceRowOwner - same-ID recreation cannot reuse a durable registration incarnation # time=0.732ms
+[tv-dator] 
+[tv-dator] # Subtest: PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical partition leader authority across all 45 seed partitions, election transfer, stale services.raft_role, non-seed join, and single-partition refusal
+[tv-dator]     ok 1 - fresh seed schema corpus should cover all 46 system tables
+[tv-dator]     ok 2 - tables-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 3 - tables-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 4 - tables resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 5 - nodes-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 6 - nodes-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 7 - nodes resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 8 - latency_groups-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 9 - latency_groups-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 10 - latency_groups resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 11 - inter_group_latencies-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 12 - inter_group_latencies-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 13 - inter_group_latencies resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 14 - message_groups-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 15 - message_groups-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 16 - message_groups resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 17 - partitions-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 18 - partitions-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 19 - partitions resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 20 - services-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 21 - services-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 22 - services resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 23 - indices-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 24 - indices-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 25 - indices resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 26 - logs-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 27 - logs-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 28 - logs resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 29 - config-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 30 - config-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 31 - config resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 32 - live_queries-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 33 - live_queries-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 34 - live_queries resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 35 - contexts-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 36 - contexts-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 37 - contexts resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 38 - code-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 39 - code-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 40 - code resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 41 - control_plane_publications-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 42 - control_plane_publications-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 43 - control_plane_publications resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 44 - replica_operations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 45 - replica_operations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 46 - replica_operations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 47 - node_endpoints-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 48 - node_endpoints-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 49 - node_endpoints resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 50 - service_definitions-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 51 - service_definitions-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 52 - service_definitions resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 53 - service_instances-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 54 - service_instances-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 55 - service_instances resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 56 - service_bindings-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 57 - service_bindings-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 58 - service_bindings resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 59 - service_endpoints-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 60 - service_endpoints-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 61 - service_endpoints resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 62 - service_timers-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 63 - service_timers-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 64 - service_timers resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 65 - service_packages-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 66 - service_packages-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 67 - service_packages resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 68 - service_revisions-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 69 - service_revisions-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 70 - service_revisions resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 71 - service_installations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 72 - service_installations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 73 - service_installations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 74 - service_install_failures-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 75 - service_install_failures-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 76 - service_install_failures resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 77 - module_manifests-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 78 - module_manifests-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 79 - module_manifests resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 80 - package_registry_mappings-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 81 - package_registry_mappings-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 82 - package_registry_mappings resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 83 - package_registry_overrides-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 84 - package_registry_overrides-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 85 - package_registry_overrides resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 86 - module_dependency_locks-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 87 - module_dependency_locks-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 88 - module_dependency_locks resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 89 - wasm_operations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 90 - wasm_operations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 91 - wasm_operations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 92 - sql_transactions-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 93 - sql_transactions-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 94 - sql_transactions resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 95 - sql_transaction_participants-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 96 - sql_transaction_participants-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 97 - sql_transaction_participants resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 98 - sql_write_operations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 99 - sql_write_operations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 100 - sql_write_operations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 101 - schema_operations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 102 - schema_operations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 103 - schema_operations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 104 - schema_migrations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 105 - schema_migrations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 106 - schema_migrations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 107 - schema_migration_partitions-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 108 - schema_migration_partitions-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 109 - schema_migration_partitions resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 110 - debug_sessions-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 111 - debug_sessions-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 112 - debug_sessions resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 113 - debug_breakpoints-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 114 - debug_breakpoints-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 115 - debug_breakpoints resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 116 - debug_snapshots-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 117 - debug_snapshots-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 118 - debug_snapshots resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 119 - storage_reservations-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 120 - storage_reservations-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 121 - storage_reservations resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 122 - service_partition_access-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 123 - service_partition_access-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 124 - service_partition_access resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 125 - call_cell_reduce_slots-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 126 - call_cell_reduce_slots-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 127 - call_cell_reduce_slots resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 128 - call_cell_reduce_results-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 129 - call_cell_reduce_results-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 130 - call_cell_reduce_results resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 131 - call_activation_leases-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 132 - call_activation_leases-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 133 - call_activation_leases resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 134 - artifact_payloads-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 135 - artifact_payloads-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 136 - artifact_payloads resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 137 - artifact_payload_chunks-p1 registration collapses leader to follower in services.raft_role
+[tv-dator]     ok 138 - artifact_payload_chunks-p1 publishes canonical leader_node_id from live Raft authority
+[tv-dator]     ok 139 - artifact_payload_chunks resolves leader from canonical partitions.leader_node_id
+[tv-dator]     ok 140 - canonical leader transfer to non-seed node wins over stale services.raft_role=leader
+[tv-dator]     ok 141 - refuses when canonical leader_node_id points to an inactive replica
+[tv-dator]     ok 142 - refuses when canonical leader_node_id is stale/unmatched
+[tv-dator]     ok 143 - refuses when canonical leader_node_id is absent and no witness exists
+[tv-dator]     ok 144 - explicitly refuses multi-partition tables
+[tv-dator]     1..144
+[tv-dator] ok 6 - PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical partition leader authority across all 45 seed partitions, election transfer, stale services.raft_role, non-seed join, and single-partition refusal # time=17.363ms
+[tv-dator] 
+[tv-dator] # Subtest: necessity: the canonical leader publication follows the live leader only; the row role the owner publishes never decides it
+[tv-dator]     ok 1 - tracked follower, live leader true: the registered row carries no leader role
+[tv-dator]     ok 2 - tracked follower, live leader true: the activated row carries no leader role
+[tv-dator]     not ok 3 - tracked follower, live leader true: registration and activation publish the leader exactly when the service leads
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,4 +1,3 @@
+[tv-dator]          Array [
+[tv-dator]            "node-a",
+[tv-dator]         -  "node-a",
+[tv-dator]          ]
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]         lineNumber: 446
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-service-row-owner.test.js:446:9)
+[tv-dator]       source: |2
+[tv-dator]               const publications = harness.updates.filter((update) =>
+[tv-dator]                 update.tableName === 'partitions');
+[tv-dator]               t.same(publications.map((update) => update.updateData.leader_node_id),
+[tv-dator]         --------^
+[tv-dator]                 liveLeader ? ['node-a', 'node-a'] : [],
+[tv-dator]                 `${label}: registration and activation publish the leader exactly ` +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 4 - tracked follower, live leader false: the registered row carries no leader role
+[tv-dator]     ok 5 - tracked follower, live leader false: the activated row carries no leader role
+[tv-dator]     ok 6 - tracked follower, live leader false: registration and activation publish the leader exactly when the service leads
+[tv-dator]     ok 7 - tracked candidate, live leader true: the registered row carries no leader role
+[tv-dator]     ok 8 - tracked candidate, live leader true: the activated row carries no leader role
+[tv-dator]     not ok 9 - tracked candidate, live leader true: registration and activation publish the leader exactly when the service leads
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,4 +1,3 @@
+[tv-dator]          Array [
+[tv-dator]            "node-a",
+[tv-dator]         -  "node-a",
+[tv-dator]          ]
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]         lineNumber: 446
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-service-row-owner.test.js:446:9)
+[tv-dator]       source: |2
+[tv-dator]               const publications = harness.updates.filter((update) =>
+[tv-dator]                 update.tableName === 'partitions');
+[tv-dator]               t.same(publications.map((update) => update.updateData.leader_node_id),
+[tv-dator]         --------^
+[tv-dator]                 liveLeader ? ['node-a', 'node-a'] : [],
+[tv-dator]                 `${label}: registration and activation publish the leader exactly ` +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 10 - tracked candidate, live leader false: the registered row carries no leader role
+[tv-dator]     ok 11 - tracked candidate, live leader false: the activated row carries no leader role
+[tv-dator]     ok 12 - tracked candidate, live leader false: registration and activation publish the leader exactly when the service leads
+[tv-dator]     ok 13 - tracked leader, live leader true: the registered row carries no leader role
+[tv-dator]     ok 14 - tracked leader, live leader true: the activated row carries no leader role
+[tv-dator]     not ok 15 - tracked leader, live leader true: registration and activation publish the leader exactly when the service leads
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,4 +1,3 @@
+[tv-dator]          Array [
+[tv-dator]            "node-a",
+[tv-dator]         -  "node-a",
+[tv-dator]          ]
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]         lineNumber: 446
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-service-row-owner.test.js:446:9)
+[tv-dator]       source: |2
+[tv-dator]               const publications = harness.updates.filter((update) =>
+[tv-dator]                 update.tableName === 'partitions');
+[tv-dator]               t.same(publications.map((update) => update.updateData.leader_node_id),
+[tv-dator]         --------^
+[tv-dator]                 liveLeader ? ['node-a', 'node-a'] : [],
+[tv-dator]                 `${label}: registration and activation publish the leader exactly ` +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 16 - tracked leader, live leader false: the registered row carries no leader role
+[tv-dator]     ok 17 - tracked leader, live leader false: the activated row carries no leader role
+[tv-dator]     ok 18 - tracked leader, live leader false: registration and activation publish the leader exactly when the service leads
+[tv-dator]     ok 19 - tracked learner, live leader true: the registered row carries no leader role
+[tv-dator]     ok 20 - tracked learner, live leader true: the activated row carries no leader role
+[tv-dator]     not ok 21 - tracked learner, live leader true: registration and activation publish the leader exactly when the service leads
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,4 +1,3 @@
+[tv-dator]          Array [
+[tv-dator]            "node-a",
+[tv-dator]         -  "node-a",
+[tv-dator]          ]
+[tv-dator]       at:
+[tv-dator]         fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]         lineNumber: 446
+[tv-dator]         columnNumber: 9
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/partition/partition-service-row-owner.test.js:446:9)
+[tv-dator]       source: |2
+[tv-dator]               const publications = harness.updates.filter((update) =>
+[tv-dator]                 update.tableName === 'partitions');
+[tv-dator]               t.same(publications.map((update) => update.updateData.leader_node_id),
+[tv-dator]         --------^
+[tv-dator]                 liveLeader ? ['node-a', 'node-a'] : [],
+[tv-dator]                 `${label}: registration and activation publish the leader exactly ` +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 22 - tracked learner, live leader false: the registered row carries no leader role
+[tv-dator]     ok 23 - tracked learner, live leader false: the activated row carries no leader role
+[tv-dator]     ok 24 - tracked learner, live leader false: registration and activation publish the leader exactly when the service leads
+[tv-dator]     1..24
+[tv-dator] not ok 7 - necessity: the canonical leader publication follows the live leader only; the row role the owner publishes never decides it # time=18.688ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/partition/partition-service-row-owner.test.js
+[tv-dator]     lineNumber: 423
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // so for every role the enum owns as the tracked role the decision is the
+[tv-dator]     // live leadership's (the anchor: live leadership changes it).
+[tv-dator]     test('necessity: the canonical leader publication follows the live leader ' +
+[tv-dator]     ^
+[tv-dator]       'only; the row role the owner publishes never decides it', async (t) => {
+[tv-dator]       for (const trackedRole of Object.values(RAFT_ROLE)) {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..7
+[tv-dator] # { total: 197, pass: 192, fail: 5 }
+[tv-dator] # time=87.085ms
+[tv-dator] ok test/rebalancer/surplus-drain-prefers-non-leader-source.test.js (33 assertions, 1695ms)
+[tv-dator] not ok test/rebalancer/replace-named-handoff-attempt.test.js (38 assertions, 1806ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead
+[tv-dator]     not ok 1 - one handoff was issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 216
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:216:7)
+[tv-dator]       source: |2
+[tv-dator]           try {
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]         ------^
+[tv-dator]             const request = harness.stepDowns()[0];
+[tv-dator]             t.ok(request.target.startsWith(TARGET_NODE_ID),
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - Cannot read properties of undefined (reading 'target')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:218:18)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 218
+[tv-dator]         columnNumber: 18
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]             const request = harness.stepDowns()[0];
+[tv-dator]             t.ok(request.target.startsWith(TARGET_NODE_ID),
+[tv-dator]         -----------------^
+[tv-dator]               'the handoff goes to the target node');
+[tv-dator]             t.equal(request.payload[ReplicaOperationField.REPLICA_ID],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 1 - named-target only: while the source leads, the only handoff names the REPLACE's own target, and removal waits for the witness to see it lead # time=98.812ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 210
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('named-target only: while the source leads, the only handoff names the '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'REPLACE\'s own target, and removal waits for the witness to see it lead',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target
+[tv-dator]     not ok 1 - an accepted, unresolved attempt is not re-issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 251
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:251:7)
+[tv-dator]       source: |2
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.stepDowns().length, 1,
+[tv-dator]         ------^
+[tv-dator]               'an accepted, unresolved attempt is not re-issued');
+[tv-dator]             t.equal(readReplaceHandoffAttempt(harness.owner,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - Cannot read properties of null (reading 'answerClass')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:254:37)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 254
+[tv-dator]         columnNumber: 37
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]               'an accepted, unresolved attempt is not re-issued');
+[tv-dator]             t.equal(readReplaceHandoffAttempt(harness.owner,
+[tv-dator]               harness.operation.operationId).answerClass,
+[tv-dator]         ------------------------------------^
+[tv-dator]             REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED, 'the attempt is accepted');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 2 - one attempt: an unresolved attempt blocks a second handoff; a refused attempt resolves and the next one names the same target # time=45.47ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 243
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('one attempt: an unresolved attempt blocks a second handoff; a refused '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'attempt resolves and the next one names the same target', async (t) => {
+[tv-dator]       let answer = {status: ReplicaOperationResponseStatus.COMPLETED,
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: attemptSeq echo: a late answer of an earlier attempt is dropped
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'attemptSeq')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:293:56)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 293
+[tv-dator]         columnNumber: 56
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]                 harness.operation.operationId,
+[tv-dator]                 {status: ReplicaOperationResponseStatus.COMPLETED,
+[tv-dator]                   [ReplicaOperationField.ATTEMPT_SEQ]: current.attemptSeq - 1},
+[tv-dator]         -------------------------------------------------------^
+[tv-dator]                 current.attemptSeq);
+[tv-dator]               t.equal(applied, false, 'the late answer is not applied');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 3 - attemptSeq echo: a late answer of an earlier attempt is dropped # time=38.587ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 282
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('attemptSeq echo: a late answer of an earlier attempt is dropped',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         const harness = await createHarness({stepDownResponse: () => null});
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding
+[tv-dator]     not ok 1 - one handoff was issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 316
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:316:7)
+[tv-dator]       source: |2
+[tv-dator]             const attempt = readReplaceHandoffAttempt(harness.owner,
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]         ------^
+[tv-dator]             t.equal(attempt?.answerClass, null,
+[tv-dator]               'the mismatched answer resolved nothing');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - the mismatched answer resolved nothing
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 317
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:317:7)
+[tv-dator]       source: |2
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]             t.equal(attempt?.answerClass, null,
+[tv-dator]         ------^
+[tv-dator]               'the mismatched answer resolved nothing');
+[tv-dator]             t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -null
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - it was counted late
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 319
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:319:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(attempt?.answerClass, null,
+[tv-dator]               'the mismatched answer resolved nothing');
+[tv-dator]             t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+[tv-dator]         ------^
+[tv-dator]               lateBefore + 1, 'it was counted late');
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 4 - the outstanding attempt blocks a second handoff
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 322
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:322:7)
+[tv-dator]       source: |2
+[tv-dator]               lateBefore + 1, 'it was counted late');
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.stepDowns().length, 1,
+[tv-dator]         ------^
+[tv-dator]               'the outstanding attempt blocks a second handoff');
+[tv-dator]             t.equal(harness.removals().length, 0, 'and no removal');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 5 - and no removal
+[tv-dator]     1..5
+[tv-dator] not ok 4 - attemptSeq echo, routed: an answer echoing another attempt through the real dispatch leaves the current attempt outstanding # time=41.166ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 303
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('attemptSeq echo, routed: an answer echoing another attempt through the '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'real dispatch leaves the current attempt outstanding', async (t) => {
+[tv-dator]       const harness = await createHarness({stepDownResponse: (payload) => ({
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: F-b: no handoff leaves for an operation that became terminal
+[tv-dator]     ok 1 - the decision was to issue a handoff
+[tv-dator]     ok 2 - nothing was sent
+[tv-dator]     ok 3 - no STEP_DOWN left
+[tv-dator]     1..3
+[tv-dator] ok 5 - F-b: no handoff leaves for an operation that became terminal # time=32.878ms
+[tv-dator] 
+[tv-dator] # Subtest: no retarget: a target that reports its replica missing fails the REPLACE before its removal intent
+[tv-dator]     not ok 1 - the REPLACE failed before any removal intent
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 359
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:359:7)
+[tv-dator]       source: |2
+[tv-dator]             const persisted = await harness.coordinator.queryOperationById(
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED,
+[tv-dator]         ------^
+[tv-dator]               'the REPLACE failed before any removal intent');
+[tv-dator]             t.equal(harness.removals().length, 0, 'no source removal was sent');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -FAILED
+[tv-dator]         +PENDING
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 2 - no source removal was sent
+[tv-dator]     not ok 3 - no other replica was asked to lead
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "sql_transactions-p1-r4",
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 362
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:362:7)
+[tv-dator]       source: |2
+[tv-dator]               'the REPLACE failed before any removal intent');
+[tv-dator]             t.equal(harness.removals().length, 0, 'no source removal was sent');
+[tv-dator]             t.same([...new Set(harness.stepDowns().map((delivery) =>
+[tv-dator]         ------^
+[tv-dator]               delivery.payload[ReplicaOperationField.REPLICA_ID]))],
+[tv-dator]             [TARGET_REPLICA_ID], 'no other replica was asked to lead');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..3
+[tv-dator] not ok 6 - no retarget: a target that reports its replica missing fails the REPLACE before its removal intent # time=37.556ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 350
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('no retarget: a target that reports its replica missing fails the ' +
+[tv-dator]     ^
+[tv-dator]       'REPLACE before its removal intent', async (t) => {
+[tv-dator]       const harness = await createHarness({stepDownResponse: () => ({
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: BR12: no handoff leaves on a deferred-visibility snapshot
+[tv-dator]     ok 1 - the deferred snapshot issues no handoff
+[tv-dator]     ok 2 - control: the fresh copy issues the named-target handoff
+[tv-dator]     1..2
+[tv-dator] ok 7 - BR12: no handoff leaves on a deferred-visibility snapshot # time=41.016ms
+[tv-dator] 
+[tv-dator] # Subtest: BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff
+[tv-dator]     ok 1 - a non-source, non-target leader does not authorize the removal
+[tv-dator]     not ok 2 - one handoff was issued
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 397
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:397:7)
+[tv-dator]       source: |2
+[tv-dator]             t.equal(harness.removals().length, 0,
+[tv-dator]               'a non-source, non-target leader does not authorize the removal');
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]         ------^
+[tv-dator]             t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+[tv-dator]               TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - it names the REPLACE's own target
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 398
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:398:7)
+[tv-dator]       source: |2
+[tv-dator]               'a non-source, non-target leader does not authorize the removal');
+[tv-dator]             t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+[tv-dator]             t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+[tv-dator]         ------^
+[tv-dator]               TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+[tv-dator]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -sql_transactions-p1-r4
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 4 - the target leading (fresh read) lets removal proceed
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 402
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:402:7)
+[tv-dator]       source: |2
+[tv-dator]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[tv-dator]             await harness.coordinator.executeOperation(harness.operation);
+[tv-dator]             t.equal(harness.removals().length, 1,
+[tv-dator]         ------^
+[tv-dator]               'the target leading (fresh read) lets removal proceed');
+[tv-dator]           } finally {
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..4
+[tv-dator] not ok 8 - BR11: only a fresh read of the target leading authorizes removal; a third replica leading gets the named-target handoff # time=39.079ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 389
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('BR11: only a fresh read of the target leading authorizes removal; a ' +
+[tv-dator]     ^
+[tv-dator]       'third replica leading gets the named-target handoff', async (t) => {
+[tv-dator]       const harness = await createHarness();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt
+[tv-dator]     not ok 1 - Cannot read properties of null (reading 'answerClass')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/replace-named-handoff-attempt.test.js:422:21)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]         lineNumber: 422
+[tv-dator]         columnNumber: 21
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]             const attempt = readReplaceHandoffAttempt(harness.owner,
+[tv-dator]               harness.operation.operationId);
+[tv-dator]             t.equal(attempt.answerClass, REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED,
+[tv-dator]         --------------------^
+[tv-dator]               'setup: attempt accepted');
+[tv-dator]             harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 9 - S9: an ACTIVE wait after the named handoff decided safe reads the handoff attempt, not an unresolved phase with no attempt # time=45.291ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replace-named-handoff-attempt.test.js
+[tv-dator]     lineNumber: 415
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // target leading (LEADERSHIP_SAFE); a later ACTIVE wait (another check
+[tv-dator]     // deferring) must not read "attempt unresolved" with no attempt.
+[tv-dator]     test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
+[tv-dator]     ^
+[tv-dator]       'handoff attempt, not an unresolved phase with no attempt', async (t) => {
+[tv-dator]       const harness = await createHarness();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: necessity: the priority REPLACE leader-removal decision reads only the fresh witness; no SERVICES raft_role and no partitions.leader_node_id changes it
+[tv-dator]     ok 1 - witness leader sql_transactions-p1-r1: none of 512 row-input combinations changes the decision
+[tv-dator]     ok 2 - witness leader sql_transactions-p1-r4: none of 512 row-input combinations changes the decision
+[tv-dator]     ok 3 - anchor: while the witness reads the source leading, removal waits
+[tv-dator]     ok 4 - anchor: and the named handoff goes to the target
+[tv-dator]     ok 5 - anchor: the witness reading the target leading changes the decision to safe
+[tv-dator]     1..5
+[tv-dator] ok 10 - necessity: the priority REPLACE leader-removal decision reads only the fresh witness; no SERVICES raft_role and no partitions.leader_node_id changes it # time=110.024ms
+[tv-dator] 
+[tv-dator] 1..10
+[tv-dator] # { total: 28, pass: 13, fail: 15 }
+[tv-dator] # time=552.469ms
+[tv-dator] ok test/node/group-retirement-redrive.test.js (111 assertions, 3033ms)
+[tv-dator] # test-files total=4 pass=2 fail=2 assertions=386
+[tv-dator] classified lane bootstrap: 1 file(s), jobs=2
+[tv-dator] thermal: ok cpu 54C (coretemp/Package id 0) nvme 54C (nvme/Sensor 1)
+[tv-dator] ok test/bootstrap/bootstrap-topology-snapshot-owner.test.js (65 assertions, 544ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=65
+lab test: tv-dator: # test-files total=5 pass=3 fail=2 assertions=451
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=5 pass=3 fail=2 assertions=451
+exit=1

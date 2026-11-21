@@ -1,0 +1,957 @@
+placement-shell=3308173
+placement-head=f580579a509293e50b0344d1c7e742b10fbf2aac
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3309234
+# test-files planned=5
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: hold cpu 79C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/cdc-source-occurrence-delivery.integration.test.js (5 assertions, 15091ms)
+# test-files total=1 pass=1 fail=0 assertions=5
+classified lane exclusive: 4 file(s), jobs=1
+thermal: ok cpu 56C (coretemp/Package id 0) nvme 22C (nvme/Composite)
+not ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2788ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: C6: real RuntimeServiceHandler + manager + runtime + native lifecycle on three hosts
+    # Subtest: C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+    not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+      ---
+      duration_ms: 754.221776
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:116:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:143:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: C6-7 REMOVE withdraws endpoint before CLOSED and the row after; C6-8 closed:false holds; C6-9 restart
+    not ok 2 - C6-7 REMOVE withdraws endpoint before CLOSED and the row after; C6-8 closed:false holds; C6-9 restart
+      ---
+      duration_ms: 596.51111
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:195:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:84:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:197:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..2
+not ok 1 - C6: real RuntimeServiceHandler + manager + runtime + native lifecycle on three hosts
+  ---
+  duration_ms: 1352.234937
+  type: 'suite'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding.integration.test.js:115:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 2
+# suites 1
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1358.98985
+# time=2788ms
+not ok test/wasm-service/bound-creation-physical-custody.integration.test.js (20 assertions, 7167ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: U1 services-row publication: a current retained origin admits one PRESENT mark
+ok 1 - U1 services-row publication: a current retained origin admits one PRESENT mark
+  ---
+  duration_ms: 158.127607
+  type: 'test'
+  ...
+# Subtest: U1 physical owner: CREATED, STARTING and READY are current; fenced objects remain held
+ok 2 - U1 physical owner: CREATED, STARTING and READY are current; fenced objects remain held
+  ---
+  duration_ms: 142.482526
+  type: 'test'
+  ...
+# Subtest: U1 physical owner: full intent identity is compared even when the token is identical
+ok 3 - U1 physical owner: full intent identity is compared even when the token is identical
+  ---
+  duration_ms: 86.434435
+  type: 'test'
+  ...
+# Subtest: U1 physical owner: actual failed cleanup is unavailable while its resource custody stays live
+ok 4 - U1 physical owner: actual failed cleanup is unavailable while its resource custody stays live
+  ---
+  duration_ms: 93.823623
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement custody: registration precedes a synchronously reentrant shutdown
+ok 5 - U1 retirement custody: registration precedes a synchronously reentrant shutdown
+  ---
+  duration_ms: 78.510555
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement custody: equal requests coalesce and an operation-id body collision is refused
+ok 6 - U1 retirement custody: equal requests coalesce and an operation-id body collision is refused
+  ---
+  duration_ms: 77.329931
+  type: 'test'
+  ...
+# Subtest: U1 retirement custody: shutdown retry preserves a failed retirement tombstone obligation
+ok 7 - U1 retirement custody: shutdown retry preserves a failed retirement tombstone obligation
+  ---
+  duration_ms: 104.016998
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement custody: joining an ordinary stop retains debt when that stop fails
+ok 8 - U1 retirement custody: joining an ordinary stop retains debt when that stop fails
+  ---
+  duration_ms: 84.832309
+  type: 'test'
+  ...
+# Subtest: U1 physical admission: a directly stopping object blocks a second bound object
+ok 9 - U1 physical admission: a directly stopping object blocks a second bound object
+  ---
+  duration_ms: 82.978507
+  type: 'test'
+  ...
+# Subtest: U1 retirement finality: lost metadata history with RETIRED storage
+ok 10 - U1 retirement finality: lost metadata history with RETIRED storage
+  ---
+  duration_ms: 91.958574
+  type: 'test'
+  ...
+# Subtest: U1 retirement finality: lost metadata history with missing storage
+ok 11 - U1 retirement finality: lost metadata history with missing storage
+  ---
+  duration_ms: 70.560847
+  type: 'test'
+  ...
+# Subtest: U1 driver admission: a stale prepared origin cannot start the physically current successor
+ok 12 - U1 driver admission: a stale prepared origin cannot start the physically current successor
+  ---
+  duration_ms: 71.307615
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement debt: throw STOPPED projection cannot complete the original journal
+not ok 13 - U1 retirement debt: throw STOPPED projection cannot complete the original journal
+  ---
+  duration_ms: 542.299375
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:451:3'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:453:17)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement debt: retained STOPPED projection cannot complete the original journal
+not ok 14 - U1 retirement debt: retained STOPPED projection cannot complete the original journal
+  ---
+  duration_ms: 537.527796
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:451:3'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:453:17)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement debt: absent STOPPED projection cannot complete the original journal
+not ok 15 - U1 retirement debt: absent STOPPED projection cannot complete the original journal
+  ---
+  duration_ms: 583.884763
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:451:3'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:453:17)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 actual return: old driver READY cannot replace the manager state of a HELD successor
+not ok 16 - U1 actual return: old driver READY cannot replace the manager state of a HELD successor
+  ---
+  duration_ms: 596.329192
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:703:1'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:705:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 actual return: old physical PUBLISHED cannot mark a HELD successor running in the driver
+not ok 17 - U1 actual return: old physical PUBLISHED cannot mark a HELD successor running in the driver
+  ---
+  duration_ms: 556.78676
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:734:1'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:736:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 actual return: old authoritative PUBLISHED confirmation cannot overwrite successor state
+not ok 18 - U1 actual return: old authoritative PUBLISHED confirmation cannot overwrite successor state
+  ---
+  duration_ms: 608.59498
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:765:1'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:767:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 actual return: completed services effect cannot authorize the next owner after replacement
+not ok 19 - U1 actual return: completed services effect cannot authorize the next owner after replacement
+  ---
+  duration_ms: 524.248733
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:809:3'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:811:17)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: U1 actual return: completed endpoint effect cannot authorize the next owner after replacement
+not ok 20 - U1 actual return: completed endpoint effect cannot authorize the next owner after replacement
+  ---
+  duration_ms: 578.839804
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:809:3'
+  failureType: 'testCodeFailure'
+  error: 'custody founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:445:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-physical-custody.integration.test.js:811:17)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 12
+# fail 8
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5678.992934
+# time=7167ms
+not ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 16816ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+    # Subtest: P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+    not ok 1 - P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+      ---
+      duration_ms: 559.392252
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:164:3'
+      failureType: 'testCodeFailure'
+      error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:181:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+    not ok 2 - P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+      ---
+      duration_ms: 388.020536
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:187:3'
+      failureType: 'testCodeFailure'
+      error: 'host-3 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:204:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+    not ok 3 - P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+      ---
+      duration_ms: 656.736388
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:209:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:222:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+    not ok 4 - P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+      ---
+      duration_ms: 618.034293
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:233:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:236:15)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+    not ok 5 - P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+      ---
+      duration_ms: 595.632175
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:268:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:271:15)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+    not ok 6 - P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+      ---
+      duration_ms: 588.254819
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:292:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:298:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R8 in-process: terminal creation does not reopen physical custody; idempotent REMOVE returns COMPLETED synchronously with no duplicate outcome, and after restart missing physical custody is NOT_FOUND
+    not ok 7 - P-R8 in-process: terminal creation does not reopen physical custody; idempotent REMOVE returns COMPLETED synchronously with no duplicate outcome, and after restart missing physical custody is NOT_FOUND
+      ---
+      duration_ms: 572.402416
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:359:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:362:15)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+    not ok 8 - P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+      ---
+      duration_ms: 549.953102
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:389:3'
+      failureType: 'testCodeFailure'
+      error: 'founders active: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:392:15)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+    ok 9 - P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+      ---
+      duration_ms: 205.412191
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+    not ok 10 - P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+      ---
+      duration_ms: 348.316749
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:469:3'
+      failureType: 'testCodeFailure'
+      error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:497:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+    not ok 11 - P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+      ---
+      duration_ms: 422.796353
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:534:3'
+      failureType: 'testCodeFailure'
+      error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async removeAndSettle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:552:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+    ok 12 - P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+      ---
+      duration_ms: 303.449721
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+    not ok 13 - P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+      ---
+      duration_ms: 411.003158
+      type: 'test'
+      location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:572:3'
+      failureType: 'testCodeFailure'
+      error: 'removed: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+        async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:581:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+    ok 14 - P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+      ---
+      duration_ms: 295.888326
+      type: 'test'
+      ...
+    1..14
+not ok 1 - recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+  ---
+  duration_ms: 6517.91012
+  type: 'suite'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:163:1'
+  failureType: 'subtestsFailed'
+  error: '11 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+    # Subtest: R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+    ok 1 - R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+      ---
+      duration_ms: 120.944321
+      type: 'test'
+      ...
+    1..1
+ok 2 - recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+  ---
+  duration_ms: 121.134479
+  type: 'suite'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+ok 3 - independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+  ---
+  duration_ms: 166.618993
+  type: 'test'
+  ...
+# {"oldStopped":true,"resumedAfterCustodyTransfer":[],"oldInFlight":[],"newCompositionOwnsDirectory":true}
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+not ok 4 - independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+  ---
+  duration_ms: 589.470618
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:692:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:693:13)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+not ok 5 - independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+  ---
+  duration_ms: 555.852538
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:726:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:727:13)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+not ok 6 - independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+  ---
+  duration_ms: 582.431173
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:771:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:772:13)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: predecessor-first inventory preserves both predecessor cleanup and successor reentry
+not ok 7 - independent U1: predecessor-first inventory preserves both predecessor cleanup and successor reentry
+  ---
+  duration_ms: 555.958074
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:814:3'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:815:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: successor-first inventory preserves both predecessor cleanup and successor reentry
+not ok 8 - independent U1: successor-first inventory preserves both predecessor cleanup and successor reentry
+  ---
+  duration_ms: 597.388253
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:814:3'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:815:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: predecessor-first older ABSENT reentry cannot hide the successor
+ok 9 - independent U1: predecessor-first older ABSENT reentry cannot hide the successor
+  ---
+  duration_ms: 245.459947
+  type: 'test'
+  ...
+# {"order":"predecessor-first","plans":[["operation-1","ABSENT_UNCLAIMED","REENTER"],["z-live-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["operation-1","z-live-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"z-live-1","origin":{"operationId":"z-live-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"00fb300e7d36f42c0548cd5f81c364f9979a5f6b72197d83754f4c1858e7bbf7","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"9575bd07d742ef06dec2025f4729caf90b1fd76210acdf502cf4aaa79fe41cf0","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005c","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"a6e0fd3ba3565d19ab766cbd970dda63caf73dac3b9d3e25006b06a1551da272","revisionId":"service-revision-d6eeac103aebc2f8f938834aa0c65ae994a7d0b64af86791178d16b501a1ea49","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"z-live-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"9b3c63d3b456fbe37e2518ad1b0285790937eaa8c9be936df1d619becc54f900","bodyDigest":"0f8f2bda3d067bf5002f75d6f0f99490ea0212aeef334af21da012b5fa0c6a17","operationId":"z-live-1","ordinal":1,"slot":1}}}}
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: successor-first older ABSENT reentry cannot hide the successor
+ok 10 - independent U1: successor-first older ABSENT reentry cannot hide the successor
+  ---
+  duration_ms: 254.498093
+  type: 'test'
+  ...
+# {"order":"successor-first","plans":[["a-live-1","ABSENT_UNCLAIMED","REENTER"],["operation-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["a-live-1","operation-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"a-live-1","origin":{"operationId":"a-live-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"00fb300e7d36f42c0548cd5f81c364f9979a5f6b72197d83754f4c1858e7bbf7","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"9575bd07d742ef06dec2025f4729caf90b1fd76210acdf502cf4aaa79fe41cf0","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005c","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"a6e0fd3ba3565d19ab766cbd970dda63caf73dac3b9d3e25006b06a1551da272","revisionId":"service-revision-d6eeac103aebc2f8f938834aa0c65ae994a7d0b64af86791178d16b501a1ea49","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"a-live-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"9b3c63d3b456fbe37e2518ad1b0285790937eaa8c9be936df1d619becc54f900","bodyDigest":"d040db924399daa7348ae2ffa74652b807b790bb2bc793a0095e825bb5682339","operationId":"a-live-1","ordinal":1,"slot":1}}}}
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1 control: restart invokes the retained operation id without a scan identity
+ok 11 - independent U1 control: restart invokes the retained operation id without a scan identity
+  ---
+  duration_ms: 174.993584
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1 control: a RETIRED startup plan enters one bound stop
+not ok 12 - independent U1 control: a RETIRED startup plan enters one bound stop
+  ---
+  duration_ms: 537.509527
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:908:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:909:13)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles
+not ok 13 - independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles
+  ---
+  duration_ms: 568.179748
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:924:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:925:13)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 v3 D1: original future CREATE retries itself while held belongs to J
+ok 14 - U1 v3 D1: original future CREATE retries itself while held belongs to J
+  ---
+  duration_ms: 281.129527
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 v3 D1: original future CREATE retries itself while active belongs to J
+not ok 15 - U1 v3 D1: original future CREATE retries itself while active belongs to J
+  ---
+  duration_ms: 551.658477
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:953:3'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:955:55)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 v3: a local inspection suspended past shutdown has no late handler effect
+ok 16 - U1 v3: a local inspection suspended past shutdown has no late handler effect
+  ---
+  duration_ms: 213.635968
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 v3: RETIRED physical closure keeps startup debt until original journal confirms
+not ok 17 - U1 v3: RETIRED physical closure keeps startup debt until original journal confirms
+  ---
+  duration_ms: 525.208179
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1048:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1050:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once
+ok 18 - U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once
+  ---
+  duration_ms: 146.618078
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 v3: duplicate journal observation is folded by identity
+ok 19 - U1 v3: duplicate journal observation is folded by identity
+  ---
+  duration_ms: 182.818795
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 v3: duplicate journal observation is refused by identity
+ok 20 - U1 v3: duplicate journal observation is refused by identity
+  ---
+  duration_ms: 148.646866
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 memo wake: real HELD J retains one wake behind exact F through handler gate release
+ok 21 - U1 memo wake: real HELD J retains one wake behind exact F through handler gate release
+  ---
+  duration_ms: 186.578206
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 memo wake: memo replacement refuses stale J admission at gate settlement
+ok 22 - U1 memo wake: memo replacement refuses stale J admission at gate settlement
+  ---
+  duration_ms: 190.527156
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 memo wake: physical replacement refuses stale J admission at gate settlement
+ok 23 - U1 memo wake: physical replacement refuses stale J admission at gate settlement
+  ---
+  duration_ms: 208.354944
+  type: 'test'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome
+not ok 24 - U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome
+  ---
+  duration_ms: 556.959323
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1300:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1302:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 retirement identity: changed full body with the active token has no owner or file effect
+ok 25 - U1 retirement identity: changed full body with the active token has no owner or file effect
+  ---
+  duration_ms: 215.581414
+  type: 'test'
+  ...
+# Subtest: U1 projection debt: the actual stopped projection owner cannot complete an old journal
+not ok 26 - U1 projection debt: the actual stopped projection owner cannot complete an old journal
+  ---
+  duration_ms: 513.415797
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1381:1'
+  failureType: 'testCodeFailure'
+  error: 'founders active: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async publishedGroup (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:139:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-restart.integration.test.js:1383:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..26
+# tests 39
+# suites 2
+# pass 17
+# fail 22
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15398.924506
+# time=16816ms
+not ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 2716ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: U1 bound REMOVE exact endpoint await preserves old physical custody and successor exclusion
+not ok 1 - U1 bound REMOVE exact endpoint await preserves old physical custody and successor exclusion
+  ---
+  duration_ms: 729.138172
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:48:1'
+  failureType: 'testCodeFailure'
+  error: 'real bound founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async dispatchCreates (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:116:3)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:131:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:50:28)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: U1 bound handler REMOVE retains failed native close debt and retries its original resource
+not ok 2 - U1 bound handler REMOVE retains failed native close debt and retries its original resource
+  ---
+  duration_ms: 560.262639
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:135:1'
+  failureType: 'testCodeFailure'
+  error: 'real bound founders published: did not settle within the declared rounds'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    e.settle (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-creation-handler-embedding-fixture.js:343:12)
+    async dispatchCreates (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:116:3)
+    async publishedWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation-fixture.js:131:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/f580579a5092-mwqg1bmd-1133978/test/wasm-service/bound-remove-physical-operation.integration.test.js:137:28)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1295.392287
+# time=2716ms
+# test-files total=4 pass=0 fail=4 assertions=66
+placement-results={"file":"test/bootstrap/cdc-source-occurrence-delivery.integration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":15091,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/bound-creation-handler-embedding.integration.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":2788,"retriedOnce":false,"firstFailureLine":"not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)"}
+placement-results={"file":"test/wasm-service/bound-creation-physical-custody.integration.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":7167,"retriedOnce":false,"firstFailureLine":"not ok 13 - U1 retirement debt: throw STOPPED projection cannot complete the original journal"}
+placement-results={"file":"test/wasm-service/bound-creation-restart.integration.test.js","attempt":1,"ok":false,"assertions":41,"durationMs":16816,"retriedOnce":false,"firstFailureLine":"not ok 1 - P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes"}
+placement-results={"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":2716,"retriedOnce":false,"firstFailureLine":"not ok 1 - U1 bound REMOVE exact endpoint await preserves old physical custody and successor exclusion"}

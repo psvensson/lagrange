@@ -1,0 +1,9 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.12
+[adams-gamla] placement-shell=1524589
+[adams-gamla] placement-head=2e0b33342e5eb7775dd594f3ca12db207a31c39f
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement: the commit's generated metadata is stale; regenerate and commit test/shards/impact-graph-seal.json 
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=0
+lab test: adams-gamla: 1 file(s) reported no result: exit 97
+# test-files total=1 pass=0 fail=1 assertions=0

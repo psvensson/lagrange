@@ -1,0 +1,703 @@
+placement-shell=1629034
+placement-head=38708b6fa0ae54f04c1c5f8c516154bd2c482844
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+placement-pid=1630472
+# test-files planned=76
+classified lane ordinary: 38 file(s), jobs=3
+thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+ok test/scripts/stop-distributed-harness-containers.test.js (13 assertions, 807ms)
+ok test/scripts/strict-operation-outcomes-evidence.test.js (6 assertions, 819ms)
+ok test/scripts/summarize-distributed-failure-report.test.js (3 assertions, 362ms)
+ok test/scripts/summarize-representative-evidence.test.js (5 assertions, 1146ms)
+ok test/scripts/test-placement-lab-split.test.js (8 assertions, 406ms)
+ok test/scripts/selection-golden-corpus.test.js (4 assertions, 50438ms)
+ok test/scripts/test-primary-classification.test.js (10 assertions, 383ms)
+ok test/scripts/test-resource-classification.test.js (10 assertions, 649ms)
+ok test/scripts/test-subsystem-classification.test.js (14 assertions, 8858ms)
+ok test/scripts/test-subsystem-repository-index.test.js (5 assertions, 446ms)
+ok test/scripts/test-timeout-declarations.test.js (24 assertions, 12421ms)
+ok test/scripts/wait-for-load-headroom.test.js (16 assertions, 541ms)
+ok test/scripts/workspace-injection-candidates.test.js (5 assertions, 406ms)
+ok test/service/minimal-deployment-binding-owner-guard.test.js (1 assertions, 486ms)
+ok test/service/request-cell-call-bridge.test.js (117 assertions, 1023ms)
+not ok test/scripts/select-change-tests.test.js (31 assertions, 96762ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: every safety-spine entry is a real, classified test
+ok 1 - every safety-spine entry is a real, classified test
+  ---
+  duration_ms: 9.715673
+  type: 'test'
+  ...
+# Subtest: the safety spine rejects inherited or empty test authority
+ok 2 - the safety spine rejects inherited or empty test authority
+  ---
+  duration_ms: 2.720051
+  type: 'test'
+  ...
+# Subtest: the plan rejects an injected empty safety spine
+ok 3 - the plan rejects an injected empty safety spine
+  ---
+  duration_ms: 4371.916184
+  type: 'test'
+  ...
+# Subtest: the plan rejects non-data and non-string spine arrays
+ok 4 - the plan rejects non-data and non-string spine arrays
+  ---
+  duration_ms: 24820.037874
+  type: 'test'
+  ...
+# Subtest: inherited plan collaborators cannot replace release refusal or spine
+ok 5 - inherited plan collaborators cannot replace release refusal or spine
+  ---
+  duration_ms: 28.054789
+  type: 'test'
+  ...
+# Subtest: plan option and selector-result accessors never become authority
+ok 6 - plan option and selector-result accessors never become authority
+  ---
+  duration_ms: 0.398857
+  type: 'test'
+  ...
+# Subtest: a selector returning NOTHING still runs the entire safety spine
+ok 7 - a selector returning NOTHING still runs the entire safety spine
+  ---
+  duration_ms: 22.334276
+  type: 'test'
+  ...
+# Subtest: the selector never selects the safety spine itself
+ok 8 - the selector never selects the safety spine itself
+  ---
+  duration_ms: 4123.096219
+  type: 'test'
+  ...
+# Subtest: a REFUSED selection refuses the whole run, spine notwithstanding
+ok 9 - a REFUSED selection refuses the whole run, spine notwithstanding
+  ---
+  duration_ms: 4064.306881
+  type: 'test'
+  ...
+# Subtest: only an exact-SHA release receipt may satisfy release-proof refusal
+ok 10 - only an exact-SHA release receipt may satisfy release-proof refusal
+  ---
+  duration_ms: 4149.078056
+  type: 'test'
+  ...
+# Subtest: an unknown source area refuses rather than selecting nothing
+ok 11 - an unknown source area refuses rather than selecting nothing
+  ---
+  duration_ms: 4023.036644
+  type: 'test'
+  ...
+# Subtest: a changed test without classification refuses
+ok 12 - a changed test without classification refuses
+  ---
+  duration_ms: 3991.12039
+  type: 'test'
+  ...
+# Subtest: package.json scripts is development tooling
+ok 13 - package.json scripts is development tooling
+  ---
+  duration_ms: 4118.161604
+  type: 'test'
+  ...
+# Subtest: package.json devDependencies is development tooling
+ok 14 - package.json devDependencies is development tooling
+  ---
+  duration_ms: 4055.110693
+  type: 'test'
+  ...
+# Subtest: package.json devDependencies+scripts is development tooling
+ok 15 - package.json devDependencies+scripts is development tooling
+  ---
+  duration_ms: 4125.023426
+  type: 'test'
+  ...
+# Subtest: package.json metadata still proves the packaging subsystem
+ok 16 - package.json metadata still proves the packaging subsystem
+  ---
+  duration_ms: 4178.922694
+  type: 'test'
+  ...
+# Subtest: lockfile root release metadata still proves packaging modularly
+ok 17 - lockfile root release metadata still proves packaging modularly
+  ---
+  duration_ms: 4164.471589
+  type: 'test'
+  ...
+# Subtest: lockfile graph state true fails closed
+ok 18 - lockfile graph state true fails closed
+  ---
+  duration_ms: 0.237124
+  type: 'test'
+  ...
+# Subtest: lockfile graph state null fails closed
+ok 19 - lockfile graph state null fails closed
+  ---
+  duration_ms: 0.142682
+  type: 'test'
+  ...
+# Subtest: lockfile graph state undefined fails closed
+ok 20 - lockfile graph state undefined fails closed
+  ---
+  duration_ms: 0.097424
+  type: 'test'
+  ...
+# Subtest: package.json exports still demands a release proof
+ok 21 - package.json exports still demands a release proof
+  ---
+  duration_ms: 0.154924
+  type: 'test'
+  ...
+# Subtest: package.json dependencies still demands a release proof
+ok 22 - package.json dependencies still demands a release proof
+  ---
+  duration_ms: 0.088188
+  type: 'test'
+  ...
+# Subtest: a dev-tooling field mixed with a surface field still refuses
+ok 23 - a dev-tooling field mixed with a surface field still refuses
+  ---
+  duration_ms: 0.117504
+  type: 'test'
+  ...
+# Subtest: DELETING a test does not refuse the whole proof
+ok 24 - DELETING a test does not refuse the whole proof
+  ---
+  duration_ms: 4255.211907
+  type: 'test'
+  ...
+# Subtest: a still-present unclassified test refuses, deletion notwithstanding
+ok 25 - a still-present unclassified test refuses, deletion notwithstanding
+  ---
+  duration_ms: 4220.020221
+  type: 'test'
+  ...
+# Subtest: unknown precise cover widens to the subsystem, never to everything
+ok 26 - unknown precise cover widens to the subsystem, never to everything
+  ---
+  duration_ms: 4377.712895
+  type: 'test'
+  ...
+# Subtest: inert paths select only their observers beyond the spine
+not ok 27 - inert paths select only their observers beyond the spine
+  ---
+  duration_ms: 4390.551443
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/test/scripts/select-change-tests.test.js:413:1'
+  failureType: 'testCodeFailure'
+  error: 'observers of a document are a handful, never a corpus'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/test/scripts/select-change-tests.test.js:423:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a test selected twice executes once, carrying both reasons
+ok 28 - a test selected twice executes once, carrying both reasons
+  ---
+  duration_ms: 4429.45937
+  type: 'test'
+  ...
+# Subtest: source ownership is all-rules, so order cannot decide scope
+ok 29 - source ownership is all-rules, so order cannot decide scope
+  ---
+  duration_ms: 0.331275
+  type: 'test'
+  ...
+# Subtest: the plan reports spine and selected counts separately
+ok 30 - the plan reports spine and selected counts separately
+  ---
+  duration_ms: 4353.702795
+  type: 'test'
+  ...
+# Subtest: the convergence-probe class is observed elsewhere, never part of a change proof
+ok 31 - the convergence-probe class is observed elsewhere, never part of a change proof
+  ---
+  duration_ms: 21.587663
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 30
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 96342.108519
+# time=96762ms
+ok test/simulation/formation-sim-production-transcript-determinism.test.js (5 assertions, 32499ms)
+ok test/solve/evidence-store.test.js (5 assertions, 299ms)
+ok test/solve/guards.test.js (9 assertions, 527ms)
+ok test/solve/migrate-v1.test.js (2 assertions, 492ms)
+ok test/solve/commands.test.js (43 assertions, 13044ms)
+ok test/solve/schema.test.js (6 assertions, 533ms)
+ok test/storage-load/storage-load-report.test.js (22 assertions, 554ms)
+ok test/storage/data-directory-manager.test.js (39 assertions, 1450ms)
+ok test/storage/persistent-storage-paths.property.test.js (10 assertions, 1104ms)
+ok test/storage/sqlite-connection-state.test.js (5 assertions, 323ms)
+ok test/storage/data-directory-validation.property.test.js (8 assertions, 2797ms)
+ok test/storage/sqlite-store.property.test.js (51 assertions, 923ms)
+ok test/storage/sqlite-store.test.js (63 assertions, 784ms)
+ok test/test-helpers/managed-timers.test.js (11 assertions, 676ms)
+ok test/test-helpers/topology-leak-check.test.js (55 assertions, 615ms)
+ok test/test-helpers/port-allocator.test.js (17 assertions, 1229ms)
+ok test/topology/cdc-propagation-slot-removed-census.test.js (2 assertions, 1217ms)
+ok test/topology/node-host-identity-start-site-census.test.js (7 assertions, 2077ms)
+ok test/transport/message-router-api.property.test.js (21 assertions, 1403ms)
+ok test/utils/canonical-json-data.test.js (73 assertions, 593ms)
+ok test/utils/correlation.test.js (28 assertions, 508ms)
+ok test/scripts/test-placement.test.js (26 assertions, 128125ms)
+# test-files total=38 pass=37 fail=1 assertions=780
+classified lane external-toolchain: 1 file(s), jobs=1
+thermal: ok cpu 66C (coretemp/Package id 0) nvme unmeasured
+ok test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js (18 assertions, 12733ms)
+# test-files total=1 pass=1 fail=0 assertions=18
+classified lane bootstrap: 10 file(s), jobs=2
+thermal: ok cpu 63C (coretemp/Package id 0) nvme unmeasured
+ok test/bootstrap/boot-incarnation-owner.test.js (120 assertions, 1167ms)
+ok test/bootstrap/boot-incarnation-reservation-census.test.js (44 assertions, 1468ms)
+ok test/bootstrap/bootstrap-api-readiness-gating.test.js (119 assertions, 2784ms)
+ok test/bootstrap/lifecycle-unification.test.js (3 assertions, 259ms)
+ok test/bootstrap/message-group-activation-handler-boundary.test.js (75 assertions, 1347ms)
+ok test/bootstrap/bootstrap-api-readiness-publication.test.js (101 assertions, 4301ms)
+ok test/bootstrap/phase-adapter-removal.test.js (6 assertions, 270ms)
+ok test/bootstrap/partition-activation-handler-boundary.test.js (46 assertions, 1345ms)
+ok test/bootstrap/support-envelope-owner.test.js (7 assertions, 692ms)
+ok test/bootstrap/removed-formation-barrier-and-handoff-census.test.js (4 assertions, 2846ms)
+# test-files total=10 pass=10 fail=0 assertions=525
+classified lane exclusive: 27 file(s), jobs=1
+thermal: ok cpu 68C (coretemp/Package id 0) nvme unmeasured
+ok test/integration/call-cell-public-outcome-adversarial.integration.test.js (13 assertions, 63804ms)
+not ok test/integration/control-plane-rebalance.integration.test.js (13 assertions, 9890ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Control plane dispatch integration
+{"level":50,"time":"2026-11-21T12:45:58.795Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+{"level":50,"time":"2026-11-21T12:45:58.797Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+{"level":50,"time":"2026-11-21T12:45:58.798Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+{"level":50,"time":"2026-11-21T12:45:58.800Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+{"level":50,"time":"2026-11-21T12:45:58.801Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+{"level":50,"time":"2026-11-21T12:45:58.802Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+    # Subtest: dispatches replica operation to target node
+        ok 1 - bootstrap should succeed
+        ok 2 - should have system table cache
+        ok 3 - cluster readiness should be satisfied
+        ok 4 - should have CDC integration service
+        ok 5 - should have table policy service
+        ok 6 - bootstrap should own a rebalance coordinator
+        ok 7 - bootstrap should own a replica dispatch service
+        ok 8 - bootstrap dispatch service should already have message groups attached
+        ok 9 - should have the operation-ledger partition
+        ok 10 - should select the operation-ledger partition
+{"level":50,"time":"2026-11-21T12:45:59.799Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"nodes","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+        not ok 11 - Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid
+          ---
+          stack: |
+            throwRuntimeServicePlacementError (src/rebalancer/rebalance-coordinator-operation-creation-support.js:198:17)
+            RebalanceCoordinator.createPartitionOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:527:7)
+            RebalanceCoordinator.createOperationViaPlacementAdmission (src/rebalancer/rebalance-coordinator-operation-creation-support.js:496:17)
+            RebalanceCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:497:19)
+            async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+            async file:/home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+            async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+            async Test.<anonymous> (test/integration/control-plane-rebalance.integration.test.js:253:25)
+          at:
+            fileName: src/rebalancer/rebalance-coordinator-operation-creation-support.js
+            lineNumber: 198
+            columnNumber: 17
+            functionName: throwRuntimeServicePlacementError
+          code: placement_admission_bytes_invalid
+          failureCode: placement_admission_bytes_invalid
+          reasonCode: placement_admission_bytes_invalid
+          entryId: null
+          placementResult:
+            reason: placement_admission_bytes_invalid
+          admissionAnswer: null
+          tapCaught: returnedPromiseRejection
+          source: |
+            function throwRuntimeServicePlacementError(entityId, answer, result) {
+              const failureCode = result?.reason || PLACEMENT_ADMISSION_REFUSED_CODE;
+              const error = new Error(
+            ----------------^
+                `Placement admission refused for ${entityId}: ${failureCode}`,
+              );
+          ...
+        
+        1..11
+{"level":50,"time":"2026-11-21T12:45:59.800Z","nodeId":"test-node","pid":1642532,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"control_plane_publications","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node","msg":"Raft CDC command failed"}
+    not ok 1 - dispatches replica operation to target node # time=7516.086ms
+      ---
+      at:
+        fileName: test/integration/control-plane-rebalance.integration.test.js
+        lineNumber: 59
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test('dispatches replica operation to target node', async (t) => {
+        ----------^
+            // Use real BootstrapService to create seed node
+            const seedNodeId = '550e8400-e29b-41d4-a716-446655440050';
+      ...
+    
+    1..1
+not ok 1 - Control plane dispatch integration # time=7610.997ms
+  ---
+  at:
+    fileName: test/integration/control-plane-rebalance.integration.test.js
+    lineNumber: 40
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('Control plane dispatch integration', async (t) => {
+    ^
+      t.teardown(() => {
+        if (process.env.TAP === '1') {
+  ...
+
+1..1
+# { total: 11, pass: 10, fail: 1 }
+# time=7621.9ms
+ok test/integration/create-table-partition-provisioning.integration.test.js (14 assertions, 15679ms)
+ok test/integration/critical-partition-learner-safety.integration.test.js (11 assertions, 12295ms)
+ok test/integration/critical-replica-placement-causal-trace.integration.test.js (31 assertions, 138381ms)
+ok test/integration/cross-node-replica-placement.integration.test.js (21 assertions, 2099ms)
+not ok test/integration/lagrange-server-npm-package.integration.test.js (3 assertions, 147428ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: lagrange-server npm distribution
+    # Subtest: packs one commit-bound artifact and proves its installed API and CLIs
+    not ok 1 - packs one commit-bound artifact and proves its installed API and CLIs
+      ---
+      duration_ms: 147146.947811
+      type: 'test'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/test/integration/lagrange-server-npm-package.integration.test.js:42:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        npm install --no-audit --no-fund --package-lock=false --cache /tmp/lagrange-npm-install-fir2uD/npm-cache /tmp/lagrange-server-npm-tgOLUi/lagrange-server-0.4.0.tgz failed with status 1
+        stdout:
+        
+        stderr:
+        npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+        npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+        
+      code: 'INSTALL_FAILED'
+      name: 'NpmReleaseError'
+      stack: |-
+        runChecked (file:///home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/scripts/release-npm-package.js:201:11)
+        verifyInstalledPackage (file:///home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/scripts/release-npm-package.js:417:5)
+        async buildAndVerifyNpmPackage (file:///home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/scripts/release-npm-package.js:531:3)
+        async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/test/integration/lagrange-server-npm-package.integration.test.js:48:20)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: resolves the harness playback-viewer copy source to the packaged runtime asset (single owner, no checked-in twin)
+    ok 2 - resolves the harness playback-viewer copy source to the packaged runtime asset (single owner, no checked-in twin)
+      ---
+      duration_ms: 37.32229
+      type: 'test'
+      ...
+    1..2
+not ok 1 - lagrange-server npm distribution
+  ---
+  duration_ms: 147185.543758
+  type: 'suite'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/test/integration/lagrange-server-npm-package.integration.test.js:41:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 2
+# suites 1
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 147190.582721
+# time=147428ms
+ok test/integration/managed-split-admission-reliability.integration.test.js (47 assertions, 20752ms)
+ok test/integration/managed-split-writes-after-cutover.integration.test.js (12 assertions, 31625ms)
+ok test/integration/message-group-learner-successor-ordering.integration.test.js (20 assertions, 4381ms)
+ok test/integration/node-joining-rebalance.integration.test.js (38 assertions, 20294ms)
+ok test/integration/pgwire-command-tag-real-engine.integration.test.js (424 assertions, 79733ms)
+ok test/integration/priority-spread-one-authority-rebalance.integration.test.js (41 assertions, 1205ms)
+ok test/integration/public-binding-cell-invocation-seam.integration.test.js (70 assertions, 131690ms)
+ok test/integration/single-node-default-replica-count-refusal.integration.test.js (6 assertions, 17253ms)
+ok test/integration/three-node-partition-rebalance.integration.test.js (18 assertions, 2416ms)
+ok test/integration/three-node-seed-rebalance.integration.test.js (11 assertions, 57365ms)
+ok test/partition/fresh-create-release-authority-cross-node.integration.test.js (16 assertions, 11720ms)
+ok test/partition/learner-host-committed-admission-production.integration.test.js (1 assertions, 1530ms)
+ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 1712ms)
+ok test/partition/replica-admission-committed-operation-production.integration.test.js (1 assertions, 1524ms)
+ok test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js (4 assertions, 3594ms)
+ok test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js (8 assertions, 7202ms)
+ok test/rebalancer/create-timeout-admission-cas.integration.test.js (22 assertions, 8755ms)
+not ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 6941ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Message-group operation routing integration
+    # Subtest: dispatch preserves message-group entity identity for coordinator
+        not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+          ---
+          stack: >
+            invalidOperationPersistenceOutcome
+            (src/rebalancer/replica-operation-update-outcome.js:67:17)
+          
+            requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+          
+            decodePersistedOperationHistory
+            (src/rebalancer/replica-operation-update-outcome.js:97:3)
+          
+            decodeReplicaOperationRow
+            (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+          
+            ReplicaDispatchService.buildOperationFromRow
+            (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+          
+            ReplicaDispatchService.dispatchOperationRow
+            (src/control-plane/replica-dispatch-operation-execution.js:219:31)
+          
+            Test.<anonymous>
+            (test/rebalancer/message-group-operation-routing.integration.test.js:146:23)
+          at:
+            fileName: src/rebalancer/replica-operation-update-outcome.js
+            lineNumber: 67
+            columnNumber: 17
+            functionName: invalidOperationPersistenceOutcome
+          code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+          tapCaught: returnedPromiseRejection
+          source: >
+          
+            function invalidOperationPersistenceOutcome(reason, cause) {
+              const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+            ----------------^
+              error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+              if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+          ...
+        
+        1..1
+    not ok 1 - dispatch preserves message-group entity identity for coordinator # time=25.127ms
+      ---
+      at:
+        fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+        lineNumber: 55
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test(
+        ----------^
+            'dispatch preserves message-group entity identity for coordinator',
+            async (t) => {
+      ...
+    
+    # Subtest: dispatch rehydrates persisted message-group topology metadata
+        ok 1 - dispatch should restore persisted replica ids
+        ok 2 - dispatch should restore persisted peer addresses
+        1..2
+    ok 2 - dispatch rehydrates persisted message-group topology metadata # time=10.633ms
+    
+{"level":50,"time":"2026-11-21T12:58:05.779Z","nodeId":"caf6fab7-475f-4ef0-8ebe-589875dcca71","pid":1653627,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS","awaited":"persisted replica operation authoritatively visible","boundMs":5000,"elapsedMs":5028,"lastObserved":{"expectedWorkflowStep":"SENDING","expectedStatus":"pending","polls":26,"sawVisibilityMismatch":false,"deferredOutcome":true},"scope":{"nodeId":"node-1","partitionId":"mg-1","operationId":"op-mg-route-1"},"repeats":0,"nodeId":"caf6fab7-475f-4ef0-8ebe-589875dcca71","msg":"Wait bound spent"}
+    # Subtest: coordinator routes message-group operation to message-group handler
+        not ok 1 - message-group operation should route to message-group handler
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+            lineNumber: 330
+            columnNumber: 11
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/message-group-operation-routing.integration.test.js:330:11)
+          source: |2
+                  try {
+                    await coordinator.executeOperation(operation);
+                    t.equal(
+            ----------^
+                      deliveries[0]?.target,
+                      'node-2/service/message-group-handler',
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -node-2/service/message-group-handler
+            +undefined
+          ...
+        
+        1..1
+    not ok 3 - coordinator routes message-group operation to message-group handler # time=5054.755ms
+      ---
+      at:
+        fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+        lineNumber: 266
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          );
+      
+          await t.test(
+        ----------^
+            'coordinator routes message-group operation to message-group handler',
+            async (t) => {
+      ...
+    
+    # Subtest: coordinator persists canonical entity fields for message-group operations
+        ok 1 - should run dedupe query before insert
+        ok 2 - dedupe query should scope by entity_type
+        ok 3 - dedupe query should scope by entity_id
+        ok 4 - dedupe query params should include message_group entity type
+        ok 5 - dedupe query params should include message-group entity id
+        ok 6 - should insert operation row
+        ok 7 - insert query should include entity_type column
+        ok 8 - insert query should include entity_id column
+        ok 9 - insert params should include message_group entity type
+        ok 10 - inserted steps history should persist canonical replica ids
+        1..10
+    ok 4 - coordinator persists canonical entity fields for message-group operations # time=28.93ms
+    
+    # Subtest: coordinator fails closed when message-group topology is unavailable
+        ok 1 - message-group createOperation should fail closed when topology is missing
+        1..1
+    ok 5 - coordinator fails closed when message-group topology is unavailable # time=3.628ms
+    
+    1..5
+not ok 1 - Message-group operation routing integration # time=5362.643ms
+  ---
+  at:
+    fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+    lineNumber: 45
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('Message-group operation routing integration', async (t) => {
+    ^
+      t.beforeEach(async () => {
+        initEnv();
+  ...
+
+1..1
+# { total: 15, pass: 13, fail: 2 }
+# time=5391.026ms
+ok test/scripts/exact-election-evidence-same-turn-model-contract.test.js (16 assertions, 7282ms)
+ok test/scripts/local-leader-row-visibility-model-contract.test.js (26 assertions, 3687ms)
+# test-files total=27 pass=24 fail=3 assertions=910
+placement-results={"file":"test/scripts/stop-distributed-harness-containers.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":807,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/strict-operation-outcomes-evidence.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":819,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/summarize-distributed-failure-report.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":362,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/summarize-representative-evidence.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1146,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/test-placement-lab-split.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":406,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/selection-golden-corpus.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":50438,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/test-primary-classification.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":383,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/test-resource-classification.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":649,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/test-subsystem-classification.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":8858,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/test-subsystem-repository-index.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":446,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-EavcWQ/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":502,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-WEGgvD/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":480,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-zX4Ix1/echo-timeout.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":564,"retriedOnce":false,"firstFailureLine":"not ok 1 - should be equal"}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-AabGc1/echo-timeout.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":471,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-pJiW8P/echo-timeout.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":476,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-icdV2d/echo-timeout.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":485,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-HUACo5/echo-timeout.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":470,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-cwjiPI/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":492,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-csdLjJ/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":474,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-rNzu5Y/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":476,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-Ii7tjM/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":478,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-T5ccdO/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":473,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-iyteOV/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":487,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-6aUdtg/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":451,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-H847i0/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":469,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-0cruIF/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":479,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-62Lu6g/echo-timeout.test.js","attempt":1,"ok":false,"assertions":0,"durationMs":0,"retriedOnce":false,"firstFailureLine":"run-test-files: unresolved timeout declaration — refusing to fall back to tap's 30s default, which would silently cap the test:\n  timeout declaration is an expression this harness cannot resolve statically; use a literal or a file-local numeric const: UnaryExpression at /home/peter/projects/lagrange/test-output/placement-worktrees/38708b6fa0ae-mwqed92c-1026611/test-output/tap-timeout-fixtures/run-62Lu6g/echo-timeout.test.js:4"}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-eI4hPH/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":499,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-WuKXpN/echo-timeout.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":608,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test-output/tap-timeout-fixtures/run-modAZu/echo-timeout.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":610,"retriedOnce":false,"firstFailureLine":"not ok 1 - should be equal"}
+placement-results={"file":"test/scripts/test-timeout-declarations.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":12421,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/wait-for-load-headroom.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":541,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/workspace-injection-candidates.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":406,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/service/minimal-deployment-binding-owner-guard.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":486,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/service/request-cell-call-bridge.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":1023,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/select-change-tests.test.js","attempt":1,"ok":false,"assertions":31,"durationMs":96762,"retriedOnce":false,"firstFailureLine":"not ok 27 - inert paths select only their observers beyond the spine"}
+placement-results={"file":"test/simulation/formation-sim-production-transcript-determinism.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":32499,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/solve/evidence-store.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":299,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/solve/guards.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":527,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/solve/migrate-v1.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":492,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/solve/commands.test.js","attempt":1,"ok":true,"assertions":43,"durationMs":13044,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/solve/schema.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":533,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage-load/storage-load-report.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":554,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage/data-directory-manager.test.js","attempt":1,"ok":true,"assertions":39,"durationMs":1450,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage/persistent-storage-paths.property.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1104,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage/sqlite-connection-state.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":323,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage/data-directory-validation.property.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":2797,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage/sqlite-store.property.test.js","attempt":1,"ok":true,"assertions":51,"durationMs":923,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/storage/sqlite-store.test.js","attempt":1,"ok":true,"assertions":63,"durationMs":784,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/test-helpers/managed-timers.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":676,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/test-helpers/topology-leak-check.test.js","attempt":1,"ok":true,"assertions":55,"durationMs":615,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/test-helpers/port-allocator.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":1229,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/cdc-propagation-slot-removed-census.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1217,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/topology/node-host-identity-start-site-census.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2077,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-api.property.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1403,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/utils/canonical-json-data.test.js","attempt":1,"ok":true,"assertions":73,"durationMs":593,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/utils/correlation.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":508,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/test-placement.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":128125,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":12733,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/boot-incarnation-owner.test.js","attempt":1,"ok":true,"assertions":120,"durationMs":1167,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/boot-incarnation-reservation-census.test.js","attempt":1,"ok":true,"assertions":44,"durationMs":1468,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-api-readiness-gating.test.js","attempt":1,"ok":true,"assertions":119,"durationMs":2784,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/lifecycle-unification.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":259,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/message-group-activation-handler-boundary.test.js","attempt":1,"ok":true,"assertions":75,"durationMs":1347,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-api-readiness-publication.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":4301,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/phase-adapter-removal.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":270,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/partition-activation-handler-boundary.test.js","attempt":1,"ok":true,"assertions":46,"durationMs":1345,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/support-envelope-owner.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":692,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/removed-formation-barrier-and-handoff-census.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2846,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/call-cell-public-outcome-adversarial.integration.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":63804,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/control-plane-rebalance.integration.test.js","attempt":1,"ok":false,"assertions":13,"durationMs":9890,"retriedOnce":false,"firstFailureLine":"not ok 11 - Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid"}
+placement-results={"file":"test/integration/create-table-partition-provisioning.integration.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":15679,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/critical-partition-learner-safety.integration.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":12295,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/critical-replica-placement-causal-trace.integration.test.js","attempt":1,"ok":true,"assertions":31,"durationMs":138381,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/cross-node-replica-placement.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2099,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/lagrange-server-npm-package.integration.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":147428,"retriedOnce":false,"firstFailureLine":"not ok 1 - packs one commit-bound artifact and proves its installed API and CLIs"}
+placement-results={"file":"test/integration/managed-split-admission-reliability.integration.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":20752,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/managed-split-writes-after-cutover.integration.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":31625,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/message-group-learner-successor-ordering.integration.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":4381,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/node-joining-rebalance.integration.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":20294,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/pgwire-command-tag-real-engine.integration.test.js","attempt":1,"ok":true,"assertions":424,"durationMs":79733,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/priority-spread-one-authority-rebalance.integration.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1205,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/public-binding-cell-invocation-seam.integration.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":131690,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/single-node-default-replica-count-refusal.integration.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":17253,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/three-node-partition-rebalance.integration.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":2416,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/three-node-seed-rebalance.integration.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":57365,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/fresh-create-release-authority-cross-node.integration.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":11720,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/learner-host-committed-admission-production.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1530,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-origin-retained-history.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1712,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/replica-admission-committed-operation-production.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1524,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3594,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":7202,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/create-timeout-admission-cas.integration.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":8755,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":false,"assertions":21,"durationMs":6941,"retriedOnce":false,"firstFailureLine":"not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text"}
+placement-results={"file":"test/scripts/exact-election-evidence-same-turn-model-contract.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":7282,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/local-leader-row-visibility-model-contract.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":3687,"retriedOnce":false,"firstFailureLine":null}

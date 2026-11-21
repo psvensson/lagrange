@@ -1,0 +1,167 @@
+lab test: adam-laptop: exclusive (1 files) cores=8 mem=15.5GiB speed x2.09
+[adam-laptop] placement-shell=3154821
+[adam-laptop] placement-head=f580579a509293e50b0344d1c7e742b10fbf2aac
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3155772
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane exclusive: 1 file(s), jobs=1
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 45C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 6830ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: Message-group operation routing integration
+[adam-laptop]     # Subtest: dispatch preserves message-group entity identity for coordinator
+[adam-laptop]         not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             invalidOperationPersistenceOutcome
+[adam-laptop]             (src/rebalancer/replica-operation-update-outcome.js:67:17)
+[adam-laptop]           
+[adam-laptop]             requireOutcome (src/rebalancer/replica-operation-update-outcome.js:74:25)
+[adam-laptop]           
+[adam-laptop]             decodePersistedOperationHistory
+[adam-laptop]             (src/rebalancer/replica-operation-update-outcome.js:97:3)
+[adam-laptop]           
+[adam-laptop]             decodeReplicaOperationRow
+[adam-laptop]             (src/rebalancer/replica-operation-repository-row-methods.js:96:20)
+[adam-laptop]           
+[adam-laptop]             ReplicaDispatchService.buildOperationFromRow
+[adam-laptop]             (src/control-plane/replica-dispatch-readiness-capture.js:119:12)
+[adam-laptop]           
+[adam-laptop]             ReplicaDispatchService.dispatchOperationRow
+[adam-laptop]             (src/control-plane/replica-dispatch-operation-execution.js:219:31)
+[adam-laptop]           
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/rebalancer/message-group-operation-routing.integration.test.js:146:23)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/rebalancer/replica-operation-update-outcome.js
+[adam-laptop]             lineNumber: 67
+[adam-laptop]             columnNumber: 17
+[adam-laptop]             functionName: invalidOperationPersistenceOutcome
+[adam-laptop]           code: INVALID_OPERATION_PERSISTENCE_OUTCOME
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >
+[adam-laptop]           
+[adam-laptop]             function invalidOperationPersistenceOutcome(reason, cause) {
+[adam-laptop]               const error = new Error(`Invalid replica operation persistence outcome: ${reason}`, {cause});
+[adam-laptop]             ----------------^
+[adam-laptop]               error.code = INVALID_OPERATION_PERSISTENCE_OUTCOME;
+[adam-laptop]               if (reason === GROWTH_PROMOTION_COHORT_UNRESOLVED) error.reasonCode = reason;
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 1 - dispatch preserves message-group entity identity for coordinator # time=23.865ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+[adam-laptop]         lineNumber: 55
+[adam-laptop]         columnNumber: 11
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           });
+[adam-laptop]       
+[adam-laptop]           await t.test(
+[adam-laptop]         ----------^
+[adam-laptop]             'dispatch preserves message-group entity identity for coordinator',
+[adam-laptop]             async (t) => {
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: dispatch rehydrates persisted message-group topology metadata
+[adam-laptop]         ok 1 - dispatch should restore persisted replica ids
+[adam-laptop]         ok 2 - dispatch should restore persisted peer addresses
+[adam-laptop]         1..2
+[adam-laptop]     ok 2 - dispatch rehydrates persisted message-group topology metadata # time=9.325ms
+[adam-laptop]     
+[adam-laptop] {"level":50,"time":"2026-11-21T12:06:22.763Z","nodeId":"008bbb7d-0661-44f9-bd7e-2a0c64a9b18f","pid":3156392,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS","awaited":"persisted replica operation authoritatively visible","boundMs":5000,"elapsedMs":5046,"lastObserved":{"expectedWorkflowStep":"SENDING","expectedStatus":"pending","polls":26,"sawVisibilityMismatch":false,"deferredOutcome":true},"scope":{"nodeId":"node-1","partitionId":"mg-1","operationId":"op-mg-route-1"},"repeats":0,"nodeId":"008bbb7d-0661-44f9-bd7e-2a0c64a9b18f","msg":"Wait bound spent"}
+[adam-laptop]     # Subtest: coordinator routes message-group operation to message-group handler
+[adam-laptop]         not ok 1 - message-group operation should route to message-group handler
+[adam-laptop]           ---
+[adam-laptop]           compare: ===
+[adam-laptop]           at:
+[adam-laptop]             fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+[adam-laptop]             lineNumber: 330
+[adam-laptop]             columnNumber: 11
+[adam-laptop]             typeName: Test
+[adam-laptop]           stack: >
+[adam-laptop]             Test.<anonymous>
+[adam-laptop]             (test/rebalancer/message-group-operation-routing.integration.test.js:330:11)
+[adam-laptop]           source: |2
+[adam-laptop]                   try {
+[adam-laptop]                     await coordinator.executeOperation(operation);
+[adam-laptop]                     t.equal(
+[adam-laptop]             ----------^
+[adam-laptop]                       deliveries[0]?.target,
+[adam-laptop]                       'node-2/service/message-group-handler',
+[adam-laptop]           diff: |
+[adam-laptop]             --- expected
+[adam-laptop]             +++ actual
+[adam-laptop]             @@ -1,1 +1,1 @@
+[adam-laptop]             -node-2/service/message-group-handler
+[adam-laptop]             +undefined
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 3 - coordinator routes message-group operation to message-group handler # time=5075.441ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+[adam-laptop]         lineNumber: 266
+[adam-laptop]         columnNumber: 11
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           );
+[adam-laptop]       
+[adam-laptop]           await t.test(
+[adam-laptop]         ----------^
+[adam-laptop]             'coordinator routes message-group operation to message-group handler',
+[adam-laptop]             async (t) => {
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: coordinator persists canonical entity fields for message-group operations
+[adam-laptop]         ok 1 - should run dedupe query before insert
+[adam-laptop]         ok 2 - dedupe query should scope by entity_type
+[adam-laptop]         ok 3 - dedupe query should scope by entity_id
+[adam-laptop]         ok 4 - dedupe query params should include message_group entity type
+[adam-laptop]         ok 5 - dedupe query params should include message-group entity id
+[adam-laptop]         ok 6 - should insert operation row
+[adam-laptop]         ok 7 - insert query should include entity_type column
+[adam-laptop]         ok 8 - insert query should include entity_id column
+[adam-laptop]         ok 9 - insert params should include message_group entity type
+[adam-laptop]         ok 10 - inserted steps history should persist canonical replica ids
+[adam-laptop]         1..10
+[adam-laptop]     ok 4 - coordinator persists canonical entity fields for message-group operations # time=22.334ms
+[adam-laptop]     
+[adam-laptop]     # Subtest: coordinator fails closed when message-group topology is unavailable
+[adam-laptop]         ok 1 - message-group createOperation should fail closed when topology is missing
+[adam-laptop]         1..1
+[adam-laptop]     ok 5 - coordinator fails closed when message-group topology is unavailable # time=3.119ms
+[adam-laptop]     
+[adam-laptop]     1..5
+[adam-laptop] not ok 1 - Message-group operation routing integration # time=5352.816ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/message-group-operation-routing.integration.test.js
+[adam-laptop]     lineNumber: 45
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('Message-group operation routing integration', async (t) => {
+[adam-laptop]     ^
+[adam-laptop]       t.beforeEach(async () => {
+[adam-laptop]         initEnv();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..1
+[adam-laptop] # { total: 15, pass: 13, fail: 2 }
+[adam-laptop] # time=5364.188ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=21
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=21
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=21
+exit=1

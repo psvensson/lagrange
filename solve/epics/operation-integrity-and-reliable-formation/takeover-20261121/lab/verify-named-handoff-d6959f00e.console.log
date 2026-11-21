@@ -1,0 +1,29 @@
+lab test: tv-dator: ordinary, bootstrap (7 files) cores=12 mem=15.4GiB speed x1.36
+[tv-dator] placement-shell=2918215
+[tv-dator] placement-head=d6959f00ea86831290d8f85239d67982833c8458
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.4 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2919200
+[tv-dator] # test-files planned=7
+[tv-dator] classified lane ordinary: 6 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/surplus-drain-prefers-non-leader-source.test.js (33 assertions, 1815ms)
+[tv-dator] ok test/rebalancer/replace-named-handoff-attempt.test.js (52 assertions, 1987ms)
+[tv-dator] ok test/convergence/dt-ledger-completion-continuity-discriminator.test.js (64 assertions, 2169ms)
+[tv-dator] ok test/scripts/check-runtime-grammar-contracts.test.js (70 assertions, 510ms)
+[tv-dator] ok test/partition/partition-service-row-owner.test.js (212 assertions, 677ms)
+[tv-dator] ok test/node/group-retirement-redrive.test.js (117 assertions, 3203ms)
+[tv-dator] # test-files total=6 pass=6 fail=0 assertions=548
+[tv-dator] classified lane bootstrap: 1 file(s), jobs=2
+[tv-dator] thermal: ok cpu 55C (coretemp/Package id 0) nvme 54C (nvme/Sensor 1)
+[tv-dator] ok test/bootstrap/bootstrap-topology-snapshot-owner.test.js (65 assertions, 558ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=65
+lab test: tv-dator: # test-files total=7 pass=7 fail=0 assertions=613
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=7 pass=7 fail=0 assertions=613

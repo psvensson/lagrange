@@ -1,0 +1,5 @@
+test/bootstrap/cdc-source-occurrence-delivery.integration.test.js
+test/wasm-service/bound-creation-handler-embedding.integration.test.js
+test/wasm-service/bound-creation-physical-custody.integration.test.js
+test/wasm-service/bound-creation-restart.integration.test.js
+test/wasm-service/bound-remove-physical-operation.integration.test.js

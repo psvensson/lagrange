@@ -1,0 +1,620 @@
+{
+ "report": {
+  "outcome": "failed",
+  "passed": false,
+  "durationMs": 674010,
+  "verdict": "BLOCK_EVIDENCE_INCOMPLETE",
+  "verdictReason": "log_window_coverage_incomplete",
+  "startedAt": "2026-11-21T13:16:58.611Z",
+  "error": "fresh-formation-user-table-routability: first unmet predicate c-replica-operations-quiet (projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4, projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03, projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa, replica_operations_in_flight); unmet: c-replica-operations-quiet, e-write-readback-every-node; time-to-serve-lane 1277ms, time-to-user-table-routable 479383ms",
+  "timings": {
+   "formationSatisfiedSinceScenarioStartMs": null,
+   "seedProcessStartAt": "2026-11-21T13:17:13.776Z",
+   "timeToServeLaneSinceScenarioStartMs": 1277,
+   "timeToServeLaneSinceSeedStartMs": 52163,
+   "timeToUserTableRoutableSinceScenarioStartMs": 479383,
+   "timeToUserTableRoutableSinceSeedStartMs": 530269
+  },
+  "formationSatisfied": false,
+  "pollCount": 198,
+  "readFailureCount": 0,
+  "bounds": {
+   "formationBoundMs": 420000,
+   "formationPollMs": 1000,
+   "quietWindowMs": 5000,
+   "routabilityBoundMs": 120000
+  },
+  "createAttempts": [
+   {
+    "contractState": "pending",
+    "nextAction": "retry",
+    "reasonCodes": [
+     "schema_replica_convergence_pending"
+    ],
+    "atMs": 1795267520291
+   },
+   {
+    "contractState": "pending",
+    "nextAction": "retry",
+    "reasonCodes": [
+     "schema_replica_convergence_pending"
+    ],
+    "atMs": 1795267555900
+   },
+   {
+    "contractState": "under_replicated",
+    "nextAction": "proceed",
+    "reasonCodes": [
+     "schema_provisioning_complete"
+    ],
+    "atMs": 1795267562165
+   }
+  ],
+  "predicates": [
+   {
+    "id": "a-serve-lane-open",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "b-priority-spread",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "c-replica-operations-quiet",
+    "met": false,
+    "reasonCodes": [
+     "projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4",
+     "projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+     "projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+     "replica_operations_in_flight"
+    ]
+   },
+   {
+    "id": "d-user-table-routable",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "e-write-readback-every-node",
+    "met": false,
+    "reasonCodes": [
+     "insert_failed:public_pg_unavailable: Timed out waiting for healthy public PostgreSQL wire endpoint",
+     "readback_coverage:null",
+     "readback_row_mismatch:admin:95ce5141-d400-429a-b8d8-52431313d8a4",
+     "readback_row_mismatch:admin:c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+     "readback_row_mismatch:admin:d1162379-5f5e-444b-b0ff-19ce9533e6aa"
+    ]
+   },
+   {
+    "id": "f-no-learner-address-unresolvable-for-committed-row",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "g-projection-agrees-with-authority",
+    "met": true,
+    "reasonCodes": []
+   },
+   {
+    "id": "observation-integrity",
+    "met": true,
+    "reasonCodes": []
+   }
+  ]
+ },
+ "polls": {
+  "count": 198,
+  "bFirstMetSinceStartMs": 100275,
+  "bUnmetAfterFirstMet": [
+   [
+    116642,
+    [
+     "partitions_observation_incomplete"
+    ]
+   ],
+   [
+    118789,
+    [
+     "partitions_observation_incomplete"
+    ]
+   ],
+   [
+    267805,
+    [
+     "partitions_observation_incomplete"
+    ]
+   ],
+   [
+    270068,
+    [
+     "partitions_observation_incomplete"
+    ]
+   ]
+  ],
+  "bUnmetAfterFirstMetCount": 4,
+  "aUnmet": [
+   [
+    302092,
+    [
+     "serve_ineligible"
+    ]
+   ],
+   [
+    303973,
+    [
+     "serve_ineligible"
+    ]
+   ]
+  ],
+  "aUnmetCount": 2,
+  "priorityPartitions": [
+   "control_plane_publications-p1",
+   "replica_operations-p1",
+   "schema_operations-p1",
+   "sql_transaction_participants-p1",
+   "sql_transactions-p1",
+   "sql_write_operations-p1"
+  ],
+  "lastPoll": {
+   "disagreementKeys": [],
+   "sinceStartMs": 419426,
+   "unmet": [
+    {
+     "id": "c-replica-operations-quiet",
+     "reasonCodes": [
+      "projection_in_flight:95ce5141-d400-429a-b8d8-52431313d8a4",
+      "projection_in_flight:c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+      "projection_in_flight:d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+      "replica_operations_in_flight"
+     ]
+    }
+   ]
+  }
+ },
+ "events": {
+  "cluster.start": [
+   {
+    "at": "2026-11-21T13:16:58.619+00:00",
+    "atMs": 1795267018619,
+    "entityId": "cluster",
+    "details": {}
+   }
+  ],
+  "node.created": [
+   {
+    "at": "2026-11-21T13:16:58.880+00:00",
+    "atMs": 1795267018880,
+    "entityId": "95ce5141-d400-429a-b8d8-52431313d8a4",
+    "details": {
+     "role": "seed",
+     "ip": "10.166.15.209"
+    }
+   },
+   {
+    "at": "2026-11-21T13:17:32.679+00:00",
+    "atMs": 1795267052679,
+    "entityId": "c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+    "details": {
+     "role": "joiner",
+     "ip": "10.166.15.208"
+    }
+   },
+   {
+    "at": "2026-11-21T13:17:32.960+00:00",
+    "atMs": 1795267052960,
+    "entityId": "d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+    "details": {
+     "role": "joiner",
+     "ip": "10.166.15.207"
+    }
+   }
+  ],
+  "node.started": [
+   {
+    "at": "2026-11-21T13:16:58.880+00:00",
+    "atMs": 1795267018880,
+    "entityId": "95ce5141-d400-429a-b8d8-52431313d8a4",
+    "details": {
+     "role": "seed"
+    }
+   },
+   {
+    "at": "2026-11-21T13:17:32.680+00:00",
+    "atMs": 1795267052680,
+    "entityId": "c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+    "details": {
+     "role": "joiner"
+    }
+   },
+   {
+    "at": "2026-11-21T13:17:32.960+00:00",
+    "atMs": 1795267052960,
+    "entityId": "d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+    "details": {
+     "role": "joiner"
+    }
+   }
+  ],
+  "node.status.changed": [
+   {
+    "at": "2026-11-21T13:17:55.861+00:00",
+    "atMs": 1795267075861,
+    "entityId": "c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+    "details": {
+     "fromStatus": "joining",
+     "toStatus": "active"
+    }
+   },
+   {
+    "at": "2026-11-21T13:18:00.586+00:00",
+    "atMs": 1795267080586,
+    "entityId": "d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+    "details": {
+     "fromStatus": "joining",
+     "toStatus": "active"
+    }
+   }
+  ],
+  "cluster.ready": [
+   {
+    "at": "2026-11-21T13:18:01.800+00:00",
+    "atMs": 1795267081800,
+    "entityId": "cluster",
+    "details": {}
+   }
+  ],
+  "partition.created": [
+   {
+    "at": "2026-11-21T13:25:17.280+00:00",
+    "atMs": 1795267517280,
+    "entityId": "tbl-5aa54f3c91d485c621cb384f40619318-p1",
+    "details": {
+     "tableName": "ffr_probe"
+    }
+   }
+  ],
+  "node.stopped": [
+   {
+    "at": "2026-11-21T13:28:17.849+00:00",
+    "atMs": 1795267697849,
+    "entityId": "95ce5141-d400-429a-b8d8-52431313d8a4",
+    "details": {}
+   },
+   {
+    "at": "2026-11-21T13:28:18.260+00:00",
+    "atMs": 1795267698260,
+    "entityId": "c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+    "details": {}
+   },
+   {
+    "at": "2026-11-21T13:28:18.979+00:00",
+    "atMs": 1795267698979,
+    "entityId": "d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+    "details": {}
+   }
+  ],
+  "node.removed": [
+   {
+    "at": "2026-11-21T13:28:19.645+00:00",
+    "atMs": 1795267699645,
+    "entityId": "c14b47ee-4648-49d4-bffd-552bd8ca9b03",
+    "details": {}
+   },
+   {
+    "at": "2026-11-21T13:28:19.651+00:00",
+    "atMs": 1795267699651,
+    "entityId": "d1162379-5f5e-444b-b0ff-19ce9533e6aa",
+    "details": {}
+   },
+   {
+    "at": "2026-11-21T13:28:19.654+00:00",
+    "atMs": 1795267699654,
+    "entityId": "95ce5141-d400-429a-b8d8-52431313d8a4",
+    "details": {}
+   }
+  ],
+  "cluster.stop": [
+   {
+    "at": "2026-11-21T13:28:19.655+00:00",
+    "atMs": 1795267699655,
+    "entityId": "cluster",
+    "details": {}
+   }
+  ]
+ },
+ "steps": [
+  {
+   "step": "formation-serve-lane-spread-ledger",
+   "status": "started",
+   "at": "2026-11-21T13:18:04.662+00:00",
+   "durationMs": null
+  },
+  {
+   "step": "formation-serve-lane-spread-ledger",
+   "status": "completed",
+   "at": "2026-11-21T13:25:04.662+00:00",
+   "durationMs": 420000
+  },
+  {
+   "step": "user-table-routability",
+   "status": "started",
+   "at": "2026-11-21T13:25:04.663+00:00",
+   "durationMs": null
+  },
+  {
+   "step": "user-table-routability",
+   "status": "completed",
+   "at": "2026-11-21T13:26:04.045+00:00",
+   "durationMs": 59382
+  },
+  {
+   "step": "write-readback",
+   "status": "started",
+   "at": "2026-11-21T13:26:04.045+00:00",
+   "durationMs": null
+  },
+  {
+   "step": "write-readback",
+   "status": "completed",
+   "at": "2026-11-21T13:28:11.161+00:00",
+   "durationMs": 127116
+  },
+  {
+   "step": "node-log-observations",
+   "status": "started",
+   "at": "2026-11-21T13:28:11.161+00:00",
+   "durationMs": null
+  },
+  {
+   "step": "node-log-observations",
+   "status": "completed",
+   "at": "2026-11-21T13:28:12.599+00:00",
+   "durationMs": 1438
+  }
+ ],
+ "operations": {
+  "snapshotAt": "2026-11-21T13:28:12.700+00:00",
+  "formationStepStart": "2026-11-21T13:18:04.662+00:00",
+  "clusterReady": "2026-11-21T13:18:01.800+00:00",
+  "formationBoundMs": 420000,
+  "all": {
+   "count": 141,
+   "byTypeStatus": {
+    "ADD:active": 95,
+    "GROWTH_PROMOTE:active": 46
+   },
+   "notCompleted": [],
+   "withError": [],
+   "firstCreated": "2026-11-21T13:17:52.304+00:00",
+   "firstCreatedSinceFormationStartS": -12.4,
+   "lastCompleted": "2026-11-21T13:26:55.294+00:00",
+   "lastCompletedOp": {
+    "id": "pl-wasm_operations-p1-1414-0",
+    "type": "GROWTH_PROMOTE",
+    "partition": "wasm_operations-p1",
+    "target": "95ce5141",
+    "status": "active",
+    "step": "ACTIVE",
+    "created": 1795267613887.0,
+    "completed": 1795267615294.0,
+    "error": null
+   },
+   "lastCompletedSinceFormationStartS": 530.6,
+   "lastCompletedMinusBoundS": 110.6
+  },
+  "system": {
+   "count": 138,
+   "byTypeStatus": {
+    "ADD:active": 92,
+    "GROWTH_PROMOTE:active": 46
+   },
+   "notCompleted": [],
+   "withError": [],
+   "firstCreated": "2026-11-21T13:17:52.304+00:00",
+   "firstCreatedSinceFormationStartS": -12.4,
+   "lastCompleted": "2026-11-21T13:26:55.294+00:00",
+   "lastCompletedOp": {
+    "id": "pl-wasm_operations-p1-1414-0",
+    "type": "GROWTH_PROMOTE",
+    "partition": "wasm_operations-p1",
+    "target": "95ce5141",
+    "status": "active",
+    "step": "ACTIVE",
+    "created": 1795267613887.0,
+    "completed": 1795267615294.0,
+    "error": null
+   },
+   "lastCompletedSinceFormationStartS": 530.6,
+   "lastCompletedMinusBoundS": 110.6
+  },
+  "userTable": {
+   "count": 3,
+   "byTypeStatus": {
+    "ADD:active": 3
+   },
+   "notCompleted": [],
+   "withError": [],
+   "firstCreated": "2026-11-21T13:25:17.538+00:00",
+   "firstCreatedSinceFormationStartS": 432.9,
+   "lastCompleted": "2026-11-21T13:26:19.210+00:00",
+   "lastCompletedOp": {
+    "id": "pl-tbl-5aa54f3c91d485c621cb384f40619318-p1-1284-0",
+    "type": "ADD",
+    "partition": "tbl-5aa54f3c91d485c621cb384f40619318-p1",
+    "target": "d1162379",
+    "status": "active",
+    "step": "ACTIVE",
+    "created": 1795267560090.0,
+    "completed": 1795267579210.0,
+    "error": null
+   },
+   "lastCompletedSinceFormationStartS": 494.5,
+   "lastCompletedMinusBoundS": 74.5
+  },
+  "priority": {
+   "count": 18,
+   "byTypeStatus": {
+    "ADD:active": 12,
+    "GROWTH_PROMOTE:active": 6
+   },
+   "notCompleted": [],
+   "withError": [],
+   "firstCreated": "2026-11-21T13:17:52.304+00:00",
+   "firstCreatedSinceFormationStartS": -12.4,
+   "lastCompleted": "2026-11-21T13:19:41.693+00:00",
+   "lastCompletedOp": {
+    "id": "pl-sql_write_operations-p1-235-0",
+    "type": "GROWTH_PROMOTE",
+    "partition": "sql_write_operations-p1",
+    "target": "95ce5141",
+    "status": "active",
+    "step": "ACTIVE",
+    "created": 1795267178806.0,
+    "completed": 1795267181693.0,
+    "error": null
+   },
+   "lastCompletedSinceFormationStartS": 97.0,
+   "lastCompletedMinusBoundS": -323.0
+  },
+  "distinctSystemPartitions": 46,
+  "completedPer30s": {
+   "0": 3,
+   "30": 6,
+   "60": 9,
+   "90": 11,
+   "120": 8,
+   "150": 10,
+   "180": 8,
+   "210": 9,
+   "240": 9,
+   "270": 4,
+   "300": 8,
+   "330": 10,
+   "360": 9,
+   "390": 7,
+   "420": 7,
+   "450": 9,
+   "480": 7,
+   "510": 7
+  }
+ },
+ "nodes": {
+  "95ce5141-d400-429a-b8d8-52431313d8a4": {
+   "host": "lagrange-fdiag-1",
+   "firstTime": "2026-11-21T13:17:02.339Z",
+   "lastTime": "2026-11-21T13:28:17.657Z",
+   "lines": 6291,
+   "unparsed": 12,
+   "greps": {
+    "sys-postgres-wire": {
+     "count": 12,
+     "first": "{\"level\":30,\"time\":\"2026-11-21T13:17:40.869Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"rebalancer\",\"entityId\":\"sys-postgres-wire\",\"entityType\":\"runtime_service\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"usingCoordinator\":true,\"msg\":\"Rebalancer initialized\"}",
+     "last": "{\"level\":30,\"time\":\"2026-11-21T13:26:08.487Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"partition\",\"tableName\":\"service_definitions\",\"keyColumn\":\"service_id\",\"keyValue\":\"sys-postgres-wire\",\"cdcPartitionId\":\"service_definitions-p1\",\"cdcReplicaId\":\"service_definitions-p1-r1\",\"suppressedSinceLastEmit\":0,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Fetching updated row for CDC\"}",
+     "msgs": {
+      "Rebalancer initialized": 2,
+      "Became leader, starting rebalancing scheduler": 2,
+      "Started runtime-service rebalancer for active service": 2,
+      "Lost leadership, stopping rebalancing scheduler": 2,
+      "Rebalancer shutdown": 2,
+      "Failed to update system table row": 1,
+      "Fetching updated row for CDC": 1
+     }
+    },
+    "replica_inventory_unusable": {
+     "count": 0,
+     "first": null,
+     "last": null,
+     "msgs": {}
+    }
+   },
+   "attribution": [
+    "{\"level\":30,\"time\":\"2026-11-21T13:17:02.339Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"deadlineMs\":640000,\"snapshotIntervalMs\":10000,\"formedSignal\":\"SIGUSR2\",\"profiling\":true,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution window started\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:18:04.094Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-0.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:19:04.273Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-1.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:20:05.157Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-2.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:21:04.647Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-3.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:22:04.826Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-4.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:23:04.875Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-5.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:24:05.567Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-6.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:25:05.140Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-7.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:26:06.324Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-8.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:27:06.378Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-9.cpuprofile\",\"final\":false,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:27:42.376Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"reason\":\"deadline\",\"attribution\":{\"schemaVersion\":1,\"windowComplete\":true,\"windowStartedAtUs\":721587528,\"windowEndedAtUs\":1361850808,\"windowDurationUs\":640263280,\"windowDurationMs\":640263.28,\"busyDurationUs\":594673107,\"idleDurationUs\":45590173,\"unattributedDurationUs\":41173956,\"unattributedDispatchCount\":465254,\"unattributedPercent\":6.430785160754494,\"accountedDurationUs\":640263280,\"partitionDeltaUs\":0,\"overlapDurationUs\":0,\"turnCount\":7419390,\"owners\":[{\"owner\":\"admin\",\"durationUs\":38377196,\"durationMs\":38377.196,\"dispatchCount\":197708,\"handoffCount\":2083,\"turnSegmentCount\":199791},{\"owner\":\"bootstrap\",\"durationUs\":45273554,\"durationMs\":45273.554,\"dispatchCount\":648486,\"handoffCount\":13,\"turnSegmentCount\":648499},{\"owner\":\"membership_publication\",\"durationUs\":3043013,\"durationMs\":3043.013,\"dispatchCount\":25522,\"handoffCount\":980,\"turnSegmentCount\":26502},{\"owner\":\"raft_apply\",\"durationUs\":62052275,\"durationMs\":62052.275,\"dispatchCount\":210909,\"handoffCount\":14957,\"turnSegmentCount\":225866},{\"owner\":\"raft_protocol\",\"durationUs\":222720118,\"durationMs\":222720.118,\"dispatchCount\":3933334,\"handoffCount\":204518,\"turnSegmentCount\":4137852},{\"owner\":\"readiness\",\"durationUs\":33423369,\"durationMs\":33423.369,\"dispatchCount\":3153,\"handoffCount\":1398,\"turnSegmentCount\":4551},{\"owner\":\"rebalancer\",\"durationUs\":43167521,\"durationMs\":43167.521,\"dispatchCount\":454449,\"handoffCount\":6023,\"turnSegmentCount\":460472},{\"owner\":\"transport\",\"durationUs\":105442105,\"durationMs\":105442.105,\"dispatchCount\":1480580,\"handoffCount\":424547,\"turnSegmentCount\":1905127},{\"owner\":\"worker_dispatch\",\"durationUs\":0,\"durationMs\":0,\"dispatchCount\":0,\"handoffCount\":0,\"turnSegmentCount\":0}],\"byExecutionNode\":[]},\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution window\"}",
+    "{\"level\":30,\"time\":\"2026-11-21T13:27:42.913Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"file\":\"/data/formation-profile/seed-main-thread-10.cpuprofile\",\"final\":true,\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution profile written\"}"
+   ],
+   "attributionSnapshots": 61,
+   "processStart": null,
+   "skippedMoves": {},
+   "lastAttributionSnapshot": "{\"level\":30,\"time\":\"2026-11-21T13:27:34.710Z\",\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"pid\":1,\"subsystem\":\"main\",\"attribution\":{\"schemaVersion\":1,\"windowComplete\":false,\"windowStartedAtUs\":721587528,\"windowEndedAtUs\":1354185231,\"windowDurationUs\":632597703,\"windowDurationMs\":632597.703,\"busyDurationUs\":587576885,\"idleDurationUs\":45020818,\"unattributedDurationUs\":40807666,\"unattributedDispatchCount\":461633,\"unattributedPercent\":6.4508084374122365,\"accountedDurationUs\":632597703,\"partitionDeltaUs\":0,\"overlapDurationUs\":0,\"turnCount\":7250372,\"owners\":[{\"owner\":\"admin\",\"durationUs\":37850636,\"durationMs\":37850.636,\"dispatchCount\":192563,\"handoffCount\":2035,\"turnSegmentCount\":194598},{\"owner\":\"bootstrap\",\"durationUs\":44856435,\"durationMs\":44856.435,\"dispatchCount\":639670,\"handoffCount\":13,\"turnSegmentCount\":639683},{\"owner\":\"membership_publication\",\"durationUs\":3043013,\"durationMs\":3043.013,\"dispatchCount\":25522,\"handoffCount\":980,\"turnSegmentCount\":26502},{\"owner\":\"raft_apply\",\"durationUs\":61515054,\"durationMs\":61515.054,\"dispatchCount\":210821,\"handoffCount\":14740,\"turnSegmentCount\":225561},{\"owner\":\"raft_protocol\",\"durationUs\":218883702,\"durationMs\":218883.702,\"dispatchCount\":3813095,\"handoffCount\":197050,\"turnSegmentCount\":4010145},{\"owner\":\"readiness\",\"durationUs\":33213843,\"durationMs\":33213.843,\"dispatchCount\":3133,\"handoffCount\":1384,\"turnSegmentCount\":4517},{\"owner\":\"rebalancer\",\"durationUs\":43103213,\"durationMs\":43103.213,\"dispatchCount\":454146,\"handoffCount\":5996,\"turnSegmentCount\":460142},{\"owner\":\"transport\",\"durationUs\":104303323,\"durationMs\":104303.323,\"dispatchCount\":1449794,\"handoffCount\":411045,\"turnSegmentCount\":1860839},{\"owner\":\"worker_dispatch\",\"durationUs\":0,\"durationMs\":0,\"dispatchCount\":0,\"handoffCount\":0,\"turnSegmentCount\":0}],\"byExecutionNode\":[]},\"nodeId\":\"95ce5141-d400-429a-b8d8-52431313d8a4\",\"msg\":\"Formation attribution snapshot\"}"
+  },
+  "c14b47ee-4648-49d4-bffd-552bd8ca9b03": {
+   "host": "lagrange-fdiag-2",
+   "firstTime": "2026-11-21T13:17:36.011Z",
+   "lastTime": "2026-11-21T13:28:18.088Z",
+   "lines": 17625,
+   "unparsed": 8609,
+   "greps": {
+    "sys-postgres-wire": {
+     "count": 1,
+     "first": "{\"level\":30,\"time\":\"2026-11-21T13:26:04.939Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"partition\",\"tableName\":\"service_definitions\",\"keyColumn\":\"service_id\",\"keyValue\":\"sys-postgres-wire\",\"cdcPartitionId\":\"service_definitions-p1\",\"cdcReplicaId\":\"replace-replica-840cd19466e2fe7fc3f19cfd00575248\",\"suppressedSinceLastEmit\":0,\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"msg\":\"Fetching updated row for CDC\"}",
+     "last": "{\"level\":30,\"time\":\"2026-11-21T13:26:04.939Z\",\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"pid\":1,\"subsystem\":\"partition\",\"tableName\":\"service_definitions\",\"keyColumn\":\"service_id\",\"keyValue\":\"sys-postgres-wire\",\"cdcPartitionId\":\"service_definitions-p1\",\"cdcReplicaId\":\"replace-replica-840cd19466e2fe7fc3f19cfd00575248\",\"suppressedSinceLastEmit\":0,\"nodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"msg\":\"Fetching updated row for CDC\"}",
+     "msgs": {
+      "Fetching updated row for CDC": 1
+     }
+    },
+    "replica_inventory_unusable": {
+     "count": 0,
+     "first": null,
+     "last": null,
+     "msgs": {}
+    }
+   },
+   "attribution": [],
+   "attributionSnapshots": 0,
+   "processStart": null,
+   "skippedMoves": {}
+  },
+  "d1162379-5f5e-444b-b0ff-19ce9533e6aa": {
+   "host": "lagrange-fdiag-3",
+   "firstTime": "2026-11-21T13:17:36.437Z",
+   "lastTime": "2026-11-21T13:28:18.638Z",
+   "lines": 27281,
+   "unparsed": 16830,
+   "greps": {
+    "sys-postgres-wire": {
+     "count": 134,
+     "first": "{\"level\":30,\"time\":\"2026-11-21T13:25:08.099Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"rebalancer\",\"entityId\":\"sys-postgres-wire\",\"entityType\":\"runtime_service\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"usingCoordinator\":true,\"msg\":\"Rebalancer initialized\"}",
+     "last": "{\"level\":30,\"time\":\"2026-11-21T13:28:13.966Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"rebalancer\",\"entityId\":\"sys-postgres-wire\",\"entityType\":\"runtime_service\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"msg\":\"Rebalancer shutdown\"}",
+     "msgs": {
+      "Rebalancer initialized": 1,
+      "Became leader, starting rebalancing scheduler": 1,
+      "Started runtime-service rebalancer for active service": 1,
+      "Waiting for local control-plane mutation readiness before planning background rebalancing": 15,
+      "Fetching updated row for CDC": 1,
+      "Critical rebalancing state detected": 23,
+      "Starting rebalancing": 23,
+      "Rebalancer pre-execution handoff": 23,
+      "Executing rebalancing move": 22,
+      "Rebalancing move skipped": 22,
+      "Lost leadership, stopping rebalancing scheduler": 1,
+      "Rebalancer shutdown": 1
+     }
+    },
+    "replica_inventory_unusable": {
+     "count": 22,
+     "first": "{\"level\":30,\"time\":\"2026-11-21T13:26:05.384Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"rebalancer\",\"entityId\":\"sys-postgres-wire\",\"entityType\":\"runtime_service\",\"moveType\":\"add\",\"movePartitionId\":\"sys-postgres-wire\",\"moveTargetNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"replicaId\":null,\"reason\":\"blocked\",\"error\":null,\"admissionDecisionType\":\"blocked\",\"admissionReason\":\"replica_inventory_unusable\",\"admissionBlockingReasonCodes\":[\"replica_inventory_unusable\"],\"admissionTopologySnapshot\":{\"observedDistinctNodeIds\":[],\"observedDistinctNodeCount\":0,\"observedServiceRowCount\":0,\"targetNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"targetReplicaCount\":null,\"authoritativeAvailable\":false,\"authoritativeReasonCode\":null,\"authoritativeRetryAfterMs\":null,\"inventoryProvenance\":{\"atomicityClaim\":\"not_claimed\",\"committedRowsState\":\"unavailable\",\"inFlightOperationsState\":\"empty\",\"observedAtSkewMs\":null,\"consistency\":\"source_unavailable\",\"topologyIncreaseUsable\":false},\"inventorySourceRevisions\":{\"committedRows\":null,\"inFlightOperations\":\"1795267564192-0-replace-replica-c5d05aca8cab607dd071a81d6f943b6a\"},\"inventorySourceWatermarks\":{\"committedRows\":{\"before\":17952675",
+     "last": "{\"level\":30,\"time\":\"2026-11-21T13:28:11.222Z\",\"nodeId\":\"d1162379-5f5e-444b-b0ff-19ce9533e6aa\",\"pid\":1,\"subsystem\":\"rebalancer\",\"entityId\":\"sys-postgres-wire\",\"entityType\":\"runtime_service\",\"moveType\":\"add\",\"movePartitionId\":\"sys-postgres-wire\",\"moveTargetNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"replicaId\":null,\"reason\":\"blocked\",\"error\":null,\"admissionDecisionType\":\"blocked\",\"admissionReason\":\"replica_inventory_unusable\",\"admissionBlockingReasonCodes\":[\"replica_inventory_unusable\"],\"admissionTopologySnapshot\":{\"observedDistinctNodeIds\":[],\"observedDistinctNodeCount\":0,\"observedServiceRowCount\":0,\"targetNodeId\":\"c14b47ee-4648-49d4-bffd-552bd8ca9b03\",\"targetReplicaCount\":null,\"authoritativeAvailable\":false,\"authoritativeReasonCode\":null,\"authoritativeRetryAfterMs\":null,\"inventoryProvenance\":{\"atomicityClaim\":\"not_claimed\",\"committedRowsState\":\"unavailable\",\"inFlightOperationsState\":\"empty\",\"observedAtSkewMs\":null,\"consistency\":\"source_unavailable\",\"topologyIncreaseUsable\":false},\"inventorySourceRevisions\":{\"committedRows\":null,\"inFlightOperations\":\"1795267615446-0-replace-replica-c5d05aca8cab607dd071a81d6f943b6a\"},\"inventorySourceWatermarks\":{\"committedRows\":{\"before\":17952676",
+     "msgs": {
+      "Rebalancing move skipped": 22
+     }
+    }
+   },
+   "attribution": [],
+   "attributionSnapshots": 0,
+   "processStart": null,
+   "skippedMoves": {}
+  }
+ }
+}

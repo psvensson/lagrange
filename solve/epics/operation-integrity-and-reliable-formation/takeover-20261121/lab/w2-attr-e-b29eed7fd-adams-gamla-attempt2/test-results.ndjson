@@ -1,0 +1,2 @@
+{"file":"test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":26110,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-owed-admission-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":37607,"retriedOnce":false,"firstFailureLine":null}

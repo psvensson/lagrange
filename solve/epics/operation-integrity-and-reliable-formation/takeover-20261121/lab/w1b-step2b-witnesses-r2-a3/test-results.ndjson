@@ -1,0 +1,8 @@
+{"file":"test/partition/coordinator-settlement-exact-settlement.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2107,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/formation-transition-settled-replay.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6627,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":6857,"retriedOnce":false,"firstFailureLine":"not ok 1 - replica_operations-p1: the recorded identity survives store reopen and the checkpoint image, and settles only the exact command"}
+{"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":9964,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6724,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-settled-replay-cutover-pause.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6515,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1678,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":5189,"retriedOnce":false,"firstFailureLine":null}

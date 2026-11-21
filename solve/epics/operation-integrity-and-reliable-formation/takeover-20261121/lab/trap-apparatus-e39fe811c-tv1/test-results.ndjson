@@ -1,0 +1,3 @@
+{"file":"test/scripts/fallback-necessity-trap.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":743,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/fallback-read-closure.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1672,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/quest-evidence-harness-expected-tests.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":4306,"retriedOnce":false,"firstFailureLine":null}

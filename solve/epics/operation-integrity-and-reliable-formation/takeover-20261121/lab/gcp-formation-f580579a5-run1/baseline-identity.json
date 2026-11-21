@@ -1,0 +1,552 @@
+{
+ "schema": "gcp-formation-baseline-identity/v1",
+ "run": {
+  "name": "gcp-formation-f580579a5-run1",
+  "scenario": "fresh-formation-user-table-routability",
+  "role": "pinned BASELINE (owner, 2026-11-21); diagnostic run, not certification (no --certify)",
+  "harnessRequested": "2026-11-21T12:05:41Z",
+  "harnessFinished": "2026-11-21T12:24:45Z",
+  "scenarioStartedAt": "2026-11-21T12:14:16.381Z",
+  "scenarioDurationMs": 617716,
+  "exitCode": 1
+ },
+ "source": {
+  "commit": "f580579a509293e50b0344d1c7e742b10fbf2aac",
+  "tree": "a5c09a1bec57bc92b2b1d7ebcef0fa63fb2e92db",
+  "branch": "wip/core-three-repairs-composed-20261121",
+  "checkoutOnController": "/home/peter/lagrange on lagrange-fdiag-3 (git status --porcelain: 0 lines before and after the run)",
+  "transport": "shallow bare clone (git clone --depth 1 --branch wip/core-three-repairs-composed-20261121 --bare file:///mnt/data/peter/projects/lagrange), tarred, gcloud compute scp to lagrange-fdiag-3, then git clone of that bare repo",
+  "transportTarSha256": "cd59071be4d3d4d982438609f4394f380b97d98f92bf43ef4c98180e317395ec",
+  "srcFingerprint": "e340b3b9144f4515",
+  "srcFingerprintLabRun2": "e340b3b9144f4515"
+ },
+ "nodeImage": {
+  "tag": "distributed-db:test",
+  "builtBy": "the harness image-build owner test/distributed/build-image.js (docker.buildOnHosts=true in the generated config), called by test/distributed/run.js on the controller lagrange-fdiag-3; DockerProvider.buildImage(context \".\", dockerfile \"Dockerfile\", labels {\"ddb.git-hash\": \"f580579a5092\"}) once per Docker host, sequentially, each over an ssh -L forward of that host's /var/run/docker.sock; classic builder; build context = the controller checkout filtered by .dockerignore",
+  "dockerfile": "Dockerfile (repo root)",
+  "dockerfileSha256": "3ff3dbc1460e3315ddd930c7a4157a8ef78c3f28cc84edf5725f4dbb806ce362",
+  "dockerignoreSha256": "5aa4006c888e91371d5b51a59dbb77236b8e7918818fc4cc22612343c10ec609",
+  "sameImageIdOnAllVms": false,
+  "sameAppContentOnAllVms": true,
+  "identicalLeadingLayers": 19,
+  "totalLayers": 26,
+  "explanation": "Image IDs differ because each host built its own image; the first 19 layer diff IDs (the distroless base) are identical, the app layers differ in metadata only: the sha256 of every file under /app (src, node_modules, vendor/raft-rs-wasm, wit, package files) is identical on all three VMs.",
+  "perVm": {
+   "lagrange-fdiag-1": {
+    "imageId": "sha256:2020d2c032bd8d6f9a8000777f15eca68c8f2441cc39c533ccc76adb7e2a66d0",
+    "repoDigests": [
+     "distributed-db@sha256:2020d2c032bd8d6f9a8000777f15eca68c8f2441cc39c533ccc76adb7e2a66d0"
+    ],
+    "repoDigestsNote": "local containerd-store digest only; the image was never pushed to any registry",
+    "created": "2026-11-21T12:08:27.85082871Z",
+    "labels": {
+     "ddb.git-hash": "f580579a5092",
+     "org.opencontainers.image.created": "unknown",
+     "org.opencontainers.image.description": "Distributed SQL database and compute-near-data runtime: partitioned, Raft-replicated SQL tables with JS/WASM services running on the node that owns the data they read.",
+     "org.opencontainers.image.documentation": "https://github.com/psvensson/lagrange/blob/main/CHANGELOG.md",
+     "org.opencontainers.image.licenses": "AGPL-3.0-only",
+     "org.opencontainers.image.revision": "unknown",
+     "org.opencontainers.image.source": "https://github.com/psvensson/lagrange",
+     "org.opencontainers.image.title": "Lagrange",
+     "org.opencontainers.image.url": "https://hub.docker.com/r/psvensson/lagrange",
+     "org.opencontainers.image.version": "dev"
+    },
+    "nodeContainer": "/ddb-test-339bd70c-751f5575-a55c-426d-89ec-860c2c0931fa",
+    "nodeContainerImageId": "sha256:2020d2c032bd8d6f9a8000777f15eca68c8f2441cc39c533ccc76adb7e2a66d0",
+    "nodeContainerCreated": "2026-11-21T12:14:16.421322872Z",
+    "nodeContainerLimits": {
+     "NanoCpus": "1000000000",
+     "Memory": "1073741824",
+     "NetworkMode": "host"
+    },
+    "rootfsLayerDiffIds": [
+     "sha256:a33ba213ad26a605d904a741f67154f3904c74a43182c872c35f36b10fa005e0",
+     "sha256:8fa10c0194df9b7c054c90dbe482585f768a54428fc90a5b78a0066a123b1bba",
+     "sha256:4840c7c54023c867f19564429c89ddae4e9589c83dce82492183a7e9f7dab1fa",
+     "sha256:114dde0fefebbca13165d0da9c500a66190e497a82a53dcaabc3172d630be1e9",
+     "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+     "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+     "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+     "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+     "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+     "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+     "sha256:6e7fbcf090d09b73a4aa85f9dce690d0ace73877c150b7c56955487b6e7a822a",
+     "sha256:33b37ab0b0901175c2699d81c10b0c887f0dff944de74763cca00c155904d6fb",
+     "sha256:bd29502adf199ad9c03afba9bc79df572a26ec60a2a6ffdda4883a5b7a1632fe",
+     "sha256:51ad86252c685cc9d72891e041d4409dc895ab5b2ebec2bb986044568d77bd98",
+     "sha256:2401c5ea32a75452bc4b02a664c80cf63f197704653926fca19e22e6cbc85652",
+     "sha256:6819a1af097df543d58dc30b51f737e55f3f42a9a04e641f175834a55bf0629c",
+     "sha256:c3abae442368dc447f15c468933843c361f227f5d87b2bb86515b49f40583ed9",
+     "sha256:7095412417d2dce289b77f7a8c632a07c82b707fe43cfef7368c3b65c8d2538a",
+     "sha256:856705921c9afe53827d31e4a004f4bd95caad7ca3a58a7af8e6bf8524c65876",
+     "sha256:0dff5786317534cff9ef9040ef0e0a20b856f508d2c6d13c5f0e591c9f87f151",
+     "sha256:6ebc3e49d430d9a0143749dc19701e5d453523e49087c470178d6814b5ca205f",
+     "sha256:2f729eded38583d9b1c5728e3fc62dac42b1ceccc72038654c7bb02238535eeb",
+     "sha256:71ff15a2186d6acd58454149d79fc2237b42b282e3b7633069bc45969e1703bf",
+     "sha256:cf05997809f53497304b69ef5219cc29531a91e97c1d7afb721d9ec4664350e6",
+     "sha256:3cc3594a6079698ff5b5bd9c765cfecabb4405e81c513966b23c3edb53e69e4f",
+     "sha256:98b40f3b857d6c41067da40b3b4bd0ba9a9a4740f00d7badf9004c20b55be3aa"
+    ],
+    "appContentManifestSha256": "56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c",
+    "appContentFileCount": 7928,
+    "baseImages": [
+     "node:22-slim Id=sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee RepoDigests=[node@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee]",
+     "gcr.io/distroless/nodejs22-debian12 Id=sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc RepoDigests=[gcr.io/distroless/nodejs22-debian12@sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc]",
+     "gcr.io/distroless/nodejs22-debian12   latest    sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc   sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc   56 years ago     204MB"
+    ]
+   },
+   "lagrange-fdiag-2": {
+    "imageId": "sha256:18cd395cbcfedc2aa3496bac13c4977096cbb4eb49f393298f4cfd739dc0b55d",
+    "repoDigests": [
+     "distributed-db@sha256:18cd395cbcfedc2aa3496bac13c4977096cbb4eb49f393298f4cfd739dc0b55d"
+    ],
+    "repoDigestsNote": "local containerd-store digest only; the image was never pushed to any registry",
+    "created": "2026-11-21T12:11:14.214272214Z",
+    "labels": {
+     "ddb.git-hash": "f580579a5092",
+     "org.opencontainers.image.created": "unknown",
+     "org.opencontainers.image.description": "Distributed SQL database and compute-near-data runtime: partitioned, Raft-replicated SQL tables with JS/WASM services running on the node that owns the data they read.",
+     "org.opencontainers.image.documentation": "https://github.com/psvensson/lagrange/blob/main/CHANGELOG.md",
+     "org.opencontainers.image.licenses": "AGPL-3.0-only",
+     "org.opencontainers.image.revision": "unknown",
+     "org.opencontainers.image.source": "https://github.com/psvensson/lagrange",
+     "org.opencontainers.image.title": "Lagrange",
+     "org.opencontainers.image.url": "https://hub.docker.com/r/psvensson/lagrange",
+     "org.opencontainers.image.version": "dev"
+    },
+    "nodeContainer": "/ddb-test-339bd70c-fab780c9-1242-4fbb-9ba5-85e8f8a4cb2c",
+    "nodeContainerImageId": "sha256:18cd395cbcfedc2aa3496bac13c4977096cbb4eb49f393298f4cfd739dc0b55d",
+    "nodeContainerCreated": "2026-11-21T12:14:45.143273724Z",
+    "nodeContainerLimits": {
+     "NanoCpus": "1000000000",
+     "Memory": "1073741824",
+     "NetworkMode": "host"
+    },
+    "rootfsLayerDiffIds": [
+     "sha256:a33ba213ad26a605d904a741f67154f3904c74a43182c872c35f36b10fa005e0",
+     "sha256:8fa10c0194df9b7c054c90dbe482585f768a54428fc90a5b78a0066a123b1bba",
+     "sha256:4840c7c54023c867f19564429c89ddae4e9589c83dce82492183a7e9f7dab1fa",
+     "sha256:114dde0fefebbca13165d0da9c500a66190e497a82a53dcaabc3172d630be1e9",
+     "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+     "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+     "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+     "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+     "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+     "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+     "sha256:6e7fbcf090d09b73a4aa85f9dce690d0ace73877c150b7c56955487b6e7a822a",
+     "sha256:33b37ab0b0901175c2699d81c10b0c887f0dff944de74763cca00c155904d6fb",
+     "sha256:bd29502adf199ad9c03afba9bc79df572a26ec60a2a6ffdda4883a5b7a1632fe",
+     "sha256:51ad86252c685cc9d72891e041d4409dc895ab5b2ebec2bb986044568d77bd98",
+     "sha256:2401c5ea32a75452bc4b02a664c80cf63f197704653926fca19e22e6cbc85652",
+     "sha256:6819a1af097df543d58dc30b51f737e55f3f42a9a04e641f175834a55bf0629c",
+     "sha256:c3abae442368dc447f15c468933843c361f227f5d87b2bb86515b49f40583ed9",
+     "sha256:7095412417d2dce289b77f7a8c632a07c82b707fe43cfef7368c3b65c8d2538a",
+     "sha256:856705921c9afe53827d31e4a004f4bd95caad7ca3a58a7af8e6bf8524c65876",
+     "sha256:384210ceed906bf4659b16cb5e86484341959e7a3d6956cfd78bad66b5d4142f",
+     "sha256:bfc0e3166258a0d51cffd3044cbb914cda84a9eacf5cafc1b14b0249c54b47f2",
+     "sha256:53714446f7e793a4acd124e9d4fe9606a9f3c644a679328301762b712f82ab91",
+     "sha256:fcc33b806a28a1aa4da78c58082d4711cd11a693dadf39f9192b5640a706971a",
+     "sha256:1b2138163f129b4b0c7da7d876ab94f67050033e36e0285bd3aa98e582fcdfd4",
+     "sha256:ef32982041588ec7cf81e8e1f85b236c4b74faa3ba2b80cdb95f494173964c4d",
+     "sha256:8ac6ac3db6152b83aaa251791ea3d1f4ac06802afea1c9dac7e16e8579c04a3f"
+    ],
+    "appContentManifestSha256": "56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c",
+    "appContentFileCount": 7928,
+    "baseImages": [
+     "node:22-slim Id=sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee RepoDigests=[node@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee]",
+     "gcr.io/distroless/nodejs22-debian12 Id=sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc RepoDigests=[gcr.io/distroless/nodejs22-debian12@sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc]",
+     "gcr.io/distroless/nodejs22-debian12   latest    sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc   sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc   56 years ago     204MB"
+    ]
+   },
+   "lagrange-fdiag-3": {
+    "imageId": "sha256:83578cbfa0331dad118d6818367365dc16a09c022ca76e113ff6d35fdfcad6f3",
+    "repoDigests": [
+     "distributed-db@sha256:83578cbfa0331dad118d6818367365dc16a09c022ca76e113ff6d35fdfcad6f3"
+    ],
+    "repoDigestsNote": "local containerd-store digest only; the image was never pushed to any registry",
+    "created": "2026-11-21T12:14:15.420649571Z",
+    "labels": {
+     "ddb.git-hash": "f580579a5092",
+     "org.opencontainers.image.created": "unknown",
+     "org.opencontainers.image.description": "Distributed SQL database and compute-near-data runtime: partitioned, Raft-replicated SQL tables with JS/WASM services running on the node that owns the data they read.",
+     "org.opencontainers.image.documentation": "https://github.com/psvensson/lagrange/blob/main/CHANGELOG.md",
+     "org.opencontainers.image.licenses": "AGPL-3.0-only",
+     "org.opencontainers.image.revision": "unknown",
+     "org.opencontainers.image.source": "https://github.com/psvensson/lagrange",
+     "org.opencontainers.image.title": "Lagrange",
+     "org.opencontainers.image.url": "https://hub.docker.com/r/psvensson/lagrange",
+     "org.opencontainers.image.version": "dev"
+    },
+    "nodeContainer": "/ddb-test-339bd70c-868fba57-93a8-4256-8875-02228afbfe49",
+    "nodeContainerImageId": "sha256:83578cbfa0331dad118d6818367365dc16a09c022ca76e113ff6d35fdfcad6f3",
+    "nodeContainerCreated": "2026-11-21T12:14:45.140740651Z",
+    "nodeContainerLimits": {
+     "NanoCpus": "1000000000",
+     "Memory": "1073741824",
+     "NetworkMode": "host"
+    },
+    "rootfsLayerDiffIds": [
+     "sha256:a33ba213ad26a605d904a741f67154f3904c74a43182c872c35f36b10fa005e0",
+     "sha256:8fa10c0194df9b7c054c90dbe482585f768a54428fc90a5b78a0066a123b1bba",
+     "sha256:4840c7c54023c867f19564429c89ddae4e9589c83dce82492183a7e9f7dab1fa",
+     "sha256:114dde0fefebbca13165d0da9c500a66190e497a82a53dcaabc3172d630be1e9",
+     "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+     "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+     "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+     "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+     "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+     "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+     "sha256:6e7fbcf090d09b73a4aa85f9dce690d0ace73877c150b7c56955487b6e7a822a",
+     "sha256:33b37ab0b0901175c2699d81c10b0c887f0dff944de74763cca00c155904d6fb",
+     "sha256:bd29502adf199ad9c03afba9bc79df572a26ec60a2a6ffdda4883a5b7a1632fe",
+     "sha256:51ad86252c685cc9d72891e041d4409dc895ab5b2ebec2bb986044568d77bd98",
+     "sha256:2401c5ea32a75452bc4b02a664c80cf63f197704653926fca19e22e6cbc85652",
+     "sha256:6819a1af097df543d58dc30b51f737e55f3f42a9a04e641f175834a55bf0629c",
+     "sha256:c3abae442368dc447f15c468933843c361f227f5d87b2bb86515b49f40583ed9",
+     "sha256:7095412417d2dce289b77f7a8c632a07c82b707fe43cfef7368c3b65c8d2538a",
+     "sha256:856705921c9afe53827d31e4a004f4bd95caad7ca3a58a7af8e6bf8524c65876",
+     "sha256:b8548bf4986020e5b21ca93eae39d3959f35a1ce591fda82125c8dbeef323db0",
+     "sha256:bb82d21b8a2a3755d6f2fc9d771f9ac6fabeb94b3ada8507b5892a48cfac9c33",
+     "sha256:0ffe0c4e2eb328f97c3370548efa74b6b916b41af2bd37eb748889199d496e00",
+     "sha256:1baad277fe2152403c2a628270fc63dc28f71f2c79a031e7cf56d4eace4bbb3b",
+     "sha256:e2fec82256bb3ef4cb536c656f0c8b7b752233e416c0a1bb5a1dd28531c89462",
+     "sha256:a74f255e98c36df7606c331a717ec99c7ed3c1d08e9a5dbd1bd1b48118fdbefd",
+     "sha256:24d912402c9c4d0583856a3a64b8b3e9a0573d2841f1e12b60b0a4d5b1d2168d"
+    ],
+    "appContentManifestSha256": "56fc938550544831d965e847c80855b3ea3de2f3ef34c6092d7a37ba1e9ae25c",
+    "appContentFileCount": 7928,
+    "baseImages": [
+     "node:22-slim Id=sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee RepoDigests=[node@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee]",
+     "gcr.io/distroless/nodejs22-debian12 Id=sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc RepoDigests=[gcr.io/distroless/nodejs22-debian12@sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc]",
+     "gcr.io/distroless/nodejs22-debian12   latest    sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc   sha256:8a3e96fe3345b5d83ecec2066e7c498139a02a6d1214e4f6c39f9ce359f3f5bc   56 years ago     204MB"
+    ]
+   }
+  }
+ },
+ "harness": {
+  "route": "lab adapter, unchanged: node scripts/lab.js harness run ... on the controller VM lagrange-fdiag-3 with the three VMs registered in that VM's own lab inventory (~/.config/lagrange/lab/inventory.json, copied to vm/lagrange-fdiag-3/diag/controller-lab-inventory.json)",
+  "generatedConfig": {
+   "file": "fresh-formation-user-table-routability-2026-11-21T12-05-41-989Z.json",
+   "sha256": "0e84949de047bfa1bb735504fb5e6ee13de6d4edfc62777d4f141a6abcf07a19",
+   "content": {
+    "size": 3,
+    "docker": {
+     "hosts": [
+      "tcp://127.0.0.1:34057",
+      "tcp://127.0.0.1:37191",
+      "tcp://127.0.0.1:35069"
+     ],
+     "hostInfo": [
+      {
+       "internalIp": "10.166.15.206",
+       "externalIp": "10.166.15.206",
+       "hostName": "lagrange-fdiag-1",
+       "machineId": "boot:71e33ccd-53d1-4f9e-bea1-28e2eb58bc1e"
+      },
+      {
+       "internalIp": "10.166.15.205",
+       "externalIp": "10.166.15.205",
+       "hostName": "lagrange-fdiag-2",
+       "machineId": "boot:b8ebcb68-f3a7-4aa8-90f4-c03e9a19892d"
+      },
+      {
+       "internalIp": "10.166.15.204",
+       "externalIp": "10.166.15.204",
+       "hostName": "lagrange-fdiag-3",
+       "machineId": "boot:ae95358e-3bbb-4b18-9993-71fbb165a135"
+      }
+     ],
+     "buildOnHosts": true
+    },
+    "image": "distributed-db:test",
+    "timeouts": {
+     "nodeStartup": 60000,
+     "convergence": 90000,
+     "quietWindow": 3000,
+     "scenarioDefault": 120000,
+     "bootstrapReadyStableWindowMs": 1000
+    },
+    "convergence": {
+     "targetVoterCount": 3,
+     "settleTimeoutMs": 30000,
+     "quietWindowMs": 3000,
+     "maxSustainedOverTargetMs": 2000,
+     "sampleIntervalMs": 250
+    },
+    "resourceLimits": {
+     "memory": "1g",
+     "cpus": "1.0"
+    },
+    "scenarios": {
+     "rollingRestart": {
+      "loadDuration": "75s",
+      "preRestartSettleMs": 1000,
+      "perRestartActiveTimeoutMs": 90000,
+      "perNodeConvergenceTimeoutMs": 60000,
+      "interRestartDelayMs": 250,
+      "postRestartLoadSoakMs": 1000,
+      "postRestartQuietWindowMs": 4000,
+      "postRestartActiveTimeoutMs": 60000
+     }
+    },
+    "benchmark": {
+     "controlQueryTimeoutMs": 15000
+    },
+    "memoryLeak": {
+     "enabled": true,
+     "failOnDetection": false,
+     "requireSamples": false
+    },
+    "load": {
+     "defaultOpsPerSec": 100,
+     "defaultDuration": "30s"
+    },
+    "nodesPerHost": 1
+   }
+  },
+  "configEqualsLabRun2ExceptDocker": true,
+  "effective": {
+   "size": 3,
+   "nodesPerHost": 1,
+   "timeouts": {
+    "nodeStartup": 60000,
+    "convergence": 90000,
+    "quietWindow": 3000,
+    "scenarioDefault": 120000,
+    "bootstrapReadyStableWindowMs": 1000
+   },
+   "convergence": {
+    "targetVoterCount": 3,
+    "settleTimeoutMs": 30000,
+    "quietWindowMs": 3000,
+    "maxSustainedOverTargetMs": 2000,
+    "sampleIntervalMs": 250
+   },
+   "resourceLimits": {
+    "memory": "1g",
+    "cpus": "1.0"
+   },
+   "benchmark": {
+    "controlQueryTimeoutMs": 15000
+   },
+   "observedContainerLimits": {
+    "lagrange-fdiag-1": {
+     "NanoCpus": "1000000000",
+     "Memory": "1073741824",
+     "NetworkMode": "host"
+    },
+    "lagrange-fdiag-2": {
+     "NanoCpus": "1000000000",
+     "Memory": "1073741824",
+     "NetworkMode": "host"
+    },
+    "lagrange-fdiag-3": {
+     "NanoCpus": "1000000000",
+     "Memory": "1073741824",
+     "NetworkMode": "host"
+    }
+   },
+   "hostNetworkMode": true
+  },
+  "processes": [
+   {
+    "pidLine": "3769 ppid    3741 nice  19",
+    "cmdline": "node scripts/lab.js harness run fresh-formation-user-table-routability --nodes lagrange-fdiag-1,lagrange-fdiag-2,lagrange-fdiag-3 --nodes-per-host 1 -- --capture-logs",
+    "environ": [
+     "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus",
+     "HOME=/home/peter",
+     "LANG=C.UTF-8",
+     "LC_ADDRESS=sv_SE.UTF-8",
+     "LC_IDENTIFICATION=sv_SE.UTF-8",
+     "LC_MEASUREMENT=sv_SE.UTF-8",
+     "LC_MONETARY=sv_SE.UTF-8",
+     "LC_NAME=sv_SE.UTF-8",
+     "LC_NUMERIC=sv_SE.UTF-8",
+     "LC_PAPER=sv_SE.UTF-8",
+     "LC_TELEPHONE=sv_SE.UTF-8",
+     "LOGNAME=peter",
+     "OLDPWD=/home/peter",
+     "PATH=/home/peter/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+     "PWD=/home/peter/lagrange",
+     "SHELL=/bin/bash",
+     "SHLVL=1",
+     "SSH_CLIENT=<operator-public-ip> 48570 22",
+     "SSH_CONNECTION=<operator-public-ip> 48570 10.166.15.204 22",
+     "USER=peter",
+     "XDG_RUNTIME_DIR=/run/user/1001",
+     "XDG_SESSION_CLASS=user",
+     "XDG_SESSION_ID=22",
+     "XDG_SESSION_TYPE=tty",
+     "_=/usr/bin/nice"
+    ]
+   },
+   {
+    "pidLine": "3949 ppid    3769 nice  19",
+    "cmdline": "/home/peter/node/bin/node test/distributed/run.js --config /home/peter/lagrange/.tmp/home-lab/fresh-formation-user-table-routability-2026-11-21T12-05-41-989Z.json --scenario fresh-formation-user-table-routability --verbose --capture-logs --no-fast-local",
+    "environ": [
+     "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus",
+     "DISTRIBUTED_MATRIX_HOSTS=lagrange-fdiag-1,lagrange-fdiag-2,lagrange-fdiag-3",
+     "DISTRIBUTED_MATRIX_TARGET=lab",
+     "HOME=/home/peter",
+     "LANG=C.UTF-8",
+     "LC_ADDRESS=sv_SE.UTF-8",
+     "LC_IDENTIFICATION=sv_SE.UTF-8",
+     "LC_MEASUREMENT=sv_SE.UTF-8",
+     "LC_MONETARY=sv_SE.UTF-8",
+     "LC_NAME=sv_SE.UTF-8",
+     "LC_NUMERIC=sv_SE.UTF-8",
+     "LC_PAPER=sv_SE.UTF-8",
+     "LC_TELEPHONE=sv_SE.UTF-8",
+     "LOGNAME=peter",
+     "OLDPWD=/home/peter",
+     "PATH=/home/peter/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+     "PWD=/home/peter/lagrange",
+     "SHELL=/bin/bash",
+     "SHLVL=1",
+     "SSH_CLIENT=<operator-public-ip> 48570 22",
+     "SSH_CONNECTION=<operator-public-ip> 48570 10.166.15.204 22",
+     "USER=peter",
+     "XDG_RUNTIME_DIR=/run/user/1001",
+     "XDG_SESSION_CLASS=user",
+     "XDG_SESSION_ID=22",
+     "XDG_SESSION_TYPE=tty",
+     "_=/usr/bin/nice"
+    ]
+   }
+  ],
+  "environmentNotes": [
+   "No LAGRANGE_* variable was set (LAGRANGE_LOOP_GAP_THRESHOLD_MS is not in the harness forwarded list FORWARDED_HOST_ENV_KEYS, test/distributed/harness/cluster-class-lifecycle-base.js:61, so it was not set).",
+   "LC_* = sv_SE.UTF-8 arrived through ssh SendEnv from the operator workstation; LANG=C.UTF-8.",
+   "Both processes ran at nice 19 on the controller."
+  ],
+  "controllerNode": "v22.23.2 (official linux-x64 tarball, SHASUMS256 verified), npm 10.9.8, npm ci"
+ },
+ "vms": {
+  "lagrange-fdiag-1": {
+   "instanceId": "7562398085052905187",
+   "zone": "europe-north1-a",
+   "machineType": "e2-standard-4",
+   "cpuPlatform": "Intel Broadwell",
+   "internalIp": "10.166.15.206",
+   "creationTimestamp": "2026-11-21T04:01:16.817-08:00",
+   "labels": {
+    "purpose": "lagrange-formation-diag-20261121"
+   },
+   "scheduling": {
+    "maxRunDuration": {
+     "nanos": 0,
+     "seconds": "10800"
+    },
+    "instanceTerminationAction": "DELETE",
+    "automaticRestart": true,
+    "onHostMaintenance": "MIGRATE",
+    "provisioningModel": "STANDARD"
+   },
+   "bootDisk": {
+    "name": "lagrange-fdiag-1",
+    "sizeGb": "50",
+    "type": "pd-ssd",
+    "sourceImage": "ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20261105",
+    "sourceImageId": "1892012953239034119"
+   },
+   "os": "Ubuntu 24.04.5 LTS",
+   "kernel": "7.0.0-1017-gcp",
+   "unameLine": "Linux lagrange-fdiag-1.europe-north1-a.c.something-2e584.internal 7.0.0-1017-gcp #19~24.04.1-Ubuntu SMP PREEMPT Thu Oct 29 22:34:06 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+   "docker": "docker client 29.1.3 server 29.1.3 api 1.52",
+   "dockerStorage": "storage-driver overlayfs cgroup systemd v2 containerd-snapshotter [[driver-type io.containerd.snapshotter.v1]]",
+   "packages": [
+    "containerd 2.2.1-0ubuntu1~24.04.4",
+    "docker.io 29.1.3-0ubuntu3~24.04.2",
+    "runc 1.3.4-0ubuntu1~24.04.1"
+   ],
+   "nproc": "4",
+   "cpuModel": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+   "memTotal": "16369236 kB",
+   "bootId": "boot:71e33ccd-53d1-4f9e-bea1-28e2eb58bc1e"
+  },
+  "lagrange-fdiag-2": {
+   "instanceId": "6184754356691941091",
+   "zone": "europe-north1-a",
+   "machineType": "e2-standard-4",
+   "cpuPlatform": "Intel Broadwell",
+   "internalIp": "10.166.15.205",
+   "creationTimestamp": "2026-11-21T04:01:16.781-08:00",
+   "labels": {
+    "purpose": "lagrange-formation-diag-20261121"
+   },
+   "scheduling": {
+    "maxRunDuration": {
+     "nanos": 0,
+     "seconds": "10800"
+    },
+    "instanceTerminationAction": "DELETE",
+    "automaticRestart": true,
+    "onHostMaintenance": "MIGRATE",
+    "provisioningModel": "STANDARD"
+   },
+   "bootDisk": {
+    "name": "lagrange-fdiag-2",
+    "sizeGb": "50",
+    "type": "pd-ssd",
+    "sourceImage": "ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20261105",
+    "sourceImageId": "1892012953239034119"
+   },
+   "os": "Ubuntu 24.04.5 LTS",
+   "kernel": "7.0.0-1017-gcp",
+   "unameLine": "Linux lagrange-fdiag-2.europe-north1-a.c.something-2e584.internal 7.0.0-1017-gcp #19~24.04.1-Ubuntu SMP PREEMPT Thu Oct 29 22:34:06 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+   "docker": "docker client 29.1.3 server 29.1.3 api 1.52",
+   "dockerStorage": "storage-driver overlayfs cgroup systemd v2 containerd-snapshotter [[driver-type io.containerd.snapshotter.v1]]",
+   "packages": [
+    "containerd 2.2.1-0ubuntu1~24.04.4",
+    "docker.io 29.1.3-0ubuntu3~24.04.2",
+    "runc 1.3.4-0ubuntu1~24.04.1"
+   ],
+   "nproc": "4",
+   "cpuModel": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+   "memTotal": "16369240 kB",
+   "bootId": "boot:b8ebcb68-f3a7-4aa8-90f4-c03e9a19892d"
+  },
+  "lagrange-fdiag-3": {
+   "instanceId": "8207193150015157987",
+   "zone": "europe-north1-a",
+   "machineType": "e2-standard-4",
+   "cpuPlatform": "Intel Broadwell",
+   "internalIp": "10.166.15.204",
+   "creationTimestamp": "2026-11-21T04:01:16.678-08:00",
+   "labels": {
+    "purpose": "lagrange-formation-diag-20261121"
+   },
+   "scheduling": {
+    "maxRunDuration": {
+     "nanos": 0,
+     "seconds": "10800"
+    },
+    "instanceTerminationAction": "DELETE",
+    "automaticRestart": true,
+    "onHostMaintenance": "MIGRATE",
+    "provisioningModel": "STANDARD"
+   },
+   "bootDisk": {
+    "name": "lagrange-fdiag-3",
+    "sizeGb": "50",
+    "type": "pd-ssd",
+    "sourceImage": "ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20261105",
+    "sourceImageId": "1892012953239034119"
+   },
+   "os": "Ubuntu 24.04.5 LTS",
+   "kernel": "7.0.0-1017-gcp",
+   "unameLine": "Linux lagrange-fdiag-3.europe-north1-a.c.something-2e584.internal 7.0.0-1017-gcp #19~24.04.1-Ubuntu SMP PREEMPT Thu Oct 29 22:34:06 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+   "docker": "docker client 29.1.3 server 29.1.3 api 1.52",
+   "dockerStorage": "storage-driver overlayfs cgroup systemd v2 containerd-snapshotter [[driver-type io.containerd.snapshotter.v1]]",
+   "packages": [
+    "containerd 2.2.1-0ubuntu1~24.04.4",
+    "docker.io 29.1.3-0ubuntu3~24.04.2",
+    "runc 1.3.4-0ubuntu1~24.04.1"
+   ],
+   "nproc": "4",
+   "cpuModel": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+   "memTotal": "16369232 kB",
+   "bootId": "boot:ae95358e-3bbb-4b18-9993-71fbb165a135"
+  }
+ }
+}

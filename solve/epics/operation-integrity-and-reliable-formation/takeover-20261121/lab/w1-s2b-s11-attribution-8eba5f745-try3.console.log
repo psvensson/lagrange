@@ -1,0 +1,93 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.44
+[tv-dator] placement-shell=2892214
+[tv-dator] placement-head=8eba5f745e495b7a094a17a5d7514db5353838bb
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=2893195
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/replace-real-group-native-ledger-recovery.test.js (3 assertions, 3716ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: S11 real ledger after SAFE: none
+[tv-dator] ok 1 - S11 real ledger after SAFE: none
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2131.326545
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T13:05:17.275Z","nodeId":"test-node","pid":2893210,"subsystem":"rebalance-coordinator","operationId":"native-s11-historical-remove","partitionId":"sql_transactions-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[tv-dator] # Subtest: S11 real ledger after SAFE: owned-repair
+[tv-dator] not ok 2 - S11 real ledger after SAFE: owned-repair
+[tv-dator]   ---
+[tv-dator]   duration_ms: 310.748581
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-recovery.test.js:28:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the actual ledger owner retains original identity while the incumbent owns its live lane
+[tv-dator]     
+[tv-dator]     0 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 0
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-recovery.test.js:64:16
+[tv-dator]     async withRepairLedger.partitionId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-fixture.js:125:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/partition/placement-retained-row-repair-fixture.js:66:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async withNativeLedgerReplace (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-fixture.js:83:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: S11 real ledger after SAFE: raw-bypass-negative
+[tv-dator] not ok 3 - S11 real ledger after SAFE: raw-bypass-negative
+[tv-dator]   ---
+[tv-dator]   duration_ms: 297.498387
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-recovery.test.js:28:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the composed prospective guard must reject this known-bad authoritative row
+[tv-dator]     
+[tv-dator]     1 !== 0
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 0
+[tv-dator]   actual: 1
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-recovery.test.js:68:16
+[tv-dator]     async withRepairLedger.partitionId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-fixture.js:125:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/partition/placement-retained-row-repair-fixture.js:66:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[tv-dator]     async withNativeLedgerReplace (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8eba5f745e49-mwqf758x-1078535/test/rebalancer/replace-real-group-native-ledger-fixture.js:83:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..3
+[tv-dator] # tests 3
+[tv-dator] # suites 0
+[tv-dator] # pass 1
+[tv-dator] # fail 2
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2747.572782
+[tv-dator] # time=3716ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=3
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=3
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=3

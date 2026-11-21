@@ -1,0 +1,193 @@
+REMOVED	/mnt/data/peter/projects/.worktrees/k2-repair	774d58f2e	 snapshot=f1e0de930792db0299fd2a1da6e4ae20e4c01de2 residue=656
+REMOVED	/mnt/data/peter/projects/lagrange-fix-a-replace-20261117	f50344e98	 residue=1350250
+REMOVED	/mnt/data/peter/projects/lagrange-fix-b2-provisioner-20261117	19a2885e4	 residue=1351938
+REMOVED	/mnt/data/peter/projects/lagrange-fix-b-ownerlane-20261117	ff4318b24	 residue=1349771
+REMOVED	/mnt/data/peter/projects/lagrange-fix-c-query-20261117	829180ae6	 residue=1349321
+REMOVED	/mnt/data/peter/projects/lagrange-fix-d-footprint-20261117	c44e3e0b8	 residue=607837
+REMOVED	/mnt/data/peter/projects/lagrange-fix-e-locale-20261117	ba7ecfeb4	 residue=1350285
+REMOVED	/mnt/data/peter/projects/lagrange-fix-f-gcplifetime-20261117	dcdfd78c4	 residue=1384390
+REMOVED	/mnt/data/peter/projects/lagrange-fix-g-budget-20261117	9905a06e2	 residue=1349346
+REMOVED	/mnt/data/peter/projects/lagrange-fix-h-benchharness-20261117	c744657b2	 residue=1352024
+REMOVED	/mnt/data/peter/projects/lagrange-fix-i-q1wrapper-20261117	d407ce427	 residue=1350821
+REMOVED	/mnt/data/peter/projects/lagrange-fix-j-smallfollowups-20261117	7e48cac31	 residue=1351525
+REMOVED	/mnt/data/peter/projects/lagrange-fix-k2-incarnation-20261118	774d58f2e	 snapshot=ce39bd507e418f5edea5b65bfab777a076620540 residue=1391783
+REMOVED	/mnt/data/peter/projects/lagrange-fix-k-incarnation-20261117	19a2134c5	 index=e864081f6aa89bc1c5aee33ae43576ccda02b692 snapshot=4edb6d7a1a77b169972a808bbc70a5b814617b1f residue=614740
+REMOVED	/mnt/data/peter/projects/lagrange-fix-m-batch2-20261117	62adbe36b	 residue=1350955
+REMOVED	/mnt/data/peter/projects/lagrange-fix-raft-selfremoval-20261118	b8ca31ebf	 residue=1369768
+REMOVED	/mnt/data/peter/projects/lagrange-fix-removal-cleanup-20261118	5cdb9b6d3	 residue=8627758
+REMOVED	/mnt/data/peter/projects/lagrange-fix-seedcpu-20261118	9bbd1fcf1	 residue=1484537
+REMOVED	/mnt/data/peter/projects/lagrange-found-wpv-20261118	9c5b7e3f1	 residue=1410627
+REMOVED	/mnt/data/peter/projects/lagrange-gcp-base-4b0c8ec1d	4b0c8ec1d	
+REMOVED	/mnt/data/peter/projects/lagrange-gcp-main-fc626cbf3	fc626cbf3	
+REMOVED	/mnt/data/peter/projects/lagrange-gcp-pregate-20261117	219c27bfe	 residue=10102443
+REMOVED	/mnt/data/peter/projects/lagrange-gcp-takeover-20261117	19a2134c5	 residue=1722294
+REMOVED	/mnt/data/peter/projects/lagrange-integration-20261118	2c96ba2bc	 snapshot=5631a3b2caf3ca44d871c6ee946a7ddf3da1bed9 residue=1939770
+REMOVED	/mnt/data/peter/projects/lagrange-place-wpb-20261117	ffdcfc1f8	 residue=1352078
+REMOVED	/mnt/data/peter/projects/lagrange-place-wpd-20261117	fed85ec00	 residue=73846841
+REMOVED	/mnt/data/peter/projects/lagrange-place-wpe-20261118	bd13bc00e	 residue=1372782
+REMOVED	/mnt/data/peter/projects/lagrange-place-wpk-20261117	fe831cd6a	 residue=1353982
+REMOVED	/mnt/data/peter/projects/lagrange-sqlmerge-wp0-20261117	6b4762924	 residue=1353214
+REMOVED	/mnt/data/peter/projects/lagrange-sqlmerge-wp1-20261117	8b563ff5b	 residue=1351025
+REMOVED	/mnt/data/peter/projects/lagrange-sqlmerge-wp2-20261118	1a21d3d50	 residue=1456504
+REMOVED	/mnt/data/peter/projects/lagrange-takeover-docs-20261118	9d1f647ea	
+REMOVED	/mnt/data/peter/projects/.worktrees/q1-forward	2c96ba2bc	 index=3bce35210897e0dc4cce219d7aac2101ca0b5ff7 snapshot=562a7cb171d4170c5df63d5177ffe9cb5ded7216 residue=1355822
+REMOVED	/mnt/data/peter/projects/.worktrees/raft-forward	20118ce84	 snapshot=96bd36adfde3cbe36d76dee261034a51ebac5e81 residue=1355813
+REMOVED	/mnt/data/peter/projects/.worktrees/removal-forward	2c96ba2bc	 index=7363d94e47f3f680471a60787324259dfedfc172 snapshot=cff059d99bf5bdb94d06eef00b77b4cf37298357 residue=1356669
+REMOVED	/mnt/data/peter/projects/.worktrees/seedcpu-forward	608fd7e90	 snapshot=7b3d8b18eab70e0c088894345ef909252695a285 residue=56686
+REMOVED	/mnt/data/peter/projects/.worktrees/wp2-repair	1a21d3d50	 snapshot=35e474601a1d5612e4db74e84727f53d1c13f255
+REMOVED	/mnt/data/peter/projects/.worktrees/wpe-repair	bd13bc00e	 snapshot=73fc236cb07eea4ac869574032d81767011d9b32
+REMOVED	/tmp/lagrange-active-handoff-operation-read-original-20261121	4f7fa56f3	 snapshot=e37b76f1a25fc01c79a2dbf7b512ad9364282fcb
+REMOVED	/tmp/lagrange-actual-dispatch-red-nov20	fe15b86f5	 residue=620685
+REMOVED	/tmp/lagrange-admin-budget-nov20	3281d085d	 residue=620505
+REMOVED	/tmp/lagrange-admission-drive-nov20	5f0a46a1d	 residue=1361717
+REMOVED	/tmp/lagrange-base-checkpoint-20261120	2f9530857	 residue=1358854
+REMOVED	/tmp/lagrange-bootstrap-arbitration-fix-nov21	bde41d663	 residue=1373107
+REMOVED	/tmp/lagrange-bootstrap-arbitration-original-nov21	55b950023	 residue=1372269
+REMOVED	/tmp/lagrange-cadence-single-factor-nov20	8ede43d60	 residue=620777
+REMOVED	/tmp/lagrange-changed-range-selection-nov21	9f05163ff	 residue=621073
+REMOVED	/tmp/lagrange-cl017-native-restoration-nov21	8f4944cf2	 residue=632155
+REMOVED	/tmp/lagrange-claim-bootstrap-proof-nov21	e0b1308a6	 residue=1372793
+REMOVED	/tmp/lagrange-cleanup-final-20261120	130711212	 residue=618802
+REMOVED	/tmp/lagrange-cleanup-negative-20261120	824758d49	 residue=618805
+REMOVED	/tmp/lagrange-committed-wake-exact-services-nov21	207d5222a	 residue=626766
+REMOVED	/tmp/lagrange-composed-active-handoff-read-20261121	953d705f8	 residue=629484
+REMOVED	/tmp/lagrange-composed-active-handoff-read-original-20261121	29cd457e5	 residue=628325
+REMOVED	/tmp/lagrange-composed-creation-hygiene-20261121	d74e111cd	 residue=624712
+REMOVED	/tmp/lagrange-composed-handoff-ledger-nov20	a2e480943	 residue=621313
+REMOVED	/tmp/lagrange-composed-timeout-exact-removal-census-20261121	e7607bbe9	 residue=628357
+REMOVED	/tmp/lagrange-control-current-witness-20261120	7080350fd	 residue=619375
+REMOVED	/tmp/lagrange-core-integration-20261120	0115084f7	 residue=4734727
+REMOVED	/tmp/lagrange-core-outcomes-20261120	a7922a97b	 residue=1361313
+REMOVED	/tmp/lagrange-core-staging-nov21	8bc05fc76	 residue=1372742
+REMOVED	/tmp/lagrange-create-activation-lifetime-nov21	a590a458b	 residue=1085032
+REMOVED	/tmp/lagrange-create-admission-order-proof-nov21	077c383b7	 residue=1148872
+REMOVED	/tmp/lagrange-create-custody-corrected-20261120	e48d8888a	 residue=620760
+REMOVED	/tmp/lagrange-create-lifetime-static-nov21	3c0b6f2e6	 residue=621758
+REMOVED	/tmp/lagrange-create-retained-admission-expiry-nov21	74d13e95c	 residue=624337
+REMOVED	/tmp/lagrange-create-stationary-voter-proof-nov21	785860208	 residue=625079
+REMOVED	/tmp/lagrange-create-voter-evidence-nov21	fb88a80bd	 residue=1371422
+REMOVED	/tmp/lagrange-creation-input-red-20261121	a93948220	 residue=621721
+REMOVED	/tmp/lagrange-creation-terminal-red-20261121	da540c1b1	 residue=624412
+REMOVED	/tmp/lagrange-dispatch-and-target-proof-nov21	97ddade42	 residue=1374256
+REMOVED	/tmp/lagrange-dispatch-exact-positive-nov20	200142a30	 residue=620719
+REMOVED	/tmp/lagrange-e8-create-checkpoints-nov21	1afe9cc02	 residue=621797
+REMOVED	/tmp/lagrange-entity-coalescing-fix-nov21	63f82b85b	 residue=627871
+REMOVED	/tmp/lagrange-entity-coalescing-original-nov21	df9b13db9	 residue=626747
+REMOVED	/tmp/lagrange-exact-fixture-migration-20261120	3892d4372	 residue=621285
+REMOVED	/tmp/lagrange-exact-intent-red-20261121	8f1cbf9b4	 snapshot=f433654ad20c7a4764a952902e0743dc5d3e3083 residue=621488
+REMOVED	/tmp/lagrange-exact-intent-result-20261121	95a3c37f5	 residue=621700
+REMOVED	/tmp/lagrange-fairness-authority-trace-20261120	a6e64ac98	 residue=621459
+REMOVED	/tmp/lagrange-fallback-current-20261120	6acafc67b	 residue=1138712
+REMOVED	/tmp/lagrange-footprint-relocate-20261120	d98aa918d	
+REMOVED	/tmp/lagrange-formation-followup-nov21	971d95d34	 residue=1374998
+REMOVED	/tmp/lagrange-formation-gate-20261120	cf4d233f5	 residue=1358486
+REMOVED	/tmp/lagrange-formation-held-reply-20261120	8259aa8bb	 residue=621086
+REMOVED	/tmp/lagrange-formation-native-ledger-observe-setup-nov21	ced367c59	 residue=631257
+REMOVED	/tmp/lagrange-formation-originals-3d910d700-nov21	b23836fb3	
+REMOVED	/tmp/lagrange-formation-reversal-witness-20261120	b990d1b18	 residue=620884
+REMOVED	/tmp/lagrange-formation-timing-red-20261120	e2612148b	 residue=1358953
+REMOVED	/tmp/lagrange-founder-origin-nov21	1a79f4318	 residue=626295
+REMOVED	/tmp/lagrange-growth-census-red-20261121	9d572e1e2	 residue=625424
+REMOVED	/tmp/lagrange-growth-source-identity-20261121	1b63d2e3f	 residue=1372568
+REMOVED	/tmp/lagrange-growth-source-original-20261121	c3e312c38	 residue=625317
+REMOVED	/tmp/lagrange-growth-step2-release-nov21	3eab92849	 residue=621456
+REMOVED	/tmp/lagrange-lease-guard-only-20261120	c2def7ee9	 residue=1139753
+REMOVED	/tmp/lagrange-ledger-cdc-before-answer-nov21	74e2403d5	 residue=630533
+REMOVED	/tmp/lagrange-ledger-composition-nov21	e0ba6444c	 residue=633073
+REMOVED	/tmp/lagrange-ledger-consumer-fixtures-20261121	9225805bb	 residue=1376610
+REMOVED	/tmp/lagrange-ledger-custody-original-nov21	38d1b8f5d	 residue=630472
+REMOVED	/tmp/lagrange-measure-seven-nov20	bc7a8cbf9	 residue=620582
+REMOVED	/tmp/lagrange-membership-publication-ack-nov21	3d6ac8584	 residue=630578
+REMOVED	/tmp/lagrange-mg-grant-original-43f3-nov21	53cfafdcd	 residue=628630
+REMOVED	/tmp/lagrange-mg-grant-repair-3b8e-nov21	ff2840596	 residue=628608
+REMOVED	/tmp/lagrange-named-dml-qualifier-nov21	8e6a15398	 residue=633557
+REMOVED	/tmp/lagrange-named-endpoint-readback-authority-nov21	2e70542f2	 residue=633272
+REMOVED	/tmp/lagrange-named-sql-witness-original-nov21	d5e21e12f	 residue=629050
+REMOVED	/tmp/lagrange-named-write-native-fb33-nov21	fb33fce0c	 residue=629009
+REMOVED	/tmp/lagrange-named-write-rejoin-receipt-fixture-nov21	1d40e3d8c	 residue=629059
+REMOVED	/tmp/lagrange-named-write-retry-key-scope-nov21	1909bf2ab	 residue=630694
+REMOVED	/tmp/lagrange-named-write-route-custody-nov21	3cfe28456	 index=fceccaac6a5cfe8c9defb2215c0c4878d5dda862 snapshot=afe67a08eddb82c2dc7be85dfbc42cf811432d3c residue=631018
+REMOVED	/tmp/lagrange-named-write-single-delivery-nov21	8540d6b7a	 residue=630132
+REMOVED	/tmp/lagrange-native-bootstrap-binding-20261121	2581d584b	 residue=624664
+REMOVED	/tmp/lagrange-native-bootstrap-claim-impl-nov21	e0b1308a6	 index=704b8c170e95c9614770d16f088cf9977d6c9642 snapshot=84319a2a6e85e8d63939477498ef064ca9fbfcc2 residue=1149657
+REMOVED	/tmp/lagrange-native-bootstrap-claim-reporting-nov21	59f0bdad0	 residue=1373792
+REMOVED	/tmp/lagrange-native-identity-census-red-20261121	2d766d082	 residue=621606
+REMOVED	/tmp/lagrange-observed-progress-turn-trace-20261121	e4376a09a	 residue=626822
+REMOVED	/tmp/lagrange-observed-retry-generation-original-20261121	41e0bf0f3	 residue=626886
+REMOVED	/tmp/lagrange-owner-rpc-read-nov21	2ca08690c	 residue=621354
+REMOVED	/tmp/lagrange-placement-binding-red-20261121	8657e3690	 residue=621571
+REMOVED	/tmp/lagrange-placement-custody-pause-diagnostic-nov21	e9de22eb1	 residue=630317
+REMOVED	/tmp/lagrange-placement-lease-admission-20261120	53405cee0	 index=627aa60201a9d67736af50098208d809d3d848f0 snapshot=eeed61f943dc155b4fc84028d756bed77b9bd1fc residue=622505
+REMOVED	/tmp/lagrange-placement-lifecycle-fixture-seal-20261121	a6ef9b4f6	 residue=622133
+REMOVED	/tmp/lagrange-placement-manual-voter-scope-20261121	1d874c7a7	
+REMOVED	/tmp/lagrange-placement-native-retirement-20261120	0b3f00796	 residue=1142070
+REMOVED	/tmp/lagrange-placement-retained-planning-20261120	0801af501	 residue=621214
+REMOVED	/tmp/lagrange-placement-retirement-authority-review-20261121	9ba1e2a0b	 residue=622452
+REMOVED	/tmp/lagrange-placement-scope-native-stack-20261120	113513ea9	 residue=622131
+REMOVED	/tmp/lagrange-placement-supersession-caller-20261121	db77ee3b0	
+REMOVED	/tmp/lagrange-progress-reentry-fixture-nov21	16067243e	 residue=622124
+REMOVED	/tmp/lagrange-proof-authority-fixture-nov21	afcd5b5ab	 residue=625316
+REMOVED	/tmp/lagrange-provision-cohort-nov21	7024f677d	 residue=628554
+REMOVED	/tmp/lagrange-publication-coordinator-fixtures-nov21	a961f400a	
+REMOVED	/tmp/lagrange-publication-queue-merge-fixture-nov21	75e35236f	
+REMOVED	/tmp/lagrange-publication-queue-visible-boundary-nov21	8135e7a68	 residue=631202
+REMOVED	/tmp/lagrange-publication-runtime-fixtures-nov21	8ed8221fc	 residue=1376345
+REMOVED	/tmp/lagrange-q11-operation-mutation-durable-original-nov21	1f19d5b27	 residue=632438
+REMOVED	/tmp/lagrange-q11-original-source-review-nov21	5920843db	
+REMOVED	/tmp/lagrange-read-lifetime-original-lab-nov21	d193d4fa8	 residue=628994
+REMOVED	/tmp/lagrange-read-retry-lifetime-witness-20261121	19cd99e27	 residue=1141
+REMOVED	/tmp/lagrange-recovery-reporting-red-nov21	b4159f345	 residue=625337
+REMOVED	/tmp/lagrange-recovery-summary-nov21	cb8953772	 residue=626543
+REMOVED	/tmp/lagrange-registered-create-oracle-20261120	41ed0b264	 residue=620750
+REMOVED	/tmp/lagrange-release-diagnostic-nov20	76f634773	 residue=621684
+REMOVED	/tmp/lagrange-release-lifetimes-20261120	e227502f6	 residue=108952710
+REMOVED	/tmp/lagrange-remove-authority-consumer-fixtures-nov21	c3acc9823	 residue=1093248
+REMOVED	/tmp/lagrange-remove-concurrency-fixtures-20261121	128fac468	 residue=628078
+REMOVED	/tmp/lagrange-remove-entity-authority-nov21	7eeee16ed	 residue=1373087
+REMOVED	/tmp/lagrange-remove-entity-authority-refined-nov21	a243a75cf	 residue=1373259
+REMOVED	/tmp/lagrange-replace-replay-dedup-nov21	ee9065ad5	 residue=628056
+REMOVED	/tmp/lagrange-replace-timeout-target-original-20261121	92849a8ce	 residue=626868
+REMOVED	/tmp/lagrange-replica-construction-ack-nov21	0fefadb0d	 residue=621754
+REMOVED	/tmp/lagrange-reservation-authority-validation-size-nov21	7822d93ed	 residue=633475
+REMOVED	/tmp/lagrange-reservation-reconcile-owner-row-20261121	c3932fe4a	 residue=628259
+REMOVED	/tmp/lagrange-retained-bootstrap-origin-nov21	f0a1996b6	 residue=625259
+REMOVED	/tmp/lagrange-retained-create-custody-20261121	0b89de48a	 residue=625152
+REMOVED	/tmp/lagrange-retained-create-services-wake-nov21	5c8a36679	 residue=624939
+REMOVED	/tmp/lagrange-retained-placement-ed3-lab-20261121	a08c79e69	 residue=630080
+REMOVED	/tmp/lagrange-retained-placement-overlap-original-nov21	c5ef72e12	 residue=630398
+REMOVED	/tmp/lagrange-review-guidance-nov20	edbf84c2d	
+REMOVED	/tmp/lagrange-review-progress-4f7f-nov21	7e6eecdbe	
+REMOVED	/tmp/lagrange-runtime-composition-nov20	3d910d700	 residue=1373065
+REMOVED	/tmp/lagrange-s11-custody-composed-witness-nov21	7fbdd5057	 residue=632236
+REMOVED	/tmp/lagrange-s11-native-safety-witness-nov21	bd5cc7939	 residue=632040
+REMOVED	/tmp/lagrange-seed-release-clock-nov21	602ff4ec1	 residue=621749
+REMOVED	/tmp/lagrange-seven-fixtures-nov20	39f3fa129	 residue=620439
+REMOVED	/tmp/lagrange-stale-timeout-census-original-20261121	aba0d24ed	 residue=626640
+REMOVED	/tmp/lagrange-stale-timeout-preimage-20261121	4f7fa56f3	 residue=628472
+REMOVED	/tmp/lagrange-startup-cleanup-recovery-20261120	56cb372b8	 residue=4387880
+REMOVED	/tmp/lagrange-static-core-nov20	244f0a346	
+REMOVED	/tmp/lagrange-stranded-remove-post-send-nov21	9559f439f	 residue=629757
+REMOVED	/tmp/lagrange-strict-85-evidence-nov21	fe117263c	 residue=629153
+REMOVED	/tmp/lagrange-strict-checkpoint-20261120	7ec83fd72	 residue=619406
+REMOVED	/tmp/lagrange-strict-epoch-ownership-20261121	0ae5f1dfb	 residue=626695
+REMOVED	/tmp/lagrange-strict-historical-controls-nov21	97a260be3	 residue=622013
+REMOVED	/tmp/lagrange-strict-mutant-adapter-20261120	0a00e855f	 residue=620088
+REMOVED	/tmp/lagrange-strict-mutant-positive-20261120	0081b7dfa	 residue=620090
+REMOVED	/tmp/lagrange-strict-mutant-release-20261120	6ef416aa6	 residue=620048
+REMOVED	/tmp/lagrange-strict-proof-admission-nov20	dddefa27a	 residue=620659
+REMOVED	/tmp/lagrange-strict-proof-final-20261120	a7c13ce92	
+REMOVED	/tmp/lagrange-strict-review-20261120	8281e61d2	 residue=620101
+REMOVED	/tmp/lagrange-strict-s11-ledger-fixtures-nov21	1d5f91e68	 residue=629642
+REMOVED	/tmp/lagrange-strict-s11-resend-owner-nov21	4020c2a94	 residue=630777
+REMOVED	/tmp/lagrange-strict-s1-sql-recorder-nov21	9c52d90b0	 residue=627964
+REMOVED	/tmp/lagrange-strict-static-hygiene-20261120	10d428346	 residue=621488
+REMOVED	/tmp/lagrange-support-admission-nov20	8f446cc0f	 residue=618799
+REMOVED	/tmp/lagrange-timeout-complement-controls-20261121	ed5edb513	 residue=628014
+REMOVED	/tmp/lagrange-timeout-fixture-nov21	e5b5b520d	 index=695185b904cada19f618e2086a744f41f71b7a84 snapshot=56849757602cb52bd046aae78854bcf8e62eb56e residue=1370174
+REMOVED	/tmp/lagrange-timeout-fixture-pin-nov21	7b713d4f4	 residue=625372
+REMOVED	/tmp/lagrange-timeout-sweep-authority-original-20261121	f7c0331b6	 residue=626881
+REMOVED	/tmp/lagrange-timeout-visibility-duplication-20261121	29a4ad819	 residue=626881
+REMOVED	/tmp/lagrange-timing-pressure-injection-20261120	dd403cc2d	 residue=621169
+REMOVED	/tmp/lagrange-upgrade-support-admission-nov21	c435d5cb6	 residue=618858
+REMOVED	/tmp/lagrange-write-identity-instance-receipts-nov21	d471620a9	 residue=634185
+prune-pass-done

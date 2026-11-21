@@ -1,0 +1,23 @@
+placement-shell=2754319
+placement-head=316671f87352e16e7cbd8dfaa74ed0af234ded36
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2754759
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/scripts/fallback-branch-census.test.js (38 assertions, 8844ms)
+ok test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (5 assertions, 15375ms)
+ok test/scripts/check-fast-static.test.js (6 assertions, 19953ms)
+ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 34415ms)
+# test-files total=4 pass=4 fail=0 assertions=50
+placement-results={"file":"test/scripts/fallback-branch-census.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":8844,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":15375,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-fast-static.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":19953,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-cdc-owed-admission-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":34415,"retriedOnce":false,"firstFailureLine":null}

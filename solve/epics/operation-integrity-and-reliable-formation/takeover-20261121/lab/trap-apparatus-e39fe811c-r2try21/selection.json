@@ -1,0 +1,21 @@
+{
+  "sha": "e39fe811c9918551f557c2c7636dff7aa8aa4d68",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/scripts/fallback-necessity-trap.test.js",
+    "test/scripts/fallback-read-closure.test.js",
+    "test/scripts/quest-evidence-harness-expected-tests.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/fallback-necessity-trap.test.js",
+        "test/scripts/fallback-read-closure.test.js",
+        "test/scripts/quest-evidence-harness-expected-tests.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

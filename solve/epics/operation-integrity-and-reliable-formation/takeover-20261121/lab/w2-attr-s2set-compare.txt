@@ -1,0 +1,80 @@
+test/topology/node-host-identity-start-site-census.test.js
+   base:FAIL(7) «every in-process node construction declares its host»
+   head:FAIL(7) «every in-process node construction declares its host»
+   s2:FAIL(7) «every in-process node construction declares its host»
+test/cdc/cdc-owner-required-authoritative-routing.test.js
+   base:FAIL(83) «should be equal»
+   head:not-run
+   s2:FAIL(83) «should be equal»
+test/scripts/select-change-tests.test.js
+   base:FAIL(31) «inert paths select only their observers beyond the spine»
+   head:FAIL(31) «inert paths select only their observers beyond the spine»
+   s2:FAIL(31) «inert paths select only their observers beyond the spine»
+test/bootstrap/move-replica-assignment-token.test.js
+   base:FAIL(23) «register-service cache visibility timeout should be retryable»
+   head:FAIL(23) «register-service cache visibility timeout should be retryable»
+   s2:FAIL(23) «register-service cache visibility timeout should be retryable»
+test/bootstrap/node-joining-lease-registration.test.js
+   base:FAIL(2) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   head:FAIL(2) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   s2:FAIL(2) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+test/bootstrap/bootstrap-api.test.js
+   base:FAIL(181) «register-service should not fail just because the bootstrap seed has not wired CDC mutations yet»
+   head:FAIL(181) «register-service should not fail just because the bootstrap seed has not wired CDC mutations yet»
+   s2:FAIL(181) «register-service should not fail just because the bootstrap seed has not wired CDC mutations yet»
+test/bootstrap/node-joining-service-message-group-activation.test.js
+   base:FAIL(50) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   head:FAIL(50) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   s2:FAIL(50) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+test/bootstrap/node-registration-idempotency.test.js
+   base:FAIL(4) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   head:FAIL(4) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   s2:FAIL(4) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+test/bootstrap/register-service-move-handoff-refused.test.js
+   base:FAIL(16) «{"statusCode":500,"error":"Internal Server Error","message":"Cannot read properties of undefined (reading 'partitionId')"}»
+   head:FAIL(16) «{"statusCode":500,"error":"Internal Server Error","message":"Cannot read properties of undefined (reading 'partitionId')"}»
+   s2:FAIL(16) «{"statusCode":500,"error":"Internal Server Error","message":"Cannot read properties of undefined (reading 'partitionId')"}»
+test/bootstrap/storage-budget-bootstrap.test.js
+   base:FAIL(21) «should resolve and persist budget via upsert»
+   head:FAIL(21) «should resolve and persist budget via upsert»
+   s2:FAIL(21) «should resolve and persist budget via upsert»
+test/bootstrap/register-node-in-cluster.test.js
+   base:FAIL(38) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   head:FAIL(38) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+   s2:FAIL(38) «Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryI»
+test/integration/control-plane-log-marker.integration.test.js
+   base:FAIL(50) «should be equal»
+   head:FAIL(50) «should be equal»
+   s2:FAIL(50) «should be equal»
+test/integration/control-plane-node-terminal-removal.integration.test.js
+   base:FAIL(45) «zero affected rows are observation changed»
+   head:FAIL(45) «zero affected rows are observation changed»
+   s2:FAIL(45) «zero affected rows are observation changed»
+test/integration/control-plane-postgres-wire-scale.integration.test.js
+   base:FAIL(27) «supported operator route accepts the desired state»
+   head:FAIL(27) «supported operator route accepts the desired state»
+   s2:FAIL(27) «supported operator route accepts the desired state»
+test/integration/control-plane-rebalance.integration.test.js
+   base:FAIL(13) «Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid»
+   head:FAIL(13) «Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid»
+   s2:FAIL(13) «Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid»
+test/integration/lagrange-server-npm-package.integration.test.js
+   base:FAIL(3) «packs one commit-bound artifact and proves its installed API and CLIs»
+   head:FAIL(3) «packs one commit-bound artifact and proves its installed API and CLIs»
+   s2:FAIL(3) «packs one commit-bound artifact and proves its installed API and CLIs»
+test/integration/membership-consistency.integration.test.js
+   base:FAIL(112) «both rebalancers see the published members the readiness owner holds eligible»
+   head:pass(112)
+   s2:FAIL(112) «both rebalancers see the published members the readiness owner holds eligible»
+test/integration/message-group-learner-join.integration.test.js
+   base:FAIL(51) «a competing terminal settlement after MATERIALIZED defeats the install; the debt stays»
+   head:FAIL(51) «a competing terminal settlement after MATERIALIZED defeats the install; the debt stays»
+   s2:FAIL(51) «a competing terminal settlement after MATERIALIZED defeats the install; the debt stays»
+test/integration/node-join-replica-activation.integration.test.js
+   base:FAIL(53) «a system-table hydration failure should not be a retryable join failure»
+   head:FAIL(53) «a system-table hydration failure should not be a retryable join failure»
+   s2:FAIL(53) «a system-table hydration failure should not be a retryable join failure»
+test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js
+   base:FAIL(6) «ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation»
+   head:FAIL(6) «ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation»
+   s2:FAIL(6) «ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation»

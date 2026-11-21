@@ -1,0 +1,16 @@
+{"file":"test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js","attempt":1,"ok":true,"assertions":30,"durationMs":2488,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":7173,"retriedOnce":false,"firstFailureLine":"not ok 1 - A-origin BUSY repairs route to B and clear on the incumbent native terminal commit on B"}
+{"file":"test/rebalancer/assignment-epoch-fencing.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":7742,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js","attempt":1,"ok":true,"assertions":97,"durationMs":3156,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3271,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/orphaned-operation-reconcile-redrive.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":3260,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-atomic-transitions.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":3285,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js","attempt":1,"ok":true,"assertions":315,"durationMs":3754,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":19130,"retriedOnce":false,"firstFailureLine":"not ok 2 - R4 full end-to-end oversized entry drain across 512, 1024, and 4096 events: executes SELECT_OWED_ENTRY_BYTES once per entry across the entire drain, bounds per-wave queries under delayed acknowledgements, transitions the tail to a multi-event wh"}
+{"file":"test/rebalancer/replica-operations-single-writer.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":3813,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":3765,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js","attempt":1,"ok":true,"assertions":293,"durationMs":6259,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-transition-authorization-production-path.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2968,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/fallback-branch-census.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":11504,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-owed-admission-native.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":53406,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/check-fast-static.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":37237,"retriedOnce":false,"firstFailureLine":null}

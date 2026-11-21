@@ -1,0 +1,18 @@
+lab test: adams-gamla: ordinary (2 files) cores=4 mem=15.6GiB speed x1.96
+[adams-gamla] placement-shell=1621547
+[adams-gamla] placement-head=b29eed7fd7dfd3d63070bda8e4aab89234a76313
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1622988
+[adams-gamla] # test-files planned=2
+[adams-gamla] classified lane ordinary: 2 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/partition/partition-cdc-obligation-oversized-entry-scaling.test.js (5 assertions, 26110ms)
+[adams-gamla] ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 37607ms)
+[adams-gamla] # test-files total=2 pass=2 fail=0 assertions=6
+lab test: adams-gamla: # test-files total=2 pass=2 fail=0 assertions=6
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=2 pass=2 fail=0 assertions=6
+exit=0
