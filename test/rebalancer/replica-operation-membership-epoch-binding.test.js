@@ -115,7 +115,8 @@ const DECODE_CONSUMERS = Object.freeze([
   'src/rebalancer/unified-rebalancer-rebalance-loop.js',
   'src/rebalancer/rebalance-coordinator-operation-creation-admission.js',
   'src/rebalancer/storage-reservation-authority.js',
-  'src/control-plane/replica-dispatch-readiness-capture.js',
+  'src/rebalancer/rebalance-coordinator-operation-intent-methods.js',
+  'src/rebalancer/replica-operation-creation-request.js',
   // The placement admission statement validates the epoch it carries.
   'src/rebalancer/replica-placement-owner-admission-statement.js',
 ]);
@@ -145,6 +146,10 @@ const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
   'src/partition/partition-placement-admission.js',
   'src/rebalancer/rebalance-coordinator-operation-creation-support.js',
   'src/rebalancer/replica-placement-owner.js',
+  // Compare the immutable epoch already bound to a decoded operation subject.
+  // These fences preserve exact identity without decoding another epoch.
+  'src/rebalancer/operation-workflow-reentry-authority.js',
+  'src/rebalancer/operation-workflow-replace-target-binding.js',
 ]);
 
 function initializeEnvironment() {

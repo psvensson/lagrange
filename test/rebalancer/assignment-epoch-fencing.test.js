@@ -38,6 +38,7 @@ import {
 
 const {MoveType, EntityType, NodeStatus} = UNIFIED_REBALANCER_SHARED;
 import {
+  createCoordinatorSqlStore,
   createMockCache,
   createMockCdcService,
   createMockPolicyService,
@@ -150,22 +151,31 @@ test('executor-rejects-stale-epoch: the planning epoch is carried in the ' +
   'executor request for an epoch-bound ADD',
 async (t) => {
   initializeConfig();
-  const {coordinator} = createEpochCoordinator({currentEpoch: PLANNING_EPOCH});
-  const {deliveredRequests, dispatch} = wireEpochDispatchProbe(coordinator);
+  const systemTableCache = createMockCache();
+  const store = createCoordinatorSqlStore(systemTableCache);
+  const {coordinator} = createEpochCoordinator({
+    currentEpoch: PLANNING_EPOCH,
+    systemTableCache,
+    sqlQueryEngine: {executeQuery: store.execute},
+  });
+  try {
+    grantEpochCoordinatorStorageAdmission(coordinator);
+    const created = await coordinator.createOperation(buildEpochBoundAddMove(PLANNING_EPOCH));
+    const operation = await coordinator.queryOperationById(created.operationId);
+    const {deliveredRequests, dispatch} = wireEpochDispatchProbe(coordinator);
 
-  await dispatch(buildEpochBoundAddOperation(PLANNING_EPOCH));
+    await dispatch(operation);
 
-  t.equal(
-    deliveredRequests.length,
-    1,
-    'a current-epoch ADD dispatches to the executor',
-  );
-  t.equal(
-    deliveredRequests[0]?.[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
-    PLANNING_EPOCH,
-    'the executor request carries the planning membership epoch',
-  );
-  await coordinator.shutdown();
+    t.equal(deliveredRequests.length, 1, 'a current-epoch ADD dispatches to the executor');
+    t.equal(
+      deliveredRequests[0]?.[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
+      PLANNING_EPOCH,
+      'the executor request carries the planning membership epoch',
+    );
+  } finally {
+    await coordinator.shutdown();
+    store.suspend();
+  }
 });
 
 test('executor-rejects-stale-epoch: a stale epoch-bound ADD fails closed ' +

@@ -1,10 +1,14 @@
 import {buildTerminalOperationFixtureOutcome} from './operation-outcome-fixture.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
+import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  createCoordinatorSqlStore, createMockCache, createMockControlPlaneSystemTableGateway,
+} from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
 const NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID =
@@ -32,6 +36,76 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   seedStorageIncreasingOperation,
   disablePersistenceConfirmation,
 }) {
+  function createCommittedLedgerFixture({cacheData, ...overrides} = {}) {
+    const systemTableCache = createMockCache(cacheData);
+    const store = createCoordinatorSqlStore(systemTableCache);
+    const sqlQueryEngine = {executeQuery: store.execute};
+    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache,
+      cdcIntegrationService: {},
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {targetReplicaCount: 3, minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+        },
+      },
+      sqlQueryEngine,
+      controlPlaneSystemTableGateway: {
+        ...createMockControlPlaneSystemTableGateway(sqlQueryEngine),
+        submitMutation: store.submitMutation,
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+      ...overrides,
+    }));
+    coordinator.initialize();
+    return {
+      coordinator,
+      store,
+      readback(operationId) {
+        return store.execute(
+          'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId],
+        ).rows[0];
+      },
+      async close() {
+        try {
+          await coordinator.shutdown();
+        } finally {
+          store.suspend();
+        }
+      },
+    };
+  }
+
+  function addTransitionInput(operationId, step, status) {
+    const now = Date.now();
+    const history = [{step: WORKFLOW_STEP.PENDING, timestamp: now}];
+    if (step !== WORKFLOW_STEP.PENDING) history.push({step, timestamp: now});
+    return {
+      operationId,
+      type: OperationType.ADD,
+      partitionId: 'partition-1',
+      entityType: 'partition',
+      entityId: 'partition-1',
+      replicaId: 'partition-1-r1',
+      sourceNodeId: 'node-local',
+      targetNodeId: 'node-remote',
+      status,
+      workflowStep: step,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: history,
+    };
+  }
+
   test('RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight',
     async (t) => {
       const workflowCoordinator = createWorkflowCoordinatorSpy();
@@ -379,229 +453,225 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
     }
   });
 
-  test('RebalanceCoordinator re-arms overdue critical PENDING operations ' +
-  'while operation budget remains active',
-  async (t) => {
-    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-      nodeId: PRIORITY_PENDING_REARM_NODE_ID,
-      transactionCoordinator: createTransactionCoordinator(),
-      systemTableCache: {
-        get() {
-          return null;
+  for (const allowDispatch of [true, false]) {
+    const result = allowDispatch ? 'commits progress before failure' :
+      'can settle elapsed pre-admission work after a skip without custody';
+    test(`RebalanceCoordinator reconciles overdue critical PENDING and ${result}`, async (t) => {
+      const deliveries = [];
+      const fixture = createCommittedLedgerFixture({
+        messageRouter: {
+          async deliver(target, request) {
+            deliveries.push({target, request});
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+          },
         },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery() {
-          return {success: true, rows: [], affectedRows: 0};
-        },
-      },
-      ...createStorageOwners(),
-      enableTimeouts: false,
-    }));
-    coordinator.initialize();
-
-    const now = Date.now();
-    const pendingTimeoutMs = coordinator.getTimeoutForStep(
-      WORKFLOW_STEP.PENDING,
-      {partitionId: PRIORITY_PENDING_REARM_PARTITION_ID},
-    );
-    const expiredStepUpdatedAt =
-      now - pendingTimeoutMs - PRIORITY_PENDING_REARM_TIMEOUT_OVERRUN_MS;
-    const operation = {
-      operationId: PRIORITY_PENDING_REARM_OPERATION_ID,
-      type: OperationType.REPLACE,
-      partitionId: PRIORITY_PENDING_REARM_PARTITION_ID,
-      entityType: 'partition',
-      entityId: PRIORITY_PENDING_REARM_PARTITION_ID,
-      replicaId: PRIORITY_PENDING_REARM_REPLICA_ID,
-      sourceNodeId: PRIORITY_PENDING_REARM_SOURCE_NODE_ID,
-      targetNodeId: PRIORITY_PENDING_REARM_NODE_ID,
-      status: ReplicaStatus.PENDING,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      createdAt: expiredStepUpdatedAt,
-      updatedAt: expiredStepUpdatedAt,
-      completedAt: null,
-      errorMessage: null,
-      stepsHistory: [],
-    };
-
-    let executeFromReconcileCalls = 0;
-    let failOperationCalls = 0;
-    coordinator.workflowOwner.getReconciledReplicaStatus = async () => null;
-    coordinator.workflowOwner.executeOperationFromReconcilePath =
-    async () => {
-      executeFromReconcileCalls += 1;
-      return {
-        success: false,
-        skipped: true,
-        reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-        operationId: operation.operationId,
-      };
-    };
-    coordinator.workflowOwner.failOperation = async (candidate) => {
-      failOperationCalls += 1;
-      return buildTerminalOperationFixtureOutcome(candidate, {failed: true});
-    };
-
-    try {
-      await coordinator.reconcileTimeoutOperation(operation, now);
-      t.equal(
-        executeFromReconcileCalls,
-        1,
-        'timeout reconciliation should re-enter dispatch before failing the pending step',
-      );
-      t.equal(
-        failOperationCalls,
-        0,
-        'timeout reconciliation must not fail the critical operation while the operation budget remains active',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  });
-
-  test('RebalanceCoordinator dispatchOperation falls back to the sync planning ' +
-  'snapshot when async priority refresh stalls',
-  async (t) => {
-    const deliveries = [];
-    const coordinator = createCoordinator({
-      nodeId: 'node-local',
-      transactionCoordinator: createTransactionCoordinator(),
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      controlPlaneReadinessService: {
-        getNodeReadinessSync(nodeId) {
-          return {
-            nodeId,
-            dimensions: {
-              controlPlaneRecoveryEligible: true,
-              repairEligible: true,
-              serveEligible: true,
-            },
+      });
+      const {coordinator} = fixture;
+      const owner = coordinator.workflowOwner;
+      try {
+        const now = Date.now();
+        const pendingTimeoutMs = coordinator.getTimeoutForStep(WORKFLOW_STEP.PENDING);
+        const elapsed = pendingTimeoutMs + PRIORITY_PENDING_REARM_TIMEOUT_OVERRUN_MS;
+        const enteredAt = now - elapsed;
+        const operation = {
+          operationId: PRIORITY_PENDING_REARM_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partitionId: PRIORITY_PENDING_REARM_PARTITION_ID,
+          entityType: 'partition',
+          entityId: PRIORITY_PENDING_REARM_PARTITION_ID,
+          replicaId: PRIORITY_PENDING_REARM_REPLICA_ID,
+          sourceReplicaId: `${PRIORITY_PENDING_REARM_PARTITION_ID}-r1`,
+          sourceNodeId: PRIORITY_PENDING_REARM_SOURCE_NODE_ID,
+          targetNodeId: PRIORITY_PENDING_REARM_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+          createdAt: enteredAt,
+          updatedAt: enteredAt,
+          completedAt: null,
+          errorMessage: null,
+          stepsHistory: [{step: WORKFLOW_STEP.PENDING, timestamp: enteredAt}],
+        };
+        t.equal(await coordinator.repository.persistNewOperation(operation), true);
+        t.ok(elapsed < TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS);
+        t.equal(owner.isOperationStepTimedOut(operation, now), true);
+        const execute = owner.executeOperationFromReconcilePath.bind(owner);
+        let attempted = 0;
+        owner.executeOperationFromReconcilePath = async (input) => {
+          attempted++;
+          return allowDispatch ? execute(input) : {
+            success: false, skipped: true, reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+            operationId: input.operationId,
           };
-        },
-        async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: Object.freeze(['node-a', 'node-local']),
-            recoveryActiveNodeIds: Object.freeze(['node-a', 'node-local']),
-            projectedServingNodeIds: Object.freeze(['node-a', 'node-local']),
-            locallyEligibleNodeIds: Object.freeze(['node-a', 'node-local']),
-            publishedMembershipIncludesTargetNode: nodeId === 'node-local',
-            priorityPartitionSummary: Object.freeze({
-              satisfied: false,
-              requiredDistinctNodeCount: 2,
-              missingPartitionIds: ['sql_write_operations-p1'],
-            }),
-          };
-        },
-      },
-      messageRouter: {
-        async deliver(target, request) {
-          deliveries.push({target, request});
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery(sql) {
-          if (String(sql).trim().toLowerCase().startsWith('select')) {
-            return {success: true, rows: [], affectedRows: 0};
-          }
-          return {success: true, rows: [], affectedRows: 1, changes: 1};
-        },
-      },
-      ...createStorageOwners(),
-      setTimeoutFn(fn) {
-        fn();
-        return {cancelled: false};
-      },
-      clearTimeoutFn() {},
-      enableTimeouts: false,
+        };
+
+        await coordinator.reconcileTimeoutOperation(operation, now);
+        const durable = fixture.readback(operation.operationId);
+        t.equal(attempted, 1, 'the reconcile re-enters dispatch before settling the expired step');
+        if (allowDispatch) {
+          t.equal(deliveries.length, 1, 'the owner dispatches one target CREATE');
+          t.equal(durable.workflow_step, WORKFLOW_STEP.CREATING);
+          t.equal(durable.completed_at, null, 'committed progress keeps the operation open');
+        } else {
+          t.same(deliveries, []);
+          t.equal(owner.isOperationDeferredRetryActive(operation.operationId), false,
+            'the skipped reply acquired no retry custody');
+          t.equal(durable.create_admission_state, null);
+          t.equal(durable.workflow_step, WORKFLOW_STEP.FAILED);
+          t.match(durable.error_message, /Timeout in PENDING step/);
+        }
+      } finally {
+        await fixture.close();
+      }
     });
-    coordinator.initialize();
-    disablePersistenceConfirmation(coordinator);
+  }
 
-    try {
-      const operation = {
-        operationId: 'op-priority-planning-sync-fallback',
-        type: OperationType.REPLACE,
-        partitionId: 'sql_write_operations-p1',
-        entityType: 'partition',
-        entityId: 'sql_write_operations-p1',
-        replicaId: 'sql_write_operations-p1-r4',
-        sourceReplicaId: 'sql_write_operations-p1-r1',
-        sourceNodeId: 'node-remote',
-        targetNodeId: 'node-local',
-        status: 'pending',
-        workflowStep: WORKFLOW_STEP.SENDING,
-        createdAt: Date.now() - 1000,
-        updatedAt: Date.now() - 500,
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
+  function registerPlanningDispatchWitness(targetEligible) {
+    const name = targetEligible ?
+      'dispatch waits for available planning and retains the exact eligible target' :
+      'dispatch waits for available planning and fences the superseded target';
+    test(`RebalanceCoordinator ${name}`, async (t) => {
+      const planningEntered = Promise.withResolvers();
+      const planningReply = Promise.withResolvers();
+      const deliveries = [];
+      const partitionId = 'sql_write_operations-p1';
+      const targetReplicaId = `${partitionId}-r4`;
+      const cohort = Object.freeze(['node-a', targetEligible ? 'node-local' : 'node-b']);
+      const snapshot = {
+        publishedActiveNodeIdsPresent: true,
+        publishedActiveNodeIds: cohort,
+        recoveryActiveNodeIds: cohort,
+        projectedServingNodeIds: cohort,
+        locallyEligibleNodeIds: cohort,
+        publishedMembershipIncludesTargetNode: targetEligible,
+        priorityPartitionSummary: {
+          satisfied: false,
+          requiredDistinctNodeCount: 2,
+          missingPartitionIds: [partitionId],
+        },
       };
-      seedStorageIncreasingOperation(coordinator, operation);
+      const targetService = {
+        service_id: targetReplicaId,
+        replica_id: targetReplicaId,
+        partition_id: partitionId,
+        node_id: 'node-local',
+        service_type: 'partition',
+        status: ReplicaStatus.FAILED,
+        created_at: 1,
+        state_entered_at: 2,
+      };
+      const fixture = createCommittedLedgerFixture({
+        cacheData: targetEligible ? {} : {services: [targetService]},
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {controlPlaneRecoveryEligible: true, repairEligible: true,
+                serveEligible: true},
+            };
+          },
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
+            planningEntered.resolve();
+            return planningReply.promise;
+          },
+        },
+        messageRouter: {
+          async deliver(target, request) {
+            deliveries.push({target, request});
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
+          },
+        },
+      });
+      const {coordinator, store} = fixture;
+      let dispatch;
+      let deadline;
+      try {
+        const now = Date.now();
+        const operation = {
+          operationId: targetEligible ? 'op-priority-planning-eligible' :
+            'op-priority-planning-superseded',
+          type: OperationType.REPLACE,
+          partitionId,
+          entityType: 'partition',
+          entityId: partitionId,
+          replicaId: targetReplicaId,
+          sourceReplicaId: `${partitionId}-r1`,
+          sourceNodeId: 'node-remote',
+          targetNodeId: 'node-local',
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.SENDING,
+          createdAt: now,
+          updatedAt: now,
+          completedAt: null,
+          errorMessage: null,
+          stepsHistory: [
+            {step: WORKFLOW_STEP.PENDING, timestamp: now},
+            {step: WORKFLOW_STEP.SENDING, timestamp: now, previousStep: WORKFLOW_STEP.PENDING},
+          ],
+        };
+        t.equal(await coordinator.repository.persistNewOperation(operation), true);
+        const reservation = store.submitMutation({
+          tableName: 'storage_reservations',
+          operation: 'insert',
+          row: {
+            reservation_id: `res-${operation.operationId}`,
+            operation_id: operation.operationId,
+            entity_type: operation.entityType,
+            entity_id: partitionId,
+            partition_id: partitionId,
+            target_node_id: operation.targetNodeId,
+            estimated_bytes: 1,
+            amplification_factor: 1,
+            status: 'active',
+            reason_code: coordinator.getReservationReasonCode(operation.type),
+            created_at: now,
+            updated_at: now,
+            expires_at: now + 300000,
+            released_at: null,
+          },
+        });
+        t.equal(reservation.partitionResult.affectedRows, 1);
+        t.equal(fixture.readback(operation.operationId).source_replica_id,
+          operation.sourceReplicaId, 'the exact bound retiring source survives the durable read');
 
-      const result = await coordinator.dispatchOperation(operation);
+        dispatch = coordinator.dispatchOperation(operation);
+        await Promise.race([
+          planningEntered.promise,
+          dispatch.then(() => {
+            throw new Error('dispatch finished before requesting the canonical planning view');
+          }),
+          new Promise((_, reject) => {
+            deadline = setTimeout(() => reject(new Error('canonical planning read not reached')), 2000);
+          }),
+        ]);
+        clearTimeout(deadline);
+        t.same(deliveries, [], 'dispatch does no replica work while the canonical answer is held');
+        t.equal(fixture.readback(operation.operationId).workflow_step, WORKFLOW_STEP.SENDING);
+        planningReply.resolve(snapshot);
+        const result = await dispatch;
+        const persisted = fixture.readback(operation.operationId);
 
-      t.equal(
-        result.success,
-        true,
-        'dispatch should keep progressing when the async planning refresh stalls',
-      );
-      t.equal(
-        deliveries.length,
-        1,
-        'dispatch should still reach the replica handler through the sync fallback snapshot',
-      );
-      t.equal(
-        deliveries[0]?.target,
-        'node-local/service/replica-handler',
-        'dispatch should still route to the local replica handler',
-      );
-      t.equal(
-        operation.workflowStep,
-        WORKFLOW_STEP.CREATING,
-        'the owner path should continue past SENDING when sync planning evidence is already sufficient',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  });
+        t.equal(result.success, targetEligible);
+        if (targetEligible) {
+          t.equal(deliveries.length, 1, 'the observed eligible target receives one request');
+          t.equal(deliveries[0].target, 'node-local/service/replica-handler');
+          t.equal(deliveries[0].request.replicaId, targetReplicaId);
+          t.equal(persisted.workflow_step, WORKFLOW_STEP.CREATING);
+        } else {
+          t.same(deliveries, [], 'the superseded operation sends no replica request');
+          t.equal(result.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.FAILED);
+          t.equal(persisted.workflow_step, WORKFLOW_STEP.FAILED);
+          t.match(persisted.error_message, /eligible cohort/i);
+        }
+      } finally {
+        clearTimeout(deadline);
+        planningReply.resolve(snapshot);
+        await Promise.allSettled([dispatch]);
+        await fixture.close();
+      }
+    });
+  }
+
+  registerPlanningDispatchWitness(true);
 
   test('OperationWorkflowOwner prefers canonical priority-recovery planning answers',
     async (t) => {
@@ -720,130 +790,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       }
     });
 
-  test('RebalanceCoordinator dispatchOperation still demotes superseded ' +
-  'priority targets when the async planning refresh stalls',
-  async (t) => {
-    const deliveries = [];
-    const coordinator = createCoordinator({
-      nodeId: 'node-local',
-      transactionCoordinator: createTransactionCoordinator(),
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      controlPlaneReadinessService: {
-        getNodeReadinessSync(nodeId) {
-          return {
-            nodeId,
-            dimensions: {
-              controlPlaneRecoveryEligible: true,
-              repairEligible: true,
-              serveEligible: true,
-            },
-          };
-        },
-        async getPriorityRecoveryPlanningSnapshotBestEffort() {
-          return {
-            publishedActiveNodeIdsPresent: true,
-            publishedActiveNodeIds: Object.freeze(['node-a', 'node-b']),
-            recoveryActiveNodeIds: Object.freeze(['node-a', 'node-b']),
-            projectedServingNodeIds: Object.freeze(['node-a', 'node-b']),
-            locallyEligibleNodeIds: Object.freeze(['node-a', 'node-b']),
-            publishedMembershipIncludesTargetNode: false,
-            priorityPartitionSummary: Object.freeze({
-              satisfied: false,
-              requiredDistinctNodeCount: 2,
-              missingPartitionIds: ['sql_write_operations-p1'],
-            }),
-          };
-        },
-      },
-      messageRouter: {
-        async deliver(target, request) {
-          deliveries.push({target, request});
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery(sql) {
-          if (String(sql).trim().toLowerCase().startsWith('select')) {
-            return {success: true, rows: [], affectedRows: 0};
-          }
-          return {success: true, rows: [], affectedRows: 1, changes: 1};
-        },
-      },
-      ...createStorageOwners(),
-      setTimeoutFn(fn) {
-        fn();
-        return {cancelled: false};
-      },
-      clearTimeoutFn() {},
-      enableTimeouts: false,
-    });
-    coordinator.initialize();
-    disablePersistenceConfirmation(coordinator);
-
-    try {
-      const operation = {
-        operationId: 'op-priority-planning-sync-superseded',
-        type: OperationType.REPLACE,
-        partitionId: 'sql_write_operations-p1',
-        entityType: 'partition',
-        entityId: 'sql_write_operations-p1',
-        replicaId: 'sql_write_operations-p1-r4',
-        sourceReplicaId: 'sql_write_operations-p1-r1',
-        sourceNodeId: 'node-remote',
-        targetNodeId: 'node-local',
-        status: 'pending',
-        workflowStep: WORKFLOW_STEP.SENDING,
-        createdAt: Date.now() - 1000,
-        updatedAt: Date.now() - 500,
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
-      };
-      seedStorageIncreasingOperation(coordinator, operation);
-
-      const result = await coordinator.dispatchOperation(operation);
-
-      t.equal(
-        result.success,
-        false,
-        'dispatch should still fail when the sync fallback proves the target is superseded',
-      );
-      t.equal(
-        deliveries.length,
-        0,
-        'superseded targets should not dispatch any replica work',
-      );
-      t.equal(
-        operation.workflowStep,
-        WORKFLOW_STEP.FAILED,
-        'the operation should become an explicit failed next action',
-      );
-      t.match(
-        String(result.error || operation.errorMessage || ''),
-        /eligible cohort/i,
-        'failure should still explain that the target is outside the recovery cohort',
-      );
-    } finally {
-      await coordinator.shutdown();
-    }
-  });
+  registerPlanningDispatchWitness(false);
 
   test('RebalanceCoordinator timeout sweeps fail overdue operations before verify windows',
     async (t) => {
@@ -946,313 +893,112 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       }
     });
 
-  test('RebalanceCoordinator updateStep persists durable transition fields',
-    async (t) => {
-      const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-        nodeId: 'node-local',
-        transactionCoordinator: createTransactionCoordinator(),
-        systemTableCache: {
-          get() {
-            return null;
-          },
-        },
-        cdcIntegrationService: {
-        },
-        tablePolicyService: {
-          async getPolicyForPartition() {
-            return {targetReplicaCount: 3, minReplicaCount: 1};
-          },
-        },
-        messageRouter: {
-          async deliver() {
-            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-          },
-        },
-        sqlQueryEngine: {
-          async executeQuery() {
-            return {success: true, rows: [], changes: 1};
-          },
-        },
-        ...createStorageOwners(),
-        enableTimeouts: false,
-      }));
-      coordinator.initialize();
-      disablePersistenceConfirmation(coordinator);
-
+  for (const witness of [
+    {
+      name: 'updateStep',
+      operationId: 'op-durable-step',
+      before: WORKFLOW_STEP.PENDING,
+      beforeStatus: ReplicaStatus.PENDING,
+      after: WORKFLOW_STEP.SENDING,
+      reason: OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
+      answer: OPERATION_RECONCILE_OUTCOME.ADVANCED,
+      invoke: (owner, operation) => owner.updateStep(operation, WORKFLOW_STEP.SENDING),
+    },
+    {
+      name: 'completeOperation',
+      operationId: 'op-complete-durable',
+      before: WORKFLOW_STEP.SYNCING,
+      beforeStatus: ReplicaStatus.SYNCING,
+      after: WORKFLOW_STEP.ACTIVE,
+      reason: OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
+      answer: OPERATION_RECONCILE_OUTCOME.COMPLETED,
+      invoke: (owner, operation) => owner.completeOperation(operation),
+    },
+    {
+      name: 'failOperation',
+      operationId: 'op-fail-durable',
+      before: WORKFLOW_STEP.CREATING,
+      beforeStatus: ReplicaStatus.CREATING,
+      after: WORKFLOW_STEP.FAILED,
+      reason: OPERATION_TRANSITION_REASON.OPERATION_FAILED,
+      answer: OPERATION_RECONCILE_OUTCOME.FAILED,
+      invoke: (owner, operation) => owner.failOperation(operation, 'test failure reason'),
+    },
+  ]) {
+    test(`RebalanceCoordinator ${witness.name} persists durable transition fields`, async (t) => {
+      const targetRow = {
+        service_id: 'partition-1-r1',
+        replica_id: 'partition-1-r1',
+        partition_id: 'partition-1',
+        node_id: 'node-remote',
+        service_type: 'partition',
+        status: ReplicaStatus.FAILED,
+        created_at: 1,
+        state_entered_at: 2,
+      };
+      const fixture = createCommittedLedgerFixture({
+        cacheData: witness.after === WORKFLOW_STEP.FAILED ? {services: [targetRow]} : {},
+      });
+      const {coordinator} = fixture;
       try {
-        const operation = {
-          operationId: 'op-durable-step',
-          type: 'ADD',
-          partitionId: 'partition-1',
-          entityType: 'partition',
-          entityId: 'partition-1',
-          replicaId: 'partition-1-r1',
-          sourceNodeId: 'node-local',
-          targetNodeId: 'node-remote',
-          status: 'pending',
-          workflowStep: WORKFLOW_STEP.PENDING,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          completedAt: null,
-          errorMessage: null,
-          stepsHistory: [],
-        };
-
-        await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
-
-        t.equal(operation.workflowStep, WORKFLOW_STEP.SENDING);
-        t.equal(operation.stepsHistory.length, 1);
-
-        const entry = operation.stepsHistory[0];
-        t.equal(entry.step, WORKFLOW_STEP.SENDING, 'step field present');
-        t.equal(
-          entry.previousStep,
-          WORKFLOW_STEP.PENDING,
-          'previousStep must be persisted',
-        );
-        t.equal(
-          entry.reason,
-          OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
-          'reason must be persisted',
-        );
-        t.ok(
-          typeof entry.timestamp === 'number' && entry.timestamp > 0,
-          'timestamp must be persisted',
-        );
-        t.equal(
-          entry.ownerKey,
-          'op-durable-step',
-          'ownerKey must be persisted',
-        );
+        const operation = addTransitionInput(witness.operationId, witness.before,
+          witness.beforeStatus);
+        t.equal(await coordinator.repository.persistNewOperation(operation), true);
+        const before = fixture.readback(operation.operationId);
+        t.equal(before.workflow_step, witness.before);
+        const answer = await witness.invoke(coordinator, operation);
+        if (witness.after === WORKFLOW_STEP.SENDING) {
+          t.equal(answer, witness.answer);
+        } else {
+          t.equal(answer.committed, true);
+          t.equal(answer.reconcileOutcome, witness.answer);
+        }
+        const stored = fixture.readback(operation.operationId);
+        t.equal(stored.workflow_step, witness.after);
+        t.equal(operation.workflowStep, stored.workflow_step);
+        const history = JSON.parse(stored.steps_history);
+        t.equal(history.length, JSON.parse(before.steps_history).length + 1);
+        t.same(operation.stepsHistory, history);
+        const entry = history.at(-1);
+        t.equal(entry.step, witness.after, 'step must be persisted');
+        t.equal(entry.previousStep, witness.before, 'previousStep must be persisted');
+        t.equal(entry.reason, witness.reason, 'reason must be persisted');
+        t.ok(Number.isFinite(entry.timestamp) && entry.timestamp > 0,
+          'timestamp must be persisted');
+        t.equal(entry.ownerKey, operation.operationId, 'ownerKey must be persisted');
       } finally {
-        await coordinator.shutdown();
+        await fixture.close();
       }
     });
-
-  test('RebalanceCoordinator completeOperation persists durable transition ' +
-  'fields', async (t) => {
-    const coordinator = createCoordinator({
-      nodeId: 'node-local',
-      transactionCoordinator: createTransactionCoordinator(),
-      systemTableCache: {
-        get() {
-          return null;
-        },
-      },
-      cdcIntegrationService: {
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery() {
-          return {success: true, rows: [], changes: 1};
-        },
-      },
-      ...createStorageOwners(),
-      enableTimeouts: false,
-    });
-    coordinator.initialize();
-    disablePersistenceConfirmation(coordinator);
-
-    try {
-      const operation = {
-        operationId: 'op-complete-durable',
-        type: 'ADD',
-        partitionId: 'partition-1',
-        entityType: 'partition',
-        entityId: 'partition-1',
-        replicaId: 'partition-1-r1',
-        sourceNodeId: 'node-local',
-        targetNodeId: 'node-remote',
-        status: 'syncing',
-        workflowStep: WORKFLOW_STEP.SYNCING,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
-      };
-
-      await coordinator.completeOperation(operation);
-
-      t.equal(operation.workflowStep, WORKFLOW_STEP.ACTIVE);
-      t.equal(operation.stepsHistory.length, 1);
-
-      const entry = operation.stepsHistory[0];
-      t.equal(
-        entry.previousStep,
-        WORKFLOW_STEP.SYNCING,
-        'previousStep must be persisted on completion',
-      );
-      t.equal(
-        entry.reason,
-        OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
-        'reason must be persisted on completion',
-      );
-      t.ok(entry.timestamp > 0, 'timestamp must be persisted');
-      t.equal(entry.ownerKey, 'op-complete-durable');
-    } finally {
-      await coordinator.shutdown();
-    }
-  });
-
-  test('RebalanceCoordinator failOperation persists durable transition ' +
-  'fields', async (t) => {
-    const coordinator = createCoordinator({
-      nodeId: 'node-local',
-      transactionCoordinator: createTransactionCoordinator(),
-      systemTableCache: {
-        get() {
-          return null;
-        },
-      },
-      cdcIntegrationService: {
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: false, error: 'test error'});
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery() {
-          return {success: true, rows: [], changes: 1};
-        },
-      },
-      ...createStorageOwners(),
-      enableTimeouts: false,
-    });
-    coordinator.initialize();
-    disablePersistenceConfirmation(coordinator);
-
-    try {
-      const operation = {
-        operationId: 'op-fail-durable',
-        type: 'ADD',
-        partitionId: 'partition-1',
-        entityType: 'partition',
-        entityId: 'partition-1',
-        replicaId: 'partition-1-r1',
-        sourceNodeId: 'node-local',
-        targetNodeId: 'node-remote',
-        status: 'creating',
-        workflowStep: WORKFLOW_STEP.CREATING,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
-      };
-
-      await coordinator.failOperation(operation, 'test failure reason');
-
-      t.equal(operation.workflowStep, WORKFLOW_STEP.FAILED);
-      t.equal(operation.stepsHistory.length, 1);
-
-      const entry = operation.stepsHistory[0];
-      t.equal(
-        entry.previousStep,
-        WORKFLOW_STEP.CREATING,
-        'previousStep must be persisted on failure',
-      );
-      t.equal(
-        entry.reason,
-        OPERATION_TRANSITION_REASON.OPERATION_FAILED,
-        'reason must be persisted on failure',
-      );
-      t.ok(entry.timestamp > 0, 'timestamp must be persisted');
-      t.equal(entry.ownerKey, 'op-fail-durable');
-    } finally {
-      await coordinator.shutdown();
-    }
-  });
+  }
 
   test('RebalanceCoordinator updateStep routes through workflow ' +
   'coordinator transitionStep', async (t) => {
     const workflowCoordinator = createWorkflowCoordinatorSpy();
     const transitionCalls = [];
-    const originalTransitionStep =
-    workflowCoordinator.transitionStep.bind(workflowCoordinator);
+    const originalTransitionStep = workflowCoordinator.transitionStep.bind(workflowCoordinator);
     workflowCoordinator.transitionStep = async (...args) => {
       transitionCalls.push(args);
       return originalTransitionStep(...args);
     };
-
-    const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
-      nodeId: 'node-local',
-      transactionCoordinator: createTransactionCoordinator(),
-      operationWorkflowCoordinator: workflowCoordinator,
-      systemTableCache: {
-        get() {
-          return null;
-        },
-      },
-      cdcIntegrationService: {
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {targetReplicaCount: 3, minReplicaCount: 1};
-        },
-      },
-      messageRouter: {
-        async deliver() {
-          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery() {
-          return {success: true, rows: [], changes: 1};
-        },
-      },
-      ...createStorageOwners(),
-      enableTimeouts: false,
-    }));
-    coordinator.initialize();
-    disablePersistenceConfirmation(coordinator);
+    const fixture = createCommittedLedgerFixture({operationWorkflowCoordinator: workflowCoordinator});
+    const {coordinator} = fixture;
 
     try {
-      const operation = {
-        operationId: 'op-route-check',
-        type: 'ADD',
-        partitionId: 'partition-1',
-        entityType: 'partition',
-        entityId: 'partition-1',
-        replicaId: 'partition-1-r1',
-        sourceNodeId: 'node-local',
-        targetNodeId: 'node-remote',
-        status: 'pending',
-        workflowStep: WORKFLOW_STEP.PENDING,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        completedAt: null,
-        errorMessage: null,
-        stepsHistory: [],
-      };
+      const operation = addTransitionInput('op-route-check', WORKFLOW_STEP.PENDING,
+        ReplicaStatus.PENDING);
+      t.equal(await coordinator.repository.persistNewOperation(operation), true);
+      const result = await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
 
-      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
-
-      t.equal(
-        transitionCalls.length,
-        1,
-        'updateStep must route through workflow coordinator transitionStep',
-      );
-      t.equal(transitionCalls[0][0], 'op-route-check');
+      t.equal(result, OPERATION_RECONCILE_OUTCOME.ADVANCED);
+      t.equal(fixture.readback(operation.operationId).workflow_step, WORKFLOW_STEP.SENDING);
+      t.equal(transitionCalls.length, 1,
+        'updateStep must route through workflow coordinator transitionStep');
+      t.equal(transitionCalls[0][0], operation.operationId);
       t.equal(transitionCalls[0][1].nextStep, WORKFLOW_STEP.SENDING);
       t.ok(transitionCalls[0][1].reason);
     } finally {
-      await coordinator.shutdown();
+      await fixture.close();
     }
   });
 }
