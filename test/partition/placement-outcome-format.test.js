@@ -156,6 +156,10 @@ async () => {
         `then answers ${answer.failureCode ?? 'a receipt'}`);
     }
     assert.equal(refusal?.code, OUTCOME_ERROR.FORMAT_UNSUPPORTED, `refusal: ${refusal}`);
+    // A consumer that keeps only the message (snapshot-catchup's
+    // RECREATE_FAILED detail) still names the typed refusal and the partition.
+    assert.ok(refusal.message.startsWith(`${OUTCOME_ERROR.FORMAT_UNSUPPORTED}:`), refusal.message);
+    assert.equal(refusal.partitionId, LEDGER_PARTITION_ID);
     const after = new Database(dbPath, {readonly: true});
     try {
       assert.deepEqual(columnsOf(after), PRIOR_COLUMNS.split(', '),
