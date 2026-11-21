@@ -1,3 +1,4 @@
+import {REPAIR_READ_SCOPE} from './replica-operation-retained-repair-authority.js';
 // The actual ledger repository serializes the whole repair decision, including
 // authority reads and adoption. Exact-entry native ingress attaches the native
 // completer directly: its outer decision may already be awaiting this ingress.
@@ -20,6 +21,11 @@ function ingressTerm(service) {
 
 function ownsIngress(service, term) {
   return service.isLeader && ingressTerm(service) === term;
+}
+
+function ownsNativeCompleter(attempt, payload) {
+  return Boolean(attempt.pending && attempt.entryId === payload.entryId &&
+    attempt.nativeIngressExpected);
 }
 
 function custodyOf(service, payload, attempt, attempts) {
@@ -54,14 +60,18 @@ function assignRetainedRepairIngressMethods(Repository) {
       if (attempt.entryId === payload.entryId && !isDeepStrictEqual(attempt.body, payload.body)) {
         return {success: false, failureCode: PLACEMENT_ADMISSION_ERROR.BYTES};
       }
+      const nativeCompleter = ownsNativeCompleter(attempt, payload);
+      attempt.nativeService = service;
+      attempt.expectedOwner = {nodeId: service.nodeId, replicaId: service.replicaId};
       const answer = await this.completeIncomingRetainedRepair(
         service, payload, attempt, submitNative);
+      if (nativeCompleter) return answer;
       const custody = custodyOf(service, payload, attempt, this.retainedPlacementRepairs);
       return custody === null ? answer : {...answer, repairCustody: custody};
     },
 
     async completeIncomingRetainedRepair(service, payload, attempt, submitNative) {
-      if (attempt.pending && attempt.entryId === payload.entryId && attempt.nativeIngressExpected) {
+      if (ownsNativeCompleter(attempt, payload)) {
         if (attempt.nativeIngressTerm !== null &&
             !ownsIngress(service, attempt.nativeIngressTerm)) {
           return unavailableReply(service, payload);
@@ -73,7 +83,12 @@ function assignRetainedRepairIngressMethods(Repository) {
         return attempt.nativeAnswerPromise;
       }
       if (attempt.pending) {
+        const term = ingressTerm(service);
         await attempt.pending;
+        if (!ownsIngress(service, term)) return unavailableReply(service, payload);
+        if (attempt.lastDecision !== null) {
+          return retainedRepairObservationReply(service, payload, attempt.lastDecision);
+        }
         return this.acceptRetainedPlacementRepairRequest(service, payload, submitNative);
       }
       let answer;
@@ -81,11 +96,12 @@ function assignRetainedRepairIngressMethods(Repository) {
       await this.runRetainedRepairDecision(attempt, async () => {
         await this.resolvePriorRetainedRepairAttempt(service, payload, attempt, term);
         if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
-        const decision = await this.readRetainedRepairDecision(attempt);
+        const decision = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.RECEIVER);
         if (!ownsIngress(service, term)) {
           answer = unavailableReply(service, payload);
           return false;
         }
+        attempt.lastDecision = decision;
         if (decision.state !== DECISION.ABSENT) {
           answer = retainedRepairObservationReply(service, payload, decision);
           return this.settleRetainedRepairDecision(attempt, decision);

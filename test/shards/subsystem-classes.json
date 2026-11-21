@@ -28,7 +28,7 @@
   "censusSize": 2718,
   "digest": "fnv1a32-473bbe91",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2bc92010",
+  "observationDigest": "fnv1a32-32ebfacb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14774,7 +14774,6 @@
         "src/rebalancer/replica-operation-update-disposition.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/rebalancer/replica-placement-owner-constants.js",
-        "test/partition/placement-admission-fixture.js",
         "test/rebalancer/test-helpers.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
