@@ -162,9 +162,17 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         enableTimeouts: false,
       });
+      const readStatuses = () => store.execute(
+        'SELECT status FROM storage_reservations ORDER BY reservation_id',
+      ).rows.map((row) => row.status);
       try {
         await coordinator.releaseReservationForOperation(operation);
-        await coordinator.reconcileReservations();
+        t.same(readStatuses(),
+          [RESERVATION_STATUS.ACTIVE, RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.ACTIVE],
+          'the keyed terminal release commits before the sweep and only for its exact operation');
+        const sweep = await coordinator.reconcileReservations();
+        t.same(sweep, {expired: 1, orphansReleased: 1},
+          'the sweep transitions just its expired and orphan rows');
         const reservationReads = gatewayCalls.filter((call) =>
           call.tableName === 'storage_reservations');
         t.equal(reservationReads.length, 3,
@@ -179,8 +187,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           t.equal(call.options.timeoutMs, CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
             'reservation sweep retains its read timeout');
         }
-        const committed = store.execute('SELECT status FROM storage_reservations ORDER BY reservation_id');
-        t.same(committed.rows.map((row) => row.status),
+        t.same(readStatuses(),
           [RESERVATION_STATUS.EXPIRED, RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.RELEASED],
           'terminal release, expiry and confirmed absence each close their exact reservation');
       } finally {
