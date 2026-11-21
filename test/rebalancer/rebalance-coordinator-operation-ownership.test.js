@@ -25,7 +25,7 @@ import {CONTROL_PLANE_MUTATION_OPERATION} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schema-shared-constants.js';
-import {createFixtureSystemMutationPort} from './test-helpers.js';
+import {createFixtureSystemMutationPort, withServicesLeaderWitness} from './test-helpers.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from
@@ -254,8 +254,9 @@ function createCoordinator(overrides = {}) {
       overrides.controlPlaneSystemTableGateway :
       {
         submitMutation: sqlQueryEngine.submitMutation,
-        async readAuthoritativeRows(_tableName, sql, params = [], options = {}) {
-          return sqlQueryEngine.executeQuery(sql, params, options);
+        async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+          return withServicesLeaderWitness(tableName,
+            await sqlQueryEngine.executeQuery(sql, params, options));
         },
         async readRows(_tableName, sql, params = [], options = {}) {
           return sqlQueryEngine.executeQuery(sql, params, options);

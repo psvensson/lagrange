@@ -22,23 +22,12 @@ import {
 } from '../../src/rebalancer/storage-admission-constants.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
-  buildMockPolicyAuthorityWitness,
   createMockCache,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withServicesLeaderWitness,
   withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
-
-// The services-p1 leader's witness on a complete SERVICES answer (an owner
-// fact the guard can decide on).
-const SERVICES_LEADER_WITNESS = buildMockPolicyAuthorityWitness(
-  `${SYSTEM_TABLE_NAME.SERVICES}-p1`);
-
-function withServicesLeaderWitness(tableName, answer) {
-  return tableName === SYSTEM_TABLE_NAME.SERVICES && answer?.success === true ?
-    {rowSetComplete: true, ...answer, readAuthorityWitness: SERVICES_LEADER_WITNESS} :
-    answer;
-}
 
 const ReplicaStatusForTest = {REMOVING: 'removing'};
 const TEST_NODE_ID = 'node-1';

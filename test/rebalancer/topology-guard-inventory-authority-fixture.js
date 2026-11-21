@@ -135,6 +135,10 @@ const PLANNER_TURN_START_DELAY_MS = 120000;
 const PLANNER_TURN_POLICY = Object.freeze({targetReplicaCount: 1, minReplicaCount: 1,
   maxReplicaCount: 1, placementConstraints: Object.freeze({spreadAcrossNodes: true})});
 const READY_LEASE_MS = 3600000;
+// The query executor's no-handler address quarantine (host clock), short so
+// a case can wait it out (production: 30 s for control-plane tables).
+const ADDRESS_QUARANTINE_MS = 200;
+const ADDRESS_QUARANTINE_MARGIN_MS = 300;
 const PLANNER_TURN_START_REASON = 'planner-turn-start';
 const REFUSES_CREATION = () => {
   throw new Error('the guard fixture creates no replica');
@@ -599,7 +603,8 @@ function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
   };
   const router = world.routerOf(NODE.PLANNER);
   const queryExecutor = new QueryExecutor({nodeId: NODE.PLANNER, messageRouter: router,
-    systemCache: cache, controlPlaneReadinessService: createCommittedServeEligibilityOwner()});
+    systemCache: cache, controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    noHandlerAddressQuarantineMs: ADDRESS_QUARANTINE_MS});
   const hopContext = {world, observed, unreachable: new Set(unreachableNodeIds)};
   router.setQueryMessageGroupServiceResolver(() => ({
     sendMessage: (address, message, options) =>
@@ -667,6 +672,10 @@ function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
 
   return Object.freeze({
     cache, store, cdc, gateway, coordinator, queryExecutor, observed,
+    // Real time past the query executor's no-handler quarantine of an address.
+    afterAddressQuarantine: () => new Promise((resolve) => {
+      setTimeout(resolve, ADDRESS_QUARANTINE_MS + ADDRESS_QUARANTINE_MARGIN_MS);
+    }),
     // A node's channel becomes reachable or unreachable; nothing is told.
     setReachable(nodeId, reachable) {
       if (reachable) hopContext.unreachable.delete(nodeId);

@@ -134,6 +134,8 @@ async function runPlannerTurnAcrossOutage(t, {world, host, outage, restore,
   // to the coordinator and no cache change: only the planner's own scheduled
   // turn can observe it.
   restore();
+  // The executor's quarantine of the refused address runs on the host clock.
+  await host.afterAddressQuarantine();
   await turn.advance(RECOVERY_BOUND_MS);
   const afterRecovery = Object.freeze({proposals: host.ledgerRows().length,
     results: [...turn.results], ledger: ledgerShape(host.ledgerRows())});

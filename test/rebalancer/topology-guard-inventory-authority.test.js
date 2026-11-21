@@ -246,9 +246,8 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
         async (t) => {
           t.equal(strict.observation?.available, false,
             'a leader-required owner read is unavailable');
-          const leaderHops = strict.hops.filter((hop) => hop.nodeId === NODE.PEER_A);
-          t.ok(leaderHops.length > 0 && leaderHops.every((hop) => hop.refused),
-            'every hop it made to the leader was refused');
+          t.notOk(strict.hops.some((hop) => hop.nodeId === NODE.PEER_A && !hop.refused),
+            'no hop reached the leader (refused, or its address quarantined)');
         });
 
       await t.test('contract (red today): a typed unavailability with a named reason and ' +

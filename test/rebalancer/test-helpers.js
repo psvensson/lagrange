@@ -506,6 +506,16 @@ function createMockTransactionCoordinator() {
   };
 }
 
+// A SERVICES answer as the services-p1 leader gives it to an owner-fact
+// read: a successful answer gains the leader's complete witness.
+function withServicesLeaderWitness(tableName, answer) {
+  return tableName === SYSTEM_TABLE_NAME.SERVICES && answer?.success === true ?
+    {rowSetComplete: true, ...answer,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness(
+        `${SYSTEM_TABLE_NAME.SERVICES}-p1`)} :
+    answer;
+}
+
 function buildMockPolicyAuthorityWitness(partitionId) {
   return Object.freeze({
     state: 'observed',
@@ -1469,6 +1479,7 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 }
 
 export {
+  withServicesLeaderWitness,
   createFixtureSystemMutationPort, createObservationOnlyMutationPort, withExecutorMutationPort,
   applyOperationRowUpdate, createOperationRowInsertPort, createOperationRowUpdatePort,
   routeOperationRowUpdates,

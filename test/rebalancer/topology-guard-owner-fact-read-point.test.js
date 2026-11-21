@@ -7,8 +7,9 @@
 //   when the leader has applied its log the same turn proposes exactly once,
 //   counting the committed row (the replica id after it, not a reused one).
 // - The leader's applied index moves while it reads (a row lands on the
-//   target node): that read decides nothing; the next decides on the moved
-//   state and refuses the occupied target.
+//   target node): the rows of that read decide nothing; the call defers or,
+//   asked again inside the same delivery, decides on the moved state, and
+//   every later call refuses the occupied target.
 // The witnesses state behaviour (what the guard decides and proposes), not
 // the read's call shape.
 //
@@ -118,11 +119,12 @@ test('a fresh services-p1 leader that has not applied its election log: no decis
     'log, minting the replica id after the committed row');
 });
 
-test('the leader\'s applied index moves while it reads: that read decides nothing; the ' +
-  'next decides on the moved state', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+test('the leader\'s applied index moves while it reads: the rows of that read decide ' +
+  'nothing; the decision is on the moved state', {timeout: CASE_TIMEOUT_MS}, async (t) => {
   const world = await openWorld(t);
   await world.settleLeader(NODE.PEER_A);
   const host = openPlannerHost(t, world);
+  const receiverBefore = world.readCountsOf(NODE.PEER_A).receiver;
   const held = world.holdNextStatementAfterRead(NODE.PEER_A);
   const pending = host.createAdd();
   const raced = await Promise.race([held.entered.then(() => null), pending]);
@@ -136,15 +138,18 @@ test('the leader\'s applied index moves while it reads: that read decides nothin
   held.release();
   const first = await pending;
   const firstLedger = host.ledgerRows().length;
+  const leaderAsked = world.readCountsOf(NODE.PEER_A).receiver - receiverBefore;
   const second = await host.createAdd();
   printObservation(t, 'read-point', {leaderStatementHeld, first: refusalOf(first.error),
-    firstLedger, second: refusalOf(second.error),
+    firstLedger, leaderAsked, second: refusalOf(second.error),
     ledger: ledgerShape(host.ledgerRows())});
 
   t.ok(leaderStatementHeld, 'the guard\'s read reached the leader\'s statement');
-  t.ok(isTypedUnavailableDeferral(refusalOf(first.error)),
-    `the read whose point moved decided nothing: ${JSON.stringify(refusalOf(first.error))}`);
-  t.equal(firstLedger, 0, 'and proposed nothing');
+  const firstRefusal = refusalOf(first.error);
+  t.ok(isTypedUnavailableDeferral(firstRefusal) ||
+    firstRefusal?.reason === TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
+  `the rows read before the move decided nothing: ${JSON.stringify(firstRefusal)}`);
+  t.equal(firstLedger, 0, 'nothing was proposed on them');
   t.equal(refusalOf(second.error)?.reason, TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
     'the next read decides on the moved state: the target is occupied');
   t.equal(refusalOf(second.error)?.decisionType, STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,

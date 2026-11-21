@@ -67,7 +67,7 @@ test('residual: the guard asks a deposed services-p1 leader that does not know i
       witnessRole: answer?.readAuthorityWitness?.role ?? null})),
     refusal: refusalOf(first.error),
     ledger: ledger.map((row) => [row.target_node_id, row.replica_id])})}`);
-  t.notEqual(newLeaderNodeId, NODE.PEER_A, 'setup: another replica leads services-p1');
+  t.not(newLeaderNodeId, NODE.PEER_A, 'setup: another replica leads services-p1');
   t.type(deposedRoleAtRead, 'string',
     `setup: the deposed replica's core role at the read is recorded (${deposedRoleAtRead})`);
   t.same(ledger, [], 'no second replica is admitted onto the node that just received one');
