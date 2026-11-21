@@ -28,7 +28,7 @@
   "censusSize": 2714,
   "digest": "fnv1a32-2108589c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-00e4284d",
+  "observationDigest": "fnv1a32-4694f06c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -19464,6 +19464,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-operation-update-disposition.js",
         "src/transport/transport-semantic-outcome.js",
         "test/node/replica-removal-consensus-exit-fixture.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
