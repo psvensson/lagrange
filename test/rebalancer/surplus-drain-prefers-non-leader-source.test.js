@@ -6,6 +6,11 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {MessageGroupServiceRowOwner} from
+  '../../src/message-group/message-group-service-row-owner.js';
+import {PartitionServiceRowOwner} from
+  '../../src/partition/partition-service-row-owner.js';
 import {createTestRebalancer} from './test-helpers.js';
 
 // Lever (a) — surplus-drain prefers a NON-leader replica as the removal source.
@@ -343,5 +348,117 @@ test('at-target spread retains node-level leadership fallback when the ' +
     'a missing-role row on leader_node_id stays conservative while an ' +
       'explicit follower remains selectable',
   );
+  t.end();
+});
+
+// Necessity witnesses for the planner's row-role leader arm (census #5: the
+// `raft_role === leader` arm of isLeaderRemovalCandidate). Rows below are the
+// ones the producers build; the plan is the lever-(a) shape above (leader on
+// node-B listed before the follower drop candidate on node-D).
+const ROW_ROLE_PLAN_NODES = Object.freeze(
+  ['node-A', LEADER_NODE, 'node-C', FOLLOWER_DROP_NODE]);
+const ROW_ROLE_PLAN_ALL_NODES = Object.freeze([...ROW_ROLE_PLAN_NODES,
+  'node-E']);
+
+function replaceSourcesOfPlan({entityId, entityType, rows, configure}) {
+  setupConfig();
+  const rebalancer = createTestRebalancer({
+    entityId,
+    entityType,
+    nodeId: 'coordinator-node',
+    cacheData: {
+      nodes: ROW_ROLE_PLAN_ALL_NODES.map(
+        (nodeId) => ({node_id: nodeId, status: 'active'})),
+      services: rows,
+      replicaOperations: [],
+    },
+  });
+  configure?.(rebalancer);
+  rebalancer.initialize();
+  rebalancer.setLeader(true);
+  try {
+    return rebalancer.calculateMoves(rows, TARGET_STATE)
+      .filter((move) => move.type === MoveType.REPLACE)
+      .map((move) => move.sourceNodeId);
+  } finally {
+    rebalancer.shutdown();
+    teardownConfig();
+  }
+}
+
+// A partition planner answers "is this candidate the leader" from its own
+// live leadership (isLeader + replicaId, as PartitionService builds it), and
+// the partition row owner never publishes leader: for every role the enum
+// owns as the leader's tracked role, the row reads non-leader and the plan is
+// the same. Without the live replica id the source falls back to first-wins
+// (the anchor: the live arm decides, the row role arm does not).
+test('necessity: a partition planner prefers a non-leader source from its ' +
+  'live leader replica; the row role it publishes never decides', (t) => {
+  const leaderReplicaId = `${PARTITION_ID}-${LEADER_NODE}`;
+  const partitionRows = (leaderTrackedRole) => ROW_ROLE_PLAN_NODES.map(
+    (nodeId) => PartitionServiceRowOwner.buildServiceRow({
+      partitionId: PARTITION_ID,
+      replicaId: `${PARTITION_ID}-${nodeId}`,
+      nodeId,
+      service: {getRole: () => nodeId === LEADER_NODE ?
+        leaderTrackedRole : RAFT_ROLE.FOLLOWER},
+      status: ReplicaStatus.ACTIVE,
+    }));
+  // The planner's own replica is the leader (setLeader(true) below); its
+  // node stays the fixture's, so placement retention reads as in the lever
+  // tests above.
+  const liveLeader = (rebalancer) => {
+    rebalancer.replicaId = leaderReplicaId;
+  };
+  for (const leaderTrackedRole of Object.values(RAFT_ROLE)) {
+    const rows = partitionRows(leaderTrackedRole);
+    t.notOk(rows.some((row) => row.raft_role === RAFT_ROLE.LEADER),
+      `tracked ${leaderTrackedRole}: the partition producer publishes no ` +
+        'leader row');
+    t.same(replaceSourcesOfPlan({entityId: PARTITION_ID,
+      entityType: EntityType.PARTITION, rows, configure: liveLeader}),
+    [FOLLOWER_DROP_NODE], `tracked ${leaderTrackedRole}: the live leader ` +
+      'replica keeps the leader out of the REPLACE source');
+  }
+  t.same(replaceSourcesOfPlan({entityId: PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    rows: partitionRows(RAFT_ROLE.LEADER)}), [LEADER_NODE],
+  'anchor: without the live leader replica the source is first-wins');
+  t.end();
+});
+
+// FINDING (the arm stays): a message-group planner has no live arm (its
+// rebalancer is built without a replicaId and both live resolvers are
+// partition-only), while the message-group row owner publishes `leader` for a
+// replica leading at registration or activation (resolveMessageGroupRaftRole,
+// collapseLeaderToFollower: false). For it the row role is the only leader
+// evidence, and it moves the REPLACE source. It goes only with the
+// message-group producer flip and a live arm for message-group planners.
+test('necessity: a message-group planner\'s only leader evidence is the ' +
+  'row role its producer publishes, and that role moves the REPLACE source',
+(t) => {
+  const messageGroupId = 'mg-orders';
+  const messageGroupRows = (leaderIsLive) => ROW_ROLE_PLAN_NODES.map(
+    (nodeId) => MessageGroupServiceRowOwner.buildServiceRow({
+      groupId: messageGroupId,
+      replicaId: `${messageGroupId}-${nodeId}`,
+      nodeId,
+      service: {isLeader: leaderIsLive && nodeId === LEADER_NODE,
+        getRole: () => RAFT_ROLE.FOLLOWER},
+      status: ReplicaStatus.ACTIVE,
+      timestamp: 1,
+    }));
+  const liveLeaderRows = messageGroupRows(true);
+  t.equal(liveLeaderRows.find((row) => row.node_id === LEADER_NODE).raft_role,
+    RAFT_ROLE.LEADER,
+    'the message-group row owner publishes leader for its live leader');
+  t.same(replaceSourcesOfPlan({entityId: messageGroupId,
+    entityType: EntityType.MESSAGE_GROUP, rows: liveLeaderRows}),
+  [FOLLOWER_DROP_NODE],
+  'with the published leader row the follower is the REPLACE source');
+  t.same(replaceSourcesOfPlan({entityId: messageGroupId,
+    entityType: EntityType.MESSAGE_GROUP, rows: messageGroupRows(false)}),
+  [LEADER_NODE],
+  'with every row a follower the source is first-wins: the row role decides');
   t.end();
 });
