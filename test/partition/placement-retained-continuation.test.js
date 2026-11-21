@@ -25,6 +25,9 @@ afterEach(clearFixtureSingletons);
 
 const PARTITION_ID = 'retained-continuation-p1';
 const OPERATION_ID = 'retained-continuation-remove';
+// Twelve virtual minutes of one-second continuation steps: more than twice the
+// rebalance operation budget, so any bound up to that budget stops inside it.
+const PERMANENT_FAILURE_TURNS = 720;
 
 function retainMissing(world) {
   return retainMissingOperation(world, {operationId: OPERATION_ID, partitionId: PARTITION_ID,
@@ -180,7 +183,7 @@ test('W6 a permanent read failure is bounded, keeps the obligation and proposes 
     await bounded(stepRetainedLedgerRow(world, competitorId, WORKFLOW_STEP.FAILED), 'the release');
     await idleRepairs(repository);
     const turns = await advanceContinuation(clock, [repository],
-      () => clock.pendingTimerCount() === 0);
+      () => clock.pendingTimerCount() === 0, PERMANENT_FAILURE_TURNS);
     assert.equal(repairCommands(world).length, proposals, 'no read, no proposal');
     assert.equal(ledgerRow(world, retained.operationId), undefined);
     assert.deepEqual(identityOf(repository, retained.operationId), identity,
