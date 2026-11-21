@@ -160,7 +160,17 @@ finite-read proof.
 [Timer authority originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--active-timer-operation-authority-29cd-953d-nov21.tar.gz).
 [Original and corrected runs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--concrete-progress-observation-paired-nov21.tar.gz).
 
-Three removal decisions remain assigned.
+The accepted-main range ending at `4007eced1` passed fast static
+against `0dbed1718` in 88.825 seconds. The whole duplication check at
+`dbf6fdc9c` passed with 35 groups / 1,109 lines in source and scripts
+and 609 / 21,780 in tests. At `76755d478`, the three-process public SQL
+journey passed on tv-dator in 36.824 seconds. The named three-host gate
+is still at zero of three consecutive passes.
+[Static original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--core-static-4007-nov21.tar.gz),
+[duplication original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--core-duplication-dbf6-nov21.tar.gz),
+[public SQL original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--public-sql-7675-and-reservation-c393-nov21.tar.gz).
+
+Removal planning, delayed replies and missing-row recovery have different evidence.
 
 * Planning checks the entity's competing operations before it has a row
   of its own. Dispatch verifies its existing committed subject and the
@@ -177,8 +187,12 @@ Three removal decisions remain assigned.
   sent row through the conditional write and preserve a replacement row
   or a conflicting terminal outcome. At `3e3057074`, the three matched
   tv-dator files passed (545 assertions) after seven failures at
-  `f29022aa1`. The subsequent handoff from corrected STOPPING to terminal
-  completion is being checked independently.
+  `f29022aa1`. The subsequent completion initially lost its preimage in
+  the concrete workflow override. `9559f439f` carries it through both
+  the terminal write and rejection by the in-memory mirror. All four
+  tv-dator files (1,221 assertions) and three adams-gamla companions
+  (497) passed; a same-generation FAILED winner is preserved.
+  [Concrete completion and mirror originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--historical-remove-owner-proof-9559-nov21.tar.gz).
   [Delayed-reply and healthy placement runs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--post-reply-f290-3e30-prospective-1d5f-nov21.tar.gz).
   [Removal and post-reply originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--remove-prospective-and-original-postreply-limits-nov21.tar.gz).
 * Normal native placement and restoration of a missing operation row
