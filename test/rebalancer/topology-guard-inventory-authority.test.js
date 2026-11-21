@@ -17,6 +17,7 @@
 // contract here is met by accepting an incomplete or non-leader answer
 // (the leader-only occupant case fails any repair that does).
 import {test} from '../../src/test-helpers/tap.js';
+import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -49,9 +50,8 @@ import {
 
 const {TOPOLOGY_GUARD_REASON} = REBALANCE_COORDINATOR_SHARED;
 const CASE_TIMEOUT_MS = 120000;
-const FOLLOWER_LED_PORT = 19931;
-const PLANNER_LED_PORT = 19941;
 const CONNECTED = 'connected';
+const PORTS = createPortAllocator(import.meta.url);
 const UNUSABLE_OPERATION_STATES = Object.freeze([
   REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE,
   REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
@@ -124,11 +124,11 @@ function isLeaderWitnessedComplete(read, servingNodeId) {
     result.readAuthorityWitness.servingNodeId === servingNodeId;
 }
 
-async function openWorld(t, leaderNodeId, basePort) {
+async function openWorld(t, leaderNodeId, ports) {
   initializeGuardEnvironment();
   let world = null;
   try {
-    world = await openServicesWorld({leaderNodeId, basePort});
+    world = await openServicesWorld({leaderNodeId, ports});
   } finally {
     t.teardown(async () => {
       await world?.close();
@@ -148,7 +148,7 @@ async function openWorld(t, leaderNodeId, basePort) {
 
 test('services-p1 led by another node: the planner\'s topology guard and the SERVICES ' +
   'authority', {timeout: CASE_TIMEOUT_MS}, async (t) => {
-  const world = await openWorld(t, NODE.PEER_A, FOLLOWER_LED_PORT);
+  const world = await openWorld(t, NODE.PEER_A, PORTS);
   t.equal(world.replicaOn(NODE.PLANNER).getRole(), RAFT_ROLE.FOLLOWER,
     'setup: the planner node hosts a services-p1 replica that follows');
 
@@ -406,7 +406,7 @@ test('services-p1 led by another node: the planner\'s topology guard and the SER
 
 test('anchor (a, green today): the planner node leading services-p1 admits the same request',
   {timeout: CASE_TIMEOUT_MS}, async (t) => {
-    const world = await openWorld(t, NODE.PLANNER, PLANNER_LED_PORT);
+    const world = await openWorld(t, NODE.PLANNER, PORTS);
     const host = openPlannerHost(t, world);
     const first = await withDiagnosticStacks(() => host.createAdd());
     const ledger = host.ledgerRows();

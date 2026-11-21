@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2372,
+    "unit": 2374,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2731,
-  "digest": "fnv1a32-390bd0a2",
+  "censusSize": 2733,
+  "digest": "fnv1a32-aea63a21",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2148,6 +2148,7 @@
     "test/rebalancer/safety-check-delegation.property.test.js": "unit",
     "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js": "unit",
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "unit",
+    "test/rebalancer/services-inventory-owner-fact-siblings.test.js": "unit",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "unit",
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "unit",
     "test/rebalancer/spread-cure-transition-authorization-row.test.js": "unit",
@@ -2178,6 +2179,7 @@
     "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js": "unit",
     "test/rebalancer/timeout-triggers-failure.property.test.js": "unit",
     "test/rebalancer/topology-guard-inventory-authority.test.js": "unit",
+    "test/rebalancer/topology-guard-owner-fact-inventory.test.js": "unit",
     "test/rebalancer/topology-owner-contracts.test.js": "unit",
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": "unit",
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": "unit",

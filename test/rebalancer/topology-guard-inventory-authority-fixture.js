@@ -20,9 +20,23 @@
 //   which is not the subject: the coordinator SQL store fixture, answered at
 //   the engine, at executeOnPartition and by the planner node's local ledger
 //   leader replica, with the fixture leader witness;
+//   A ledger write answers as the ledger leader's apply answers it: with the
+//   producer's durable commit receipt (buildDurableCommitWitness over the
+//   entry id derived from the named write's key, at a fixture log position),
+//   so the named-write settlement judges it as it judges a real one;
 // - the coordinator's non-subject collaborators as createTestCoordinator
 //   supplies them (readiness, storage admission and accounting, policy,
-//   dispatch router, transaction coordinator).
+//   dispatch router, transaction coordinator); a host opened with
+//   `readyNodes` also publishes the three nodes as ready in its cache;
+// - for the planner's own turn (openPlannerTurn): the planning gates, the
+//   policy, the state evaluation and the move calculation (the turn plans the
+//   one ADD while the ledger holds no operation for the service). The
+//   production checkRebalance, its cadence, its scheduled retry and its move
+//   execution run, on a virtual clock.
+// The planner node's ReplicaHandler is constructed (never initialized) and
+// holds the planner's services-p1 replica, as bootstrap attaches it, so the
+// CDC service's in-process read arm consults the production owner of the
+// replicas the node hosts.
 // Consensus traffic between the replicas runs on the group fixture's
 // loopback. The SERVICES table content is seeded into each replica's
 // database directly (it is table content, not the subject). The planner's
@@ -36,7 +50,8 @@ import {
   SYSTEM_TABLE_NAME,
   getSchemaByTableName,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {CDC_OPERATION, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION, NODE_STATE, SERVICE_STATUS, TABLES} from
+  '../../src/constants/index.js';
 import {UNIFIED_SERVICE_TYPE} from '../../src/constants/unified-service-lifecycle.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
@@ -47,10 +62,17 @@ import {
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {PartitionServiceRowOwner} from
   '../../src/partition/partition-service-row-owner.js';
+import {buildDurableCommitWitness} from '../../src/partition/partition-write-kernel.js';
+import {deriveParticipantEntryId} from
+  '../../src/query/distributed/distributed-write-coordinator.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR, RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {ENTITY_SERVICE_ROW_READ_SQL} from
   '../../src/rebalancer/entity-service-row-read.js';
 import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
@@ -93,7 +115,21 @@ const LEDGER_PARTITION_IDS = Object.freeze(new Set([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS],
 ]));
 const LEDGER_STATEMENT =
-  /\b(?:from|into|update)\s+(?:replica_operations|storage_reservations)\b/iu;
+  /\b(?:from|into|update)\s+(replica_operations|storage_reservations)\b/iu;
+// The fixture ledger leader's term; its log positions count from 1.
+const LEDGER_TERM = 1;
+// The planner turn's cadence (rebalancer config) and its virtual step.
+const PLANNER_CHECK_INTERVAL_MS = 5000;
+const PLANNER_CHECK_JITTER_MS = 100;
+const PLANNER_TURN_STEP_MS = 1000;
+const PLANNER_TURN_START_DELAY_MS = 120000;
+const PLANNER_TURN_POLICY = Object.freeze({targetReplicaCount: 1, minReplicaCount: 1,
+  maxReplicaCount: 1, placementConstraints: Object.freeze({spreadAcrossNodes: true})});
+const READY_LEASE_MS = 3600000;
+const PLANNER_TURN_START_REASON = 'planner-turn-start';
+const REFUSES_CREATION = () => {
+  throw new Error('the guard fixture creates no replica');
+};
 const GROUP_TEMP_PREFIX = 'topology-guard-inventory-';
 const GROUP_FORMATION_BUDGET_MS = 10000;
 // The strict probe's own bound; the guard's read keeps the coordinator's.
@@ -117,7 +153,9 @@ const QUIET_LOG_LEVEL = 'error';
 function initializeGuardEnvironment() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({node: {id: NODE.PLANNER}});
+  ConfigurationManager.getInstance().initialize({node: {id: NODE.PLANNER},
+    rebalancer: {periodicCheckIntervalMs: PLANNER_CHECK_INTERVAL_MS,
+      periodicCheckJitterMs: PLANNER_CHECK_JITTER_MS}});
   LoggingService.getInstance().initialize({level: QUIET_LOG_LEVEL});
 }
 
@@ -183,10 +221,10 @@ function buildRuntimeOccupantRow(nodeId, nowMs) {
   };
 }
 
-async function startRouters(basePort) {
+async function startRouters(ports) {
   const routers = new Map();
-  for (const [index, nodeId] of NODE_ORDER.entries()) {
-    const router = new MessageRouter({nodeId, wsPort: basePort + index,
+  for (const nodeId of NODE_ORDER) {
+    const router = new MessageRouter({nodeId, wsPort: ports.getPort(),
       inProcess: true, bootIncarnation: TEST_BOOT_INCARNATION});
     routers.set(nodeId, router);
     await router.initialize({startServer: true});
@@ -198,13 +236,32 @@ async function startRouters(basePort) {
   return routers;
 }
 
+// Count, per replica, the statements its local arm ran (executeLocalQuery)
+// and the requests its receiver answered (handleRemoteQuery): observation
+// only, the production methods run unchanged.
+function countReplicaReads(replica) {
+  const counts = {local: 0, receiver: 0};
+  const executeLocalQuery = replica.executeLocalQuery.bind(replica);
+  const handleRemoteQuery = replica.handleRemoteQuery.bind(replica);
+  replica.executeLocalQuery = (...args) => {
+    counts.local += 1;
+    return executeLocalQuery(...args);
+  };
+  replica.handleRemoteQuery = (...args) => {
+    counts.receiver += 1;
+    return handleRemoteQuery(...args);
+  };
+  return counts;
+}
+
 /**
  * Form services-p1 with `leaderNodeId` leading, host each replica on its
  * node's router and seed the SERVICES table content into every replica.
- * @param {Object} options - {leaderNodeId, basePort}.
+ * @param {Object} options - {leaderNodeId, ports}: ports is the test file's
+ *   port allocator.
  * @return {Promise<Object>} The world; close() releases it.
  */
-async function openServicesWorld({leaderNodeId, basePort}) {
+async function openServicesWorld({leaderNodeId, ports}) {
   const memberOrder = [leaderNodeId,
     ...NODE_ORDER.filter((nodeId) => nodeId !== leaderNodeId)];
   const group = await formAdmittedGroup({
@@ -234,7 +291,9 @@ async function openServicesWorld({leaderNodeId, basePort}) {
       throw new Error(`setup: ${SERVICES_PARTITION_ID} service roles did not settle: ` +
         JSON.stringify(group.services.map((replica) => [replica.nodeId, replica.getRole()])));
     }
-    routers = await startRouters(basePort);
+    routers = await startRouters(ports);
+    const readCounts = new Map(group.services.map((replica) =>
+      [replica.nodeId, countReplicaReads(replica)]));
     for (const replica of group.services) {
       routers.get(replica.nodeId).register(replica.unifiedAddress, replica.transportHandler);
     }
@@ -259,11 +318,36 @@ async function openServicesWorld({leaderNodeId, basePort}) {
         replicaOn(leaderNodeId).db, SYSTEM_TABLE_NAME.SERVICES, row),
       tableRowsOn: (nodeId, sql, params = []) =>
         replicaOn(nodeId).db.prepare(sql).all(...params),
+      readCountsOf: (nodeId) => Object.freeze({...readCounts.get(nodeId)}),
+      // Actual raft leadership moves; no projection is told.
+      async transferLeadership(fromNodeId, toNodeId) {
+        const from = replicaOn(fromNodeId);
+        const to = replicaOn(toNodeId);
+        const requested = await turnChainValue(from.requestLeadershipTransfer({
+          successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+          replicaIdentity: to.replicaId}));
+        if (requested?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+          throw new Error(`setup: transfer refused ${JSON.stringify(requested)}`);
+        }
+        const moved = await group.waitFor(() =>
+          from.raft.readStatus().role === RAFT_ROLE.FOLLOWER &&
+          to.raft.readStatus().role === RAFT_ROLE.LEADER &&
+          from.raft.readStatus().leaderId === to.replicaId);
+        if (!moved) throw new Error('setup: services-p1 leadership did not move');
+      },
       close,
     });
   } catch (error) {
     await close();
     throw error;
+  }
+}
+
+function seedReadyNodes(cache) {
+  for (const nodeId of NODE_ORDER) {
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {node_id: nodeId,
+      status: NODE_STATE.ACTIVE, connection_state: NODE_STATE.READY,
+      ready_lease_expires_at: Date.now() + READY_LEASE_MS});
   }
 }
 
@@ -285,6 +369,25 @@ function seedPlannerCache(cache, world) {
 function withAffectedRows(result) {
   return Number.isSafeInteger(result?.changes) ?
     {...result, affectedRows: result.changes} : result;
+}
+
+// A committed ledger write as the ledger leader's apply answers it: the
+// statement's count and the producer's durable commit receipt for the entry
+// the named write's key derives on the statement's partition.
+function withLedgerCommitReceipt(result, sql, options, nextLogIndex) {
+  const answer = withAffectedRows(result);
+  const key = options?.idempotencyKey;
+  const [, tableName] = String(sql).match(LEDGER_STATEMENT) ?? [];
+  if (answer?.success !== true || !Number.isSafeInteger(answer.affectedRows) ||
+      typeof key !== 'string' || tableName === undefined) {
+    return answer;
+  }
+  const partitionId = INITIAL_PARTITION_IDS[tableName.toLowerCase()];
+  return {...answer, partitionId, durableCommitWitness: buildDurableCommitWitness({
+    partitionId, leaderNodeId: NODE.PLANNER,
+    leaderReplicaId: `${partitionId}-${NODE.PLANNER}`,
+    logEntry: {term: LEDGER_TERM, index: nextLogIndex(),
+      data: {entryId: deriveParticipantEntryId(key, partitionId), idempotencyKey: key}}})};
 }
 
 function answerLedgerPartitionStatement(store, partitionId, sql, params) {
@@ -352,17 +455,85 @@ async function settle(run) {
 }
 
 /**
+ * The planner's own turn for the runtime service on `clock`: the production
+ * checkRebalance, its cadence and its scheduled retry, executing the move
+ * through the production executeMoveViaCoordinator; the planning itself is
+ * substituted (header). Turns come only from the rebalancer's own queue and
+ * timer; nothing else enqueues a check after start().
+ * @param {Object} t - The case's tap test.
+ * @param {Object} host - {cache, coordinator, ledgerRows}.
+ * @param {Object} options - {clock, scheduledRetry}: scheduledRetry false
+ *   disables the turn's scheduled retry (anti-vacuity arm).
+ * @param {Array} rebalancers - The host's rebalancers (shut down with it).
+ * @return {Object} {start, advance, stop, results}.
+ */
+function openPlannerTurn(t, host, {clock, scheduledRetry = true}, rebalancers) {
+  const rebalancer = createTestRebalancer({entityId: RUNTIME_SERVICE_ID,
+    entityType: EntityType.RUNTIME_SERVICE, nodeId: NODE.PLANNER,
+    systemTableCache: host.cache, rebalanceCoordinator: host.coordinator,
+    nowFn: () => clock.now(), setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock)});
+  rebalancers.push(rebalancer);
+  const results = [];
+  rebalancer.getCheckRebalanceBlocker = async () => null;
+  rebalancer.getPolicy = async () => PLANNER_TURN_POLICY;
+  rebalancer.evaluateState = async () => true;
+  rebalancer.rebalance = async () => {
+    const moves = host.ledgerRows().length === 0 ? [buildPlannerAddMove()] : [];
+    const executed = [];
+    for (const move of moves) {
+      const result = await rebalancer.executeMoveViaCoordinator(move);
+      executed.push(result);
+      results.push(result);
+    }
+    return rebalancer.buildRebalanceResult(true, {moves: executed});
+  };
+  if (!scheduledRetry) rebalancer.scheduleNextCheck = () => {};
+  const advance = async (durationMs) => {
+    for (let elapsed = 0; elapsed < durationMs; elapsed += PLANNER_TURN_STEP_MS) {
+      clock.advance(PLANNER_TURN_STEP_MS);
+      await rebalancer.awaitCurrentWorkIdle();
+    }
+  };
+  return Object.freeze({
+    results,
+    async start() {
+      rebalancer.initialize();
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isLeader = true;
+      clock.advance(PLANNER_TURN_START_DELAY_MS);
+      rebalancer.enqueueRebalanceCheck(PLANNER_TURN_START_REASON);
+      await rebalancer.awaitCurrentWorkIdle();
+    },
+    advance,
+    async stop() {
+      rebalancer.shutdown();
+      await rebalancer.awaitCurrentWorkIdle();
+      t.comment(`planner turn stopped with ${clock.pendingTimerCount()} virtual timers`);
+    },
+  });
+}
+
+/**
  * The planner node's owners for one case, on the world's services-p1 group.
  * @param {Object} t - The case's tap test (owns the teardown).
  * @param {Object} world - openServicesWorld().
- * @param {Object} [options] - {unreachableNodeIds}: nodes whose hop refuses.
+ * @param {Object} [options] - {unreachableNodeIds, readyNodes}: nodes whose
+ *   hop refuses (setReachable changes it later); whether the host's cache
+ *   publishes the three nodes as ready.
  * @return {Object} The host.
  */
-function openPlannerHost(t, world, {unreachableNodeIds = []} = {}) {
+function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false} = {}) {
   const observed = {servicesReads: [], ownerRpc: [], hops: [], engineRefusals: []};
   const cache = new SystemTableCache();
   seedPlannerCache(cache, world);
+  if (readyNodes) seedReadyNodes(cache);
   const store = createCoordinatorSqlStore(cache);
+  let ledgerLogIndex = 0;
+  const nextLedgerLogIndex = () => {
+    ledgerLogIndex += 1;
+    return ledgerLogIndex;
+  };
   const router = world.routerOf(NODE.PLANNER);
   const queryExecutor = new QueryExecutor({nodeId: NODE.PLANNER, messageRouter: router,
     systemCache: cache, controlPlaneReadinessService: createCommittedServeEligibilityOwner()});
@@ -386,13 +557,14 @@ function openPlannerHost(t, world, {unreachableNodeIds = []} = {}) {
           error: `${PARTITION_NOT_SERVED}${partitionId}`};
       },
     },
-    async executeQuery(sql, params = []) {
+    async executeQuery(sql, params = [], options = {}) {
       if (!LEDGER_STATEMENT.test(String(sql))) {
         observed.engineRefusals.push(String(sql));
         return {success: false, rows: [], rowSetComplete: false,
           error: ENGINE_STATEMENT_NOT_SERVED};
       }
-      return withAffectedRows(store.execute(sql, params));
+      return withLedgerCommitReceipt(store.execute(sql, params), sql, options,
+        nextLedgerLogIndex);
     },
   };
   const hostedPartitions = new Map([
@@ -404,6 +576,12 @@ function openPlannerHost(t, world, {unreachableNodeIds = []} = {}) {
     sqlQueryEngine, messageRouter: router,
     partitionServicesProvider: () => hostedPartitions});
   cdc.initialize();
+  // The production owner of the replicas the node hosts binds itself to the
+  // CDC service at construction; it holds the planner's services-p1 replica.
+  const replicaHandler = new ReplicaHandler({nodeId: NODE.PLANNER, systemTableCache: cache,
+    cdcIntegrationService: cdc, createPartitionService: REFUSES_CREATION});
+  const plannerReplica = world.replicaOn(NODE.PLANNER);
+  replicaHandler.localServices.set(plannerReplica.replicaId, plannerReplica);
   const gateway = new ControlPlaneSystemTableGateway({nodeId: NODE.PLANNER,
     cdcIntegrationService: cdc, systemTableCache: cache, sqlQueryEngine});
   tapServicesReads(gateway, observed);
@@ -426,6 +604,14 @@ function openPlannerHost(t, world, {unreachableNodeIds = []} = {}) {
 
   return Object.freeze({
     cache, store, cdc, gateway, coordinator, queryExecutor, observed,
+    // A node's channel becomes reachable or unreachable; nothing is told.
+    setReachable(nodeId, reachable) {
+      if (reachable) hopContext.unreachable.delete(nodeId);
+      else hopContext.unreachable.add(nodeId);
+    },
+    openPlannerTurn: (turnOptions) => openPlannerTurn(t, {cache, coordinator,
+      ledgerRows: () => store.execute(LEDGER_ROW_SQL, [RUNTIME_SERVICE_ID]).rows},
+    turnOptions, rebalancers),
     async createAdd(request = buildPlannerAddRequest()) {
       const marked = mark();
       const outcome = await settle(() => coordinator.createOperation(request));

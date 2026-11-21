@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2705,
+    "ordinary": 2707,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2731,
-  "digest": "fnv1a32-5e778c39",
+  "censusSize": 2733,
+  "digest": "fnv1a32-930258e6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2147,6 +2147,7 @@
     "test/rebalancer/safety-check-delegation.property.test.js": "ordinary",
     "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js": "ordinary",
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "ordinary",
+    "test/rebalancer/services-inventory-owner-fact-siblings.test.js": "ordinary",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "ordinary",
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "ordinary",
     "test/rebalancer/spread-cure-transition-authorization-row.test.js": "ordinary",
@@ -2177,6 +2178,7 @@
     "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js": "ordinary",
     "test/rebalancer/timeout-triggers-failure.property.test.js": "ordinary",
     "test/rebalancer/topology-guard-inventory-authority.test.js": "ordinary",
+    "test/rebalancer/topology-guard-owner-fact-inventory.test.js": "ordinary",
     "test/rebalancer/topology-owner-contracts.test.js": "ordinary",
     "test/rebalancer/topology-settling-node-ready-lease-wake.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": "ordinary",
