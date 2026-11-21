@@ -9,6 +9,9 @@ import {normalizeRebalancerEntityIdentity} from '../../src/rebalancer/rebalancer
 import {buildOperationUpdateOutcome} from '../../src/rebalancer/replica-operation-update-outcome.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from '../../src/rebalancer/replica-operation-update-disposition.js';
+import {buildCanonicalReplicaOperationRow, buildReplicaOperationWakeRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {decodeReplicaOperationRow} from '../../src/rebalancer/replica-operation-repository-row-methods.js';
 
 // A preexisting fixture operation carries the latest committed step and its
 // timestamp. Alternate or malformed histories should be supplied explicitly.
@@ -40,6 +43,27 @@ function advanceOperationFixture(operation, workflowStep, updatedAt = operation.
     completedAt: isTerminalStep(operation.type, workflowStep) ? updatedAt : null,
     stepsHistory: [...operation.stepsHistory, ...workflowFixtureHistory(workflowStep, updatedAt)],
   };
+}
+
+// The record the repository's reads (rowToOperation, queryIncompleteOperations)
+// answer once `operation` is durable: the one row decoder over the one row builder.
+function readBackOperationFixture(operation, leaseExpiresAt = null) {
+  return decodeReplicaOperationRow(buildCanonicalReplicaOperationRow(operation, leaseExpiresAt));
+}
+
+// The row a wake (direct dispatch wake-up, ready-node retry, cache or CDC
+// replay) is expected to carry for `operation`. Its column set is the
+// canonical row's: every wake producer builds it through
+// buildReplicaOperationWakeRow (4f347ca3f, e8f4bdb84). `assertedColumns`
+// restates as literals every column the test is about; a name outside the
+// canonical column set is refused, so a renamed or dropped column fails here.
+function expectedOperationWakeRow(operation, assertedColumns) {
+  const row = buildReplicaOperationWakeRow(operation);
+  const unknown = Object.keys(assertedColumns).filter((column) => !Object.hasOwn(row, column));
+  if (unknown.length > 0) {
+    throw new Error(`not a canonical replica_operations column: ${unknown.join(', ')}`);
+  }
+  return {...row, ...assertedColumns};
 }
 
 function completeServicesFixtureRead(rows) {
@@ -88,7 +112,9 @@ export {
   buildCreatedOperationFixture,
   buildTerminalOperationFixtureOutcome,
   completeServicesFixtureRead,
+  expectedOperationWakeRow,
   installCommittedOperationMutationFixture,
   installServicesAuthorityFixture,
+  readBackOperationFixture,
   workflowFixtureHistory,
 };
