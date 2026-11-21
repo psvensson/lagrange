@@ -41,7 +41,7 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
     entity_type: entityType,
     entity_id: entityId,
     membership_publication_epoch:
-      operation.membershipPublicationEpoch,
+      nullableOperationValue(operation.membershipPublicationEpoch),
     source_replica_id: nullableOperationValue(operation.sourceReplicaId),
     message_group_membership_lane_key:
       nullableOperationValue(operation.messageGroupMembershipLaneKey),
