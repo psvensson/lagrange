@@ -4,6 +4,7 @@
 // the real SQLQueryEngine, QueryExecutor, distributed write coordinator, CDC
 // integration service and control-plane gateway), next to the hand-built
 // fixture shapes the red tests feed it. One '# PROBE VERDICT' line per row.
+import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {TABLES} from '../../src/constants/index.js';
 import {INITIAL_PARTITION_IDS} from
@@ -251,3 +252,9 @@ test('PROBE CDC bootstrap direct path (the seed registration window)',
       }
     }, {cdc: true});
   });
+
+// The runner prints only a failing file's output: this last case fails on
+// purpose so the verdict lines above are retained.
+test('PROBE end: fail on purpose so the runner retains the verdict lines', () => {
+  assert.fail('PROBE: the verdict table above is the deliverable');
+});
