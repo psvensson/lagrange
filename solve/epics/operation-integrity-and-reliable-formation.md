@@ -114,13 +114,28 @@ invalid evidence before integration.
 
 ## Core integration handoff, 21 November 2026
 
+| Decision on resume | Current evidence and next action |
+| --- | --- |
+| Reviewed integration | `9ca0490ca0b0534a7a401072c1c41f28add0ea99` on `wip/core-formation-followup-20261121`. Accepted base for change selection is `0dbed1718c2d07c1fcb8bbe56b87ac41763c262c`. The three held checkpoints below are outside the reviewed integration. |
+| Named control-plane writes | The held [named-write source](https://github.com/psvensson/lagrange/commit/77f1b0ca205db8b2faf2f697ea38dd478a041a99) retains the original content and resolves delivery through the current gateway. On the pre-repair SQL witness `d5e21e12f`, 15 of 18 cases passed. The CDC replacement, malformed reply and SQL replacement cases failed. Run those cases on the held source, verify participant-bound settlement and the next legitimate write, then obtain independent review. [Original executions](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--named-write-replacement-weak-reply-and-sql-originals-nov21.tar.gz). |
+| Placement restoration | The held [partial placement repair](https://github.com/psvensson/lagrange/commit/ed3d2e5803aef45d4531d38477cd329472d8dbbf) checks current blocker or copy-capacity authority. Prove both missing-row entrypoints use committed admission. With a remote sender and ledger leader observing the same release, an unchanged blocker must cause zero extra proposals and a genuine release must restore the row once in either reply order. Preserve historical REMOVE protections. Independent review and a passing composed run are outstanding. |
+| SERVICES read lifetime | On adams-gamla the MessageGroup deadline control failed at `53cfafdcd`. At `ff2840596` the two selected transport files passed, with 555 assertions. The separate [executor witness](https://github.com/psvensson/lagrange/commit/e74899ff3f5c1c95e5f1ea20e54b784a3913d4ba) still needs execution. Trace whether a delayed reply can satisfy its original caller within budget. Check lost replies, stale connections, changed authority and independent reads. [Original repaired transport request](https://github.com/psvensson/lagrange-lab/issues/5540). |
+| Latest physical result | **0/3 consecutive passes.** Run `3ed87e16` on `60fe32768` missed formation. At 117.249 s four priority partitions still lacked spread. Later failed reads left final spread and quietness unknown. CREATE and COUNT succeeded by 515.549 s **from scenario start**. INSERT and readback succeeded through all three hosts. |
+| Gates to smoke and comparison | After the owner repairs and review, freeze one composition. Run the focused witnesses and strict selection, fast static, and the full classified corpus required for publication by changes to proof selection, runners and placement. Three consecutive physical trials on that candidate must satisfy the existing 420 s bound, spread, quiet window, SQL, observation and cleanup predicates. Then run comparative smoke, followed by the Lagrange GCP measurement. |
+
+
+The placement owner also has an open lifecycle question. Determine whether a
+later learner can reuse a replica ID while historical promotion credit is
+still visible. Verify the identity invariant or reproduce the sequence before
+assigning a generation-scoping repair.
+
 Three-host diagnostic `3ed87e16` finished on `60fe32768`. At 5.026 seconds
 all three serving lanes were open, each priority partition had one of the
 three required placements, and operations were active. At 117.249 seconds
 four priority partitions still lacked spread. The last 19 polls could not
 establish spread or quiet. The run recorded 88 read failures in 31 polls,
 and one final view also reported serve-ineligible. CREATE and COUNT succeeded
-at 515.549 seconds. INSERT and readback succeeded on all three nodes. The
+at 515.549 seconds from scenario start. INSERT and readback succeeded on all three nodes. The
 learner-address and projection checks passed. All three containers were
 removed. The first failed SERVICES read and a 222 ms success used the same
 stream and payload sizes. Two retries of the failed read added 39,360 bytes
