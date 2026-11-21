@@ -20,7 +20,9 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
 import {PLACEMENT_ADMIT_TYPE} from '../../src/partition/partition-placement-admission-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
 import {RAFT_LEADERSHIP_TRANSFER_REASON, RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
@@ -28,7 +30,8 @@ import {
   transferReport, waitUntil, withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
 import {
-  clearFixtureSingletons, resetFixtureSingletons,
+  clearFixtureSingletons, holdKernelRetries, resetFixtureSingletons,
+  resumeFixtureParticipantAdmission, track,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(resetFixtureSingletons);
@@ -55,6 +58,7 @@ function deferFirstAdmission(node) {
     if (gate.deferredEntry === null && entry.type === PLACEMENT_ADMIT_TYPE &&
         entry.body?.partitionId === DEFICIT) {
       gate.deferredEntry = {entryId: entry.entryId, portTerm: port.term};
+      gate.body = entry.body;
       gate.reached.resolve(gate.deferredEntry);
       return DEFERRAL;
     }
@@ -157,4 +161,70 @@ test('kernel: a placement write is not proposed under a tenure renewed inside th
     .map((proposal) => proposal.entryId), [],
   `the admission decided under term ${decidedUnder?.term} is not proposed under the term ` +
     `renewed inside the kernel's leadership read; ${report}`);
+}));
+
+// The join of a pending write is a hand-over of its answer (lead ruling
+// 2026-11-21; record write-kernel-tenure-fence-record.md section 14). A placement
+// admission under the current tenure that arrives while a write with the same
+// entryId, registered under an earlier tenure and not yet handed to consensus,
+// is still pending must not inherit that write's release: the old write is
+// released at the join (LEADERSHIP_LOST, its caller answered once) and the new
+// admission is registered and proposed in its own turn.
+// Schedule: the old tenure's admission is deferred by the port and its kernel
+// retry held, so it is still pending (QUEUED) when the new admission arrives;
+// the deficit is satisfied (the new custody plans nothing of its own); the
+// tenure is renewed without a role edge and the cutover pause lifted; the same
+// admission (entryId and body) arrives at the ledger's admission entry (the
+// PLACEMENT_ADMIT route) under the new tenure; then the held retry runs.
+const NOT_LEADER = PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER;
+test('kernel: a placement admission under the current tenure that would join a pending write ' +
+  'of an earlier tenure gets its own proposal in its own turn; the old write\'s caller is ' +
+  'released LEADERSHIP_LOST once',
+(t) => withPlacementWorld(SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a] = nodes;
+  const retries = holdKernelRetries(a.ledger);
+  const gate = deferFirstAdmission(a);
+  await world.electLedger(a);
+  const first = await gate.reached.promise;
+  const decidedUnder = a.ledger.leadershipTenure;
+  await waitUntil(() => retries.held.length === 1,
+    'premise: the deferred write waits on its held kernel retry');
+  world.publishRow(TABLES.PARTITIONS, {[COLUMN.PARTITION_ID]: DEFICIT, replica_count: 2});
+  world.announceTermWithoutRoleEdge(a);
+  const renewedTerm = a.ledger.leadershipTenure.term;
+  await resumeFixtureParticipantAdmission(a.ledger);
+  const atRenewedTerm = () => world.log.proposals.filter((proposal) =>
+    proposal.entryId === first.entryId && proposal.portTerm === renewedTerm).length;
+  const before = atRenewedTerm();
+  const joined = track(requestPlacementAdmission(a.ledger,
+    {entryId: first.entryId, body: gate.body}));
+  const ownProposalInItsTurn = atRenewedTerm() - before;
+  try {
+    await waitUntil(() => joined.settled, 'the new admission is answered', RETRY_WINDOW_MS);
+  } catch {
+    // Still pending: reported below.
+  }
+  const proposalsBeforeOldRetry = atRenewedTerm();
+  retries.release();
+  await world.idle();
+  const oldAttempts = a.probe.admissionAttempts.filter((attempt) =>
+    attempt.entryId === first.entryId && attempt.tenure === decidedUnder);
+  const facts = {ownProposalInItsTurn, proposalsBeforeOldRetry,
+    newAnswerInherited: joined.settled ? joined.value?.failureCode === NOT_LEADER : 'pending',
+    oldCallerAnswers: oldAttempts.map((attempt) => attemptOutcomeOf(attempt)),
+    queued: a.ledger.proposalQueue.size,
+    pendingOutcome: a.ledger.getPendingCommittedWriteOutcome(first.entryId) !== null,
+    heldRetries: retries.held.length};
+  const report = JSON.stringify({deferredAt: first, renewedTerm, facts,
+    newAnswer: joined.settled ? {failureCode: joined.value?.failureCode ?? null,
+      outcome: joined.value?.placementResult?.outcome ?? null} : 'pending',
+    proposals: world.log.proposals.filter((proposal) => proposal.entryId === first.entryId)
+      .map((proposal) => ({portTerm: proposal.portTerm,
+        disposition: proposal.stale ? 'stale' : `log[${proposal.logIndex}]`}))});
+  t.diagnostic(report);
+  assert.deepEqual(facts, {ownProposalInItsTurn: 1, proposalsBeforeOldRetry: 1,
+    newAnswerInherited: false, oldCallerAnswers: [NOT_LEADER], queued: 0,
+    pendingOutcome: false, heldRetries: 0},
+  `the new-tenure admission is its own write; the obsolete one is released once; ${report}`);
 }));

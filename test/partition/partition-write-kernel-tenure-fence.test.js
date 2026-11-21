@@ -25,6 +25,9 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
 } from '../../src/partition/partition-write-kernel.js';
+import {partitionWriteLeadershipRefusalOf} from
+  '../../src/partition/partition-service-raft-write-commit.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
 import {
   RAFT_EVENT,
@@ -33,9 +36,10 @@ import {
 } from '../../src/raft/raft-operation-port-constants.js';
 import {RealTimeSource} from '../../src/time/time-source.js';
 import {
-  INSERT_SQL, OTHER_ROW, ROW, ROW_2, V3, applyCommitted, clearFixtureSingletons,
+  INSERT_SQL, OTHER_ROW, REPLICAS, ROW, ROW_2, V3, applyCommitted, clearFixtureSingletons,
   decisionCommandOf, generationOf, identityOf, onFixtureLeader, operationOf, pick,
-  prepareCommandOf, resetFixtureSingletons, rowCount, settleTicks, track,
+  holdKernelRetries, prepareCommandOf, resetFixtureSingletons, resumeFixtureParticipantAdmission,
+  rowCount, settleTicks, shutdownAll, startReplica, track,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(resetFixtureSingletons);
@@ -300,3 +304,148 @@ test('kernel tenure fence (g): an ordinary write is not registered under a tenur
     `registered or proposed; ${JSON.stringify({handed: handed.map(
       ({entryId: id, portTerm}) => ({id, portTerm})), answer: write.value ?? null})}`);
 }));
+
+// The read check's scope (lead ruling 2026-11-21, record section 14): it
+// refuses also when the replica BECOMES leader inside the kernel's leadership
+// read. A write submitted before a tenure existed was decided before this
+// replica led; it is refused NOT_LEADER, and its owner's next submission,
+// under the tenure, proceeds. Schedule: a follower replica (no tenure); the
+// kernel's leadership read runs a consensus turn that makes it leader (the
+// port's LEADER role event inside the read); the leadership check is asked
+// twice, the second time under the tenure the first read minted.
+test('kernel tenure fence (read scope): a write submitted before the replica led is refused ' +
+  'NOT_LEADER when the replica becomes leader inside the kernel\'s leadership read; asked ' +
+  'again under that tenure, it proceeds', async () => {
+  const replica = await startReplica(REPLICAS[1]);
+  let failure = null;
+  try {
+    assert.equal(replica.leadershipTenure, null, 'premise: the replica holds no tenure');
+    const port = replica.raft;
+    const promotion = {tenure: null};
+    replica.raft = createRaftOperationPort({...port, readStatus: () => {
+      if (promotion.tenure === null &&
+          /partitionWriteLeadershipRefusalOf/u.test(creationStack())) {
+        replica.controllablePort.setRole(RAFT_ROLE.LEADER);
+        promotion.tenure = replica.leadershipTenure;
+      }
+      return port.readStatus();
+    }});
+    const submittedBeforeTenure = partitionWriteLeadershipRefusalOf(replica);
+    const underTheTenure = partitionWriteLeadershipRefusalOf(replica);
+    assert.deepEqual({promotedInsideRead: promotion.tenure !== null,
+      tenureKept: replica.leadershipTenure === promotion.tenure,
+      submittedBeforeTenure: pick(submittedBeforeTenure, ['success', 'failureCode']),
+      underTheTenure},
+    {promotedInsideRead: true, tenureKept: true, submittedBeforeTenure: RELEASED_NOT_LEADER,
+      underTheTenure: null},
+    'refused once while the tenure was minted inside the read, then accepted under it');
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await shutdownAll(replica);
+  } catch (error) {
+    failure ??= error;
+  }
+  if (failure !== null) throw failure;
+});
+
+// The join and the hand-off's ownership (lead rulings 2026-11-21; verifier
+// finding 2; record section 14.1). Schedule: write W1 (entryId E) is deferred
+// by the port and its kernel retry held, so its hand-off H1 sleeps with E still
+// pending (QUEUED) under tenure T1; the tenure is renewed without a role edge
+// and the cutover pause lifted; the same write (E) is delivered again under
+// T2: it must not join W1 (W1 released LEADERSHIP_LOST once) and must be
+// registered and handed to consensus itself; then H1 wakes while the new
+// registration is still pending: it must touch nothing of it; the new write
+// commits and is answered committed.
+test('kernel tenure fence (join, ownership): a write delivered again under the current tenure ' +
+  'does not join the pending write of an earlier tenure; the stale hand-off, waking, touches ' +
+  'nothing of the new registration', () => withKernelLeader(async ({leader, clock}) => {
+  const entryId = 'kernel-fence-redelivered';
+  const {handed, firstHandOver} = recordHandOvers(leader, {deferOnce: [entryId]});
+  const retries = holdKernelRetries(leader);
+  const first = track(leader.executeQuery(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
+    {entryId}));
+  assert.equal(await firstHandOver(entryId), true, 'premise: the port received W1');
+  assert.equal(await waitUntil(() => retries.held.length === 1, WAIT_MS), true,
+    'premise: W1 sleeps on its held kernel retry');
+  const renewedTerm = renewWithoutRoleEdge(leader);
+  await resumeFixtureParticipantAdmission(leader);
+  const second = track(leader.executeQuery(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
+    {entryId}));
+  await waitUntil(() => second.settled || enteredUnder(handed, entryId, renewedTerm) > 0,
+    WAIT_MS);
+  const handedBeforeStaleWake = enteredUnder(handed, entryId, renewedTerm);
+  retries.release();
+  await settleTicks();
+  const pendingAfterStaleWake = leader.getPendingCommittedWriteOutcome(entryId) !== null;
+  const handover = handOversOf(handed, entryId).find((one) =>
+    !one.deferred && one.portTerm === renewedTerm);
+  const apply = handover ? applyCommitted(leader, handover.entry) : 'not handed over';
+  await waitUntil(() => first.settled && second.settled, WAIT_MS);
+  await settleTicks();
+  const facts = {handedBeforeStaleWake, pendingAfterStaleWake, apply,
+    firstAnswer: first.settled ? pick(first.value, ['success', 'failureCode']) : 'pending',
+    secondAnswer: second.settled ? pick(second.value, ['success', 'failureCode']) : 'pending',
+    enteredUnderRenewedTerm: enteredUnder(handed, entryId, renewedTerm),
+    rows: rowCount(leader, OTHER_ROW.id), heldRetries: retries.held.length,
+    ...remainderOf(leader, clock, entryId)};
+  assert.deepEqual(facts, {handedBeforeStaleWake: 1, pendingAfterStaleWake: true, apply: null,
+    firstAnswer: RELEASED_NOT_LEADER, secondAnswer: {success: true, failureCode: null},
+    enteredUnderRenewedTerm: 1, rows: 1, heldRetries: 0, ...NOTHING_REMAINS},
+  `W1 released once at the join, W2 its own write, untouched by H1; ${JSON.stringify({
+    handed: handed.map(({entryId: id, portTerm, deferred}) => ({id, portTerm, deferred})),
+    first: first.value ?? null, second: second.value ?? null})}`);
+}));
+
+// A null tenure (verifier finding 4). Schedule: the replica's core leads but no
+// LEADER event was delivered, so the replica holds no tenure (as a fixture
+// that fakes leadership does); a prepared participant transaction reserves the
+// partition, so a write parks with no leadership read (startAdmittedPartitionWrite's
+// reserved branch); the core stops leading, again without an event; the
+// decision applies and readmits the write. The question: is anything proposed?
+test('kernel tenure fence (null tenure): a write parked with no tenure and readmitted while ' +
+  'the replica holds no tenure is not proposed (answered NOT_LEADER)', async () => {
+  const replica = await startReplica(REPLICAS[0]);
+  let failure = null;
+  try {
+    const port = replica.controllablePort;
+    const {handed} = recordHandOvers(replica);
+    port.role = RAFT_ROLE.LEADER;
+    port.leaderId = port.request?.peerId ?? null;
+    replica.isLeader = true;
+    replica.leaderId = replica.replicaId;
+    await resumeFixtureParticipantAdmission(replica);
+    const entryId = 'kernel-fence-null-tenure';
+    const holder = identityOf('kernel-fence-null-holder');
+    const prepare = prepareCommandOf(holder, [operationOf(ROW)], generationOf(replica));
+    assert.equal(applyCommitted(replica, prepare), null, 'premise: the partition is reserved');
+    const write = track(replica.executeQuery(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
+      {entryId}));
+    await settleTicks();
+    assert.deepEqual({tenure: replica.leadershipTenure, handed: handOversOf(handed, entryId)
+      .length, settled: write.settled}, {tenure: null, handed: 0, settled: false},
+    'premise: parked with no tenure, not proposed');
+    port.role = RAFT_ROLE.FOLLOWER;
+    port.leaderId = null;
+    replica.isLeader = false;
+    replica.leaderId = null;
+    assert.equal(applyCommitted(replica, decisionCommandOf(holder, V3.DECISION.COMMIT,
+      prepare.preparedDigest)), null, 'premise: the decision applied (its readmit ran)');
+    await waitUntil(() => write.settled || handOversOf(handed, entryId).length > 0, WAIT_MS);
+    await settleTicks();
+    assert.deepEqual({handed: handOversOf(handed, entryId).length,
+      answer: write.settled ? pick(write.value, ['success', 'failureCode']) : 'pending'},
+    {handed: 0, answer: RELEASED_NOT_LEADER},
+    'a replica without a tenure hands nothing to consensus');
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await shutdownAll(replica);
+  } catch (error) {
+    failure ??= error;
+  }
+  if (failure !== null) throw failure;
+});

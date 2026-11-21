@@ -924,6 +924,29 @@ function track(promise) {
   });
   return tracked;
 }
+// Hold the write kernel's deferral retry sleeps on a replica's clock (the one
+// timer partition-service-raft-write-commit.js arms) until release(); every
+// other timer of the clock runs as before. A witness uses it to keep a
+// deferred write pending across a step without racing the retry.
+const KERNEL_RETRY_FRAME = /partition-service-raft-write-commit\.js/u;
+function holdKernelRetries(service) {
+  const clock = service.timeSource;
+  const held = [];
+  const heldSetTimeout = (fn, ms, ...args) => {
+    if (!KERNEL_RETRY_FRAME.test(new Error().stack)) return clock.setTimeout(fn, ms, ...args);
+    held.push(() => fn(...args));
+    return null;
+  };
+  service.timeSource = new Proxy(clock, {get: (target, property) => {
+    if (property === 'setTimeout') return heldSetTimeout;
+    const value = Reflect.get(target, property);
+    return typeof value === 'function' ? value.bind(target) : value;
+  }});
+  return {held, release() {
+    service.timeSource = clock;
+    for (const run of held.splice(0)) run();
+  }};
+}
 async function settleTicks() {
   for (let tick = 0; tick < SETTLE_TICKS; tick += 1) {
     await settle();
@@ -1164,6 +1187,7 @@ export {
   durableAppliedIndex,
   generationOf,
   hasEntryId,
+  holdKernelRetries,
   identityOf,
   notCommitted,
   commitDecision,
