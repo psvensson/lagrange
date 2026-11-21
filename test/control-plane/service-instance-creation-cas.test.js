@@ -6,6 +6,25 @@ import {createCreationSqliteFixture} from './service-instance-creation-sqlite-fi
 import {SERVICE_INSTANCE_LIMIT} from '../../src/constants/service-instance.js';
 import {emptyInstanceState, selectInstanceState} from
   '../../src/control-plane/owners/service-instance-state.js';
+import {inspect} from 'node:util';
+
+// PROBE (line-regression-causes, diagnostic only): what the owner's gateway
+// write answered or threw (the owner swallows it into UNKNOWN).
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
+
+function probeWrap(target, method, label) {
+  const original = target[method].bind(target);
+  target[method] = (...args) => Promise.resolve(original(...args)).then((value) => {
+    probeDump(`${label}-answer`, value);
+    return value;
+  }, (error) => {
+    probeDump(`${label}-threw`, error);
+    throw error;
+  });
+}
 
 function selected(result) {
   assert.equal(result.outcome, 'SELECTED');
@@ -509,6 +528,9 @@ test('CAS-A6 a selection UPDATE that loses to a slot mutation stays single-shot 
     const from = f.writes.length;
     const held = f.holdNext('owner-a');
     t.after(held.release);
+    const probeGateway = f.primary.getGateway();
+    probeWrap(probeGateway, 'updateSystemTableRow', 'G18-A6-update');
+    probeWrap(probeGateway, 'insertSystemTableRow', 'G18-A6-insert');
     const pending = f.primary.selectConsensusInstance(request);
     await held.entered;
     assert.equal((await f.owner('owner-b').definitions.grantInstanceResource(binding, token))

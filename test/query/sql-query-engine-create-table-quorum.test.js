@@ -4,8 +4,15 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {createProvisioningReadyService} from './sql-query-engine-test-support.js';
+import {inspect} from 'node:util';
 const config = ConfigurationManager.getInstance();
 config.initialize();
+
+// PROBE (line-regression-causes, diagnostic only): how provisioning settled.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
 
 function createMockMessageRouter() {
   return {
@@ -115,13 +122,18 @@ test('SQLQueryEngine - default CREATE TABLE quorum does not fall back ' +
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
+  const provisioning = engine.provisionInitialTablePartition({
+    partitionId,
+    replicaCount: 3,
+    minimumRoutableReplicaCount: 2,
+    minimumRoutableReplicaCountWasDefaulted: true,
+  });
+  const probeCalls = () => ({checkedTargetNodeIds, createdTargetNodeIds,
+    executedTargetNodeIds});
+  provisioning.then((value) => probeDump('G12-quorum-resolved', {value, ...probeCalls()}),
+    (error) => probeDump('G12-quorum-rejected', {error, ...probeCalls()}));
   await t.rejects(
-    engine.provisionInitialTablePartition({
-      partitionId,
-      replicaCount: 3,
-      minimumRoutableReplicaCount: 2,
-      minimumRoutableReplicaCountWasDefaulted: true,
-    }),
+    provisioning,
     /insufficient/i,
     'provisioning below quorum is rejected without lowering the quorum minimum',
   );

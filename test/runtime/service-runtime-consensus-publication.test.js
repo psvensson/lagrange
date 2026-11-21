@@ -9,7 +9,7 @@
 // native lifecycle (the native embedding is the C6 integration file).
 import {describe, test} from 'node:test';
 import assert from 'node:assert/strict';
-import {isDeepStrictEqual} from 'node:util';
+import {inspect, isDeepStrictEqual} from 'node:util';
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
 import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -31,6 +31,27 @@ const NODE_ID = 'host-1';
 const HOST = 'host-1.lab.test';
 const PORT = 9101;
 const BOOT_INCARNATION = 11;
+
+// PROBE (line-regression-causes, diagnostic only): what the services-row
+// projection writer threw or answered, with its stack and cause chain.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
+
+function probeWatch(label, write) {
+  let answer;
+  try {
+    answer = write();
+  } catch (error) {
+    probeDump(`${label}-threw-sync`, error);
+    throw error;
+  }
+  Promise.resolve(answer).then((value) => {
+    if (value?.success === false || value?.error) probeDump(`${label}-answer`, value);
+  }, (error) => probeDump(`${label}-threw`, error));
+  return answer;
+}
 
 function retainedOrigin(creation) {
   return creation ? {operationId: creation.operationId, intent: creation.intent,
@@ -112,8 +133,8 @@ async function world(t, {bootIncarnation = BOOT_INCARNATION, endpoints = true,
       systemTableCache: cache});
   }
   if (projection) {
-    runtime.setStateProjectionWriter((serviceId, stateRow) =>
-      projectRuntimeReplicaServicesRow(owners.services, NODE_ID, serviceId, stateRow));
+    runtime.setStateProjectionWriter((serviceId, stateRow) => probeWatch('G2-services-row',
+      () => projectRuntimeReplicaServicesRow(owners.services, NODE_ID, serviceId, stateRow)));
   }
   const handle = {definition: consensusBootstrapDescriptor(retained), consensusCreation: retained,
     consensusOpeningOwner: metadata.lifecycle};

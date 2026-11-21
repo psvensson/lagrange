@@ -2,6 +2,7 @@
 // SQL transport is the local seam; placement and runtime remain their owners.
 import Database from 'better-sqlite3';
 import {setImmediate as nextTurn} from 'node:timers/promises';
+import {inspect} from 'node:util';
 import Fastify from 'fastify';
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminOwnerOperations, registerAdminOwnerOperationRoutes} from
@@ -81,10 +82,30 @@ function createFixture(t, beforeUpdate = () => {}) {
   return {db, cache, observe, writes, owner, app, targets};
 }
 
+// PROBE (line-regression-causes, diagnostic only): the gateway write's answer
+// or thrown error with its stack and cause chain, and the route's body.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
+
+function probeWrap(target, method, label) {
+  const original = target[method].bind(target);
+  target[method] = (...args) => Promise.resolve(original(...args)).then((value) => {
+    probeDump(`${label}-answer`, value);
+    return value;
+  }, (error) => {
+    probeDump(`${label}-threw`, error);
+    throw error;
+  });
+}
+
 test('operator PG-wire scale persists desired state through the real owner gateway', async (t) => {
   const fixture = createFixture(t);
+  probeWrap(fixture.owner.getGateway(), 'updateSystemTableRow', 'G12-pgwire-update');
   const before = fixture.observe();
   const response = await fixture.app.inject({method: 'POST', url: SCALE_PATH, payload: REQUEST});
+  if (response.statusCode !== 200) probeDump('G12-pgwire-body', response.body);
   t.equal(response.statusCode, 200, 'supported operator route accepts the desired state');
   t.equal(response.json().scaleState, 'desired_state_persisted', 'not an achieved listener claim');
   t.equal(fixture.observe().replica_count, REQUEST.replicaCount, 'count is durable');

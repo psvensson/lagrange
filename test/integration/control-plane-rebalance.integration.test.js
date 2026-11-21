@@ -27,6 +27,27 @@ import {
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {inspect} from 'node:util';
+import {canonicalPlacementStatement} from
+  '../../src/rebalancer/replica-placement-owner-admission-statement.js';
+
+// PROBE (line-regression-causes, diagnostic only): the placement payload the
+// coordinator submits, its canonical validity, and the ledger's answer.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 6, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
+
+function probePlacement(coordinator) {
+  const original = coordinator.submitPlacementPayload.bind(coordinator);
+  coordinator.submitPlacementPayload = async (payload, timeoutMs) => {
+    probeDump('G19-payload', {payload,
+      validity: canonicalPlacementStatement(payload?.body).validity});
+    const answer = await original(payload, timeoutMs);
+    probeDump('G19-answer', answer);
+    return answer;
+  };
+}
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -250,11 +271,15 @@ test('Control plane dispatch integration', async (t) => {
       // 2. CDC event is emitted when the operation is written to the partition
       // 3. ReplicaDispatchService handles the CDC event (via attached MGs)
       // 4. Operation is dispatched to target node's replica-handler
+      probePlacement(rebalanceCoordinator);
       const operation = await rebalanceCoordinator.createOperation({
         type: 'ADD',
         partitionId,
         nodeId: targetNodeId,
         replicaId: `replica-${targetNodeId}-${partitionId}`,
+      }).catch((error) => {
+        probeDump('G19-createOperation', error);
+        throw error;
       });
 
       t.ok(operation, 'should create operation');

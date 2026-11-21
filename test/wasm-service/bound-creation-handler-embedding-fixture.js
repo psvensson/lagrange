@@ -61,6 +61,25 @@ import {createLoopbackTransport} from '../partition/partition-service-test-suppo
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
 import {deliverScheduled} from './wasm-strong-write-native-fixture.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {inspect} from 'node:util';
+
+// PROBE (line-regression-causes, diagnostic only): the first services-row
+// projection failures with their stack and cause chain.
+const PROBE_LIMIT = 3;
+let probeCount = 0;
+function probeDump(label, value) {
+  if (probeCount >= PROBE_LIMIT) return;
+  probeCount += 1;
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
+
+function probeWatch(answer) {
+  Promise.resolve(answer).then((value) => {
+    if (value?.success === false || value?.error) probeDump('G13-services-row-answer', value);
+  }, (error) => probeDump('G13-services-row-threw', error));
+  return answer;
+}
 
 const SETUP_ROUNDS = 200;
 const SETTLE_ROUNDS = 120;
@@ -273,8 +292,8 @@ async function embedding(t) {
     wireRuntimeEndpointPublication({bootIncarnation, nodeId,
       serviceEndpointsOwner: owners.endpoints, serviceRuntimeLifecycle: runtime,
       systemTableCache: cache});
-    runtime.setStateProjectionWriter((serviceId, stateRow) =>
-      projectRuntimeReplicaServicesRow(owners.services, nodeId, serviceId, stateRow));
+    runtime.setStateProjectionWriter((serviceId, stateRow) => probeWatch(
+      projectRuntimeReplicaServicesRow(owners.services, nodeId, serviceId, stateRow)));
     const manager = metadata.manager();
     manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
     const emitter = new ExecutorOutcomeEmitter({logger: QUIET});

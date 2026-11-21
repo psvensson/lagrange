@@ -16,6 +16,14 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {inspect} from 'node:util';
+
+// PROBE (line-regression-causes, diagnostic only): the registration error
+// with its stack and cause chain at the assertion point.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 6, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
 
 /**
  * Wire a NodeJoiningService so registerNodeInCluster can
@@ -69,7 +77,11 @@ test(
       upsertCalls,
     });
 
-    await service.registerNodeInCluster();
+    await service.registerNodeInCluster().catch((error) => {
+      probeDump('G1-registration', error);
+      probeDump('G1-upserts', upsertCalls.map((call) => call.tableName));
+      throw error;
+    });
 
     const nodeUpsert = upsertCalls.find(
       (c) => c.tableName === TABLES.NODES,

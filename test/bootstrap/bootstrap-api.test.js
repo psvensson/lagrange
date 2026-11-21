@@ -858,6 +858,11 @@ async (t) => {
     },
   });
 
+  // PROBE (line-regression-causes, diagnostic only): the 500's body and the
+  // SQL calls the seed made before it answered.
+  if (response.statusCode !== 200) {
+    t.comment(`PROBE G12-seed-register-service ${response.body} sqlCalls=${sqlCalls.length}`);
+  }
   t.equal(response.statusCode, 200,
     'register-service should not fail just because the bootstrap seed has not wired CDC mutations yet');
   const responseBody = JSON.parse(response.body);

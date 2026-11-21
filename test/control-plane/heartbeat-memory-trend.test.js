@@ -26,6 +26,24 @@ import {
 } from './heartbeat-memory-trend-test-helpers.js';
 import './heartbeat-owner-completion-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {inspect} from 'node:util';
+
+// PROBE (line-regression-causes, diagnostic only): every endpoint write answer.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
+
+function probeWrap(target, method, label) {
+  const original = target[method].bind(target);
+  target[method] = (...args) => Promise.resolve(original(...args)).then((value) => {
+    probeDump(`${label}-answer`, value);
+    return value;
+  }, (error) => {
+    probeDump(`${label}-threw`, error);
+    throw error;
+  });
+}
 
 test('Heartbeat memory trend slope helper handles minimal and rising samples', async (t) => {
   t.equal(calculateUsageSlopePerMinute([]), 0, 'empty sample list should return 0');
@@ -400,6 +418,11 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
     nodeMetadataMinUpdateIntervalMs: 0,
     nodeMetadataMaxStalenessMs: 1000,
   });
+  const probeGateway = service.getControlPlaneSystemTableGateway();
+  for (const method of ['insertSystemTableRow', 'updateSystemTableRow', 'readAuthoritativeRows']) {
+    if (typeof probeGateway[method] === 'function') probeWrap(probeGateway, method, `G3-${method}`);
+  }
+  probeWrap(service, 'writeNodeEndpointAtIncarnation', 'G3-endpoint-outcome');
 
   const originalNow = Date.now;
   let now = 0;

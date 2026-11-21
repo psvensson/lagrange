@@ -8,6 +8,7 @@
  * projection stays a named census row (owner Group A).
  */
 
+import {inspect} from 'node:util';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -23,6 +24,13 @@ const NODE_ID = 'node-heartbeat-liveness';
 const PROMPT_MS = 300;
 const PENDING = Symbol('pending');
 const COMMIT_HLC = new HLCTimestamp(1793615397288, 3, 'node-1').toString();
+
+// PROBE (line-regression-causes, diagnostic only): the full error with its
+// stack and cause chain at the assertion point.
+function probeDump(label, value) {
+  const text = inspect(value, {depth: 5, breakLength: 160});
+  console.log(text.split('\n').map((line) => `# PROBE ${label} ${line}`).join('\n'));
+}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -98,6 +106,7 @@ test('heartbeat liveness: with the projection paused the NODES write ' +
     clock.nowMs += 60000;
     const outcome = await within(heartbeat.sendHeartbeat(null, null),
       PROMPT_MS);
+    if (outcome?.error) probeDump(`G2-heartbeat-beat-${beat}`, outcome.error);
     t.not(outcome, PENDING,
       `beat ${beat} answers within ${PROMPT_MS} ms with the projection paused`);
     t.notOk(outcome?.error,
