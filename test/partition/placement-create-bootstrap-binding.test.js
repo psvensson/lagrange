@@ -9,8 +9,12 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {CREATE_ADMISSION_STATE} from '../../src/node/replica-create-admission-owner.js';
-import {ControlPlaneSystemTableGateway} from
+import {CONTROL_PLANE_MUTATION_OPERATION, ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
+import {getWorkflowSteps} from '../../src/rebalancer/replica-operation-progress.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {bindReplaceCreateTargetReplicaId} from
@@ -30,7 +34,9 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
-import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
+import {
+  advanceOperationFixture, buildCreatedOperationFixture, installCommittedOperationMutationFixture,
+} from '../rebalancer/operation-outcome-fixture.js';
 import {
   createMockControlPlaneSystemTableGateway, createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
@@ -100,6 +106,27 @@ async function withNativeCreate(measure, type = OperationType.ADD,
       'the native admission starts with no dispatch topology');
     await measure(leader, initial[0], history);
   });
+}
+
+// The effect owner's evaluateRemoveSafety proves its subject's own durable
+// row before it arbitrates competitors. The subject is committed to the ledger
+// as the repository's one row builder writes it.
+function commitSubjectRow(leader, operation) {
+  const {sql, params} = planner.buildSqlMutationPlan({
+    operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+    tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    row: buildCanonicalReplicaOperationRow(operation, null),
+  });
+  assert.equal(commitLedgerStatement(leader, `bootstrap:subject:${operation.operationId}`,
+    sql, params), null);
+}
+
+// A coordinator-created record its owner has committed up to `workflowStep`.
+function committedAtStep(params, workflowStep, now) {
+  const steps = getWorkflowSteps(params.type);
+  return steps.slice(1, steps.indexOf(workflowStep) + 1).reduce(
+    (operation, step) => advanceOperationFixture(operation, step, now),
+    buildCreatedOperationFixture({...params, createdAt: now}));
 }
 
 function bind(coordinator, operation) {
@@ -506,18 +533,17 @@ for (const step of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         await assert.rejects(() => admission(false), /only into an idle operation ledger/);
         await admission(true);
         owner.messageRouter.pingNode = async () => false;
-        const peerRemoval = {
-          ...createOperationAt({
-            operationId: 'bootstrap-peer-remove',
-            type: OperationType.REMOVE,
-            partitionId: incumbent.partitionId,
-            sourceNodeId: NODE.A,
-            targetNodeId: NODE.B,
-            replicaId: VOTER_ID,
-          }, now),
+        const peerRemoval = committedAtStep({
+          operationId: 'bootstrap-peer-remove',
+          type: OperationType.REMOVE,
+          partitionId: incumbent.partitionId,
+          sourceNodeId: NODE.A,
+          targetNodeId: NODE.B,
+          replicaId: VOTER_ID,
           entityType: incumbent.entityType,
           entityId: incumbent.entityId,
-        };
+        }, WORKFLOW_STEP.PENDING, now);
+        commitSubjectRow(leader, peerRemoval);
         const removeSafety = await owner.evaluateRemoveSafety(peerRemoval);
         assert.match(String(removeSafety?.error), new RegExp(row.operation_id),
           'an unreachable destination cannot discharge source-side bootstrap custody');
@@ -558,19 +584,19 @@ test('all removal phases distinguish complete entity reads from unavailable owne
       return [];
     };
     const now = owner.resolveTimeoutCheckNowMs();
+    // Each removal intent is its owner's record committed at the evaluated step.
     const requests = [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]
       .map((workflowStep) => {
         const type = workflowStep === WORKFLOW_STEP.PENDING ?
           OperationType.REMOVE : OperationType.REPLACE;
-        return {
-          ...createOperationAt({
-            operationId: `removal:${workflowStep}`, type, partitionId: PARTITION_ID,
-            sourceNodeId: NODE.A, targetNodeId: NODE.B, replicaId: VOTER_ID,
-            sourceReplicaId: VOTER_ID,
-          }, now),
-          workflowStep, entityType: 'partition', entityId: PARTITION_ID,
-        };
+        return committedAtStep({
+          operationId: `removal:${workflowStep}`, type, partitionId: PARTITION_ID,
+          sourceNodeId: NODE.A, targetNodeId: NODE.B, replicaId: VOTER_ID,
+          sourceReplicaId: VOTER_ID, entityType: 'partition', entityId: PARTITION_ID,
+        }, workflowStep, now);
       });
+    for (const request of requests) commitSubjectRow(leader, request);
+    const subjectIds = new Set(requests.map((request) => request.operationId));
 
     try {
       for (const request of requests) await owner.evaluateRemoveSafety(request);
@@ -579,7 +605,7 @@ test('all removal phases distinguish complete entity reads from unavailable owne
       const {command} = await admitOnLeader(leader, proposed, 'bootstrap:removal-contender',
         placementStatement({partitionId: PARTITION_ID, target: NODE.B}));
       assert.ok(command, 'native placement committed after the removal intents already existed');
-      const [incumbent] = ledgerRows(leader);
+      const incumbent = ledgerRows(leader).find((row) => !subjectIds.has(row.operation_id));
 
       for (const request of requests) {
         const evaluation = await owner.evaluateRemoveSafety(request);

@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c3b63e56",
+  "observationDigest": "fnv1a32-833881e1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -17385,12 +17385,15 @@
     },
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": {
       "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": {
