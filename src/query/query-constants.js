@@ -144,6 +144,7 @@ const QUERY_ERROR_MSG = Object.freeze({
   TABLE_NOT_FOUND_PREFIX: 'Table not found: ',
   QUERY_TIMEOUT: 'Query timeout',
   QUERY_TIMED_OUT: 'Query timed out',
+  QUERY_EXECUTION_FAILED: 'Query execution failed without a reported error',
   MESSAGE_ROUTER_UNAVAILABLE: 'Message router not available',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   QUERY_ROUTING_FAILED: 'Query routing failed',
@@ -206,6 +207,7 @@ const QUERY_ERROR_MSG = Object.freeze({
   SERVICE_EXECUTE_UNSUPPORTED: 'Service does not support executeQuery',
   MAX_CONNECTIONS_PREFIX: 'Query would exceed max concurrent connections: ',
   RESULT_BUFFER_LIMIT_PREFIX: 'Result buffer exceeds limit: ',
+  PRIMARY_KEY_REQUIRED: 'An INSERT row must carry its primary key to route to one partition',
   PRIMARY_KEY_REQUIRED_PREFIX: 'Table \'',
   PRIMARY_KEY_REQUIRED_SUFFIX: '\' must have a PRIMARY KEY defined',
   PRIMARY_KEY_REQUIRED_DETAIL:
@@ -232,6 +234,8 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Timed out waiting for routable partition service for partition ',
   TABLE_PARTITION_LEADER_TIMEOUT_PREFIX:
     'Timed out waiting for partition leader service for partition ',
+  TABLE_PARTITION_PROVISION_DEADLINE_EXHAUSTED:
+    'Table partition provisioning deadline exhausted before target admission',
   TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX:
     'Unable to satisfy minimum routable provisioning cohort for partition ',
   TABLE_PARTITION_PROVISION_DISPATCH_FAILED:

@@ -287,7 +287,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       return;
     }
     const error = createTimeoutBudgetError({
-      message: QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+      message: QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DEADLINE_EXHAUSTED,
       budget: timeoutBudget,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
       nestedOperation: LOCAL_STR_PARTITION_PROVISIONING,

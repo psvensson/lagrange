@@ -11,6 +11,7 @@ import {
 } from './control-plane-named-write-wait.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {ERRORS} from '../constants/errors.js';
+import {OWNER_CONTRACT_NEXT_ACTION, OWNER_CONTRACT_STATE} from './owner-contract-outcome.js';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
   isWriteOutcomeUnknown,
@@ -85,6 +86,10 @@ const PENDING_INSTANCE_OUTCOME = Object.freeze({
   FAILED: 'failed',
   UNKNOWN: 'unknown',
 });
+// The gateway's classification of the transport answer an unresolved
+// instance wraps: it describes that answer, not the unknown write, so it never
+// travels on the unknown answer (it would say "applied").
+const TRANSPORT_CLASSIFICATION_FIELDS = Object.freeze(['outcome', 'completionState']);
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
 const KEY_DIGEST_LENGTH = 32;
@@ -348,16 +353,23 @@ function capacityRefusal(name) {
 // its own content: the pending instance it was, or - still unresolved - the
 // answer naming it as the typed unknown (what the re-delivery threw is
 // thrown again, carrying the pending instance).
+// The one shape of an unresolved named write: the typed unknown naming its
+// pending instance, accepted into consensus but not proven (contract PENDING),
+// whose owned next action is the re-send under the same key (RETRY).
 function unresolvedAnswer(record, answer) {
   const pendingInstance = describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN);
+  const carried = {...answer};
+  for (const field of TRANSPORT_CLASSIFICATION_FIELDS) delete carried[field];
   return {
-    ...answer,
+    ...carried,
     success: false,
     deferRetry: true,
     error: someLinkedAnswer(answer, isWriteOutcomeUnknown) ?
       answer.error : ERRORS.WRITE_OUTCOME_UNKNOWN,
     failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
     entryId: pendingInstance.entryId,
+    contractState: OWNER_CONTRACT_STATE.PENDING,
+    nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
     pendingInstance,
   };
 }
