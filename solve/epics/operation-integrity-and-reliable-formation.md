@@ -153,49 +153,55 @@ and ACTIVE in that order on one receiver attempt. All three eventually
 completed. A repeated or late dispatch must preserve the phase that
 already committed.
 
-The shared placement decision is whether an admitted ADD or REPLACE still owns
-its operation and can exclude a competing move. A late sender can observe
-PENDING after the receiver has already committed CREATING. Dispatch,
-expiration and removal must agree on the original deadline and the last
-committed phase. The real native cases at `55b950023` reached the competing
-writers in both orders. At `a243a75cf`, native bootstrap, required entity
-observation and three removal floor files passed on two lab hosts. The
-SQLite owner now supplies a complete entity read before REMOVE or REPLACE
-retires a replica. A preceding candidate still failed broader retirement and
-recovery cases. The placement owner is tracing those paths through their
-committed rows and owned wake before this unit is integrated.
-[Placement evidence](../quests/fresh-formation-user-table-routability/log.ndjson).
+Three contracts link the physical symptoms to the current repairs.
 
-For user-partition CREATE, the physical refusal preceded native founding.
-Its empty reason list leaves the cause of the missing quorum unknown.
-The SQL owner reproduced width, stale admission and reply-loss cases
-separately. At `83c857249`, twelve files passed across three machines,
-including RF3/5, RF1/3, managed split deadlines and definitive refusal.
-At `b5118ced8`, SQLite recorded FOUND before a lost or malformed reply,
-and the schema owner nevertheless reported a terminal failure. Another
-witness observed a fresh ADD after the target's READY lease expired.
-The positive replay setup did not prove an identical retained command.
-The SQL owner must reconcile that exact native entry before allowing any
-new effect and recheck the target at the final local handoff.
-[Native SQL originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--native-schema-admission-b511-red-nov21.tar.gz).
+* Placement compares the exact entity type and ID, and the original operation
+  phase and budget, before it sends or retires a replica. The initial native
+  witness reproduced opposing arrival orders. A separate held-read witness at
+  `df9b13db9` then showed that different entity types with the same ID shared
+  an in-flight gateway answer. The corrected reader keys each query by its
+  full bound parameters. On composed `d6426da99`, the SQLite repository,
+  required entity observations and committed retirement wakes passed together
+  (three files, 677 assertions). The earlier REPLACE wake test had supplied
+  four SERVICES rows in answer to a query for one replica; the fixture now
+  executes the actual SQL.
+  [Composed placement proof](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-entity-and-strict-d642-nov21.tar.gz).
+* User-partition provisioning owns a new proposal, a replay of a previously
+  sent command, and the adoption of an existing founder set differently.
+  Managed native SQLite cases at `32e5ff51a` reproduced direct and lost
+  temporary refusals, expired fresh submission, and adoption of incomplete or
+  unproved founders. At `629449eda`, six files passed (770 assertions),
+  including public split and merge construction with their own durable
+  workflow identities. A founder can grant custody only through the admission
+  evidence in its original creation record. `5f20429e4` reproduced two
+  late-history violations across the native and SQL readers. The SQL owner
+  repaired both at `7024f677d`. Recovery of an unresolved native proposal
+  across the loss of the proposing process remains unmeasured.
+  [Founding and caller identity originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--founding-identity-sqlite-6294-nov21.tar.gz).
+* A timeout and a late reply must settle the operation they observed. At
+  `7898f95a6`, a separate coordinator committed FAILED in shared SQLite
+  before the late CREATE reply. Dispatch reported the durable failure without
+  sending REMOVE. Five files passed on two hosts. At `0ae5f1dfb`, the three
+  previously failing epoch and ownership consumer files passed with 381
+  assertions. Three additional schedules at `dfa871208` reproduced a stale
+  PENDING timeout failing a fresh SENDING row, including a race at the
+  conditional write. The timeout owner must retain the original phase and
+  attempt through that write and any interrupted recovery. Classified closure
+  and review on the composed source remain open (historical receipt 4/6).
+  [Epoch controls and native timeout original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-epoch-ownership-0ae5-nov21.tar.gz).
 
-The strict-outcome owner now has a managed positive and opposing-order
-control for late CREATE. At `7898f95a6`, a separate coordinator committed
-FAILED to the shared SQLite ledger before the late response arrived.
-Public dispatch returned the original failure and issued no REMOVE.
-A confirmed promotion and persisted STOPPING reported progress. Five files
-passed with 735 assertions on two hosts. Independent source and execution
-review approved this interaction. The 85-file selection and composed
-review remain open. The strict receipt still admits four of six obligations.
-[Strict outcome originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-dispatch-sqlite-7898-nov21.tar.gz).
+The bounded support-evidence correction is integrated on the WIP. The actual
+upgrade and management owners refuse policy-only forward or resumed effects;
+the public topology validator retains its typed refusal. At `42d9199f8`
+both selected files passed on adams-gamla (273 assertions). The physical
+upgrade and rollback qualification remains with the pilot owner.
+[Support decision results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-topology-capture-nov21.tar.gz).
 
-The support-evidence branch `wip/upgrade-support-admission-nov21` at
-`c435d5cb6` retains five managed files with 495 assertions for forward
-upgrade admission and resumption. Composing this change triggered existing
-static limits on the evidence reader and upgrade policy. The support owner
-is simplifying these boundaries before integration. The pilot owner retains
-rollback and physical upgrade qualification under item 14.
-[Managed support admission originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/quest-evidence-and-candidate-binding--support-resume-authority-8611-nov21.tar.gz).
+On `e003b3c17`, managed job 5517 completed fast static from accepted main in
+89.951 seconds. The first request, 5516, could not resolve the accepted base
+in the worker mirror. Provisioning and verifying its tree cleared that
+infrastructure failure. The later composed source still owes its own gate.
+[Both original static requests](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--composed-static-e003b3c17-5516-5517-nov21.tar.gz).
 
 The next composed trial still requires the original 420-second gate and
 public SQL journey on three distinct hosts. Historical PostgreSQL and TiDB
