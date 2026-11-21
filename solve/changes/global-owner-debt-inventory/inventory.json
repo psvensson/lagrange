@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "fa811e721604924db10dd8a1e29c1035e5d57d78b03c3c01e3eb75707693065c"
+        "sha256": "89efdce70b87e052c4caaff247843d7850792ba4b69cb2c44f846ff867b6c6a4"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3782849,
-        "sha256": "d7f6d2e16f85873afbe54c53775115813bb7ee3c049d1613348d81ea13408792"
+        "bytes": 3783151,
+        "sha256": "4a0406ddd63fa13894a2c54f8bd6ae767c2d033f0bdba33f951d6ef4597620a5"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "83da7f0a08f5fd48534d8a95d081efe7570c7464f712aa06772bc95fd8aab119"
+        "sha256": "303f1b83bc574bc263d68b50f7d61cb85a12b2855a19f89cd6261ccc57eb31ba"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "02b1c46600bebfa22bd42d09fa054136161aa00883cd533b498f88ee5ac3be93"
+        "sha256": "036b45ee14dba144f56f50225658cfeaa10f5051c3e87fc8c0ec9851646f01e8"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "78f57f6afe5be9bbb1c0b046dde6c8d21fc85c742f884b0ac013061fcfbc340b"
+    "inputDigest": "f8f14da26652cc011c6b62a42a68d93505511743226c63e80ec115a37df076a1"
   },
   "reconciliation": {
     "complexity": {
@@ -73,7 +73,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "fa811e721604924db10dd8a1e29c1035e5d57d78b03c3c01e3eb75707693065c"
+        "sha256": "89efdce70b87e052c4caaff247843d7850792ba4b69cb2c44f846ff867b6c6a4"
       },
       "declaredCount": 1737,
       "observedCount": 1737,
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "83da7f0a08f5fd48534d8a95d081efe7570c7464f712aa06772bc95fd8aab119"
+          "sha256": "303f1b83bc574bc263d68b50f7d61cb85a12b2855a19f89cd6261ccc57eb31ba"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -135,7 +135,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "02b1c46600bebfa22bd42d09fa054136161aa00883cd533b498f88ee5ac3be93"
+          "sha256": "036b45ee14dba144f56f50225658cfeaa10f5051c3e87fc8c0ec9851646f01e8"
         },
         "cloneGroups": 604,
         "duplicatedLines": 21588,
@@ -173,17 +173,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3782849,
-        "sha256": "d7f6d2e16f85873afbe54c53775115813bb7ee3c049d1613348d81ea13408792"
+        "bytes": 3783151,
+        "sha256": "4a0406ddd63fa13894a2c54f8bd6ae767c2d033f0bdba33f951d6ef4597620a5"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "cdb00f207cfeb26d38120a6ecc886571bfbe03562362972b27785e7be9dcaec2",
-      "moduleCount": 6388,
-      "edgeCount": 38098,
+      "sourceDigest": "f083d90ca575d4a51ecbd5e5837e4418debc57f206b344b499fc947137b22f84",
+      "moduleCount": 6389,
+      "edgeCount": 38101,
       "unresolvedCount": 39
     }
   },
@@ -191,7 +191,7 @@
     "sourceSignalCount": 2407,
     "assignedSignalCount": 2407,
     "uniqueAssignmentCount": 2407,
-    "digest": "775ee7c1afae0c651499a7ff2f4bb532b3a539ba72ee994421cbe688a1c7ee25"
+    "digest": "055d8e450e83959b724b6f76a2762a7307cffbafb1eeaf151820270cfd3250d1"
   },
   "signalCounts": {
     "cognitive": 148,
@@ -1482,7 +1482,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 168,
-      "importOut": 77,
+      "importOut": 78,
       "score": 40,
       "topPaths": [
         "src/raft/raft-rs-runtime-owner.js",
