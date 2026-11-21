@@ -252,6 +252,12 @@ test('current actual deficit policy preserves same-ID copies and native capacity
 test('foreign and malformed native answers retain one exact unknown attempt', async () => {
   const corruptions = [
     (actual) => ({...actual, entryId: 'foreign-entry'}),
+    (actual) => ({...actual, partitionId: 'foreign-p1'}),
+    (actual) => ({...actual, success: false}),
+    (actual) => ({...actual, success: true, placementResult: {outcome: 'REFUSED',
+      reason: PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED, operationIds: []}}),
+    (actual) => ({...actual, success: false, placementResult: {outcome: 'REFUSED',
+      reason: PLACEMENT_REFUSAL.HOLD_NOT_HELD}}),
     (actual) => ({...actual, placementResult: {outcome: 'ADMITTED',
       operationIds: ['foreign-operation']}}),
     (actual) => ({...actual, placementResult: {outcome: 'REFUSED',
@@ -466,4 +472,107 @@ test('retained-copy-first occupies the ordinary target lane until its own commit
     assert.equal(cleared.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
     assert.equal(ledgerRows(world.leader).filter((row) =>
       row.operation_id === retained.operationId).length, 1);
+  }));
+
+
+test('different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    raiseParticipantCutoverPause(world.leader);
+    const owner = world.coordinator.repository;
+    assert.equal(await owner.repairRetainedOperation(retained), false);
+    const e1 = owner.retainedPlacementRepairs.get(retained.operationId);
+    const remote = remoteCaller(world);
+    const sender = remote.coordinator.repository;
+    const submit = sender.repairRetainedPlacement;
+    let reply;
+    sender.repairRetainedPlacement = async (payload) => {
+      reply = await submit(payload);
+      return reply;
+    };
+    try {
+      assert.equal(await sender.repairRetainedOperation(retained), false);
+      const e2 = sender.retainedPlacementRepairs.get(retained.operationId);
+      assert.notEqual(e2.entryId, e1.entryId);
+      assert.equal(reply.repairCustody, undefined, 'E2 is not retained at the receiver');
+      assert.equal(e2.delegated, undefined, 'sender still owns its unknown E2');
+      assert.equal(owner.retainedPlacementRepairs.get(retained.operationId), e1);
+      const proposed = world.commands.length;
+      await resumeFixtureParticipantAdmission(world.leader);
+      await settleRepair(world);
+      const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(retained.operationId);
+      assert.ok(row, 'actual E1 owner release restored the row without leadership change');
+      sender.observeRetainedPlacementRepairCommit('replica_operations', row);
+      await settleTicks();
+      assert.equal(sender.retainedPlacementRepairs.size, 0,
+        'real own-row CDC wakes authoritative confirmation, without resync or another caller');
+      assert.equal(world.commands.length, proposed + 1);
+    } finally {
+      await remote.coordinator.shutdown();
+    }
+  }));
+
+test('remote E2 joins active E1 then takes actual custody after its definite BUSY settlement', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const competitor = await compete(world);
+    const owner = world.coordinator.repository;
+    const native = owner.repairRetainedPlacement;
+    let release;
+    let observed;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const committed = new Promise((resolve) => {
+      observed = resolve;
+    });
+    let first = true;
+    owner.repairRetainedPlacement = async (payload) => {
+      const answer = await native(payload);
+      if (first) {
+        first = false;
+        observed();
+        await held;
+      }
+      return answer;
+    };
+    const firstResult = owner.repairRetainedOperation(retained);
+    await committed;
+    const remote = remoteCaller(world);
+    const sender = remote.coordinator.repository;
+    const submit = sender.repairRetainedPlacement;
+    let reply;
+    sender.repairRetainedPlacement = async (payload) => {
+      reply = await submit(payload);
+      return reply;
+    };
+    try {
+      const secondResult = sender.repairRetainedOperation(retained);
+      await settleTicks();
+      release();
+      assert.equal(await firstResult, false);
+      assert.equal(await secondResult, false);
+      assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+      assert.equal(reply.repairCustody, undefined,
+        'settled E2 has no receiver custody; sender retains its typed blocker wake');
+      assert.equal(sender.retainedPlacementRepairs.get(retained.operationId).delegated, undefined);
+      assert.deepEqual(owner.retainedPlacementRepairs.get(retained.operationId).blockers,
+        sender.retainedPlacementRepairs.get(retained.operationId).blockers);
+      stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+      const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(competitor.operationIds[0]);
+      sender.observeRetainedPlacementRepairCommit('replica_operations', cleared);
+      await settleRepair(world);
+      await sender.retainedPlacementRepairDrain;
+      await settleTicks();
+      const row = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(retained.operationId);
+      assert.ok(row, 'same leader real holder clear restores through actual owner');
+      assert.equal(sender.retainedPlacementRepairs.size, 0,
+        'sender spends its own typed blocker wake, without own-row CDC or leadership change');
+    } finally {
+      release();
+      await remote.coordinator.shutdown();
+    }
   }));
