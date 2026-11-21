@@ -204,7 +204,11 @@ test('P3(i) a pass that throws: the only clearing event starts a pass that throw
   world.releasePublications();
   const running = owner.runningPromise;
   const rejection = await (running ?? Promise.resolve()).then(() => null, (error) => error);
-  const boundMs = recoveryBoundOf(owner);
+  const failedPass = n1.probe.passes.find((pass) => pass.threw);
+  // The next wake of ANY kind, well before the resync: a SERVICES change.
+  const ledgerRow = n1.cache.getAll('services').find((row) => row.partition_id === LEDGER);
+  world.publishRow('services', {...ledgerRow});
+  const boundMs = PROGRESS_BOUND_MS;
   const recovered = await admittedWithin(world, n1, boundMs);
   await world.idle();
   const report = reportOf(t, world);
@@ -214,6 +218,16 @@ test('P3(i) a pass that throws: the only clearing event starts a pass that throw
   assert.ok(recovered, `admitted within ${boundMs} ms after a pass threw (pending triggers ` +
     `after the throw: ${owner.pendingTriggers.size}, rejection: ` +
     `${rejection?.message ?? 'none'}); ${report}`);
+  // Retention observable: the pass after the throw plans the failed pass's
+  // triggers as well as its own wake's, and the resync caused nothing.
+  const admittingPass = n1.probe.passes.find((pass) =>
+    n1.probe.admissionAttempts.some((attempt) => attempt.pass === pass));
+  assert.ok(failedPass, `a pass threw; ${report}`);
+  assert.ok(failedPass.triggers.every((trigger) => admittingPass?.triggers.includes(trigger)) &&
+    admittingPass.triggers.includes(PLACEMENT_TRIGGER.SERVICES_CHANGED),
+  `the next wake's pass carries the retained triggers ${JSON.stringify(failedPass.triggers)} ` +
+    `(it ran with ${JSON.stringify(admittingPass?.triggers ?? null)}); ${report}`);
+  assert.equal(owner.placementResyncAdmissions, 0, `the resync admitted nothing; ${report}`);
 }));
 
 test('P8 start path: with the ledger\'s CDC drive stalled (a subscriber that never answers), ' +
@@ -274,4 +288,55 @@ test('resync and custody: the leading owner arms exactly one resync at the decla
   t.diagnostic(report());
   assert.equal(a.probe.passes.length, passesBefore,
     `a resync fired after the custody ended starts no pass; ${report()}`);
+}));
+
+// A deterministic failure attributable to ONE candidate (its admissibility
+// read throws) must not starve the other partitions: the pass records the
+// failure for that candidate, admits the others, and the failed candidate's
+// obligation stays retained and visible; no spin.
+const SECOND = 'tbl-second-p1';
+const TWO_DEFICITS = Object.freeze({nodes: THREE_NODES, partitions: [
+  {partitionId: LEDGER, replicaNodeIds: ['n1', 'n2', 'n3']},
+  {partitionId: TARGET, leaderNodeId: 'n2', replicaNodeIds: ['n2', 'n3']},
+  {partitionId: SECOND, leaderNodeId: 'n2', replicaNodeIds: ['n2', 'n3']},
+]});
+
+test('poisoned candidate: a failure attributable to one partition\'s candidate is recorded ' +
+  'for it; the other partition\'s deficit in the same pass is admitted; no spin',
+(t) => withPlacementWorld(TWO_DEFICITS, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [n1] = nodes;
+  const owner = ownerOf(n1);
+  const admissible = owner.isCandidateAdmissibleNow;
+  let poisoned = 0;
+  owner.isCandidateAdmissibleNow = function poisonedFor(candidate, ...rest) {
+    if (candidate.partitionId === TARGET) {
+      poisoned += 1;
+      throw new Error('fixture: poisoned candidate');
+    }
+    return admissible.call(this, candidate, ...rest);
+  };
+  await world.electLedger(n1);
+  await world.idle();
+  let secondAdmitted = true;
+  try {
+    await waitUntil(() => admittedOperations(world, n1, SECOND).length === 1,
+      'the other partition is admitted', PROGRESS_BOUND_MS);
+  } catch {
+    secondAdmitted = false;
+  }
+  await world.idle();
+  const passesAfterIdle = n1.probe.passes.length;
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const report = JSON.stringify({passes: n1.probe.passes.length, poisoned,
+    snapshot: owner.lastPassSnapshot});
+  t.diagnostic(report);
+  assert.ok(secondAdmitted, `the other deficit was admitted beside the poisoned one; ${report}`);
+  assert.equal(admittedOperations(world, n1, TARGET).length, 0, report);
+  assert.ok(JSON.stringify(owner.lastPassSnapshot).includes(TARGET) &&
+    JSON.stringify(owner.lastPassSnapshot).includes('fixture: poisoned candidate'),
+  `the snapshot names the poisoned candidate and its failure; ${report}`);
+  assert.ok(poisoned <= n1.probe.passes.length,
+    `at most one failure per pass (failures ${poisoned}); ${report}`);
+  assert.ok(n1.probe.passes.length - passesAfterIdle <= 5, `no spin; ${report}`);
 }));

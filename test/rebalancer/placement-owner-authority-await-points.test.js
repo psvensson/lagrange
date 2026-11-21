@@ -19,7 +19,8 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {TABLES} from '../../src/constants/index.js';
 import {
   LEDGER, THREE_NODES, admittedOperations, attemptOutcomeOf, boundaryTenureOf, decisionTenureOf,
-  holdNextAdmissionAnswer, holdNextHoldRelease, holdNextRemoveSafetyRows, recordRemoveSafetyReads,
+  holdNextAdmissionAnswer, holdNextCensusRead, holdNextHoldRelease, holdNextRemoveSafetyRows,
+  recordRemoveSafetyReads,
   startThreeNodeLedger, transferReport, waitUntil, withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
 import {
@@ -163,4 +164,74 @@ test('A3 REMOVE: a pass suspended in its first REMOVE admissibility read across 
     attempt.pass === reached.pass);
   assert.deepEqual(obsoleteAttempts.map(attemptOutcomeOf), [],
     `property 1: the obsolete pass makes no admission attempt; ${report}`);
+}));
+
+const DEFICIT_SPEC = Object.freeze({nodes: THREE_NODES, partitions: [
+  {partitionId: LEDGER, replicaNodeIds: ['n1', 'n2', 'n3']},
+  {partitionId: SURPLUS, leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']},
+]});
+
+test('census read: a pass suspended in its census read across a graceful transfer constructs ' +
+  'no move and reads no capacity after its tenure ended; the successor admits meanwhile',
+(t) => withPlacementWorld(DEFICIT_SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a, b] = nodes;
+  const held = holdNextCensusRead(a);
+  await world.electLedger(a);
+  const reached = await held.reached.promise;
+  await world.electLedger(b);
+  await waitUntil(() => admittedOperations(world, b, SURPLUS).length === 1,
+    'the successor admits', PROGRESS_BOUND_MS);
+  const suspendedWhileMeasured = reached.pass.done === false;
+  held.release.resolve();
+  await world.idle();
+  const report = reportOf(t, world, nodes, SURPLUS);
+  assert.ok(suspendedWhileMeasured, `premise: the obsolete pass was outstanding; ${report}`);
+  assert.equal(workAfterTenureEnded(a.probe.constructions, reached.pass), 0,
+    `no move construction after the tenure ended during the census read; ${report}`);
+  assert.equal(workAfterTenureEnded(a.probe.capacityChecks, reached.pass), 0,
+    `no capacity reads after the tenure ended during the census read; ${report}`);
+}));
+
+test('A3 REMOVE, third read: a pass suspended in its floor read (the policy minimum) across ' +
+  'a graceful transfer makes no admission attempt after its tenure ended',
+(t) => withPlacementWorld(SURPLUS_SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a, b] = nodes;
+  const rows = [...world.durable.get(TABLES.SERVICES).values()]
+    .filter((row) => row.partition_id === SURPLUS);
+  const workflowOwner = a.coordinator.workflowOwner;
+  const readRows = workflowOwner.getCriticalReplicaRowsForSafety;
+  const readMinimum = workflowOwner.getCriticalMinReplicaCount;
+  const gate = {reached: null, release: null};
+  let releaseFloor;
+  const floorReleased = new Promise((resolve) => {
+    releaseFloor = resolve;
+  });
+  let reachedFloor;
+  const floorReached = new Promise((resolve) => {
+    reachedFloor = resolve;
+  });
+  workflowOwner.getCriticalReplicaRowsForSafety = async function substitutedRows() {
+    workflowOwner.getCriticalReplicaRowsForSafety = readRows;
+    return rows.map((row) => ({...row}));
+  };
+  workflowOwner.getCriticalMinReplicaCount = async function heldMinimum() {
+    workflowOwner.getCriticalMinReplicaCount = readMinimum;
+    reachedFloor(a.probe.context());
+    await floorReleased;
+    return 2;
+  };
+  gate.release = releaseFloor;
+  await world.electLedger(a);
+  const reached = await floorReached;
+  await world.electLedger(b);
+  await world.idle({except: [a]});
+  const suspendedWhileMeasured = reached.pass?.done === false;
+  gate.release();
+  await world.idle();
+  const report = reportOf(t, world, nodes, SURPLUS);
+  assert.ok(suspendedWhileMeasured, `premise: the pass was suspended in its floor read; ${report}`);
+  assert.deepEqual(a.probe.admissionAttempts.filter((attempt) => attempt.pass === reached.pass)
+    .map(attemptOutcomeOf), [], `no admission attempt after the third REMOVE read; ${report}`);
 }));

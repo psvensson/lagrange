@@ -298,6 +298,7 @@ class LedgerLog {
     this.applied = new Map();
     this.held = new Set();
     this.termStarts = new Map();
+    this.pendingConf = new Map();
     this.dropNext = null;
   }
 
@@ -310,13 +311,28 @@ class LedgerLog {
     this.deliverAll();
   }
 
-  // rs-raft's currentTermApplied: this replica leads and has applied an entry
-  // of its current term (its term start).
+  // rs-raft's currentTermApplied AS DEFINED IN PRODUCTION TODAY
+  // (raft-rs-status-observation.js: leader and applied > pendingConfIndex;
+  // pendingConfIndex is the last index when the replica became leader and the
+  // index of every configuration change it proposes): true once the term start
+  // applied, false again while the last applied entry is a configuration change
+  // of this leader. A witness can also withhold it (node.termStartWithheld).
   currentTermApplied(node) {
     const port = node.ledger.controllablePort;
-    if (port.role !== RAFT_ROLE.LEADER) return false;
-    const index = this.termStarts.get(`${node.nodeId}@${port.term}`);
-    return index !== undefined && this.applied.get(node) > index;
+    if (port.role !== RAFT_ROLE.LEADER || node.termStartWithheld === true) return false;
+    const key = `${node.nodeId}@${port.term}`;
+    const index = this.termStarts.get(key);
+    if (index === undefined) return false;
+    return this.applied.get(node) > Math.max(index, this.pendingConf.get(key) ?? index);
+  }
+
+  // A configuration change the leader proposed, committed and applied: an
+  // empty entry that raises the leader's pendingConfIndex to its own index.
+  appendConfigurationChange(node) {
+    const term = node.ledger.controllablePort.term;
+    this.entries.push({term, command: null, proposer: node.nodeId, termStart: true});
+    this.pendingConf.set(`${node.nodeId}@${term}`, this.entries.length);
+    this.deliverAll();
   }
 
   attach(node) {
@@ -404,9 +420,17 @@ function ownerOf(node) {
 // field currentTermApplied answered by the fixture's ledger log. Installed
 // right after the replica started, before any subscriber or delivery holds
 // the port; every other operation is the double's own.
-function withTermStartStatus(port, currentTermApplied) {
-  return createRaftOperationPort({...port, readStatus: () => deepFreeze({
-    ...port.readStatus(), currentTermApplied: currentTermApplied()})});
+function withTermStartStatus(port, currentTermApplied, node) {
+  return createRaftOperationPort({...port, readStatus: () => {
+    // A status read that runs a consensus turn and announces applied
+    // progress synchronously (raft-rs-runtime-owner.js readStatusNow drains
+    // inbound): armed once by a witness.
+    if (node.statusReadWake === true) {
+      node.statusReadWake = false;
+      node.ledger.controllablePort.emitEvent(RAFT_EVENT.APPLIED_PROGRESS);
+    }
+    return deepFreeze({...port.readStatus(), currentTermApplied: currentTermApplied()});
+  }});
 }
 
 // Transparent instance wrappers on the production owner object: every call
@@ -459,9 +483,10 @@ function instrumentOwner(node) {
   const ledger = node.ledger;
   const passScope = new AsyncLocalStorage();
   const probe = {nodeId: node.nodeId, passes: [], constructions: [], capacityChecks: [],
-    candidateChecks: [], admissionAttempts: [], releaseAttempts: [], inFlight: 0,
+    candidateChecks: [], admissionAttempts: [], releaseAttempts: [], inFlight: 0, maxInFlight: 0,
     gates: {admitPlacement: {before: null, answer: null},
-      releasePlacementHold: {before: null, answer: null}, admissibility: {before: null}}};
+      releasePlacementHold: {before: null, answer: null}, admissibility: {before: null},
+      census: {answer: null}}};
   const context = () => {
     const status = ledger.raft?.readStatus?.() ?? {};
     return {ownerIsLeader: owner.isLeader, tenure: ledger.leadershipTenure ?? null,
@@ -482,7 +507,14 @@ function instrumentOwner(node) {
       done: false};
     pass.startTenure = pass.tenure;
     probe.passes.push(pass);
+    // Arm the status-read wake for the read this pass makes next (its
+    // term-start barrier), inside the drain's synchronous prefix.
+    if (node.statusWakeAtNextPass === true) {
+      node.statusWakeAtNextPass = false;
+      node.statusReadWake = true;
+    }
     probe.inFlight += 1;
+    probe.maxInFlight = Math.max(probe.maxInFlight, probe.inFlight);
     try {
       return await passScope.run(pass, () => originalRunPass.call(this, triggers));
     } catch (error) {
@@ -495,6 +527,17 @@ function instrumentOwner(node) {
   };
   wrap('readPartitionPlacementRows', () => probe.constructions.push(context()));
   wrap('readStorageExcludedTargets', () => probe.capacityChecks.push(context()));
+  // The census read of a pass (await readPassCensus): its answer held by its gate.
+  const readCensus = owner.readPassCensus;
+  owner.readPassCensus = async function heldCensus(...args) {
+    const census = await readCensus.apply(this, args);
+    const gate = takeGate(probe.gates.census, 'answer');
+    if (gate) {
+      gate.reached.resolve(context());
+      await gate.release.promise;
+    }
+    return census;
+  };
   // The admissibility read (await A3): recorded, and held by its gate.
   const admissible = owner.isCandidateAdmissibleNow;
   owner.isCandidateAdmissibleNow = async function heldAdmissibility(candidate, ...rest) {
@@ -525,6 +568,11 @@ function armSubmitterGate(node, name, kind, skip = 0) {
 // check and the admission boundary (requestPlacementAdmission).
 function holdNextAdmission(node, {skip = 0} = {}) {
   return armSubmitterGate(node, 'admitPlacement', 'before', skip);
+}
+
+// Hold the census read of a node's owner's next pass (its answer).
+function holdNextCensusRead(node) {
+  return armSubmitterGate(node, 'census', 'answer');
 }
 
 // Hold the next admissibility read of a node's owner (await A3): the pass has
@@ -705,7 +753,7 @@ class PlacementWorld {
       nodeId: node.nodeId, replicaIds, systemTableCache: node.cache, dbPath: node.dbPath,
     }, LEDGER);
     node.ledger.raft = withTermStartStatus(node.ledger.raft,
-      () => this.log.currentTermApplied(node));
+      () => this.log.currentTermApplied(node), node);
     this.log.attach(node);
     if (authority) await installNodeAuthority(this, node);
     if (bind) node.ledger.setRebalanceCoordinator(node.coordinator);
@@ -1112,6 +1160,7 @@ export {
   THREE_NODES,
   holdLeadershipStartDrives,
   holdNextAdmissibilityCheck,
+  holdNextCensusRead,
   holdNextAdmission,
   holdNextAdmissionAnswer,
   holdNextHoldRelease,

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2706,
+    "ordinary": 2707,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2732,
-  "digest": "fnv1a32-0aa108f3",
+  "censusSize": 2733,
+  "digest": "fnv1a32-b7e44b06",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2023,6 +2023,7 @@
     "test/rebalancer/pending-move-tracking.property.test.js": "ordinary",
     "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "ordinary",
     "test/rebalancer/placement-owner-authority-await-points.test.js": "ordinary",
+    "test/rebalancer/placement-owner-authority-barrier.test.js": "ordinary",
     "test/rebalancer/placement-owner-authority-disruptions.test.js": "ordinary",
     "test/rebalancer/placement-owner-authority-five-nodes.test.js": "ordinary",
     "test/rebalancer/placement-owner-authority-negatives.test.js": "ordinary",

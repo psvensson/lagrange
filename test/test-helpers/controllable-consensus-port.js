@@ -9,7 +9,14 @@
  * currentTermApplied (the rs-raft status field: this replica leads and has
  * applied an entry of its current term) is a stated simplification here: the
  * term-start entry is treated as already applied whenever the double leads; a
- * test that needs the barrier sets currentTermApplied explicitly.
+ * test that needs the barrier sets currentTermApplied explicitly. That is the
+ * IDEAL fact ("the leader has applied an entry of its own term"). Production
+ * today defines the field differently (raft-rs-status-observation.js
+ * currentTermApplied): leader and applied > pendingConfIndex, so it is false
+ * again while the last applied entry is a configuration change of this
+ * leader; that definition is being corrected by the raft owner to the ideal
+ * fact (applied term == current term). The placement-owner authority fixture
+ * models today's production definition; this double does not.
  */
 
 import {RAFT_ROLE} from '../../src/raft/constants.js';

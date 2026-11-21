@@ -52,6 +52,7 @@ import {
   withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-write-kernel.js';
+import {PLACEMENT_ADMIT_TYPE} from '../../src/partition/partition-placement-admission-constants.js';
 import {
   clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipantAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
@@ -65,6 +66,13 @@ const SPEC = Object.freeze({nodes: THREE_NODES, partitions: [
   {partitionId: DEFICIT, leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']},
 ]});
 const PROGRESS_BOUND_MS = 2_000;
+// The re-staged witnesses (3, 4, 5, 13) add a second deficit, ordered after
+// DEFICIT (a user partition after a priority one), so that work an obsolete
+// continuation might still do after its wait is observable.
+const SECOND = 'tbl-second-p1';
+const SPEC_TWO = Object.freeze({nodes: THREE_NODES, partitions: [...SPEC.partitions,
+  {partitionId: SECOND, leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']}]});
+const STALE_AT_ADMISSIBILITY = 'A3_AFTER_ADMISSIBILITY';
 
 const NOT_LEADER = PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER;
 const attemptsOf = (node) => node.probe.admissionAttempts.filter((attempt) =>
@@ -173,18 +181,22 @@ test('P4 delayed role event of the new leader: nobody schedules while no owner l
 
 test('P4 pass suspended at A3 (its admissibility read) across a graceful transfer: the ' +
   'successor admits while it is suspended; the obsolete pass checks its tenure after the wait',
-(t) => withPlacementWorld(SPEC, async (world) => {
+(t) => withPlacementWorld(SPEC_TWO, async (world) => {
   const nodes = await startThreeNodeLedger(world);
   const [a, b] = nodes;
   const held = holdNextAdmissibilityCheck(a);
   await world.electLedger(a);
-  await held.reached.promise;
+  const reached = await held.reached.promise;
   await world.electLedger(b);
   await world.idle({except: [a]});
   const admittedWhileSuspended = admittedOperations(world, b, DEFICIT).length;
+  const suspendedWhileMeasured = reached.pass.done === false;
   held.release.resolve();
   await world.idle();
   const report = reportOf(t, world);
+  assert.ok(suspendedWhileMeasured, `premise: the obsolete pass was outstanding; ${report}`);
+  assert.equal(a.probe.admissionAttempts.filter((attempt) => attempt.pass === reached.pass)
+    .length, 0, `no admission attempt of any candidate by the obsolete pass; ${report}`);
   assert.equal(admittedWhileSuspended, 1, `property 4; ${report}`);
   assertOneAdmitted(world, nodes, report, 'n2');
   assert.deepEqual(expiredTenureAdmissions(nodes), [], `property 1; ${report}`);
@@ -193,9 +205,9 @@ test('P4 pass suspended at A3 (its admissibility read) across a graceful transfe
   // Held at A3, the pass constructed and read capacity under its live tenure
   // before the wait; nothing of either may follow the wait.
   assert.equal(workAfterTenureEnded(a.probe.constructions), 0,
-    `property 3: no move construction after the tenure ended during A1; ${report}`);
+    `property 3: no move construction after the tenure ended during A3; ${report}`);
   assert.equal(workAfterTenureEnded(a.probe.capacityChecks), 0,
-    `property 3: no capacity reads after the tenure ended during A1; ${report}`);
+    `property 3: no capacity reads after the tenure ended during A3; ${report}`);
 }));
 
 async function heldAcrossABA(world, holdAt) {
@@ -203,7 +215,7 @@ async function heldAcrossABA(world, holdAt) {
   const [a, b] = nodes;
   const gate = holdAt === 'A3' ? holdNextAdmissibilityCheck(a) : holdNextAdmission(a);
   await world.electLedger(a);
-  await gate.reached.promise;
+  const reached = await gate.reached.promise;
   const firstTenure = a.ledger.leadershipTenure;
   // B is elected and deposed again before its activation holdoff ends: B's
   // owner never leads, so the deficit is still open when A leads again.
@@ -212,17 +224,30 @@ async function heldAcrossABA(world, holdAt) {
   assert.equal(b.probe.passes.length, 0, 'B\'s owner never ran a pass');
   assert.notEqual(a.ledger.leadershipTenure, firstTenure,
     'A leads again under a new tenure (a new leadershipTenure object)');
-  return {nodes, a, b, gate, firstTenure};
+  return {nodes, a, b, gate, firstTenure, heldPass: reached.pass};
 }
 
 test('P5 A->B->A with an old continuation held at A3 across both changes: the old pass ' +
-  'must find its tenure expired and admit nothing', (t) => withPlacementWorld(SPEC,
+  'must find its tenure expired and admit nothing', (t) => withPlacementWorld(SPEC_TWO,
   async (world) => {
-    const {nodes, a, gate, firstTenure} = await heldAcrossABA(world, 'A3');
+    const {nodes, a, gate, firstTenure, heldPass} = await heldAcrossABA(world, 'A3');
+    await waitUntil(() => admittedOperations(world, a, DEFICIT).length === 1,
+      'the later tenure admits', PROGRESS_BOUND_MS);
+    const suspendedWhileMeasured = heldPass.done === false;
+    const staleStops = () => ownerOf(a).observation.totals.staleStops[STALE_AT_ADMISSIBILITY] ?? 0;
+    const staleBefore = staleStops();
     gate.release.resolve();
     await world.idle();
     const report = reportOf(t, world);
+    assert.ok(suspendedWhileMeasured, `premise: the first tenure's pass was outstanding; ${report}`);
     assertOneAdmitted(world, nodes, report, 'n1');
+    const admitting = attemptsOf(a).find((attempt) => attemptOutcomeOf(attempt) === 'ADMITTED');
+    assert.equal(decisionTenureOf(admitting), a.ledger.leadershipTenure,
+      `the admission's deciding tenure is the current one; ${report}`);
+    assert.equal(staleStops() - staleBefore, 1,
+      `the old pass is refused by tenure identity on the same node; ${report}`);
+    assert.equal(a.probe.admissionAttempts.filter((attempt) => attempt.pass === heldPass)
+      .length, 0, `the old pass attempts no candidate; ${report}`);
     const oldPassAttempts = attemptsOf(a).filter((attempt) =>
       decisionTenureOf(attempt) === firstTenure);
     assert.deepEqual(expiredTenureAdmissions(nodes), [],
@@ -231,13 +256,14 @@ test('P5 A->B->A with an old continuation held at A3 across both changes: the ol
   }));
 
 test('P5 A->B->A: the successor tenure progresses while the obsolete continuation is still ' +
-  'suspended at A3', (t) => withPlacementWorld(SPEC, async (world) => {
-  const {nodes, a, gate} = await heldAcrossABA(world, 'A3');
+  'suspended at A3', (t) => withPlacementWorld(SPEC_TWO, async (world) => {
+  const {nodes, a, gate, heldPass} = await heldAcrossABA(world, 'A3');
   const currentTenure = a.ledger.leadershipTenure;
   let progressed = false;
   try {
-    await waitUntil(() => admittedOperations(world, a, DEFICIT).length === 1,
-      'the current tenure admits while the obsolete pass is suspended', PROGRESS_BOUND_MS);
+    await waitUntil(() => admittedOperations(world, a, DEFICIT).length === 1 &&
+      heldPass.done === false,
+    'the current tenure admits while the obsolete pass is suspended', PROGRESS_BOUND_MS);
     progressed = true;
   } catch {
     progressed = false;
@@ -421,27 +447,57 @@ function outstandingWork(nodes) {
   };
 }
 
-test('P4 bound over repeated transfers: N transfers with every leadership-start drive ' +
-  'suspended do not accumulate obsolete passes, triggers, writes, attempts or timers',
-(t) => withPlacementWorld(SPEC, async (world) => {
+// Re-staged 2026-11-21 (lead ruling, verifier): A1 is no longer awaited, so a
+// pass is suspended at every transfer at an await that exists: the leader's
+// admission of DEFICIT is proposed and never committed (the fixture's log
+// drops it), so the pass waits at A4 until the role edge releases the write
+// (LEADERSHIP_LOST). The bound at head, asserted: after each role-edge
+// transfer exactly one pass and one write are outstanding (the current
+// custody's); every obsolete pass has ended (released at the edge).
+test('P4 bound over repeated transfers: N transfers, each leaving the leader\'s pass ' +
+  'suspended, do not accumulate obsolete passes, triggers, writes, attempts or timers',
+(t) => withPlacementWorld(SPEC_TWO, async (world) => {
   const nodes = await startThreeNodeLedger(world);
   const [a, b] = nodes;
   const gates = [holdLeadershipStartDrives(a), holdLeadershipStartDrives(b)];
   const samples = [];
   const timerCensus = [];
+  const suspended = [];
   try {
     for (let transfer = 1; transfer <= 6; transfer += 1) {
-      await world.electLedger(transfer % 2 === 1 ? a : b);
+      const next = transfer % 2 === 1 ? a : b;
+      world.log.dropNext = (node, entry) => node === next &&
+        entry.type === PLACEMENT_ADMIT_TYPE && entry.body?.partitionId === DEFICIT;
+      await world.electLedger(next);
+      await waitUntil(() => world.log.proposals.some((proposal) => proposal.dropped &&
+        proposal.nodeId === next.nodeId && proposal.groupTerm === world.log.term),
+      `transfer ${transfer}: the leader's pass is suspended at its admission answer`);
       await world.idle({except: nodes});
+      suspended.push({transfer, leaderPassOutstanding: next.probe.passes.some((pass) =>
+        pass.startTenure === next.ledger.leadershipTenure && pass.done === false),
+      obsoleteOutstanding: nodes.filter((node) => node !== next).reduce((sum, node) =>
+        sum + node.probe.inFlight, 0)});
       samples.push({transfer, ...outstandingWork(nodes),
         heldDrives: gates.reduce((sum, gate) => sum + gate.calls, 0),
         admitted: admittedOperations(world, a, DEFICIT).length});
       timerCensus.push({transfer, timers: world.timers.aliveCreators()});
     }
   } finally {
+    world.log.dropNext = null;
     for (const gate of gates) gate.releaseAll();
   }
+  // One more transfer, not dropped: the deficit is admitted.
+  await world.electLedger(a);
+  await waitUntil(() => admittedOperations(world, a, DEFICIT).length === 1, 'admitted at last');
   await world.idle();
+  t.diagnostic(JSON.stringify(suspended));
+  const atEveryTransfer = 'premise and bound at every transfer: the leader\'s pass is ' +
+    'suspended, no obsolete pass is outstanding; ';
+  assert.ok(suspended.every((sample) => sample.leaderPassOutstanding &&
+    sample.obsoleteOutstanding === 0), `${atEveryTransfer}${JSON.stringify(suspended)}`);
+  const oneEach = 'bound: one outstanding pass and one outstanding write at every transfer; ';
+  assert.ok(samples.every((sample) => sample.inFlightPasses === 1 &&
+    sample.pendingWrites === 1), `${oneEach}${JSON.stringify(samples)}`);
   const report = reportOf(t, world);
   t.diagnostic(JSON.stringify(samples));
   t.diagnostic(`timer census (src creators of the ref'd timers alive after each transfer): ${
