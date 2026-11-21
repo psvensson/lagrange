@@ -10,10 +10,15 @@ import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
 
 // The lifecycle owner answers activation with the registered row made ACTIVE:
 // the row this owner built for the registering service (its raft_role is the
-// owner's published projection, never leader for a partition).
+// owner's published projection, never leader for a partition). It was born
+// before the activation clock; building it mints a process-wide created_at,
+// so its birth sits below every clock the tests here register at.
+const REGISTERED_AT = 1;
+
 function createActivationHarness({registeredService = null} = {}) {
   const lifecycleCalls = [];
   const updates = [];
@@ -37,7 +42,7 @@ function createActivationHarness({registeredService = null} = {}) {
           replicaId: options.replicaId,
           nodeId: options.nodeId,
           service: registeredService,
-          timestamp: options.timestamp,
+          timestamp: REGISTERED_AT,
         }),
         status: 'active',
         updated_at: options.timestamp,
@@ -414,12 +419,14 @@ test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical 
 });
 
 // Necessity witness for the row arm of the canonical leader publication
-// (publishCanonicalLeaderNodeId, leader-authority census N2). Registration
-// and activation publish partitions.leader_node_id; the decision reads the
-// live service's leadership and, beside it, the row's raft_role. The row is
-// the one this owner built, whose role never reads leader for a partition,
-// so for every role the enum owns as the tracked role the decision is the
-// live leadership's (the anchor: live leadership changes it).
+// (publishCanonicalLeaderNodeId, leader-authority census N2). Activation of
+// a registered replica publishes partitions.leader_node_id; the decision
+// reads the live service's leadership and, beside it, the row's raft_role.
+// The row is the one this owner built at registration (born STOPPED, as the
+// seed registers it, so registration itself publishes nothing), whose role
+// never reads leader for a partition: for every role the enum owns as the
+// tracked role the decision is the live leadership's (the anchor: live
+// leadership changes it).
 test('necessity: the canonical leader publication follows the live leader ' +
   'only; the row role the owner publishes never decides it', async (t) => {
   for (const trackedRole of Object.values(RAFT_ROLE)) {
@@ -434,19 +441,21 @@ test('necessity: the canonical leader publication follows the live leader ' +
         replicaStateMachine: harness.replicaStateMachine,
       });
       const registered = await owner.registerReplica({partitionId: 'p1',
-        replicaId: 'p1-r1', nodeId: 'node-a', service});
+        replicaId: 'p1-r1', nodeId: 'node-a', service,
+        status: SERVICE_STATUS.STOPPED});
       t.not(registered.raft_role, RAFT_ROLE.LEADER,
         `${label}: the registered row carries no leader role`);
+      t.equal(harness.updates.length, 0,
+        `${label}: a registration born STOPPED publishes no leader`);
       const activated = await owner.activateReplica({partitionId: 'p1',
         replicaId: 'p1-r1', nodeId: 'node-a', service});
       t.not(activated.raft_role, RAFT_ROLE.LEADER,
         `${label}: the activated row carries no leader role`);
-      const publications = harness.updates.filter((update) =>
-        update.tableName === 'partitions');
-      t.same(publications.map((update) => update.updateData.leader_node_id),
-        liveLeader ? ['node-a', 'node-a'] : [],
-        `${label}: registration and activation publish the leader exactly ` +
-          'when the service leads');
+      t.same(harness.updates.map((update) => [update.tableName,
+        update.updateData.leader_node_id]),
+      liveLeader ? [['partitions', 'node-a']] : [],
+      `${label}: activation publishes the leader exactly when the service ` +
+        'leads');
     }
   }
 });
