@@ -334,6 +334,19 @@ closure history to both acknowledged operations.
 [Publication coordinator](../../src/control-plane/membership-publication-coordinator-persist.js)
 · [Reconciliation producer](../../src/control-plane/membership-publication-coordinator-reconcile.js).
 
+On `ff1a075bd`, a full-row decoder converted JSON text in the SQL
+comparison predicate to objects and arrays that SQLite could not bind.
+On `9f38fc8d2`, preserving the stored scalar values and attaching the
+reconciliation fixture to its actual leader let the native tests reach
+both competing writes. Six cases passed, including both ACK orders and
+supersession. A delayed ACK, a delayed refresh and a serial ACK still
+lost fields. These are the three discriminating failures for the intent
+repair. A fourth failure compared the normalized empty ID to null at
+the final absence check. The generic predicate controls on `dbedf08b7`
+passed 48 assertions on tv-dator.
+[Native SQLite and consumer originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-lifecycle-native-and-consumers-nov21.tar.gz)
+· [Matched ordering and predicate originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--publication-intent-order-9f38-nov21.tar.gz).
+
 Across the three node logs in each complete recording, the query executor
 reported the following unresolved write deliveries. Each line with the exact
 message `Partition write outcome still unknown when its delivery budget was spent`
