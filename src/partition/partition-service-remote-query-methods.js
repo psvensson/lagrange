@@ -195,8 +195,11 @@ function safeIndexOf(value) {
   return Number.isSafeInteger(value) ? value : null;
 }
 
-// The serving replica described from ONE observation of its consensus core
-// (readOwnRaftStatus: CORE_OK, this group, this replica): role, term, the
+// The serving replica described from one status its raft-rs runtime reports
+// (readOwnRaftStatus: CORE_OK, this group, this replica). While a core turn
+// is pending that status is the last announced observation, not the core's
+// current state (raft-rs-runtime-owner.js readStatusObserved): an open limit
+// of this receiver until the raft owner offers an uncached observation. Role, term, the
 // applied and commit index and whether it has applied every entry its log
 // held when it was elected all come from that observation, never from the
 // event-derived service role. raft-rs sets its pending configuration index to
@@ -283,12 +286,12 @@ function leaderReadRefusalAfter(service, before, read) {
 
 /**
  * Answer a leader-qualified read (the request's leaderRead field) as its
- * receiver: decided here, by the leader-read predicate, on one observation
- * of this replica's core. Nothing is awaited between that observation and
- * the statement: on this replica's one SQLite connection, where committed
- * entries are applied synchronously together with their applied index,
- * the rows are read at the observed applied position. A refused read
- * executes nothing and ships no rows.
+ * receiver: decided here, by the leader-read predicate, on the status the
+ * raft-rs runtime reports. Nothing is awaited between that status and the
+ * statement, but the status can be the last announced observation while a
+ * core turn is pending, so its applied index is a lower bound of the
+ * snapshot read (verification F1/F2, open). A refused read executes nothing
+ * and ships no rows.
  * @param {Object} service - The receiving PartitionService.
  * @param {Object} payload - The QUERY payload.
  * @param {string} sql - Its statement.
