@@ -360,13 +360,10 @@ async function observeCriticalServicePublication(rig, shutdown) {
       assert.equal(learner.isShutdown, true);
       return;
     }
-    const previousRecovery = handler.replicaCreateAdmissionRecoveryTask;
     await publish(matching);
-    assert.equal(await waitForCondition(() =>
-      handler.replicaCreateAdmissionRecoveryRearmOwner.current() ||
-      handler.replicaCreateAdmissionRecoveryTask !== previousRecovery,
-    OBSERVATION_BOUND_MS), true, 'the exact CDC publication wakes the stationary voter');
     assert.deepEqual(consensus, [], 'the group emits no new consensus evidence during publication');
+    assert.ok(handler.replicaCreateAdmissionRecoveryRearmOwner.current(),
+      'processing the exact CDC publication schedules the stationary voter recovery');
   } finally {
     cache.offCacheChange(collect);
     learner.off(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, collectConsensus);
