@@ -578,9 +578,47 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
 
       coordinator.initialize();
       try {
-        await coordinator.checkTimeouts();
         const owner = coordinator.workflowOwner;
         const {operation_id: operationId} = operationRow;
+        const diagnostics = [];
+        let stage = 'initialSweep';
+        const log = (name, details) => diagnostics.push({stage, name, ...details});
+        const summarize = (op) => op ? {
+          id: op.operationId, step: op.workflowStep, status: op.status,
+          source: op.sourceNodeId, target: op.targetNodeId, birth: op.createdAt,
+          completed: op.completedAt,
+        } : null;
+        const routeRead = owner.repository.getOperationByIdVisibilityObservation
+          .bind(owner.repository);
+        owner.repository.getOperationByIdVisibilityObservation = async (...args) => {
+          const outcome = await routeRead(...args);
+          log('visibility', {subject: args[0], operation: summarize(outcome.operation),
+            deferred: outcome.deferredOutcome});
+          return outcome;
+        };
+        const lifecycle = owner.reconcileOperationLifecycle.bind(owner);
+        owner.reconcileOperationLifecycle = async (operation, options) => {
+          const readsBefore = gatewayCalls.length;
+          const outcome = await lifecycle(operation, options);
+          log('lifecycle', {operation: summarize(operation), outcome,
+            cause: options?.cause, reads: gatewayCalls.slice(readsBefore)});
+          return outcome;
+        };
+        const confirmActive = owner.confirmActiveReplicaTerminalHandoff.bind(owner);
+        owner.confirmActiveReplicaTerminalHandoff = async (...args) => {
+          const outcome = await confirmActive(...args);
+          log('activeHandoff', {operation: summarize(args[0]), outcome});
+          return outcome;
+        };
+        const schedule = owner.scheduleActiveReplicaHandoffRetry.bind(owner);
+        owner.scheduleActiveReplicaHandoffRetry = (operation) => {
+          const outcome = schedule(operation);
+          log('schedule', {operation: summarize(operation), outcome,
+            now: owner.resolveTimeoutCheckNowMs(),
+            timer: owner.observedProgressRetryTimerByOperationId.has(operationId)});
+          return outcome;
+        };
+        await coordinator.checkTimeouts();
         t.ok(ledger.pointReads.some(({rows}) => rows[0]?.operation_id === operationId),
           'the operation is exact and current while the services read is incomplete');
         t.equal(ledger.read().workflow_step, 'CREATING');
@@ -593,8 +631,13 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         t.ok(retry, 'cache ACTIVE preserves the existing owner wake');
         let consumed = retry;
         for (let turn = 0; turn < 2 && consumed; turn++) {
-          await consumed.timeoutHandle.callback();
+          stage = `heldRetry${turn}`;
+          log('queueBeforeRetry', {keys: [...owner.operationWorkflowCoordinator
+            .inFlightExecutionsByOwnerKey.keys()], deadline: consumed.deadlineMs,
+            now: owner.resolveTimeoutCheckNowMs()});
+          const outcome = await consumed.timeoutHandle.callback();
           const successor = pendingRetry();
+          log('retryReturn', {outcome, successor: Boolean(successor)});
           t.ok(successor && successor.timeoutHandle !== consumed.timeoutHandle,
             'each unavailable turn retains a distinct successor wake');
           t.equal(ledger.read().workflow_step, 'CREATING');
@@ -615,6 +658,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
             'spent timer ownership leaves the exact durable operation for CDC recovery');
         }
 
+        stage = 'cdc';
         activeAuthority = true;
         t.ok(cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, authorityRow),
           'the service event is accepted through the real cache mutation owner');
@@ -626,7 +670,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         const completedTurn = owner.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey
           .get(owner.getOperationOwnerSingleFlightKey(operationId));
         t.ok(completedTurn, 'the cache event starts the real operation owner turn');
-        await completedTurn;
+        const cdcOutcome = await completedTurn;
+        log('cdcReturn', {outcome: cdcOutcome});
+        t.comment(JSON.stringify(diagnostics));
         const committed = ledger.read();
         t.equal(committed.workflow_step, 'ACTIVE', 'the real services CDC wakes and completes the original ADD');
         t.equal(committed.status, 'active');
