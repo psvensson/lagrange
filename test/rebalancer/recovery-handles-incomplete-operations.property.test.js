@@ -15,11 +15,18 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {REBALANCE_COORDINATOR_EVENT, REBALANCE_COORDINATOR_LOG_MSG} from
+  '../../src/rebalancer/rebalancer-constants.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  createCoordinatorSqlStore,
   createMockCache,
   createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
@@ -50,7 +57,9 @@ function createOperationRow(params) {
     updated_at: params.updatedAt || now,
     completed_at: params.completedAt || null,
     error_message: params.errorMessage || null,
-    steps_history: params.stepsHistory || JSON.stringify([{step: 'PENDING', timestamp: now}]),
+    steps_history: params.stepsHistory || JSON.stringify([
+      {step: params.workflowStep || WORKFLOW_STEP.PENDING, timestamp: now},
+    ]),
   };
 }
 
@@ -63,15 +72,19 @@ function createRecoveryTestCoordinator(options = {}) {
   const {
     operations = [],
     services = [],
+    unavailableReplicaId,
   } = options;
 
-  // Track operations in a map (simulating SQL storage)
+  // Mirror committed SQLite operation rows for assertions.
   const trackedOperations = new Map();
   operations.forEach((op) => trackedOperations.set(op.operation_id, {...op}));
 
   // Track services for replica status lookup
   const trackedServices = new Map();
-  services.forEach((s) => trackedServices.set(s.service_id, {...s}));
+  services.forEach((row) => trackedServices.set(row.service_id, {
+    service_type: SERVICE_TYPE.PARTITION,
+    ...row,
+  }));
 
   // Mock CDC service
   const cdcService = {
@@ -80,112 +93,22 @@ function createRecoveryTestCoordinator(options = {}) {
     refreshAuthoritativeCacheRow: async () => true,
   };
 
-  // SQL engine that handles operations and services queries
+  const store = createCoordinatorSqlStore({
+    getAll(table) {
+      if (table === 'replica_operations') return [...trackedOperations.values()];
+      if (table === 'services') return [...trackedServices.values()];
+      return [];
+    },
+    upsert(_table, row) {
+      trackedOperations.set(row.operation_id, row);
+    },
+  });
   const sqlEngine = {
-    executeQuery: async (sql, params) => {
-      // Handle INSERT operations
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory,
-        ] = params;
-
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-        });
-        return {success: true};
+    async executeQuery(sql, params) {
+      if (unavailableReplicaId && sql.includes('FROM services') && params[0] === unavailableReplicaId) {
+        return {success: false, error: 'authoritative_row_source_unavailable'};
       }
-
-      // Handle UPDATE operations
-      if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        const existing = trackedOperations.get(operationId);
-        if (existing) {
-          trackedOperations.set(operationId, {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
-        return {success: true};
-      }
-
-      // Handle SELECT for services (replica status lookup)
-      if (sql.includes('services') && sql.includes('service_id = ?')) {
-        const [serviceId] = params;
-        const service = trackedServices.get(serviceId);
-        if (service) {
-          return {success: true, rows: [{...service}]};
-        }
-        return {success: true, rows: []};
-      }
-
-      // Handle SELECT for services by partition/node
-      if (sql.includes('services') && sql.includes('partition_id = ?')) {
-        const [partitionId, nodeId] = params;
-        const matching = Array.from(trackedServices.values()).filter((s) =>
-          s.partition_id === partitionId && s.node_id === nodeId);
-        if (matching.length > 0) {
-          return {success: true, rows: [{status: matching[0].status}]};
-        }
-        return {success: true, rows: []};
-      }
-
-      // Handle SELECT for replica_operations
-      if (sql.includes('replica_operations')) {
-        const allOps = Array.from(trackedOperations.values());
-
-        // Handle operation by ID query
-        if (sql.includes('operation_id = ?')) {
-          const [operationId] = params;
-          const op = trackedOperations.get(operationId);
-          return {success: true, rows: op ? [op] : []};
-        }
-
-        // Handle deduplication query
-        if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
-          const [partitionId, targetNodeId] = params;
-          const matching = allOps.filter((op) =>
-            op.partition_id === partitionId &&
-            op.target_node_id === targetNodeId &&
-            !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: matching};
-        }
-
-        // Filter for non-terminal operations
-        if (sql.includes('NOT IN')) {
-          const incompleteOps = allOps.filter((op) =>
-            !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: incompleteOps};
-        }
-
-        return {success: true, rows: allOps};
-      }
-
-      return {success: true, rows: []};
+      return store.execute(sql, params);
     },
   };
 
@@ -211,6 +134,15 @@ function createRecoveryTestCoordinator(options = {}) {
     enableTimeouts: false,
   }));
 
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    try {
+      await shutdown();
+    } finally {
+      store.suspend();
+    }
+  };
+
   /**
    * Get an operation from the tracked store.
    * @param {string} operationId - Operation ID.
@@ -222,6 +154,82 @@ function createRecoveryTestCoordinator(options = {}) {
 
   return {coordinator, getTrackedOperation, trackedOperations};
 }
+
+test('recovery reports the committed terminal branch and leaves pending outcomes uncounted', async (t) => {
+  const rows = [
+    ['pending-completes', WORKFLOW_STEP.PENDING, ReplicaStatus.PENDING, ReplicaStatus.ACTIVE],
+    ['syncing-fails', WORKFLOW_STEP.SYNCING, ReplicaStatus.SYNCING, ReplicaStatus.FAILED],
+    ['pending-refused', WORKFLOW_STEP.PENDING, ReplicaStatus.PENDING, null],
+    ['syncing-waits', WORKFLOW_STEP.SYNCING, ReplicaStatus.SYNCING, ReplicaStatus.SYNCING],
+  ];
+  const operations = rows.map(([operationId, workflowStep, status]) =>
+    createOperationRow({operationId, replicaId: operationId + '-replica', workflowStep, status}));
+  const services = rows.flatMap(([operationId, , , status]) => status === null ? [] : [{
+    service_id: operationId + '-replica',
+    partition_id: 'test-partition',
+    node_id: 'test-node-1',
+    status,
+  }]);
+  const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
+    operations, services, unavailableReplicaId: 'pending-refused-replica',
+  });
+  const recoveryLogs = [];
+  const recoveryEvents = [];
+  const failedEvents = [];
+  const completedEvents = [];
+  const reconcileOutcomes = new Map();
+  const owner = coordinator.workflowOwner;
+  const reconcile = owner.reconcileOperationLifecycle.bind(owner);
+  owner.reconcileOperationLifecycle = async (operation, options) => {
+    const outcome = await reconcile(operation, options);
+    reconcileOutcomes.set(operation.operationId, outcome);
+    return outcome;
+  };
+  owner.logger = {
+    info: (message, detail) => recoveryLogs.push({message, detail}),
+    warn() {},
+    error() {},
+    debug() {},
+  };
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED,
+    (summary) => recoveryEvents.push(summary));
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+    ({operation}) => failedEvents.push(operation.operationId));
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+    ({operation}) => completedEvents.push(operation.operationId));
+  coordinator.initialize();
+  try {
+    const summary = await coordinator.handleRecovery();
+    t.same(operations.map(({operation_id: id}) => getTrackedOperation(id).workflow_step),
+      [WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.FAILED, WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SYNCING],
+      'authoritative state carries both opposite terminal outcomes and retains two live rows');
+    t.equal(summary.markedFailed, 1, 'only the durably failed SYNCING row counts as a failure');
+    t.equal(summary.reconciled, 1, 'only the durably completed PENDING row counts as reconciled');
+    t.same(summary.errors, [], 'ordinary refusal and waiting do not become thrown errors');
+    t.equal(reconcileOutcomes.get('pending-refused'), OPERATION_RECONCILE_OUTCOME.REFUSED,
+      'real authority unavailability takes the normal named refusal');
+    t.equal(reconcileOutcomes.get('syncing-waits'), OPERATION_RECONCILE_OUTCOME.WAITING,
+      'the observable live SYNCING row takes the normal named wait');
+    t.same(failedEvents, ['syncing-fails'], 'failure event identifies the durable FAILED row');
+    t.same(completedEvents, ['pending-completes'], 'completion event identifies the durable ACTIVE row');
+    t.same(recoveryEvents, [summary], 'the public recovery event publishes the exact returned counters');
+    const failureLogs = recoveryLogs.filter(({message}) =>
+      message === REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_OBSERVED_FAILURE);
+    t.same(failureLogs.map(({detail}) => detail.operationId), ['syncing-fails'],
+      'only observed durable failure receives failure-settlement diagnostics');
+    const summaryLog = recoveryLogs.find(({message}) =>
+      message === REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED);
+    t.same(summaryLog?.detail, {nodeId: 'test-node-1', ...summary},
+      'completion diagnostics and public event agree after reservation and debt accounting');
+    const direct = await owner.handleRecovery();
+    t.equal(direct.totalIncomplete, 2, 'direct recovery rediscovers the same retained operations');
+    t.equal(direct.markedFailed + direct.reconciled, 0,
+      'direct recovery reports no progress without a terminal or advancing outcome');
+    t.same(failedEvents, ['syncing-fails'], 'direct recovery does not emit a second terminal failure');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
   const failureRecoveryCases = [
@@ -353,7 +361,7 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
               operation.workflow_step === 'FAILED' &&
-              result.reconciled === 1;
+              result.markedFailed === 1 && result.reconciled === 0;
           } finally {
             await coordinator.shutdown();
           }
@@ -393,7 +401,7 @@ test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
             return operation !== null &&
               operation.status === ReplicaStatus.FAILED &&
               operation.workflow_step === 'FAILED' &&
-              result.reconciled === 1;
+              result.markedFailed === 1 && result.reconciled === 0;
           } finally {
             await coordinator.shutdown();
           }
