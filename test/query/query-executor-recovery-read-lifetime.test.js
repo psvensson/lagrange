@@ -44,6 +44,8 @@ const SQL = `SELECT id, value FROM ${TABLE} WHERE id = ?`;
 const LATE_MS = 1;
 const READ_ATTEMPTS = 3;
 const GRANT_PROBES = 6;
+const MAX_INSPECTIONS_PER_OBSERVATION = 8;
+const ROUTING_SPIN = 'routing repeatedly inspected unchanged eligibility without waiting';
 const FIXTURE_BUDGET_MS = 10000;
 const CANCEL_REASON = 'witness caller cancelled';
 const RECOVERY = CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
@@ -225,20 +227,30 @@ async function openFixture(t, options = {}) {
   executor.readRetryAttempts = READ_ATTEMPTS;
   const resolve = executor.resolvePartitionServiceCandidates.bind(executor);
   let routingInspections = 0;
+  let inspectionLimit = Number.POSITIVE_INFINITY;
   executor.resolvePartitionServiceCandidates = (...args) => {
     routingInspections += 1;
+    if (routingInspections > inspectionLimit) {
+      // A controller timeout cannot interrupt a synchronous loop in this turn.
+      inspectionLimit = Number.POSITIVE_INFINITY;
+      throw new Error(ROUTING_SPIN);
+    }
     return resolve(...args);
   };
   const probeMs = sender.router.reconnectIntervalMs;
-  function read(key, deadlineMs, {readAuthority, cancellationToken} = {}) {
+  function read(key, deadlineMs, options = {}) {
     return executor.executeOnPartition(PARTITION, SQL, [key], true, true, false, {
-      readAuthority, cancellationToken, timeoutBudget: {deadlineMs},
+      ...options, timeoutBudget: {deadlineMs},
       routingReadinessDimension: RECOVERY,
     });
   }
   return {
     clock, group, probeMs, read, executor, handoff, publishAlternate, source: sender.router,
+    primaryAddress, alternateAddress,
     routingInspections: () => routingInspections,
+    limitRoutingInspections() {
+      inspectionLimit = routingInspections + MAX_INSPECTIONS_PER_OBSERVATION;
+    },
     alternateSends: () => [...resources.alternateWire.deliveries.values()],
     withdrawPrimary: () => {
       cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE,
@@ -484,3 +496,44 @@ for (const advertiseAlternate of [true, false]) {
     assertRetired(f, t);
   });
 }
+
+test('an excluded alternate cannot prevent the original reply or an independent read',
+  async (t) => {
+    const f = await openFixture(t, {withAlternate: true});
+    f.executor.readRetryAttempts = 1;
+    const deadline = f.clock.now() + GRANT_PROBES * f.probeMs;
+    const options = {excludeDeliveryAddresses: [f.alternateAddress]};
+    const settled = f.read(HELD_KEY, deadline, options).then(
+      (value) => ({value}), (error) => ({error}),
+    );
+    await settleUntil(t, () => f.held()[0]?.answer?.success === true,
+      'the only eligible endpoint answered natively and its frames are held');
+    const [first] = f.held();
+    const inspected = f.routingInspections();
+    f.limitRoutingInspections();
+    f.clock.advance(f.probeMs + LATE_MS);
+    await settleUntil(t, () => f.routingInspections() > inspected, 'bounded routing wake');
+    const independent = await f.read(PEER_KEY, deadline, options);
+    t.same(independent.rows, [{id: PEER_KEY, value: 'independent row'}]);
+    t.ok(f.source.pendingResponses.has(first.id), 'the held response remains live');
+    t.equal(f.alternateSends().length, 0, 'the excluded endpoint receives no original or peer read');
+    releaseFrames(first);
+    const result = await settled;
+    t.equal(result.error?.message, undefined, 'an unchanged route yields instead of spinning');
+    t.same(result.value?.rows, [{id: HELD_KEY, value: 'original row'}]);
+    t.equal(first.sends, 1, 'same-route inspection does not spend the scarce submission');
+    assertRetired(f, t);
+  });
+
+test('excluding every candidate sends nothing and leaves no pending waiters', async (t) => {
+  const f = await openFixture(t, {withAlternate: true});
+  f.executor.readRetryAttempts = 1;
+  const deadline = f.clock.now() + GRANT_PROBES * f.probeMs;
+  const result = await f.read(HELD_KEY, deadline, {
+    excludeDeliveryAddresses: [f.primaryAddress, f.alternateAddress],
+  });
+  t.equal(result.success, false);
+  t.equal(f.sent().length, 0);
+  t.equal(f.alternateSends().length, 0);
+  assertRetired(f, t);
+});
