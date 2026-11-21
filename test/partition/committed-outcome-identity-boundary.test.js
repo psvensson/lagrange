@@ -6,14 +6,19 @@
 // - producer: the owner's committed apply writes its outcome row through the
 //   outcome owner's recorder (with command_digest) into a file-backed store;
 // - persistence boundary: the same store reopened by a new PartitionService,
-//   and the state-machine checkpoint image the snapshot owner seals from it
-//   (createSqliteStateMachineCheckpoint) opened as a replica store - both
-//   through the one store-open step (partition-service-raft-init-base.js);
+//   and the state-machine image the snapshot owner seals from it (a backup
+//   scrubbed by the checkpoint producer's own scrubRaftRsCheckpointPayload)
+//   opened as a replica store - both through the one store-open step
+//   (partition-service-raft-init-base.js), which a snapshot install's
+//   replacement service also passes;
 // - consumers: placement replay and formation replay, at request and at apply.
 // After every boundary the exact command answers its ORIGINAL receipt and
 // replays without effect; a different command under the same entry key is the
 // owner's collision at request and fails the application closed at apply.
-// The snapshot install marker/swap protocol itself is owned by
+// The checkpoint watermark gate, descriptor and install marker/swap protocol
+// are not exercised here: the controllable consensus port keeps no raft-rs
+// checkpoint boundary (createSqliteStateMachineCheckpoint answers
+// apply_watermark_divergence); they are owned by
 // test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js.
 //
 // REAL: PartitionService initialization and committed apply, the placement
@@ -23,6 +28,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
+import Database from 'better-sqlite3';
 import {CONTROL_PLANE_PUBLICATIONS_SCHEMA, REPLICA_OPERATIONS_SCHEMA, SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {FORMATION_REFUSAL_REASON, buildFormationDeclareBody, requestFormationDeclare} from
@@ -37,10 +43,8 @@ import {requestPlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
 import {buildPlacementCommand} from
   '../../src/partition/partition-placement-admission-command.js';
-import {RAFT_CHECKPOINT_CREATION_OUTCOME, RAFT_CHECKPOINT_PAYLOAD_FILE} from
-  '../../src/raft/snapshot-checkpoint-constants.js';
-import {createSqliteStateMachineCheckpoint} from '../../src/raft/snapshot-checkpoint-store.js';
-import {buildSnapshotCatchupIdentity} from '../../src/raft/snapshot-catchup.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
+import {scrubRaftRsCheckpointPayload} from '../../src/raft/snapshot-application-content.js';
 import {applyCommitted, awaitProposal, clearFixtureSingletons, resetFixtureSingletons,
   shutdownAll, startLeader, temporaryDbPath, track} from
   '../test-helpers/participant-transaction-fixture.js';
@@ -138,7 +142,6 @@ for (const owner of [PLACEMENT, FORMATION]) {
     'image, and settles only the exact command', async () => {
     const {directory, dbPath} = temporaryDbPath();
     const imagePath = path.join(directory, 'image', 'partition.db');
-    const checkpointsRoot = path.join(directory, 'checkpoints');
     try {
       const original = await onStore(owner, dbPath, async (leader, proposed) => {
         const answer = await owner.settle(leader, proposed);
@@ -146,15 +149,14 @@ for (const owner of [PLACEMENT, FORMATION]) {
         return answer;
       });
       await onStore(owner, dbPath, async (leader, proposed) => {
-        const created = await createSqliteStateMachineCheckpoint({db: leader.db,
-          identity: buildSnapshotCatchupIdentity({partitionId: owner.partitionId,
-            tableName: owner.options.tableName}),
-          checkpointsRoot, raftRsGroupId: owner.partitionId});
-        assert.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-          `checkpoint: ${JSON.stringify(created)}`);
         fs.mkdirSync(path.dirname(imagePath), {recursive: true});
-        fs.copyFileSync(path.join(created.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE),
-          imagePath);
+        await leader.db.backup(imagePath);
+        const image = new Database(imagePath);
+        try {
+          scrubRaftRsCheckpointPayload(image, ENTITY_TYPE.PARTITION);
+        } finally {
+          image.close();
+        }
         await assertExactReplay(owner, leader, proposed, original);
       });
       await onStore(owner, imagePath, (leader, proposed) =>

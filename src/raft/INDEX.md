@@ -84,7 +84,7 @@ documentClass: generated
 - [replica-leadership-state.js](replica-leadership-state.js) - Mint a new leadership tenure: a NEW frozen object per tenure, so a reader that kept the previous token sees a... (importers: many)
 - [replica-raft-timing.js](replica-raft-timing.js) - A replica's raft timing at initialization: the configured heartbeat and election window, with this replica's... (importers: few)
 - [replica-voter-readiness.js](replica-voter-readiness.js) - Single owner of the replica voter-readiness semantics (quest voter-readiness-visibility-single-owner-table; epic... (importers: hub)
-- [snapshot-application-content.js](snapshot-application-content.js) - Application and durable partition table policy for raft-rs replica-image checkpoints (SN1 / F5). (importers: one)
+- [snapshot-application-content.js](snapshot-application-content.js) - Application and durable partition table policy for raft-rs replica-image checkpoints (SN1 / F5). (importers: few)
 - [snapshot-boundary.js](snapshot-boundary.js) - Snapshot compacted-log boundary (quest raft-snapshot-atomic-install, R3). (importers: few)
 - [snapshot-catchup-constants.js](snapshot-catchup-constants.js) - Raft snapshot compacted-follower catch-up vocabulary (quest raft-snapshot-compacted-follower-catchup, spec... (importers: many)
 - [snapshot-catchup.js](snapshot-catchup.js) - Raft snapshot compacted-follower catch-up orchestrator (quest raft-snapshot-compacted-follower-catchup, spec... (importers: many)
