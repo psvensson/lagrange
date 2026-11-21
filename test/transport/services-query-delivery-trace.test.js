@@ -1,4 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  TRANSPORT_DELIVERY_OUTCOME_STATE,
+  deliveryTransportOf,
+} from '../../src/transport/transport-semantic-outcome.js';
 
 const traceEnv = 'LAGRANGE_SERVICES_QUERY_TRACE';
 process.env[traceEnv] ??= '1';
@@ -29,6 +34,7 @@ const TARGET = 'test-node';
 const PARTITION = 'services-p1';
 const ADDRESS = `${TARGET}/partition/${PARTITION}-r1`;
 const SQL = 'SELECT field_trace_secret FROM services';
+const WRITE_SQL = 'UPDATE services SET field_trace_secret = 1';
 
 function capture(owner, records) {
   owner.logger = {
@@ -54,7 +60,11 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   // Direct-only queries exercise the actual group send owner without Raft.
   group.initialized = true;
   sender.router.setQueryMessageGroupServiceResolver(() => ({service: group}));
-  target.router.register(ADDRESS, () => ({success: true, rows: []}));
+  let sinkWrites = 0;
+  target.router.register(ADDRESS, (envelope) => {
+    if (envelope.payload.payload.sql === WRITE_SQL) sinkWrites += 1;
+    return {success: true, rows: []};
+  });
   await fixture.connect(sender, target);
   const systemCache = createMockSystemCache([PARTITION]);
   systemCache.services[0].service_id = `${PARTITION}-r1`;
@@ -74,9 +84,11 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   'receiver write callback');
   const positive = records.splice(0);
   const write = await sender.router.deliver(ADDRESS, {
-    type: QUERY_MESSAGE_TYPE.QUERY, sql: 'UPDATE services SET field_trace_secret = 1',
+    type: QUERY_MESSAGE_TYPE.QUERY, sql: WRITE_SQL,
   });
-  t.equal(write.transport.acknowledged, true, 'the ordinary write still reached the sink');
+  t.equal(deliveryTransportOf(write).deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
+    'the ordinary write was delivered');
+  t.equal(sinkWrites, 1, 'the receiving handler applied the excluded write exactly once');
   t.same(records, [], 'a write to the same partition does not consume trace budget');
 
   // Keep dispatch and response real. Delay the seed ACK at the socket handoff
@@ -94,7 +106,11 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   const failed = await sender.router.deliver(ADDRESS, {
     type: QUERY_MESSAGE_TYPE.QUERY, sql: SQL,
   }, {timeoutMs: 1000});
-  t.equal(failed.transport.acknowledged, false, 'an expired delivery remains unacknowledged');
+  const timeout = deliveryTransportOf(failed);
+  t.equal(timeout.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
+    'the expired delivery deferred');
+  t.equal(timeout.reasonCode, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT,
+    'the sender reported its spent delivery bound');
   t.ok(heldAck, 'the real seed parsed the query and tried to ACK');
 
   const replacement = {...connection, connectionId: 'trace-replacement'};
