@@ -61,16 +61,16 @@ async function assertForeignRecordIsCollision(leader, proposed, entryId, body) {
   const rowsBefore = ledgerRows(leader);
   const proposals = proposed.length;
   const requested = await requestPlacementAdmission(leader, {entryId, body});
-  assert.equal(proposed.length, proposals);
-  assert.notEqual(requested.failureCode, PLACEMENT_ADMISSION_ERROR.OUTCOME_IDENTITY_UNAVAILABLE,
-    `a current-format ${record.outcome} record of another owner is classified as an old ` +
-    'placement outcome format');
-  assert.equal(requested.failureCode, PLACEMENT_ADMISSION_ERROR.BYTES);
   const appliedBefore = durableAppliedIndex(leader);
   const committed = buildPlacementCommand(leader, {type: PLACEMENT_ADMIT_TYPE, entryId, body});
-  assert.equal(applyCommitted(leader, committed), PLACEMENT_ADMISSION_ERROR.BYTES,
-    'a committed placement command is never consumed as an old-format identity debt');
-  assert.equal(durableAppliedIndex(leader), appliedBefore);
+  const applied = applyCommitted(leader, committed);
+  // Request and apply are observed together, so a red run names both.
+  assert.deepEqual({request: requested.failureCode, apply: applied,
+    appliedIndexAdvance: durableAppliedIndex(leader) - appliedBefore}, {
+    request: PLACEMENT_ADMISSION_ERROR.BYTES, apply: PLACEMENT_ADMISSION_ERROR.BYTES,
+    appliedIndexAdvance: 0}, `a current-format ${record.outcome} record of another owner ` +
+    'must be the collision at request and at apply, never an old placement outcome format');
+  assert.equal(proposed.length, proposals);
   assert.deepEqual(recordOf(leader, entryId), record);
   assert.deepEqual(ledgerRows(leader), rowsBefore);
 }

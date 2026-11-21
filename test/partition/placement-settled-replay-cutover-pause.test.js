@@ -32,6 +32,13 @@ beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
 
 const resultOf = (answer) => answer[PLACEMENT_RESULT_FIELD];
+// The committed receipt of an entry. The first answer's acknowledgement
+// stamp (acceptingNodeId, acknowledgedAtMs) belongs to that delivery, not to
+// the committed outcome, so a replay is compared on the receipt alone.
+const RECEIPT_FIELDS = Object.freeze(['success', 'partitionId', PLACEMENT_RESULT_FIELD,
+  'committed', 'logIndex', 'term']);
+const receiptOf = (answer) => Object.fromEntries(RECEIPT_FIELDS.map((field) =>
+  [field, answer?.[field]]));
 const E0 = 'pause-e0';
 const E1 = 'pause-e1';
 const E1_UNRESOLVED = 'pause-e1u';
@@ -55,7 +62,8 @@ test('cutover pause: settled E0 answers its original receipt while new and unres
     const proposals = proposed.length;
 
     const replay = await requestPlacementAdmission(leader, {entryId: E0, body: e0Body});
-    assert.deepEqual(replay, e0.answer, 'a settled E0 is answered with its original receipt');
+    assert.deepEqual(receiptOf(replay), receiptOf(e0.answer),
+      'a settled E0 is answered with its original receipt');
     assert.equal(Object.isFrozen(resultOf(replay)), true);
 
     const fresh = await requestPlacementAdmission(leader, {entryId: E1, body: e1Body});
