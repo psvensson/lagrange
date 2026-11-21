@@ -671,6 +671,9 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
         typeof error.runtimeAuthority === LOCAL_STR_OBJECT) {
       result.runtimeAuthority = error.runtimeAuthority;
     }
+    if (result.errorCode === QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE) {
+      result.detail = error.detail;
+    }
     if (error?.details && typeof error.details === LOCAL_STR_OBJECT) {
       result.details = {...error.details};
     }

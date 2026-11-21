@@ -459,8 +459,15 @@ class ManagedSplitWorkflow {
             partitionInfo.leaderNodeId ||
             this.nodeId,
         });
+      const childProvisioningAttempt = {
+        timeoutBudget: executionTimeoutBudget,
+        cancellationToken: executionContext.cancellationToken,
+      };
+      const assertChildProvisioningAttempt = () =>
+        this.assertChildProvisioningAttempt(childProvisioningAttempt);
       const childProvisioningAdmissionByPartitionId =
         await this.probeChildProvisioningAdmissions({
+          ...childProvisioningAttempt,
           childProvisioningTargetNodeIdsByPartitionId,
           minimumRoutableReplicaCount: splitBootstrapReplicaCount,
         });
@@ -500,9 +507,12 @@ class ManagedSplitWorkflow {
         ...this.buildSplitPlanTransitionMetadata(splitPlan),
       };
       const prepared = await this.workflowCoordinator.updateWorkflow(
-        workflowId, (current) => ({...current,
-          status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-          metadata: {...current.metadata, ...planDelta}}));
+        workflowId, (current) => {
+          assertChildProvisioningAttempt();
+          return {...current,
+            status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+            metadata: {...current.metadata, ...planDelta}};
+        });
       const transitionMetadata = prepared.metadata;
 
       const sourcePartitionKeyType =
@@ -549,6 +559,7 @@ class ManagedSplitWorkflow {
       await this.ensureChildPartitionMetadata({
         leftPartitionMetadata,
         rightPartitionMetadata,
+        assertEffectAllowed: assertChildProvisioningAttempt,
       });
       await Promise.all([
         this.waitForTablePartitionMetadata(
@@ -563,6 +574,7 @@ class ManagedSplitWorkflow {
         ),
       ]);
 
+      assertChildProvisioningAttempt();
       await markTargetProvisioningDispatched(this, workflowId,
         splitPlan.leftPartition.partitionId);
       await this.provisionInitialTablePartition({
@@ -581,11 +593,12 @@ class ManagedSplitWorkflow {
           childProvisioningAdmissionByPartitionId[
             splitPlan.leftPartition.partitionId
           ] || null,
-        timeoutBudget: executionTimeoutBudget,
+        ...childProvisioningAttempt,
         topologySnapshot: transitionTopologySnapshot,
         routingReadinessDimension:
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
+      assertChildProvisioningAttempt();
       await markTargetProvisioningDispatched(this, workflowId,
         splitPlan.rightPartition.partitionId);
       await this.provisionInitialTablePartition({
@@ -604,7 +617,7 @@ class ManagedSplitWorkflow {
           childProvisioningAdmissionByPartitionId[
             splitPlan.rightPartition.partitionId
           ] || null,
-        timeoutBudget: executionTimeoutBudget,
+        ...childProvisioningAttempt,
         topologySnapshot: transitionTopologySnapshot,
         routingReadinessDimension:
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,

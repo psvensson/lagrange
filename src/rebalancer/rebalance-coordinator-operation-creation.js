@@ -188,7 +188,7 @@ class RebalanceCoordinatorOperationCreation {
    *   observation previously issued by this coordinator owner.
    * @return {Promise<Object>} Created or existing operation record.
    */
-  async createOperation(request) {
+  async createOperation(request, {assertFreshCreationAllowed} = {}) {
     if (this.isShuttingDown || !this.initialized) {
       throw new Error(LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN);
     }
@@ -243,6 +243,7 @@ class RebalanceCoordinatorOperationCreation {
       replaceIntentIdentity,
       dedupeKey,
       criticalAddLikeIntentKey,
+      assertFreshCreationAllowed,
     });
   }
 
@@ -489,6 +490,7 @@ class RebalanceCoordinatorOperationCreation {
       replaceIntentIdentity: creationContext.replaceIntentIdentity,
       requestedMove,
       observeAttempt: creationContext.observeAttempt,
+      assertFreshCreationAllowed: creationContext.assertFreshCreationAllowed,
     };
     if (this.placementAdmissionEnabled === true &&
         this.isPlacementAdmissionManagedEntityType(entityType)) {
@@ -729,21 +731,16 @@ class RebalanceCoordinatorOperationCreation {
 
     // Persist via SQL engine (writes to partition leader).
     context.observeAttempt?.(operation);
+    const returnDisposition = Boolean(context.replaceIntentIdentity ||
+      operation.targetClaimKey || move.operationIntentId);
+    const submissionIsCurrent = context.assertFreshCreationAllowed ?
+      () => {
+        context.assertFreshCreationAllowed();
+        return true;
+      } : undefined;
+    // A deterministic child intent reuses its exact winning durable row.
     const persistenceResult = await this.persistNewOperationAtAdmissionBoundary(
-      operation,
-      move,
-      // Deterministic-intent creators (move.operationIntentId — the
-      // schema-provisioning jobs mint one id per (job, target)) are
-      // idempotent re-creates by construction: a zero-change collision
-      // whose leader row carries the SAME operation id is the prior
-      // attempt's durable row, so take the EXISTING disposition instead
-      // of demanding fresh-timestamp visibility the advanced row can
-      // never satisfy (round-7 root cause; the strict fail-closed
-      // contract stays for non-intent creators).
-      context.replaceIntentIdentity || operation.targetClaimKey ||
-        move.operationIntentId ?
-        {returnDisposition: true} :
-        undefined,
+      operation, move, {returnDisposition, submissionIsCurrent},
     );
     if (persistenceResult.operationCreationAdmission) {
       resolvedEntitySizeBytes =

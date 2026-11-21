@@ -5,6 +5,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 // Hardware-relative budget scaling: CI's ordinary lane runs on a slower host
 // (LAGRANGE_TEST_MACHINE_FACTOR=3); a tight real-clock provisioning budget
@@ -27,8 +28,7 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
-import {
-} from '../../src/control-plane/timeout-budget.js';
+import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {
@@ -58,7 +58,22 @@ import {
 import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
 test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
-  'insertion when child provisioning precheck cannot satisfy quorum', async (t) => {
+  'insertion when child provisioning precheck cannot satisfy quorum', (t) =>
+  exerciseSplitChildAdmission(t, 'denied'));
+
+for (const mode of ['valid', 'expired', 'cancelled']) {
+  test(`managed split checks its held child admission before metadata (${mode})`,
+    (t) => exerciseSplitChildAdmission(t, mode));
+}
+
+async function exerciseSplitChildAdmission(t, mode) {
+  const now = {value: Date.now()};
+  const nowFn = () => now.value;
+  const cancellationToken = new CancellationToken();
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let firstProbeTimer;
+  const starts = [];
   const tables = [{
     table_id: 'tbl-users',
     table_name: 'users',
@@ -75,6 +90,7 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
       table_name: 'users',
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: 'TEXT',
       partition_version: 1,
       replica_count: 3,
       leader_node_id: 'node-a',
@@ -123,6 +139,7 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
   const childInsertCalls = [];
   const provisionCalls = [];
   const engine = new SQLQueryEngine({
+    nowFn,
     controlPlaneReadinessService: createCommittedServeEligibilityOwner({
       projectedDimensions: {controlPlaneRecoveryEligible: true, repairEligible: true},
     }),
@@ -136,7 +153,11 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
           partitionId: move.partitionId,
           nodeId: move.nodeId,
         });
-        if (move.partitionId === 'users-p-right' &&
+        if (mode !== 'denied' && checkedMoves.length === 1) {
+          entered.resolve('first probe');
+          await release.promise;
+        }
+        if (mode === 'denied' && move.partitionId === 'users-p-right' &&
             move.nodeId !== 'node-a') {
           return {
             allowed: false,
@@ -176,10 +197,12 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(tableName, row) {
-        childInsertCalls.push({
-          tableName,
-          partitionId: row.partition_id,
-        });
+        if (tableName === TABLES.PARTITIONS) {
+          childInsertCalls.push({
+            tableName,
+            partitionId: row.partition_id,
+          });
+        }
         return {success: true};
       },
       async upsertSystemTableRow(tableName, row) {
@@ -206,14 +229,59 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
     },
   });
   engine.waitForTablePartitionMetadata = async () => {
-    t.fail('metadata visibility wait must not run on child precheck deferral');
+    t.equal(mode, 'valid', 'metadata visibility requires an approved live attempt');
   };
   engine.provisionInitialTablePartition = async (context) => {
     provisionCalls.push(context);
   };
   engine.startSplitReplicationOnSourcePartition = async () => {
-    t.fail('source replication must not start on child precheck deferral');
+    starts.push('source started');
   };
+
+  if (mode !== 'denied') {
+    const timeoutBudget = createTimeoutBudget({configuredBudgetMs: 200, now: nowFn});
+    const execution = engine.executeManagedSplit('users-p1', {
+      timeoutBudget, cancellationToken,
+    }).then((result) => ({result}), (error) => ({error}));
+    try {
+      const first = await Promise.race([
+        entered.promise,
+        execution,
+        new Promise((resolve) => {
+          firstProbeTimer = setTimeout(() => resolve('first probe timed out'), 2500);
+        }),
+      ]);
+      t.equal(first, 'first probe', 'the real SQL admission is held before effects');
+      t.same(childInsertCalls, []);
+      if (mode === 'expired') now.value = timeoutBudget.deadlineMs;
+      if (mode === 'cancelled') cancellationToken.cancel('split test cancelled');
+    } finally {
+      clearTimeout(firstProbeTimer);
+      release.resolve();
+    }
+    const {result, error} = await execution;
+    if (mode === 'valid') {
+      t.equal(result?.success, true);
+      t.same(uniqueNodeIds(checkedMoves.map(({partitionId}) => partitionId)),
+        ['users-p-left', 'users-p-right']);
+      t.same(childInsertCalls.map(({partitionId}) => partitionId),
+        ['users-p-left', 'users-p-right']);
+      t.same(provisionCalls.map(({partitionId}) => partitionId),
+        ['users-p-left', 'users-p-right']);
+      t.same(starts, ['source started']);
+    } else {
+      t.notOk(result?.success);
+      if (mode === 'cancelled') t.match(error?.message, /split test cancelled/);
+      if (mode === 'expired') t.equal(error?.errorCode, 'TIMEOUT');
+      t.equal(checkedMoves.length, 1, 'the stopped attempt reads no further target or child');
+      t.equal(checkedMoves[0]?.partitionId, 'users-p-left');
+      t.same(childInsertCalls, []);
+      t.same(provisionCalls, []);
+      t.same(starts, []);
+      t.not(tables[0].partition_transition_state, PARTITION_TRANSITION_STATE.SPLIT_PREPARING);
+    }
+    return;
+  }
 
   const result = await engine.executeManagedSplit('users-p1');
 
@@ -263,13 +331,18 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
     1,
     'persisted diagnostics should retain the failing child precheck result',
   );
-});
+}
 
-test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
-  'target fallbacks when later admission rejects preferred nodes', async (t) => {
+for (const replyLost of [false, true]) {
+  test(`explicit child creation uses alternatives only after pre-write refusal (lost: ${replyLost})`,
+    (t) => exerciseExplicitChildCreation(t, replyLost));
+}
+
+async function exerciseExplicitChildCreation(t, replyLost) {
   const partitionId = 'tbl-split-child-fallback-p1';
   const localNodeId = 'node-a';
   const checkedTargetNodeIds = [];
+  const attemptOrder = [];
   const createdTargetNodeIds = [];
   const executedTargetNodeIds = [];
   const services = [];
@@ -304,6 +377,7 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
   const rebalanceCoordinator = withBootstrapHoldRelease({
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
+      attemptOrder.push(`check:${move.nodeId}`);
       return {
         allowed: true,
         decisionType: 'admitted',
@@ -315,6 +389,10 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
     },
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
+      attemptOrder.push(`create:${move.nodeId}`);
+      if (replyLost && move.nodeId === 'node-b') {
+        throw new Error('native CREATE response lost');
+      }
       if (move.nodeId === 'node-b' || move.nodeId === 'node-c') {
         const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
         error.admissionResult = {
@@ -363,15 +441,28 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
-  await engine.provisionInitialTablePartition({
+  const provisioning = engine.provisionInitialTablePartition({
     partitionId,
     replicaCount: 3,
     minimumRoutableReplicaCount: 2,
     targetNodeIds: [localNodeId, 'node-b', 'node-c', 'node-d'],
   });
+  if (replyLost) {
+    await t.rejects(provisioning, {message: 'native CREATE response lost'});
+    t.same(checkedTargetNodeIds, [localNodeId, 'node-b', 'node-c']);
+    t.same(createdTargetNodeIds, [localNodeId, 'node-b']);
+    t.same(executedTargetNodeIds, []);
+    t.same(attemptOrder, ['check:node-a', 'check:node-b', 'check:node-c',
+      'create:node-a', 'create:node-b']);
+    return;
+  }
+  await provisioning;
+  t.same(attemptOrder, ['check:node-a', 'check:node-b', 'check:node-c',
+    'create:node-a', 'create:node-b', 'create:node-c',
+    'check:node-d', 'create:node-d']);
 
   t.same(
-    uniqueNodeIds(checkedTargetNodeIds),
+    checkedTargetNodeIds,
     [localNodeId, 'node-b', 'node-c', 'node-d'],
     'explicit child provisioning targets should still be admission-probed in order',
   );
@@ -385,7 +476,7 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
     [localNodeId, 'node-d'],
     'provisioning should continue with later explicit fallbacks once the minimum child cohort is still satisfiable',
   );
-});
+}
 
 test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
   'prechecks during bootstrap creation', async (t) => {

@@ -26,15 +26,20 @@ function placementOperationIdOf(partitionId, applyIndex, ordinal) {
     `${PLACEMENT_OPERATION_ID_SEPARATOR}${ordinal}`;
 }
 
-function isPlacementOperationForPartition(operationId, partitionId) {
-  if (typeof operationId !== 'string' || typeof partitionId !== 'string') return false;
+function placementOperationPositionOf(operationId, partitionId) {
+  if (typeof operationId !== 'string' || typeof partitionId !== 'string') return null;
   const prefix = `${PLACEMENT_OPERATION_ID_PREFIX}${partitionId}${PLACEMENT_OPERATION_ID_SEPARATOR}`;
-  if (!operationId.startsWith(prefix)) return false;
+  if (!operationId.startsWith(prefix)) return null;
   const [applyIndex, ordinal] = operationId.slice(prefix.length)
     .split(PLACEMENT_OPERATION_ID_SEPARATOR).map(Number);
   return Number.isSafeInteger(applyIndex) && applyIndex > 0 &&
     Number.isSafeInteger(ordinal) && ordinal >= 0 &&
-    placementOperationIdOf(partitionId, applyIndex, ordinal) === operationId;
+    placementOperationIdOf(partitionId, applyIndex, ordinal) === operationId ?
+    {index: applyIndex, ordinal} : null;
+}
+
+function isPlacementOperationForPartition(operationId, partitionId) {
+  return placementOperationPositionOf(operationId, partitionId) !== null;
 }
 
 /**
@@ -47,4 +52,7 @@ function placementReplicaIdOf(operationId) {
     .digest(HASH_ENCODING).slice(0, ID_DIGEST_LENGTH);
 }
 
-export {isPlacementOperationForPartition, placementOperationIdOf, placementReplicaIdOf};
+export {
+  isPlacementOperationForPartition, placementOperationIdOf,
+  placementOperationPositionOf, placementReplicaIdOf,
+};

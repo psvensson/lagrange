@@ -1,9 +1,14 @@
+import {throwIfCancellationRequested} from './query-cancellation.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  createTimeoutBudgetError, getRemainingBudgetMs, TIMEOUT_BUDGET_CLASSIFICATION,
+} from '../control-plane/timeout-budget.js';
 import {
   buildSchemaProvisioningChildIntent,
 } from './schema-provisioning-child-intent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_PARTITION_PROVISIONING = 'partition_provisioning';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_WARN = 'warn';
@@ -38,10 +43,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     if (!admissionResult || typeof admissionResult !== LOCAL_STR_OBJECT) {
       return false;
     }
-    if (admissionResult.allowed === true) {
-      return false;
-    }
-    return true;
+    return admissionResult.allowed === false;
   }
 
   /**
@@ -279,6 +281,65 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     );
   }
 
+  assertProvisioningAttemptBudget(timeoutBudget) {
+    if (!timeoutBudget ||
+        getRemainingBudgetMs(timeoutBudget, {now: this.nowFn}) !== 0) {
+      return;
+    }
+    const error = createTimeoutBudgetError({
+      message: QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+      budget: timeoutBudget,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
+      nestedOperation: LOCAL_STR_PARTITION_PROVISIONING,
+      now: this.nowFn,
+    });
+    error.code = error.errorCode;
+    throw error;
+  }
+
+  async readProvisioningTargetAdmission({
+    partitionId, targetNodeId, childIntent, timeoutBudget, cancellationToken,
+  }) {
+    throwIfCancellationRequested(cancellationToken);
+    this.assertProvisioningAttemptBudget(timeoutBudget);
+    let decision;
+    try {
+      decision = await this.rebalanceCoordinator.checkProvisioningAdmission({
+        type: OperationType.ADD,
+        partitionId,
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: partitionId,
+        nodeId: targetNodeId,
+        controlPlaneMutationWorkClass:
+          CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
+        ...childIntent,
+      });
+    } catch (error) {
+      if (!this.isProvisioningAdmissionDeniedError(error)) {
+        throw error;
+      }
+      decision = {allowed: false, admissionResult: error.admissionResult, error};
+    }
+    throwIfCancellationRequested(cancellationToken);
+    this.assertProvisioningAttemptBudget(timeoutBudget);
+
+    if (decision?.allowed === true) {
+      return decision;
+    }
+    if (decision?.allowed === false) {
+      return {
+        allowed: false,
+        rejection: this.createProvisioningTargetRejection(targetNodeId, {
+          admissionResult: decision.admissionResult,
+          message: decision.error?.message,
+        }),
+      };
+    }
+    const error = new Error(`Provisioning admission unavailable for ${targetNodeId}`);
+    error.code = QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE;
+    throw error;
+  }
+
   /**
    * Probe provisioning admission for one candidate target cohort.
    * @param {Object} options
@@ -290,8 +351,9 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   async probeProvisioningTargetAdmission(options = {}) {
     const partitionId = String(options.partitionId || '');
     const targetNodeIds = this.normalizeTargetNodeIds(options.targetNodeIds);
-    const existingRoutableNodeIds =
-      this.getRoutablePartitionServiceNodeIds(partitionId);
+    const existingRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
+      partitionId, options.routingReadinessDimension,
+    );
     const routableNodeIdSet = new Set(existingRoutableNodeIds);
     const candidateTargetNodeIds = [];
 
@@ -312,39 +374,26 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       };
     }
 
+    const {requiredReplicaCount} = options;
+    const checkedTargetNodeIds = [];
     const admittedTargetNodeIds = [];
     const acceptedTargetPlans = [];
     const rejectedTargetNodePlans = [];
     for (const targetNodeId of candidateTargetNodeIds) {
-      let admissionDecision = null;
-      const childIntent = buildSchemaProvisioningChildIntent(
-        options.schemaJobId,
-        targetNodeId,
-      );
-      try {
-        admissionDecision =
-          await this.rebalanceCoordinator.checkProvisioningAdmission({
-            type: OperationType.ADD,
-            partitionId,
-            entityType: SERVICE_TYPE.PARTITION,
-            entityId: partitionId,
-            nodeId: targetNodeId,
-            controlPlaneMutationWorkClass:
-              CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-            ...childIntent,
-          });
-      } catch (error) {
-        if (!this.isProvisioningAdmissionDeniedError(error)) {
-          throw error;
-        }
-        admissionDecision = {
-          allowed: false,
-          admissionResult: error.admissionResult || null,
-          error,
-        };
+      if (Number.isInteger(requiredReplicaCount) &&
+          existingRoutableNodeIds.length + admittedTargetNodeIds.length >=
+            requiredReplicaCount) {
+        break;
       }
-
-      if (admissionDecision?.allowed === true) {
+      const admissionDecision = await this.readProvisioningTargetAdmission({
+        partitionId,
+        targetNodeId,
+        childIntent: buildSchemaProvisioningChildIntent(options.schemaJobId, targetNodeId),
+        timeoutBudget: options.timeoutBudget,
+        cancellationToken: options.cancellationToken,
+      });
+      checkedTargetNodeIds.push(targetNodeId);
+      if (admissionDecision.allowed) {
         admittedTargetNodeIds.push(targetNodeId);
         acceptedTargetPlans.push(Object.freeze({
           targetNodeId,
@@ -354,25 +403,12 @@ class SQLQueryEngineProvisioningAdmissionMethods {
         continue;
       }
 
-      const rejectionError =
-        admissionDecision?.error && typeof admissionDecision.error === 'object' ?
-          admissionDecision.error :
-          (() => {
-            const fallbackError = new Error(
-              `Provisioning admission denied on ${targetNodeId}`,
-            );
-            fallbackError.admissionResult =
-                admissionDecision?.admissionResult || null;
-            return fallbackError;
-          })();
-      rejectedTargetNodePlans.push(
-        this.createProvisioningTargetRejection(targetNodeId, rejectionError),
-      );
+      rejectedTargetNodePlans.push(admissionDecision.rejection);
     }
 
     return {
       existingRoutableNodeIds,
-      candidateTargetNodeIds,
+      candidateTargetNodeIds: checkedTargetNodeIds,
       admittedTargetNodeIds,
       admittedTargetPlans: Object.freeze(acceptedTargetPlans),
       rejectedTargetNodePlans,
@@ -446,21 +482,8 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    * @private
    */
   async refreshProvisioningOperationAdmission(options) {
-    const decision =
-      await this.rebalanceCoordinator.checkProvisioningAdmission({
-        type: OperationType.ADD,
-        partitionId: options.partitionId,
-        entityType: SERVICE_TYPE.PARTITION,
-        entityId: options.partitionId,
-        nodeId: options.targetNodeId,
-        controlPlaneMutationWorkClass:
-          CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-        operationIntentId: options.childIntent.operationIntentId,
-        replicaIntentId: options.childIntent.replicaIntentId,
-      });
-    return decision?.allowed === true ?
-      decision.operationCreationAdmission || null :
-      null;
+    const decision = await this.readProvisioningTargetAdmission(options);
+    return decision.allowed ? decision.operationCreationAdmission : null;
   }
 
   /**
@@ -474,6 +497,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     const createWithAdmission = (admission) =>
       this.rebalanceCoordinator.createOperation(
         this.buildProvisioningCreateOperationMove(options, admission),
+        {assertFreshCreationAllowed: options.assertFreshCreationAllowed},
       );
     let admission = options.operationCreationAdmission || null;
     try {

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2355,
+    "unit": 2356,
     "integration": 125,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2713,
-  "digest": "fnv1a32-0b7fadfe",
+  "censusSize": 2714,
+  "digest": "fnv1a32-231c7374",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1677,6 +1677,7 @@
     "test/query/scenario-a-deep-stack-throughput-and-latency.test.js": "unit",
     "test/query/scenario-a-transaction-coordination-fast-path.test.js": "unit",
     "test/query/schema-provisioning-job-owner.test.js": "unit",
+    "test/query/schema-provisioning-native-admission.test.js": "unit",
     "test/query/schema-provisioning-transient-collision.test.js": "unit",
     "test/query/select-no-from.test.js": "unit",
     "test/query/service-lifecycle-call-invocation.test.js": "unit",

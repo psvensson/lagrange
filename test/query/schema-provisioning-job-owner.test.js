@@ -1,7 +1,9 @@
-import {EventEmitter} from 'node:events';
+import {
+  createGateway, createService, createSchemaWireClient, createServeRefreshFixture,
+  serveRefreshPublication,
+} from './schema-provisioning-job-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {TableCreationService} from
-  '../../src/query/table-creation-service.js';
+import {TableCreationService} from '../../src/query/table-creation-service.js';
 import {OWNER_CONTRACT_STATE} from
   '../../src/control-plane/owner-contract-outcome.js';
 import {SCHEMA_PROVISIONING_ERROR_CODE} from
@@ -10,20 +12,17 @@ import {canonicalizeSchemaProvisioningIntent} from
   '../../src/query/schema-provisioning-intent.js';
 import {createTimeoutBudget} from
   '../../src/control-plane/timeout-budget.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
-import {PgWireProtocolHandler} from
-  '../../src/runtime/pgwire-protocol-handler.js';
-import {PG_BACKEND_MSG, PG_ERROR_CODE, PG_TRANSACTION_STATE} from
+import {PG_BACKEND_MSG, PG_ERROR_CODE} from
   '../../src/runtime/pgwire-protocol-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {TABLES} from '../../src/constants/index.js';
 import {SCHEMA_PROVISIONING_DEFAULT} from
   '../../src/query/schema-provisioning-job-constants.js';
-import {createReadinessServiceForTest} from '../helpers/readiness-service-fixture.js';
 
 function createAst(extraColumn = null) {
   return {
@@ -46,246 +45,322 @@ function createNotNullDefaultAst() {
   });
 }
 
-function applyGatewayInsert(rows, mutation) {
-  const {row, tableName} = mutation;
-  const existing = [...rows.values()].find((candidate) =>
-    tableName === 'schema_operations' &&
-    candidate.table_identity_key === row.table_identity_key,
-  );
-  if (existing) return {success: false, affectedRows: 0, error: 'unique'};
-  const identity = tableName === 'schema_operations' ? row.job_id :
-    tableName === 'partitions' ? row.partition_id : row.table_id;
-  rows.set(`${tableName}:${identity}`, {...row});
-  return {success: true, affectedRows: 1, visibilityState: 'visible'};
-}
+test('provisioning target selection projects one committed serve answer',
+  async (t) => {
+    const gateway = createGateway();
+    const first = createServeRefreshFixture(t, gateway);
+    first.state.nodes[2].ready_lease_expires_at = 900;
+    await first.readiness.readServeEligibility();
+    const earlier = first.readiness.answerServeCohort();
 
-function applyGatewayUpdate(rows, mutation) {
-  const {tableName, whereClause} = mutation;
-  const key = `${tableName}:${whereClause.job_id}`;
-  const current = rows.get(key);
-  const ownerMatches = whereClause.workflow_owner_id === undefined ||
-    current?.workflow_owner_id === whereClause.workflow_owner_id;
-  const matches = current && ownerMatches &&
-    current.row_version === whereClause.row_version &&
-    current.workflow_fence_token === whereClause.workflow_fence_token;
-  if (!matches) return {success: true, affectedRows: 0};
-  rows.set(key, {...current, ...mutation.data});
-  return {success: true, affectedRows: 1, visibilityState: 'visible'};
-}
+    const second = createServeRefreshFixture(t, gateway);
+    second.state.nodes[1].ready_lease_expires_at = 900;
+    second.state.nodes[2].ready_lease_expires_at = 900;
+    second.state.publications = [serveRefreshPublication(4)];
+    await second.readiness.readServeEligibility();
+    const later = second.readiness.answerServeCohort();
+    t.same(earlier.eligibleNodeIds, ['serve-a', 'serve-b']);
+    t.same(later.eligibleNodeIds, ['serve-a']);
 
-function applyGatewayUpsert(rows, mutation) {
-  const {row, tableName} = mutation;
-  const identity = tableName === 'partitions' ?
-    row.partition_id : row.table_id;
-  rows.set(`${tableName}:${identity}`, {...row});
-  return {success: true, affectedRows: 1, visibilityState: 'visible'};
-}
-
-// A committed metadata write answers its position (routed writes answer at
-// commit); this fixture's projection applies at once unless paused.
-function metadataPosition(mutation) {
-  return {tableName: mutation.tableName,
-    key: mutation.row?.table_id ?? mutation.row?.partition_id,
-    originHlc: '1793615397288-1-seam-node'};
-}
-
-function createGateway() {
-  const rows = new Map();
-  const writes = [];
-  return {
-    rows,
-    writes,
-    paused: false,
-    projectionWaits: [],
-    awaitProjectionAt(position, options = {}) {
-      if (!this.paused) return Promise.resolve({outcome: 'reached', position});
-      return new Promise((resolve, reject) => {
-        this.projectionWaits.push({position, options, resolve, reject});
-      });
-    },
-    async submitMutation(mutation) {
-      const answer = await this.applyMutation(mutation);
-      return mutation.tableName === 'schema_operations' ? answer :
-        {...answer, position: metadataPosition(mutation)};
-    },
-    async applyMutation(mutation) {
-      writes.push(mutation);
-      const {operation, tableName} = mutation;
-      const normalizedOperation = String(operation).toUpperCase();
-      if (normalizedOperation === 'INSERT') {
-        return applyGatewayInsert(rows, mutation);
-      }
-      if (normalizedOperation === 'UPDATE' && tableName === 'schema_operations') {
-        return applyGatewayUpdate(rows, mutation);
-      }
-      if (normalizedOperation === 'UPSERT') {
-        return applyGatewayUpsert(rows, mutation);
-      }
-      throw new Error(`Unexpected mutation ${operation} ${tableName}`);
-    },
-    async readRows(tableName, _sql, params) {
-      const candidates = [...rows.entries()]
-        .filter(([key]) => key.startsWith(`${tableName}:`))
-        .map(([, row]) => row);
-      if (tableName === 'schema_operations') {
-        if (params.length === 0) {
-          return {rows: candidates.filter(
-            (row) => row.status !== 'SUCCEEDED' && row.status !== 'FAILED',
-          )};
-        }
-        return {rows: candidates.filter(
-          (row) => row.table_identity_key === params[0],
-        )};
-      }
-      if (tableName === 'tables') {
-        return {rows: candidates.filter((row) => row.table_name === params[0])};
-      }
-      if (tableName === 'partitions') {
-        return {rows: candidates.filter(
-          (row) => row.partition_id === params[0],
-        )};
-      }
-      return {rows: []};
-    },
-  };
-}
-
-function createService(gateway, provisionCalls, overrides = {}) {
-  const cdcIntegrationService = {
-    insertSystemTableRow() {},
-    updateSystemTableRow() {},
-    upsertSystemTableRow() {},
-  };
-  return new TableCreationService({
-    systemCache: {find: () => null, getAll: () => []},
-    cdcIntegrationService,
-    controlPlaneSystemTableGateway: gateway,
-    schemaProvisioningOwnerId: 'schema-worker-a',
-    ...overrides,
-    partitionProvisioner: overrides.partitionProvisioner || (async (context) => {
-      provisionCalls.push(context);
-      return {
-        resolvedReplicaCount: 3,
-        routableReplicaCount: 3,
-        fullReplicaCountConverged: true,
-        contractState: 'ready',
-        nextAction: 'proceed',
-      };
-    }),
-  });
-}
-
-// Real SQL dispatch, table service, durable schema owner and wire mapping.
-// Only durable storage, provisioning availability and timer delivery are seams.
-function createSchemaWireClient(t, service, gateway, existingEngine = null) {
-  const engine = existingEngine || new SQLQueryEngine({
-    systemCache: {find: () => null, getAll: () => []},
-    controlPlaneSystemTableGateway: gateway,
-    autoStartDistributedTransactionRecovery: false,
-    migrationAutoWire: false,
-  });
-  engine.tableCreationService.shutdown();
-  engine.tableCreationService = service;
-  t.teardown(() => service.shutdown());
-  return async () => {
-    const socket = new EventEmitter();
-    const messages = [];
-    socket.write = (message) => messages.push(Buffer.from(message));
-    let outcome;
-    const handler = new PgWireProtocolHandler({
-      adapter: {
-        async execute(sessionId, sql, params) {
-          outcome = await engine.executeQuery(sql, params, {sessionId});
-          return outcome;
-        },
-      },
-      socket,
-      logger: {debug() {}, info() {}, warn() {}, error() {}},
+    let answers = 0;
+    first.readiness.answerServeCohort = () => ++answers === 1 ? earlier : later;
+    const result = await first.engine.waitForProvisionTargetNodeIds({
+      partitionId: 'adjacent-cohorts', requiredReplicaCount: 3,
+      failOnTimeout: false,
     });
-    handler._session = {
-      sessionId: 'quorum-refusal-client',
-      getTransactionState: () => PG_TRANSACTION_STATE.IDLE,
-      setTransactionState() {},
-    };
-    await handler._executeAndSend(
-      'CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY)', []);
-    return {outcome, messages};
-  };
-}
+    t.equal(answers, 1, 'synchronous selection reads the owner once');
+    t.same(result.epoch, earlier.epoch, 'target IDs and epoch describe one answer');
+    t.same(result.nodeIds, earlier.eligibleNodeIds);
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  });
 
-function createServeRefreshClock() {
-  const clock = {now: 1000, timers: []};
-  clock.setTimeout = (callback, delayMs) => {
-    const timer = {at: clock.now + delayMs, callback,
-      cleared: false, unref() {}};
-    clock.timers.push(timer);
-    return timer;
-  };
-  clock.clearTimeout = (timer) => {
-    timer.cleared = true;
-  };
-  clock.advance = async (elapsedMs) => {
-    clock.now += elapsedMs;
-    for (const timer of clock.timers.filter((entry) =>
-      !entry.cleared && entry.at <= clock.now)) {
-      timer.cleared = true;
-      timer.callback();
+test('public CREATE reports a real missing quorum without inventing a reason',
+  async (t) => {
+    const gateway = createGateway();
+    const {clock, cache, state, readiness, engine} =
+      createServeRefreshFixture(t, gateway);
+    state.nodes = state.nodes.slice(0, 1);
+    state.publications = [serveRefreshPublication(3, ['serve-a'])];
+    await readiness.readServeEligibility();
+    const observed = readiness.answerServeCohort();
+    t.same(observed.eligibleNodeIds, ['serve-a']);
+    t.same(observed.answers['serve-a'].reasons, []);
+
+    const {answer, attempts} = await queryInitialPartition(t, gateway, {
+      clock, cache, engine,
+    });
+    assertQuorumRefusal(t, answer, answer.outcome.detail);
+    t.equal(attempts.length, 0, 'one target cannot reach founding');
+    t.same(answer.outcome.reasons, [], 'the owner supplied no denial reason');
+    t.same(answer.outcome.reasonCodes, []);
+    t.same(answer.outcome.detail.epoch, observed.epoch);
+    t.same(answer.outcome.detail.nodeReasons, {});
+    t.same(answer.outcome.detail.candidateTargetNodeIds, ['serve-a']);
+    t.equal(answer.outcome.detail.requiredReplicaCount, 3);
+    t.equal(answer.outcome.detail.quorumReplicaCount, 2);
+    t.equal(answer.outcome.detail.jobId, answer.outcome.jobId);
+    t.match(answer.outcome.detail.partitionId, /-p1$/);
+  });
+
+test('public CREATE rechecks serve freshness after admission prechecks',
+  async (t) => {
+    const gateway = createGateway();
+    const {clock, cache, state, readiness, engine} =
+      createServeRefreshFixture(t, gateway);
+    state.nodes[1].ready_lease_expires_at = 1100;
+    state.nodes[2].ready_lease_expires_at = 1100;
+    await readiness.readServeEligibility();
+    t.same(readiness.answerServeCohort().eligibleNodeIds,
+      ['serve-a', 'serve-b', 'serve-c']);
+
+    const prechecked = [];
+    const {answer, attempts} = await queryInitialPartition(t, gateway, {
+      clock, cache, engine,
+      async checkProvisioningAdmission({nodeId}) {
+        prechecked.push(nodeId);
+        clock.now = 1200;
+        return {allowed: true};
+      },
+    });
+    t.ok(prechecked.length > 0, 'the initial cohort reaches awaited admission');
+    t.equal(attempts.length, 0, 'stale approvals cannot reach founding');
+    if (answer.outcome.detail) {
+      assertQuorumRefusal(t, answer, answer.outcome.detail);
+      t.same(answer.outcome.detail.reasons, ['unavailable_stale']);
+      t.same(answer.outcome.reasonCodes, answer.outcome.detail.reasons);
+      t.same(answer.outcome.detail.nodeReasons['serve-b'], ['unavailable_stale']);
+      t.same(answer.outcome.detail.nodeReasons['serve-c'], ['unavailable_stale']);
+      t.same(answer.outcome.detail.candidateTargetNodeIds, ['serve-a']);
+      t.equal(answer.outcome.detail.quorumReplicaCount, 2);
+      t.equal(answer.outcome.detail.jobId, answer.outcome.jobId);
+    } else {
+      t.fail('the refusal carries the latest committed serve observation');
     }
-    await new Promise((resolve) => setImmediate(resolve));
-  };
-  return clock;
-}
+  });
 
-function serveRefreshPublication(epoch) {
-  const members = JSON.stringify(['serve-a', 'serve-b', 'serve-c']);
-  return {publication_id: `cluster_membership-${epoch}`,
-    publication_kind: 'cluster_membership', publication_epoch: epoch,
-    publisher_node_id: 'serve-a', status: 'PUBLISHED',
-    published_active_node_ids: members, required_ack_node_ids: members,
-    acknowledged_node_ids: members,
-    priority_partition_summary: JSON.stringify({
-      satisfied: true, blockedPartitions: []}),
-  };
-}
+test('an admission precheck can reuse a healthy majority at a newer epoch',
+  async (t) => {
+    const gateway = createGateway();
+    const {state, readiness, engine} = createServeRefreshFixture(t, gateway);
+    state.nodes[2].ready_lease_expires_at = 900;
+    await readiness.readServeEligibility();
+    const checked = [];
+    engine.rebalanceCoordinator = {
+      async checkProvisioningAdmission({nodeId}) {
+        checked.push(nodeId);
+        if (checked.length === 1) {
+          state.publications = [serveRefreshPublication(4)];
+          await readiness.readServeEligibility();
+        }
+        return {allowed: true};
+      },
+    };
+    const result = await engine.waitForProvisionTargetNodeIds({
+      partitionId: 'healthy-majority', requiredReplicaCount: 3,
+    });
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+    t.same(result.nodeIds, ['serve-a', 'serve-b']);
+    t.same(checked, result.nodeIds, 'a newer epoch does not repeat admission');
+    t.equal(result.epoch?.publicationEpoch, 4, 'success uses the checked fresh cohort');
+  });
 
-function createServeRefreshFixture(t, gateway) {
-  const clock = createServeRefreshClock();
-  const cache = new SystemTableCache();
-  const state = {reads: 0, activeReads: 0, maxActiveReads: 0, hold: null,
-    nodes: ['serve-a', 'serve-b', 'serve-c'].map((nodeId) => ({
-      node_id: nodeId, status: 'active', boot_incarnation: 1,
-      ready_lease_expires_at: 16000,
-    })), publications: [serveRefreshPublication(3)], fail: false};
-  const view = {
-    canRead: () => true,
-    async readReadinessOwnerRows(tableName) {
-      state.reads += 1;
-      state.activeReads += 1;
-      state.maxActiveReads = Math.max(state.maxActiveReads, state.activeReads);
-      const rows = tableName === TABLES.NODES ? state.nodes : state.publications;
-      const answer = {success: !state.fail, rows: structuredClone(rows)};
-      try {
-        if (state.hold) await state.hold;
-        return answer;
-      } finally {
-        state.activeReads -= 1;
-      }
+async function queryInitialPartition(t, gateway, fixture) {
+  const {clock, cache, engine, checkProvisioningAdmission} = fixture;
+  const attempts = [];
+  engine.rebalanceCoordinator = {
+    checkProvisioningAdmission,
+    async createOperation(operation) {
+      attempts.push(operation);
+      throw new Error('unexpected CREATE operation for an unavailable cohort');
+    },
+    async executeOperation() {
+      throw new Error('unexpected replica dispatch for an unavailable cohort');
     },
   };
-  const readiness = createReadinessServiceForTest({
-    nodeId: 'serve-a', systemTableCache: cache,
-    authoritativeControlPlaneView: view,
-    now: () => clock.now,
-    setTimeoutFn: clock.setTimeout, clearTimeoutFn: clock.clearTimeout,
+  const service = createService(gateway, [], {
+    systemCache: cache, now: () => clock.now,
+    schemaProvisioningRetrySetTimeoutFn: clock.setTimeout,
+    schemaProvisioningRetryClearTimeoutFn: clock.clearTimeout,
+    partitionProvisioner: (context) => engine.provisionInitialTablePartition(context),
   });
-  const engine = new SQLQueryEngine({
-    nodeId: 'serve-a', systemCache: cache,
-    controlPlaneReadinessService: readiness,
-    controlPlaneSystemTableGateway: gateway,
-    autoStartDistributedTransactionRecovery: false, migrationAutoWire: false,
+  const query = createSchemaWireClient(t, service, gateway, engine);
+  return {answer: await query(), attempts};
+}
+
+for (const {replicaCount, members, targetNodeIds, expected} of [
+  {replicaCount: 3, members: ['serve-e', 'serve-b', 'serve-a', 'serve-d', 'serve-c'],
+    expected: ['serve-a', 'serve-b', 'serve-c']},
+  {members: ['serve-c', 'serve-a', 'serve-b'], expected: ['serve-a']},
+  {replicaCount: 3, members: ['serve-c', 'serve-a', 'serve-b'],
+    targetNodeIds: ['serve-c', 'serve-a'], expected: ['serve-c', 'serve-a']},
+  {replicaCount: 2, members: ['serve-a', 'serve-b', 'serve-c'],
+    targetNodeIds: ['serve-c', 'serve-a', 'serve-b'], expected: ['serve-c', 'serve-a']},
+]) {
+  test(`founding uses the ordered requested width (RF ${replicaCount ?? 1}, ` +
+    `explicit: ${Boolean(targetNodeIds)})`, async (t) => {
+    const fixture = createServeRefreshFixture(t, createGateway());
+    const {state, readiness, engine} = fixture;
+    state.nodes = members.map((nodeId) => ({
+      ...state.nodes[0], node_id: nodeId,
+    }));
+    state.publications = [serveRefreshPublication(3, members)];
+    await readiness.readServeEligibility();
+    t.equal(readiness.answerServeCohort().eligibleNodeIds.length, members.length);
+
+    const native = captureFoundingAdmission(engine);
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'width-probe-p1', replicaCount, targetNodeIds,
+      assertProvisioningOwnership: async () => native.events.push('ownership'),
+    }), {message: 'the founding admission reached the native boundary'});
+
+    t.same(native.checked, expected, 'admission reaches only the required healthy targets');
+    t.same(native.proposals[0]?.moves.map(({targetNodeId}) => targetNodeId), expected);
+    t.same(native.events, [...expected, 'ownership', 'found'],
+      'the job fence is checked after admission and before FOUND');
+    t.equal(native.proposals.length, 1);
   });
-  t.teardown(() => readiness.shutdown());
-  return {clock, cache, state, readiness, engine};
+}
+
+test('founding checks the next eligible target after a pre-effect refusal',
+  async (t) => {
+    const {state, readiness, engine} = createServeRefreshFixture(t, createGateway());
+    const members = ['serve-a', 'serve-b', 'serve-c', 'serve-d'];
+    state.nodes.push({...state.nodes[0], node_id: 'serve-d'});
+    state.publications = [serveRefreshPublication(3, members)];
+    await readiness.readServeEligibility();
+    const native = captureFoundingAdmission(engine, (nodeId) => ({
+      allowed: nodeId !== 'serve-a',
+    }));
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'alternate-probe-p1', replicaCount: 3,
+    }), {message: 'the founding admission reached the native boundary'});
+    t.same(native.checked, members);
+    t.same(native.proposals[0]?.moves.map(({targetNodeId}) => targetNodeId),
+      ['serve-b', 'serve-c', 'serve-d']);
+    t.equal(native.proposals.length, 1, 'an unknown native reply never selects a second set');
+  });
+
+test('founding rechecks the cohort after the schema ownership fence',
+  async (t) => {
+    const {state, clock, readiness, engine} =
+      createServeRefreshFixture(t, createGateway());
+    state.nodes[2].ready_lease_expires_at = 1100;
+    await readiness.readServeEligibility();
+    const native = captureFoundingAdmission(engine);
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'ownership-probe-p1', replicaCount: 3,
+      async assertProvisioningOwnership() {
+        native.events.push('ownership');
+        clock.now = 1200;
+      },
+    }), {message: 'the founding admission reached the native boundary'});
+    t.same(native.events, ['serve-a', 'serve-b', 'serve-c', 'ownership', 'found']);
+    t.same(native.proposals[0]?.moves.map(({targetNodeId}) => targetNodeId),
+      ['serve-a', 'serve-b'], 'founding retains only the still-affirmed majority');
+  });
+
+test('admission outlasting the parent deadline cannot found a healthy cohort',
+  async (t) => {
+    const {clock, engine, readiness} =
+      createServeRefreshFixture(t, createGateway());
+    await readiness.readServeEligibility();
+    engine.nowFn = () => clock.now;
+    const native = captureFoundingAdmission(engine, () => {
+      clock.now += 50;
+      return {allowed: true};
+    });
+    const timeoutBudget = createTimeoutBudget({
+      configuredBudgetMs: 20, now: engine.nowFn,
+    });
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'deadline-probe-p1', replicaCount: 3, timeoutBudget,
+      assertProvisioningOwnership: async () => native.events.push('ownership'),
+    }), {errorCode: 'TIMEOUT'});
+    t.same(readiness.answerServeCohort().eligibleNodeIds,
+      ['serve-a', 'serve-b', 'serve-c'], 'lease time and job budget are independent');
+    t.same(native.checked, ['serve-a'], 'later prechecks cannot start after the budget');
+    t.same(native.proposals, [], 'a spent budget cannot reach the founding owner');
+  });
+
+test('explicit prechecks stop when their shared attempt deadline expires',
+  async (t) => {
+    const {clock, engine} = createServeRefreshFixture(t, createGateway());
+    engine.nowFn = () => clock.now;
+    const native = captureFoundingAdmission(engine, () => {
+      clock.now += 50;
+      return {allowed: true};
+    });
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'explicit-deadline-p1', replicaCount: 2,
+      targetNodeIds: ['serve-c', 'serve-a', 'serve-b'],
+      timeoutBudget: createTimeoutBudget({configuredBudgetMs: 20, now: engine.nowFn}),
+    }), {errorCode: 'TIMEOUT'});
+    t.same(native.checked, ['serve-c']);
+    t.same(native.proposals, []);
+  });
+
+for (const explicit of [false, true]) {
+  test(`unknown admission cannot advance to another target (explicit: ${explicit})`,
+    async (t) => {
+      const {engine, readiness} = createServeRefreshFixture(t, createGateway());
+      await readiness.readServeEligibility();
+      const native = captureFoundingAdmission(engine, (nodeId) =>
+        nodeId === 'serve-a' ? {} : {allowed: true});
+      await t.rejects(engine.provisionInitialTablePartition({
+        partitionId: 'admission-unknown-p1', replicaCount: 2,
+        ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
+      }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE});
+      t.same(native.checked, ['serve-a']);
+      t.same(native.proposals, []);
+    });
+}
+
+for (const explicit of [false, true]) {
+  test(`cancelled prechecks cannot examine another target (explicit: ${explicit})`,
+    async (t) => {
+      const {engine, readiness} = createServeRefreshFixture(t, createGateway());
+      await readiness.readServeEligibility();
+      const cancellationToken = new CancellationToken();
+      const native = captureFoundingAdmission(engine, () => {
+        cancellationToken.cancel('provisioning test cancelled');
+        return {allowed: true};
+      });
+      await t.rejects(engine.provisionInitialTablePartition({
+        partitionId: 'cancelled-admission-p1', replicaCount: 2,
+        cancellationToken,
+        ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
+      }), {message: 'provisioning test cancelled'});
+      t.same(native.checked, ['serve-a']);
+      t.same(native.proposals, []);
+    });
+}
+
+function captureFoundingAdmission(engine, precheck = () => ({allowed: true})) {
+  const events = [];
+  const checked = [];
+  const proposals = [];
+  engine.rebalanceCoordinator = {
+    placementAdmissionEnabled: true,
+    resolveFormationLatchEpochForPlacement: () => 7,
+    async checkProvisioningAdmission({nodeId}) {
+      checked.push(nodeId);
+      events.push(nodeId);
+      return precheck(nodeId);
+    },
+    async admitPlacementStatement({statement, prepareFreshPlacement, buildFreshStatement}) {
+      await prepareFreshPlacement?.();
+      proposals.push(buildFreshStatement ? buildFreshStatement() : statement);
+      events.push('found');
+      throw new Error('the founding admission reached the native boundary');
+    },
+    async createOperation() {
+      throw new Error('founding must submit the native statement');
+    },
+    async executeOperation() {
+      throw new Error('the witness pauses before native materialization');
+    },
+  };
+  return {events, checked, proposals};
 }
 
 // Real public SQL -> schema custody -> provisioning cohort -> readiness owner

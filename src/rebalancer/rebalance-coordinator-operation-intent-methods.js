@@ -34,6 +34,8 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_STRING = 'string';
+const CREATION_REQUEST_EPOCH_SOURCE = 'coordinator creation request';
+const CREATION_REPLAY_FOREIGN_SUBJECT = 'Creation replay proof has a different subject';
 const LOCAL_STR_FUNCTION = 'function';
 const REUSED_OPERATION_REARM_ACTION = Object.freeze({
   SKIP_NOT_PENDING: 'skip_not_pending',
@@ -158,7 +160,7 @@ class RebalanceCoordinatorOperationIntentMethods {
 
   assertCreationRequestEpoch(move) {
     return assertMembershipPublicationEpochBinding(move.membershipPublicationEpoch, {
-      source: 'coordinator creation request',
+      source: CREATION_REQUEST_EPOCH_SOURCE,
       operationId: move.operationIntentId,
     });
   }
@@ -215,8 +217,10 @@ class RebalanceCoordinatorOperationIntentMethods {
           (operation.copySourceNodeId ?? null) === (candidate.copySourceNodeId ?? null) &&
           (operation.membershipPublicationEpoch ?? null) ===
             (candidate.membershipPublicationEpoch ?? null);
-      } catch {
-        // A foreign row cannot settle this caller's request.
+      } catch (error) {
+        this.logger.debug(CREATION_REPLAY_FOREIGN_SUBJECT, {
+          operationId: candidate.operationId, error: error.message,
+        });
       }
       if (sameSubject) {
         if (this.isRecentOperationIntentTerminal(operation)) {
@@ -282,6 +286,7 @@ class RebalanceCoordinatorOperationIntentMethods {
               this.createOperationInternal(moveForCreate, {
                 replaceIntentIdentity,
                 requestedMove: canonicalMove,
+                assertFreshCreationAllowed: context.assertFreshCreationAllowed,
                 observeAttempt: (candidate) => {
                   attemptedOperation = candidate;
                 },
@@ -290,7 +295,7 @@ class RebalanceCoordinatorOperationIntentMethods {
           const placementIntent = this.buildPlacementCreationIntent(operation, canonicalMove);
           return {operation, attemptedOperation, placementIntent, error: null};
         } catch (error) {
-          return {operation: null, attemptedOperation, error};
+          return Object.freeze({attemptedOperation, error});
         }
       });
       if (factoryRan) {

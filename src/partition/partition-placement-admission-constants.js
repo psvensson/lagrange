@@ -10,6 +10,8 @@ const PLACEMENT_COMMAND_TYPES = Object.freeze([PLACEMENT_ADMIT_TYPE,
   PLACEMENT_RELEASE_HOLD_TYPE]);
 // The answer field a placement request answers its typed outcome under.
 const PLACEMENT_RESULT_FIELD = 'placementResult';
+// Host-only custody of the sent entry and its exact statement.
+const RETAINED_PLACEMENT_ATTEMPT = Symbol('retainedPlacementAttempt');
 const PLACEMENT_ADMISSION_ERROR = Object.freeze({
   ORIGIN: 'placement_admission_origin_refused',
   BYTES: 'placement_admission_bytes_invalid',
@@ -19,4 +21,4 @@ const PLACEMENT_ADMISSION_ERROR = Object.freeze({
 });
 
 export {PLACEMENT_ADMISSION_ERROR, PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES,
-  PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_RESULT_FIELD};
+  PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_RESULT_FIELD, RETAINED_PLACEMENT_ATTEMPT};

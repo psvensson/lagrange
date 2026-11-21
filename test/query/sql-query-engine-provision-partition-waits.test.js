@@ -338,10 +338,8 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
 
   t.equal(result.contractState, OWNER_CONTRACT_STATE.DEFERRED);
   t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.RETRY);
-  t.ok(
-    result.reasonCodes.includes('ready_lease_expired') ||
-    result.reasonCodes.includes('provisioning_unavailable'),
-  );
+  t.same(result.reasonCodes, [], 'the owner gave no denial reasons');
+  t.equal(result.quorumReplicaCount, 2);
   t.ok(result.retryAfterMs > 0);
   t.equal(result.timedOut, true);
 });

@@ -105,17 +105,21 @@ class SQLQueryEngineProvisioningMethods {
   /**
    * Resolve active node IDs plus eligibility diagnostics.
    * @param {number} requestedReplicaCount
+   * @param {Object|null} [cohort] The captured serving answer, if already read.
    * @return {{nodeIds: string[], diagnostics: Object}}
    * @private
    */
-  resolveProvisionTargetNodeIdsWithDiagnostics(requestedReplicaCount) {
+  resolveProvisionTargetNodeIdsWithDiagnostics(
+    requestedReplicaCount,
+    cohort,
+  ) {
     const desiredReplicaCount =
       Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
         requestedReplicaCount :
         1;
 
     const diagnostics =
-      this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount);
+      this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount, cohort);
     const selectedNodeIds = diagnostics.selectedNodeIds;
 
     const orderedNodeIds = this.orderProvisionTargetNodeIds(selectedNodeIds);
@@ -151,33 +155,20 @@ class SQLQueryEngineProvisioningMethods {
   }
 
   /**
-   * Resolve provision-target diagnostics from the readiness owner's
-   * committed serving cohort.
+   * Resolve provision-target diagnostics from one committed serving cohort.
    * @param {number} requestedReplicaCount
+   * @param {Object|null} [cohort] The captured serving answer, if already read.
    * @return {Object}
    * @private
    */
-  resolveProvisionTargetNodeDiagnostics(requestedReplicaCount) {
+  resolveProvisionTargetNodeDiagnostics(
+    requestedReplicaCount,
+    cohort = this.controlPlaneReadinessService?.answerServeCohort?.() ?? null,
+  ) {
     const desiredReplicaCount =
       Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
         requestedReplicaCount :
         1;
-    const readinessService = this.controlPlaneReadinessService;
-    if (!readinessService) {
-      return {
-        requestedReplicaCount: desiredReplicaCount,
-        activeNodeRowCount: 0,
-        activeServiceRowCount: 0,
-        strictNodeIds: [],
-        degradedFallbackNodeIds: [],
-        selectedNodeIds: [],
-        usedDegradedFallback: false,
-        epoch: null,
-      };
-    }
-    const cohort = typeof readinessService.answerServeCohort === LOCAL_STR_FUNCTION ?
-      readinessService.answerServeCohort() :
-      null;
     const strictNodeIds = extractCohortStrictNodeIds(this, cohort);
     const selectedNodeIds = strictNodeIds;
 

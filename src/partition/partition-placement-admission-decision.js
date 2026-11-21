@@ -1,3 +1,4 @@
+import {provePlacementFounders} from './partition-placement-founder-proof.js';
 import {buildGrowthPromotionCohort, readGrowthPromotionCohortFromRow} from
   '../rebalancer/growth-promotion-subject.js';
 // Public entry: decidePlacementAdmission, decideHoldRelease, readPlacementCensus, isOccupyingCopy, LEDGER_PARTITION_ID.
@@ -60,10 +61,11 @@ function censusRowOf(row) {
   const growth = row.type === OperationType.GROWTH_PROMOTE;
   const unresolvedActiveGrowth = growth && row.workflow_step === WORKFLOW_STEP.ACTIVE &&
     (row.status !== ReplicaStatus.ACTIVE || !Number.isFinite(row.completed_at));
+  const bootstrapMembership = readOriginalCreateBootstrapMembership(history);
   const founder = isGenesisFoundingCreateOperation({type: row.type,
-    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
-      readOriginalCreateBootstrapMembership(history)});
+    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: bootstrapMembership});
   return Object.freeze({operationId: row.operation_id, type: row.type,
+    partitionId: row.partition_id, replicaId: row.replica_id, bootstrapMembership,
     entityType: row.entity_type, entityId: row.entity_id,
     targetNodeId: row.target_node_id, copySourceNodeId: row.copy_source_node_id,
     step: row.workflow_step, founder,
@@ -114,11 +116,12 @@ function foundingRefusal(statement, census) {
     row.entityType === statement.entityType && row.entityId === statement.entityId &&
     (row.incomplete || row.step === WORKFLOW_STEP.ACTIVE));
   if (live.length === 0) return null;
-  // A founding set admitted by FOUND names its intent; a set the seed or an
-  // earlier founding path wrote carries no admission record.
-  const [first] = live;
-  return refused(REFUSAL.ALREADY_FOUNDED, {operationIds: idsOf(live),
-    foundingIntentId: first.admission === null ? null : first.admission.foundingIntentId});
+  const proof = provePlacementFounders(live, statement);
+  return refused(REFUSAL.ALREADY_FOUNDED, {
+    operationIds: idsOf(live),
+    foundingIntentId: proof ? statement.foundingIntentId : null,
+    foundingEntryId: proof?.entryId ?? null,
+  });
 }
 
 // Step 7 (PLACEMENT copies only): occupancy over every committed copy-phase

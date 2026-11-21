@@ -360,7 +360,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         {operation},
       );
     }
-
     /**
      * Insert the operation row WITHOUT taking the transition-exclusive lane
      * (CL-017(b): the divergence re-insert path runs from within update
@@ -396,6 +395,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                 disableSystemWriteSession:
                   isLedgerSelfCoupledOperationInsert(operation),
                 beforeAttempt: options.beforeAttempt,
+                submissionIsCurrent: options.submissionIsCurrent,
                 onRetryableFailure: (errorResult) =>
                   this.recoverPersistedReplicaOperationMutation(
                     operation,
