@@ -18,7 +18,7 @@ import {ReplicaOperationField} from './replica-operation-constants.js';
 import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {OPERATION_METADATA_KEY} from './replica-operation-progress.js';
 import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
-import {OperationType} from './replica-status.js';
+import {getOperationMetadataValue, OperationType} from './replica-status.js';
 
 function needsReplaceCreateTargetBinding(
   operation,
@@ -108,7 +108,9 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
     return deferPlacementBootstrapBinding(owner, operation,
       'Placement CREATE admission is not yet observable');
   }
-  const recordedStamp = current[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
+  const recordedStamp = getOperationMetadataValue(
+    current.stepsHistory, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
+  );
   if (committedStampOfAnswer(recordedStamp) !== null) return current;
   // Once CREATE has been admitted, an absent stamp cannot be reconstructed
   // from a newer view of Raft membership. Retain that operation as unresolved.
