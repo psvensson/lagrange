@@ -29,9 +29,13 @@ import {test} from '../../src/test-helpers/tap.js';
 
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL = 'SELECT * FROM replica_operations WHERE operation_id = ?';
+// The final request shape (S0 corrective, items 3 and 5): a floor typed by
+// partition, and a deadline and routing class the caller must state.
 const VALID = Object.freeze({
   tableName: TABLE, sql: SQL, params: Object.freeze(['operation-1']),
-  minimumIndex: 7, minimumTerm: 3,
+  floor: Object.freeze({partitionId: INITIAL_PARTITION_IDS[TABLE], index: 7, term: 3}),
+  deadline: Object.freeze({timeoutMs: 1500}),
+  routingReadinessDimension: DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 });
 
 function recordingReader() {
@@ -66,8 +70,9 @@ test('readOwnerFact: a request that names no mode reaches the reader leader-requ
     t.equal(readOptions.authoritativeReadMode, MODE.OWNER_RPC_REQUIRED,
       'never a weaker default mode');
     t.equal(readOptions.leaderMode, LEADER.REQUIRED, 'never a weaker default leader mode');
-    t.same(readOptions.ownerFactFloor, {minimumIndex: 7, minimumTerm: 3},
-      'the caller\'s floors travel with the read');
+    t.same(readOptions.ownerFactFloor,
+      {partitionId: INITIAL_PARTITION_IDS[TABLE], index: 7, term: 3},
+      'the caller\'s floor travels with the read');
     t.equal(Object.isFrozen(readOptions), true, 'the token cannot be weakened downstream');
     t.same(answer, {state: STATE.UNAVAILABLE, reason: REASON.READ_FAILED},
       'a failed read is typed unavailability, with no rows field');
@@ -104,19 +109,13 @@ test('buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refus
     }
   });
 
-test('buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted',
+test('buildOwnerFactRequest: statement, table and reader are required, never defaulted',
   async (t) => {
-    const {minimumIndex: _index, ...withoutIndex} = VALID;
-    const {minimumTerm: _term, ...withoutTerm} = VALID;
     const cases = [
-      ['no index floor', withoutIndex, REFUSAL.FLOOR_REQUIRED, 'minimumIndex'],
-      ['no term floor', withoutTerm, REFUSAL.FLOOR_REQUIRED, 'minimumTerm'],
-      ['negative index floor', {...VALID, minimumIndex: -1}, REFUSAL.FLOOR_REQUIRED,
-        'minimumIndex'],
-      ['fractional term floor', {...VALID, minimumTerm: 1.5}, REFUSAL.FLOOR_REQUIRED,
-        'minimumTerm'],
-      ['text index floor', {...VALID, minimumIndex: '7'}, REFUSAL.FLOOR_REQUIRED,
-        'minimumIndex'],
+      ['negative index floor', {...VALID, floor: {...VALID.floor, index: -1}},
+        REFUSAL.FLOOR_REQUIRED, 'floor'],
+      ['fractional term floor', {...VALID, floor: {...VALID.floor, term: 1.5}},
+        REFUSAL.FLOOR_REQUIRED, 'floor'],
       ['no statement', {...VALID, sql: ''}, REFUSAL.STATEMENT_REQUIRED, 'sql'],
       ['params not a list', {...VALID, params: null}, REFUSAL.STATEMENT_REQUIRED, 'params'],
       ['a table with no owner partition', {...VALID, tableName: 'no_such_table'},
@@ -137,14 +136,7 @@ test('buildOwnerFactRequest: floors, statement, table and reader are required, n
     t.equal(noReader?.code, REFUSAL.READER_REQUIRED);
   });
 
-// The final request shape (S0 corrective, items 3 and 5): a floor typed by
-// partition, and a deadline and routing class the caller must state.
-const FINAL = Object.freeze({
-  tableName: TABLE, sql: SQL, params: Object.freeze(['operation-1']),
-  floor: Object.freeze({partitionId: INITIAL_PARTITION_IDS[TABLE], index: 7, term: 3}),
-  deadline: Object.freeze({timeoutMs: 1500}),
-  routingReadinessDimension: DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-});
+const FINAL = VALID;
 
 test('readOwnerFact: the floor is a typed partition position, and the deadline and the routing ' +
   'class are required and travel with the read', async (t) => {

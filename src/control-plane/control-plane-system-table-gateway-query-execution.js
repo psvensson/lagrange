@@ -1,4 +1,6 @@
 import {resolveControlPlaneQueryTimeoutMs} from './timeout-budget.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from './control-plane-system-table-gateway-constants.js';
+import {LEADER_READ_KIND, leaderReadRequestOf} from './control-plane-owner-fact-read-contract.js';
 import {AST_TYPE, SQLParser} from '../query/sql-parser.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
@@ -116,6 +118,22 @@ function buildReadExecutionContract(options = {}) {
   return readAuthority;
 }
 
+// A leader-REQUIRED read's decided kind and, for an owner fact, its typed
+// floor are part of its execution identity, as its receiver decides on them:
+// an owner fact never joins a plain leader-required read or one with another
+// floor. An owner fact's relative deadline is too: a joiner shares only a
+// flight with its own timeout that started no later than it did, so the
+// flight is bounded by a deadline no later than the joiner's own.
+function buildLeaderReadContract(options = {}) {
+  if (buildReadExecutionContract(options).leaderMode !==
+      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED) {
+    return {};
+  }
+  const leaderRead = leaderReadRequestOf(options.ownerFactFloor);
+  return leaderRead.kind === LEADER_READ_KIND.OWNER_FACT ?
+    {leaderRead, ownerFactTimeoutMs: options.timeoutMs} : {leaderRead};
+}
+
 function buildReadPressureContract(options = {}) {
   return {
     workloadClass: options.workloadClass || null,
@@ -139,7 +157,8 @@ function buildPressureAdmissionRequest(workClass, resourceKeys) {
 function buildExplicitReadRequestKey(tableName, explicitKey, options) {
   return `control-plane:read:${
     tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
-  }:${explicitKey}:${stableSerialize(buildReadExecutionContract(options))}`;
+  }:${explicitKey}:${stableSerialize({...buildReadExecutionContract(options),
+    ...buildLeaderReadContract(options)})}`;
 }
 
 function buildImplicitReadRequestKey(tableName, sql, params, options) {
@@ -151,6 +170,7 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
     sql: sql || null,
     params: Array.isArray(params) ? params : [],
     ...buildReadExecutionContract(options),
+    ...buildLeaderReadContract(options),
     ...buildReadPressureContract(options),
   });
 }

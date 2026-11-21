@@ -13,7 +13,7 @@ import {
   readOwnerFact,
 } from '../../src/control-plane/control-plane-owner-fact-read.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {PARTITION, READ_SQL, TABLE, openLedgerGroupSurface} from
+import {PARTITION, openLedgerGroupSurface, ownerFactDraft} from
   './cdc-owner-fact-group-fixture.js';
 
 const OPERATION = 'leader-only-operation';
@@ -22,8 +22,11 @@ const TEST_TIMEOUT_MS = 120000;
 const FAR_INDEX = 1000000;
 
 function requestFor(operationId, extra = {}) {
-  return {tableName: TABLE, sql: READ_SQL, params: [operationId],
-    minimumIndex: 0, minimumTerm: 0, ...extra};
+  return ownerFactDraft([operationId], extra);
+}
+
+function floorAt(index, term) {
+  return {floor: {partitionId: PARTITION, index, term}};
 }
 
 function carriesRows(answer) {
@@ -83,16 +86,15 @@ test('readOwnerFact: an empty answer from a replica that does not lead is never 
         'absence carries the witness of the leader that asserted it');
 
       const {term, appliedIndex} = answer.witness;
-      const atFloor = await read(requestFor(OPERATION,
-        {minimumIndex: appliedIndex, minimumTerm: term}));
+      const atFloor = await read(requestFor(OPERATION, floorAt(appliedIndex, term)));
       t.equal(atFloor.state, STATE.READY, 'the floors are inclusive');
       const belowIndex = await read(requestFor(OPERATION,
-        {minimumIndex: appliedIndex + FAR_INDEX}));
+        floorAt(appliedIndex + FAR_INDEX, 0)));
       t.equal(belowIndex.state, STATE.UNAVAILABLE,
         'a leader that has not applied the caller\'s index is not an answer');
       t.equal(belowIndex.reason, REASON.BELOW_INDEX_FLOOR);
       t.equal(Object.hasOwn(belowIndex, 'rows'), false);
-      const belowTerm = await read(requestFor(OPERATION, {minimumTerm: term + 1}));
+      const belowTerm = await read(requestFor(OPERATION, floorAt(0, term + 1)));
       t.equal(belowTerm.state, STATE.UNAVAILABLE,
         'a leader of an older term than the caller has seen is not an answer');
       t.equal(belowTerm.reason, REASON.BELOW_TERM_FLOOR);

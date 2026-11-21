@@ -1,4 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {PartitionServiceCoreBase} from '../../src/partition/partition-service-core-base.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {
   CDC_OPERATIONS,
   SystemTableCache,
@@ -44,18 +46,26 @@ function buildTableRow(schemaVersion, originHlc, updatedAtMs = 1_000) {
 }
 
 test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from raft.readStatus()', (t) => {
+  // The witness producer reads the replica's own raft status through the
+  // service's seam (readOwnRaftStatus: a CORE_OK status of this group and
+  // replica), as the real PartitionService does.
   const fakeService = {
     partitionId: 'partition-0',
     nodeId: 'node-leader',
     replicaId: 'replica-leader',
-    role: 'LEADER',
     timeSource: {now: () => 4_200},
+    readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
     raft: {
       readStatus: () => ({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        groupId: 'partition-0',
+        replicaIdentity: 'replica-leader',
+        role: RAFT_ROLE.LEADER,
         term: 3,
         commitIndex: 28,
         appliedIndex: 27,
         lastIndex: 28,
+        confChangePending: false,
       }),
     },
   };
@@ -74,7 +84,8 @@ test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from
     term: 3,
     appliedIndex: 27,
     commitIndex: 28,
-    role: 'LEADER',
+    electionLogApplied: true,
+    role: RAFT_ROLE.LEADER,
     observedAtMs: 4_200,
   });
   t.end();

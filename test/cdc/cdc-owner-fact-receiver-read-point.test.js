@@ -50,8 +50,7 @@ const FLOOR_OTHER_PARTITION = 'owner_fact_floor_other_partition';
 const OWN_ANSWER_WAIT_MS = 1000;
 
 function requestFor(operationId) {
-  return {tableName: TABLE, sql: READ_SQL, params: [operationId],
-    minimumIndex: 0, minimumTerm: 0};
+  return ownerFactDraft([operationId]);
 }
 
 // The fields of a receiver's answer that are its decision (not its clock).

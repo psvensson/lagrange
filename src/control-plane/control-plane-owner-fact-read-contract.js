@@ -21,20 +21,25 @@ const OWNER_FACT_UNAVAILABLE_REASON = Object.freeze({
   // The replica that answered does not lead, or stopped leading (another
   // term, another runtime) before its read finished.
   NOT_LEADER: 'owner_fact_not_leader',
-  // A leader whose applied index is not its commit index.
+  // A leader whose applied position is behind the commit index it observed.
   APPLY_BEHIND_COMMIT: 'owner_fact_apply_behind_commit',
   // A leader that has not applied every entry its log held when it was
   // elected: entries an earlier leader committed may still be missing from
   // its state (raft-rs commits them only through an entry of its own term).
   ELECTION_LOG_NOT_APPLIED: 'owner_fact_election_log_not_applied',
-  // The leader's applied index moved while it read: the receiver cannot name
-  // the applied position of the snapshot its rows came from.
-  READ_POINT_MOVED: 'owner_fact_read_point_moved',
   BELOW_INDEX_FLOOR: 'owner_fact_below_index_floor',
   BELOW_TERM_FLOOR: 'owner_fact_below_term_floor',
+  // The floor is a position of another raft group than the one read.
+  FLOOR_OTHER_PARTITION: 'owner_fact_floor_other_partition',
   UNEXPECTED_SERVING_REPLICA: 'owner_fact_unexpected_serving_replica',
   // The serving leader did not declare the statement's row set complete.
   INCOMPLETE_ROW_SET: 'owner_fact_incomplete_row_set',
+  // The leader's connection is inside a transaction its receiver did not
+  // open: a read through it would see that transaction's staged rows.
+  FOREIGN_TRANSACTION: 'owner_fact_foreign_transaction',
+  // The answer's witness does not echo the leader-qualified read this caller
+  // asked for (a shared, rebuilt or unqualified answer).
+  ANSWER_FOR_ANOTHER_REQUEST: 'owner_fact_answer_for_another_request',
 });
 const OWNER_FACT_UNAVAILABLE_REASONS = new Set(
   Object.values(OWNER_FACT_UNAVAILABLE_REASON));
@@ -50,48 +55,66 @@ const LEADER_READ_REQUEST_MALFORMED = 'leader_read_request_malformed';
 const LEADER_REQUIRED_READ = Object.freeze({
   kind: LEADER_READ_KIND.LEADER_REQUIRED,
 });
-// The fields of each leaderRead kind on the wire.
+// The fields of each leaderRead kind on the wire, and of an owner-fact floor.
 const LEADER_REQUIRED_READ_FIELDS = Object.freeze(['kind']);
-const OWNER_FACT_READ_FIELDS = Object.freeze(['kind', 'minimumIndex', 'minimumTerm']);
+const OWNER_FACT_READ_FIELDS = Object.freeze(['kind', 'floor']);
+const FLOOR_FIELDS = Object.freeze(['partitionId', 'index', 'term']);
 
-function isFloor(value) {
+function hasExactly(value, fields) {
+  return value !== null && typeof value === 'object' &&
+    Object.keys(value).length === fields.length &&
+    fields.every((field) => Object.hasOwn(value, field));
+}
+
+function isPosition(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
 /**
- * The owner-fact read point a request asks for.
- * @param {Object} floor - {minimumIndex, minimumTerm}.
- * @return {Object|null} The frozen owner-fact read, or null when malformed.
+ * The owner-fact read point a request asks for: a floor typed by the raft
+ * group it is a position of.
+ * @param {Object} floor - {partitionId, index, term}.
+ * @return {Object|null} The frozen owner-fact read {kind, floor}, or null
+ *   when the floor is malformed.
  */
 function ownerFactReadOf(floor) {
-  if (!isFloor(floor?.minimumIndex) || !isFloor(floor?.minimumTerm)) {
+  if (!hasExactly(floor, FLOOR_FIELDS) || typeof floor.partitionId !== 'string' ||
+      floor.partitionId.length === 0 || !isPosition(floor.index) ||
+      !isPosition(floor.term)) {
     return null;
   }
-  return Object.freeze({kind: LEADER_READ_KIND.OWNER_FACT,
-    minimumIndex: floor.minimumIndex, minimumTerm: floor.minimumTerm});
+  return Object.freeze({kind: LEADER_READ_KIND.OWNER_FACT, floor: Object.freeze({
+    partitionId: floor.partitionId, index: floor.index, term: floor.term})});
 }
 
 /**
- * Parse the leaderRead field a receiver got.
- * @param {*} value - The request's leaderRead field.
+ * Parse the leaderRead field a receiver got (or a witness echoes).
+ * @param {*} value - The leaderRead field.
  * @return {Object|null} The frozen read, or null when malformed.
  */
 function leaderReadOf(value) {
-  const fieldCount = value !== null && typeof value === 'object' ?
-    Object.keys(value).length : 0;
   if (value?.kind === LEADER_READ_KIND.LEADER_REQUIRED &&
-      fieldCount === LEADER_REQUIRED_READ_FIELDS.length) {
+      hasExactly(value, LEADER_REQUIRED_READ_FIELDS)) {
     return LEADER_REQUIRED_READ;
   }
   return value?.kind === LEADER_READ_KIND.OWNER_FACT &&
-    fieldCount === OWNER_FACT_READ_FIELDS.length ? ownerFactReadOf(value) : null;
+    hasExactly(value, OWNER_FACT_READ_FIELDS) ? ownerFactReadOf(value.floor) : null;
+}
+
+// Whether a witness echoes exactly the owner-fact read asked for (kind and
+// floor): the receiver puts the read it decided into its witness.
+function echoesOwnerFactRead(echo, read) {
+  const decided = leaderReadOf(echo);
+  return decided?.kind === LEADER_READ_KIND.OWNER_FACT &&
+    FLOOR_FIELDS.every((field) => decided.floor[field] === read.floor[field]);
 }
 
 /**
  * The leaderRead field a leader-REQUIRED read sends: the owner-fact read
  * point when the caller is readOwnerFact (it alone passes a floor), the
  * leader-required kind otherwise.
- * @param {Object|undefined} ownerFactFloor - readOwnerFact's floor.
+ * @param {Object|undefined} ownerFactFloor - readOwnerFact's typed floor
+ *   {partitionId, index, term}.
  * @return {Object} The frozen leaderRead field.
  */
 function leaderReadRequestOf(ownerFactFloor) {
@@ -117,16 +140,22 @@ function servedByExpectedReplica(witness, expectedReplica) {
 }
 
 function ownerFactPointRefusal(witness, read) {
-  if (!isIndexPosition(witness) || witness.commitIndex !== witness.appliedIndex) {
+  if (!echoesOwnerFactRead(witness.leaderRead, read)) {
+    return OWNER_FACT_UNAVAILABLE_REASON.ANSWER_FOR_ANOTHER_REQUEST;
+  }
+  if (read.floor.partitionId !== witness.partitionId) {
+    return OWNER_FACT_UNAVAILABLE_REASON.FLOOR_OTHER_PARTITION;
+  }
+  if (!isIndexPosition(witness) || witness.commitIndex > witness.appliedIndex) {
     return OWNER_FACT_UNAVAILABLE_REASON.APPLY_BEHIND_COMMIT;
   }
   if (witness.electionLogApplied !== true) {
     return OWNER_FACT_UNAVAILABLE_REASON.ELECTION_LOG_NOT_APPLIED;
   }
-  if (witness.appliedIndex < read.minimumIndex) {
+  if (witness.appliedIndex < read.floor.index) {
     return OWNER_FACT_UNAVAILABLE_REASON.BELOW_INDEX_FLOOR;
   }
-  if (witness.term < read.minimumTerm) {
+  if (witness.term < read.floor.term) {
     return OWNER_FACT_UNAVAILABLE_REASON.BELOW_TERM_FLOOR;
   }
   return servedByExpectedReplica(witness, read.expectedReplica) ? null :
@@ -134,11 +163,13 @@ function ownerFactPointRefusal(witness, read) {
 }
 
 /**
- * The one witness predicate of a leader-qualified read. A leader-required
- * read asks only that the witness names a leader of the partition; an
- * owner-fact read also asks for an applied read point that is the leader's
- * commit index, covers every entry the leader's log held when it was
- * elected, and meets the caller's floors (and, when pinned, the expected
+ * The one witness predicate of a leader-qualified read. Every such read asks
+ * that the witness names a leader of the partition; an owner-fact read also
+ * asks that the witness echoes exactly this read (kind and floor; the
+ * receiver echoes the read it decided), that its floor is a position of the
+ * partition read, and for an applied read point not behind the commit
+ * index the leader observed, covering every entry the leader's log held when
+ * it was elected, and meeting the floor (and, when pinned, the expected
  * serving replica).
  * @param {Object} witness - The serving replica's readAuthorityWitness.
  * @param {Object} expectation - {partitionId, read}; read is a parsed

@@ -126,7 +126,7 @@ function hasAppliedItsCommit(service) {
  * @return {Object} The QUERY request.
  */
 function ownerFactRequestTo(service, params,
-  ownerFactFloor = {minimumIndex: 0, minimumTerm: 0}) {
+  ownerFactFloor = {partitionId: PARTITION, index: 0, term: 0}) {
   return createDefaultPartitionRequestBuilder({
     executionOptions: {
       readAuthority: Object.freeze({leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED}),
@@ -157,6 +157,7 @@ function createHeldRaftNetwork() {
   let holds = () => false;
   let pends = () => false;
   const pending = [];
+  const delivered = [];
   network.deliver = async (address, payload, options) => {
     if (holds(address, payload)) {
       return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
@@ -166,6 +167,7 @@ function createHeldRaftNetwork() {
       pending.push(released);
       await released.promise;
     }
+    delivered.push({to: String(payload?.to), message: payload?.message ?? {}});
     return deliver(address, payload, options);
   };
   const releasePending = () => {
@@ -185,6 +187,9 @@ function createHeldRaftNetwork() {
       return {held: () => pending.length, release: releasePending};
     },
     releasePending,
+    // How many raft messages reached `peer` that `predicate` accepts.
+    deliveredTo: (peer, predicate) =>
+      delivered.filter(({to, message}) => to === peer && predicate(message)).length,
   };
 }
 
@@ -433,6 +438,7 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     transferLeadership,
     writeRow,
     waitFor: (predicate) => group.waitFor(predicate),
+    deliveredTo: (service, predicate) => raft.deliveredTo(peerOf(service), predicate),
     // Hold, pending, every raft message `service` sends that `predicate`
     // accepts ({msgType, term, commit, ...}).
     holdPendingSendsOf(service, predicate) {

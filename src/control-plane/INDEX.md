@@ -30,7 +30,7 @@ documentClass: generated
 - [control-plane-mutation-readiness.js](control-plane-mutation-readiness.js) - Dimensions the priority-recovery break-glass may relax. (importers: many)
 - [control-plane-named-write-outcome.js](control-plane-named-write-outcome.js) - Named writes settle only on the terminal receipt their delivery owner emits. (importers: one)
 - [control-plane-named-write-wait.js](control-plane-named-write-wait.js) - No leading comment; first export: completeNamedWriteDelivery. (importers: few)
-- [control-plane-owner-fact-read-contract.js](control-plane-owner-fact-read-contract.js) - The owner-defined shapes of a leader-qualified system-table read (S0 of the fallback-read closure): the reasons an... (importers: few)
+- [control-plane-owner-fact-read-contract.js](control-plane-owner-fact-read-contract.js) - The owner-defined shapes of a leader-qualified system-table read (S0 of the fallback-read closure): the reasons an... (importers: many)
 - [control-plane-owner-fact-read.js](control-plane-owner-fact-read.js) - The canonical owner-fact read and the explicit hint read (S0 of the fallback-read closure). (importers: many)
 - [control-plane-publication-merge.js](control-plane-publication-merge.js) - No leading comment; first export: CONTROL_PLANE_PUBLICATION_STATUS. (importers: hub)
 - [control-plane-publication-story.js](control-plane-publication-story.js) - No leading comment; first export: buildControlPlanePublicationStory. (importers: one)

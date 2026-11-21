@@ -114,7 +114,7 @@ documentClass: generated
 - [partition-service-assembly.js](partition-service-assembly.js) - No leading comment; first export: PartitionService. (importers: few)
 - [partition-service-cdc-stream-base.js](partition-service-cdc-stream-base.js) - Report a spent commit deadline for one pending write. (importers: few)
 - [partition-service-constants.js](partition-service-constants.js) - No leading comment; first export: PARTITION_LEADER_ADDRESS_REFUSAL. (importers: hub)
-- [partition-service-core-base.js](partition-service-core-base.js) - Build this replica's consensus operation port. (importers: few)
+- [partition-service-core-base.js](partition-service-core-base.js) - Build this replica's consensus operation port. (importers: many)
 - [partition-service-create-admission-migration-constants.js](partition-service-create-admission-migration-constants.js) - No leading comment; first export: PARTITION_SERVICE_CREATE_ADMISSION_COLUMN. (importers: one)
 - [partition-service-durability-fitness.js](partition-service-durability-fitness.js) - Report one spent leader-durability bound with the unfitness evidence. (importers: few)
 - [partition-service-entry-apply-base.js](partition-service-entry-apply-base.js) - Handle incoming transport message. (importers: few)

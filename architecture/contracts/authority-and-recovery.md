@@ -168,36 +168,54 @@ conditional committed write that revalidates its own predicate.
 
 The safe read point of an owner fact is decided by the replica that answers,
 at its receiver (`PartitionService.handleRemoteQuery`), on the status its
-raft-rs runtime reports: it leads; its applied index equals its commit index; it
-has applied every entry its log held when it was elected (raft-rs sets its
-pending configuration index to that last index on becoming leader; by Raft's
-leader completeness that log holds every entry an earlier leader committed,
-and the leader commits them only through an entry of its own term); and it
-meets the caller's index and term floors. The rows are read on the replica's
-one SQLite connection with no await after that status, and the replica checks
-the same status again after the read; otherwise it refuses typed and ships no
-rows. Known limit (verification F1/F2, open): while a core turn is pending
-(a peer send, a persistence-admission wait) the runtime reports the last
-announced observation, not the core's current state
-(`src/raft/raft-rs-runtime-owner.js:1559-1578`), so both the decision and the
-re-check can rest on a stale status, and the witness's applied index is a lower
-bound of the snapshot read, not its position. The node that hosts the replica
-reaches the same receiver in process; every other node reaches it over the
-query transport, redirect-first, inside the original request's deadline.
+raft-rs runtime reports: it leads; it has applied every entry its log held
+when it was elected (raft-rs sets its pending configuration index to that last
+index on becoming leader; by Raft's leader completeness that log holds every
+entry an earlier leader committed, and the leader commits them only through
+an entry of its own term); its applied position is not behind the commit
+index it observed; and the caller's floor, a position `{partitionId, index,
+term}` typed by the raft group it was taken in, names this partition and is
+met. A read on a connection inside a transaction the receiver did not open is
+refused. The rows and the applied position the witness names are read in one
+read transaction of the replica's one SQLite connection (the statement and the
+raft store's applied-state row), with no await after that status; after the
+read the replica checks it still leads in the same term; otherwise it refuses
+typed and ships no rows. The witness echoes the read it decided (kind and
+floor); `readOwnerFact` accepts only an answer that echoes its own request,
+and the gateway never shares one owner fact's read with a read of another
+kind, floor or deadline.
+Known limit (verification F1, open until the raft owner's current authority
+observation is adopted): while a core turn is pending (a peer send, a
+persistence-admission wait) the runtime's status is the last announced
+observation, not the core's current state
+(`src/raft/raft-rs-runtime-owner.js:1559-1578`), so the leadership decision
+can rest on a stale status. The node that hosts the replica reaches the same
+receiver in process; every other node reaches it over the query transport,
+redirect-first, inside the original request's deadline, under the routing
+class the caller states.
 
 This is a leader-local read point, not a linearizable read: no quorum round
-confirms leadership when the rows are read. With `check_quorum`, a leader cut
-off from its quorum checks its quorum contact once per election timeout over
-the activity since the previous check, so it steps down after one to two
-election timeouts counted in its own ticks: `electionTick = max(heartbeatTick
+confirms leadership when the rows are read, and the serving replica's role is
+its own local belief. With `check_quorum`, a leader cut off from its quorum
+checks its quorum contact once per election timeout over the activity since
+the previous check, so, while its core turns run, it steps down after one to
+two election timeouts counted in its own ticks: `electionTick = max(heartbeatTick
 + 1, ceil(electionMinMs / tickMs))`, `tickMs = floor(heartbeatMs / 3)`
 (`src/raft/raft-rs-runtime-tuning.js:14-37`,
 `src/raft/raft-rs-group-constants.js:18-23`); at the defaults (election
 minimum 1000 ms, heartbeat 50 ms: 16 ms ticks, 63 ticks) that is about 2 s,
-longer in wall time when the event loop stalls. An owner fact is the leader's
-applied state, stale by at most that bound plus the pending-turn window above
-when it was answered, plus the answer's transit, which the caller's deadline
-bounds.
+longer in wall time when the event loop stalls. That bound does not hold while
+a core turn is pending: the leader's ticks queue behind the turn, so a cut-off
+leader may not step down for as long as the turn pends (up to the persistence
+admission bound, 120 s, `src/raft/raft-rs-runtime-owner-constants.js:240`).
+What protects an owner fact is the receiver's refusal unless its raft core's
+current observation is the settled leader answer, not the step-down; until the
+raft owner reports a leader unsettled while a newer-term envelope waits in its
+own inbound queue (verification B-1,
+`test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js`, red until then),
+such a leader can answer for as long as its turn pends. Otherwise an owner fact
+is the leader's applied state, stale by at most the step-down bound when it
+was answered, plus the answer's transit, which the caller's deadline bounds.
 
 Precondition for consumers: an absence-dependent consumer (one that concludes
 from an empty result that a row does not exist) may rely only on `readOwnerFact`,
