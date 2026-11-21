@@ -1,5 +1,6 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {createCoordinatorSqlStore} from './test-helpers.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
@@ -33,7 +34,7 @@ const PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS = 1000;
 const STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME =
   'checkTimeouts reconciles stale priority PENDING from cached active target without unsafe trim';
 
-test('checkTimeouts confirms STOPPING timeout failure without cache waits',
+test('checkTimeouts settles STOPPING from confirmed source absence without cache waits',
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
@@ -46,7 +47,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       replica_id: 'partition-1-r1',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
-      status: 'stopping',
+      status: ReplicaStatus.REMOVING,
       workflow_step: 'STOPPING',
       created_at: staleUpdatedAtMs - 5000,
       updated_at: staleUpdatedAtMs,
@@ -59,34 +60,11 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       ]),
     };
 
-    const sqlQueryEngine = {
-      async executeQuery(sql, params) {
-        if (sql.includes('FROM replica_operations')) {
-          return {
-            success: true,
-            rows: [{...timedOutOperationRow}],
-          };
-        }
-        if (sql.startsWith('UPDATE replica_operations SET')) {
-          timedOutOperationRow.status = params[0];
-          timedOutOperationRow.workflow_step = params[1];
-          timedOutOperationRow.updated_at = params[2];
-          timedOutOperationRow.completed_at = params[3];
-          timedOutOperationRow.error_message = params[4];
-          timedOutOperationRow.steps_history = params[5];
-          timedOutOperationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
-        }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: 0,
-        };
-      },
-    };
+    const store = createCoordinatorSqlStore({
+      getAll: (table) => table === 'replica_operations' ? [timedOutOperationRow] : [],
+      upsert: (_table, row) => Object.assign(timedOutOperationRow, row),
+    });
+    const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
 
     const coordinator = createCoordinator({
       nodeId: 'node-1',
@@ -118,13 +96,14 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       await coordinator.checkTimeouts();
     } finally {
       await coordinator.shutdown();
+      store.suspend();
     }
 
     t.equal(timedOutOperationRow.status, 'removed');
     t.equal(timedOutOperationRow.workflow_step, 'REMOVED');
   });
 
-test('checkTimeouts reconciles stale operations when owner-rpc reads are unavailable',
+test('checkTimeouts retries a stale STOPPING operation after strict owner reads recover',
   async (t) => {
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - 70000;
@@ -138,7 +117,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       replica_id: 'partition-1-r1',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
-      status: 'stopping',
+      status: ReplicaStatus.REMOVING,
       workflow_step: 'STOPPING',
       created_at: staleUpdatedAtMs - 5000,
       updated_at: staleUpdatedAtMs,
@@ -151,6 +130,12 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       ]),
     };
 
+    const store = createCoordinatorSqlStore({
+      getAll: (table) => table === 'replica_operations' ? [timedOutOperationRow] : [],
+      upsert: (_table, row) => Object.assign(timedOutOperationRow, row),
+    });
+    let ownerRpcAvailable = false;
+    let terminalWrites = 0;
     const cdcIntegrationService = {
       refreshAuthoritativeCacheRow: async () => true,
       async executeAuthoritativeSystemTableRead(
@@ -165,26 +150,16 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
           params: [...(Array.isArray(params) ? params : [])],
           options: {...options},
         });
-        if (tableName === 'replica_operations' &&
-            options.authoritativeReadMode === 'owner_rpc_required') {
+        if (!ownerRpcAvailable && tableName === 'replica_operations' &&
+            options.authoritativeReadMode ===
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED) {
           return {
             success: false,
             error: 'owner-rpc-read-failed',
             rows: [],
           };
         }
-        if (tableName === 'replica_operations') {
-          return {
-            success: true,
-            source: 'local_partition_replica',
-            rows: [{...timedOutOperationRow}],
-          };
-        }
-        return {
-          success: true,
-          source: 'local_partition_replica',
-          rows: [],
-        };
+        return store.execute(sql, params);
       },
     };
 
@@ -206,24 +181,10 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
         );
       },
       async executeQuery(sql, params = []) {
-        if (String(sql).startsWith('UPDATE replica_operations SET')) {
-          timedOutOperationRow.status = params[0];
-          timedOutOperationRow.workflow_step = params[1];
-          timedOutOperationRow.updated_at = params[2];
-          timedOutOperationRow.completed_at = params[3];
-          timedOutOperationRow.error_message = params[4];
-          timedOutOperationRow.steps_history = params[5];
-          timedOutOperationRow.replica_id = params[6];
-          return {
-            success: true,
-            affectedRows: 1,
-          };
+        if (sql.includes('UPDATE replica_operations') && sql.includes('completed_at IS NULL')) {
+          terminalWrites += 1;
         }
-        return {
-          success: true,
-          rows: [],
-          affectedRows: 0,
-        };
+        return store.execute(sql, params);
       },
     };
 
@@ -264,14 +225,20 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
     coordinator.initialize();
     try {
       await coordinator.checkTimeouts();
+      t.equal(timedOutOperationRow.workflow_step, 'STOPPING',
+        'local discovery cannot settle terminal state during strict owner unavailability');
+      t.equal(terminalWrites, 0, 'the owner refuses before the terminal CAS');
+      ownerRpcAvailable = true;
+      await coordinator.checkTimeouts();
     } finally {
       await coordinator.shutdown();
+      store.suspend();
     }
 
     t.equal(
       timedOutOperationRow.workflow_step,
       'REMOVED',
-      'timeout reconciliation should still complete stale operations when owner-rpc reads are unavailable',
+      'the retained removal settles once owner reads recover',
     );
     t.ok(
       authoritativeReadCalls.some((call) =>
@@ -345,59 +312,22 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     }],
   ]);
   const authoritativeReplicaOperationReads = [];
-
+  const store = createCoordinatorSqlStore({
+    getAll(table) {
+      if (table === 'replica_operations') return [...operationRows.values()];
+      if (table === 'services') return [...serviceRowsByReplicaId.values()];
+      return [];
+    },
+    upsert(_table, row) {
+      Object.assign(operationRows.get(row.operation_id), row);
+    },
+  });
   const sqlQueryEngine = {
     async executeQuery(sql, params = []) {
       if (sql.includes('FROM replica_operations')) {
-        authoritativeReplicaOperationReads.push({
-          sql: String(sql),
-          params: [...params],
-        });
-        return {
-          success: true,
-          rows: [...operationRows.values()].map((row) => ({...row})),
-          affectedRows: 0,
-        };
+        authoritativeReplicaOperationReads.push({sql, params: [...params]});
       }
-      if (sql.startsWith('UPDATE replica_operations SET')) {
-        const operationRow = operationRows.get(params[7]);
-        operationRow.status = params[0];
-        operationRow.workflow_step = params[1];
-        operationRow.updated_at = params[2];
-        operationRow.completed_at = params[3];
-        operationRow.error_message = params[4];
-        operationRow.steps_history = params[5];
-        operationRow.replica_id = params[6];
-        return {
-          success: true,
-          affectedRows: 1,
-        };
-      }
-      if (sql.includes('FROM services WHERE service_id = ?')) {
-        const serviceRow = serviceRowsByReplicaId.get(params[0]) || null;
-        return {
-          success: true,
-          rows: serviceRow ? [{...serviceRow}] : [],
-          affectedRows: serviceRow ? 1 : 0,
-        };
-      }
-      if (sql.includes('FROM services') &&
-          sql.includes('WHERE partition_id = ? AND node_id = ?')) {
-        const serviceRow = [...serviceRowsByReplicaId.values()].find((row) =>
-          row.partition_id === params[0] &&
-          row.node_id === params[1],
-        ) || null;
-        return {
-          success: true,
-          rows: serviceRow ? [{...serviceRow}] : [],
-          affectedRows: serviceRow ? 1 : 0,
-        };
-      }
-      return {
-        success: true,
-        rows: [],
-        affectedRows: 0,
-      };
+      return store.execute(sql, params);
     },
   };
 
@@ -448,6 +378,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     await coordinator.checkTimeouts();
   } finally {
     await coordinator.shutdown();
+    store.suspend();
   }
 
   t.equal(
