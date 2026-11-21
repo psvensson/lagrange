@@ -369,6 +369,19 @@ class RouterConnectionAuthorityOwner {
       return null;
     }
   }
+  /**
+   * Whether this node should stay connected to a peer: the node address
+   * resolution owner (the router's resolveNodeAddress; in production the
+   * NODES row and the ACTIVE WebSocket endpoint of the node's current
+   * incarnation) answers an address for it. The same answer every delivery
+   * and reconnect address resolves through; no second membership notion.
+   * A router without a resolver knows no member.
+   * @param {string} nodeId - The peer's node id.
+   * @return {boolean}
+   */
+  isConnectionMember(nodeId) {
+    return this.resolveNodeAddressForDelivery(nodeId) !== null;
+  }
   resolveCanonicalReconnectAddress(targetNodeId, fallbackAddress = null) {
     const resolvedAddress = this.resolveNodeAddressForDelivery(targetNodeId);
     if (
