@@ -145,8 +145,8 @@ test('lost committed answer reuses pinned bytes and preserves the retained lease
     const row = ledgerRows(world.leader)[0];
     assert.equal(row.lease_expires_at, retained.ownerLeaseExpiresAt ?? null);
     const held = repository.retainedPlacementRepairs.get(retained.operationId);
-    assert.equal(held.entryId, attempts[0].entryId);
-    assert.deepEqual(held.body, attempts[0].body, 'unknown answer retains identical native command');
+    assert.equal(held.entry.entryId, attempts[0].entryId);
+    assert.deepEqual(held.entry.body, attempts[0].body, 'unknown answer retains identical native command');
     assert.equal(await repository.repairRetainedOperation(retained), true);
     assert.equal(world.commands.length, 1, 'settled replay proposes no second write');
     assert.equal(repository.retainedPlacementRepairs.size, 0);
@@ -279,8 +279,8 @@ test('foreign and malformed native answers retain one exact unknown attempt', as
       assert.equal(await repository.repairRetainedOperation(retained), false);
       assert.equal(repository.retainedPlacementRepairs.size, 1);
       const held = repository.retainedPlacementRepairs.get(retained.operationId);
-      assert.equal(held.entryId, original.entryId);
-      assert.deepEqual(held.body, original.body);
+      assert.equal(held.entry.entryId, original.entryId);
+      assert.deepEqual(held.entry.body, original.body);
       repository.repairRetainedPlacement = submit;
       assert.equal(await repository.repairRetainedOperation(retained), true);
       assert.equal(repository.retainedPlacementRepairs.size, 0);
@@ -349,7 +349,7 @@ for (const first of ['normal', 'ledger']) {
         assert.equal(ledgerRows(world.leader).length, 1);
         const debt = world.coordinator.repository.retainedPlacementRepairs
           .get(retained.operationId);
-        assert.equal(debt.blockers[0].operationId, normal.operationIds[0]);
+        assert.equal(debt.blocker.operations[0].operationId, normal.operationIds[0]);
         await stepRetainedLedgerRow(world, normal.operationIds[0], WORKFLOW_STEP.FAILED);
         await settleRepair(world);
         assert.ok(ledgerRows(world.leader)
@@ -499,9 +499,9 @@ test('different remote E2 never receives custody while owner retains unknown E1;
     try {
       assert.equal(await sender.repairRetainedOperation(retained), false);
       const e2 = sender.retainedPlacementRepairs.get(retained.operationId);
-      assert.notEqual(e2.entryId, e1.entryId);
+      assert.notEqual(e2.entry.entryId, e1.entry.entryId);
       assert.equal(reply.repairCustody, undefined, 'E2 is not retained at the receiver');
-      assert.equal(e2.delegated, undefined, 'sender still owns its unknown E2');
+      assert.equal(e2.custody.state, 'self', 'sender still owns its unknown E2');
       assert.equal(owner.retainedPlacementRepairs.get(retained.operationId), e1);
       const proposed = world.commands.length;
       await resumeFixtureParticipantAdmission(world.leader);
@@ -564,9 +564,9 @@ test('remote E2 joins active E1 and retains renewed BUSY without spending its en
       assert.equal(reply.committed, undefined, 'E1 is never relabeled as a committed E2');
       assert.equal(reply.repairCustody, undefined,
         'settled E2 has no receiver custody; sender retains its typed blocker wake');
-      assert.equal(sender.retainedPlacementRepairs.get(retained.operationId).delegated, undefined);
-      assert.deepEqual(owner.retainedPlacementRepairs.get(retained.operationId).blockers,
-        sender.retainedPlacementRepairs.get(retained.operationId).blockers);
+      assert.equal(sender.retainedPlacementRepairs.get(retained.operationId).custody.state, 'self');
+      assert.deepEqual(owner.retainedPlacementRepairs.get(retained.operationId).blocker,
+        sender.retainedPlacementRepairs.get(retained.operationId).blocker);
       await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
       const cleared = world.leader.db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
         .get(competitor.operationIds[0]);
@@ -952,13 +952,14 @@ for (const lane of ['source', 'target']) {
       };
       assert.equal(await repository.repairRetainedOperation(retained), false);
       const held = repository.retainedPlacementRepairs.get(retained.operationId);
-      assert.equal(held.entryId, original.entryId);
-      assert.deepEqual(held.body, original.body);
+      assert.equal(held.entry.entryId, original.entryId);
+      assert.deepEqual(held.entry.body, original.body);
       const commands = world.commands.length;
       repository.repairRetainedPlacement = native;
       assert.equal(await repository.repairRetainedOperation(retained), false);
       assert.equal(world.commands.length, commands, 'genuine refusal replays original committed attempt');
-      assert.ok(repository.retainedPlacementRepairs.get(retained.operationId).occupancy);
+      assert.equal(repository.retainedPlacementRepairs.get(retained.operationId).blocker.kind,
+        'occupancy');
     }));
 }
 
@@ -977,9 +978,9 @@ test('incoming durable E0 refusal replays before volatile E1 redrive and rejects
     await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
     await settleRepair(world);
     const e1 = repository.retainedPlacementRepairs.get(retained.operationId);
-    assert.ok(e1.entryId && e1.entryId !== e0.entryId);
-    const e1Id = e1.entryId;
-    const e1Bytes = JSON.stringify(e1.body);
+    assert.ok(e1.entry.entryId && e1.entry.entryId !== e0.entryId);
+    const e1Id = e1.entry.entryId;
+    const e1Bytes = JSON.stringify(e1.entry.body);
     let redrives = 0;
     const submit = repository.repairRetainedPlacement;
     repository.repairRetainedPlacement = (payload) => {
@@ -996,8 +997,8 @@ test('incoming durable E0 refusal replays before volatile E1 redrive and rejects
       body: {...e0.body, operation: {...e0.body.operation, updatedAt: retained.updatedAt + 1}}});
     assert.equal(conflict.failureCode, 'placement_admission_bytes_invalid');
     assert.equal(world.commands.length, before);
-    assert.equal(e1.entryId, e1Id);
-    assert.equal(JSON.stringify(e1.body), e1Bytes);
+    assert.equal(e1.entry.entryId, e1Id);
+    assert.equal(JSON.stringify(e1.entry.body), e1Bytes);
   }));
 
 async function invokeRecoveryProducer(remote, operation, producer) {
@@ -1136,8 +1137,8 @@ for (const authority of ['exact', 'changed', 'unavailable']) {
         assert.equal(world.commands.length, 1, 'joining a winner does not create an exact-existing proposal');
         if (authority === 'unavailable') {
           const held = race.sender.retainedPlacementRepairs.get(race.retained.operationId);
-          assert.equal(held.entryId, race.e2.entryId);
-          assert.deepEqual(held.body, race.e2.body);
+          assert.equal(held.entry.entryId, race.e2.entryId);
+          assert.deepEqual(held.entry.body, race.e2.body);
           assert.equal(held.lastDecision.state, 'unavailable',
             'the confirming actor keeps a typed uncertainty instead of trusting the winner hint');
           race.sender.executeReplicaOperationsRead = originalRead;
@@ -1288,16 +1289,16 @@ test('registered owner read backoff recovers without a new caller or row/role ev
     try {
       assert.equal(await repository.ensureRetainedOperationRow(retained), false);
       assert.equal(reads, 1);
-      assert.ok(repository.retainedPlacementRepairReadRetry,
-        'the dependency continuation is registered before the unavailable answer returns');
       const entry = repository.retainedPlacementRepairs.get(retained.operationId);
+      assert.equal(entry.continuation.state, 'armed',
+        'the dependency continuation is registered before the unavailable answer returns');
       assert.equal(world.commands.length, 0);
       unavailable = false;
       await restored;
       await settleRepair(world);
       assert.equal(world.commands.length, 1);
       assert.equal(repository.retainedPlacementRepairs.size, 0);
-      assert.equal(repository.retainedPlacementRepairReadRetry, null);
+      assert.equal(entry.continuation.state, 'idle');
       assert.equal(entry.operation.createdAt, retained.createdAt);
       assert.equal(world.leader.db.prepare('SELECT created_at FROM replica_operations WHERE operation_id = ?')
         .get(retained.operationId).created_at, retained.createdAt);
@@ -1327,13 +1328,14 @@ test('shutdown cancels actual registered read-dependency wake and cannot rearm r
     repository.executeReplicaOperationsRead = async () => ({success: false, rowSetComplete: false});
     assert.equal(await repository.repairRetainedOperation(retained), false);
     assert.equal(scheduled.length, 1);
-    assert.ok(repository.retainedPlacementRepairReadRetry);
+    const record = repository.retainedPlacementRepairs.get(retained.operationId);
+    assert.equal(record.continuation.state, 'armed');
     assert.equal(await repository.repairRetainedOperation(
       {...retained, createdAt: retained.createdAt + 1}), false,
     'the replacement cannot borrow the original registered dependency wake');
     await world.coordinator.shutdown();
     assert.deepEqual(canceled, scheduled);
-    assert.equal(repository.retainedPlacementRepairReadRetry, null);
+    assert.equal(record.continuation.state, 'idle');
     assert.equal(repository.retainedPlacementRepairs.size, 0);
     await settleTicks();
     assert.equal(world.commands.length, 0);

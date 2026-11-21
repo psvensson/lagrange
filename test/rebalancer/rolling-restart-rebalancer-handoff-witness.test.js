@@ -13,6 +13,7 @@
 // whether the same node is re-planned into a fresh operation is a different
 // claim, carried to formation-sim (formation-contracts-registration, 2026-09-12).
 
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -96,6 +97,7 @@ function createHandoffOwner(testContext) {
     error: (message, fields) => warnings.push({message, fields}),
   };
   const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: COORDINATOR_NODE_ID,
     systemTableCache: cache,
     cdcIntegrationService: hosts.cdcIntegrationService,

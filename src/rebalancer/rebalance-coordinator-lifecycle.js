@@ -1,4 +1,4 @@
-import {prepareRetainedPlacementRepairBody} from
+import {prepareRetainedPlacementRepairBody, resolveRetainedPlacementRepairBinding} from
   './replica-placement-owner-retained-repair-routing.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
@@ -355,7 +355,7 @@ class RebalanceCoordinatorLifecycle {
         prepareRetainedPlacementRepair: (operation) =>
           prepareRetainedPlacementRepairBody(this, operation),
         repairRetainedPlacement: (payload) => this.submitRetainedPlacementRepair(payload),
-        resolveRetainedPlacementRepairRoute: () => this.resolveRemoteLedgerLeader(),
+        resolveRetainedPlacementRepairRoute: () => resolveRetainedPlacementRepairBinding(this),
         // The membership owner claim is bound to this process's issued boot
         // incarnation, the one the router carries and the nodes row publishes.
         membershipOwnerBootIncarnation:

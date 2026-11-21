@@ -1,6 +1,7 @@
 // Test composition of existing native groups and actual registered replica
 // handlers. Census cache rows below are projections of actual native status;
 // they route the production cure and are never fabricated committed rows.
+import {unavailableRetainedRepairPorts} from '../../test-helpers/retained-repair-ports.js';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
@@ -47,7 +48,9 @@ function replaceConsumerContext(source, target) {
     partitionId: source.partitionId, sourceNodeId: source.nodeId,
     targetNodeId: target.nodeId, sourceReplicaId: source.replicaId,
     targetReplicaId: target.replicaId, replicaId: target.replicaId};
-  const repository = new ReplicaOperationRepository({nodeId: target.nodeId,
+  const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
+    nodeId: target.nodeId,
     systemTableCache: target.systemTableCache, logger: target.logger,
     timeSource: target.timeSource});
   const owner = Object.assign(Object.create(PriorityRecoverySupersededTarget.prototype),

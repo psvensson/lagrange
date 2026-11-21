@@ -28,7 +28,7 @@
   "censusSize": 2720,
   "digest": "fnv1a32-95d6aaf2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3aa06215",
+  "observationDigest": "fnv1a32-71d3c53a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10330,8 +10330,14 @@
         "src/storage/data-directory-process-owner.js"
       ]
     },
+    "test/integration/message-group-fresh-identity-replacement.integration.test.js": {
+      "files": [
+        "src/partition/partition-placement-repair-preparation-result.js"
+      ]
+    },
     "test/integration/message-group-learner-discovery.integration.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -10354,6 +10360,7 @@
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10385,6 +10392,7 @@
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10410,6 +10418,7 @@
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10434,6 +10443,7 @@
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10455,6 +10465,7 @@
     },
     "test/integration/message-group-learner-recipient.integration.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -10470,6 +10481,7 @@
     },
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -10490,6 +10502,7 @@
     },
     "test/integration/message-group-learner-successor-ordering.integration.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -10511,6 +10524,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
@@ -11283,6 +11297,7 @@
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
         "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -11524,6 +11539,7 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -11839,6 +11855,7 @@
       "files": [
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -11876,6 +11893,7 @@
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -14329,6 +14347,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -17796,6 +17815,7 @@
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-participant-transaction-session.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/partition/partition-service-shared.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -18363,6 +18383,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ],
       "directories": [
@@ -18643,6 +18664,7 @@
     },
     "test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
         "src/rebalancer/operation-workflow-transition-persistence.js",
@@ -18820,6 +18842,7 @@
         "src/message-group/message-group-learner-join.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-create-admission-evidence.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
@@ -18839,6 +18862,7 @@
     },
     "test/rebalancer/message-group-membership-branch-authorization.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js"
       ]
     },
@@ -18853,6 +18877,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js",
@@ -19767,7 +19792,13 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": {
+      "files": [
+        "src/partition/partition-placement-repair-preparation-result.js"
       ]
     },
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": {
@@ -19814,13 +19845,20 @@
         "src"
       ]
     },
+    "test/rebalancer/replica-operation-observation-contract.test.js": {
+      "files": [
+        "src/partition/partition-placement-repair-preparation-result.js"
+      ]
+    },
     "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js": {
       "files": [
-        "src/logging/wait-bound-spent.js"
+        "src/logging/wait-bound-spent.js",
+        "src/partition/partition-placement-repair-preparation-result.js"
       ]
     },
     "test/rebalancer/replica-operation-repository-time-authority.test.js": {
       "files": [
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/replica-operation-repository.js"
       ]
     },
@@ -19829,6 +19867,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/partition/partition-write-kernel.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-step-policy.js",
@@ -19850,6 +19889,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
@@ -19954,6 +19994,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/replica-operation-repository-constants.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
@@ -20012,6 +20053,7 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -20240,6 +20282,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
         "src/rebalancer/operation-workflow-replace-owner.js",
@@ -20795,6 +20838,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/rebalancer/unified-rebalancer.js",
         "test/test-helpers/participant-protocol-double.js"
       ]

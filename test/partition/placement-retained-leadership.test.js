@@ -66,9 +66,15 @@ for (const publicationOrder of ['partition-first', 'service-first']) {
       assert.ok(messages.some((message) => message.from === a && message.to === b &&
       message.payload.type === 'PLACEMENT_REPAIR'), 'A used current B route instead of saved A closure');
       assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 1);
+      const proposalsAtB = () => b.commands.filter((command) =>
+        command.type === 'PLACEMENT_REPAIR' &&
+        command.body.operation.operationId === retained.operationId).length;
+      assert.equal(proposalsAtB(), 0,
+        'B evaluates the unchanged BUSY blocker first: zero native proposals at B');
       await stepRetainedLedgerRow(b, competitor.placementResult.operationIds[0],
         WORKFLOW_STEP.FAILED);
       await idle(a, b);
+      assert.equal(proposalsAtB(), 1, 'exactly one native proposal at B after the blocker cleared');
       assert.ok(b.leader.db.prepare('SELECT operation_id FROM replica_operations WHERE operation_id = ?')
         .get(retained.operationId), 'B actual commit clears and restores without another resync');
       assert.equal(b.coordinator.repository.retainedPlacementRepairs.size, 0);
@@ -81,13 +87,13 @@ test('paused pinned A request survives B custody and genuine A recovery unchange
     raiseParticipantCutoverPause(a.leader);
     assert.equal(await a.coordinator.repository.repairRetainedOperation(retained), false);
     const original = a.coordinator.repository.retainedPlacementRepairs.get(retained.operationId);
-    const entryId = original.entryId;
-    const bodyText = JSON.stringify(original.body);
+    const entryId = original.entry.entryId;
+    const bodyText = JSON.stringify(original.entry.body);
     await elect(b, {resume: false});
     await idle(a, b);
     const bAttempt = b.coordinator.repository.retainedPlacementRepairs.get(retained.operationId);
-    assert.equal(bAttempt.entryId, entryId);
-    assert.equal(JSON.stringify(bAttempt.body), bodyText);
+    assert.equal(bAttempt.entry.entryId, entryId);
+    assert.equal(JSON.stringify(bAttempt.entry.body), bodyText);
     await elect(a, {resume: false});
     await idle(a, b);
     const before = a.commands.length + b.commands.length;
@@ -118,8 +124,8 @@ test('a lost committed reply retires from the visible winner without another nat
     };
     assert.equal(await repository.repairRetainedOperation(retained), false);
     const original = repository.retainedPlacementRepairs.get(retained.operationId);
-    const entryId = original.entryId;
-    const bodyText = JSON.stringify(original.body);
+    const entryId = original.entry.entryId;
+    const bodyText = JSON.stringify(original.entry.body);
     assert.ok(a.leader.db.prepare('SELECT operation_id FROM replica_operations WHERE operation_id = ?')
       .get(retained.operationId), 'the first reply loss followed an actual commit');
     await elect(b);
@@ -146,8 +152,8 @@ test('genuinely uncommitted pinned A request routes A-B-A without changing ident
     const repository = a.coordinator.repository;
     assert.equal(await repository.repairRetainedOperation(retained), false);
     const original = repository.retainedPlacementRepairs.get(retained.operationId);
-    const entryId = original.entryId;
-    const bodyText = JSON.stringify(original.body);
+    const entryId = original.entry.entryId;
+    const bodyText = JSON.stringify(original.entry.body);
     await elect(b, {resume: false});
     await idle(a, b);
     assert.ok(messages.some((message) => message.from === a && message.to === b &&
@@ -155,8 +161,9 @@ test('genuinely uncommitted pinned A request routes A-B-A without changing ident
     assert.equal(a.commands.length + b.commands.length, 0);
     await elect(a, {resume: false});
     await idle(a, b);
-    assert.equal(repository.retainedPlacementRepairs.get(retained.operationId).entryId, entryId);
-    assert.equal(JSON.stringify(repository.retainedPlacementRepairs.get(retained.operationId).body),
+    const held = repository.retainedPlacementRepairs.get(retained.operationId);
+    assert.equal(held.entry.entryId, entryId);
+    assert.equal(JSON.stringify(held.entry.body),
       bodyText);
     assert.equal(a.commands.length + b.commands.length, 0);
     await resumeFixtureParticipantAdmission(a.leader);

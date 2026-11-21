@@ -7,6 +7,9 @@ import {REPAIR_PREPARATION_STATE as PREPARATION, PLACEMENT_ADMISSION_ERROR,
 import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
 import {PLACEMENT_STATEMENT_VALIDITY} from './replica-placement-owner-admission-statement.js';
 import {resolvePlacementLedgerDelivery} from './replica-placement-owner-transport.js';
+import {RETAINED_REPAIR_BINDING as BINDING} from './replica-operation-retained-repair-record.js';
+import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
+import {TABLES} from '../constants/index.js';
 
 // ends-on: PLACEMENT_REPAIR_PREPARE owner reply
 const PREPARATION_TIMEOUT_MS = 5000;
@@ -52,4 +55,21 @@ async function prepareRetainedPlacementRepairBody(coordinator, operation) {
   return validatePreparedRepair(reading, operation);
 }
 
-export {prepareRetainedPlacementRepairBody};
+const UNAVAILABLE_BINDING = Object.freeze({state: BINDING.UNAVAILABLE});
+
+// The binding a retained decision presents to: the active local ledger leader
+// (the node that would propose), else the canonical remote route together with
+// the tenure pair existing owners attest a running replica by: the bound node's
+// published boot incarnation and the replica's SERVICES birth (created_at).
+function resolveRetainedPlacementRepairBinding(coordinator) {
+  const local = coordinator.resolveActiveLocalLedgerLeaderService();
+  if (local) return {state: BINDING.LOCAL, nodeId: local.nodeId, replicaId: local.replicaId};
+  const route = coordinator.resolveRemoteLedgerLeader();
+  if (route === null) return UNAVAILABLE_BINDING;
+  const cache = coordinator.systemTableCache;
+  return {state: BINDING.REMOTE, ...route,
+    nodeBootIncarnation: resolveTargetNodeIncarnationSnapshot(cache, route.nodeId).bootIncarnation,
+    replicaCreatedAt: cache.get(TABLES.SERVICES, route.replicaId).created_at};
+}
+
+export {prepareRetainedPlacementRepairBody, resolveRetainedPlacementRepairBinding};

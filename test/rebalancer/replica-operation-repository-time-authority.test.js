@@ -12,6 +12,7 @@
 //
 // The default stays RealTimeSource, so production behaviour is unchanged;
 // what changes is that a deterministic owner can supply its own clock.
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from '../../src/test-helpers/tap.js';
 
 import {ReplicaOperationRepository} from
@@ -37,6 +38,7 @@ function virtualTimeSource(startMs) {
 
 function createRepository(timeSource, reads) {
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: TEST_NODE_ID,
     timeSource,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},

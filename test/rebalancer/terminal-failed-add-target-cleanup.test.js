@@ -13,6 +13,7 @@
 // post-intent no-fail guard (shared with REPLACE) completes it instead -
 // even when the SYNCING step timer fires after the promotion.
 
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -85,7 +86,9 @@ function terminalCleanupRepairOwner(
   options = {},
 ) {
   const scheduled = [];
-  const repository = new ReplicaOperationRepository({nodeId: TARGET_NODE});
+  const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
+    nodeId: TARGET_NODE});
   repository.queryReplicaOperationPersistenceAuthorityOperation = async () => operation;
   repository.queryTerminalReplicaCleanupOperations = async () => [operation];
   return {

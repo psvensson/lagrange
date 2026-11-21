@@ -1,3 +1,4 @@
+import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {assignRetainedPlacementRepairMethods, createRetainedPlacementRepairPorts} from
   './replica-operation-repository-retained-placement-repair.js';
 /**
@@ -502,8 +503,14 @@ class ReplicaOperationRepository {
     Object.assign(this, createRetainedPlacementRepairPorts(options));
     this.retainedPlacementRepairs = new Map();
     this.retainedPlacementRepairWakes = new Map();
-    this.retainedPlacementRepairReadRetry = null;
-    this.retainedPlacementRepairReadRetryDelayMs = 0;
+    this.retainedPlacementRepairDrain = null;
+    this.retainedPlacementRepairReleaseSequence = 0;
+    // The retained owner's continuation bounds: the existing owner-read retry
+    // delays and the rebalance operation budget as its bounded window.
+    this.retainedRepairContinuationPolicy = Object.freeze({
+      minDelayMs: REPLICA_OPERATION_READ_RETRY_DELAY_MS,
+      maxDelayMs: REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+      windowMs: TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS});
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
     this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;

@@ -91,7 +91,7 @@ function attachCurrentCopyOwner(world) {
       }
       if (table === 'services') {
         return [{replica_id: `${partitionId}-source`,
-          partition_id: partitionId, node_id: NODE.A, status: 'active', raft_role: 'leader'}];
+          partition_id: partitionId, node_id: NODE.A, status: 'active', raft_role: 'follower'}];
       }
       return [];
     },

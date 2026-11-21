@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -15,6 +16,7 @@ const TEST_PARTITION_NODE_FALLBACK_ADDRESS = 'node-2/partition/replica-2';
 
 function createRepository(overrides = {}) {
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: 'node-1',
     systemTableCache: {},
     cdcIntegrationService: {},

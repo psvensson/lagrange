@@ -42,17 +42,17 @@ async function pinPaused(a) {
   const repository = a.coordinator.repository;
   assert.equal(await bounded(repository.repairRetainedOperation(retained), 'paused repair'), false);
   const attempt = repository.retainedPlacementRepairs.get(retained.operationId);
-  assert.ok(attempt.entryId, 'the paused refusal pinned one exact entry');
-  return {retained, attempt, identity: {entryId: attempt.entryId,
-    bodyText: JSON.stringify(attempt.body), operationText: JSON.stringify(attempt.operation),
+  assert.ok(attempt.entry.entryId, 'the paused refusal pinned one exact entry');
+  return {retained, attempt, identity: {entryId: attempt.entry.entryId,
+    bodyText: JSON.stringify(attempt.entry.body), operationText: JSON.stringify(attempt.operation),
     minimumLedgerIndex: attempt.minimumLedgerIndex, minimumLedgerTerm: attempt.minimumLedgerTerm}};
 }
 
 function assertIdentityPreserved(repository, pinned, label) {
   const attempt = repository.retainedPlacementRepairs.get(pinned.retained.operationId);
   assert.ok(attempt, `${label}: the obligation is retained`);
-  assert.equal(attempt.entryId, pinned.identity.entryId, `${label}: unresolved entry id`);
-  assert.equal(JSON.stringify(attempt.body), pinned.identity.bodyText, `${label}: exact body`);
+  assert.equal(attempt.entry.entryId, pinned.identity.entryId, `${label}: unresolved entry id`);
+  assert.equal(JSON.stringify(attempt.entry.body), pinned.identity.bodyText, `${label}: exact body`);
   assert.equal(JSON.stringify(attempt.operation), pinned.identity.operationText,
     `${label}: operation identity`);
   assert.ok(attempt.minimumLedgerIndex >= pinned.identity.minimumLedgerIndex,
@@ -161,7 +161,8 @@ async function retainBusy(a) {
   assert.equal(await bounded(repository.repairRetainedOperation(retained), 'BUSY repair'), false);
   assert.equal(repairCommands(a).length, 1, 'the origin committed exactly one BUSY refusal');
   const attempt = repository.retainedPlacementRepairs.get(retained.operationId);
-  assert.deepEqual(attempt.blockers.map((blocker) => blocker.operationId), [competitorId]);
+  assert.deepEqual(attempt.blocker.operations.map((blocker) => blocker.operationId),
+    [competitorId]);
   return {retained, competitorId};
 }
 

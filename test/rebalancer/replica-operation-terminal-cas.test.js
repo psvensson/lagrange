@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {buildOperationTransitionOutcome} from '../../src/rebalancer/operation-workflow-transition-outcome.js';
 // Audit finding 6 (quest replica-operation-terminal-cas): terminal
 // replica-operation transitions are first-terminal-wins, never
@@ -147,6 +148,7 @@ function createTerminalCasHarness(t, {
     }),
   };
   const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: TEST_NODE_ID,
     systemTableCache: {
       get: () => null,

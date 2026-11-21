@@ -1,13 +1,15 @@
 // Observations are hints for the retained-record owner, never row authority.
-// Each record holds only this finite mask; a drain consumes it after pending
-// work settles and confirms current authority before retrying or retiring.
+// Each record holds only this finite mask; a drain consumes it after the
+// in-flight decision settles. A hint never changes the binding, custody or
+// blocker: only the serialized decision does.
 import {LEDGER_PARTITION_ID, copyCapacityObservationAffects} from
   '../partition/partition-placement-admission-decision.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {RETAINED_COPY_POLICY_STATE as POLICY} from '../partition/partition-placement-admission-constants.js';
 
+// ENTRY: the pinned entry itself committed at the local ledger.
 const REPAIR_OBSERVATION = Object.freeze({NONE: 0, OWN_ROW: 1, CLEARING: 2,
-  LEADER: 4, CONTENTION: 8});
+  ROUTE: 4, CONTENTION: 8, ENTRY: 16});
 
 function peerObservationMayClear(attempt, row) {
   if (!row) return false;
@@ -17,8 +19,9 @@ function peerObservationMayClear(attempt, row) {
   const ledger = operation.partitionId === LEDGER_PARTITION_ID ||
     row.entity_id === LEDGER_PARTITION_ID;
   if (sameEntity || ledger) return true;
-  return attempt.body?.copyPolicy.state === POLICY.READY &&
-    copyCapacityObservationAffects(attempt.body.copyPolicy.statement, row);
+  const policy = attempt.entry.body?.copyPolicy;
+  return policy?.state === POLICY.READY &&
+    copyCapacityObservationAffects(policy.statement, row);
 }
 
 function ownRowObservation(attempt, tableName, row) {
@@ -28,17 +31,18 @@ function ownRowObservation(attempt, tableName, row) {
 
 function recordRepairObservation(attempt, kind) {
   attempt.observations |= kind;
-  if ((kind & REPAIR_OBSERVATION.LEADER) !== 0) attempt.delegated = null;
 }
 
+// The drain consumes the queued hints together with whatever a failed read
+// left owed: an event decides now, it is not parked behind a backoff.
 function takeRepairObservations(attempt) {
-  const observations = attempt.observations;
+  const observations = attempt.observations | attempt.owed;
   attempt.observations = REPAIR_OBSERVATION.NONE;
   return observations;
 }
 
 function observationAllowsRetry(observations) {
-  return (observations & (REPAIR_OBSERVATION.CLEARING | REPAIR_OBSERVATION.LEADER)) !== 0;
+  return (observations & (REPAIR_OBSERVATION.CLEARING | REPAIR_OBSERVATION.ROUTE)) !== 0;
 }
 
 export {REPAIR_OBSERVATION, peerObservationMayClear, ownRowObservation,

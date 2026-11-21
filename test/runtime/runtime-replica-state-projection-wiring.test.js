@@ -13,6 +13,7 @@
  * the lifecycle context lacks one.
  */
 
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -254,6 +255,7 @@ test('the replica-operation repository uses exact canonical runtime IDs',
   async (t) => {
     const projectedRows = runtimeServiceIdentityRows();
     const repository = new ReplicaOperationRepository({
+      ...unavailableRetainedRepairPorts(),
       nodeId: 'node-a',
       systemTableCache: {
         filter: (_tableName, predicate) => projectedRows.filter(predicate),

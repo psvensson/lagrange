@@ -2,9 +2,13 @@
 import {isDeepStrictEqual} from 'node:util';
 import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_REFUSAL} from './replica-placement-owner-constants.js';
+import {RETAINED_REPAIR_BINDING as BINDING, RETAINED_REPAIR_BLOCKER as BLOCKER,
+  RETAINED_REPAIR_ENTRY as ENTRY, NO_BLOCKER, entryBody} from './replica-operation-retained-repair-record.js';
 
 const REPAIR_ANSWER_STATE = Object.freeze({KNOWN: 'known', UNKNOWN: 'unknown'});
-const OWNER_FIELDS = Object.freeze(['nodeId', 'replicaId']);
+// A known refusal either names what clears it or is permanent. The table's
+// own convention (a permanent reason maps to no trigger) is read only here.
+const REPAIR_REFUSAL_CLEARING = Object.freeze({CLEARABLE: 'clearable', PERMANENT: 'permanent'});
 const OCCUPANCY_FIELDS = Object.freeze(['sourceOccupancy', 'targetOccupancy']);
 const RESULT_FIELDS = Object.freeze({
   ADMITTED: ['outcome', 'operationIds'],
@@ -48,24 +52,26 @@ function isRepairResult(answer, attempt) {
 }
 
 function isCommittedRepairAnswer(answer, attempt) {
-  if (!answer) return false;
-  return [answer.committed === true, answer.entryId === attempt.entryId,
+  if (!answer || attempt.entry.state !== ENTRY.PINNED) return false;
+  return [answer.committed === true, answer.entryId === attempt.entry.entryId,
     answer.partitionId === LEDGER_PARTITION_ID, answer.failureCode === undefined,
     answer.admitted === undefined,
     positivePosition(answer.logIndex), positivePosition(answer.term),
     isRepairResult(answer, attempt)].every(Boolean);
 }
 
-function custodyMatches(custody, attempt) {
-  if (!custody) return false;
-  const expected = {entryId: attempt.entryId, operationId: attempt.operation.operationId,
-    createdAt: attempt.operation.createdAt, bodyText: JSON.stringify(attempt.body)};
-  const fieldsMatch = Object.keys(expected).every((key) => custody[key] === expected[key]);
-  const ownerPresent = [custody.nodeId, custody.replicaId].every((value) =>
-    typeof value === 'string' && value.length > 0);
-  const ownerMatches = !attempt.expectedOwner || OWNER_FIELDS.every((key) =>
-    custody[key] === attempt.expectedOwner[key]);
-  return fieldsMatch && ownerPresent && ownerMatches;
+// Custody is the receiver's attestation for the exact entry the sender pinned,
+// under the receiver tenure the sender's decision bound: the bound replica and
+// its ledger term at ingress. Its lifetime ends with that tenure.
+function custodyMatches(custody, attempt, binding) {
+  if (!custody || attempt.entry.state !== ENTRY.PINNED || binding.state !== BINDING.REMOTE) {
+    return false;
+  }
+  const expected = {entryId: attempt.entry.entryId, operationId: attempt.operation.operationId,
+    createdAt: attempt.operation.createdAt, bodyText: JSON.stringify(attempt.entry.body),
+    nodeId: binding.nodeId, replicaId: binding.replicaId};
+  return Object.keys(expected).every((key) => custody[key] === expected[key]) &&
+    positivePosition(custody.ledgerTerm);
 }
 
 function validBlocker(blocker) {
@@ -82,7 +88,8 @@ function readBlockers(result) {
   if (!isDeepStrictEqual(result.operationIds, blockers.map((row) => row.operationId))) {
     return UNKNOWN;
   }
-  return {state: REPAIR_ANSWER_STATE.KNOWN, blockers, occupancy: null};
+  return {state: REPAIR_ANSWER_STATE.KNOWN,
+    blocker: Object.freeze({kind: BLOCKER.OPERATIONS, operations: blockers})};
 }
 
 function validOccupancyCounts(occupancy) {
@@ -92,7 +99,7 @@ function validOccupancyCounts(occupancy) {
 
 function readOccupancy(result, attempt) {
   if (!hasResultFields(result, RESULT_FIELDS.CAPACITY)) return UNKNOWN;
-  const statement = attempt.body.copyPolicy.statement;
+  const statement = entryBody(attempt.entry)?.copyPolicy.statement;
   const occupancy = result.occupancy;
   if (!statement || !occupancy) return UNKNOWN;
   const expected = {copySourceNodeId: statement.moves[0].copySourceNodeId,
@@ -103,7 +110,8 @@ function readOccupancy(result, attempt) {
   const reasonMatchesCounts = result.reason === PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY ?
     atSourceLimit : !atSourceLimit && occupancy.targetOccupancy >= occupancy.targetLimit;
   return validOccupancyCounts(occupancy) && reasonMatchesCounts ?
-    {state: REPAIR_ANSWER_STATE.KNOWN, occupancy, blockers: null} : UNKNOWN;
+    {state: REPAIR_ANSWER_STATE.KNOWN,
+      blocker: Object.freeze({kind: BLOCKER.OCCUPANCY, occupancy})} : UNKNOWN;
 }
 
 function readRetainedRepairRefusal(result, attempt) {
@@ -114,11 +122,15 @@ function readRetainedRepairRefusal(result, attempt) {
       !isDeepStrictEqual(result.blockingOperations, []))) return UNKNOWN;
   if (result.reason === PLACEMENT_REFUSAL.CDC_CAPACITY &&
       !hasResultFields(result, RESULT_FIELDS.CDC)) return UNKNOWN;
-  let evidence = {state: REPAIR_ANSWER_STATE.KNOWN, blockers: null, occupancy: null};
+  let evidence = {state: REPAIR_ANSWER_STATE.KNOWN, blocker: NO_BLOCKER};
   if (BLOCKING_REASONS.has(result.reason)) evidence = readBlockers(result);
   else if (CAPACITY_REASONS.has(result.reason)) evidence = readOccupancy(result, attempt);
   if (evidence.state === REPAIR_ANSWER_STATE.UNKNOWN) return evidence;
-  return {...evidence, clearingTrigger: PLACEMENT_CLEARING_TRIGGER[result.reason]};
+  const trigger = PLACEMENT_CLEARING_TRIGGER[result.reason];
+  return {...evidence, clearing: trigger === null ?
+    {state: REPAIR_REFUSAL_CLEARING.PERMANENT} :
+    {state: REPAIR_REFUSAL_CLEARING.CLEARABLE, trigger}};
 }
 
-export {REPAIR_ANSWER_STATE, isCommittedRepairAnswer, custodyMatches, readRetainedRepairRefusal};
+export {REPAIR_ANSWER_STATE, REPAIR_REFUSAL_CLEARING, isCommittedRepairAnswer, custodyMatches,
+  readRetainedRepairRefusal};

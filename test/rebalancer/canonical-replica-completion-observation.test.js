@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,6 +17,7 @@ const SIBLING_REPLICA_ID = 'replica-sibling-99';
 
 function createRepository(overrides = {}) {
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: 'node-1',
     systemTableCache: {
       get() {

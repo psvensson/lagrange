@@ -10,6 +10,8 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {mintServiceRowCreatedAt} from '../../src/node/service-row-incarnation.js';
 import {raiseParticipantCutoverPause} from
   '../../src/partition/partition-participant-transaction-pause.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PLACEMENT_TRIGGER} from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {clearFixtureSingletons, resetFixtureSingletons, resumeFixtureParticipantAdmission,
@@ -41,7 +43,7 @@ function failEvery() {
 function identityOf(repository, operationId) {
   const attempt = repository.retainedPlacementRepairs.get(operationId);
   assert.ok(attempt, 'the obligation is retained');
-  return {entryId: attempt.entryId, bodyText: JSON.stringify(attempt.body),
+  return {entryId: attempt.entry.entryId, bodyText: JSON.stringify(attempt.entry.body),
     operationText: JSON.stringify(attempt.operation)};
 }
 
@@ -62,7 +64,7 @@ async function delegateToPausedLeader(world) {
   const identity = identityOf(sender, retained.operationId);
   assert.ok(identity.entryId, 'the sender pinned one exact entry');
   assert.equal(world.coordinator.repository.retainedPlacementRepairs.get(retained.operationId)
-    ?.entryId, identity.entryId, 'the paused ledger leader holds the exact pinned request');
+    ?.entry.entryId, identity.entryId, 'the paused ledger leader holds the exact pinned request');
   assert.equal(world.commands.length, 0, 'a paused ledger proposes nothing');
   return {retained, remote, sender, clock, identity};
 }
@@ -101,6 +103,8 @@ test('W5 a not-leader disclaim under an unchanged route tuple returns the obliga
       assert.equal(sender.retainedPlacementRepairs.size, 0,
         'the sender-owned continuation confirms the durable row and retires the debt');
       assert.equal(clock.pendingTimerCount(), 0, 'retirement leaves no continuation armed');
+      assert.equal(world.coordinator.repository.retainedPlacementRepairs.size, 0,
+        'the receiver released the custody of its ended tenure: its record map is empty');
     } finally {
       await remote.coordinator.shutdown();
     }
@@ -143,9 +147,10 @@ async function retainBusy(world) {
   const repository = world.coordinator.repository;
   assert.equal(await bounded(repository.repairRetainedOperation(retained), 'BUSY repair'), false);
   const attempt = repository.retainedPlacementRepairs.get(retained.operationId);
-  assert.deepEqual(attempt.blockers.map((blocker) => blocker.operationId), [competitorId]);
+  assert.deepEqual(attempt.blocker.operations.map((blocker) => blocker.operationId),
+    [competitorId]);
   assert.equal(attempt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT);
-  return {retained, competitorId, repository, attempt, blockers: structuredClone(attempt.blockers),
+  return {retained, competitorId, repository, attempt, blockers: structuredClone(attempt.blocker),
     proposals: repairCommands(world).length};
 }
 
@@ -229,7 +234,7 @@ test('W7 an unavailable read on the ingress path leaves the committed blocker tr
       assert.ok(reads.attempted >= 1, 'the ingress decision attempted its own qualified read');
       assert.equal(repairCommands(world).length, proposals);
       assert.equal(repository.retainedPlacementRepairs.get(retained.operationId), attempt);
-      assert.deepEqual(attempt.blockers, blockers, 'the known blockers survive the read failure');
+      assert.deepEqual(attempt.blocker, blockers, 'the known blockers survive the read failure');
       assert.equal(attempt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT,
         'a failed read owes revalidation; it does not rewrite what the committed refusal waits for');
       await releaseAndRecover(world, busy, clock, reads);
@@ -252,9 +257,10 @@ test('W7 an unavailable observation consumed by the sender leaves its blocker tr
     try {
       assert.equal(await bounded(sender.repairRetainedOperation(retained), 'remote BUSY'), false);
       const attempt = sender.retainedPlacementRepairs.get(retained.operationId);
-      assert.deepEqual(attempt.blockers.map((blocker) => blocker.operationId), [competitorId]);
+      assert.deepEqual(attempt.blocker.operations.map((blocker) => blocker.operationId),
+        [competitorId]);
       assert.equal(attempt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT);
-      const blockers = structuredClone(attempt.blockers);
+      const blockers = structuredClone(attempt.blocker);
       const proposals = repairCommands(world).length;
       reads.fault = failEvery;
       await bounded(stepRetainedLedgerRow(world, competitorId, WORKFLOW_STEP.FAILED),
@@ -264,7 +270,7 @@ test('W7 an unavailable observation consumed by the sender leaves its blocker tr
       await idleRepairs(sender, receiver);
       assert.equal(repairCommands(world).length, proposals, 'the outage authorizes no proposal');
       assert.equal(sender.retainedPlacementRepairs.get(retained.operationId), attempt);
-      assert.deepEqual(attempt.blockers, blockers);
+      assert.deepEqual(attempt.blocker, blockers);
       assert.equal(attempt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT,
         'a consumed unavailable observation owes revalidation; the blocker trigger is unchanged');
       reads.fault = () => null;
@@ -298,7 +304,7 @@ test('W7 an unavailable read after the pinned entry resolved leaves the committe
     };
     assert.equal(await bounded(repository.repairRetainedOperation(retained), 'lost BUSY'), false);
     const attempt = repository.retainedPlacementRepairs.get(retained.operationId);
-    assert.ok(attempt.entryId, 'the unknown outcome keeps its entry pinned');
+    assert.ok(attempt.entry.entryId, 'the unknown outcome keeps its entry pinned');
     const proposals = repairCommands(world).length;
     assert.equal(proposals, 1, 'the BUSY refusal actually committed');
     const clock = installVirtualClock(repository);
@@ -309,8 +315,8 @@ test('W7 an unavailable read after the pinned entry resolved leaves the committe
     assert.equal(reads.attempted, 2, 'one read before and one after resolving the pinned entry');
     assert.equal(repairCommands(world).length, proposals, 'the durable refusal replays: no proposal');
     assert.equal(repository.retainedPlacementRepairs.get(retained.operationId), attempt);
-    assert.deepEqual(attempt.blockers.map((blocker) => blocker.operationId), [competitorId],
-      'the replayed committed refusal named its blocker');
+    assert.deepEqual(attempt.blocker.operations.map((blocker) => blocker.operationId),
+      [competitorId], 'the replayed committed refusal named its blocker');
     assert.equal(attempt.clearingTrigger, PLACEMENT_TRIGGER.LEDGER_COMMIT,
       'the failed post-resolution read owes revalidation; the committed trigger is unchanged');
     await releaseAndRecover(world, {retained, competitorId, repository, proposals}, clock, reads);
@@ -467,3 +473,110 @@ for (const [name, corrupt] of invalidAuthorityAnswers) {
       }
     }));
 }
+
+test('Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const repository = world.coordinator.repository;
+    const clock = installVirtualClock(repository);
+    const native = repository.repairRetainedPlacement;
+    let answers = 0;
+    repository.repairRetainedPlacement = async (payload) => {
+      const answer = await native(payload);
+      answers += 1;
+      if (answers === 1) throw new Error('lost answer after the actual native commit');
+      return answer;
+    };
+    assert.equal(await bounded(repository.repairRetainedOperation(retained), 'lost answer'), false);
+    await idleRepairs(repository);
+    assertRestoredOnce(world, retained, 'the committed pinned entry');
+    assert.equal(repairCommands(world).length, 1, 'zero further native proposals');
+    assert.equal(repository.retainedPlacementRepairs.size, 0,
+      'the observed own-entry commit settles the obligation: no clock advance, no other caller');
+    assert.equal(clock.pendingTimerCount(), 0);
+  }));
+
+test('Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const repository = world.coordinator.repository;
+    const clock = installVirtualClock(repository);
+    const native = repository.repairRetainedPlacement;
+    const presented = [];
+    repository.repairRetainedPlacement = async (payload) => {
+      presented.push(payload);
+      if (presented.length > 1) return native(payload);
+      return {success: false, partitionId: world.leader.partitionId,
+        failureCode: WRITE_REFUSAL.BACKPRESSURE};
+    };
+    assert.equal(await bounded(repository.repairRetainedOperation(retained), 'backpressure'), false);
+    await idleRepairs(repository);
+    assert.equal(repairCommands(world).length, 0, 'the refused entry was never admitted');
+    assert.ok(clock.pendingTimerCount() > 0,
+      'an idle ledger commits nothing: the continuation owns the uncommitted entry');
+    await advanceContinuation(clock, [repository],
+      () => repository.retainedPlacementRepairs.size === 0);
+    assertRestoredOnce(world, retained, 'after the backpressure');
+    assert.equal(repairCommands(world).length, 1, 'exactly one committed effect');
+    assert.equal(presented.length, 2);
+    assert.equal(presented[1].entryId, presented[0].entryId, 'the exact entry is re-presented');
+    assert.deepEqual(presented[1].body, presented[0].body);
+    assert.equal(clock.pendingTimerCount(), 0);
+  }));
+
+test('B5 a custodian record released at its tenure end, without a read, cancels its continuation', () =>
+  withRepairLedger(async (world) => {
+    const retained = await retainMissing(world);
+    const receiver = world.coordinator.repository;
+    const clock = installVirtualClock(receiver);
+    const reads = controlOwnerReads(receiver);
+    reads.fault = failEvery;
+    const remote = remoteSender(world);
+    installVirtualClock(remote.repository);
+    try {
+      assert.equal(await bounded(remote.repository.repairRetainedOperation(retained), 'outage'),
+        false);
+      assert.equal(clock.pendingTimerCount(), 1, 'the custodian armed one continuation');
+      const attempted = reads.attempted;
+      world.leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+      await settleTicks();
+      assert.equal(await bounded(remote.repository.ensureRetainedOperationRow(retained),
+        'later caller'), false);
+      assert.equal(receiver.retainedPlacementRepairs.size, 0,
+        'the ended tenure released its ingress-only record without a read');
+      assert.equal(clock.pendingTimerCount(), 0, 'the released record left no continuation armed');
+      clock.advance(600_000);
+      await idleRepairs(receiver, remote.repository);
+      assert.equal(reads.attempted, attempted, 'nothing fires after the release');
+      assert.equal(world.commands.length, 0);
+      assert.ok(remote.repository.retainedPlacementRepairs.get(retained.operationId),
+        'the sender keeps the obligation');
+    } finally {
+      reads.restore();
+      await remote.coordinator.shutdown();
+    }
+  }));
+
+test('Q9 an event storm during an outage reads once in flight plus once owed', () =>
+  withRepairLedger(async (world) => {
+    const {retained, competitorId, repository, proposals} = await retainBusy(world);
+    const clock = installVirtualClock(repository);
+    const reads = controlOwnerReads(repository);
+    reads.fault = () => (answer) => ({...answer, success: false, rowSetComplete: false});
+    const changed = {...ledgerRow(world, competitorId), workflow_step: WORKFLOW_STEP.ACTIVE};
+    const hold = reads.holdNext();
+    repository.observeRetainedPlacementRepairCommit('replica_operations', changed);
+    await bounded(hold.arrived, 'the first event decides at once');
+    for (let count = 0; count < 20; count += 1) {
+      repository.observeRetainedPlacementRepairCommit('replica_operations', changed);
+    }
+    hold.release();
+    await idleRepairs(repository);
+    assert.equal(reads.maxInFlight, 1, 'one decision in flight');
+    assert.equal(reads.attempted, 2,
+      'one read in flight plus one owed reconsideration, not one read per event');
+    assert.equal(repairCommands(world).length, proposals, 'an outage authorizes no proposal');
+    assert.ok(repository.retainedPlacementRepairs.get(retained.operationId));
+    assert.equal(clock.pendingTimerCount(), 1, 'the outage leaves exactly one bounded continuation');
+    reads.restore();
+  }));

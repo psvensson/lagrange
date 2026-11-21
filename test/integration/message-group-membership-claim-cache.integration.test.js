@@ -7,6 +7,7 @@
  * live reconciliation, founder admission, or physical membership acceptance.
  * All earlier founder-token and lease-interleaving failures remain evidence.
  */
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {performance} from 'node:perf_hooks';
@@ -75,7 +76,9 @@ async function exerciseSettlement(t, settlement,
     transitionIdentity: `${id}-transition`, membershipLaneKey: `message-group:${group}`});
   const sourceClaim = JSON.stringify({replicaId: source,
     createdAt: now, stateEnteredAt: now, createAttemptToken: sourceAttempt});
-  const repository = new ReplicaOperationRepository({nodeId: NODE,
+  const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
+    nodeId: NODE,
     membershipOwnerBootIncarnation: bootstrap.bootIncarnation,
     systemTableCache: cache, cdcIntegrationService: cdc,
     controlPlaneSystemTableGateway: gateway, logger: coordinator.logger});

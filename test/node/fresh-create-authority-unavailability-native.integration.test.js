@@ -1,3 +1,4 @@
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {completePartitionConstructionFixture} from '../test-helpers/replica-handler-identity-fixture.js';
 // Item 03 proves committed-admission release through the real loopback route
 // and native partition. Faults affect only the answering leader's authoritative
@@ -467,6 +468,7 @@ test('readable no-origin founding contradiction fails CREATE with a cleanup ' +
   // Read the exact native target generation through the production repository.
   // The fixture models the subsequent coordinator ledger terminal transition.
   const repository = new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: NODE_ID, systemTableCache: run.cache, controlPlaneSystemTableGateway: run.gateway,
     logger: run.handler.logger,
   });

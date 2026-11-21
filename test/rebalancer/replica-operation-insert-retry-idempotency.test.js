@@ -16,6 +16,7 @@
  * stays a hard failure.
  */
 
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -76,6 +77,7 @@ function createRepository({insertResults, authoritativeRows, insertCalls}) {
     }),
   };
   return new ReplicaOperationRepository({
+    ...unavailableRetainedRepairPorts(),
     nodeId: TEST_NODE_ID,
     systemTableCache: {
       get: () => null,
