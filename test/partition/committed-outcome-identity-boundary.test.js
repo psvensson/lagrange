@@ -128,8 +128,9 @@ async function assertExactReplay(owner, leader, proposed, original) {
   assert.deepEqual(owner.stateOf(leader), stateBefore, 'no replay or near miss has an effect');
 }
 
-async function onStore(owner, dbPath, measure) {
-  const {leader, proposed} = await startLeader({...owner.options, dbPath}, owner.partitionId);
+async function onStore(owner, dbPath, measure, extra = {}) {
+  const {leader, proposed} = await startLeader({...owner.options, dbPath, ...extra},
+    owner.partitionId);
   try {
     return await measure(leader, proposed);
   } finally {
@@ -159,8 +160,11 @@ for (const owner of [PLACEMENT, FORMATION]) {
         }
         await assertExactReplay(owner, leader, proposed, original);
       });
+      // The image carries no raft-rs state, so its origin is not yet replicated
+      // here and the participant cutover admission stays closed (paused): the
+      // exact settled replay and the collision are answered before the pause.
       await onStore(owner, imagePath, (leader, proposed) =>
-        assertExactReplay(owner, leader, proposed, original));
+        assertExactReplay(owner, leader, proposed, original), {releaseAdmission: false});
     } finally {
       fs.rmSync(directory, {recursive: true, force: true});
     }
