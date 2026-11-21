@@ -167,6 +167,41 @@ test('S1: membership change x R-1a - decide-first waits STILL_VOTER; ' +
   }
 });
 
+test('a committed removal is recorded once when its repository reply is lost', async (t) => {
+  const world = await openReplaceWorld();
+  try {
+    await driveToIntent(world);
+    world.eventsSuppressed = true;
+    world.group.advance();
+    const {repository} = world.coordinator;
+    const persist = repository.persistOperationUpdate.bind(repository);
+    let lostWrite = false;
+    repository.persistOperationUpdate = async (operation, options) => {
+      const outcome = await persist(operation, options);
+      if (operation.operationId === world.operation.operationId &&
+          outcome.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED &&
+          operation.workflowStep === WORKFLOW_STEP.REMOVED) {
+        lostWrite = true;
+        throw new Error('fixture lost the reply after the real terminal write');
+      }
+      return outcome;
+    };
+    await Promise.allSettled([entry(world)]);
+    repository.persistOperationUpdate = persist;
+    t.ok(lostWrite, 'the actual SQLite write precedes losing its reply');
+    const durable = await repository.queryReplicaOperationPersistenceAuthorityOperation(
+      world.operation);
+    t.equal(durable.workflowStep, WORKFLOW_STEP.REMOVED);
+    const replay = await persist(durable, {terminalTransition: true});
+    t.equal(replay.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY);
+    t.same(world.terminalWrites.map(({step, sourceCommittedVoter}) =>
+      [step, sourceCommittedVoter]), [[WORKFLOW_STEP.REMOVED, false]],
+    'only the SQLite mutation is counted, with the source absent from committed Raft membership');
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
 test('S2: membership change x R-1f - a removal committed by the leader\'s ' +
   'row-driven path while R-1f\'s proposal is lost: no double authority',
 async (t) => {
