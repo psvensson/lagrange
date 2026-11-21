@@ -268,6 +268,9 @@ async function exerciseSplitChildAdmission(t, mode) {
         ['users-p-left', 'users-p-right']);
       t.same(provisionCalls.map(({partitionId}) => partitionId),
         ['users-p-left', 'users-p-right']);
+      t.same(provisionCalls.map(({partitionWorkflowId}) => partitionWorkflowId),
+        [result?.workflowId, result?.workflowId],
+        'the durable split owner names both child provisionings');
       t.same(starts, ['source started']);
     } else {
       t.notOk(result?.success);

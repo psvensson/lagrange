@@ -94,6 +94,9 @@ for (const caseName of ['lost', 'refused', 'malformed', 'invalid', 'refused-lost
         const first = await query();
         const key = `schema_operations:${first.outcome.jobId}`;
         t.equal(messages.length, 1);
+        t.equal(messages[0]?.body.foundingIntentId,
+          `${first.outcome.jobId}:${messages[0]?.body.partitionId}`,
+          'SQL CREATE names its actual durable schema job');
         t.equal(dispatched.length, 0);
         if (['lost', 'malformed', 'refused-lost'].includes(caseName)) {
           const firstRows = ledgerRows(leader);
@@ -334,6 +337,42 @@ for (const caseName of ['same', 'unproved', 'mixed', 'incomplete']) {
           await t.rejects(adoption, {code: 'ALREADY_FOUNDED'});
         }
         t.equal(ledgerRows(leader).length, 3, 'existing founders always block duplicates');
+      } finally {
+        await stop();
+      }
+    }));
+}
+
+for (const caller of ['split', 'merge', 'missing-owner', 'missing-host']) {
+  test(`FOUND uses the durable workflow and hosting owner (${caller})`, (t) =>
+    onLedgerLeader(async (leader, proposed) => {
+      const stop = attachAutoCommitLoop(leader, proposed);
+      try {
+        const {engine} = createServeRefreshFixture(t, createGateway());
+        const coordinator = createCoordinatorWithLedger(leader);
+        engine.rebalanceCoordinator = coordinator;
+        const partitionId = 'workflow-child-p2';
+        const partitionWorkflowId = `${caller}-tbl-users-v2`;
+        if (caller === 'missing-host') coordinator.nodeId = '';
+        const execution = engine.tryProvisionFoundingSetViaPlacementAdmission({
+          partitionId, targetNodeIds: ['serve-a', 'serve-b'],
+          context: caller === 'missing-owner' ? {} : {partitionWorkflowId},
+        });
+        if (caller.startsWith('missing')) {
+          await t.rejects(execution, {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'});
+          t.same(ledgerRows(leader), []);
+        } else {
+          const result = await execution;
+          t.equal(result.provisioned, true);
+          const rows = ledgerRows(leader);
+          t.equal(rows.length, 2);
+          for (const row of rows) {
+            const [created] = JSON.parse(row.steps_history);
+            t.equal(created.placementAdmission.foundingIntentId,
+              `${partitionWorkflowId}:${partitionId}`);
+            t.equal(row.source_node_id, coordinator.nodeId);
+          }
+        }
       } finally {
         await stop();
       }
