@@ -200,6 +200,7 @@ class ReplicaHandler extends EventEmitter {
     this.shutdownPromise = null;
     this.replicaCreateAdmissionRecoveryBarrier = null;
     this.replicaCreateAdmissionRecoveryTask = null;
+    this.retainedCreateBootstrapWake = null;
     this.replicaCreateAdmissionRecoveryRearmOwner =
       new ReplicaCreateAdmissionRecoveryRearmOwner();
     this.hydratedMetadataByPartitionId = new Map();

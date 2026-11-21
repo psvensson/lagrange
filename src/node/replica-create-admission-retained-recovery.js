@@ -22,7 +22,6 @@ const RETAINED_CREATE_BOOTSTRAP_UNRESOLVED = 'RETAINED_CREATE_BOOTSTRAP_UNRESOLV
 const EMPTY_ADMISSION_STEPS_HISTORY = Object.freeze([]);
 const RETAINED_CREATE_BOOTSTRAP_CACHE_REQUIRED =
   'Retained CREATE bootstrap requires a subscribable system cache';
-const retainedBootstrapWakeByHandler = new WeakMap();
 
 function parseAdmissionStepsHistory(row) {
   if (Array.isArray(row?.steps_history)) return row.steps_history;
@@ -105,13 +104,14 @@ function retainedBootstrapPublicationMayClear(table, published, retained) {
 }
 
 function queueRetainedBootstrapWake(handler, state) {
-  if (handler.shuttingDown || state.scheduled) return;
+  if (handler.shuttingDown) return;
+  if (state.scheduled) return;
   state.scheduled = true;
   const afterCurrentRecovery = () => {
     state.scheduled = false;
-    if (!handler.shuttingDown && state.rows.size > 0) {
-      return handler.startReplicaCreateAdmissionRecovery();
-    }
+    if (handler.shuttingDown) return;
+    if (state.rows.size === 0) return;
+    return handler.startReplicaCreateAdmissionRecovery();
   };
   // Publish wakeups as hints to the existing owner. Its recovery task owns the
   // authoritative read, retry and shutdown join after the current scan.
@@ -149,10 +149,10 @@ function subscribeRetainedBootstrapPublications(handler) {
 }
 
 function retainBootstrapWake(handler, row) {
-  let state = retainedBootstrapWakeByHandler.get(handler);
+  let state = handler.retainedCreateBootstrapWake;
   if (!state) {
     state = subscribeRetainedBootstrapPublications(handler);
-    retainedBootstrapWakeByHandler.set(handler, state);
+    handler.retainedCreateBootstrapWake = state;
   }
   const previous = state.rows.get(row.operation_id);
   if (previous?.create_admission_attempt_token === row.create_admission_attempt_token) return;
@@ -173,16 +173,16 @@ function retainBootstrapWake(handler, row) {
 }
 
 function disarmRetainedBootstrapWake(handler, operationId) {
-  const state = retainedBootstrapWakeByHandler.get(handler);
+  const state = handler.retainedCreateBootstrapWake;
   if (!state) return;
   state.rows.delete(operationId);
   if (state.rows.size === 0) stopRetainedBootstrapWake(handler);
 }
 
 function stopRetainedBootstrapWake(handler) {
-  const state = retainedBootstrapWakeByHandler.get(handler);
+  const state = handler.retainedCreateBootstrapWake;
   if (!state) return;
-  retainedBootstrapWakeByHandler.delete(handler);
+  handler.retainedCreateBootstrapWake = null;
   state.unsubscribe();
   state.rows.clear();
 }
