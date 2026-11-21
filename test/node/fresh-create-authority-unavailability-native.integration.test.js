@@ -220,7 +220,7 @@ async function runCreate(t, {label, refusals = 0, holdRead = false, notGenesis =
   handler.registerWithRouter(transport);
   const created = [];
   const failed = [];
-  const onCreated = (event) => created.push(event);
+  const onCreated = (event) => created.push({...event, observedAtMs: Date.now()});
   const onFailed = (event) => failed.push(event);
   handler.on('replicaCreated', onCreated);
   handler.on('replicaCreationFailed', onFailed);
@@ -241,7 +241,6 @@ async function runCreate(t, {label, refusals = 0, holdRead = false, notGenesis =
   const workflowUpdatedAt = operationRow.updated_at;
   const admissionToken = buildReplicaCreateAdmissionToken({operationId, replicaId,
     targetNodeId: NODE_ID, workflowUpdatedAt});
-  const startedAt = Date.now();
   const response = await handler.handleCreateReplica(withBootstrapStamp({
     [ReplicaOperationField.OPERATION_ID]: operationId,
     [ReplicaOperationField.OPERATION_TYPE]: OperationType.ADD,
@@ -266,9 +265,12 @@ async function runCreate(t, {label, refusals = 0, holdRead = false, notGenesis =
   }, (error) => {
     original.error = error;
   });
-  return {created, failed, startedAt, fault, handler, operationId, replicaId, operationRow,
-    admissionToken, opened, releases, original, restoreAuthority: () => held?.resolve(),
-    store: lifecycle.store};
+  return {created, failed, fault, handler, operationId, replicaId, operationRow,
+    admissionToken, opened, releases, original, store: lifecycle.store,
+    restoreAuthority() {
+      fault.remaining = 0;
+      held?.resolve();
+    }};
 }
 
 async function observe(predicate, description, timeoutMs = OBSERVATION_TIMEOUT_MS) {
@@ -296,28 +298,105 @@ function assertRetainedIdentity(run, row) {
   'unavailable authority neither fails nor removes the service');
 }
 
+function isAuthorityDeferral({answer}) {
+  return answer?.outcome === RELEASE_OUTCOME.UNAVAILABLE &&
+    answer.missingFact === PARTICIPANT_RELEASE_MISSING_FACT.CREATE_ADMISSION_AUTHORITY;
+}
+
+async function observeOriginalReturn(run, description) {
+  await observe(() => run.original.settledAtMs !== null || run.original.error, description);
+  assert.ifError(run.original.error);
+  return run.original.settledAtMs;
+}
+
+function assertSyncingCreate(run) {
+  assert.equal(run.created.length, 0);
+  const syncing = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.equal(syncing?.status, ReplicaStatus.SYNCING);
+  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
+  assertRetainedIdentity(run, syncing);
+  return syncing;
+}
+
+async function restoreAndObserveActive(run, originalRequest, syncing) {
+  const restoredAtMs = Date.now();
+  assert.ok(restoredAtMs >= originalRequest.deadlineAtMs,
+    'the original deadline passed before authority was restored');
+  run.restoreAuthority();
+  await observe(() => run.created.length || run.failed.length, 'normal admission recovery settled');
+  assert.equal(run.created.length, 1, run.failed[0]?.error);
+  assert.equal(run.created[0].operationId, run.operationId);
+  assert.equal(run.created[0].replicaId, run.replicaId);
+  const released = run.releases.find(({answer}) => answer?.outcome === RELEASE_OUTCOME.CUT_OVER);
+  assert.ok(released, 'the real release owner completed cutover');
+  assert.ok(released.sentAtMs >= restoredAtMs &&
+    released.request.deadlineAtMs > originalRequest.deadlineAtMs,
+  'a separate recovery turn released after authority returned');
+  assert.deepEqual(released.request.createAdmissionIdentity,
+    originalRequest.createAdmissionIdentity);
+  assert.notEqual(readPartitionWriteOrigin(run.opened[0].db), null,
+    'the native origin was committed');
+  const active = run.store.durableRow(TABLES.SERVICES, run.replicaId);
+  assert.equal(active?.status, ReplicaStatus.ACTIVE);
+  assert.equal(active.created_at, syncing.created_at);
+  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
+  assertRetainedIdentity(run, active);
+}
+
 test('an authority read unavailable N times delays the fresh create, which ' +
   'completes within the existing deadline (real create path, real port)',
 {timeout: TEST_TIMEOUT_MS}, async (t) => {
   environment(t);
   const run = await runCreate(t, {label: 'recovering', refusals: 3});
-  await observe(() => run.created.length || run.failed.length, 'finite CREATE settled');
+  const settledAtMs = await observeOriginalReturn(run, 'the original finite CREATE worker returned');
   assert.equal(run.fault.refused, 3, 'the authority refused the release read 3 times');
-  const refusals = run.releases.filter(({answer}) =>
-    answer?.outcome === RELEASE_OUTCOME.UNAVAILABLE &&
-    answer.missingFact === PARTICIPANT_RELEASE_MISSING_FACT.CREATE_ADMISSION_AUTHORITY);
+  const refusals = run.releases.filter(isAuthorityDeferral);
   assert.equal(refusals.length, 3, 'the real route returned typed authority deferral');
   assert.equal(run.failed.length, 0, run.failed[0]?.error);
-  assert.equal(run.created[0]?.operationId, run.operationId);
+  assert.equal(run.created.length, 1, 'the original worker published the terminal event');
+  const [created] = run.created;
+  assert.equal(created.operationId, run.operationId);
   const released = run.releases.find(({answer}) => answer?.outcome === RELEASE_OUTCOME.CUT_OVER);
   assert.ok(released, 'the real release route completed cutover');
   assert.equal(released.request.deadlineAtMs, run.original.deadlineAtMs);
-  assert.ok(released.answeredAtMs <= run.original.deadlineAtMs);
-  const elapsedMs = Date.now() - run.startedAt;
-  assert.ok(elapsedMs < SYNC_TIMEOUT_MS + 1000,
-    `within the existing create deadline (${elapsedMs} ms)`);
+  assert.ok(released.answeredAtMs <= created.observedAtMs &&
+    created.observedAtMs <= settledAtMs && settledAtMs <= run.original.deadlineAtMs,
+  `release replied at ${released.answeredAtMs}, ACTIVE at ${created.observedAtMs}, ` +
+    `CREATE worker returned at ${settledAtMs}, original deadline ${run.original.deadlineAtMs}`);
   const row = run.store.durableRow(TABLES.SERVICES, run.replicaId);
   assert.equal(row?.status, ReplicaStatus.ACTIVE, 'the replica is ACTIVE');
+});
+
+test('prompt release refusals exhaust the original CREATE retry window and recovery ' +
+  'activates the exact retained service after authority returns',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  environment(t);
+  const run = await runCreate(t, {label: 'refused-through-deadline', refusals: Infinity});
+  const settledAtMs = await observeOriginalReturn(run, 'the original deferral-only worker returned');
+  const {deadlineAtMs} = run.original;
+  const attempts = run.releases.filter(({request}) => request.deadlineAtMs === deadlineAtMs);
+  assert.ok(attempts.length > 1, 'the original caller retried the release');
+  assert.equal(run.fault.refused, attempts.length);
+  for (const attempt of attempts) {
+    assert.ok(isAuthorityDeferral(attempt), 'every original request returned typed UNAVAILABLE');
+    assert.equal(attempt.origin, null, 'authority refusal did not permit cutover');
+    assert.ok(attempt.answeredAtMs >= attempt.sentAtMs && attempt.answeredAtMs <= deadlineAtMs,
+      'each routed reply returned inside the original deadline');
+  }
+  const last = attempts.at(-1);
+  assert.ok(last.answer.retryAfterMs > 0);
+  const nextRetryAtMs = last.answeredAtMs + last.answer.retryAfterMs;
+  // A scheduled final retry can also wake at the deadline. In that case no
+  // request reaches the route, and the worker returns at or after the deadline.
+  assert.ok(nextRetryAtMs >= deadlineAtMs || settledAtMs >= deadlineAtMs,
+    `last routed reply at ${last.answeredAtMs}; retry due ${nextRetryAtMs}; ` +
+    `worker returned at ${settledAtMs}; original deadline ${deadlineAtMs}`);
+  assert.ok(settledAtMs >= last.answeredAtMs && settledAtMs < deadlineAtMs + OBSERVATION_GRACE_MS,
+    'the worker returned with all original release replies resolved');
+  await observe(() => Date.now() > deadlineAtMs, 'authority remained unavailable through deadline');
+  const syncing = assertSyncingCreate(run);
+
+  await restoreAndObserveActive(run, last.request, syncing);
 });
 
 test('a held release read expires the original CREATE wait and recovery activates ' +
@@ -330,39 +409,18 @@ test('a held release read expires the original CREATE wait and recovery activate
   assert.equal(request.deadlineAtMs, run.original.deadlineAtMs);
   assert.equal(origin, null, 'the founder has no write origin when release starts');
   assert.equal(heldOperation.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
-  await observe(() => run.original.settledAtMs !== null || run.original.error,
+  const settledAtMs = await observeOriginalReturn(run,
     'original detached CREATE returned with its read still held');
-  assert.ifError(run.original.error);
-  assert.ok(run.original.settledAtMs >= request.deadlineAtMs &&
-    run.original.settledAtMs < request.deadlineAtMs + OBSERVATION_GRACE_MS,
-  `original work settled at ${run.original.settledAtMs} for deadline ${request.deadlineAtMs}`);
+  assert.ok(settledAtMs >= request.deadlineAtMs &&
+    settledAtMs < request.deadlineAtMs + OBSERVATION_GRACE_MS,
+  `original work settled at ${settledAtMs} for deadline ${request.deadlineAtMs}`);
   assert.equal(run.fault.held.answer, undefined, 'original release has no reply yet');
-  assert.equal(run.created.length, 0);
-  const syncing = run.store.durableRow(TABLES.SERVICES, run.replicaId);
-  assert.equal(syncing?.status, ReplicaStatus.SYNCING);
-  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
-  assertRetainedIdentity(run, syncing);
+  const syncing = assertSyncingCreate(run);
 
-  run.restoreAuthority();
-  await observe(() => run.created.length || run.failed.length, 'normal admission recovery settled');
-  assert.equal(run.created.length, 1);
-  assert.equal(run.created[0].operationId, run.operationId);
-  assert.equal(run.created[0].replicaId, run.replicaId);
-  const released = run.releases.find(({answer}) => answer?.outcome === RELEASE_OUTCOME.CUT_OVER);
-  assert.ok(released, 'the real release owner completed cutover');
-  assert.ok(released.sentAtMs >= request.deadlineAtMs &&
-    released.request.deadlineAtMs > request.deadlineAtMs, 'a separate recovery turn released');
-  assert.deepEqual(released.request.createAdmissionIdentity, request.createAdmissionIdentity);
+  await restoreAndObserveActive(run, request, syncing);
   assert.equal(run.fault.held.answer?.outcome, RELEASE_OUTCOME.UNAVAILABLE);
   assert.equal(run.fault.held.answer.missingFact,
     PARTICIPANT_RELEASE_MISSING_FACT.RELEASE_DEADLINE);
-  assert.notEqual(readPartitionWriteOrigin(run.opened[0].db), null,
-    'the native origin was committed');
-  const active = run.store.durableRow(TABLES.SERVICES, run.replicaId);
-  assert.equal(active?.status, ReplicaStatus.ACTIVE);
-  assert.equal(active.created_at, syncing.created_at);
-  assert.equal(run.operationRow.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
-  assertRetainedIdentity(run, active);
 });
 
 test('readable no-origin founding contradiction fails CREATE with a cleanup ' +
@@ -390,10 +448,9 @@ test('readable no-origin founding contradiction fails CREATE with a cleanup ' +
   assert.equal(row?.status, ReplicaStatus.FAILED, 'the replica is FAILED');
   assert.equal(row?.cleanup_token, buildFailedCreateCleanupToken(run.operationId),
     'no FAILED row with cleanup_token null after admission input existed');
-  // The operation owner's admission of that FAILED and its cleanup decision
-  // (real admitCreateTerminalFailure / decideFailedCreateTargetCleanup) over
-  // the observation of the resulting durable row: ELIGIBLE with the recorded
-  // lifecycle precondition (verifier N2).
+  // Feed the native target's durable FAILED row to the real cleanup decision
+  // functions with fixture coordinator operation state, then send their exact
+  // precondition through the target's real REMOVE handler.
   const observation = {state: 'observed', lifecycleStatus: row.status,
     lifecyclePrecondition: Object.fromEntries(Object.entries(row))};
   const owner = {repository: {getActualReplicaObservation: async () => observation}};
