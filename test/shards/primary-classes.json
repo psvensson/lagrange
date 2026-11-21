@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2372,
+    "unit": 2373,
     "integration": 126,
     "bootstrap": 229,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2734,
-  "digest": "fnv1a32-97f209b5",
+  "censusSize": 2735,
+  "digest": "fnv1a32-bb2442c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1632,6 +1632,7 @@
     "test/query/locking-read-canonical-ast.test.js": "unit",
     "test/query/locking-read-execution-lifecycle.test.js": "unit",
     "test/query/lookup-primitive.test.js": "unit",
+    "test/query/named-write-cdc-sticky-unknown.test.js": "unit",
     "test/query/named-write-real-producer-applied.test.js": "unit",
     "test/query/named-write-real-producer-definite.test.js": "unit",
     "test/query/nested-call-classifier.test.js": "unit",
