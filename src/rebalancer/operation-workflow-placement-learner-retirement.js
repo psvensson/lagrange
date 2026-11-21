@@ -61,6 +61,7 @@ async function settleSupersededRemoval(owner, operation, reason) {
 }
 
 async function readSupersededDispatchReplay(owner, operation) {
+  if (scopedOperationAdmission(operation) === NO_PLACEMENT_ADMISSION) return null;
   const durable = await owner.repository.queryAuthoritativeOperationById(operation.operationId, {
     authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
@@ -299,7 +300,7 @@ function isScopedPlacementLearnerRetirement(operation) {
 export {
   completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
   isScopedPlacementLearnerRetirement,
-  isUnscopedPlacementRemoval, reconcileUnscopedPlacementRemoval,
+  isUnscopedPlacementRemoval, readSupersededDispatchReplay, reconcileUnscopedPlacementRemoval,
   recoverCompletedLearnerRetirementCleanup, settleSupersededRemoval,
   releaseCompletedLearnerRetirementCleanup,
 };

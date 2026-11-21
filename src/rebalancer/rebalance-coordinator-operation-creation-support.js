@@ -412,9 +412,10 @@ const operationCreationSupportMethods = {
     if (retained?.entryId === answer.entryId) retained.admittedAnswer = answer;
     const [operationId] = answer[PLACEMENT_RESULT_FIELD].operationIds;
     const operation = await confirmOperation(operationId, retained, answer.entryId);
-    const terminal = requireCreationReplayOutcome(operation);
-    if (attempts.get(key)?.entryId === answer.entryId) attempts.delete(key);
-    return {...answer, operation, terminal};
+    if (retained?.entryId === answer.entryId && attempts.get(key) === retained) {
+      attempts.delete(key);
+    }
+    return {...answer, operation, terminal: requireCreationReplayOutcome(operation)};
   },
 
   async admitPlacementStatement({

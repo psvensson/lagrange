@@ -1,6 +1,7 @@
 import {assertDurableRejoinStorageAdmission} from
   '../../../src/bootstrap/durable-rejoin-storage-admission.js';
 import assert from 'node:assert/strict';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -817,6 +818,16 @@ async function waitForHeldRequest(entered) {
   }
 }
 
+function trackNativeDispatchCompletions(owner, deliveryContext) {
+  const execute = owner.executeOperationInternal.bind(owner);
+  owner.executeOperationInternal = (...args) => {
+    const completion = Promise.withResolvers();
+    const pending = deliveryContext.run(completion.promise, () => execute(...args));
+    pending.then(completion.resolve, (error) => completion.resolve({error}));
+    return pending;
+  };
+}
+
 for (const change of ['boot', 'service birth', 'missing service', 'older service',
   'foreign host', 'ordinary lifecycle version']) {
   test(`a held native proposal cannot overtake a committed newer ${change}`,
@@ -832,18 +843,22 @@ for (const change of ['boot', 'service birth', 'missing service', 'older service
       const resume = Promise.withResolvers();
       const deliveries = [];
       let held = false;
+      const deliveryContext = new AsyncLocalStorage();
       const coordinator = openDispatchOwner({source, rows, removal, nodes, cluster,
         deliveries, leader, clock, async beforeDelivery(payload) {
           if (!held && payload.type === ReplicaOperationMessageType.REMOVE_LEARNER &&
               payload.learnerRetirement.canPropose) {
             held = true;
-            entered.resolve(payload);
+            const completion = deliveryContext.getStore();
+            assert.ok(completion, 'capture the executing owner at the held transport delivery');
+            entered.resolve({payload, completion});
             await resume.promise;
           }
         }});
+      trackNativeDispatchCompletions(coordinator.workflowOwner, deliveryContext);
       const run = coordinator.dispatchOperation(removal);
       try {
-        const captured = await waitForHeldRequest(entered);
+        const {payload: captured, completion} = await waitForHeldRequest(entered);
         assert.equal(captured.operationId, removal.operation_id);
         assert.equal(captured.learnerRetirement.replicaCreatedAt, target.created_at);
         if (change === 'boot') {
@@ -875,14 +890,17 @@ for (const change of ['boot', 'service birth', 'missing service', 'older service
           assert.equal(observed.state, LEARNER_LIFECYCLE_CUSTODY.CHANGED);
         }
         resume.resolve();
-        const result = await run;
+        const result = await completion;
+        const starterResult = await run;
         const current = await coordinator.getOperation(removal.operation_id);
-        t.diagnostic(JSON.stringify({change, result, deliveries, step: current.workflowStep,
+        t.diagnostic(JSON.stringify({change, result, starterResult, deliveries,
+          step: current.workflowStep,
           birth: authorityRow?.created_at, reason: authorityRow?.trigger_reason,
           version: authorityRow?.state_entered_at, serviceType: authorityRow?.service_type}));
         if (change === 'boot' || change === 'service birth') {
           assert.equal(result.terminal, true);
           assert.equal(current.workflowStep, WORKFLOW_STEP.SUPERSEDED);
+          assert.deepEqual(await coordinator.dispatchOperation(removal.operation_id), result);
         } else {
           assert.equal(current.completedAt, null);
           assert.equal(current.workflowStep, WORKFLOW_STEP.SENDING);

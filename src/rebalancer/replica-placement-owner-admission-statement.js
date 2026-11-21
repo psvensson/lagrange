@@ -445,7 +445,8 @@ function buildRuntimeServiceAdmissionStatement(input) {
 
 function matchesCommittedSinglePlacementStatement(operation, requested, admitted) {
   const [move] = requested.moves;
-  const operationAdmission = operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
+  const operationAdmission =
+    operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
   const replicaId = move.replicaId ?? placementReplicaIdOf(operation.operationId);
   const claimKey =
     requested.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
