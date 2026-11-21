@@ -1,3 +1,5 @@
+import {hasSystemCacheChangeReader} from '../cache/system-cache-client.js';
+import {memoizedParseStepsHistoryString} from '../rebalancer/steps-history-parse-memo.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {CDC_OPERATION, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {
@@ -13,10 +15,13 @@ import {
 import {
   OPERATION_METADATA_KEY, ReplicaStatus,
   getOperationMetadataObject, getOperationMetadataStringArray,
+  readOriginalCreateBootstrapMembership,
 } from '../rebalancer/replica-status.js';
 
 const RETAINED_CREATE_BOOTSTRAP_UNRESOLVED = 'RETAINED_CREATE_BOOTSTRAP_UNRESOLVED';
 const EMPTY_ADMISSION_STEPS_HISTORY = Object.freeze([]);
+const RETAINED_CREATE_BOOTSTRAP_CACHE_REQUIRED =
+  'Retained CREATE bootstrap requires a subscribable system cache';
 const retainedBootstrapWakeByHandler = new WeakMap();
 
 function parseAdmissionStepsHistory(row) {
@@ -24,19 +29,13 @@ function parseAdmissionStepsHistory(row) {
   if (typeof row?.steps_history !== 'string') {
     return EMPTY_ADMISSION_STEPS_HISTORY;
   }
-  try {
-    const parsed = JSON.parse(row.steps_history);
-    return Array.isArray(parsed) ? parsed : EMPTY_ADMISSION_STEPS_HISTORY;
-  } catch (_error) {
-    return EMPTY_ADMISSION_STEPS_HISTORY;
-  }
+  return memoizedParseStepsHistoryString(row.steps_history);
 }
 
 function originalBootstrapFromHistory(stepsHistory) {
-  const bootstrap = getOperationMetadataObject(
-    stepsHistory, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
-  );
-  return validateBootstrapMembershipStamp(bootstrap).valid ? bootstrap : null;
+  const bootstrap = readOriginalCreateBootstrapMembership(stepsHistory);
+  const validation = validateBootstrapMembershipStamp(bootstrap);
+  return validation.valid ? validation.stamp : null;
 }
 
 function buildRetainedCreateRequest(row, evidence) {
@@ -123,22 +122,36 @@ function queueRetainedBootstrapWake(handler, state) {
     });
 }
 
-function retainBootstrapWake(handler, row) {
+function retainedBootstrapPublicationAlreadyVisible(readProjected, row) {
+  const operation = readProjected(TABLES.REPLICA_OPERATIONS, row.operation_id);
+  const service = readProjected(TABLES.SERVICES, row.replica_id);
+  return retainedBootstrapPublicationMayClear(TABLES.REPLICA_OPERATIONS, operation, row) ||
+    retainedBootstrapPublicationMayClear(TABLES.SERVICES, service, row);
+}
+
+function onOriginalBootstrapPublication(handler, state, table, change, published) {
+  if (change === CDC_OPERATION.DELETE ||
+      (table !== TABLES.REPLICA_OPERATIONS && table !== TABLES.SERVICES)) return;
+  if ([...state.rows.values()].some((retained) =>
+    retainedBootstrapPublicationMayClear(table, published, retained))) {
+    queueRetainedBootstrapWake(handler, state);
+  }
+}
+
+function subscribeRetainedBootstrapPublications(handler) {
   const cache = handler.systemTableCache;
-  if (typeof cache?.onCacheChange !== 'function' ||
-      typeof cache.offCacheChange !== 'function') return;
+  const state = {rows: new Map(), scheduled: false, readProjected: cache.get.bind(cache)};
+  const listener = (table, change, row) =>
+    onOriginalBootstrapPublication(handler, state, table, change, row);
+  cache.onCacheChange(listener);
+  state.unsubscribe = () => cache.offCacheChange(listener);
+  return state;
+}
+
+function retainBootstrapWake(handler, row) {
   let state = retainedBootstrapWakeByHandler.get(handler);
   if (!state) {
-    state = {rows: new Map(), scheduled: false};
-    state.listener = (table, operation, published) => {
-      if (operation === CDC_OPERATION.DELETE ||
-          (table !== TABLES.REPLICA_OPERATIONS && table !== TABLES.SERVICES)) return;
-      if ([...state.rows.values()].some((retained) =>
-        retainedBootstrapPublicationMayClear(table, published, retained))) {
-        queueRetainedBootstrapWake(handler, state);
-      }
-    };
-    cache.onCacheChange(state.listener);
+    state = subscribeRetainedBootstrapPublications(handler);
     retainedBootstrapWakeByHandler.set(handler, state);
   }
   const previous = state.rows.get(row.operation_id);
@@ -154,10 +167,7 @@ function retainBootstrapWake(handler, row) {
   });
   // A publication that raced the initial authoritative scan is already
   // projected. Check that level once on parking, never on a repeated miss.
-  if ([TABLES.REPLICA_OPERATIONS, TABLES.SERVICES].some((table) =>
-    retainedBootstrapPublicationMayClear(table,
-      cache.get(table, table === TABLES.REPLICA_OPERATIONS ? row.operation_id : row.replica_id),
-      row))) {
+  if (retainedBootstrapPublicationAlreadyVisible(state.readProjected, row)) {
     queueRetainedBootstrapWake(handler, state);
   }
 }
@@ -173,7 +183,7 @@ function stopRetainedBootstrapWake(handler) {
   const state = retainedBootstrapWakeByHandler.get(handler);
   if (!state) return;
   retainedBootstrapWakeByHandler.delete(handler);
-  handler.systemTableCache.offCacheChange(state.listener);
+  state.unsubscribe();
   state.rows.clear();
 }
 
@@ -441,6 +451,15 @@ async function recoverRetainedCreateAdmissionRow(
   });
 }
 
+function parkUnresolvedBootstrap(handler, row, error, onFailure) {
+  if (!hasSystemCacheChangeReader(handler.systemTableCache)) {
+    onFailure?.(row, new Error(RETAINED_CREATE_BOOTSTRAP_CACHE_REQUIRED, {cause: error}));
+    return;
+  }
+  retainBootstrapWake(handler, row);
+  onFailure?.(row, error);
+}
+
 async function recoverRetainedCreateAdmissionRows(
   handler,
   owner,
@@ -481,8 +500,7 @@ async function recoverRetainedCreateAdmissionRows(
         continue;
       }
       if (error?.code === RETAINED_CREATE_BOOTSTRAP_UNRESOLVED) {
-        retainBootstrapWake(handler, row);
-        onFailure?.(row, error);
+        parkUnresolvedBootstrap(handler, row, error, onFailure);
         continue;
       }
       if (

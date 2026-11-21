@@ -6,6 +6,7 @@
 
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert';
+import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../../src/bootstrap/shared/replica-handler-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
 import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
@@ -36,10 +37,7 @@ describe('ReplicaHandlerSetup', () => {
     };
 
     // Create mock system table cache
-    mockSystemTableCache = {
-      get: () => null,
-      filter: () => [],
-    };
+    mockSystemTableCache = new SystemTableCache();
 
     // Create mock partition service factory
     mockCreatePartitionService = async () => ({
@@ -138,7 +136,8 @@ describe('ReplicaHandlerSetup', () => {
           messageRouter: mockMessageRouter,
           cdcIntegrationService: mockCdcIntegrationService,
           systemTableCache: {
-            ...mockSystemTableCache,
+            get: mockSystemTableCache.get.bind(mockSystemTableCache),
+            filter: mockSystemTableCache.filter.bind(mockSystemTableCache),
             onCacheChange() {
               subscriptions += 1;
             },

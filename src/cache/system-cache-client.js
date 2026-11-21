@@ -18,6 +18,11 @@ const SYSTEM_CACHE_CLIENT_ERROR_MSG = Object.freeze({
   UNSUPPORTED_MODE: (mode) => `Unsupported system cache client mode: ${mode}`,
 });
 
+function hasSystemCacheChangeReader(cache) {
+  return typeof cache?.get === 'function' &&
+    typeof cache.onCacheChange === 'function' && typeof cache.offCacheChange === 'function';
+}
+
 function assertCacheBacking(backing) {
   if (!backing) {
     throw new Error(SYSTEM_CACHE_CLIENT_ERROR_MSG.CACHE_REQUIRED);
@@ -97,6 +102,7 @@ function createSystemCacheClient(options = {}) {
 export {
   SYSTEM_CACHE_CLIENT_MODE,
   SYSTEM_CACHE_CLIENT_ERROR_MSG,
+  hasSystemCacheChangeReader,
   createDirectSystemCacheClient,
   createProxySystemCacheClient,
   createSystemCacheClient,

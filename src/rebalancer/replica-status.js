@@ -70,6 +70,17 @@ function getOperationMetadataValue(stepsHistory, metadataKey) {
   return null;
 }
 
+// Bootstrap membership belongs to the operation's original history record.
+function readOriginalCreateBootstrapMembership(rawHistory) {
+  const history = typeof rawHistory === LOCAL_STR_STRING ?
+    memoizedParseStepsHistoryString(rawHistory) : rawHistory;
+  if (!Array.isArray(history)) return null;
+  const original = history[0];
+  if (!original || typeof original !== LOCAL_STR_OBJECT || Array.isArray(original)) return null;
+  return Object.getOwnPropertyDescriptor(original, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP)
+    ?.value ?? null;
+}
+
 function getOperationMetadataString(stepsHistory, metadataKey) {
   const value = getOperationMetadataValue(stepsHistory, metadataKey);
   return typeof value === LOCAL_STR_STRING && value.length > 0 ? value : null;
@@ -492,6 +503,7 @@ export {
   getAllStatusValues,
   isValidStatus,
   getOperationMetadataValue,
+  readOriginalCreateBootstrapMembership,
   getOperationMetadataString,
   getOperationMetadataStringArray,
   getOperationMetadataObject,

@@ -4,6 +4,7 @@ import {
   readOperationRecordWorkflowStep,
 } from './replica-operation-progress.js';
 import {
+  readOriginalCreateBootstrapMembership,
   readOperationTargetNodeBootIncarnation,
   readOperationTargetNodeStorageIncarnation,
 } from './replica-status.js';
@@ -16,6 +17,7 @@ import {
 } from './replica-operation-membership-epoch-binding.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const OBJECT_TYPE = 'object';
 const DURABLE_ROW_EPOCH_BINDING_SOURCE = 'replica_operations row';
 
 // Sanctioned local-only-truth seed literal for the priority control-plane
@@ -243,11 +245,9 @@ function assignReplicaOperationRepositoryRowMethods(
       if (bootstrapPartitionMetadata) {
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] = bootstrapPartitionMetadata;
       }
-      const bootstrapMembership = getOperationMetadataObject(
-        stepsHistory,
-        OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
-      );
-      if (bootstrapMembership) {
+      const bootstrapMembership = readOriginalCreateBootstrapMembership(stepsHistory);
+      if (bootstrapMembership && typeof bootstrapMembership === OBJECT_TYPE &&
+          !Array.isArray(bootstrapMembership)) {
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
       }
       const targetNodeBootIncarnation = readOperationTargetNodeBootIncarnation(

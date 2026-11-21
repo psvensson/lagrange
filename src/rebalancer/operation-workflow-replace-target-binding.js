@@ -18,7 +18,15 @@ import {ReplicaOperationField} from './replica-operation-constants.js';
 import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {OPERATION_METADATA_KEY} from './replica-operation-progress.js';
 import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
-import {getOperationMetadataValue, OperationType} from './replica-status.js';
+import {readOriginalCreateBootstrapMembership, OperationType} from './replica-status.js';
+
+const BOOTSTRAP_BINDING_DEFERRED = Object.freeze({
+  ROW_UNAVAILABLE: 'Placement CREATE bootstrap row is unavailable',
+  ADMISSION_UNOBSERVED: 'Placement CREATE admission is not yet observable',
+  MISSING_ORIGINAL: 'Original placement CREATE bootstrap topology is unresolved',
+  UNCONFIRMED: 'Placement CREATE bootstrap binding was not confirmed',
+  CAS_UNCOMMITTED: 'Placement CREATE bootstrap compare-and-set did not commit',
+});
 
 function needsReplaceCreateTargetBinding(
   operation,
@@ -91,7 +99,7 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
   );
   if (observation.deferredOutcome) {
     return deferPlacementBootstrapBinding(owner, operation,
-      'Placement CREATE bootstrap row is unavailable', observation.deferredOutcome);
+      BOOTSTRAP_BINDING_DEFERRED.ROW_UNAVAILABLE, observation.deferredOutcome);
   }
   const current = observation.operation;
   if (!current || current.completedAt !== null) return null;
@@ -106,11 +114,9 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
 
   if (operation.createAdmissionState != null && current.createAdmissionState == null) {
     return deferPlacementBootstrapBinding(owner, operation,
-      'Placement CREATE admission is not yet observable');
+      BOOTSTRAP_BINDING_DEFERRED.ADMISSION_UNOBSERVED);
   }
-  const recordedStamp = getOperationMetadataValue(
-    current.stepsHistory, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
-  );
+  const recordedStamp = readOriginalCreateBootstrapMembership(current.stepsHistory);
   if (committedStampOfAnswer(recordedStamp) !== null) return current;
   // Once CREATE has been admitted, an absent stamp cannot be reconstructed
   // from a newer view of Raft membership. Retain that operation as unresolved.
@@ -118,7 +124,7 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
       (current.workflowStep !== WORKFLOW_STEP.PENDING &&
         current.workflowStep !== WORKFLOW_STEP.SENDING)) {
     return deferPlacementBootstrapBinding(owner, operation,
-      'Original placement CREATE bootstrap topology is unresolved');
+      BOOTSTRAP_BINDING_DEFERRED.MISSING_ORIGINAL);
   }
 
   try {
@@ -142,10 +148,10 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
     if (outcome.committed) return outcome.operation;
   } catch (error) {
     return deferPlacementBootstrapBinding(owner, operation,
-      'Placement CREATE bootstrap binding was not confirmed', error);
+      BOOTSTRAP_BINDING_DEFERRED.UNCONFIRMED, error);
   }
   return deferPlacementBootstrapBinding(owner, operation,
-    'Placement CREATE bootstrap compare-and-set did not commit');
+    BOOTSTRAP_BINDING_DEFERRED.CAS_UNCOMMITTED);
 }
 
 /**
