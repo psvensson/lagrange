@@ -8,6 +8,7 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_MUTATION_OPERATION,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
@@ -24,7 +25,6 @@ const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const TEST_SERVICES_TABLE = 'services';
 const TEST_CACHE_OPERATION_UPSERT = 'UPSERT';
-const TEST_UPDATE_OPERATION_SQL_PREFIX = 'UPDATE replica_operations SET';
 const TEST_SELECT_SERVICE_ID_FRAGMENT = 'WHERE service_id = ?';
 const TEST_SELECT_PARTITION_NODE_FRAGMENT =
   'WHERE partition_id = ? AND node_id = ?';
@@ -39,15 +39,6 @@ const TEST_INITIAL_TIMER_ID = 1;
 const TEST_NO_AFFECTED_ROWS = 0;
 const TEST_ONE_AFFECTED_ROW = 1;
 const TEST_FIRST_TIMER_INDEX = 0;
-const TEST_OPERATION_UPDATE_PARAM_INDEX = Object.freeze({
-  STATUS: 0,
-  WORKFLOW_STEP: 1,
-  UPDATED_AT: 2,
-  COMPLETED_AT: 3,
-  ERROR_MESSAGE: 4,
-  STEPS_HISTORY: 5,
-  REPLICA_ID: 6,
-});
 const TEST_READ_SOURCE_LOCAL_PARTITION_REPLICA = 'local_partition_replica';
 const TEST_REPLICA_OPERATION_INITIATED_STATUS = 'initiated';
 const TEST_LANE_HELD_RETRY_TEST_NAME =
@@ -186,22 +177,6 @@ function buildActiveLearnerServiceRow() {
   });
 }
 
-function applyOperationUpdate(operationRow, params) {
-  operationRow.status = params[TEST_OPERATION_UPDATE_PARAM_INDEX.STATUS];
-  operationRow.workflow_step =
-    params[TEST_OPERATION_UPDATE_PARAM_INDEX.WORKFLOW_STEP];
-  operationRow.updated_at =
-    params[TEST_OPERATION_UPDATE_PARAM_INDEX.UPDATED_AT];
-  operationRow.completed_at =
-    params[TEST_OPERATION_UPDATE_PARAM_INDEX.COMPLETED_AT];
-  operationRow.error_message =
-    params[TEST_OPERATION_UPDATE_PARAM_INDEX.ERROR_MESSAGE];
-  operationRow.steps_history =
-    params[TEST_OPERATION_UPDATE_PARAM_INDEX.STEPS_HISTORY];
-  operationRow.replica_id =
-    params[TEST_OPERATION_UPDATE_PARAM_INDEX.REPLICA_ID];
-}
-
 function createObservedProgressCoordinator({
   operationRow,
   serviceRow,
@@ -318,14 +293,23 @@ function createObservedProgressCoordinator({
           options,
         );
       },
-      async executeQuery(sql, params = []) {
-        if (String(sql).startsWith(TEST_UPDATE_OPERATION_SQL_PREFIX)) {
-          applyOperationUpdate(operationRow, params);
-          return {
-            success: true,
-            affectedRows: TEST_ONE_AFFECTED_ROW,
-          };
+      async submitMutation({operation, tableName, whereClause, data}) {
+        if (operation !== CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
+            tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          throw new Error('Unexpected observed progress mutation');
         }
+        const matches = Object.entries(whereClause).every(
+          ([column, value]) => (operationRow[column] ?? TEST_EMPTY_VALUE) === value,
+        );
+        if (matches) {
+          Object.assign(operationRow, data);
+        }
+        return {
+          success: true,
+          affectedRows: matches ? TEST_ONE_AFFECTED_ROW : TEST_NO_AFFECTED_ROWS,
+        };
+      },
+      async executeQuery() {
         return {
           success: true,
           rows: [],

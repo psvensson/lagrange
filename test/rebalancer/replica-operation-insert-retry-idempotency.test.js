@@ -19,6 +19,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 
@@ -54,7 +57,11 @@ function makeRow(overrides = {}) {
 function createRepository({insertResults, authoritativeRows, insertCalls}) {
   const mockLogger = {info() {}, warn() {}, error() {}, debug() {}};
   const gateway = {
-    insertSystemTableRow: async (tableName, row, options = {}) => {
+    async submitMutation({operation, tableName, row}, options) {
+      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+          tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        throw new Error('Unexpected insert retry mutation');
+      }
       insertCalls.push({tableName, row, options});
       const next = insertResults.shift();
       if (next instanceof Error) {
@@ -71,9 +78,6 @@ function createRepository({insertResults, authoritativeRows, insertCalls}) {
       rows: authoritativeRows(),
     }),
     executeQuery: async () => ({success: true, changes: 1}),
-    resolveCdcIntegrationService: () => ({
-      insertSystemTableRow: async () => ({success: true}),
-    }),
   };
   return new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,

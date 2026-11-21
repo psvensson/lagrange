@@ -28,7 +28,7 @@
   "censusSize": 2723,
   "digest": "fnv1a32-3a7bd656",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-448db676",
+  "observationDigest": "fnv1a32-a75c9cff",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18583,9 +18583,11 @@
     },
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/priority-recovery-completion.js",
         "src/control-plane/timeout-budget.js",
         "src/rebalancer/executor-outcome-constants.js",
@@ -19355,8 +19357,10 @@
     },
     "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
         "src/rebalancer/replica-operation-repository.js",
@@ -19439,6 +19443,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "test/rebalancer/committed-membership-fixture.js"
       ]
@@ -19896,6 +19901,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js"
       ]
     },
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": {
@@ -25395,6 +25405,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/workflow/durable-workflow-coordinator.js",

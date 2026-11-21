@@ -21,6 +21,11 @@ class RebalanceCoordinator extends CommittedReadRebalanceCoordinator {
     this.workflowOwner.recoverReplicaCleanupReleaseDebt = async () => 0;
   }
 }
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schema-shared-constants.js';
+import {createFixtureSystemMutationPort} from './test-helpers.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from
@@ -117,6 +122,9 @@ function createTransactionCoordinator() {
 function withAuthoritativeOperationRows(sqlQueryEngine) {
   const trackedOperations = new Map();
   const trackedReservations = new Map();
+  const submit = createFixtureSystemMutationPort(
+    (...args) => sqlQueryEngine.executeQuery(...args),
+  );
   const fixtureEngine = {
     ...sqlQueryEngine,
     seedStorageIncreasingOperation(operation, reasonCode) {
@@ -166,36 +174,39 @@ function withAuthoritativeOperationRows(sqlQueryEngine) {
           return {success: true, rowSetComplete: true, rows: [row]};
         }
       }
-      const result = withDefaultRowSetComplete(
+      return withDefaultRowSetComplete(
         await sqlQueryEngine.executeQuery(sql, params, options),
       );
-      if (result?.success !== false &&
-          sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId, membershipPublicationEpoch,
-        ] = params;
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-          membership_publication_epoch: membershipPublicationEpoch,
-        });
+    },
+    async submitMutation(mutation, options) {
+      if (mutation.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        throw new Error('Unexpected operation ownership mutation');
+      }
+      const {operation, row, whereClause, data} = mutation;
+      if (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT) {
+        if (trackedOperations.has(row.operation_id)) {
+          return {success: true, affectedRows: 0};
+        }
+        const result = await submit(mutation, options);
+        if (result.success === true &&
+            (result.affectedRows ?? result.changes) > 0) {
+          trackedOperations.set(row.operation_id, {...row});
+        }
+        return result;
+      }
+      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
+        throw new Error('Unexpected operation ownership mutation verb');
+      }
+      const current = trackedOperations.get(whereClause.operation_id);
+      if (!current || !Object.entries(whereClause).every(
+        ([column, value]) => (current[column] ?? null) === value,
+      )) {
+        return {success: true, affectedRows: 0};
+      }
+      const result = await submit(mutation, options);
+      if (result.success === true &&
+          (result.affectedRows ?? result.changes) > 0) {
+        Object.assign(current, data);
       }
       return result;
     },
@@ -242,6 +253,7 @@ function createCoordinator(overrides = {}) {
     controlPlaneSystemTableGateway: hasExplicitGateway ?
       overrides.controlPlaneSystemTableGateway :
       {
+        submitMutation: sqlQueryEngine.submitMutation,
         async readAuthoritativeRows(_tableName, sql, params = [], options = {}) {
           return sqlQueryEngine.executeQuery(sql, params, options);
         },

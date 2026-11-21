@@ -12,6 +12,8 @@ import {fixtureCommittedReadCoordinator} from
 // the fixture world (owner decision O1).
 const RebalanceCoordinator =
   fixtureCommittedReadCoordinator(ProductionRebalanceCoordinator);
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -113,33 +115,6 @@ function createSqlEngine(options = {}) {
         rows: existing,
       };
     }
-    if (sql.includes('INSERT INTO replica_operations')) {
-      const [
-        operationId, type, partitionId, replicaId, targetClaimKey,
-        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-        entityId,
-      ] = params;
-      operations.set(operationId, {
-        operation_id: operationId,
-        type,
-        partition_id: partitionId,
-        replica_id: replicaId,
-        target_claim_key: targetClaimKey,
-        source_node_id: sourceNodeId,
-        target_node_id: targetNodeId,
-        status,
-        workflow_step: workflowStep,
-        created_at: createdAt,
-        updated_at: updatedAt,
-        completed_at: completedAt,
-        error_message: errorMessage,
-        steps_history: stepsHistory,
-        entity_type: entityType,
-        entity_id: entityId,
-      });
-      return {success: true, changes: 1};
-    }
     if (sql.includes('SELECT * FROM replica_operations') &&
           sql.includes('operation_id = ?')) {
       const [operationId] = params;
@@ -154,6 +129,17 @@ function createSqlEngine(options = {}) {
 
   return {
     executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
+    async submitMutation({operation, tableName, row}) {
+      if (operation !== CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
+          tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        throw new Error('Unexpected topology guard mutation');
+      }
+      if (operations.has(row.operation_id)) {
+        return {success: true, affectedRows: 0};
+      }
+      operations.set(row.operation_id, {...row});
+      return {success: true, affectedRows: 1};
+    },
     getOperations() {
       return [...operations.values()];
     },
@@ -197,6 +183,7 @@ function createCoordinator(options = {}) {
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService,
     controlPlaneSystemTableGateway: options.controlPlaneSystemTableGateway || {
+      submitMutation: sqlEngine.submitMutation,
       readAuthoritativeRows: async (_tableName, sql, params = []) =>
         sqlEngine.executeQuery(sql, params),
       readRows: async (_tableName, sql, params = []) =>
@@ -314,6 +301,9 @@ test('RebalanceCoordinator fails topology increase closed when service owner row
         createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
       ],
       controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          throw new Error('Topology read probe must not mutate replica operations');
+        },
         readAuthoritativeRows: readRows,
         readRows,
         executeQuery: async () => ({success: true, rows: []}),
@@ -346,6 +336,9 @@ test(
       createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
     ];
     const slowSuccessfulGateway = {
+      async submitMutation() {
+        throw new Error('Topology read probe must not mutate replica operations');
+      },
       readAuthoritativeRows: async (tableName) => {
         nowMs += 1_500;
         if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
@@ -456,6 +449,9 @@ test(
           nodeId === staleTransportTarget ? 'disconnected' : 'connected',
       },
       controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          throw new Error('Topology read probe must not mutate replica operations');
+        },
         readAuthoritativeRows: ownerRead,
         readRows: ownerRead,
         executeQuery: async () => ({success: true, rows: []}),
