@@ -69,6 +69,16 @@ function receiverChanged(attempt, tableName, row) {
     typeof row.replica_id === 'string', row.replica_id !== attempt.expectedOwner.replicaId].every(Boolean);
 }
 
+function retainedCustodyOf(service, payload, attempt, attempts) {
+  const operation = payload.body.operation;
+  const ownsIncoming = attempts.get(operation.operationId) === attempt &&
+    service.isLeader && attempt.nativeService === service &&
+    attempt.entryId === payload.entryId && isDeepStrictEqual(attempt.body, payload.body);
+  return ownsIncoming ? {nodeId: service.nodeId, replicaId: service.replicaId,
+    operationId: operation.operationId, createdAt: operation.createdAt,
+    entryId: payload.entryId, bodyText: JSON.stringify(payload.body)} : null;
+}
+
 function assignRetainedPlacementRepairMethods(Repository) {
   Object.assign(Repository.prototype, {
     async acceptRetainedPlacementRepairRequest(service, payload, submitNative) {
@@ -93,24 +103,28 @@ function assignRetainedPlacementRepairMethods(Repository) {
       attempt.nativeService = service;
       attempt.expectedOwner = {nodeId: service.nodeId, replicaId: service.replicaId};
       attempt.delegated = null;
-      const custody = {nodeId: service.nodeId, replicaId: service.replicaId,
-        operationId: operation.operationId, createdAt: operation.createdAt,
-        entryId: payload.entryId, bodyText: JSON.stringify(payload.body)};
       const answer = await this.completeIncomingRetainedRepair(
         service, payload, attempt, submitNative);
-      return {...answer, repairCustody: custody};
+      const custody = retainedCustodyOf(service, payload, attempt, this.retainedPlacementRepairs);
+      return custody === null ? answer : {...answer, repairCustody: custody};
     },
 
     async completeIncomingRetainedRepair(service, payload, attempt, submitNative) {
       if (attempt.entryId !== payload.entryId) {
+        if (attempt.pending) await attempt.pending;
+        else await this.repairRetainedOperation(attempt.operation);
+        if (this.retainedPlacementRepairs.get(attempt.operation.operationId) !== attempt ||
+            attempt.entryId === null) {
+          if (this.retainedPlacementRepairs.get(attempt.operation.operationId) === attempt) {
+            this.retainedPlacementRepairs.delete(attempt.operation.operationId);
+          }
+          return this.acceptRetainedPlacementRepairRequest(service, payload, submitNative);
+        }
         const recorded = readCommittedStatementOutcome(service,
           service.getCommittedEntryKey({entryId: payload.entryId}));
         if (recorded.state === RECORD.SETTLED) {
           return submitNative(payload);
         } else {
-          if (!attempt.pending) {
-            this.wakeRetainedPlacementRepairs((candidate) => candidate === attempt);
-          }
           return {success: false, failureCode: PLACEMENT_ADMISSION_ERROR.REPAIR_PENDING};
         }
       } else if (attempt.nativeAnswerPromise && attempt.pending) {
@@ -201,20 +215,16 @@ function assignRetainedPlacementRepairMethods(Repository) {
       const releaseSequence = this.retainedPlacementRepairReleaseSequence ?? 0;
       const answer = await this.sendRetainedRepairAttempt(attempt);
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
+      const committed = isCommittedRepairAnswer(answer, attempt);
+      if (answer?.committed === true && !committed) return false;
       this.recordRetainedRepairCustody(attempt, answer);
-      if (!isCommittedRepairAnswer(answer, attempt)) {
+      if (!committed) {
         return this.retainUncommittedRepairAnswer(attempt, answer, releaseSequence);
       }
       const result = answer.placementResult;
-      switch (result?.outcome) {
-      case PLACEMENT_OUTCOME.ADMITTED:
-        return isDeepStrictEqual(result.operationIds, [attempt.operation.operationId]) ?
-          this.confirmAdmittedRetainedRepair(attempt) : false;
-      case PLACEMENT_OUTCOME.REFUSED:
-        return this.retainCommittedRepairRefusal(attempt, result);
-      default:
-        return false;
-      }
+      return result.outcome === PLACEMENT_OUTCOME.ADMITTED ?
+        this.confirmAdmittedRetainedRepair(attempt) :
+        this.retainCommittedRepairRefusal(attempt, result);
     },
 
     async sendRetainedRepairAttempt(attempt) {
