@@ -238,7 +238,7 @@ documentClass: generated
 - [replica-placement-owner-order.js](replica-placement-owner-order.js) - The one admission order of the replica placement owner (quest replica-placement-admission-owner, design section... (importers: many)
 - [replica-placement-owner-retained-repair-routing.js](replica-placement-owner-retained-repair-routing.js) - No leading comment; first export: prepareRetainedPlacementRepairBody. (importers: one)
 - [replica-placement-owner-retained-repair-statement.js](replica-placement-owner-retained-repair-statement.js) - No leading comment; first export: buildCurrentRetainedCopyPolicy. (importers: few)
-- [replica-placement-owner-transport.js](replica-placement-owner-transport.js) - No leading comment; first export: wrapPlacementTransport. (importers: few)
+- [replica-placement-owner-transport.js](replica-placement-owner-transport.js) - No leading comment; first export: resolvePlacementLedgerDelivery. (importers: few)
 - [replica-placement-owner.js](replica-placement-owner.js) - No leading comment; first export: REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID. (importers: many)
 - [replica-status.js](replica-status.js) - Unified Replica Status and Operation Types. (importers: hub)
 - [runtime-service-policy.js](runtime-service-policy.js) - No leading comment; first export: resolveRuntimeServiceDefinitionPolicy. (importers: many)
