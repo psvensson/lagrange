@@ -18,6 +18,9 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {REBALANCE_COORDINATOR_EVENT, REBALANCE_COORDINATOR_LOG_MSG} from
   '../../src/rebalancer/rebalancer-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from
+  '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
@@ -34,6 +37,8 @@ import {
 } from './test-helpers.js';
 import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js';
 
+const {OPERATION_OWNER_ACTION} = OPERATION_WORKFLOW_OWNER_SHARED;
+
 /**
  * Create a mock operation row for the SQL engine.
  * @param {Object} params - Operation parameters.
@@ -42,13 +47,14 @@ import {withNodeReadinessService} from '../helpers/readiness-service-fixture.js'
 function createOperationRow(params) {
   const now = Date.now();
   const partitionId = params.partitionId || 'test-partition';
+  const operationId = params.operationId || `op-${Math.random().toString(36).slice(2)}`;
   return {
-    operation_id: params.operationId || `op-${Math.random().toString(36).slice(2)}`,
+    operation_id: operationId,
     type: params.type || OperationType.ADD,
     partition_id: partitionId,
     entity_type: 'partition',
     entity_id: partitionId,
-    replica_id: params.replicaId || null,
+    replica_id: params.replicaId || `${partitionId}-${operationId}-replica`,
     source_node_id: params.sourceNodeId || 'test-node-1',
     target_node_id: params.targetNodeId || 'test-node-1',
     status: params.status || ReplicaStatus.PENDING,
@@ -83,6 +89,7 @@ function createRecoveryTestCoordinator(options = {}) {
   const trackedServices = new Map();
   services.forEach((row) => trackedServices.set(row.service_id, {
     service_type: SERVICE_TYPE.PARTITION,
+    raft_role: RAFT_ROLE.FOLLOWER,
     ...row,
   }));
 
@@ -180,7 +187,13 @@ test('recovery reports the committed terminal branch and leaves pending outcomes
   const reconcileOutcomes = new Map();
   const owner = coordinator.workflowOwner;
   const reconcile = owner.reconcileOperationLifecycle.bind(owner);
+  const pendingEntered = Promise.withResolvers();
+  const resumePending = Promise.withResolvers();
   owner.reconcileOperationLifecycle = async (operation, options) => {
+    if (operation.operationId === 'pending-completes') {
+      pendingEntered.resolve(operation);
+      await resumePending.promise;
+    }
     const outcome = await reconcile(operation, options);
     reconcileOutcomes.set(operation.operationId, outcome);
     return outcome;
@@ -199,7 +212,13 @@ test('recovery reports the committed terminal branch and leaves pending outcomes
     ({operation}) => completedEvents.push(operation.operationId));
   coordinator.initialize();
   try {
-    const summary = await coordinator.handleRecovery();
+    const recovery = coordinator.handleRecovery();
+    const pending = await pendingEntered.promise;
+    const joiningAction = owner.runOperationOwnerAction(OPERATION_OWNER_ACTION.EXECUTE, pending);
+    resumePending.resolve();
+    const summary = await recovery;
+    t.equal(await joiningAction, OPERATION_RECONCILE_OUTCOME.COMPLETED,
+      'a non-retaining action shares the exact result of the held recovery lane');
     t.same(operations.map(({operation_id: id}) => getTrackedOperation(id).workflow_step),
       [WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.FAILED, WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SYNCING],
       'authoritative state carries both opposite terminal outcomes and retains two live rows');

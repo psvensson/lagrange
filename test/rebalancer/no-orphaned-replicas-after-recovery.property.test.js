@@ -13,12 +13,17 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  createCoordinatorSqlStore,
   createMockCache,
+  createMockControlPlaneSystemTableGateway,
   createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
@@ -35,13 +40,14 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 function createOperationRow(params) {
   const now = Date.now();
   const partitionId = params.partitionId || 'test-partition';
+  const operationId = params.operationId || `op-${Math.random().toString(36).slice(2)}`;
   return {
-    operation_id: params.operationId || `op-${Math.random().toString(36).slice(2)}`,
+    operation_id: operationId,
     type: params.type || OperationType.ADD,
     partition_id: partitionId,
     entity_type: 'partition',
     entity_id: partitionId,
-    replica_id: params.replicaId || null,
+    replica_id: params.replicaId || `${partitionId}-${operationId}-replica`,
     source_node_id: params.sourceNodeId || 'test-node-1',
     target_node_id: params.targetNodeId || 'target-node',
     status: params.status || ReplicaStatus.PENDING,
@@ -51,7 +57,7 @@ function createOperationRow(params) {
     completed_at: params.completedAt || null,
     error_message: params.errorMessage || null,
     steps_history: params.stepsHistory ||
-      JSON.stringify([{step: 'PENDING', timestamp: now}]),
+      JSON.stringify([{step: params.workflowStep || WORKFLOW_STEP.PENDING, timestamp: now}]),
   };
 }
 
@@ -64,186 +70,28 @@ function createOperationRow(params) {
 function createRecoveryTestCoordinator(options = {}) {
   const {operations = [], services = []} = options;
 
-  // Track operations in memory (simulates SQL engine storage)
-  const trackedOperations = new Map();
-
-  // Initialize with provided operations
-  for (const op of operations) {
-    trackedOperations.set(op.operation_id, {...op});
-  }
-
-  function mergeTrackedOperation(operationId, patch = {}) {
-    const existing = trackedOperations.get(operationId);
-    if (!existing) {
-      return null;
-    }
-    const updated = {
-      ...existing,
-      ...patch,
-      operation_id: operationId,
-    };
-    trackedOperations.set(operationId, updated);
-    return updated;
-  }
-
-  // SQL engine that tracks operations via INSERT/UPDATE queries
-  const sqlQueryEngine = {
-    executeQuery: async (sql, params) => {
-      // Handle INSERT operations
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory,
-        ] = params;
-
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-        });
-        return {success: true};
-      }
-
-      // Handle UPDATE operations
-      if (sql.includes('UPDATE replica_operations')) {
-        const [
-          status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
-        ] = params;
-
-        const existing = trackedOperations.get(operationId);
-        if (existing) {
-          trackedOperations.set(operationId, {
-            ...existing,
-            status,
-            workflow_step: workflowStep,
-            updated_at: updatedAt,
-            completed_at: completedAt,
-            error_message: errorMessage,
-            steps_history: stepsHistory,
-            replica_id: replicaId,
-          });
-        }
-        return {success: true};
-      }
-
-      // Handle SELECT by operation_id
-      if (sql.includes('WHERE operation_id = ?')) {
-        const [operationId] = params;
-        const op = trackedOperations.get(operationId);
-        return {success: true, rows: op ? [op] : []};
-      }
-
-      // Handle owner-scoped incomplete operation query (for recovery)
-      if (sql.includes('replica_operations') &&
-          sql.includes('source_node_id = ?') &&
-          sql.includes('workflow_step IN')) {
-        const [
-          sourceNodeId,
-          pendingStep,
-          sendingStep,
-          creatingStep,
-          syncingStep,
-          stoppingStep,
-          activeStep,
-          replaceType,
-        ] = params;
-        const inFlightSteps = new Set([
-          pendingStep,
-          sendingStep,
-          creatingStep,
-          syncingStep,
-          stoppingStep,
-        ]);
-        const allOps = Array.from(trackedOperations.values());
-        const incompleteOps = allOps.filter((op) => {
-          if (op.source_node_id !== sourceNodeId) {
-            return false;
-          }
-          if (inFlightSteps.has(op.workflow_step)) {
-            return true;
-          }
-          return op.workflow_step === activeStep && op.type === replaceType;
-        });
-        return {success: true, rows: incompleteOps};
-      }
-
-      // Handle SELECT all operations
-      if (sql.includes('SELECT * FROM replica_operations') &&
-          sql.includes('ORDER BY')) {
-        return {success: true, rows: Array.from(trackedOperations.values())};
-      }
-
-      // Handle SELECT services (for reconciliation)
-      if (sql.includes('services') && sql.includes('service_id = ?')) {
-        const [serviceId] = params;
-        const service = services.find((s) => s.service_id === serviceId);
-        return {success: true, rows: service ? [service] : []};
-      }
-
-      // Handle SELECT services by partition and node
-      if (sql.includes('services') && sql.includes('partition_id = ?') &&
-          sql.includes('node_id = ?')) {
-        const [partitionId, nodeId] = params;
-        const service = services.find((s) =>
-          s.partition_id === partitionId && s.node_id === nodeId);
-        return {success: true, rows: service ? [service] : []};
-      }
-
-      return {success: true, rows: []};
+  const trackedOperations = new Map(operations.map((row) => [row.operation_id, {...row}]));
+  const exactServices = services.map((row) => ({
+    service_type: SERVICE_TYPE.PARTITION,
+    raft_role: RAFT_ROLE.FOLLOWER,
+    ...row,
+  }));
+  const store = createCoordinatorSqlStore({
+    getAll(table) {
+      if (table === 'replica_operations') return [...trackedOperations.values()];
+      if (table === 'services') return exactServices;
+      return [];
     },
-  };
-
-  const controlPlaneSystemTableGateway = {
-    readAuthoritativeRows: async (_tableName, sql, params = []) =>
-      sqlQueryEngine.executeQuery(sql, params),
-    readRows: async (_tableName, sql, params = []) =>
-      sqlQueryEngine.executeQuery(sql, params),
-    executeQuery: async (sql, params = []) =>
-      sqlQueryEngine.executeQuery(sql, params),
-    async submitMutation(mutation) {
-      if (mutation?.tableName !== 'replica_operations') {
-        return {success: true, partitionResult: {affectedRows: 1}};
-      }
-
-      if (mutation.operation === 'insert') {
-        const row = {
-          ...mutation.row,
-          operation_id: mutation.row?.operation_id ?? mutation.row?.operationId,
-        };
-        trackedOperations.set(row.operation_id, row);
-        return {success: true, partitionResult: {affectedRows: 1}};
-      }
-
-      if (mutation.operation === 'update') {
-        const whereClause = mutation.whereClause || mutation.where || {};
-        const operationId =
-          whereClause.operation_id ?? whereClause.operationId ?? null;
-        if (operationId) {
-          mergeTrackedOperation(operationId, mutation.data || {});
-        }
-        return {success: true, partitionResult: {affectedRows: 1}};
-      }
-
-      return {success: true, partitionResult: {affectedRows: 1}};
+    upsert(_table, row) {
+      trackedOperations.set(row.operation_id, row);
     },
-  };
+  });
+  const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
+  const controlPlaneSystemTableGateway = createMockControlPlaneSystemTableGateway(sqlQueryEngine);
 
   const coordinator = new RebalanceCoordinator({
     nodeId: options.nodeId || 'test-node-1',
-    systemTableCache: createMockCache({services}),
+    systemTableCache: createMockCache({services: exactServices}),
     cdcIntegrationService: createMockCdcService(),
     controlPlaneSystemTableGateway,
     tablePolicyService: createMockPolicyService(),
@@ -256,6 +104,14 @@ function createRecoveryTestCoordinator(options = {}) {
     enableTimeouts: false,
   });
   coordinator.initialize();
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    try {
+      await shutdown();
+    } finally {
+      store.suspend();
+    }
+  };
   return {coordinator, trackedOperations};
 }
 
@@ -624,6 +480,7 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
         operationId: 'remove-op',
         type: OperationType.REMOVE,
         replicaId: 'replica-to-remove',
+        sourceNodeId: 'other-owner-node',
         workflowStep: 'STOPPING',
         status: ReplicaStatus.REMOVING,
       }),

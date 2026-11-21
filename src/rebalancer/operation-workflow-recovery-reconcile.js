@@ -411,6 +411,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       await this.operationWorkflowRunExclusive(singleFlightKey, async () => {
         started = true;
         recoveryOutcome = await this.reconcileRecoveryOperation(operation);
+        return recoveryOutcome;
       });
     } catch (error) {
       // The lane can return another wake's in-flight promise without running
