@@ -114,8 +114,8 @@ invalid evidence before integration.
 
 ## Core integration handoff, 21 November 2026
 
-The last physically measured source is `3d910d700` on
-`wip/core-runtime-composed-20261120`. Current integration proceeds on
+The latest three-host diagnostic measured `e3e0164d6` in run `bd3bfd82`.
+The preceding trial `4ef9154c` measured `3d910d700`. Current integration proceeds on
 `wip/core-formation-followup-20261121`. Its reviewed components and active
 repairs have distinct proof in the two Quest logs. Resolve the remote
 branch tip before resuming. The shared candidate
@@ -176,11 +176,17 @@ cases in the remaining scheduling file failed. One observed a third REMOVE
 after the incumbent cleared; its witness expected one initial delivery
 and one resend. The other observed the injected restoration described
 below. The REPLACE dispatch owner is tracing the resend ordering, and the
-placement ledger owner is validating restoration at apply. A
-three-host formation **diagnostic** on the same runtime at `e3e0164d6`
-will check the earlier in-flight operations and public SQL failure. It
-precedes acceptance of the repaired composition.
+placement ledger owner is validating restoration at apply. The three-host
+diagnostic on the same runtime at `e3e0164d6` failed formation and SQL
+routability. The field comparison below identifies the next measurement.
 [Combined results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--combined-removal-core-8b9f-nov21.tar.gz).
+
+The 85-file strict selection still needs a completed run. The one-CPU
+calibration at `76755d478` exercised two selected files with one lane.
+On adam-laptop the thermal watchdog stopped request `4319a3db` after 20.67
+seconds, before a completed classified result. On adams-gamla request
+`a43befa1` completed the two files in 63.127 seconds.
+[Calibration originals](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-onecpu-calibration-nov21.tar.gz).
 
 Removal planning, delayed replies and missing-row recovery have different evidence.
 
@@ -226,7 +232,7 @@ Removal planning, delayed replies and missing-row recovery have different eviden
 | Which service may CREATE publish or retire? | At `369c45e64` the three-process public SQL journey passed on tv-dator in 37.808 seconds. On composed `9e7184a3b` it passed on adam-laptop in 53.200 seconds. All three installed guards recorded zero admin calls. | Preserve this public check when a change affects construction, delivery or worker cleanup. |
 | Which operation may a caller replay? | The native CREATE owner now refuses a durably FAILED creation and replays a matching ACTIVE creation. The composed terminal-replay file at `e7e978450` checks that the exact failed attempt releases its lane for its successor. | Preserve the distinction between a confirmed terminal row and an unreadable or mismatched result through reconstruction. |
 | When may placement retire an existing learner? | The 24 native retirement assertions passed on `e89e3dccf` and on `e7e978450`. The cases cover a newer boot or replica birth, late promotion, a neutral durable SUPERSEDED result and continued custody of an uncertain dispatched REMOVE. | Check neutral retirement and release through the normal dispatch and recensus path when composing further changes. |
-| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. Physical run `4ef9154c` on this commit failed the same bound. | The placement/workflow and SQL owners have reproduced independent failures below. Integrate their reviewed repairs before another physical attempt. Three consecutive passing runs on the named hosts precede comparative smoke. |
+| Does the whole cluster meet the service goal? | On `3d910d700ea350b0cfcfc6b7695cdc80a40a5a33`, the original 53 classified files and 12 affected files passed across the three lab hosts (3,757 assertions, no retries). The full range from accepted main passed fast static in 57.100 seconds on tv-dator, request `42135768-4ebb-4f35-9822-5b2eac1749dd`. Physical runs `4ef9154c` on that commit and `bd3bfd82` on `e3e0164d6` failed the 420-second formation bound and SQL routability. | Trace the missing SERVICES reply and the unresolved membership publication described below. Three consecutive accepted formations on the same candidate and named hosts precede comparative smoke. |
 
 On `4ef9154c`, all three serving lanes opened after 3.930 seconds. The
 last formation poll ended at 420.001 seconds. Two control snapshots were
@@ -237,7 +243,54 @@ SQL connection. Provisioning reported unreachable quorum for
 write/readback gate remained unmet. All three containers were removed.
 [Physical report and node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-4ef9154c-nov21.tar.gz).
 
-The final ledger row for `pl-nodes-p1-333-0` contains PENDING, SENDING
+On `bd3bfd82` a node ran on each of tv-dator, adam-laptop and adams-gamla.
+All three serving lanes first opened at 3.565 seconds. The last formation
+poll ended at 420.003 seconds. The report counted 33 polls and 49 read
+failures, and recorded a persistent priority-spread disagreement for
+`sql_transaction_participants-p1` on `8dbffb60`. The subsequent diagnostic
+CREATE first returned pending and then an expired workflow ownership lease.
+COUNT saw zero active services for quorum two and reported
+`no_active_addressed_services`. The public INSERT/readback gate remained
+unmet. Teardown removed all three containers. Both reports classified the
+run as `BLOCK_EVIDENCE_INCOMPLETE`; both also contain the failed SQL
+operation. The consecutive physical pass count remains **0/3**.
+[Diagnostic report, configuration, playback and full node logs](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--formation-three-host-bd3bfd82-nov21.tar.gz).
+
+The two runs expose a shared request path. In both, a joining query executor
+spent three attempts reading `services-p1` from the seed before a SERVICES
+snapshot failed. The first such read failures came at 01:57:19.047 UTC
+and 04:56:16.304 UTC respectively. In the second run, the sender logged
+missing ACKs for `b37a0044-30be-47b8-8dc5-f75bb2b450d1` and
+`2c452efb-136c-4513-b8a1-96a7d29d9d01` on connection
+`d027bc8f-b773-45f4-ad5d-4b36bacf1414` to the seed's `services-p1-r1`.
+The seed fetched a CDC row on that replica between the two warnings.
+Only the sender logged these envelope IDs. The receiver's processing stage
+and the query identity behind either envelope remain unknown. Placement
+also continued after a snapshot timed out. At 05:00:39 UTC the target of
+ADD `pl-sql_transactions-p1-185-0` refused CREATE because its authoritative
+prior-existence read deferred.
+
+The table provisioner on the seed later reported zero eligible targets and
+`unavailable_stale` for `membership-publication:3:6f00d4f0758f90acad8dfbb6`.
+This server-side observation at 05:04:04.045 UTC followed the end of the
+public SQL check at 05:04:01.790 UTC. Earlier, the publication writer
+reported unknown outcomes for this exact row. Entry
+`dwrite-participant-b1c92f973c4528af` spent 27,588 ms across 34 deliveries
+with 11 lost answers. A later entry `dwrite-participant-5930935f6d3f4e46`
+spent 27,151 ms across 38 deliveries with 12 lost answers. Its final
+participant refused a proposal during cutover. Earlier proposal and
+commit outcomes remain unresolved.
+
+The transport and query owners should trace one failing `services-p1` read
+from sender to receiver, ACK, partition dispatch and response with the same
+query, envelope and connection identities. The membership-publication and
+write owners should reconcile the exact entry and epoch across durable apply,
+cutover release and the provisioner's next authoritative read. This would
+distinguish a lost answer after commit from a write still owed after a pause.
+Keep the formation, observation and public SQL bounds unchanged.
+
+In the earlier `4ef9154c` trial, the final ledger row for
+`pl-nodes-p1-333-0` contains PENDING, SENDING
 and FAILED. Its founding entry has no CREATE membership stamp, and every
 receiver admission field is null. While the stamp was unavailable, the
 sender deferred dispatch. The ledger later recorded a SENDING timeout
