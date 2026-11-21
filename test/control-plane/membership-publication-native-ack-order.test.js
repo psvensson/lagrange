@@ -14,16 +14,19 @@ import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
-import {buildMembershipPublicationRow} from
+import {buildMembershipPublicationRow, buildPublicationMetadataRefreshRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {FORMATION_PUBLICATION_ID} from
   '../../src/control-plane/membership-publication-formation-record.js';
-import {MEMBERSHIP_PUBLICATION_STATUS as STATUS} from
+import {MEMBERSHIP_LIFECYCLE_STATE, MEMBERSHIP_MEMBER_STATE} from
+  '../../src/control-plane/membership-lifecycle-constants.js';
+import {MEMBERSHIP_PUBLICATION_STATUS as STATUS, MEMBERSHIP_PUBLICATION_WORKFLOW_STEP} from
   '../../src/control-plane/membership-publication-row-contract.js';
 import {ControlPlanePublicationsOwner} from
   '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {normalizeControlPlanePublicationRow} from
   '../../src/control-plane/system-row-normalizers.js';
+import {WORKFLOW_TRANSITION_FIELD} from '../../src/workflow/workflow-constants.js';
 import {deriveParticipantEntryId} from
   '../../src/query/distributed/distributed-write-coordinator.js';
 import {
@@ -183,6 +186,15 @@ async function exerciseAcknowledgementOrder({slowNode, fastNode, successor}) {
       assert.deepEqual(settled.acknowledgedNodeIds, NODES,
         'both independently confirmed acknowledgments survive arbitrary apply order');
       assert.equal(settled.status, STATUS.PUBLISHED);
+      assert.equal(settled.membershipLifecycleSummary.lifecycleState,
+        MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE);
+      for (const nodeId of NODES) {
+        assert.equal(settled.membershipLifecycleSummary.memberStatesByNodeId[nodeId],
+          MEMBERSHIP_MEMBER_STATE.SERVING);
+      }
+      assert.equal(settled.transitionHistory.filter(({state}) => state === STATUS.PUBLISHED).length,
+        1, 'the union persists one genuine final-ACK closure');
+      assert.equal(settled.transitionHistory.at(-1).state, STATUS.PUBLISHED);
       assert.deepEqual(normalizeControlPlanePublicationRow(slow).acknowledgedNodeIds, NODES,
         'the delayed owner returns the confirmed union');
     }
@@ -274,3 +286,124 @@ test('native publication confirmation resolves a lost final answer and refuses u
       }
     }
   });
+
+async function withPublicationLedger(exercise) {
+  const {directory, dbPath} = temporaryDbPath();
+  let leader;
+  let writer;
+  try {
+    const ledger = await openPublicationsLedger(dbPath);
+    leader = ledger.leader;
+    writer = createPublicationWriter(leader, NODES[0], WRITER_TIME);
+    await exercise(ledger, writer);
+  } finally {
+    writer?.cdc.markShuttingDown();
+    try {
+      await shutdownAll(leader);
+    } finally {
+      fs.rmSync(directory, {recursive: true, force: true});
+    }
+  }
+}
+
+async function racePublicationReconcile(ledger, writer, row, options, update) {
+  const {leader} = ledger;
+  const publicationId = row.publication_id;
+  const held = holdFirstAcknowledgement(leader);
+  const pending = track(writer.coordinator.reconcileClusterMembership(options));
+  try {
+    await settleTicks();
+    assert.ok(held.request, `owner reached the held update: ${JSON.stringify(pending.value)}`);
+    const current = await writer.owner.getPublication(publicationId);
+    const mutation = await writer.owner.upsertPublication({...current, ...update}, {
+      expectedPublicationRow: current,
+    });
+    assert.equal(mutation.partitionResult.affectedRows, 1, 'the competing write changes the row');
+    held.release();
+    return await pending.promise;
+  } finally {
+    held.release();
+    await Promise.allSettled([pending.promise]);
+  }
+}
+
+test('a refused lifecycle-summary-only reconcile keeps its obligation until native confirmation',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const row = buildPublicationMetadataRefreshRow({
+      publicationRow: publicationRow(3, NODES, WRITER_TIME - 10),
+      nowMs: WRITER_TIME - 10,
+    });
+    await writer.coordinator.persistPublicationRow(row);
+    const baseline = readDurablePublication(ledger.leader, row.publication_id);
+    const requested = {...baseline.membershipLifecycleSummary, locallyEligibleNodeIds: NODES};
+    writer.coordinator.deriveClusterMembershipCandidate = async () => ({
+      ...baseline, changed: false, membershipLifecycleSummaryChanged: true,
+      membershipLifecycleSummary: requested,
+    });
+    const options = {
+      latestPublicationRow: row, latestPublishedPublicationRow: row, publicationWriteMaxAttempts: 1,
+    };
+    await assert.rejects(racePublicationReconcile(ledger, writer, row, options, {
+      reason_code: 'concurrently committed metadata',
+    }), {code: 'PUBLICATION_WRITE_UNCONFIRMED'});
+    assert.deepEqual(readDurablePublication(ledger.leader, row.publication_id)
+      .membershipLifecycleSummary.locallyEligibleNodeIds, []);
+    const result = await writer.coordinator.reconcileClusterMembership(options);
+    assert.deepEqual(result.publicationRow.membershipLifecycleSummary.locallyEligibleNodeIds,
+      NODES);
+    assert.deepEqual(readDurablePublication(ledger.leader, row.publication_id)
+      .membershipLifecycleSummary.locallyEligibleNodeIds, NODES);
+  }));
+
+test('an adopted supersession does not open the reconciliation workflow',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const row = publicationRow(3, NODES, WRITER_TIME - 10);
+    await writer.coordinator.persistPublicationRow(row);
+    const baseline = readDurablePublication(ledger.leader, row.publication_id);
+    writer.coordinator.deriveClusterMembershipCandidate = async () => ({
+      ...baseline, changed: true,
+    });
+    const result = await racePublicationReconcile(ledger, writer, row, {
+      latestPublicationRow: row, latestPublishedPublicationRow: row,
+    }, {
+      status: STATUS.SUPERSEDED, updated_at: WRITER_TIME + 10, closed_at: WRITER_TIME + 10,
+    });
+    assert.equal(result.publicationRow.status, STATUS.SUPERSEDED);
+    const workflow = writer.coordinator.workflowCoordinator
+      .getWorkflowByOwnerKey(writer.coordinator.buildOwnerKey());
+    assert.notEqual(workflow.step, MEMBERSHIP_PUBLICATION_WORKFLOW_STEP.OPEN);
+    const stages = workflow.transitionHistory.map((entry) =>
+      entry[WORKFLOW_TRANSITION_FIELD.NEXT_STEP]);
+    assert.equal(stages.includes(MEMBERSHIP_PUBLICATION_WORKFLOW_STEP.OPEN), false);
+    const fresh = publicationRow(4, NODES, WRITER_TIME);
+    const freshCandidate = normalizeControlPlanePublicationRow(fresh);
+    writer.coordinator.deriveClusterMembershipCandidate = async () => ({
+      ...freshCandidate, changed: true,
+    });
+    const healthy = await writer.coordinator.reconcileClusterMembership({
+      latestPublicationRow: row, latestPublishedPublicationRow: row,
+    });
+    assert.equal(healthy.publicationRow.publicationId, fresh.publication_id);
+    assert.equal(healthy.publicationRow.status, STATUS.OPEN);
+    assert.equal(writer.coordinator.workflowCoordinator
+      .getWorkflowByOwnerKey(writer.coordinator.buildOwnerKey()).step,
+    MEMBERSHIP_PUBLICATION_WORKFLOW_STEP.OPEN);
+  }));
+
+test('explicit publication identity cannot be rebound to another revision or cohort',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const explicit = {...publicationRow(3, NODES, WRITER_TIME - 10),
+      publication_id: 'explicit-membership-publication'};
+    const ordinary = await writer.coordinator.persistPublicationRow(explicit);
+    assert.equal(ordinary.publication_id, explicit.publication_id);
+    const writes = ledger.applied.length;
+    const different = publicationRow(4, [NODES[1], 'node-c'], WRITER_TIME);
+    await assert.rejects(writer.coordinator.persistPublicationRow({
+      ...different, publication_id: explicit.publication_id,
+    }), {code: 'PUBLICATION_REVISION_MISMATCH'});
+    assert.equal(ledger.applied.length, writes);
+    assert.deepEqual(readDurablePublication(ledger.leader, explicit.publication_id)
+      .publishedActiveNodeIds, NODES);
+    const next = await writer.coordinator.persistPublicationRow(different);
+    assert.equal(next.publication_id, different.publication_id);
+  }));
