@@ -1,3 +1,4 @@
+import {PLACEMENT_CLASS} from '../bootstrap/system-partition-classification.js';
 import {PLACEMENT_ADMISSION_ERROR} from '../partition/partition-placement-admission-constants.js';
 // The vocabulary of the one replica placement owner (quest
 // replica-placement-admission-owner, design sections 2.5-2.7 and 2.12 item 2):
@@ -37,13 +38,6 @@ const PLACEMENT_MOVE_TYPE = Object.freeze({
 // The one admission order (design section 2.6): the operation ledger, the
 // other priority control-plane partitions, then - after the formation latch
 // is FORMED - nodes-p1, the other system partitions and user partitions.
-const PLACEMENT_CLASS = Object.freeze({
-  LEDGER: 'LEDGER',
-  PRIORITY: 'PRIORITY',
-  FORMATION_DEPENDENCY: 'FORMATION_DEPENDENCY',
-  SYSTEM: 'SYSTEM',
-  USER: 'USER',
-});
 const PLACEMENT_CLASS_ORDER = Object.freeze([
   PLACEMENT_CLASS.LEDGER,
   PLACEMENT_CLASS.PRIORITY,

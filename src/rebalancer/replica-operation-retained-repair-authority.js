@@ -10,18 +10,26 @@ import {assertOperationUpdateRecord} from './replica-operation-update-outcome.js
 import {buildCanonicalReplicaOperationRow} from './replica-operation-repository-mutation-row-methods.js';
 
 const REPAIR_AUTHORITY = Object.freeze({UNAVAILABLE: 'unavailable', READY: 'ready'});
-const UNAVAILABLE = Object.freeze({state: REPAIR_AUTHORITY.UNAVAILABLE});
+const REPAIR_AUTHORITY_REFUSAL = Object.freeze({READ_FAILED: 'owner_read_failed',
+  UNQUALIFIED: 'unqualified_authority', INVALID_ROW: 'invalid_operation_row'});
+
+function unavailableRepairAuthority(reason) {
+  return {state: REPAIR_AUTHORITY.UNAVAILABLE, reason};
+}
 const READ_OPTIONS = Object.freeze({authoritativeReadMode: READ_MODE.OWNER_RPC_REQUIRED,
   leaderMode: LEADER_MODE.REQUIRED});
 const READ_IDS_PREFIX = 'SELECT * FROM replica_operations WHERE operation_id IN (';
 const SQL_SEPARATOR = ', ';
 const SQL_PARAMETER = '?';
+const SQL_IN_END = ')';
 
 function readPlan(attempt) {
-  if (attempt.occupancy) return {...retainedRepairCensusRead(attempt.operation.operationId), ids: null};
+  if (attempt.occupancy) {
+    return {...retainedRepairCensusRead(attempt.operation.operationId), ids: null};
+  }
   const ids = attempt.blockers === null ? [attempt.operation.operationId] :
     [attempt.operation.operationId, ...attempt.blockers.map((row) => row.operationId)];
-  return {sql: READ_IDS_PREFIX + ids.map(() => SQL_PARAMETER).join(SQL_SEPARATOR) + ')',
+  return {sql: READ_IDS_PREFIX + ids.map(() => SQL_PARAMETER).join(SQL_SEPARATOR) + SQL_IN_END,
     params: ids, ids: new Set(ids)};
 }
 
@@ -40,6 +48,15 @@ function currentWitness(witness, attempt) {
     witnessMatchesExpectedOwner(witness, attempt);
 }
 
+function canonicalRowObservation(repository, row) {
+  try {
+    assertOperationUpdateRecord(repository.rowToOperation(row));
+    return {state: REPAIR_AUTHORITY.READY};
+  } catch {
+    return unavailableRepairAuthority(REPAIR_AUTHORITY_REFUSAL.INVALID_ROW);
+  }
+}
+
 function completeRows(repository, rows, attempt, plan) {
   const columns = Object.keys(buildCanonicalReplicaOperationRow(attempt.operation,
     attempt.operation.ownerLeaseExpiresAt ?? null));
@@ -49,11 +66,7 @@ function completeRows(repository, rows, attempt, plan) {
     if (!columns.every((column) => Object.hasOwn(row, column)) || ids.has(row.operation_id)) {
       return false;
     }
-    try {
-      assertOperationUpdateRecord(repository.rowToOperation(row));
-    } catch {
-      return false;
-    }
+    if (canonicalRowObservation(repository, row).state !== REPAIR_AUTHORITY.READY) return false;
     ids.add(row.operation_id);
     return plan.ids === null || plan.ids.has(row.operation_id);
   });
@@ -61,12 +74,20 @@ function completeRows(repository, rows, attempt, plan) {
 
 async function readRetainedRepairAuthority(repository, attempt) {
   const plan = readPlan(attempt);
-  const answer = await repository.executeReplicaOperationsRead(plan.sql, plan.params, READ_OPTIONS);
+  let answer;
+  try {
+    answer = await repository.executeReplicaOperationsRead(plan.sql, plan.params, READ_OPTIONS);
+  } catch {
+    return unavailableRepairAuthority(REPAIR_AUTHORITY_REFUSAL.READ_FAILED);
+  }
   if (!isCompleteAuthoritativeReadResult(answer) ||
       !currentWitness(answer.readAuthorityWitness, attempt) ||
-      !completeRows(repository, answer.rows, attempt, plan)) return UNAVAILABLE;
+      !completeRows(repository, answer.rows, attempt, plan)) {
+    return unavailableRepairAuthority(REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED);
+  }
   return {state: REPAIR_AUTHORITY.READY, rows: answer.rows,
-    census: answer.rows.map(censusRowOf), completeCensus: plan.ids === null};
+    census: answer.rows.map(censusRowOf), completeCensus: plan.ids === null,
+    witness: answer.readAuthorityWitness};
 }
 
 export {REPAIR_AUTHORITY, readRetainedRepairAuthority};
