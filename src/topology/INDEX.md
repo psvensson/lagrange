@@ -7,6 +7,7 @@ documentClass: generated
 
 ## Files
 
+- [cdc-group-propagation-collaborators.js](cdc-group-propagation-collaborators.js) - Owner contract: Owner: CDCGroupPropagationService wiring (initialize) owns the validation of the collaborators its... (importers: few)
 - [cdc-group-propagation-constants.js](cdc-group-propagation-constants.js) - Constants for CDCGroupPropagationService. (importers: hub)
 - [cdc-group-propagation-delivery-methods.js](cdc-group-propagation-delivery-methods.js) - The foreground retry loop and its pressure gate for CDCGroupPropagationService's durable wave. (importers: one)
 - [cdc-group-propagation-durable-delivery.js](cdc-group-propagation-durable-delivery.js) - No leading comment; first export: propagateDurableCdcEvent. (importers: one)

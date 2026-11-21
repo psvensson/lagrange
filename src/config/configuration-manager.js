@@ -109,6 +109,19 @@ class ConfigurationManager {
     this.ajv = new Ajv({allErrors: true, strict: false});
     this.validate = this.ajv.compile(CONFIG_SCHEMA);
     this.initialized = false;
+    // Advanced by every write of the configuration tree (applyOverrides,
+    // setByPath, initialize's node id): a reader keyed on it re-reads exactly
+    // when a value may have changed.
+    this.revision = 0;
+  }
+
+  /**
+   * The configuration's change revision: monotonic for this instance and
+   * advanced by every write of the configuration tree.
+   * @return {number} The current revision.
+   */
+  getRevision() {
+    return this.revision;
   }
 
   /**
@@ -174,6 +187,7 @@ class ConfigurationManager {
     // Generate node ID if not provided
     if (!this.config.node.id) {
       this.config.node.id = uuidv4();
+      this.revision += 1;
     }
 
     this.validateFormationConfiguration();
@@ -314,6 +328,8 @@ class ConfigurationManager {
    * @private
    */
   applyOverrides(overrides) {
+    // Advanced first: a merge that refuses an unsafe key part-way has written.
+    this.revision += 1;
     this.deepMerge(this.config, overrides);
   }
 
@@ -368,6 +384,7 @@ class ConfigurationManager {
     }
 
     current[parts[parts.length - 1]] = value;
+    this.revision += 1;
   }
 
   /**

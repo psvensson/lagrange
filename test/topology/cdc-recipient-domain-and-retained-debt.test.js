@@ -8,7 +8,9 @@
 import assert from 'node:assert/strict';
 import {afterEach, test} from 'node:test';
 
-import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION, COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from
+  '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   CDC_COMPLETION,
@@ -47,6 +49,9 @@ const SOURCE_MG = 'mg-source';
 const NEAR_MG = 'mg-near';
 const FAR_MG = 'mg-far';
 
+// The real system table cache owner holding the given rows (a latency edge is
+// keyed by its source and target groups). Later changes are written through
+// the owner, so its per-table versions move with them.
 function createDualDomainTopologyCache({
   nodes = [],
   latencyGroups = [],
@@ -54,76 +59,17 @@ function createDualDomainTopologyCache({
   services = [],
   latencies = [],
 } = {}) {
-  const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]));
-  const latencyGroupRows = new Map(latencyGroups.map((row) => [row[COLUMN.GROUP_ID], {...row}]));
-  const messageGroupRows = new Map(messageGroups.map((row) => [row[COLUMN.GROUP_ID], {...row}]));
-  const serviceRows = services.map((row) => ({...row}));
-  const latencyRows = latencies.map((row) => ({...row}));
-  const listeners = new Set();
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return latencyGroupRows.get(key) || null;
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return messageGroupRows.get(key) || null;
-      }
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return [...latencyGroupRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [...messageGroupRows.values()].map((row) => ({...row}));
-      }
-      if (tableName === TABLES.INTER_GROUP_LATENCIES) {
-        return latencyRows.map((row) => ({...row}));
-      }
-      return [];
-    },
-    filter(tableName, predicate) {
-      if (tableName === TABLES.SERVICES) {
-        return serviceRows.filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()].filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return [...latencyGroupRows.values()].filter((row) => predicate(row));
-      }
-      if (tableName === TABLES.MESSAGE_GROUPS) {
-        return [...messageGroupRows.values()].filter((row) => predicate(row));
-      }
-      return [];
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-    offCacheChange(listener) {
-      listeners.delete(listener);
-    },
-    emitCacheChange(tableName) {
-      for (const listener of listeners.values()) {
-        listener(tableName);
-      }
-    },
-    addServiceRow(row) {
-      serviceRows.push({...row});
-      this.emitCacheChange(TABLES.SERVICES);
-    },
-    addMessageGroupRow(row) {
-      messageGroupRows.set(row[COLUMN.GROUP_ID], {...row});
-      this.emitCacheChange(TABLES.MESSAGE_GROUPS);
-    },
-  };
+  const cache = new SystemTableCache();
+  const edges = latencies.map((row) => ({...row, latency_edge_id:
+    `${row[COLUMN.SOURCE_GROUP_ID]}->${row[COLUMN.TARGET_GROUP_ID]}`}));
+  for (const [tableName, rows] of [[TABLES.NODES, nodes], [TABLES.LATENCY_GROUPS, latencyGroups],
+    [TABLES.MESSAGE_GROUPS, messageGroups], [TABLES.SERVICES, services],
+    [TABLES.INTER_GROUP_LATENCIES, edges]]) {
+    for (const row of rows) {
+      cache.applySystemTableChange(tableName, CDC_OPERATION.INSERT, {...row});
+    }
+  }
+  return cache;
 }
 
 function buildStandardDualDomainFixture(t, mode = LATENCY_PROPAGATION_MODE.SAFE, options = {}) {
@@ -372,8 +318,9 @@ test('missing-mapping-refusal-and-recovery: unmapped latency group returns typed
   assert.equal(firstAttempt.error, CDC_COMPLETION.UNKNOWN);
 
   // Now register mapping for UNMAPPED_LG:
-  cache.addMessageGroupRow({[COLUMN.GROUP_ID]: RESOLVED_MG, leader_node_id: 'node-u'});
-  cache.addServiceRow({
+  cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.INSERT,
+    {[COLUMN.GROUP_ID]: RESOLVED_MG, leader_node_id: 'node-u'});
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     [COLUMN.SERVICE_ID]: `${RESOLVED_MG}-r1`,
     [COLUMN.GROUP_ID]: RESOLVED_MG,
     [COLUMN.NODE_ID]: 'node-u',

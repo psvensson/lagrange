@@ -7,8 +7,8 @@
     "bootstrap-membership": 350,
     "cdc-metadata": 72,
     "cli-tooling": 99,
-    "control-plane": 235,
-    "convergence-topology": 87,
+    "control-plane": 236,
+    "convergence-topology": 88,
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
@@ -18,17 +18,17 @@
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 249,
+    "storage-partition": 251,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2726,
-  "digest": "fnv1a32-24f8749a",
+  "censusSize": 2730,
+  "digest": "fnv1a32-a8d270d9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0f7336c5",
+  "observationDigest": "fnv1a32-7c61d957",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -351,6 +351,7 @@
     "test/cache/system-table-cache-consistency.property.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-delete-ordering.test.js": "storage-partition",
     "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js": "storage-partition",
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js": "storage-partition",
     "test/cache/system-table-cache-observation.test.js": "storage-partition",
     "test/cache/system-table-cache-row-preview.test.js": "storage-partition",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "storage-partition",
@@ -518,6 +519,7 @@
     "test/config/architecture-ownership-guardrails.test.js": "architecture-governance",
     "test/config/code-path-uniqueness.property.test.js": "architecture-governance",
     "test/config/configuration-centralization.property.test.js": "architecture-governance",
+    "test/config/configuration-manager-revision.test.js": "control-plane",
     "test/config/configuration-manager.test.js": "control-plane",
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "architecture-governance",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "architecture-governance",
@@ -1440,6 +1442,7 @@
     "test/partition/participant-release-retention-native.test.js": "storage-partition",
     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
     "test/partition/partition-boundary-representation.test.js": "storage-partition",
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js": "storage-partition",
     "test/partition/partition-cdc-delivery-progress.test.js": "storage-partition",
     "test/partition/partition-cdc-drain-admission.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
@@ -2592,6 +2595,7 @@
     "test/topology/latency-group-manager.test.js": "convergence-topology",
     "test/topology/latency-measurement-service.test.js": "convergence-topology",
     "test/topology/latency-topology-constants.test.js": "convergence-topology",
+    "test/topology/latency-tree-routing-generation.test.js": "convergence-topology",
     "test/topology/latency-tree-service.test.js": "convergence-topology",
     "test/topology/node-host-identity-start-site-census.test.js": "convergence-topology",
     "test/topology/node-host-identity.test.js": "convergence-topology",
@@ -4232,6 +4236,11 @@
       "files": [
         "src/bootstrap/system-table-core-schema-definitions.js",
         "test/cache/fixtures/system-table-cache-lifecycle-reconciliation-golden.json"
+      ]
+    },
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js": {
+      "files": [
+        "src/control-plane/membership-planning-version-key.js"
       ]
     },
     "test/cache/system-table-cache-row-preview.test.js": {
@@ -13208,6 +13217,37 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-selection.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/constants/index.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/latency-topology-constants.js",
+        "src/transport/message-router-shared-vocabulary.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
     "test/partition/partition-cdc-delivery-progress.test.js": {
@@ -25010,6 +25050,11 @@
         "scripts",
         "src",
         "test"
+      ]
+    },
+    "test/topology/cdc-recipient-domain-and-retained-debt.test.js": {
+      "files": [
+        "src/constants/index.js"
       ]
     },
     "test/topology/node-host-identity-start-site-census.test.js": {

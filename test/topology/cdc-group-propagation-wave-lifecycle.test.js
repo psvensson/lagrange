@@ -37,6 +37,7 @@ import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-cons
 import {CDC_GROUP_PROPAGATION_EVENT, CDC_GROUP_PROPAGATION_REASON, CDC_GROUP_PROPAGATION_RETRY,
   CDC_GROUP_PROPAGATION_STRATEGY, CDC_GROUP_PUBLICATION_MODE} from
   '../../src/topology/cdc-group-propagation-constants.js';
+import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
 import {createOwnerWorkLedger} from '../helpers/owner-work-ledger.js';
 import {
   beginDurableCdcInvocation,
@@ -46,6 +47,7 @@ import {
   createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
+  createStatedRoutingTree,
   createTopologyCache,
 } from './cdc-group-propagation-service-harness.js';
 
@@ -375,19 +377,17 @@ test('a source group of another latency group is refused before it writes the ' 
 test('at an unchanged publication mode the published reason is the latest admitted plan\'s: ' +
   'no transition is recorded, and a wave admitted under the earlier reason does not write it ' +
   'back when it completes', async (t) => {
-  const node = {[COLUMN.NODE_ID]: 'node-a'};
-  const groups = [];
+  // The node has no latency group yet and no group exists. The real cache
+  // owner, written through below, and the real tree over it.
+  const cache = createTopologyCache({nodes: [{[COLUMN.NODE_ID]: 'node-a'}]});
+  const tree = new LatencyTreeService({nodeId: 'node-a', systemTableCache: cache});
+  tree.initialize();
+  tree.start();
+  t.after(() => tree.stop());
   const held = Promise.withResolvers();
   const f = composeWaveTopology(t, {mode: LATENCY_PROPAGATION_MODE.GROUPED,
     applyCDCBatch: () => f.source.batches.length === 1 ? held.promise : unknownCdcAcceptance(),
-    options: {
-      systemTableCache: {
-        get: (table, key) => table === TABLES.NODES && key === 'node-a' ? {...node} : null,
-        getAll: (table) => table === TABLES.LATENCY_GROUPS ? groups.map((row) => ({...row})) : [],
-        filter: () => [],
-      },
-      latencyTreeService: {getRoutingOrder: () => groups.map((row) => row[COLUMN.GROUP_ID])},
-    }});
+    options: {systemTableCache: cache, latencyTreeService: tree}});
   const published = () => {
     const {currentMode, reasonCode, recentTransitions} = f.service.getPublicationModeDiagnostics();
     return {currentMode, reasonCode, transitions: recentTransitions.length};
@@ -397,8 +397,11 @@ test('at an unchanged publication mode the published reason is the latest admitt
   assert.deepEqual(published(), {currentMode: CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
     reasonCode: CDC_GROUP_PROPAGATION_REASON.MISSING_LOCAL_GROUP, transitions: 1},
   'precondition: the first plan falls back for the missing latency group');
-  node[COLUMN.LATENCY_GROUP_ID] = 'g-1';
-  groups.push(createGroupRow('g-1', 'node-a'), createGroupRow('g-2', 'node-g-2'));
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE,
+    {[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: 'g-1'});
+  for (const row of [createGroupRow('g-1', 'node-a'), createGroupRow('g-2', 'node-g-2')]) {
+    cache.applySystemTableChange(TABLES.LATENCY_GROUPS, CDC_OPERATION.INSERT, row);
+  }
   const later = f.present([laneEvent(TABLES.NODES, 'node-1')]);
   await later.box.promise;
   const afterLater = {currentMode: CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
@@ -427,7 +430,7 @@ async (t) => {
       nodes: [{[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: 'g-1'}],
       groups: [createGroupRow('g-1', 'node-a'), createGroupRow('g-3', null)],
       services: [createMessageGroupServiceRow('s2-r1', 'node-a', '', RAFT_ROLE.LEADER, 's2')]}),
-    latencyTreeService: {getRoutingOrder: () => ['g-1', 'g-3']}}});
+    latencyTreeService: createStatedRoutingTree(['g-1', 'g-3'])}});
   const second = createDurableSourceMessageGroupService('s2');
   const present = (source, key) => f.service.propagateCDCEvent({
     events: [laneEvent(TABLES.SERVICES, key)], sourceMessageGroupService: source,

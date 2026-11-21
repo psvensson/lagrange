@@ -30,6 +30,7 @@ import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {createDurableCdcEvent, createDurablePropagationRequest,
   createDurableSourceMessageGroupService, createMessageGroupServiceRow,
+  createStatedRoutingTree,
   createTopologyCache} from './cdc-group-propagation-service-harness.js';
 
 const NODE_ID = 'cdc-failed-set-node';
@@ -83,7 +84,7 @@ async function harness(t, failingReply, {bareReceipt = false} = {}) {
         return router.deliver(address, payload, options);
       },
     },
-    latencyTreeService: {getRoutingOrder: () => []},
+    latencyTreeService: createStatedRoutingTree([]),
     nowFn: () => 1000,
     deliveryRetryMaxAttempts: MAX_ATTEMPTS,
     deliveryRetryDelayMs: 1,

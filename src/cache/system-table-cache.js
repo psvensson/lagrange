@@ -572,8 +572,10 @@ class SystemTableCache {
     for (const tableName of SYSTEM_TABLES) {
       this.lastCdcObservationByTableName.get(tableName).clear();
       this.mutationVersionByTableKey.get(tableName).clear();
+      // A version a consumer captured never recurs for other rows: the
+      // per-table version survives clear(), and clearing is itself a change.
+      this.bumpTableMutationVersion(tableName);
     }
-    this.mutationVersionByTableName.clear();
     this.tableRevisionWatermarks.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }

@@ -17,7 +17,7 @@ documentClass: generated
 - [hosted-replica-authorities.js](hosted-replica-authorities.js) - The node-local authorities a replica hosted on this node inherits. (importers: many)
 - [latency-topology-setup.js](latency-topology-setup.js) - Shared topology setup owner for latency-aware services. (importers: many)
 - [local-query-transport-readiness.js](local-query-transport-readiness.js) - Report exhausted local query-transport readiness attempts. (importers: many)
-- [message-group-selection.js](message-group-selection.js) - No leading comment; first export: buildMessageGroupOwnerNotReadyError. (importers: few)
+- [message-group-selection.js](message-group-selection.js) - No leading comment; first export: buildMessageGroupOwnerNotReadyError. (importers: many)
 - [message-group-service-activation.js](message-group-service-activation.js) - No leading comment; first export: activateMessageGroupServiceRows. (importers: few)
 - [message-group-service-handler-setup.js](message-group-service-handler-setup.js) - Shared setup for MessageGroupServiceHandler. (importers: few)
 - [message-group-transport-handler.js](message-group-transport-handler.js) - Register the replica's transport handler and record its exact identity. (importers: many)

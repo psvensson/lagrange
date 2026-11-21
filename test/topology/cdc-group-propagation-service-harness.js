@@ -16,6 +16,7 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 
 const DURABLE_SOURCE_FORWARD_RETRY_MS = 20;
 const DURABLE_SOURCE_TERM = 1;
@@ -47,37 +48,35 @@ export function teardownConfig() {
   LoggingService.resetInstance();
 }
 
+// The shared topology cache: the real system table cache owner holding the
+// given rows. Its per-table versions move with every later write, which the
+// propagation service requires of the cache it is wired with.
 export function createTopologyCache({
   nodes = [],
   groups = [],
   services = [],
 } = {}) {
-  const nodeRows = new Map(
-    nodes.map((row) => [row[COLUMN.NODE_ID], {...row}]),
-  );
-  const groupRows = groups.map((row) => ({...row}));
-  const serviceRows = services.map((row) => ({...row}));
+  const cache = new SystemTableCache();
+  for (const [tableName, rows] of [[TABLES.NODES, nodes], [TABLES.LATENCY_GROUPS, groups],
+    [TABLES.SERVICES, services]]) {
+    for (const row of rows) {
+      cache.applySystemTableChange(tableName, CDC_OPERATION.INSERT, {...row});
+    }
+  }
+  return cache;
+}
 
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      return null;
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.LATENCY_GROUPS) {
-        return groupRows.map((row) => ({...row}));
-      }
-      return [];
-    },
-    filter(tableName, predicate) {
-      if (tableName !== TABLES.SERVICES) {
-        return [];
-      }
-      return serviceRows.filter((row) => predicate(row));
-    },
-  };
+// The one routing-order fixture for a test whose subject is an order it states
+// once. A stated order never changes, so its routing generation never moves.
+// A test whose order follows the cache wires the real LatencyTreeService.
+const STATED_ROUTING_GENERATION = 0;
+
+export function createStatedRoutingTree(order) {
+  const routingOrder = Object.freeze([...order]);
+  return Object.freeze({
+    getRoutingOrder: () => [...routingOrder],
+    getRoutingGeneration: () => STATED_ROUTING_GENERATION,
+  });
 }
 
 // The one source message group double: the durable surface the durable wave
@@ -282,7 +281,7 @@ export function composeWaveTopology(t, {answer = () => null, targets = ['g-2'],
         groupId)),
     }),
     messageRouter: router,
-    latencyTreeService: {getRoutingOrder: () => groups},
+    latencyTreeService: createStatedRoutingTree(groups),
     nowFn: () => clock.now(),
     ...FAST_FOREGROUND_RETRY,
     ...options,
