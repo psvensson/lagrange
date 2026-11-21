@@ -7,9 +7,39 @@ const {
   QUERY_ROUTING_REPAIR_REASON,
 } = QUERY_EXECUTOR_SHARED;
 
+function createPartitionCandidateEligibility(executor, partitionId, executionOptions) {
+  // Straggler-hedge attempts must land on a different replica from their primary.
+  const addresses = executionOptions.excludeDeliveryAddresses;
+  const excluded = new Set(Array.isArray(addresses) ? addresses : []);
+  function allowsAddress(address) {
+    return typeof address === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      address.length > 0 && !excluded.has(address);
+  }
+  function accepts(serviceInfo, address, snapshot) {
+    if (!allowsAddress(address)) return false;
+    const row = executor.findRoutingSnapshotService(snapshot, serviceInfo, address);
+    return !executor.isTemporarilyUnroutableAddress(partitionId, address, row);
+  }
+  function resolve(resolution, inspectEligible) {
+    if (!inspectEligible) return resolution;
+    const {candidates, routingSnapshot} = resolution;
+    const seen = new Set();
+    const eligible = candidates.filter((candidate) => {
+      const {address} = candidate;
+      if (seen.has(address) || !accepts(candidate, address, routingSnapshot)) return false;
+      seen.add(address);
+      return true;
+    });
+    return {...resolution, candidates: eligible, ownerHadCandidates: candidates.length > 0};
+  }
+  return {allowsAddress, accepts, resolve};
+}
+
 function createPartitionCandidateDeliveryState({
   allowReadinessAuthoritativeRefresh,
   candidateQueue,
+  candidateEligibility,
+  inspectEligibleCandidates,
   executionOptions = {},
   executor,
   forRead,
@@ -21,13 +51,6 @@ function createPartitionCandidateDeliveryState({
   runtimeRoutingRepairState,
 }) {
   const attemptedAddresses = new Set();
-  // Straggler-hedge attempts exclude the delivery addresses the primary
-  // attempt already targeted so the hedge lands on a different replica.
-  const excludedDeliveryAddresses = new Set(
-    Array.isArray(executionOptions.excludeDeliveryAddresses) ?
-      executionOptions.excludeDeliveryAddresses :
-      [],
-  );
   let leaderRecoveryQueued = false;
   let retryCurrentAddressOnNextAttempt = false;
   let deferPartitionRetryOnNextAttempt = false;
@@ -65,24 +88,9 @@ function createPartitionCandidateDeliveryState({
       return routingSnapshot;
     },
     shouldSkipCandidateDelivery(serviceInfo, address) {
-      if (
-        typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-        address.length === 0 ||
-        attemptedAddresses.has(address) ||
-        excludedDeliveryAddresses.has(address)
-      ) {
-        return true;
-      }
-      const witnessedService = executor.findRoutingSnapshotService(
-        routingSnapshot,
-        serviceInfo,
-        address,
-      );
-      return executor.isTemporarilyUnroutableAddress(
-        partitionId,
-        address,
-        witnessedService,
-      );
+      return attemptedAddresses.has(address) ||
+        (!inspectEligibleCandidates && !candidateEligibility.accepts(
+          serviceInfo, address, routingSnapshot));
     },
     markAttemptedAddress(address) {
       attemptedAddresses.add(address);
@@ -91,7 +99,7 @@ function createPartitionCandidateDeliveryState({
       currentCandidateIndex = null,
       participantNodeId = null,
     ) {
-      if (leaderRecoveryQueued) {
+      if (inspectEligibleCandidates || leaderRecoveryQueued) {
         return;
       }
       const recoveryCandidates = executor.getLeaderRecoveryCandidates(
@@ -182,6 +190,7 @@ function createPartitionCandidateDeliveryState({
         }))
       ) {
         runtimeRoutingRepairState.awaited = true;
+        if (inspectEligibleCandidates) return; // The next inspection reads the owner again.
         refreshRoutingSnapshot();
         const refreshedRecoveryCandidates = executor.getLeaderRecoveryCandidates(
           routingSnapshot,
@@ -227,4 +236,8 @@ function notifyHedgeDeliveryObserver(
   });
 }
 
-export {createPartitionCandidateDeliveryState, notifyHedgeDeliveryObserver};
+export {
+  createPartitionCandidateDeliveryState,
+  createPartitionCandidateEligibility,
+  notifyHedgeDeliveryObserver,
+};
