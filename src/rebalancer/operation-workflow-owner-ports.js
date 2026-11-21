@@ -1,3 +1,4 @@
+import {retainUnclaimedPlacementAfterCreateBudgetTurn} from './operation-workflow-owner-create-budget-dispatch.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 import {readStateField} from '../utils/state-field-read.js';
@@ -686,13 +687,13 @@ async function readOperationWorkflowOwnerPortDurableOperation(
   }
   return OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
 }
-
 async function primeCoordinatorCreatedLocalOwnerOperation(
   owner,
   operation,
   context,
 ) {
   owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
+  if (retainUnclaimedPlacementAfterCreateBudgetTurn(owner, operation, context)) return true;
   try {
     const claimedOperation = await owner.claimPendingDispatchOperation(
       operation,
@@ -723,7 +724,6 @@ async function primeCoordinatorCreatedLocalOwnerOperation(
     throw error;
   }
 }
-
 async function dispatchOperationWorkflowLocalOwner(owner, operation, context) {
   if (shouldPrimeCoordinatorCreatedLocalOwnerOperation(operation, context)) {
     return primeCoordinatorCreatedLocalOwnerOperation(

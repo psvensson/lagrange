@@ -1,3 +1,4 @@
+import {requiresPlacementCreateBootstrapTopology} from './operation-workflow-placement-bootstrap-phase.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {REBALANCER_SKIP_REASON} = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -100,6 +101,17 @@ function retainCoordinatorCreatedDispatchAfterCreateBudgetTurn(owner, entry) {
   return true;
 }
 
+// Native bootstrap may read another partition over transport. Let the
+// existing retained turn run that read and claim outside the budget lane.
+function retainUnclaimedPlacementAfterCreateBudgetTurn(owner, operation, context) {
+  if (!requiresPlacementCreateBootstrapTopology(operation, false) ||
+      resolveCoordinatorCreatedDispatchPhase(context) !==
+        COORDINATOR_CREATED_DISPATCH_PHASE.AFTER_CREATE_BUDGET_TURN) return false;
+  return retainCoordinatorCreatedDispatchAfterCreateBudgetTurn(owner, {
+    operation, claimedOperation: operation, boundary: context.effectCommand,
+  });
+}
+
 /**
  * @param {Object} owner
  * @param {string} operationId
@@ -177,4 +189,5 @@ export {
   dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn,
   resolveCoordinatorCreatedDispatchPhase,
   retainCoordinatorCreatedDispatchAfterCreateBudgetTurn,
+  retainUnclaimedPlacementAfterCreateBudgetTurn,
 };
