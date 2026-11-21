@@ -2,8 +2,8 @@
 // to choose a fresh target or reserve copy capacity on an already serving one.
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
-import {withRepairLedger} from './placement-retained-row-repair-fixture.js';
-import {NODE, placementStatement, stepLedgerRow} from './placement-admission-fixture.js';
+import {withRepairLedger, stepRetainedLedgerRow} from './placement-retained-row-repair-fixture.js';
+import {NODE, placementStatement} from './placement-admission-fixture.js';
 import {createOperationAt, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {REPLACE_INTENT_FIELD as INTENT} from '../../src/rebalancer/operation-workflow-replace-owner-state.js';
@@ -60,7 +60,7 @@ for (const first of ['normal', 'retained']) {
         const result = await world.coordinator.repository.persistOperationUpdate(retained,
           {expectedWorkflowStep: WORKFLOW_STEP.STOPPING});
         assert.equal(result.disposition, DISPOSITION.REFUSED);
-        stepLedgerRow(world.leader, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+        await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
         await settleTicks();
         await world.coordinator.repository.retainedPlacementRepairDrain;
       } else {
