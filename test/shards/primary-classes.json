@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2366,
+    "unit": 2368,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2725,
-  "digest": "fnv1a32-8b158853",
+  "censusSize": 2727,
+  "digest": "fnv1a32-3844b233",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1796,6 +1796,7 @@
     "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "unit",
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js": "unit",
     "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js": "unit",
     "test/raft/raft-rs-backend/formation-placement-lease-authority.test.js": "unit",
     "test/raft/raft-rs-backend/formation-placement-native-retirement.test.js": "unit",
@@ -1837,6 +1838,7 @@
     "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "unit",
     "test/raft/raft-rs-backend/peer-identity.test.js": "unit",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "unit",
+    "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "unit",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "unit",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "unit",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "unit",
