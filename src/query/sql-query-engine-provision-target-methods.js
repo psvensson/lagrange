@@ -27,9 +27,10 @@ function readTargetAnswerReasons(answer) {
 
 function buildProvisionTargetRefusal({
   partitionId, jobId, diagnostics, nodeIds, requiredReplicaCount,
-  quorumReplicaCount, retryAfterMs,
+  quorumReplicaCount, defaultRetryAfterMs,
 }) {
   const {cohort, epoch, selectedNodeIds} = diagnostics;
+  const retryAfterMs = cohort?.retryAfterMs ?? defaultRetryAfterMs;
   const reasonCodes = new Set();
   if (cohort?.state === LOCAL_STR_UNAVAILABLE && cohort.reason) {
     reasonCodes.add(cohort.reason);
@@ -107,7 +108,6 @@ class SQLQueryEngineProvisionTargetMethods {
    * @param {string[]} [options.explicitTargetNodeIds]
    * @param {number} [options.maxWaitMs]
    * @param {boolean} [options.failOnTimeout]
-   * @param {Function} [options.assertProvisioningOwnership]
    * @return {Promise<Object>}
    * @private
    */
@@ -158,7 +158,8 @@ class SQLQueryEngineProvisionTargetMethods {
         this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount));
     }
 
-    let nodeIds = hasExplicitTargets ? explicitTargetNodeIds : diagnostics.selectedNodeIds;
+    let candidateTargetNodeIds = hasExplicitTargets ?
+      explicitTargetNodeIds : diagnostics.selectedNodeIds;
     const majorityCount = this.calculateQuorumReplicaCount(requiredReplicaCount);
     const requestedMinimum = options.minimumRoutableReplicaCount;
     const quorumReplicaCount =
@@ -168,28 +169,34 @@ class SQLQueryEngineProvisionTargetMethods {
         majorityCount;
 
     let admissionProbe = null;
-    if (nodeIds.length >= quorumReplicaCount) {
-      if (partitionId && this.supportsProvisioningAdmissionPrecheck()) {
-        admissionProbe = await this.probeProvisioningTargetAdmission({
-          partitionId,
-          targetNodeIds: nodeIds,
-          schemaJobId: options.schemaJobId,
-        });
-      }
-      if (options.assertProvisioningOwnership) {
-        await options.assertProvisioningOwnership();
-      }
+    if (candidateTargetNodeIds.length >= quorumReplicaCount &&
+        partitionId && this.supportsProvisioningAdmissionPrecheck()) {
+      admissionProbe = await this.probeProvisioningTargetAdmission({
+        partitionId,
+        targetNodeIds: candidateTargetNodeIds,
+        requiredReplicaCount,
+        schemaJobId: options.schemaJobId,
+        routingReadinessDimension: options.routingReadinessDimension,
+        timeoutBudget: options.timeoutBudget,
+      });
       throwIfCancellationRequested(cancellationToken);
-      if (!hasExplicitTargets && (admissionProbe || options.assertProvisioningOwnership)) {
+      this.assertProvisioningAttemptBudget(options.timeoutBudget);
+      if (!hasExplicitTargets) {
         // The owner fences expired or superseded evidence on every answer.
-        // Newly eligible targets belong to a subsequent admission attempt.
         ({diagnostics} =
           this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount));
         const eligibleNodeIds = new Set(diagnostics.selectedNodeIds);
-        nodeIds = nodeIds.filter((nodeId) => eligibleNodeIds.has(nodeId));
+        const checkedNodeIds = new Set([
+          ...admissionProbe.existingRoutableNodeIds,
+          ...admissionProbe.candidateTargetNodeIds,
+        ]);
+        candidateTargetNodeIds = candidateTargetNodeIds.filter((nodeId) =>
+          eligibleNodeIds.has(nodeId) && checkedNodeIds.has(nodeId));
       }
     }
 
+    const nodeIds = hasExplicitTargets ?
+      candidateTargetNodeIds : candidateTargetNodeIds.slice(0, requiredReplicaCount);
     if (nodeIds.length < quorumReplicaCount) {
       const detail = buildProvisionTargetRefusal({
         partitionId,
@@ -198,14 +205,14 @@ class SQLQueryEngineProvisionTargetMethods {
         nodeIds,
         requiredReplicaCount,
         quorumReplicaCount,
-        retryAfterMs: diagnostics.cohort?.retryAfterMs ??
-          this.tablePartitionProvisioningTimeoutMs,
+        defaultRetryAfterMs: this.tablePartitionProvisioningTimeoutMs,
       });
       if (options.failOnTimeout !== false) {
         throwProvisionTargetRefusal(detail);
       }
       return this.buildProvisionTargetNodeConvergenceResult({
         nodeIds,
+        candidateTargetNodeIds,
         diagnostics,
         admissionProbe,
         timedOut: true,
@@ -219,6 +226,7 @@ class SQLQueryEngineProvisionTargetMethods {
 
     return this.buildProvisionTargetNodeConvergenceResult({
       nodeIds,
+      candidateTargetNodeIds,
       diagnostics,
       admissionProbe,
       timedOut: false,
@@ -232,6 +240,27 @@ class SQLQueryEngineProvisionTargetMethods {
         nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
       }),
     });
+  }
+
+  requireFreshFoundingTargets({
+    partitionId, jobId, nodeIds, requiredReplicaCount, quorumReplicaCount,
+  }) {
+    const {diagnostics} =
+      this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
+    const eligibleNodeIds = new Set(diagnostics.selectedNodeIds);
+    const freshNodeIds = nodeIds.filter((nodeId) => eligibleNodeIds.has(nodeId));
+    if (freshNodeIds.length < quorumReplicaCount) {
+      throwProvisionTargetRefusal(buildProvisionTargetRefusal({
+        partitionId,
+        jobId,
+        diagnostics,
+        nodeIds: freshNodeIds,
+        requiredReplicaCount,
+        quorumReplicaCount,
+        defaultRetryAfterMs: this.tablePartitionProvisioningTimeoutMs,
+      }));
+    }
+    return {nodeIds: freshNodeIds, epoch: diagnostics.epoch};
   }
 
   buildProvisionTargetNodeConvergenceResult(options = {}) {
@@ -252,7 +281,8 @@ class SQLQueryEngineProvisionTargetMethods {
       }));
     return {
       ...contractOutcome,
-      nodeIds: Array.isArray(options.nodeIds) ? options.nodeIds : [],
+      nodeIds: options.nodeIds,
+      candidateTargetNodeIds: options.candidateTargetNodeIds,
       diagnostics,
       admissionProbe:
         options?.admissionProbe &&

@@ -462,6 +462,44 @@ for (const {replicaCount, members, targetNodeIds, expected} of [
   });
 }
 
+test('founding checks the next eligible target after a pre-effect refusal',
+  async (t) => {
+    const {state, readiness, engine} = createServeRefreshFixture(t, createGateway());
+    const members = ['serve-a', 'serve-b', 'serve-c', 'serve-d'];
+    state.nodes.push({...state.nodes[0], node_id: 'serve-d'});
+    state.publications = [serveRefreshPublication(3, members)];
+    await readiness.readServeEligibility();
+    const native = captureFoundingAdmission(engine, (nodeId) => ({
+      allowed: nodeId !== 'serve-a',
+    }));
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'alternate-probe-p1', replicaCount: 3,
+    }), {message: 'the founding admission reached the native boundary'});
+    t.same(native.checked, members);
+    t.same(native.proposals[0]?.moves.map(({targetNodeId}) => targetNodeId),
+      ['serve-b', 'serve-c', 'serve-d']);
+    t.equal(native.proposals.length, 1, 'an unknown native reply never selects a second set');
+  });
+
+test('founding rechecks the cohort after the schema ownership fence',
+  async (t) => {
+    const {state, clock, readiness, engine} =
+      createServeRefreshFixture(t, createGateway());
+    state.nodes[2].ready_lease_expires_at = 1100;
+    await readiness.readServeEligibility();
+    const native = captureFoundingAdmission(engine);
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'ownership-probe-p1', replicaCount: 3,
+      async assertProvisioningOwnership() {
+        native.events.push('ownership');
+        clock.now = 1200;
+      },
+    }), {message: 'the founding admission reached the native boundary'});
+    t.same(native.events, ['serve-a', 'serve-b', 'serve-c', 'ownership', 'found']);
+    t.same(native.proposals[0]?.moves.map(({targetNodeId}) => targetNodeId),
+      ['serve-a', 'serve-b'], 'founding retains only the still-affirmed majority');
+  });
+
 test('admission outlasting the parent deadline cannot found a healthy cohort',
   async (t) => {
     const {clock, engine, readiness} =
@@ -470,6 +508,7 @@ test('admission outlasting the parent deadline cannot found a healthy cohort',
     engine.nowFn = () => clock.now;
     const native = captureFoundingAdmission(engine, () => {
       clock.now += 50;
+      return {allowed: true};
     });
     const timeoutBudget = createTimeoutBudget({
       configuredBudgetMs: 20, now: engine.nowFn,
@@ -484,7 +523,7 @@ test('admission outlasting the parent deadline cannot found a healthy cohort',
     t.same(native.proposals, [], 'a spent budget cannot reach the founding owner');
   });
 
-function captureFoundingAdmission(engine, duringPrecheck = () => {}) {
+function captureFoundingAdmission(engine, precheck = () => ({allowed: true})) {
   const events = [];
   const checked = [];
   const proposals = [];
@@ -494,8 +533,7 @@ function captureFoundingAdmission(engine, duringPrecheck = () => {}) {
     async checkProvisioningAdmission({nodeId}) {
       checked.push(nodeId);
       events.push(nodeId);
-      duringPrecheck();
-      return {allowed: true};
+      return precheck(nodeId);
     },
     async admitPlacementStatement({statement}) {
       proposals.push(statement);

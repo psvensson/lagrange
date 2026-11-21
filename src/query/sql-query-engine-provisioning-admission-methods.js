@@ -1,9 +1,13 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
+  createTimeoutBudgetError, getRemainingBudgetMs, TIMEOUT_BUDGET_CLASSIFICATION,
+} from '../control-plane/timeout-budget.js';
+import {
   buildSchemaProvisioningChildIntent,
 } from './schema-provisioning-child-intent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_PARTITION_PROVISIONING = 'partition_provisioning';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_WARN = 'warn';
@@ -38,10 +42,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     if (!admissionResult || typeof admissionResult !== LOCAL_STR_OBJECT) {
       return false;
     }
-    if (admissionResult.allowed === true) {
-      return false;
-    }
-    return true;
+    return admissionResult.allowed === false;
   }
 
   /**
@@ -279,6 +280,22 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     );
   }
 
+  assertProvisioningAttemptBudget(timeoutBudget) {
+    if (!timeoutBudget ||
+        getRemainingBudgetMs(timeoutBudget, {now: this.nowFn}) !== 0) {
+      return;
+    }
+    const error = createTimeoutBudgetError({
+      message: QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+      budget: timeoutBudget,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
+      nestedOperation: LOCAL_STR_PARTITION_PROVISIONING,
+      now: this.nowFn,
+    });
+    error.code = error.errorCode;
+    throw error;
+  }
+
   /**
    * Probe provisioning admission for one candidate target cohort.
    * @param {Object} options
@@ -290,8 +307,9 @@ class SQLQueryEngineProvisioningAdmissionMethods {
   async probeProvisioningTargetAdmission(options = {}) {
     const partitionId = String(options.partitionId || '');
     const targetNodeIds = this.normalizeTargetNodeIds(options.targetNodeIds);
-    const existingRoutableNodeIds =
-      this.getRoutablePartitionServiceNodeIds(partitionId);
+    const existingRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
+      partitionId, options.routingReadinessDimension,
+    );
     const routableNodeIdSet = new Set(existingRoutableNodeIds);
     const candidateTargetNodeIds = [];
 
@@ -312,10 +330,17 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       };
     }
 
+    const checkedTargetNodeIds = [];
     const admittedTargetNodeIds = [];
     const acceptedTargetPlans = [];
     const rejectedTargetNodePlans = [];
     for (const targetNodeId of candidateTargetNodeIds) {
+      if (existingRoutableNodeIds.length + admittedTargetNodeIds.length >=
+          options.requiredReplicaCount) {
+        break;
+      }
+      this.assertProvisioningAttemptBudget(options.timeoutBudget);
+      checkedTargetNodeIds.push(targetNodeId);
       let admissionDecision = null;
       const childIntent = buildSchemaProvisioningChildIntent(
         options.schemaJobId,
@@ -372,7 +397,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
 
     return {
       existingRoutableNodeIds,
-      candidateTargetNodeIds,
+      candidateTargetNodeIds: checkedTargetNodeIds,
       admittedTargetNodeIds,
       admittedTargetPlans: Object.freeze(acceptedTargetPlans),
       rejectedTargetNodePlans,
@@ -471,10 +496,12 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    * @private
    */
   async createProvisioningOperationWithAdmissionReentry(options) {
-    const createWithAdmission = (admission) =>
-      this.rebalanceCoordinator.createOperation(
+    const createWithAdmission = (admission) => {
+      this.assertProvisioningAttemptBudget(options.timeoutBudget);
+      return this.rebalanceCoordinator.createOperation(
         this.buildProvisioningCreateOperationMove(options, admission),
       );
+    };
     let admission = options.operationCreationAdmission || null;
     try {
       return await createWithAdmission(admission);
