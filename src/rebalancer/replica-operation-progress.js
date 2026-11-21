@@ -430,13 +430,7 @@ function getNextWorkflowStep(operationType, currentStep) {
   return steps[currentIndex + 1];
 }
 
-/**
- * Check if a workflow step is a terminal step (final step or FAILED).
- *
- * @param {string} operationType - The operation type (ADD or REMOVE).
- * @param {string} step - The workflow step to check.
- * @return {boolean} True if the step is terminal.
- */
+/* A terminal outcome may close the obligation outside its progress steps. */
 function isTerminalStep(operationType, step) {
   if (step === WORKFLOW_STEP.FAILED) {
     return true;

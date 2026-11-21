@@ -1,7 +1,7 @@
 // A placement REMOVE that was authorized for a learner has two effects.
 // The current partition leader must first commit removal of that learner.
 // The target runtime can be cleaned only for the captured service generation.
-import {COLUMN, SERVICE_STATUS, STATE, TABLES} from '../constants/index.js';
+import {COLUMN, SERVICE_STATUS, STATE, TABLES, WORKFLOW_STEP} from '../constants/index.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {RAFT_FOUNDING_GROWTH_OUTCOME, RAFT_OPERATION_OUTCOME} from
@@ -23,6 +23,7 @@ import {canonicalVoterRetirement} from './replica-placement-owner-admission-stat
 import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
 import {observesCommittedNodeLoss} from './replica-placement-owner-deficits.js';
 import {ReplicaStatus} from './replica-status.js';
+import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
 
 function verdict(state, fields = {}) {
   return Object.freeze({state, ...fields});
@@ -42,6 +43,26 @@ function isUnscopedPlacementRemoval(operation) {
   return admission !== NO_PLACEMENT_ADMISSION &&
     admission.learnerRetirement === undefined &&
     canonicalVoterRetirement(admission.voterRetirement) === null;
+}
+
+async function settleSupersededRemoval(owner, operation, reason) {
+  const outcome = await owner.supersedePlacementRemoval(operation, {
+    expectedWorkflowStep: operation.workflowStep, reason,
+  });
+  return outcome === null ?
+    owner.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+      operation.operationId, {error: reason}) :
+    owner.buildTerminalOperationDispatchResult(outcome, {operationId: operation.operationId});
+}
+
+async function reconcileUnscopedPlacementRemoval(owner, operation) {
+  if (!isUnscopedPlacementRemoval(operation)) return null;
+  const reason = LEARNER_RETIREMENT_OUTCOME.INTENT_UNSCOPED;
+  if (operation.workflowStep === WORKFLOW_STEP.PENDING) {
+    return settleSupersededRemoval(owner, operation, reason);
+  }
+  return owner.buildSkippedOperationResult(REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+    operation.operationId, {error: reason});
 }
 
 async function currentNode(owner, targetNodeId) {
@@ -253,6 +274,7 @@ function isScopedPlacementLearnerRetirement(operation) {
 export {
   completeOwnedLearnerRetirement, evaluatePlacementLearnerRetirement,
   isScopedPlacementLearnerRetirement,
-  isUnscopedPlacementRemoval, recoverCompletedLearnerRetirementCleanup,
+  isUnscopedPlacementRemoval, reconcileUnscopedPlacementRemoval,
+  recoverCompletedLearnerRetirementCleanup, settleSupersededRemoval,
   releaseCompletedLearnerRetirementCleanup,
 };

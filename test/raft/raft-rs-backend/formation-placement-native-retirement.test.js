@@ -275,8 +275,10 @@ test('late native promotion preserves an incumbent named by an admitted learner 
     }
   }, {createCluster: addressedCluster}));
 
-for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
-  test(`a historical unscoped REMOVE holds only unresolved dispatch debt (${priorStep})`,
+for (const schedule of ['undispatched', 'dispatched', 'concurrent dispatch claim']) {
+  const priorStep = schedule === 'dispatched' ? WORKFLOW_STEP.SENDING : WORKFLOW_STEP.PENDING;
+  const concurrentClaim = schedule === 'concurrent dispatch claim';
+  test(`a historical unscoped REMOVE holds only unresolved dispatch debt (${schedule})`,
     async (t) => withPlacementLeaseAuthority(async (context) => {
       const {cluster, initial, nodes, ledger} = context;
       const admitted = await admitRetirement(context);
@@ -299,10 +301,44 @@ for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
       const deliveries = [];
       const coordinator = openDispatchOwner({source, rows, removal: historical, nodes, cluster,
         leader, deliveries});
+      const supersessionReached = Promise.withResolvers();
+      const supersessionReleased = Promise.withResolvers();
+      const repository = coordinator.repository;
+      const persist = repository.persistOperationUpdate.bind(repository);
+      if (concurrentClaim) {
+        repository.persistOperationUpdate = async (operation, options) => {
+          if (operation.workflowStep === WORKFLOW_STEP.SUPERSEDED) {
+            supersessionReached.resolve(options);
+            await supersessionReleased.promise;
+          }
+          return persist(operation, options);
+        };
+      }
+      const dispatch = coordinator.dispatchOperation(historical);
       try {
-        const result = await coordinator.dispatchOperation(historical);
+        if (concurrentClaim) {
+          const options = await waitForHeldRequest(supersessionReached);
+          assert.equal(options.expectedWorkflowStep, WORKFLOW_STEP.PENDING);
+          const current = await coordinator.getOperation(historical.operation_id);
+          assert.equal(current.workflowStep, WORKFLOW_STEP.PENDING);
+          const transition = {step: WORKFLOW_STEP.SENDING, timestamp: current.updatedAt + 1,
+            previousStep: WORKFLOW_STEP.PENDING, reason: 'concurrent_dispatch_claim'};
+          const winner = await persist({...current, workflowStep: WORKFLOW_STEP.SENDING,
+            updatedAt: transition.timestamp, stepsHistory: [...current.stepsHistory, transition]},
+          {expectedWorkflowStep: WORKFLOW_STEP.PENDING});
+          assert.equal(winner.persisted, true);
+          assert.equal((await coordinator.getOperation(historical.operation_id)).workflowStep,
+            WORKFLOW_STEP.SENDING);
+          supersessionReleased.resolve();
+        }
+        const result = await dispatch;
         const pending = await coordinator.getOperation(historical.operation_id);
-        if (priorStep === WORKFLOW_STEP.PENDING) {
+        if (concurrentClaim) {
+          assert.notEqual(result.reconcileOutcome, 'superseded');
+          assert.equal(pending.workflowStep, WORKFLOW_STEP.SENDING);
+          assert.equal(pending.completedAt, null);
+          assert.equal(pending.stepsHistory.at(-1).reason, 'concurrent_dispatch_claim');
+        } else if (priorStep === WORKFLOW_STEP.PENDING) {
           assert.equal(result.reconcileOutcome, 'superseded');
           assert.equal(pending.workflowStep, 'SUPERSEDED');
           assert.equal(pending.status, 'superseded');
@@ -330,6 +366,8 @@ for (const priorStep of [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]) {
         assert.ok(appliedStateOf(cluster, SEED_REPLICA).voters.includes(peer));
         t.diagnostic(JSON.stringify({result, pendingStep: pending.workflowStep, peer}));
       } finally {
+        supersessionReleased.resolve();
+        await Promise.allSettled([dispatch]);
         await coordinator.shutdown();
         await source.dispose();
         await leader.dispose();
