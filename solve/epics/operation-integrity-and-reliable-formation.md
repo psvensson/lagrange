@@ -170,6 +170,18 @@ is still at zero of three consecutive passes.
 [duplication original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--core-duplication-dbf6-nov21.tar.gz),
 [public SQL original](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--public-sql-7675-and-reservation-c393-nov21.tar.gz).
 
+The reviewed removal and progress changes are integrated at `8b9fdbf37`.
+Twenty of 21 affected files passed across the three lab machines. Two
+cases in the remaining scheduling file failed. One observed a third REMOVE
+after the incumbent cleared; its witness expected one initial delivery
+and one resend. The other observed the injected restoration described
+below. The REPLACE dispatch owner is tracing the resend ordering, and the
+placement ledger owner is validating restoration at apply. A
+three-host formation **diagnostic** on the same runtime at `e3e0164d6`
+will check the earlier in-flight operations and public SQL failure. It
+precedes acceptance of the repaired composition.
+[Combined results](https://github.com/psvensson/lagrange/releases/download/solve-evidence/fresh-formation-user-table-routability--combined-removal-core-8b9f-nov21.tar.gz).
+
 Removal planning, delayed replies and missing-row recovery have different evidence.
 
 * Planning checks the entity's competing operations before it has a row
