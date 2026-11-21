@@ -12,19 +12,19 @@ const REPLICA_OPERATION_REPOSITORY_ERROR_MSG = Object.freeze({
     'Terminal failed-create cleanup recovery read unavailable',
 });
 
-function unavailableReplicaOperationMutation() {
+function refuseMissingReplicaOperationMutationPort() {
   const error = new Error(REPLICA_OPERATION_REPOSITORY_ERROR_MSG.MUTATION_PORT_REQUIRED);
   error.code = REPLICA_OPERATION_REPOSITORY_ERROR_CODE.MUTATION_PORT_REQUIRED;
   throw error;
 }
 
-function bindReplicaOperationMutationPort(gateway, required) {
+// The repository's one writer is the gateway's structured mutation port. A
+// gateway without it is refused where it is bound - at construction or on a
+// dependency sync - so no repository exists whose first write discovers it.
+function bindReplicaOperationMutationPort(gateway) {
   const submit = gateway?.submitMutation;
-  if (typeof submit === 'function') {
-    return (mutation, options) => gateway.submitMutation(mutation, options);
-  }
-  if (required) unavailableReplicaOperationMutation();
-  return unavailableReplicaOperationMutation;
+  if (typeof submit !== 'function') refuseMissingReplicaOperationMutationPort();
+  return (mutation, options) => gateway.submitMutation(mutation, options);
 }
 
 export {
