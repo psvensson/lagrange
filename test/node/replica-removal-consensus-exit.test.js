@@ -270,3 +270,62 @@ async (t) => {
     'setLocalReplica clears completedRemovalOperationId on non-REMOVED status',
   );
 });
+
+// The completion record above is process-local (the handler's localReplicas
+// entry). After a process restart the same REMOVE redelivered must still
+// answer a typed outcome decided from durable state: the row is absent and
+// nothing is hydrated, so the node answers NOT_FOUND - never COMPLETED from
+// a record it no longer has, never ERROR for an operation whose replica is
+// gone (the coordinator maps a REMOVE's NOT_FOUND to source-absent
+// completion, remove-active-dispatch-redrive.test.js), and it runs no
+// cleanup effect and reports no outcome.
+test('a REMOVE re-delivered after completion AND a process restart is ' +
+  'answered the typed NOT_FOUND from durable state, never from the lost ' +
+  'record', async (t) => {
+  const world = openWorld(t);
+  const {cluster, cache, source} = world;
+  t.equal(world.elected, true, 'setup: the other voter leads');
+  const removeOutcomes = (outcomes) => outcomes.filter(([type]) =>
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED ||
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED).map(([type]) => type);
+
+  t.equal((await source.removeRequest('op-ledger-remove')).status,
+    ReplicaOperationResponseStatus.INITIATED);
+  await nextTurns();
+  await retirePartitionRaftPeer({raft: cluster.node(LEADER),
+    partitionId: PARTITION_ID, replicaId: LEADER}, SOURCE);
+  for (let round = 0; round < EXIT_ROUNDS &&
+    removeOutcomes(source.outcomes).length === 0; round += 1) {
+    cluster.settle(() => false, {rounds: 10});
+    await nextTurns();
+  }
+  t.same(removeOutcomes(source.outcomes),
+    [EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED],
+    'setup: the removal completed');
+  t.equal(cache.get('services', SOURCE) ?? null, null,
+    'setup: its services row is deleted');
+  t.equal(source.lifecycleStore.durable.services.get(SOURCE) ?? null, null,
+    'setup: the durable services row is deleted');
+
+  const restarted = source.restart();
+  t.equal(restarted.handler.localReplicas.get(SOURCE) ?? null, null,
+    'the restarted process holds no completion record');
+  const redelivered = await restarted.removeRequest('op-ledger-remove');
+  t.equal(redelivered.status, ReplicaOperationResponseStatus.NOT_FOUND,
+    `the same operation re-delivered after a restart is NOT_FOUND (${
+      redelivered.status}: ${redelivered.error ?? ''})`);
+  t.not(redelivered.status, ReplicaOperationResponseStatus.COMPLETED,
+    'never COMPLETED: the process-local record is gone');
+  t.not(redelivered.status, ReplicaOperationResponseStatus.ERROR,
+    'never ERROR: the replica is absent, not refused');
+  t.same(removeOutcomes(restarted.outcomes), [],
+    'the restarted handler reports no removal outcome');
+  t.equal(restarted.handler.replicaStateMachine.getState(SOURCE), null,
+    'nothing is tracked after the redelivery');
+  t.equal(source.lifecycleStore.durable.services.get(SOURCE) ?? null, null,
+    'no services row is resurrected');
+
+  const other = await restarted.removeRequest('op-other-remove');
+  t.equal(other.status, ReplicaOperationResponseStatus.NOT_FOUND,
+    'another operation after the restart gets the same durable answer');
+});
