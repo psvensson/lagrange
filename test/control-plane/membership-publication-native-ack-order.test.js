@@ -416,12 +416,12 @@ test('explicit publication identity cannot be rebound to another revision or coh
 const ACK_CLOCK = WRITER_TIME + 10;
 const RECOVERY_SOURCE = 'committed_recovery_snapshot';
 
-function installLifecycleRefresh(writer, row) {
+function installLifecycleRefresh(writer, row, placementNodeIds = [NODES[1]]) {
   const previous = normalizeControlPlanePublicationRow(row);
   const projection = {
     ...previous.membershipLifecycleSummary,
     locallyEligibleNodeIds: NODES,
-    formationPlacementNodeIds: [NODES[1]],
+    formationPlacementNodeIds: placementNodeIds,
     recoveryActiveNodeSource: RECOVERY_SOURCE,
   };
   writer.coordinator.deriveClusterMembershipCandidate = async () => ({
@@ -479,6 +479,50 @@ for (const order of ['ack-late', 'refresh-late', 'serial']) {
         held?.release();
         await Promise.allSettled(pending ? [pending.promise] : []);
         ackWriter.cdc.markShuttingDown();
+      }
+    }));
+}
+
+for (const order of ['visible-before-read', 'committed-during-cas']) {
+  test(`a stale lifecycle refresh defers when a different refresh is ${order}`,
+    () => withPublicationLedger(async (ledger, staleWriter) => {
+      const {leader} = ledger;
+      const currentWriter = createPublicationWriter(leader, NODES[1], ACK_CLOCK);
+      const row = publicationRow(3, NODES, WRITER_TIME - 10);
+      const publicationId = row.publication_id;
+      let held;
+      let pending;
+      try {
+        await staleWriter.coordinator.persistPublicationBirth(row);
+        const staleRefresh = installLifecycleRefresh(staleWriter, row, [NODES[0]]);
+        const currentRefresh = installLifecycleRefresh(currentWriter, row, [NODES[1]]);
+        if (order === 'committed-during-cas') {
+          held = holdFirstAcknowledgement(leader);
+          pending = track(staleRefresh());
+          await settleTicks();
+          assert.ok(held.request, 'the stale refresh reached its first native proposal');
+        }
+        await currentRefresh();
+        const winner = leader.db.prepare(SELECT_ROW).get(publicationId);
+        assert.deepEqual(normalizeControlPlanePublicationRow(winner)
+          .membershipLifecycleSummary.formationPlacementNodeIds, [NODES[1]]);
+        const appliedWithWinner = ledger.applied.length;
+        held?.release();
+        await assert.rejects(pending ? pending.promise : staleRefresh(),
+          {code: 'PUBLICATION_WRITE_UNCONFIRMED', deferRetry: true});
+        assert.deepEqual(leader.db.prepare(SELECT_ROW).get(publicationId), winner);
+        assert.equal(ledger.applied.length, appliedWithWinner + (held ? 1 : 0),
+          'the losing CAS can settle zero rows but cannot submit a stale metadata proposal');
+        if (held) assert.equal(held.replay.changes, 0);
+
+        const rederivedRefresh = installLifecycleRefresh(staleWriter, winner, NODES);
+        await rederivedRefresh();
+        assert.deepEqual(readDurablePublication(leader, publicationId)
+          .membershipLifecycleSummary.formationPlacementNodeIds, NODES);
+      } finally {
+        held?.release();
+        await Promise.allSettled(pending ? [pending.promise] : []);
+        currentWriter.cdc.markShuttingDown();
       }
     }));
 }
