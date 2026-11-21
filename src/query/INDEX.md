@@ -101,7 +101,7 @@ documentClass: generated
 - [sql-query-engine-metadata-authority-refresh.js](sql-query-engine-metadata-authority-refresh.js) - No leading comment; first export: METADATA_AUTHORITY_ERROR_CODE. (importers: few)
 - [sql-query-engine-participant-wire.js](sql-query-engine-participant-wire.js) - The engine's wire to the participant transaction owner (TX1 design revision 10, sections 2.2 and 4; seam items A, D,... (importers: many)
 - [sql-query-engine-partition-routing-readiness.js](sql-query-engine-partition-routing-readiness.js) - The outstanding durable split proposals: one per tables row whose transition is a retryable split (BLOCKED /... (importers: few)
-- [sql-query-engine-provision-target-methods.js](sql-query-engine-provision-target-methods.js) - Log a provisioning-target wait failure that waitForCondition did not already report as a spent bound (e.g. a budget... (importers: few)
+- [sql-query-engine-provision-target-methods.js](sql-query-engine-provision-target-methods.js) - Resolve the minimum routable replica cohort required before provisioning can continue. (importers: few)
 - [sql-query-engine-provisioning-admission-methods.js](sql-query-engine-provisioning-admission-methods.js) - Return true when one create-operation error was denied by admission. (importers: one)
 - [sql-query-engine-provisioning-methods.js](sql-query-engine-provisioning-methods.js) - Resolve active node IDs eligible for initial replica provisioning. (importers: few)
 - [sql-query-engine-request-dispatch.js](sql-query-engine-request-dispatch.js) - Canonical SqlRequest execution-mode dispatch. (importers: few)
