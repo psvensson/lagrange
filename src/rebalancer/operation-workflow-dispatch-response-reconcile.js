@@ -24,6 +24,8 @@ import {
 } from './operation-workflow-ambiguous-create-delivery.js';
 import {didOperationReconcileAdvanceOrComplete, OPERATION_RECONCILE_OUTCOME} from
   './operation-workflow-reconcile-outcome.js';
+import {reconcileSatisfiedCreateResponse} from
+  './operation-workflow-create-satisfied-response.js';
 import {repairStrandedRemoveAfterResponse} from './operation-workflow-stranded-remove-repair.js';
 import {
   applyGrowthPromoteRequestFields,
@@ -1212,47 +1214,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     return this.getObservedOperationRowTargetProgressStatus(operation);
   },
   async handleCreatePhaseSatisfiedResponse(operation, responseStatus) {
-    try {
-      await this.applyReconciledReplicaStatus(
-        operation,
-        ReplicaStatus.ACTIVE,
-      );
-      const replaceResumeDecision =
-        this.buildCreateSatisfiedReplaceResumeDecision(operation);
-      let replaceResumeResult = null;
-      if (replaceResumeDecision.shouldResume) {
-        replaceResumeResult =
-          await this.executeOperationFromReconcilePath(operation);
-      }
-      if (replaceResumeResult?.skipped === true) {
-        this.ensurePriorityActiveReplaceRetryArmed(operation);
-      }
-      return this.buildSuccessfulOperationResult(operation.operationId, {
-        status: responseStatus,
-      });
-    } catch (error) {
-      if (
-        this.deferObservedProgressRetry(
-          operation?.operationId || null,
-          SYSTEM_TABLE_NAME.SERVICES,
-          OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
-          error,
-        )
-      ) {
-        return this.buildSkippedOperationResult(
-          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-          operation?.operationId || null,
-          {
-            error: this.normalizeErrorMessage(
-              error,
-              OPERATION_WORKFLOW_OWNER_LITERAL
-                .RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE,
-            ),
-          },
-        );
-      }
-      throw error;
-    }
+    return reconcileSatisfiedCreateResponse(this, operation, responseStatus);
   },
 };
 const {

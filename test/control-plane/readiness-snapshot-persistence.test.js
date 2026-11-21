@@ -29,6 +29,8 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   OPERATION_METADATA_KEY,
+  ReplicaStatus,
+  WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-status.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
@@ -199,7 +201,7 @@ function createCanonicalOperationStore(t) {
       const statement = database.prepare(sql);
       if (statement.reader) {
         const rows = statement.all(...params);
-        return {success: true, rows, affectedRows: rows.length};
+        return {success: true, rows, rowSetComplete: true, affectedRows: rows.length};
       }
       const result = statement.run(...params);
       return {
@@ -212,7 +214,16 @@ function createCanonicalOperationStore(t) {
       return {success: false, error: error.message, errorCode: error.code};
     }
   };
-  return {executeQuery, sqlCalls};
+  const gateway = {
+    executeQuery,
+    async readAuthoritativeRows(_tableName, sql, params) {
+      return executeQuery(sql, params);
+    },
+    async readRows(_tableName, sql, params) {
+      return executeQuery(sql, params);
+    },
+  };
+  return {executeQuery, sqlCalls, gateway};
 }
 
 // --- compactSnapshotSummary ---
@@ -390,15 +401,6 @@ test('coordinator createOperation persists readiness snapshot in initial step',
 
     const canonicalStore = createCanonicalOperationStore(t);
     const executeCanonicalQuery = canonicalStore.executeQuery;
-    const controlPlaneSystemTableGateway = {
-      executeQuery: executeCanonicalQuery,
-      async readAuthoritativeRows(_tableName, _sql, params = []) {
-        return controlPlaneSystemTableGateway.executeQuery(_sql, params);
-      },
-      async readRows(_tableName, _sql, params = []) {
-        return controlPlaneSystemTableGateway.executeQuery(_sql, params);
-      },
-    };
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
       systemTableCache: {
@@ -422,7 +424,7 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         executeQuery: executeCanonicalQuery,
       },
       controlPlaneReadinessService: readinessService,
-      controlPlaneSystemTableGateway,
+      controlPlaneSystemTableGateway: canonicalStore.gateway,
       storageAccountingService,
       storageAdmissionService,
       enableTimeouts: false,
@@ -501,6 +503,7 @@ test('dispatch service emits readiness snapshot with dispatch event',
       [targetNodeId]: readiness,
     });
 
+    const now = Date.now();
     let dispatchedEvent = null;
     const dispatchService = new ReplicaDispatchService({
       nodeId: 'node-local',
@@ -522,26 +525,7 @@ test('dispatch service emits readiness snapshot with dispatch event',
         offCacheChange() {},
       },
       rebalanceCoordinator: {
-        async claimDispatchTransition(opId) {
-          return {
-            operationId: opId,
-            type: 'ADD',
-            partitionId: 'partition-1',
-            entityType: 'partition',
-            entityId: 'partition-1',
-            replicaId: 'partition-1-r1',
-            sourceNodeId: 'node-local',
-            targetNodeId,
-            status: 'in_progress',
-            workflowStep: WORKFLOW_STEP.SENDING,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            completedAt: null,
-            errorMessage: null,
-            stepsHistory: [],
-          };
-        },
-        async executeOperation() {
+        async dispatchOperation() {
           return {success: true};
         },
         on() {},
@@ -550,6 +534,7 @@ test('dispatch service emits readiness snapshot with dispatch event',
       controlPlaneReadinessService: readinessService,
     });
 
+    t.teardown(() => dispatchService.stop());
     dispatchService.on(DISPATCH_EVENT.OPERATION_DISPATCHED, (event) => {
       dispatchedEvent = event;
     });
@@ -563,10 +548,13 @@ test('dispatch service emits readiness snapshot with dispatch event',
       replica_id: 'partition-1-r1',
       source_node_id: 'node-local',
       target_node_id: targetNodeId,
-      status: 'pending',
+      status: ReplicaStatus.PENDING,
       workflow_step: WORKFLOW_STEP.PENDING,
-      created_at: Date.now(),
-      updated_at: Date.now(),
+      created_at: now,
+      updated_at: now,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: now}]),
     };
 
     await dispatchService.dispatchOperationRow(row);
@@ -698,6 +686,7 @@ test('dispatch service emits failure event when target is not ready',
       [targetNodeId]: readiness,
     });
 
+    const now = Date.now();
     let failureEvent = null;
     const dispatchService = new ReplicaDispatchService({
       nodeId: 'node-local',
@@ -744,10 +733,13 @@ test('dispatch service emits failure event when target is not ready',
       replica_id: 'partition-1-r1',
       source_node_id: 'node-local',
       target_node_id: targetNodeId,
-      status: 'pending',
+      status: ReplicaStatus.PENDING,
       workflow_step: WORKFLOW_STEP.PENDING,
-      created_at: Date.now(),
-      updated_at: Date.now(),
+      created_at: now,
+      updated_at: now,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([{step: WORKFLOW_STEP.PENDING, timestamp: now}]),
     });
 
     t.ok(failureEvent, 'dispatch failure event was emitted');
@@ -780,7 +772,7 @@ test('coordinator updateStep persists readiness snapshot in step entry',
       [targetNodeId]: readiness,
     });
 
-    let lastPersistedHistory = null;
+    const canonicalStore = createCanonicalOperationStore(t);
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
       systemTableCache: {
@@ -800,19 +792,8 @@ test('coordinator updateStep persists readiness snapshot in step entry',
           return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
-      sqlQueryEngine: {
-        async executeQuery(_sql, params) {
-          if (params && Array.isArray(params)) {
-            // UPDATE_OPERATION — stepsHistory is param index 5
-            const historyCandidate = params[NUM.FIVE];
-            if (typeof historyCandidate === 'string' &&
-                historyCandidate.startsWith('[')) {
-              lastPersistedHistory = JSON.parse(historyCandidate);
-            }
-          }
-          return {success: true, rows: [], affectedRows: 1, changes: 1};
-        },
-      },
+      sqlQueryEngine: {executeQuery: canonicalStore.executeQuery},
+      controlPlaneSystemTableGateway: canonicalStore.gateway,
       controlPlaneReadinessService: readinessService,
       transactionCoordinator: createTransactionCoordinator(),
       enableTimeouts: false,
@@ -820,6 +801,7 @@ test('coordinator updateStep persists readiness snapshot in step entry',
     coordinator.initialize();
 
     try {
+      const now = Date.now();
       const operation = {
         operationId: 'op-step-test',
         type: 'ADD',
@@ -829,19 +811,26 @@ test('coordinator updateStep persists readiness snapshot in step entry',
         replicaId: 'partition-1-r1',
         sourceNodeId: 'node-local',
         targetNodeId,
-        status: 'pending',
+        status: ReplicaStatus.PENDING,
         workflowStep: WORKFLOW_STEP.PENDING,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        createdAt: now,
+        updatedAt: now,
         completedAt: null,
         errorMessage: null,
-        stepsHistory: [{step: WORKFLOW_STEP.PENDING, timestamp: Date.now()}],
+        stepsHistory: [{step: WORKFLOW_STEP.PENDING, timestamp: now}],
       };
 
+      const inserted = await coordinator.repository.persistNewOperation(operation);
+      t.equal(inserted, true, 'the founding PENDING row was inserted');
       await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
 
-      t.ok(lastPersistedHistory, 'stepsHistory was persisted');
-      const sendingEntry = lastPersistedHistory.find(
+      const persisted = (await canonicalStore.executeQuery(
+        'SELECT * FROM replica_operations WHERE operation_id = ?',
+        [operation.operationId],
+      )).rows[0];
+      t.equal(persisted.workflow_step, WORKFLOW_STEP.SENDING);
+      t.equal(persisted.status, WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.SENDING]);
+      const sendingEntry = JSON.parse(persisted.steps_history).find(
         (e) => e.step === WORKFLOW_STEP.SENDING,
       );
       t.ok(sendingEntry, 'SENDING step entry exists');

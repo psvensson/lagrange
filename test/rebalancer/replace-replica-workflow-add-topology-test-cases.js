@@ -1,3 +1,4 @@
+import {readOriginalCreateBootstrapMembership} from '../../src/rebalancer/replica-status.js';
 import {createMockCache} from './test-helpers.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export async function registerReplaceReplicaWorkflowAddTopologyTests({
@@ -123,7 +124,7 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
     });
 
   await t.test(
-    'RebalanceCoordinator forwards explicit bootstrap topology on CREATE_REPLICA',
+    'RebalanceCoordinator forwards the committed bootstrap topology on CREATE_REPLICA',
     async (t) => {
       const deliveries = [];
       const messageRouter = {
@@ -137,6 +138,18 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
         nodeId: 'seed-node',
         enableTimeouts: false,
         messageRouter,
+        cacheData: {
+          services: [
+            {service_id: 'users-p1-r1', replica_id: 'users-p1-r1',
+              service_type: 'partition', partition_id: 'users-p1',
+              node_id: 'node-1', status: 'active', raft_role: 'leader',
+              address: 'node-1/partition/users-p1-r1'},
+            {service_id: 'users-p1-r2', replica_id: 'users-p1-r2',
+              service_type: 'partition', partition_id: 'users-p1',
+              node_id: 'node-2', status: 'active', raft_role: 'follower',
+              address: 'node-2/partition/users-p1-r2'},
+          ],
+        },
       });
       coordinator.initialize();
 
@@ -146,19 +159,20 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
           partitionId: 'users-p1',
           entityType: 'partition',
           entityId: 'users-p1',
-          nodeId: 'node-2',
+          nodeId: 'node-3',
         });
-        const bootstrapReplicaIds = ['users-p1-r1', 'users-p1-r2', 'users-p1-r3'];
-        const bootstrapPeerAddresses = [
-          'node-1/partition/users-p1-r1',
-          'node-2/partition/users-p1-r2',
-          'node-3/partition/users-p1-r3',
-        ];
-        operation[ReplicaOperationField.REPLICA_IDS] = bootstrapReplicaIds;
-        operation[ReplicaOperationField.PEER_ADDRESSES] =
-          bootstrapPeerAddresses;
+        operation[ReplicaOperationField.REPLICA_IDS] = ['users-p1-r99'];
 
         await coordinator.executeOperation(operation);
+
+        const persisted = await coordinator.queryOperationById(operation.operationId);
+        const stamp = readOriginalCreateBootstrapMembership(persisted.stepsHistory);
+        t.ok(stamp, 'the repository persisted the original bootstrap stamp');
+        t.same(
+          deliveries[0]?.payload?.[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
+          stamp,
+          'the target receives the original durable membership stamp',
+        );
 
         t.equal(
           deliveries[0]?.payload?.[ReplicaOperationField.OPERATION_TYPE],
@@ -166,9 +180,9 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
           'CREATE_REPLICA payloads should carry ADD intent explicitly when the target is bootstrapping a new voter',
         );
         t.same(
-          deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS],
-          bootstrapReplicaIds,
-          'bootstrap replica ids should be preserved on the CREATE_REPLICA payload',
+          deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS]?.toSorted(),
+          ['users-p1-r1', 'users-p1-r2', 'users-p1-r3'],
+          'the committed voters and joining replica define the wire topology',
         );
         t.equal(
           deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],

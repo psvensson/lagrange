@@ -13,7 +13,7 @@ import {
 import {buildElapsedOperationFailureGuard} from
   './operation-workflow-replace-terminal-admission.js';
 import {observedReplaceTargetStatus} from './operation-workflow-replace-surviving-membership.js';
-import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
+import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete, isOperationReconcileTerminal} from './operation-workflow-reconcile-outcome.js';
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES, OPERATION_LIFECYCLE_ACTION,
@@ -85,8 +85,10 @@ function classifyReconcileExecutionOutcome(owner, operation, previousStep, execu
   if (owner.repository.isOperationTerminal(operation)) {
     return terminalOperationReconcileOutcome(operation);
   }
-  if (executionResult?.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.FAILED) {
-    return OPERATION_RECONCILE_OUTCOME.FAILED;
+  const reportedOutcome = executionResult?.reconcileOutcome;
+  if (reportedOutcome === OPERATION_RECONCILE_OUTCOME.ADVANCED ||
+      isOperationReconcileTerminal(reportedOutcome)) {
+    return reportedOutcome;
   }
   if (executionResult?.skipped === true) return OPERATION_RECONCILE_OUTCOME.WAITING;
   if (previousStep !== null && previousStep !== undefined &&
@@ -159,20 +161,20 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     return false;
   }
 
-  async reconcileActiveReplicaStatus(operation) {
+  async reconcileActiveReplicaStatus(operation, onCommittedPromotion) {
     if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
       return OPERATION_RECONCILE_OUTCOME.WAITING;
     }
     if (operation.type === OperationType.REPLACE) {
       const previousStep = operation.workflowStep;
       const replaceProgressApplied =
-        await this.reconcileReplaceActualActive(operation);
+        await this.reconcileReplaceActualActive(operation, onCommittedPromotion);
       if (replaceProgressApplied === true) {
         this.clearObservedProgressRetry(operation.operationId, {
           includeDeliveredCreateProgress: true,
         });
         return this.repository?.isOperationTerminal?.(operation) === true ?
-          OPERATION_RECONCILE_OUTCOME.COMPLETED :
+          terminalOperationReconcileOutcome(operation) :
           OPERATION_RECONCILE_OUTCOME.ADVANCED;
       }
       return classifyReconcileExecutionOutcome(this, operation, previousStep);
@@ -309,7 +311,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
 
     if (reconciledStatus === ReplicaStatus.ACTIVE) {
-      return this.reconcileActiveReplicaStatus(operation);
+      return this.reconcileActiveReplicaStatus(operation, options.onCommittedPromotion);
     }
 
     if (reconciledStatus === ReplicaStatus.FAILED) {

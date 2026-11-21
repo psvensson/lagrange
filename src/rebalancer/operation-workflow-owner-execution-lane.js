@@ -496,20 +496,29 @@ class OperationWorkflowOwnerExecutionLane
 
   buildTerminalOperationDispatchResult(transitionOutcome, extra = {}) {
     const outcome = assertOperationTransitionOutcome(transitionOutcome);
-    const operationId = outcome.operation?.operationId || extra.operationId;
+    const {operationId: requestedOperationId, ...details} = extra;
     if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.FAILED) {
-      return this.buildFailedOperationResult(operationId, outcome.operation.errorMessage,
-        {reconcileOutcome: outcome.reconcileOutcome});
+      return this.buildFailedOperationResult(
+        outcome.operation.operationId, outcome.operation.errorMessage,
+        {reconcileOutcome: outcome.reconcileOutcome, terminal: true},
+      );
     }
     if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.COMPLETED) {
-      return this.buildSuccessfulOperationResult(operationId,
-        {...extra, reconcileOutcome: outcome.reconcileOutcome});
+      return this.buildSuccessfulOperationResult(outcome.operation.operationId,
+        {...details, reconcileOutcome: outcome.reconcileOutcome});
     }
-    return this.buildSkippedOperationResult(outcome.reconcileOutcome, operationId, {
-      reconcileOutcome: outcome.reconcileOutcome,
-      ...(outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.SUPERSEDED ?
-        {terminal: true} : {}),
-    });
+    if (outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.REFUSED) {
+      return this.buildSkippedOperationResult(outcome.reconcileOutcome, requestedOperationId,
+        {reconcileOutcome: outcome.reconcileOutcome});
+    }
+    return this.buildSkippedOperationResult(
+      outcome.reconcileOutcome, outcome.operation.operationId,
+      {
+        reconcileOutcome: outcome.reconcileOutcome,
+        ...(outcome.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.SUPERSEDED ?
+          {terminal: true} : {}),
+      },
+    );
   }
 
   /**
