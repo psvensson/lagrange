@@ -4,18 +4,18 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 351,
+    "bootstrap-membership": 352,
     "cdc-metadata": 72,
     "cli-tooling": 99,
-    "control-plane": 236,
+    "control-plane": 237,
     "convergence-topology": 87,
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 292,
-    "query-sql": 211,
+    "query-sql": 212,
     "release-packaging": 15,
-    "runtime-primitives": 23,
+    "runtime-primitives": 24,
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 246,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2729,
-  "digest": "fnv1a32-eadd2148",
+  "censusSize": 2733,
+  "digest": "fnv1a32-59935b58",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7f6a5e0d",
+  "observationDigest": "fnv1a32-0a0e5d0e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -287,6 +287,7 @@
     "test/bootstrap/return-value-completeness.property.test.js": "bootstrap-membership",
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "bootstrap-membership",
     "test/bootstrap/schema-operations-table-schema.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap-membership",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
@@ -534,6 +535,7 @@
     "test/config/test-configuration-compliance.property.test.js": "architecture-governance",
     "test/config/test-output-tracking-guardrails.test.js": "architecture-governance",
     "test/constants/constants-separation.test.js": "runtime-primitives",
+    "test/constants/message-table-census.test.js": "runtime-primitives",
     "test/constants/node-state-cache-membership.property.test.js": "runtime-primitives",
     "test/constants/pgwire-constants.test.js": "pgwire-compat",
     "test/constants/runtime.test.js": "runtime-primitives",
@@ -638,6 +640,7 @@
     "test/control-plane/membership-swim-transport-adapter.test.js": "control-plane",
     "test/control-plane/movielens-phantom-predicate-repro.test.js": "control-plane",
     "test/control-plane/named-write-outcome-total.test.js": "control-plane",
+    "test/control-plane/named-write-unknown-outcome-shape.test.js": "control-plane",
     "test/control-plane/no-inline-live-transport-copy.guard.test.js": "control-plane",
     "test/control-plane/node-incarnation-fence.test.js": "control-plane",
     "test/control-plane/node-lifecycle-publication.test.js": "control-plane",
@@ -1648,6 +1651,7 @@
     "test/query/locking-read-execution-lifecycle.test.js": "query-sql",
     "test/query/lookup-primitive.test.js": "query-sql",
     "test/query/named-write-real-producer-applied.test.js": "query-sql",
+    "test/query/named-write-real-producer-definite.test.js": "query-sql",
     "test/query/nested-call-classifier.test.js": "query-sql",
     "test/query/nested-call-rejection-messages.test.js": "query-sql",
     "test/query/nested-call-rejection.test.js": "query-sql",
@@ -4090,6 +4094,11 @@
         "src/workflow/reconcile-queue-constants.js"
       ]
     },
+    "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": {
+      "files": [
+        "test/test-helpers/fresh-seed-activation-public-child.js"
+      ]
+    },
     "test/bootstrap/seed-cache-hydration-handoff.test.js": {
       "files": [
         "src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js",
@@ -5528,6 +5537,18 @@
         "src/control-plane/control-plane-system-table-gateway.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js"
+      ]
+    },
+    "test/control-plane/named-write-unknown-outcome-shape.test.js": {
+      "files": [
+        "src/admin/admin-owner-operations.js",
+        "src/control-plane/control-plane-mutation-outcome-classifier.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owner-contract-outcome.js",
+        "src/control-plane/owners/system-metadata-owner-base.js",
         "src/query/distributed/distributed-write-coordinator.js"
       ]
     },
@@ -15794,6 +15815,41 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/query/named-write-real-producer-definite.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-named-write-outcome.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/control-plane-write-identity.js",
+        "src/control-plane/owners/system-metadata-owner-base.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/query/nested-call-rejection-messages.test.js": {
       "files": [
         "src/query/budget-enforcer.js",
@@ -15937,11 +15993,9 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/projection-readiness-constants.js",
+        "src/partition/managed-split-workflow-state-methods.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
-      ],
-      "directories": [
-        "src/query"
       ]
     },
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": {
