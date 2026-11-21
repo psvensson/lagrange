@@ -1,3 +1,4 @@
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {REPLICA_OPERATION_SUPERSEDED_STATUS} from './replica-operation-progress.js';
 import {releaseCompletedLearnerRetirementCleanup} from
   './operation-workflow-placement-learner-retirement.js';
@@ -500,7 +501,9 @@ class OperationWorkflowTransitionPersistence
     const replay = await this.resolveOperationTransitionBeforeWrite(operation, finalStep,
       {terminalTransition: true, terminalErrorMessage: null});
     if (replay) {
-      await this.releaseDurableTerminalOperation(operation, replay);
+      if (replay.reconcileOutcome !== OPERATION_RECONCILE_OUTCOME.SUPERSEDED) {
+        await this.releaseDurableTerminalOperation(operation, replay);
+      }
       return replay;
     }
     if (operation.type !== OperationType.REMOVE ||
