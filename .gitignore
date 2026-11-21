@@ -29,6 +29,9 @@ data
 !/data/fallback-census/
 /data/fallback-census/*
 !/data/fallback-census/census.json
+!/data/fallback-census/closure-baseline.json
+!/data/fallback-census/kept.json
+!/data/fallback-census/traps/
 !/data/tidb-comparison/
 /data/tidb-comparison/*
 !/data/tidb-comparison/*.ndjson

@@ -2301,3 +2301,16 @@ Quest evidence above govern continuation.
   separation between bounded stream verification and pending physical
   three-node formation (`fresh-formation-user-table-routability`) / `Q12`
   aggregate acceptance.
+- 2026-11-21: Retired the label-based closure checker
+  `scripts/checks/check-repository-legacy-fallback-closure.js` and its test
+  `test/scripts/repository-legacy-fallback-closure.test.js` (lead ruling H7;
+  owner: labels and free-text reasons are not evidence that an arm is
+  needed). Q11's evidence entry point keeps its verification mode and its
+  diagnostic mode now refuses, naming the replacements: the one-way ratchet
+  `scripts/checks/fallback-read-closure.js` (supplementary; never a Quest's
+  `doneWhen` on its own) and executed trap runs
+  (`scripts/checks/fallback-necessity-trap.js`). The Q11 seal, receipt and
+  log are unchanged historical evidence. Not retired here: the classification
+  file `scripts/checks/code-navigability-fallback-classification.json` and
+  the `fallback_sites_unclassified` row of the code-navigability budget,
+  which belong to that epic's sealed budget.

@@ -348,15 +348,21 @@ function gitHead(root) {
  *   to auditCensus
  * @return {Object} the plan
  */
-function buildTrapPlan({root = ROOT, census = null, readFiles, head} = {}) {
-  const detection = detectNavigabilityPatterns(root);
-  if (detection.missingRoot) throw new Error(`${MISSING_ROOT}${detection.missingRoot}`);
-  const audit = census ? auditCensus(census, {root, readFiles}) : null;
+function sitesByFile(sites) {
   const byFile = new Map();
-  for (const site of arrayFilter(detection.sites, isCensusRowSite)) {
+  for (const site of arrayFilter(sites, isCensusRowSite)) {
     if (!byFile.has(site.file)) byFile.set(site.file, []);
     byFile.get(site.file).push(site);
   }
+  return byFile;
+}
+
+function unreproducibleSummary(audit) {
+  return arrayMap(audit ? audit.unreproducible : [], ({record, reason}) =>
+    ({file: record?.file ?? null, range: record?.range ?? null, reason}));
+}
+
+function plannedFiles(root, byFile, audit) {
   const files = {};
   const uninstrumented = [];
   const bucketOf = (site) => siteBucket(site, audit);
@@ -365,12 +371,18 @@ function buildTrapPlan({root = ROOT, census = null, readFiles, head} = {}) {
     if (planned.entry) files[file] = planned.entry;
     uninstrumented.push(...planned.uninstrumented);
   }
+  return {files, uninstrumented};
+}
+
+function buildTrapPlan({root = ROOT, census = null, readFiles, head} = {}) {
+  const detection = detectNavigabilityPatterns(root);
+  if (detection.missingRoot) throw new Error(`${MISSING_ROOT}${detection.missingRoot}`);
+  const audit = census ? auditCensus(census, {root, readFiles}) : null;
+  const {files, uninstrumented} = plannedFiles(root, sitesByFile(detection.sites), audit);
   return {
     schema: PLAN_SCHEMA, root, head: head === undefined ? gitHead(root) : head,
     censusHead: audit ? audit.head : null, trap: TRAP_GLOBAL, files, uninstrumented,
-    unparsedFiles: detection.parseFailures,
-    unreproducibleRecords: audit ? arrayMap(audit.unreproducible, ({record, reason}) =>
-      ({file: record?.file ?? null, range: record?.range ?? null, reason})) : [],
+    unparsedFiles: detection.parseFailures, unreproducibleRecords: unreproducibleSummary(audit),
   };
 }
 
@@ -491,35 +503,38 @@ function mergedSummary(arms) {
  * @param {Object|null} run `{id, lane, laneExitCode}` to bind, or null
  * @return {Object} the merged document (deterministic for the same inputs)
  */
-function mergeObservations(inputs, run = null) {
-  if (inputs.length === 0) throw new Error(MERGE_PROBLEM.EMPTY);
-  const docs = arrayMap(inputs, ({doc, source}) => asMerged(doc, source));
+function assertMergeable(docs) {
+  if (docs.length === 0) throw new Error(MERGE_PROBLEM.EMPTY);
   for (const key of MERGE_KEYS) {
     if (arraySome(docs, (doc) => doc[key] !== docs[0][key])) {
       throw new Error(`${MERGE_PROBLEM.MIXED}${key}`);
     }
   }
-  const processes = new Set();
-  const loaded = {};
-  const refused = new Map();
-  let arms = {};
-  for (const doc of docs) {
-    for (const key of doc.processes) {
-      if (processes.has(key)) throw new Error(`${MERGE_PROBLEM.DUPLICATE}${key}`);
-      processes.add(key);
-    }
-    for (const file of objectKeys(doc.loaded)) {
-      loaded[file] = (loaded[file] ?? 0) + doc.loaded[file];
-    }
-    for (const item of doc.refused) {
-      const key = jsonStringify([item.file, item.reason]);
-      refused.set(key, {file: item.file, reason: item.reason,
-        processes: (refused.get(key)?.processes ?? 0) + item.processes});
-    }
-    const next = {...arms};
-    for (const id of objectKeys(doc.arms)) next[id] = addArm(next[id], doc.arms[id]);
-    arms = next;
+}
+
+// Fold one merged-shape document into the running totals.
+function foldDocument(totals, doc) {
+  for (const key of doc.processes) {
+    if (totals.processes.has(key)) throw new Error(`${MERGE_PROBLEM.DUPLICATE}${key}`);
+    totals.processes.add(key);
   }
+  for (const file of objectKeys(doc.loaded)) {
+    totals.loaded[file] = (totals.loaded[file] ?? 0) + doc.loaded[file];
+  }
+  for (const item of doc.refused) {
+    const key = jsonStringify([item.file, item.reason]);
+    totals.refused.set(key, {file: item.file, reason: item.reason,
+      processes: (totals.refused.get(key)?.processes ?? 0) + item.processes});
+  }
+  for (const id of objectKeys(doc.arms)) totals.arms[id] = addArm(totals.arms[id], doc.arms[id]);
+}
+
+function mergeObservations(inputs, run = null) {
+  const docs = arrayMap(inputs, ({doc, source}) => asMerged(doc, source));
+  assertMergeable(docs);
+  const totals = {processes: new Set(), loaded: {}, refused: new Map(), arms: {}};
+  for (const doc of docs) foldDocument(totals, doc);
+  const {processes, loaded, refused, arms} = totals;
   const sortedArms = sortedObject(arms, (arm) => sortedObject({...arm,
     callers: [...arm.callers].sort()}));
   return {
