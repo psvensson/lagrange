@@ -20,6 +20,13 @@ const RETAINED_REPAIR_ORIGIN = Object.freeze({CALLER: 'caller', INGRESS: 'ingres
 // What a retiring record that refused a caller reports to its composition.
 const RETAINED_REPAIR_VERDICT = Object.freeze({CONFIRMED: 'confirmed',
   UNCONFIRMED: 'unconfirmed'});
+// A caller awaiting the record hears its answer directly; the last caller's
+// refusal (WITHHELD) is owed the verdict the record retires with.
+const RETAINED_REPAIR_CALLER = Object.freeze({NONE: 'none', WITHHELD: 'withheld'});
+// Why a record retired unconfirmed when no committed refusal names it.
+const RETAINED_REPAIR_RETIREMENT = Object.freeze({CHANGED: 'row_changed',
+  TENURE_ENDED: 'tenure_ended'});
+const CONFIRMED_VERDICT = Object.freeze({state: RETAINED_REPAIR_VERDICT.CONFIRMED});
 // PINNED: an exact entry is presented and unresolved. SETTLED: its durable
 // outcome settled it; the body still states the copy policy it was judged by.
 const RETAINED_REPAIR_ENTRY = Object.freeze({UNPINNED: 'unpinned', PINNED: 'pinned',
@@ -61,8 +68,13 @@ function entryBody(entry) {
   return entry.state === RETAINED_REPAIR_ENTRY.UNPINNED ? null : entry.body;
 }
 
+function unconfirmedVerdict(reason) {
+  return Object.freeze({state: RETAINED_REPAIR_VERDICT.UNCONFIRMED, reason});
+}
+
 function retainedRepairRecord(operation, origin, entry = UNPINNED_ENTRY) {
   return {operation: copyOperationOutcomeData(operation), origin, entry,
+    callerAnswer: RETAINED_REPAIR_CALLER.NONE, awaitingCallers: 0,
     binding: UNOBSERVED_BINDING, custody: SELF_CUSTODY, tenure: NO_TENURE,
     nativeIngress: NATIVE_IDLE, blocker: NO_BLOCKER,
     // What the last committed or observed refusal waits for. A failed read
@@ -86,7 +98,8 @@ function materializeRepairContention(result, rows) {
 }
 
 export {RETAINED_REPAIR_DECISION, RETAINED_REPAIR_MODE, PROPOSING_MODES, RETAINED_REPAIR_ORIGIN,
-  RETAINED_REPAIR_VERDICT,
+  RETAINED_REPAIR_VERDICT, RETAINED_REPAIR_CALLER, RETAINED_REPAIR_RETIREMENT, CONFIRMED_VERDICT,
+  unconfirmedVerdict,
   RETAINED_REPAIR_ENTRY, RETAINED_REPAIR_BINDING, RETAINED_REPAIR_CUSTODY, RETAINED_REPAIR_TENURE,
   RETAINED_REPAIR_NATIVE, RETAINED_REPAIR_NATIVE_FENCE, RETAINED_REPAIR_NATIVE_ANSWER,
   RETAINED_REPAIR_BLOCKER, RETAINED_REPAIR_CONTINUATION, RETAINED_REPAIR_DECISION_RUN,

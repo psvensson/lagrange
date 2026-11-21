@@ -13,6 +13,7 @@ import {REPAIR_OBSERVATION as OBSERVATION, peerObservationMayClear, ownRowObserv
 import {RETAINED_REPAIR_BINDING as BINDING, RETAINED_REPAIR_BLOCKER as BLOCKER,
   RETAINED_REPAIR_CUSTODY as CUSTODY, RETAINED_REPAIR_DECISION_RUN as RUN,
   RETAINED_REPAIR_ENTRY as ENTRY, RETAINED_REPAIR_ORIGIN as ORIGIN,
+  RETAINED_REPAIR_RETIREMENT as RETIREMENT, unconfirmedVerdict,
   RETAINED_REPAIR_TENURE as TENURE, NO_TENURE, entryBody} from './replica-operation-retained-repair-record.js';
 
 const READ_BLOCKER_SQL = 'SELECT created_at, workflow_step, completed_at FROM replica_operations ' +
@@ -172,7 +173,7 @@ function assignRetainedRepairWakeMethods(Repository) {
       if (attempt.tenure.state !== TENURE.LEDGER || attempt.decision.state === RUN.RUNNING ||
           !this.retainedRepairAttemptIsCurrent(attempt) || !tenureEnded(attempt)) return;
       if (attempt.origin === ORIGIN.INGRESS) {
-        this.retireRetainedRepair(attempt);
+        this.retireRetainedRepair(attempt, unconfirmedVerdict(RETIREMENT.TENURE_ENDED));
       } else {
         attempt.tenure = NO_TENURE;
         recordRepairObservation(attempt, OBSERVATION.ROUTE);

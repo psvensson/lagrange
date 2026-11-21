@@ -123,6 +123,7 @@ documentClass: generated
 - [operation-workflow-transition-persistence.js](operation-workflow-transition-persistence.js) - Claim one priority control-plane operation for dispatch without relying on a transition-scoped distributed transaction. (importers: few)
 - [operation-workflow-transition-retry-grace.js](operation-workflow-transition-retry-grace.js) - First finite durable-progress timestamp, in the same precedence order the context fields have always carried:... (importers: one)
 - [operation-workflow-transition-retry.js](operation-workflow-transition-retry.js) - No leading comment; first export: deferTransitionRetry. (importers: one)
+- [operation-workflow-withheld-dispatch.js](operation-workflow-withheld-dispatch.js) - A storage-increasing dispatch the reservation gate withheld because the retained placement repair owner did not... (importers: few)
 - [placement-admission-attempt.js](placement-admission-attempt.js) - No leading comment; first export: bindPlacementAttemptAnswer. (importers: one)
 - [placement-owner-constants.js](placement-owner-constants.js) - No leading comment; first export: PLACEMENT_OWNER. (importers: many)
 - [placement-owner-decision.js](placement-owner-decision.js) - No leading comment; first export: buildPlacementOwnerDecision. (importers: many)

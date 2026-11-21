@@ -16,6 +16,7 @@ import {
 import {
   STORAGE_RESERVATION_AUTHORITY_ERROR,
 } from './storage-reservation-authority.js';
+import {retainWithheldDispatch} from './operation-workflow-withheld-dispatch.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
@@ -136,6 +137,8 @@ async function ensureDispatchReservationOrSkip(owner, operation, options = {}) {
   if (reservationAttemptIsActive(attempt, options)) {
     const repaired = await repairGateRepairedOperationRow(owner, operation, attempt);
     if (repaired) return null;
+    // Withheld: the retained owner's later verdict for this record is the wake.
+    retainWithheldDispatch(owner, operation);
     return owner.buildSkippedOperationResult(
       OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
       operation.operationId,

@@ -1,4 +1,5 @@
 import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
+import {redriveWithheldDispatch} from './operation-workflow-withheld-dispatch.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   './operation-workflow-recovery-reconcile-shared.js';
 import {readStateField} from '../utils/state-field-read.js';
@@ -67,6 +68,9 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     // The DT6 TimeSource seam is owned by OperationWorkflowRecoveryTimeout.
     this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId =
       new Map();
+    // Dispatches withheld at the reservation gate, each woken only by the
+    // retained owner's verdict (operation-workflow-withheld-dispatch.js).
+    this.withheldDispatchByOperationId = new Map();
     // Consecutive UNAVAILABLE stopping-observation deferrals per operation;
     // consumed by the bounded starvation escalation in
     // reconcileStoppingOperationProgress and cleared on any non-UNAVAILABLE
@@ -302,6 +306,19 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       }
       throw error;
     }
+  }
+
+  // The retained placement repair owner's verdict for a record that refused a
+  // caller (its required port, composed by the coordinator): the only wake of
+  // a dispatch the reservation gate withheld on that record.
+  observeRetainedRepairVerdict(verdict) {
+    return redriveWithheldDispatch(this, verdict);
+  }
+
+  // A shut-down owner holds no withheld dispatch: a later verdict wakes nothing.
+  shutdown() {
+    this.withheldDispatchByOperationId.clear();
+    super.shutdown();
   }
 
   async reconcileObservedProgressOperation(operationId) {

@@ -12,6 +12,9 @@ function unavailableRetainedRepairPorts() {
     resolveRetainedPlacementRepairRoute: () => ({state: RETAINED_REPAIR_BINDING.UNAVAILABLE}),
     prepareRetainedPlacementRepair: async () =>
       unavailableRepairPreparation(PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE),
+    // No workflow owner is composed with this repository: no dispatch of it
+    // can be withheld, so a verdict has nothing to wake.
+    reportRetainedRepairVerdict: () => {},
   };
 }
 

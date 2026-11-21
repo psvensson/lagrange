@@ -330,6 +330,7 @@ class OperationWorkflowTransitionPersistence
    */
   clearTerminalOperationRetryState(operation) {
     this.clearDispatchRetry(operation?.operationId);
+    this.withheldDispatchByOperationId.delete(operation?.operationId);
     this.clearOperationLedgerSelfMoveParkEvidence(operation?.operationId);
     this.clearObservedProgressRetry(operation?.operationId, {
       includeDeliveredCreateProgress: true,

@@ -7,6 +7,8 @@ import {RETAINED_REPAIR_DECISION as DECISION, RETAINED_REPAIR_MODE as MODE, PROP
   RETAINED_REPAIR_NATIVE as NATIVE, RETAINED_REPAIR_NATIVE_FENCE as FENCE,
   RETAINED_REPAIR_NATIVE_ANSWER as NATIVE_ANSWER, RETAINED_REPAIR_DECISION_RUN as RUN,
   SELF_CUSTODY, NATIVE_IDLE, IDLE_DECISION, pinnedEntry, settledEntry,
+  RETAINED_REPAIR_CALLER as CALLER, RETAINED_REPAIR_RETIREMENT as RETIREMENT,
+  CONFIRMED_VERDICT, unconfirmedVerdict,
   entryBody, retainedRepairRecord, materializeRepairContention} from './replica-operation-retained-repair-record.js';
 import {RETAINED_REPAIR_DISCLAIM, matchesRetainedRepairObservation} from
   './replica-operation-retained-repair-reply.js';
@@ -41,8 +43,11 @@ const UNFENCED = Object.freeze({state: FENCE.UNFENCED});
 // One immutable process-retained envelope per operation; no durable reconstruction
 // promise. Owned commits/CDC and the record's bounded continuation trigger
 // revalidation, never substitute admission authority. Every write reaches native apply.
+// reportRetainedRepairVerdict: the composition's consumer of the verdict a
+// record that refused a caller retires with (retireRetainedRepair).
 const RETAINED_REPAIR_PORTS = Object.freeze(['repairRetainedPlacement',
-  'resolveRetainedPlacementRepairRoute', 'prepareRetainedPlacementRepair']);
+  'resolveRetainedPlacementRepairRoute', 'prepareRetainedPlacementRepair',
+  'reportRetainedRepairVerdict']);
 const RETAINED_REPAIR_PORT_REFUSAL = 'retained_placement_repair_port_missing';
 
 function createRetainedPlacementRepairPorts(options) {
@@ -75,6 +80,20 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       if (!isDeepStrictEqual(attempt.operation, operation)) return false;
       attempt.origin = ORIGIN.CALLER;
+      attempt.awaitingCallers += 1;
+      let answer;
+      try {
+        answer = await this.answerRetainedRepairCaller(attempt, operation);
+      } finally {
+        attempt.awaitingCallers -= 1;
+      }
+      if (this.retainedRepairAttemptIsCurrent(attempt)) {
+        attempt.callerAnswer = answer ? CALLER.NONE : CALLER.WITHHELD;
+      }
+      return answer;
+    },
+
+    async answerRetainedRepairCaller(attempt, operation) {
       if (attempt.decision.state === RUN.RUNNING) {
         const running = attempt.decision;
         const joined = await running.promise;
@@ -249,11 +268,16 @@ function assignRetainedPlacementRepairMethods(Repository) {
         this.retainedPlacementRepairs.get(attempt.operation.operationId) === attempt;
     },
 
-    // Retirement cancels the record's continuation and drops its backoff.
-    retireRetainedRepair(attempt) {
+    // Retirement cancels the record's continuation and drops its backoff. A
+    // record whose last caller it refused, with no caller awaiting it now,
+    // reports the verdict it retires with, once (the only emission point).
+    retireRetainedRepair(attempt, verdict) {
       this.cancelRetainedRepairContinuation(attempt);
-      if (this.retainedPlacementRepairs.get(attempt.operation.operationId) === attempt) {
-        this.retainedPlacementRepairs.delete(attempt.operation.operationId);
+      const {operationId, createdAt} = attempt.operation;
+      if (this.retainedPlacementRepairs.get(operationId) !== attempt) return;
+      this.retainedPlacementRepairs.delete(operationId);
+      if (attempt.callerAnswer === CALLER.WITHHELD && attempt.awaitingCallers === 0) {
+        this.reportRetainedRepairVerdict({operationId, createdAt, verdict});
       }
     },
 
@@ -390,7 +414,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
         // and its next arrival starts a fresh record with a fresh entry.
         this.logger.error(REPAIR_LOG.DEFINITELY_REFUSED, {reason: failureCode,
           operationId: attempt.operation.operationId, entryId: attempt.entry.entryId});
-        this.retireRetainedRepair(attempt);
+        this.retireRetainedRepair(attempt, unconfirmedVerdict(failureCode));
         return false;
       }
       // A bound remote receiver refusing for want of ledger leadership holds no
@@ -435,7 +459,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       attempt.lastDecision = {state: DECISION.CONTENDED, result};
       attempt.blocker = refusal.blocker;
       if (refusal.clearing.state === CLEARING.PERMANENT) {
-        this.retireRetainedRepair(attempt);
+        this.retireRetainedRepair(attempt, unconfirmedVerdict(result.reason));
         return false;
       }
       attempt.clearingTrigger = refusal.clearing.trigger;
@@ -488,10 +512,10 @@ function assignRetainedPlacementRepairMethods(Repository) {
       switch (decision.state) {
       case DECISION.EXACT:
         this.syncIncompleteOperationObservation(decision.operation);
-        this.retireRetainedRepair(attempt);
+        this.retireRetainedRepair(attempt, CONFIRMED_VERDICT);
         return true;
       case DECISION.CHANGED:
-        this.retireRetainedRepair(attempt);
+        this.retireRetainedRepair(attempt, unconfirmedVerdict(RETIREMENT.CHANGED));
         return false;
       case DECISION.CONTENDED:
         this.retainObservedRepairContention(attempt, decision.result);

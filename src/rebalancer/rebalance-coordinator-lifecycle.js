@@ -356,6 +356,9 @@ class RebalanceCoordinatorLifecycle {
           prepareRetainedPlacementRepairBody(this, operation),
         repairRetainedPlacement: (payload) => this.submitRetainedPlacementRepair(payload),
         resolveRetainedPlacementRepairRoute: () => resolveRetainedPlacementRepairBinding(this),
+        // A withheld dispatch's only wake: the workflow owner composed below.
+        reportRetainedRepairVerdict: (verdict) =>
+          this.workflowOwner.observeRetainedRepairVerdict(verdict),
         // The membership owner claim is bound to this process's issued boot
         // incarnation, the one the router carries and the nodes row publishes.
         membershipOwnerBootIncarnation:
