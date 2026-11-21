@@ -617,6 +617,16 @@ for (const {name, settleBeforeRead, replaceOwner, corruptReply} of retainedRefre
     const read = writer.cdc.executeAuthoritativeSystemTableRead.bind(writer.cdc);
     writer.cdc.executeAuthoritativeSystemTableRead = (...args) =>
       readbackBlocked ? {success: false, rows: [], deferRetry: true} : read(...args);
+    if (corruptReply) {
+      const update = writer.cdc.updateSystemTableRow.bind(writer.cdc);
+      writer.cdc.updateSystemTableRow = async (...args) => {
+        if (resolving) return update(...args);
+        const originalReply = await update(...args).catch((error) => error);
+        assert.ok(originalReply instanceof Error, 'CDC normally rejects the released answer');
+        readbackBlocked = true;
+        return {};
+      };
+    }
     leader.controllablePort.setProposeHandler(async (command) => {
       if (!resolving && !heldCommand) {
         heldCommand = command;
@@ -636,10 +646,6 @@ for (const {name, settleBeforeRead, replaceOwner, corruptReply} of retainedRefre
         ]);
         assert.equal(command?.entryId, options.entryId,
           'the transport refusal refers to the actual held consensus proposal');
-        if (corruptReply) {
-          readbackBlocked = true;
-          return {};
-        }
         return buildReleasedPendingWriteAnswer({
           entryId: command.entryId, proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
         }, PARTITION_ID, {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST});
