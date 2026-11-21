@@ -1,0 +1,98 @@
+// Real file-backed ledger and committed apply/CDC/outcome path. Consensus
+// transport is controlled; callers can compose this with a real user group.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
+import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
+import {createMockControlPlaneSystemTableGateway, createTestCoordinator} from
+  '../rebalancer/test-helpers.js';
+import {applyCommitted, temporaryDbPath} from '../test-helpers/participant-transaction-fixture.js';
+import {NODE, commitLedgerStatement, onLedgerLeader} from './placement-admission-fixture.js';
+const DEFAULT_PARTITION_ID = 'retained-repair-p1';
+const planner = new ControlPlaneSystemTableGateway();
+
+async function withRepairLedger(measure, {partitionId = DEFAULT_PARTITION_ID} = {}) {
+  const temporary = temporaryDbPath();
+  try {
+    await onLedgerLeader(async (leader, proposed) => {
+      let mutationId = 0;
+      const sqlEngine = {async executeQuery(sql, params = []) {
+        const statement = leader.db.prepare(sql);
+        assert.equal(statement.reader, true, 'only native committed apply mutates');
+        return {success: true, rows: statement.all(...params), rowSetComplete: true};
+      }};
+      const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
+      gateway.submitMutation = async (mutation) => {
+        const {sql, params} = planner.buildSqlMutationPlan(mutation);
+        const entryId = `retained:sql:${++mutationId}`;
+        assert.equal(commitLedgerStatement(leader, entryId, sql, params), null);
+        const result = readCommittedStatementOutcome(leader, `entry:${entryId}`);
+        return {success: true, partitionResult: {affectedRows: result.changes}};
+      };
+      installCommittedOperationMutationFixture(gateway);
+      const coordinator = createTestCoordinator({nodeId: NODE.A,
+        sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway});
+      coordinator.registerLedgerPartitionService(leader);
+      const commands = [];
+      leader.controllablePort.setProposeHandler(async (entry) => {
+        proposed.push({...entry});
+        commands.push(entry);
+        queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
+      });
+      const world = {leader, coordinator, gateway, commands, partitionId};
+      attachCurrentCopyOwner(world);
+      try {
+        await measure(world);
+      } finally {
+        world.placementOwner?.shutdown();
+        leader.setRebalancerLeadershipSink(null);
+        await coordinator.shutdown();
+      }
+    }, {dbPath: temporary.dbPath});
+  } finally {
+    fs.rmSync(temporary.directory, {recursive: true, force: true});
+  }
+}
+
+
+function attachCurrentCopyOwner(world) {
+  world.placementOwner?.shutdown();
+  const now = Date.now();
+  const partitionId = world.partitionId;
+  const cache = {
+    get(table, nodeId) {
+      return table === 'nodes' ? {node_id: nodeId, boot_incarnation: 1, storage_incarnation: 1} : null;
+    },
+    getAll(table) {
+      if (table === 'partitions') return [{partition_id: partitionId, status: 'active',
+        replica_count: 3, leader_node_id: NODE.A}];
+      if (table === 'services') return [{replica_id: `${partitionId}-source`,
+        partition_id: partitionId, node_id: NODE.A, status: 'active', raft_role: 'leader'}];
+      return [];
+    },
+    onCacheApplyChange() {}, offCacheApplyChange() {},
+  };
+  const owner = createReplicaPlacementOwner({nodeId: NODE.A,
+    ledgerPartitionService: world.leader, systemTableCache: cache,
+    workflowOwner: world.coordinator.workflowOwner,
+    nodeAuthority: {
+      answerCommittedNodes: () => ({state: 'ready', epoch: {publicationEpoch: 7},
+        formation: {state: 'FORMED', latchEpoch: 7},
+        nodeRows: [NODE.A, NODE.B, NODE.C].map((node, index) => ({node_id: node,
+          host_id: `host-${index}`, status: 'active', boot_incarnation: 1,
+          ready_lease_expires_at: now + 60_000}))}),
+      subscribe: () => () => {}, scheduleRefresh() {},
+    }, now: () => now, logger: world.leader.logger});
+  world.leader.setRebalancerLeadershipSink(owner);
+  // Pause ordinary planning while measuring the supported pure preparation
+  // path. This does not replace its real node/deficit/classification algorithm.
+  owner.setLeader(false);
+  world.placementOwner = owner;
+}
+
+
+export {withRepairLedger, attachCurrentCopyOwner};

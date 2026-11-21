@@ -1,18 +1,15 @@
+import {withRepairLedger, attachCurrentCopyOwner} from './placement-retained-row-repair-fixture.js';
 // File-backed SQLite, real PartitionService committed apply, statement outcomes,
 // CDC ledger and repository/workflow producers. Consensus transport is a
 // controllable port: the witness orders and commits proposals, not real rs-raft.
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {afterEach, beforeEach, test} from 'node:test';
-import {ControlPlaneSystemTableGateway} from
-  '../../src/control-plane/control-plane-system-table-gateway.js';
 import * as placementAdmission from
   '../../src/partition/partition-placement-admission.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../../src/rebalancer/replica-placement-owner-constants.js';
-import {createReplicaPlacementOwner} from '../../src/rebalancer/replica-placement-owner.js';
 import {createOperationAt, OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION as DISPOSITION} from
@@ -22,12 +19,11 @@ import {ensureDispatchReservationOrSkip} from
 import {OPERATION_RESERVATION_ATTEMPT_OUTCOME as RESERVATION} from
   '../../src/rebalancer/operation-reservation-attempt-outcome.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
-import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
-import {createMockControlPlaneSystemTableGateway, createTestCoordinator} from
+import {createTestCoordinator} from
   '../rebalancer/test-helpers.js';
-import {applyCommitted, clearFixtureSingletons, resetFixtureSingletons,
-  resumeFixtureParticipantAdmission, send, settleTicks, temporaryDbPath} from '../test-helpers/participant-transaction-fixture.js';
-import {NODE, commitLedgerStatement, ledgerRows, onLedgerLeader, placementStatement,
+import {clearFixtureSingletons, resetFixtureSingletons,
+  resumeFixtureParticipantAdmission, send, settleTicks} from '../test-helpers/participant-transaction-fixture.js';
+import {NODE, commitLedgerStatement, ledgerRows, placementStatement,
   stepLedgerRow} from './placement-admission-fixture.js';
 
 beforeEach(resetFixtureSingletons);
@@ -37,50 +33,7 @@ import {raiseParticipantCutoverPause} from
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 
 const PARTITION_ID = 'retained-repair-p1';
-const planner = new ControlPlaneSystemTableGateway();
 
-async function withRepairLedger(measure) {
-  const temporary = temporaryDbPath();
-  try {
-    await onLedgerLeader(async (leader, proposed) => {
-      let mutationId = 0;
-      const sqlEngine = {async executeQuery(sql, params = []) {
-        const statement = leader.db.prepare(sql);
-        assert.equal(statement.reader, true, 'only native committed apply mutates');
-        return {success: true, rows: statement.all(...params), rowSetComplete: true};
-      }};
-      const gateway = createMockControlPlaneSystemTableGateway(sqlEngine);
-      gateway.submitMutation = async (mutation) => {
-        const {sql, params} = planner.buildSqlMutationPlan(mutation);
-        const entryId = `retained:sql:${++mutationId}`;
-        assert.equal(commitLedgerStatement(leader, entryId, sql, params), null);
-        const result = readCommittedStatementOutcome(leader, `entry:${entryId}`);
-        return {success: true, partitionResult: {affectedRows: result.changes}};
-      };
-      installCommittedOperationMutationFixture(gateway);
-      const coordinator = createTestCoordinator({nodeId: NODE.A,
-        sqlQueryEngine: sqlEngine, controlPlaneSystemTableGateway: gateway});
-      coordinator.registerLedgerPartitionService(leader);
-      const commands = [];
-      leader.controllablePort.setProposeHandler(async (entry) => {
-        proposed.push({...entry});
-        commands.push(entry);
-        queueMicrotask(() => assert.equal(applyCommitted(leader, entry), null));
-      });
-      const world = {leader, coordinator, gateway, commands};
-      attachCurrentCopyOwner(world);
-      try {
-        await measure(world);
-      } finally {
-        world.placementOwner?.shutdown();
-        leader.setRebalancerLeadershipSink(null);
-        await coordinator.shutdown();
-      }
-    }, {dbPath: temporary.dbPath});
-  } finally {
-    fs.rmSync(temporary.directory, {recursive: true, force: true});
-  }
-}
 
 async function retainMissing(world, type = OperationType.REMOVE, partitionId = PARTITION_ID) {
   const operation = createOperationAt({operationId: `historical-${type}`,
@@ -219,39 +172,6 @@ test('exact existing row succeeds; changed birth and history refuse without repl
     assert.equal(ledgerRows(world.leader)[0].created_at, retained.createdAt);
   }));
 
-function attachCurrentCopyOwner(world) {
-  world.placementOwner?.shutdown();
-  const now = Date.now();
-  const cache = {
-    get(table, nodeId) {
-      return table === 'nodes' ? {node_id: nodeId, boot_incarnation: 1, storage_incarnation: 1} : null;
-    },
-    getAll(table) {
-      if (table === 'partitions') return [{partition_id: PARTITION_ID, status: 'active',
-        replica_count: 3, leader_node_id: NODE.A}];
-      if (table === 'services') return [{replica_id: `${PARTITION_ID}-source`,
-        partition_id: PARTITION_ID, node_id: NODE.A, status: 'active', raft_role: 'leader'}];
-      return [];
-    },
-    onCacheApplyChange() {}, offCacheApplyChange() {},
-  };
-  const owner = createReplicaPlacementOwner({nodeId: NODE.A,
-    ledgerPartitionService: world.leader, systemTableCache: cache,
-    workflowOwner: world.coordinator.workflowOwner,
-    nodeAuthority: {
-      answerCommittedNodes: () => ({state: 'ready', epoch: {publicationEpoch: 7},
-        formation: {state: 'FORMED', latchEpoch: 7},
-        nodeRows: [NODE.A, NODE.B, NODE.C].map((node, index) => ({node_id: node,
-          host_id: `host-${index}`, status: 'active', boot_incarnation: 1,
-          ready_lease_expires_at: now + 60_000}))}),
-      subscribe: () => () => {}, scheduleRefresh() {},
-    }, now: () => now, logger: world.leader.logger});
-  world.leader.setRebalancerLeadershipSink(owner);
-  // Pause ordinary planning while measuring the supported pure preparation
-  // path. This does not replace its real node/deficit/classification algorithm.
-  owner.setLeader(false);
-  world.placementOwner = owner;
-}
 
 test('a clearing holder commit during the old BUSY reply owns a successor attempt', () =>
   withRepairLedger(async (world) => {

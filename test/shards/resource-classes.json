@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2689,
+    "ordinary": 2690,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2715,
-  "digest": "fnv1a32-28c29a35",
+  "censusSize": 2716,
+  "digest": "fnv1a32-ca1db132",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2086,6 +2086,7 @@
     "test/rebalancer/replace-real-group-deposed-leader.test.js": "ordinary",
     "test/rebalancer/replace-real-group-handoff.test.js": "ordinary",
     "test/rebalancer/replace-real-group-latency.test.js": "ordinary",
+    "test/rebalancer/replace-real-group-native-ledger-recovery.test.js": "ordinary",
     "test/rebalancer/replace-real-group-retire-route.test.js": "ordinary",
     "test/rebalancer/replace-real-group-scheduling.test.js": "ordinary",
     "test/rebalancer/replace-remove-safety-post-intent.test.js": "ordinary",

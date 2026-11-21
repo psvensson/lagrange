@@ -181,7 +181,8 @@ function entityAdmissionRefusal(statement, census) {
     if (founded !== null) return founded;
   }
   if (statement.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
-      statement.entityId === LEDGER_PARTITION_ID) {
+      statement.entityId === LEDGER_PARTITION_ID &&
+      statement.dispatchHold !== PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE) {
     const active = census.filter((row) => row.incomplete);
     if (active.length > 0) {
       return refused(REFUSAL.LEDGER_TRANSITION_UNRESOLVED, {operationIds: idsOf(active)});

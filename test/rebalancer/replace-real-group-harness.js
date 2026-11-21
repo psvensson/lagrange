@@ -570,7 +570,7 @@ function createReplaceWorld(options = {}) {
   const partitionId = options.partitionId ?? PRIORITY_PARTITION_ID;
   const replicaCount = options.replicaCount ?? 3;
   const sourceReplicaId = `${partitionId}-r1`;
-  const targetReplicaId = `${partitionId}-r4`;
+  const targetReplicaId = options.targetReplicaId ?? `${partitionId}-r4`;
   const membersByCount = {
     1: [[sourceReplicaId, NODE.SOURCE], [targetReplicaId, NODE.TARGET]],
     2: [
@@ -1162,7 +1162,8 @@ async function openReplaceWorld(options = {}) {
   const world = createReplaceWorld(options);
   try {
     startCoordinator(world);
-    await createReplace(world);
+    if (options.initializeOperation) await options.initializeOperation(world);
+    else await createReplace(world);
   } catch (error) {
     await disposeWorld(world);
     throw error;

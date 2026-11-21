@@ -57,6 +57,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       }
       attempt.submitNative = submitNative;
       attempt.nativeService = service;
+      attempt.delegated = null;
       const custody = {nodeId: service.nodeId, replicaId: service.replicaId,
         operationId: operation.operationId, createdAt: operation.createdAt,
         entryId: payload.entryId, bodyText: JSON.stringify(payload.body)};

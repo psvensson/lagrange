@@ -13,6 +13,7 @@ import {canonicalPlacementStatement, PLACEMENT_STATEMENT_VALIDITY as VALIDITY} f
   '../rebalancer/replica-placement-owner-admission-statement.js';
 import {classifyPlacementClass} from '../rebalancer/replica-placement-owner-order.js';
 import {OPERATION_METADATA_KEY, OperationType} from '../rebalancer/replica-operation-progress.js';
+import {getOperationMetadataValue} from '../rebalancer/replica-status.js';
 import {PLACEMENT_TRANSITION_KIND, PLACEMENT_OUTCOME, PLACEMENT_REFUSAL} from
   '../rebalancer/replica-placement-owner-constants.js';
 import {admissionRefusal, entityAdmissionRefusal, readPlacementCensus} from './partition-placement-admission-decision.js';
@@ -113,6 +114,7 @@ function decideRetainedPlacementRepair(db, {operation, admissionStatement}) {
     const decision = entityAdmissionRefusal({
       transitionKind: PLACEMENT_TRANSITION_KIND.PLACEMENT,
       entityType: row.entity_type, entityId: row.entity_id,
+      dispatchHold: getOperationMetadataValue(operation.stepsHistory, OPERATION_METADATA_KEY.DISPATCH_HOLD),
       moves: [{type: operation.type}],
     }, census);
     // Copies require a current policy statement before their capacity arm;
