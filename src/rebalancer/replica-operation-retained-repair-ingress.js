@@ -168,12 +168,13 @@ function assignRetainedRepairIngressMethods(Repository) {
         attempt.tenure.service === service && attempt.entry.state === ENTRY.PINNED &&
         attempt.entry.entryId === payload.entryId &&
         isDeepStrictEqual(attempt.entry.body, payload.body) && birth !== UNATTESTED_BIRTH;
-      return holds ? {nodeId: service.nodeId, replicaId: service.replicaId,
+      if (!holds) return null;
+      return {nodeId: service.nodeId, replicaId: service.replicaId,
         operationId: attempt.operation.operationId, createdAt: attempt.operation.createdAt,
         entryId: payload.entryId, bodyText: JSON.stringify(payload.body),
         ledgerTerm: attempt.tenure.term,
         nodeBootIncarnation: this.membershipOwnerBootIncarnation,
-        replicaCreatedAt: birth.createdAt} : null;
+        replicaCreatedAt: birth.createdAt};
     },
   });
 }
