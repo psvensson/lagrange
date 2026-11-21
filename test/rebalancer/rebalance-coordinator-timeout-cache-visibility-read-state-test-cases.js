@@ -8,6 +8,7 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {
   buildTransactionCoordinator,
+  createCommittedTimeoutLedger,
   createCoordinator,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
 
@@ -43,35 +44,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         ]),
       };
 
-      const sqlQueryEngine = {
-        async executeQuery(sql, params) {
-          if (sql.includes('FROM replica_operations')) {
-            return {
-              success: true,
-              rows: [{...nonPrioritySyncingOperationRow}],
-            };
-          }
-          if (sql.startsWith('UPDATE replica_operations SET')) {
-            nonPrioritySyncingOperationRow.status = params[0];
-            nonPrioritySyncingOperationRow.workflow_step = params[1];
-            nonPrioritySyncingOperationRow.updated_at = params[2];
-            nonPrioritySyncingOperationRow.completed_at = params[3];
-            nonPrioritySyncingOperationRow.error_message = params[4];
-            nonPrioritySyncingOperationRow.steps_history = params[5];
-            nonPrioritySyncingOperationRow.replica_id = params[6];
-            return {
-              success: true,
-              affectedRows: 1,
-            };
-          }
-          return {
-            success: true,
-            rows: [],
-            affectedRows: 0,
-          };
-        },
-      };
-
+      const ledger = createCommittedTimeoutLedger(nonPrioritySyncingOperationRow);
       const coordinator = createCoordinator({
         nodeId: 'node-2',
         transactionCoordinator: buildTransactionCoordinator(),
@@ -79,9 +52,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           get() {
             return null;
           },
-        },
-        cdcIntegrationService: {
-          refreshAuthoritativeCacheRow: async () => true,
         },
         messageRouter: {
           async deliver() {
@@ -93,24 +63,34 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
             return {targetReplicaCount: 3, minReplicaCount: 1};
           },
         },
-        sqlQueryEngine,
+        ...ledger.options,
         enableTimeouts: false,
       });
 
       coordinator.initialize();
+      let committed;
       try {
         await coordinator.checkTimeouts();
+        committed = ledger.read();
       } finally {
-        await coordinator.shutdown();
+        try {
+          await coordinator.shutdown();
+        } finally {
+          ledger.close();
+        }
       }
+      t.ok(ledger.pointReads.some(({rows}) =>
+        rows[0]?.operation_id === nonPrioritySyncingOperationRow.operation_id),
+      'the exact owner row reaches reconciliation within the configured step budget');
+      t.same(ledger.terminalChanges, [], 'no failure CAS is submitted');
 
       t.equal(
-        nonPrioritySyncingOperationRow.workflow_step,
+        committed.workflow_step,
         'SYNCING',
         'non-priority SYNCING operations should keep the configured longer timeout budget',
       );
       t.equal(
-        nonPrioritySyncingOperationRow.error_message,
+        committed.error_message,
         null,
         'non-priority SYNCING operations should not fail early under the bounded priority timeout path',
       );
@@ -153,6 +133,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
       ]),
     };
 
+    const ledger = createCommittedTimeoutLedger(authoritativeTerminalRow);
     const coordinator = createCoordinator({
       nodeId: 'node-1',
       transactionCoordinator: buildTransactionCoordinator(),
@@ -170,9 +151,6 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           return [staleCacheRow];
         },
       },
-      cdcIntegrationService: {
-        refreshAuthoritativeCacheRow: async () => true,
-      },
       messageRouter: {
         async deliver() {
           deliveries.push(true);
@@ -184,28 +162,29 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
           return {targetReplicaCount: 3, minReplicaCount: 1};
         },
       },
-      sqlQueryEngine: {
-        async executeQuery(sql) {
-          if (sql.includes('FROM replica_operations WHERE operation_id = ?')) {
-            return {
-              success: true,
-              rows: [{...authoritativeTerminalRow}],
-              affectedRows: 1,
-            };
-          }
-          return {success: true, rows: [], affectedRows: 0};
-        },
-      },
+      ...ledger.options,
       enableTimeouts: false,
     });
 
     coordinator.initialize();
+    let committed;
     try {
       await coordinator.checkTimeouts();
+      committed = ledger.read();
     } finally {
-      await coordinator.shutdown();
+      try {
+        await coordinator.shutdown();
+      } finally {
+        ledger.close();
+      }
     }
 
+    t.ok(ledger.pointReads.some(({rows}) =>
+      rows[0]?.operation_id === authoritativeTerminalRow.operation_id &&
+      rows[0].workflow_step === 'REMOVED'),
+    'the exact owner point read observes the completed operation over the stale cache');
+    t.equal(committed.workflow_step, 'REMOVED');
+    t.same(ledger.terminalChanges, [], 'the terminal winner is left intact');
     t.equal(deliveries.length, 0,
       'stale cache rows should not trigger dispatch when authoritative row is terminal');
   });
