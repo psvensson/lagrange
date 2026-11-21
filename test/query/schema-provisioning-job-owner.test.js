@@ -436,6 +436,8 @@ for (const {replicaCount, members, targetNodeIds, expected} of [
   {members: ['serve-c', 'serve-a', 'serve-b'], expected: ['serve-a']},
   {replicaCount: 3, members: ['serve-c', 'serve-a', 'serve-b'],
     targetNodeIds: ['serve-c', 'serve-a'], expected: ['serve-c', 'serve-a']},
+  {replicaCount: 2, members: ['serve-a', 'serve-b', 'serve-c'],
+    targetNodeIds: ['serve-c', 'serve-a', 'serve-b'], expected: ['serve-c', 'serve-a']},
 ]) {
   test(`founding uses the ordered requested width (RF ${replicaCount ?? 1}, ` +
     `explicit: ${Boolean(targetNodeIds)})`, async (t) => {
@@ -522,6 +524,39 @@ test('admission outlasting the parent deadline cannot found a healthy cohort',
     t.same(native.checked, ['serve-a'], 'later prechecks cannot start after the budget');
     t.same(native.proposals, [], 'a spent budget cannot reach the founding owner');
   });
+
+test('explicit prechecks stop when their shared attempt deadline expires',
+  async (t) => {
+    const {clock, engine} = createServeRefreshFixture(t, createGateway());
+    engine.nowFn = () => clock.now;
+    const native = captureFoundingAdmission(engine, () => {
+      clock.now += 50;
+      return {allowed: true};
+    });
+    await t.rejects(engine.provisionInitialTablePartition({
+      partitionId: 'explicit-deadline-p1', replicaCount: 2,
+      targetNodeIds: ['serve-c', 'serve-a', 'serve-b'],
+      timeoutBudget: createTimeoutBudget({configuredBudgetMs: 20, now: engine.nowFn}),
+    }), {errorCode: 'TIMEOUT'});
+    t.same(native.checked, ['serve-c']);
+    t.same(native.proposals, []);
+  });
+
+for (const explicit of [false, true]) {
+  test(`unknown admission cannot advance to another target (explicit: ${explicit})`,
+    async (t) => {
+      const {engine, readiness} = createServeRefreshFixture(t, createGateway());
+      await readiness.readServeEligibility();
+      const native = captureFoundingAdmission(engine, (nodeId) =>
+        nodeId === 'serve-a' ? {} : {allowed: true});
+      await t.rejects(engine.provisionInitialTablePartition({
+        partitionId: 'admission-unknown-p1', replicaCount: 2,
+        ...(explicit ? {targetNodeIds: ['serve-a', 'serve-b', 'serve-c']} : {}),
+      }), {code: QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE});
+      t.same(native.checked, ['serve-a']);
+      t.same(native.proposals, []);
+    });
+}
 
 function captureFoundingAdmission(engine, precheck = () => ({allowed: true})) {
   const events = [];
