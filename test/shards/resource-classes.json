@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2694,
+    "ordinary": 2695,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2720,
-  "digest": "fnv1a32-a831753c",
+  "censusSize": 2721,
+  "digest": "fnv1a32-a3667749",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1519,6 +1519,7 @@
     "test/partition/placement-retained-leadership.test.js": "ordinary",
     "test/partition/placement-retained-post-copy.test.js": "ordinary",
     "test/partition/placement-retained-publication.test.js": "ordinary",
+    "test/partition/placement-retained-real-publication.test.js": "ordinary",
     "test/partition/placement-retained-row-repair.test.js": "ordinary",
     "test/partition/proposal-queue-capacity.property.test.js": "ordinary",
     "test/partition/proposal-queue-size-invariant.property.test.js": "ordinary",

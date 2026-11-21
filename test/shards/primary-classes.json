@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2362,
+    "unit": 2363,
     "integration": 125,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2720,
-  "digest": "fnv1a32-fc92c841",
+  "censusSize": 2721,
+  "digest": "fnv1a32-a8bcb950",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1520,6 +1520,7 @@
     "test/partition/placement-retained-leadership.test.js": "unit",
     "test/partition/placement-retained-post-copy.test.js": "unit",
     "test/partition/placement-retained-publication.test.js": "unit",
+    "test/partition/placement-retained-real-publication.test.js": "unit",
     "test/partition/placement-retained-row-repair.test.js": "unit",
     "test/partition/proposal-queue-capacity.property.test.js": "unit",
     "test/partition/proposal-queue-size-invariant.property.test.js": "unit",
