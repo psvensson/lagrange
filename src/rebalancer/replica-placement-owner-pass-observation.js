@@ -27,6 +27,7 @@ const PLACEMENT_PASS_CHECKPOINT = Object.freeze({
   ABORTED: 'ABORTED',
   PASS_START: 'PASS_START',
   TERM_START_BARRIER: 'TERM_START_BARRIER',
+  AFTER_CENSUS: 'AFTER_CENSUS',
   NODE_AUTHORITY: 'NODE_AUTHORITY',
   BEFORE_HOLD_RELEASE: 'BEFORE_HOLD_RELEASE',
   AFTER_HOLD_RELEASE: 'A2_AFTER_HOLD_RELEASE',
@@ -51,7 +52,7 @@ function createPlacementObservation() {
   return {passSequence: 0, totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
     leadershipStartDrivesJoined: 0, constructions: 0, evaluated: 0, candidates: 0,
     capacityChecks: 0, proposals: 0, fenced: 0, admitted: 0, released: 0, refused: {},
-    outcomeUnknown: 0, failedPasses: 0, leadershipStartDriveFailures: 0}};
+    outcomeUnknown: 0, failedPasses: 0, failedCandidates: 0, leadershipStartDriveFailures: 0}};
 }
 
 function newPassRecord(observation, custody, sequence, triggers) {
@@ -59,7 +60,7 @@ function newPassRecord(observation, custody, sequence, triggers) {
     tenureTerm: custody?.tenure?.term ?? null, state: PLACEMENT_PASS_STATE.STOPPED,
     stoppedAt: CHECKPOINT.RUNNING, stale: false, operationIds: Object.freeze([]),
     evaluated: 0, candidates: 0, waiting: {}, capacityChecks: 0, proposals: 0, fenced: 0,
-    refused: {}};
+    refused: {}, failedCandidates: {}};
 }
 
 /**
@@ -101,6 +102,13 @@ function recordPassFailure(pass, error) {
   pass.stoppedAt = CHECKPOINT.ABORTED;
   pass.failure = String(error?.message ?? error);
   pass.observation.totals.failedPasses += 1;
+}
+
+// A failure attributable to one candidate: recorded for its partition; the
+// pass goes on with the other candidates.
+function recordCandidateFailure(pass, partitionId, error) {
+  pass.failedCandidates[partitionId] = String(error?.message ?? error);
+  pass.observation.totals.failedCandidates += 1;
 }
 
 function recordLeadershipStartDriveFailure(observation) {
@@ -221,6 +229,7 @@ function placementPassSnapshot(pass, clearingTriggers) {
     stale: pass.stale, evaluated: pass.evaluated, candidates: pass.candidates,
     waiting: frozenCounts(pass.waiting), capacityChecks: pass.capacityChecks,
     proposals: pass.proposals, fenced: pass.fenced, refused: frozenCounts(pass.refused),
+    failedCandidates: frozenCounts(pass.failedCandidates),
     totals: frozenTotals(pass.observation.totals)});
 }
 
@@ -229,6 +238,7 @@ export {
   PLACEMENT_PASS_STATE,
   beginPlacementPass,
   completePass,
+  recordCandidateFailure,
   createPlacementObservation,
   directSubmissionRecord,
   markPassStale,

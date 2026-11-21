@@ -15,6 +15,12 @@
 // at its start; it is current while the custody is the owner's and its token
 // is the ledger's live token. Nothing here grants authority.
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../partition/partition-write-kernel.js';
+import {PLACEMENT_TRIGGER} from './replica-placement-owner-constants.js';
+import {
+  recordLeadershipStartDriveFailure, recordLeadershipStartDriveJoined,
+} from './replica-placement-owner-pass-observation.js';
+
+const LOG_START_DRIVE_FAILED = 'Replica placement leadership-start CDC drive failed';
 
 // The custody's term-start barrier: its own term-start entry committed and
 // applied on this replica, or not yet.
@@ -68,10 +74,40 @@ function tenureFenceRefusal(partitionId) {
     tenureFence: PLACEMENT_TENURE_FENCE.TENURE_ENDED});
 }
 
+/**
+ * The custody's leadership start requests one drive of the ledger's CDC
+ * obligations and does not wait for it (lead ruling 4: the start path waits
+ * for no publication or CDC drive); one request per owner at a time: a custody
+ * whose earlier request is still unanswered joins it. Its answer, whenever it
+ * comes, only frees the owner's request slot (and counts a failure).
+ * @param {Object} owner - The ReplicaPlacementOwner.
+ * @param {Object} pass - The pass record.
+ */
+function requestLeadershipStartCdcDrive(owner, pass) {
+  const cdcDelivery = owner.ledgerPartitionService.cdcDelivery;
+  if (!cdcDelivery) return;
+  if (owner.leadershipStartDrive !== null) {
+    recordLeadershipStartDriveJoined(pass);
+    return;
+  }
+  const drive = Promise.resolve(
+    cdcDelivery.driveCdcObligations(PLACEMENT_TRIGGER.LEADERSHIP_START));
+  owner.leadershipStartDrive = drive;
+  drive.then(() => {
+    if (owner.leadershipStartDrive === drive) owner.leadershipStartDrive = null;
+  }, (error) => {
+    if (owner.leadershipStartDrive === drive) owner.leadershipStartDrive = null;
+    recordLeadershipStartDriveFailure(owner.observation);
+    owner.logger.warn(LOG_START_DRIVE_FAILED, {nodeId: owner.nodeId,
+      error: error?.message ?? String(error)});
+  });
+}
+
 export {
   PLACEMENT_TENURE_FENCE,
   PLACEMENT_TERM_START,
   createTenureCustody,
   isTermStartApplied,
+  requestLeadershipStartCdcDrive,
   tenureFenceRefusal,
 };

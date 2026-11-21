@@ -48,12 +48,13 @@ import {canAdmitRemoveUnderPass} from './replica-placement-owner-remove.js';
 import {
   PLACEMENT_PASS_CHECKPOINT as CHECKPOINT, beginPlacementPass, completePass,
   createPlacementObservation, directSubmissionRecord, markPassStale, markPassWaiting,
-  placementPassSnapshot, recordCapacityCheck, recordFenced, recordLeadershipStartDriveJoined,
-  recordLeadershipStartDriveFailure, recordNodeAuthorityWait, recordPassEvaluations,
-  recordPassFailure, recordProposal, recordSubmissionAnswer,
+  placementPassSnapshot, recordCapacityCheck, recordFenced,
+  recordNodeAuthorityWait, recordPassEvaluations,
+  recordCandidateFailure, recordPassFailure, recordProposal, recordSubmissionAnswer,
 } from './replica-placement-owner-pass-observation.js';
 import {
-  PLACEMENT_TERM_START, createTenureCustody, isTermStartApplied, tenureFenceRefusal,
+  PLACEMENT_TERM_START, createTenureCustody, isTermStartApplied, requestLeadershipStartCdcDrive,
+  tenureFenceRefusal,
 } from './replica-placement-owner-tenure.js';
 
 const PLACEMENT_RESYNC_INTERVAL_MS = 60_000;
@@ -61,7 +62,9 @@ const ENTRY_KIND_RELEASE = 'release';
 const ENTRY_KIND_ADMIT = 'admit';
 const SKIPPED_PARTITION_STATUSES = Object.freeze(new Set(['splitting', 'merging']));
 const LOG_PASS_FAILED = 'Replica placement pass failed; its triggers wait for the next wake';
-const LOG_START_DRIVE_FAILED = 'Replica placement leadership-start CDC drive failed';
+const LOG_CANDIDATE_FAILED = 'Replica placement candidate failed; the pass goes on';
+// The typed answer of a candidate whose proposal threw (recorded for it).
+const CANDIDATE_FAILED = Object.freeze({state: 'CANDIDATE_FAILED'});
 
 function rowSignatureOf(row) {
   return `${row.workflow_step}:${row.status}:${row.steps_history}`;
@@ -292,12 +295,19 @@ class ReplicaPlacementOwner {
   }
 
   // One drain per custody: a new tenure never queues behind an obsolete pass.
+  // Invariant: no foreign call between deciding to drain and marking the
+  // drain; the custody's running promise exists before the first pass reads
+  // the ledger's status (a read that may run a consensus turn and notify).
   drainQueue() {
     const custody = this.custody;
     if (!this.isCustodyCurrent(custody) || this.pendingTriggers.size === 0) {
       return custody?.running ?? Promise.resolve();
     }
-    if (custody.running === null) custody.running = this.drainCustody(custody);
+    if (custody.running === null) {
+      const drain = Promise.withResolvers();
+      custody.running = drain.promise;
+      this.drainCustody(custody).then(drain.resolve, drain.reject);
+    }
     return custody.running;
   }
 
@@ -312,7 +322,11 @@ class ReplicaPlacementOwner {
         custody.retainedTriggers.clear();
         this.pendingTriggers.clear();
         try {
-          await this.runPass(triggers);
+          const pass = await this.runPass(triggers);
+          // A candidate failed: its obligation stays with the next wake.
+          if (Object.keys(pass.failedCandidates).length > 0) {
+            for (const trigger of triggers) custody.retainedTriggers.add(trigger);
+          }
         } catch (error) {
           for (const trigger of triggers) custody.retainedTriggers.add(trigger);
           this.logger.warn(LOG_PASS_FAILED, {nodeId: this.nodeId,
@@ -437,33 +451,9 @@ class ReplicaPlacementOwner {
     );
   }
 
-  // The start path requests one drive of the ledger's CDC obligations and
-  // does not wait for it (lead ruling 4: the start path waits for no
-  // publication or CDC drive); one request per owner at a time: a custody
-  // whose earlier request is still unanswered joins it.
-  requestLeadershipStartCdcDrive(pass) {
-    const cdcDelivery = this.ledgerPartitionService.cdcDelivery;
-    if (!cdcDelivery) return;
-    if (this.leadershipStartDrive !== null) {
-      recordLeadershipStartDriveJoined(pass);
-      return;
-    }
-    const drive = Promise.resolve(
-      cdcDelivery.driveCdcObligations(PLACEMENT_TRIGGER.LEADERSHIP_START));
-    this.leadershipStartDrive = drive;
-    drive.then(() => {
-      if (this.leadershipStartDrive === drive) this.leadershipStartDrive = null;
-    }, (error) => {
-      if (this.leadershipStartDrive === drive) this.leadershipStartDrive = null;
-      recordLeadershipStartDriveFailure(this.observation);
-      this.logger.warn(LOG_START_DRIVE_FAILED, {nodeId: this.nodeId,
-        error: error?.message ?? String(error)});
-    });
-  }
-
   // The custody's one leadership-start reconciliation (synchronous).
   reconcileUnresolvedAttemptsOnLeadershipStart(census, pass) {
-    this.requestLeadershipStartCdcDrive(pass);
+    requestLeadershipStartCdcDrive(this, pass);
     const refreshed = readPlacementCensus(this.ledgerPartitionService.db);
     reconcilePlacementAttempts(
       this.ledgerPartitionService.db,
@@ -641,6 +631,19 @@ class ReplicaPlacementOwner {
     return {candidate, operationId};
   }
 
+  // A failure attributable to this candidate is recorded for it (once per
+  // pass, so at most once per wake) and the pass goes on with the others.
+  async proposeCandidateIsolated(rawCandidate, context) {
+    try {
+      return await this.proposeOrderedCandidate(rawCandidate, context);
+    } catch (error) {
+      recordCandidateFailure(context.pass, rawCandidate.partitionId, error);
+      this.logger.warn(LOG_CANDIDATE_FAILED, {nodeId: this.nodeId,
+        partitionId: rawCandidate.partitionId, error: error?.message ?? String(error)});
+      return CANDIDATE_FAILED;
+    }
+  }
+
   // A5: an admitted ledger move's hold is released while no other copy runs;
   // false when the pass's tenure ended across it.
   async releaseAdmittedLedgerHold(operationId, state, pass) {
@@ -663,8 +666,8 @@ class ReplicaPlacementOwner {
           shouldStopPlacementPass(rawCandidate, state)) {
         break;
       }
-      const proposal = await this.proposeOrderedCandidate(rawCandidate, context);
-      if (proposal === null) continue;
+      const proposal = await this.proposeCandidateIsolated(rawCandidate, context);
+      if (proposal === null || proposal === CANDIDATE_FAILED) continue;
       const {candidate, operationId} = proposal;
       if (resyncOnly) this.placementResyncAdmissions += 1;
       operationIds.push(operationId);
@@ -700,7 +703,8 @@ class ReplicaPlacementOwner {
       return false;
     }
     custody.termStart = PLACEMENT_TERM_START.APPLIED;
-    return true;
+    // The status read may have run a consensus turn: the custody, re-checked.
+    return this.checkpoint(pass, CHECKPOINT.TERM_START_BARRIER);
   }
 
   async planAndAdmit(pass, census, nodeInput, nowMs, triggers) {
@@ -733,7 +737,7 @@ class ReplicaPlacementOwner {
   async runPassSteps(pass, triggers) {
     if (!this.checkpoint(pass, CHECKPOINT.PASS_START) || !this.passTermStartBarrier(pass)) return;
     const census = await this.readPassCensus(pass);
-    if (census === null) return;
+    if (census === null || !this.checkpoint(pass, CHECKPOINT.AFTER_CENSUS)) return;
     const nowMs = this.now();
     const nodeInput = readPlacementNodeInputs(this.nodeAuthority, nowMs);
     if (nodeInput.state !== SERVE_ELIGIBILITY_STATE.READY) {
@@ -759,6 +763,7 @@ class ReplicaPlacementOwner {
         this.lastPassSnapshot = placementPassSnapshot(pass, PLACEMENT_CLEARING_TRIGGER);
       }
     }
+    return pass;
   }
 }
 
