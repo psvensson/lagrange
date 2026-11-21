@@ -21,7 +21,8 @@ const FRESH_CREATE_RELEASE_ROUTE_UNAVAILABLE = 'Fresh CREATE participant release
 
 function requireFreshCreateReleaseRoute(handler) {
   const router = handler.messageRouter;
-  if (typeof router?.deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
+  const deliver = router?.deliver;
+  if (typeof deliver !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
       !isExactReplicaHandlerRegistered(router,
         handler.nodeId + PARTICIPANT_RELEASE_ROUTE_SUFFIX, handler.registeredRouterHandler)) {
     throw Object.assign(new Error(FRESH_CREATE_RELEASE_ROUTE_UNAVAILABLE),

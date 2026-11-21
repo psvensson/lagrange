@@ -412,10 +412,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         this.setLocalReplica(replicaId, {
           replicaId, partitionId, status: ReplicaStatus.FAILED,
         });
-        // CL-016: a locally seeded CREATING row must not linger after failure.
-        if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-          this.seedLocalPriorityServiceRow(replicaId, partitionId, ReplicaStatus.FAILED);
-        }
+        this.projectConfirmedCreateFailure(replicaId, partitionId);
         this.failReplicaCreationProgress(work.progress, error);
         releaseReplicaCreateWork(this, work);
         this.emitExecutorOutcome(
