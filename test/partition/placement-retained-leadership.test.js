@@ -1,3 +1,4 @@
+import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {stepRetainedLedgerRow} from './placement-retained-row-repair-fixture.js';
@@ -43,7 +44,24 @@ for (const publicationOrder of ['partition-first', 'service-first']) {
           voterRetirement: {nodeBootIncarnation: 1, replicaCreatedAt: 1}})});
       assert.equal(competitor.placementResult.outcome, 'ADMITTED');
       assert.equal(await a.coordinator.repository.repairRetainedOperation(retained), false);
-      await elect(b, {publicationOrder});
+      b.lastRolePublication += 1;
+      for (const node of [a, b]) {
+        const cache = node.coordinator.systemTableCache;
+        const service = cache.get('services', b.leader.replicaId);
+        cache.applySystemTableChange('services', CACHE_CDC_OPERATIONS.UPSERT,
+          {...service, address: `foreign-node/partition/${b.leader.replicaId}`,
+            updated_at: b.lastRolePublication});
+      }
+      const beforePublication = messages.length;
+      await elect(b, {publicationOrder, afterFirstPublication: async () => {
+        await idle(a, b);
+        assert.equal(messages.slice(beforePublication).filter((message) =>
+          message.from === a && message.to === b && message.payload.type === 'PLACEMENT_REPAIR').length,
+        0, 'one half of the canonical owner/endpoint publication cannot route to B');
+        const route = a.coordinator.resolveRemoteLedgerLeader();
+        if (publicationOrder === 'partition-first') assert.equal(route, null);
+        else assert.equal(route.replicaId, a.leader.replicaId);
+      }});
       await idle(a, b);
       assert.ok(messages.some((message) => message.from === a && message.to === b &&
       message.payload.type === 'PLACEMENT_REPAIR'), 'A used current B route instead of saved A closure');

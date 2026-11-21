@@ -55,7 +55,8 @@ async function withRetainedLeadershipPair(measure) {
       };
       node.coordinator.syncOwnerDependencies({messageRouter: router});
     }
-    async function elect(next, {resume = true, publicationOrder = 'partition-first'} = {}) {
+    async function elect(next, {resume = true, publicationOrder = 'partition-first',
+      afterFirstPublication} = {}) {
       if (leader !== next) term += 1;
       leader = next;
       for (const node of nodes) {
@@ -98,9 +99,10 @@ async function withRetainedLeadershipPair(measure) {
       };
       const publications = publicationOrder === 'partition-first' ?
         [publishPartition, publishServices] : [publishServices, publishPartition];
-      for (const publish of publications) {
+      for (const [index, publish] of publications.entries()) {
         publish();
         await settleTicks();
+        if (index === 0 && afterFirstPublication) await afterFirstPublication();
       }
       await settleTicks();
     }
