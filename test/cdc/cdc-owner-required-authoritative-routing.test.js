@@ -13,6 +13,7 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
+import {managedSleep} from '../../src/test-helpers/managed-timers.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {buildDeliveryEnvelope, deliveryAnswerOf} from
   '../../src/transport/transport-semantic-outcome.js';
@@ -39,6 +40,8 @@ const REFUSED_SQL = 'SELECT unavailable_column FROM replica_operations ' +
 const OWNER_ROW = {operation_id: OPERATION, workflow_step: 'OWNER'};
 const LOCAL_ROW = {operation_id: OPERATION, workflow_step: 'LOCAL'};
 const TIMEOUT_MS = 2000;
+const SETUP_POLL_MS = 5;
+const SETUP_POLLS = 400;
 
 function seedRoutingCache() {
   const cache = new SystemTableCache();
@@ -233,3 +236,142 @@ test('strict CDC reads route to the registered owner while a local query is held
       ConfigurationManager.resetInstance();
     }
   });
+
+// S0 witness 1 (fallback-read closure). Owner path: gateway.readAuthoritativeRows
+// -> executeAuthoritativeSystemTableRead (leader REQUIRED). The node that hosts
+// the ledger leader must get its owner fact from that in-process replica: the
+// read may not wait for leader publication or for query routing, which are
+// what recovery restores.
+// Real: gateway, CDC flow, QueryExecutor, MessageRouter, a single-voter
+// raft-rs PartitionService (the witness producer). Substituted: query channel
+// transit only (recorded). Ceiling: one process, one voter; the rows are
+// seeded straight into the replica's database.
+function seedLeaderHostCache(leaderNodeId) {
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
+    partition_id: PARTITION, table_id: TABLE,
+    ...(leaderNodeId === null ? {} : {leader_node_id: leaderNodeId}),
+  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+    service_id: REPLICA, replica_id: REPLICA, node_id: OWNER,
+    partition_id: PARTITION, service_type: 'partition',
+    status: 'active', address: ADDRESS,
+  });
+  return cache;
+}
+
+function createLeaderHostGateway({router, cache, partition, withQueryEngine}) {
+  const sqlQueryEngine = withQueryEngine ? {queryExecutor: new QueryExecutor({
+    nodeId: router.nodeId,
+    messageRouter: router,
+    systemCache: cache,
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+  })} : null;
+  const cdc = new CDCIntegrationService({
+    nodeId: router.nodeId,
+    messageRouter: router,
+    systemTableCache: cache,
+    partitionServicesProvider: () => new Map([[partition.replicaId, partition]]),
+    ...(sqlQueryEngine ? {sqlQueryEngine} : {}),
+  });
+  cdc.initialize();
+  return new ControlPlaneSystemTableGateway({
+    nodeId: router.nodeId,
+    cdcIntegrationService: cdc,
+    systemTableCache: cache,
+    ...(sqlQueryEngine ? {sqlQueryEngine} : {}),
+  });
+}
+
+test('gateway.readAuthoritativeRows leader-REQUIRED: the in-process ledger leader answers ' +
+  'without a published leader or a query engine',
+async (t) => {
+  ConfigurationManager.getInstance().initialize({});
+  LoggingService.getInstance().initialize({level: 'error'});
+  const router = new MessageRouter({
+    nodeId: OWNER, wsPort: OWNER_PORT, inProcess: true,
+    bootIncarnation: TEST_BOOT_INCARNATION,
+  });
+  const partition = new PartitionService(withFoundingStamp({
+    partitionId: PARTITION, replicaId: REPLICA, nodeId: OWNER,
+    tableName: TABLE, tableId: TABLE, dbPath: ':memory:',
+    transport: router,
+    systemTableCache: seedLeaderHostCache(OWNER),
+    schema: {columns: [
+      {name: 'operation_id', type: 'TEXT', primaryKey: true},
+      {name: 'workflow_step', type: 'TEXT'},
+    ]},
+  }));
+  try {
+    await router.initialize({startServer: true});
+    await partition.initialize();
+    partition.raft.campaign();
+    const leadsAndApplied = () => {
+      const status = partition.raft.readStatus();
+      return status.role === 'leader' && partition.role === 'leader' &&
+        status.commitIndex === status.appliedIndex;
+    };
+    for (let poll = 0; poll < SETUP_POLLS && !leadsAndApplied(); poll += 1) {
+      await managedSleep(t, SETUP_POLL_MS);
+    }
+    t.equal(leadsAndApplied(), true,
+      'setup: the hosted native replica leads and has applied what it committed');
+    partition.db.prepare('INSERT INTO replica_operations ' +
+      '(operation_id, workflow_step) VALUES (?, ?)')
+      .run(OWNER_ROW.operation_id, OWNER_ROW.workflow_step);
+    const transit = [];
+    router.setQueryMessageGroupServiceResolver(() => ({
+      async sendMessage(address, message, options) {
+        const delivery = await router.deliverLocal(address, 'leader-host-read-delivery',
+          message, null, options.transportDeliveryOptions).then(({result, answer}) =>
+          buildDeliveryEnvelope(result, answer));
+        transit.push({address, success: deliveryAnswerOf(delivery)?.success === true});
+        return {delivery};
+      },
+    }));
+    const cases = [
+      {label: 'the routing snapshot names no canonical leader',
+        leaderNodeId: null, withQueryEngine: true},
+      {label: 'no query engine exists yet (seed before cache hydration)',
+        leaderNodeId: OWNER, withQueryEngine: false},
+    ];
+    for (const scenario of cases) {
+      await t.test(scenario.label, async (t) => {
+        transit.length = 0;
+        const gateway = createLeaderHostGateway({
+          router, partition, cache: seedLeaderHostCache(scenario.leaderNodeId),
+          withQueryEngine: scenario.withQueryEngine,
+        });
+        const answer = await gateway.readAuthoritativeRows(TABLE, SQL, [OPERATION], {
+          timeoutMs: TIMEOUT_MS,
+          authoritativeReadMode: MODE.OWNER_RPC_REQUIRED,
+          leaderMode: LEADER.REQUIRED,
+          localReadConsistency: 'local_leader',
+          deliveryPriority: 'critical',
+          workClass: 'critical',
+        });
+        const witness = answer.readAuthorityWitness;
+        t.comment(JSON.stringify({observed: {success: answer.success, error: answer.error,
+          source: answer.source, rows: answer.rows, witness, transit}}));
+        t.equal(answer.success, true,
+          'the node hosting the leader gets its owner fact (today: unavailable)');
+        t.same(answer.rows, [OWNER_ROW], 'the leader replica\'s rows');
+        t.equal(answer.rowSetComplete, true, 'the serving replica declares the row set complete');
+        t.equal(witness?.role, 'leader', 'the answer carries the serving replica\'s leader witness');
+        t.equal(witness?.partitionId, PARTITION);
+        t.equal(witness?.servingNodeId, OWNER);
+        t.equal(witness?.servingReplicaId, REPLICA);
+        t.ok(Number.isSafeInteger(witness?.term) && witness.term >= 1, 'witness term');
+        t.ok(Number.isSafeInteger(witness?.appliedIndex) &&
+          witness.appliedIndex === witness?.commitIndex,
+        'the witness names an applied index equal to its commit index');
+        t.equal(transit.length, 0, 'the in-process leader is read without query transit');
+      });
+    }
+  } finally {
+    await partition.shutdown();
+    await router.shutdown();
+    LoggingService.resetInstance();
+    ConfigurationManager.resetInstance();
+  }
+});
