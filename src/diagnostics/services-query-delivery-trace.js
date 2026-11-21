@@ -1,8 +1,17 @@
+import {createHash} from 'node:crypto';
 import {performance} from 'node:perf_hooks';
 import {
   MESSAGE_ROUTER_LITERAL,
   extractSqlOperationKind,
 } from '../transport/message-router-shared-vocabulary.js';
+
+import {
+  SERVICES_REPLICA_ADDRESS,
+  ServicesQuerySocketWrites,
+  queryRequest,
+  serviceWriteFamily,
+  socketFields,
+} from './services-query-socket-writes.js';
 
 // Process-local field diagnostic. The request object links the two generated
 // IDs without adding metadata to a delivery option or a serialized frame.
@@ -43,10 +52,13 @@ const TRACE_MAX_OUTBOUND_IDS = 256;
 const TRACE_FIELD_LENGTH = 96;
 const TRACE_ENABLED = process.env[SERVICES_QUERY_TRACE_ENV] === '1';
 const SERVICES_PARTITION = 'services-p1';
-const SERVICES_REPLICA_ADDRESS = /\/partition\/services-p1-r[0-9]+$/;
+const HARNESS_ADMIN_QUERY_ID = /^q-[0-9]{13}-[a-z0-9]{1,16}$/;
+const ADMIN_QUERY_DIGEST = 'sha256';
+const ADMIN_QUERY_DIGEST_ENCODING = 'hex';
 class ServicesQueryTraceState {
   requests = new WeakMap();
   outbound = new WeakMap();
+  socketWrites = TRACE_ENABLED ? new ServicesQuerySocketWrites() : null;
   startedAtMs = null;
   stopped = !TRACE_ENABLED;
   sequence = 0;
@@ -56,6 +68,7 @@ class ServicesQueryTraceState {
     this.stopped = true;
     this.requests = new WeakMap();
     this.outbound = new WeakMap();
+    this.socketWrites = null;
   }
 }
 
@@ -112,13 +125,13 @@ const NO_QUERY_TRACE = Object.freeze({
   fail: (result) => result,
 });
 
-function startServicesPartitionQuery(executor, partitionId, forRead) {
+function startServicesPartitionQuery(executor, partitionId, forRead, deliveryOptions) {
   if (forRead !== true || partitionId !== SERVICES_PARTITION || !isServicesQueryTraceOpen()) {
     return NO_QUERY_TRACE;
   }
   const queryId = ++traceState.querySequence;
   recordServicesQueryTrace(executor, QUERY_TRACE_STAGE.QUERY_START, {
-    queryId, partitionId, forRead,
+    queryId, partitionId, forRead, ...adminQueryIdentity(deliveryOptions?.sessionId),
   });
   return {
     bind(request) {
@@ -148,7 +161,7 @@ function isTracedServicesRead(router, address, request) {
 
 function isTracedServicesReadFrame(router, address, payload, messageId) {
   return isTracedServicesRead(router, address,
-    payload?.messageId === messageId ? payload.payload : payload);
+    queryRequest(payload, messageId));
 }
 
 function traceOuterServicesQuery(router, request, address, messageId) {
@@ -188,6 +201,7 @@ function traceOutboundServicesQuery(
     targetAddress: boundedField(targetAddress),
     targetNodeId: boundedField(targetNodeId),
     sentConnectionId: boundedField(connectionId),
+    ...frameAdminQueryIdentity(payload, messageId),
   };
   messages.set(messageId, trace);
   return trace;
@@ -198,15 +212,69 @@ function getOutboundServicesQueryTrace(router, messageId) {
   return traceState.outbound.get(router)?.get(messageId) ?? null;
 }
 
+// A digest joins a pre-existing harness admin queryId with the SQL session
+// when the production path propagates it. Shape alone never proves its origin.
+function adminQueryIdentity(sessionId) {
+  if (typeof sessionId !== 'string' || sessionId.length > TRACE_FIELD_LENGTH ||
+      !HARNESS_ADMIN_QUERY_ID.test(sessionId)) return {};
+  return {adminQueryIdDigest: createHash(ADMIN_QUERY_DIGEST).update(sessionId)
+    .digest(ADMIN_QUERY_DIGEST_ENCODING)};
+}
+
+function frameAdminQueryIdentity(payload, messageId) {
+  return adminQueryIdentity(queryRequest(payload, messageId)?.sessionId);
+}
+
+function diagnoseSocket(observe) {
+  let result = null;
+  try {
+    result = observe();
+  } catch (_error) {
+    traceState.stop();
+  }
+  return result;
+}
+
+function traceSocketFields(ws) {
+  return isServicesQueryTraceOpen() ? diagnoseSocket(() => socketFields(ws)) : null;
+}
+
+function traceSocketBufferedAmount(ws, capture = true) {
+  return capture && isServicesQueryTraceOpen() ?
+    diagnoseSocket(() => ws?._socket ? ws.bufferedAmount : null) : null;
+}
+
+function traceReplyWriteFamily(router, address, payload, messageId) {
+  return isServicesQueryTraceOpen() ?
+    diagnoseSocket(() => serviceWriteFamily(router, address, payload, messageId)) : null;
+}
+
+function recordSocketSubmission(router, ws, bytes, message, replyFamily, capture = false) {
+  if (!isServicesQueryTraceOpen()) return null;
+  return diagnoseSocket(() => {
+    if (!ws._socket) return null;
+    // IDENTIFY is already a primary-socket send, so traffic preceding the
+    // first traced query falls within the same existing diagnostic window.
+    traceState.startedAtMs ??= performance.now();
+    return traceState.socketWrites.record(router, ws, bytes, message, replyFamily, capture);
+  });
+}
+
 export {
   SERVICES_QUERY_TRACE_ENV,
+  adminQueryIdentity,
   QUERY_TRACE_STAGE,
+  frameAdminQueryIdentity,
   getOutboundServicesQueryTrace,
   isServicesQueryTraceOpen,
   isTracedServicesReadFrame,
   recordServicesQueryTrace,
+  recordSocketSubmission,
   startServicesPartitionQuery,
   traceMessageGroupQuery,
+  traceReplyWriteFamily,
+  traceSocketBufferedAmount,
+  traceSocketFields,
   traceOuterServicesQuery,
   traceOutboundServicesQuery,
 };

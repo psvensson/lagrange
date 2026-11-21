@@ -61,7 +61,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   ) {
     // One entryId for every delivery of a write (the caller's, or minted
     // once): a re-delivery is never a fresh entry.
-    const traceQuery = startServicesPartitionQuery(this, partitionId, forRead);
+    const traceQuery = startServicesPartitionQuery(
+      this, partitionId, forRead, deliveryOptions);
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
     const unknownOutcome = createUnknownOutcomeRedelivery({
       entryId: executionOptions?.entryId ?? null,

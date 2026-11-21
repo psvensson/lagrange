@@ -1,5 +1,9 @@
-import {QUERY_TRACE_STAGE as STAGE, traceOuterServicesQuery} from
-  '../diagnostics/services-query-delivery-trace.js';
+import {
+  QUERY_TRACE_STAGE as STAGE,
+  recordSocketSubmission,
+  traceOuterServicesQuery,
+  traceSocketBufferedAmount,
+} from '../diagnostics/services-query-delivery-trace.js';
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 export {sendMessage} from './message-router-ack-delivery.js';
@@ -273,6 +277,7 @@ export function tryDeliverRaftDirect(
     const encoded = JSON.stringify(message);
     assertDeliveryOpen(options);
     connection.ws.send(encoded);
+    recordSocketSubmission(router, connection.ws, encoded, message);
     return {messageId, acknowledged: true};
   } catch (_sendError) {
     return null;
@@ -578,22 +583,28 @@ export async function resolveRecoverableDeliveryError(
   return null;
 }
 
-export function sendRaw(router, ws, message, trace) {
+export function sendRaw(router, ws, message, trace, replyFamily) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     if (!trace) {
-      ws.send(JSON.stringify(message));
+      const encoded = JSON.stringify(message);
+      ws.send(encoded);
+      recordSocketSubmission(router, ws, encoded, message, replyFamily);
       return;
     }
     const handoffAtMs = router.timeSource.now();
+    const wsBufferedAmountBefore = traceSocketBufferedAmount(ws);
+    let encoded;
     try {
-      ws.send(JSON.stringify(message), (error) => {
+      encoded = JSON.stringify(message);
+      ws.send(encoded, (error) => {
         trace(STAGE.WRITE_CALLBACK, {failed: Boolean(error)});
       });
     } catch (error) {
       trace(STAGE.WRITE_THREW, {handoffAtMs});
       throw error;
     }
-    trace(STAGE.SOCKET_HANDOFF, {handoffAtMs});
+    const submission = recordSocketSubmission(router, ws, encoded, message, replyFamily, true);
+    trace(STAGE.SOCKET_HANDOFF, {handoffAtMs, wsBufferedAmountBefore, ...submission});
   } else {
     trace?.(STAGE.SOCKET_NOT_OPEN);
   }

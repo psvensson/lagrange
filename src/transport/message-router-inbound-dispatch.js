@@ -1,9 +1,12 @@
 import {
   QUERY_TRACE_STAGE as STAGE,
+  frameAdminQueryIdentity,
   getOutboundServicesQueryTrace,
   isServicesQueryTraceOpen,
   isTracedServicesReadFrame,
   recordServicesQueryTrace,
+  traceReplyWriteFamily,
+  traceSocketFields,
 } from '../diagnostics/services-query-delivery-trace.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
@@ -51,6 +54,7 @@ function inboundQueryTrace(router, message, nodeKey, connectionId) {
     if (!isTracedServicesReadFrame(router, targetAddress, payload, messageId)) return null;
     return (stage, fields) => recordServicesQueryTrace(router, stage, {
       messageId, targetAddress, sourceNodeId, connectionId,
+      ...frameAdminQueryIdentity(payload, messageId),
       activeConnectionId: router.nodeConnections.get(nodeKey)?.connectionId,
       ...fields,
     });
@@ -99,7 +103,9 @@ class MessageRouterInboundDispatch {
       const message = JSON.parse(data.toString());
       const trace = isServicesQueryTraceOpen() ?
         inboundQueryTrace(this, message, connectionId, socketConnectionId) : null;
-      trace?.(STAGE.FRAME_PARSED, {observedAtMs: this.timeSource.now()});
+      trace?.(STAGE.FRAME_PARSED, {
+        observedAtMs: this.timeSource.now(), ...traceSocketFields(ws),
+      });
       this.recordNodeInboundActivity(connectionId);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
@@ -513,6 +519,7 @@ class MessageRouterInboundDispatch {
       registeredHandlers: Array.from(this.handlers.keys()),
       hasHandler: this.handlers.has(targetAddress),
     });
+    const replyFamily = traceReplyWriteFamily(this, targetAddress, payload, messageId);
     const traceAck = trace && ((stage, fields) => trace(`ack_${stage}`, fields));
     const traceResponse = trace && ((stage, fields) => trace(`response_${stage}`, fields));
     this.sendRaw(ws, {
@@ -537,7 +544,7 @@ class MessageRouterInboundDispatch {
         sourceAddress: message.sourceAddress,
         noHandler: true,
         error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
-      }, traceResponse);
+      }, traceResponse, replyFamily);
       return;
     }
     const envelope = {
@@ -564,7 +571,7 @@ class MessageRouterInboundDispatch {
           messageId,
           sourceAddress: message.sourceAddress,
           result,
-        }, traceResponse);
+        }, traceResponse, replyFamily);
       })
       .catch((error) => {
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
@@ -577,7 +584,7 @@ class MessageRouterInboundDispatch {
           messageId,
           sourceAddress: message.sourceAddress,
           error: error.message,
-        }, traceResponse);
+        }, traceResponse, replyFamily);
       });
   }
   /**

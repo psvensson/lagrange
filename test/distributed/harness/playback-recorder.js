@@ -8,6 +8,10 @@ import {copyFile, mkdir, writeFile} from 'node:fs/promises';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
+  SERVICES_QUERY_TRACE_ENV,
+  adminQueryIdentity,
+} from '../../../src/diagnostics/services-query-delivery-trace.js';
+import {
   OUTPUT,
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
@@ -60,6 +64,8 @@ const WARNING_CODE_PROCESS_DIAGNOSTICS_CAPTURE_FAILED =
 const WARNING_CODE_PROCESS_DIAGNOSTICS_API_MISSING =
   'process-diagnostics-api-missing';
 const SNAPSHOT_QUERY_LANE = 'snapshot';
+const RECORDER_QUERY_SUBMITTED = 'recorder_services_query_submitted';
+const RECORDER_TRACE_MAX_RECORDS = 128;
 const CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
 
 const CAPTURE_ERROR_MESSAGE = 'capture-error';
@@ -91,10 +97,11 @@ function extractRows(result) {
   return [];
 }
 
-async function queryTopologySnapshot(node, sql) {
+async function queryTopologySnapshot(node, sql, observeSubmission) {
   if (typeof node?.queryWithTimeout === 'function') {
     return node.queryWithTimeout(sql, [], {
       lane: SNAPSHOT_QUERY_LANE,
+      observeSubmission,
     });
   }
   if (typeof node?.query === 'function') {
@@ -773,6 +780,7 @@ class PlaybackRecorder {
     this._snapshotsStream = null;
 
     this._eventsCount = 0;
+    this._recorderQueryTraceCount = 0;
     this._samplesCount = 0;
     this._snapshotsCount = 0;
     this._previousSnapshot = null;
@@ -1004,6 +1012,20 @@ class PlaybackRecorder {
     this._eventsCount++;
   }
 
+  recordServicesQuerySubmission(nodeId, queryId, timestamp) {
+    const identity = adminQueryIdentity(queryId);
+    if (!identity.adminQueryIdDigest ||
+        this._recorderQueryTraceCount >= RECORDER_TRACE_MAX_RECORDS) return;
+    this._recorderQueryTraceCount += 1;
+    this.recordEvent({
+      type: RECORDER_QUERY_SUBMITTED,
+      scope: SCOPE_NODE,
+      entityId: nodeId,
+      timestamp,
+      details: identity,
+    });
+  }
+
   _startPollers() {
     this._topologyPollTimer = this._setInterval(() => {
       this._collectTopologySnapshot().catch((err) => {
@@ -1088,6 +1110,10 @@ class PlaybackRecorder {
               const servicesResult = await queryTopologySnapshot(
                 node,
                 SERVICES_QUERY,
+                process.env[SERVICES_QUERY_TRACE_ENV] === '1' ?
+                  (queryId, timestamp) =>
+                    this.recordServicesQuerySubmission(nodeId, queryId, timestamp) :
+                  undefined,
               );
               return {
                 nodeId,

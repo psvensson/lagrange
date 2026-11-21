@@ -370,6 +370,11 @@ class NodeHandle {
       try {
         ws.send(frame);
         traceEntry.sentAtMs = Date.now();
+        try {
+          options.observeSubmission?.(queryId, traceEntry.sentAtMs);
+        } catch (_diagnosticError) {
+          this._recordSuppressedBestEffortError();
+        }
       } catch (err) {
         pendingQueries.delete(queryId);
         clearTimeout(pending.timeout);

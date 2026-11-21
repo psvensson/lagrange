@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
@@ -35,6 +36,32 @@ const PARTITION = 'services-p1';
 const ADDRESS = `${TARGET}/partition/${PARTITION}-r1`;
 const SQL = 'SELECT field_trace_secret FROM services';
 const WRITE_SQL = 'UPDATE services SET field_trace_secret = 1';
+const BACKGROUND_ADDRESS = `${TARGET}/partition/partitions-p1-r1`;
+const BACKGROUND_SQL = 'SELECT field_trace_background FROM partitions';
+const OTHER_CALLER = 'services-query-trace-other-caller';
+const ADMIN_QUERY_ID = 'q-1795320000000-formation';
+const SHARED_SNAPSHOT_SQL = 'SELECT * FROM services WHERE service_type = \'partition\'';
+
+function bindQueryGroup(router, groupId) {
+  const group = new MessageGroupService(withTestDbPath({
+    groupId, replicaId: `${groupId}-r1`, nodeId: router.nodeId, transport: router,
+  }));
+  // Direct-only queries exercise the actual group send owner without Raft.
+  group.initialized = true;
+  router.setQueryMessageGroupServiceResolver(() => ({service: group}));
+  return group;
+}
+
+function captureResponseBytes(connection) {
+  const frames = new Map();
+  connection.ws.on('message', (data) => {
+    const frame = JSON.parse(data.toString());
+    if (frame.type === ROUTER_MESSAGE_TYPE.SERVICE_RESPONSE) {
+      frames.set(frame.messageId, data.byteLength);
+    }
+  });
+  return frames;
+}
 
 function capture(owner, records) {
   owner.logger = {
@@ -51,21 +78,25 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   t.teardown(() => fixture.teardown());
   const sender = await fixture.start(SENDER);
   const target = await fixture.start(TARGET);
-  const group = new MessageGroupService(withTestDbPath({
-    groupId: 'field-trace',
-    replicaId: 'field-trace-r1',
-    nodeId: SENDER,
-    transport: sender.router,
-  }));
-  // Direct-only queries exercise the actual group send owner without Raft.
-  group.initialized = true;
-  sender.router.setQueryMessageGroupServiceResolver(() => ({service: group}));
+  const otherCaller = await fixture.start(OTHER_CALLER);
+  const group = bindQueryGroup(sender.router, 'field-trace');
+  bindQueryGroup(otherCaller.router, 'other-field-trace');
   let sinkWrites = 0;
   target.router.register(ADDRESS, (envelope) => {
     if (envelope.payload.payload.sql === WRITE_SQL) sinkWrites += 1;
     return {success: true, rows: []};
   });
+  const backgroundWireIds = new Map();
+  target.router.register(BACKGROUND_ADDRESS, (envelope) => {
+    backgroundWireIds.set(envelope.sourceNodeId, envelope.messageId);
+    return {success: true, rows: [{label: 'räksmörgås'.repeat(16)}]};
+  });
   await fixture.connect(sender, target);
+  await fixture.connect(otherCaller, target);
+  const connection = sender.router.nodeConnections.get(TARGET);
+  const otherConnection = otherCaller.router.nodeConnections.get(TARGET);
+  const frames = captureResponseBytes(connection);
+  const otherFrames = captureResponseBytes(otherConnection);
   const systemCache = createMockSystemCache([PARTITION]);
   systemCache.services[0].service_id = `${PARTITION}-r1`;
   systemCache.services[0].address = ADDRESS;
@@ -76,7 +107,20 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   const records = [];
   for (const owner of [executor, group, sender.router, target.router]) capture(owner, records);
   const execute = (timeoutMs) =>
-    executor.executeOnPartition(PARTITION, SQL, [], true, true, false, {timeoutMs});
+    executor.executeOnPartition(PARTITION, SHARED_SNAPSHOT_SQL, [], true, true, false,
+      {timeoutMs, sessionId: ADMIN_QUERY_ID});
+  const sendBackground = async (caller, received) => {
+    const response = await caller.router.deliver(BACKGROUND_ADDRESS, {
+      type: QUERY_MESSAGE_TYPE.QUERY, sql: BACKGROUND_SQL, params: [],
+    });
+    const transport = deliveryTransportOf(response);
+    t.equal(transport.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
+      'background read traversed the real partition handler and socket');
+    return received.get(backgroundWireIds.get(caller.router.nodeId));
+  };
+  const firstBackground = await sendBackground(sender, frames);
+  const wrongSocketBytes = await sendBackground(otherCaller, otherFrames);
+  t.ok(firstBackground > 0 && wrongSocketBytes > 0, 'measured actual WS payload lengths');
 
   t.equal((await execute(5000)).success, true, 'the real send and response completed');
   await settleUntil(t, () =>
@@ -93,16 +137,16 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
 
   // Keep dispatch and response real. Delay the seed ACK at the socket handoff
   // until the sender's original grant has retired.
+  const secondBackground = await sendBackground(sender, frames);
   const raw = target.router.sendRaw.bind(target.router);
   let heldAck;
-  target.router.sendRaw = (ws, frame, trace) => {
+  target.router.sendRaw = (ws, frame, trace, replyFamily) => {
     if (frame.type === ROUTER_MESSAGE_TYPE.ACK) {
       heldAck = {ws, frame, trace};
       return;
     }
-    raw(ws, frame, trace);
+    raw(ws, frame, trace, replyFamily);
   };
-  const connection = sender.router.nodeConnections.get(TARGET);
   const failed = await sender.router.deliver(ADDRESS, {
     type: QUERY_MESSAGE_TYPE.QUERY, sql: SQL,
   }, {timeoutMs: 1000});
@@ -113,7 +157,9 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
     'the sender reported its spent delivery bound');
   t.ok(heldAck, 'the real seed parsed the query and tried to ACK');
 
-  const replacement = {...connection, connectionId: 'trace-replacement'};
+  const replacement = {
+    ...connection, connectionId: 'trace-replacement', ws: otherConnection.ws,
+  };
   sender.router.nodeConnections.set(TARGET, replacement);
   try {
     const {ws, frame, trace} = heldAck;
@@ -150,6 +196,29 @@ test('SERVICES read trace follows the real query/MG/WS path and ACK retirement',
   t.equal(late?.connectionId, connection.connectionId, 'actual receiving socket identity');
   t.equal(late?.sentConnectionId, connection.connectionId, 'original sending socket identity');
   t.equal(late?.activeConnectionId, replacement.connectionId, 'different current connection');
+  const firstCut = positive.find((entry) => entry.stage === 'response_socket_handoff');
+  const failedCut = records.find((entry) => entry.stage === 'response_socket_handoff');
+  t.equal(firstCut?.otherPartitionQueryFrames, 1, 'wrong-socket background is excluded');
+  t.equal(firstCut?.otherPartitionQueryEncodedBytes, firstBackground,
+    'successful read follows the exact encoded size of the preceding response');
+  t.equal(failedCut?.otherPartitionQueryFrames, 2, 'failed read follows both same-socket frames');
+  t.equal(failedCut?.otherPartitionQueryEncodedBytes, firstBackground + secondBackground);
+  t.equal(firstCut?.sharedServicesSnapshotFrames, 0, 'current response excluded from its own prefix');
+  t.equal(failedCut?.sharedServicesSnapshotFrames, 1, 'earlier shared-shape response included');
+  t.equal(failedCut?.sharedServicesSnapshotEncodedBytes, firstCut?.encodedBytes);
+  t.equal(firstCut?.encodedBytes, frames.get(inner.messageId), 'traced response bytes match ws data');
+  t.equal(failedCut?.encodedBytes, frames.get(heldAck.frame.messageId));
+  t.equal(firstCut?.adminQueryIdDigest, createHash('sha256').update(ADMIN_QUERY_ID).digest('hex'),
+    'pre-existing session identity correlates without adding metadata to the frame');
+  t.equal(firstCut?.tcpLocalPort, connection.ws._socket.remotePort);
+  t.equal(firstCut?.tcpRemotePort, connection.ws._socket.localPort);
+  t.equal(failedCut?.tcpRemotePort, firstCut?.tcpRemotePort, 'same TCP stream as the success');
+  t.ok(Number.isFinite(firstCut?.wsBufferedAmountBefore), 'sampled ws before submission');
+  t.ok(Number.isFinite(firstCut?.wsBufferedAmount), 'sampled ws after submission');
+  const parsedAck = records.find((entry) =>
+    entry.stage === 'frame_parsed' && entry.frameType === ROUTER_MESSAGE_TYPE.ACK);
+  t.equal(parsedAck?.tcpLocalPort, firstCut?.tcpRemotePort, 'late ACK used the original stream');
+  t.not(parsedAck?.tcpLocalPort, replacement.ws._socket.localPort);
   const encoded = JSON.stringify([...positive, ...records]);
-  t.notMatch(encoded, /wrong-message-id|field_trace_secret/, 'no unrelated message ID or SQL');
+  t.notMatch(encoded, /wrong-message-id|field_trace_secret|field_trace_background|räksmörgås|q-1795320000000/, 'no unrelated message ID or SQL');
 });

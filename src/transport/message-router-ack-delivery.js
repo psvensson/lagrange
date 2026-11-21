@@ -1,5 +1,10 @@
-import {QUERY_TRACE_STAGE as STAGE, recordServicesQueryTrace, traceOutboundServicesQuery} from
-  '../diagnostics/services-query-delivery-trace.js';
+import {
+  QUERY_TRACE_STAGE as STAGE,
+  recordServicesQueryTrace,
+  recordSocketSubmission,
+  traceOutboundServicesQuery,
+  traceSocketBufferedAmount,
+} from '../diagnostics/services-query-delivery-trace.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertDeliveryOpen, deliveryAbortReason, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
@@ -64,7 +69,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
     router, targetAddress, payload, messageId, targetNodeId, connection?.connectionId);
   const observe = trace && ((stage, fields) => {
     recordServicesQueryTrace(router, stage, {
-      messageId, targetAddress, targetNodeId, connectionId: connection?.connectionId,
+      ...trace, messageId, connectionId: connection?.connectionId,
       activeConnectionId: router.nodeConnections.get(targetNodeId)?.connectionId,
       ...fields,
     });
@@ -90,7 +95,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       return;
     }
     const {clock} = options.deliveryLifetime;
-    const encoded = encodeDeliveryMessage({
+    const message = {
       type: RouterMessageType.SERVICE_MESSAGE,
       messageId,
       targetAddress,
@@ -98,7 +103,8 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       sourceNodeId: router.nodeId,
       payload,
       timestamp: clock.now(),
-    }, options.deliveryLifetime);
+    };
+    const encoded = encodeDeliveryMessage(message, options.deliveryLifetime);
     // Encoding can run user code or consume the whole grant. No timer callback
     // is required to reject an expired dispatch.
     assertDeliveryOpen(options);
@@ -169,6 +175,7 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
       return;
     }
     const handoffAtMs = observe ? clock.now() : null;
+    const wsBufferedAmountBefore = traceSocketBufferedAmount(ws, Boolean(observe));
     try {
       writeStarted = true;
       ws.send(bytes, {binary: false}, (error) => {
@@ -177,7 +184,8 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
           failed: Boolean(error), observedAtMs: clock.now(),
         });
       });
-      observe?.(STAGE.SERVICE_SOCKET_HANDOFF, {handoffAtMs});
+      const submission = recordSocketSubmission(router, ws, bytes, message, null, Boolean(observe));
+      observe?.(STAGE.SERVICE_SOCKET_HANDOFF, {handoffAtMs, wsBufferedAmountBefore, ...submission});
     } catch (_sendError) {
       observe?.(STAGE.SERVICE_WRITE_THREW, {handoffAtMs});
       // Once ws.send has been entered, a thrown error is not proof that its

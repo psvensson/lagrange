@@ -30,6 +30,7 @@ documentClass: generated
 - [runtime-build-provenance.js](runtime-build-provenance.js) - One immutable boot measurement. (importers: many)
 - [runtime-content-fingerprint.js](runtime-content-fingerprint.js) - The source/build manifest owner enumerates the executable content of a deployment: source and the installed... (importers: few)
 - [services-query-delivery-trace.js](services-query-delivery-trace.js) - No leading comment; first export: SERVICES_QUERY_TRACE_ENV. (importers: many)
+- [services-query-socket-writes.js](services-query-socket-writes.js) - Bounded census of primary router WebSocket submissions. (importers: one)
 - [source-fingerprint.js](source-fingerprint.js) - Deterministic content fingerprint of a source tree, shared verbatim by the node entrypoint (src/index.js) and the... (importers: hub)
 - [stop-condition-decision.js](stop-condition-decision.js) - No leading comment; first export: decideStopCondition. (importers: few)
 - [topology-convergence-active-gate-normalizers.js](topology-convergence-active-gate-normalizers.js) - No leading comment; first export: normalizeActiveGateSnapshotCoverageProgress. (importers: one)
