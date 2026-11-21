@@ -33,10 +33,12 @@ function attachAutoCommitLoop(leader, proposed) {
 function createAuthoritativeLedgerRepository(leader) {
   let casCounter = 0;
   // Retain the repository owner's exact projection comparison.
-  return Object.assign(Object.create(ReplicaOperationRepository.prototype), {
+  const repository = new ReplicaOperationRepository({
     nodeId: NODE.A,
     timeSource: leader.timeSource,
     logger: leader.logger,
+  });
+  return Object.assign(repository, {
     async executeReplicaOperationsRead(sql, params) {
       return {
         success: true,

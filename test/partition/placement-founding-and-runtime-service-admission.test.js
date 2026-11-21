@@ -20,8 +20,10 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {
+  CDC_OPERATION,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  TABLES,
   UNIFIED_SERVICE_TYPE,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -76,10 +78,208 @@ import {
 import {attachAutoCommitLoop, createCoordinatorWithLedger} from
   './placement-create-with-ledger-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {REPLICA_OPERATIONS_SCHEMA, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {RETAINED_PLACEMENT_ATTEMPT} from
+  '../../src/partition/partition-placement-admission-constants.js';
+import {REPLICAS, shutdownAll, startLeader} from '../test-helpers/participant-transaction-fixture.js';
+import {createRouterEnvelopeFixture} from '../transport/router-envelope-witness-fixture.js';
 
 const SERVICE_ID = 'transaction_coordinator';
 const USER_PARTITION_ID = 'orders-p1';
 const SCHEMA_JOB_ID = 'schema-job-found-1';
+const REMOTE_TIMEOUT_MS = 1_000;
+
+function unknownPlacementDelivery() {
+  return buildDeliveryEnvelope({acknowledged: true, errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+    error: 'Request timeout'});
+}
+
+function remotePlacementCoordinator(leader, messageRouter) {
+  const coordinator = createCoordinatorWithLedger(leader, {
+    registerLocalLeader: false, messageRouter,
+  });
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT,
+    {partition_id: leader.partitionId, leader_node_id: leader.nodeId});
+  cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
+    PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
+      replicaId: leader.replicaId, nodeId: leader.nodeId, service: leader,
+      status: SERVICE_STATUS.ACTIVE}));
+  coordinator.systemTableCache = cache;
+  return coordinator;
+}
+
+async function withRemotePlacementWire(scenario) {
+  const network = createRouterEnvelopeFixture(import.meta.url, NODE.A);
+  await network.setup();
+  try {
+    await onLedgerLeader(async (leader, proposed) => {
+      const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
+      try {
+        const sender = await network.start(NODE.A);
+        const target = await network.start(leader.nodeId);
+        const cache = new SystemTableCache();
+        const coordinator = createCoordinatorWithLedger(leader, {
+          registerLocalLeader: false, messageRouter: sender.router,
+        });
+        coordinator.systemTableCache = cache;
+        const serviceRow = PartitionServiceRowOwner.buildServiceRow({
+          partitionId: leader.partitionId, replicaId: leader.replicaId,
+          nodeId: leader.nodeId, service: leader, status: SERVICE_STATUS.ACTIVE,
+        });
+        const requests = [];
+        const reply = {afterApply: (answer) => answer};
+        target.router.register(serviceRow.address, async (envelope) => {
+          requests.push(leader.extractApplicationPayload(envelope));
+          return reply.afterApply(await leader.handleTransportMessage(envelope));
+        });
+        await network.connect(sender, target);
+        const owner = new PartitionServiceRowOwner({systemTableWriter: {
+          updateSystemTableRow(tableName, key, fields) {
+            cache.applySystemTableChange(tableName, CDC_OPERATION.UPSERT, {...key, ...fields});
+          },
+        }});
+        const publish = () => owner.publishCanonicalLeaderNodeId(serviceRow, leader);
+        const statement = placementStatement({partitionId: 'q11-routing-p1', target: NODE.B});
+        const submit = (entryId) => coordinator.submitPlacementPayload({entryId, body: statement},
+          REMOTE_TIMEOUT_MS);
+        await scenario({cache, serviceRow, requests, publish, submit, leader,
+          proposed, coordinator, network, sender, owner, reply, statement});
+      } finally {
+        await stopAutoCommit();
+      }
+    });
+  } finally {
+    await network.teardown();
+  }
+}
+
+it('placement holds an active endpoint until canonical leader publication', async () => {
+  await withRemotePlacementWire(async ({cache, serviceRow, requests, publish, submit, leader}) => {
+    assert.equal(serviceRow.raft_role, RAFT_ROLE.FOLLOWER,
+      'production registration collapses the service role');
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, serviceRow);
+    await assert.rejects(submit('q11-pending-remote'), {code: 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE'});
+    assert.equal(requests.length, 0, 'no unconfirmed route receives a message');
+    assert.deepEqual(ledgerRows(leader), []);
+    await publish();
+    assert.equal((await submit('q11-pending-remote')).placementResult.outcome, 'ADMITTED');
+    assert.equal(requests.length, 1);
+    assert.equal(ledgerRows(leader).length, 1);
+  });
+});
+
+it('placement never uses sendToAddress as a response-bearing delivery port', async () =>
+  withRemotePlacementWire(async ({cache, serviceRow, publish, submit, coordinator, leader}) => {
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, serviceRow);
+    await publish();
+    let legacyCalls = 0;
+    coordinator.messageRouter = {async sendToAddress() {
+      legacyCalls += 1;
+      return {success: true, committed: true};
+    }};
+    await assert.rejects(submit('q11-legacy-delivery'), {code: 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE'});
+    assert.equal(legacyCalls, 0);
+    assert.deepEqual(ledgerRows(leader), []);
+  }));
+
+it('placement refuses a mismatched or ambiguous published service binding', async () =>
+  withRemotePlacementWire(async ({cache, serviceRow, publish, submit, requests, leader}) => {
+    const malformed = {...serviceRow, address: `${NODE.C}/partition/${leader.replicaId}`};
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, malformed);
+    await publish();
+    await assert.rejects(submit('q11-wrong-address'), {code: 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE'});
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
+      {...serviceRow, updated_at: serviceRow.updated_at + 1});
+    const duplicate = PartitionServiceRowOwner.buildServiceRow({
+      partitionId: leader.partitionId, nodeId: leader.nodeId, replicaId: REPLICAS[1],
+      status: SERVICE_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, duplicate);
+    await assert.rejects(submit('q11-ambiguous'), {code: 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE'});
+    assert.equal(requests.length, 0);
+    assert.deepEqual(ledgerRows(leader), []);
+  }));
+
+it('placement preserves the exact pending entry past a real former-leader refusal', async () =>
+  withRemotePlacementWire(async ({cache, serviceRow, publish, coordinator, leader, requests,
+    network, sender, owner, statement}) => {
+    const successor = await startLeader({tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      schema: REPLICA_OPERATIONS_SCHEMA, nodeId: NODE.C, replicaId: REPLICAS[1]},
+    LEDGER_PARTITION_ID);
+    const stop = attachAutoCommitLoop(successor.leader, successor.proposed);
+    try {
+      const target = await network.start(successor.leader.nodeId);
+      const nextRow = PartitionServiceRowOwner.buildServiceRow({partitionId: LEDGER_PARTITION_ID,
+        nodeId: successor.leader.nodeId, replicaId: successor.leader.replicaId,
+        service: successor.leader, status: SERVICE_STATUS.ACTIVE});
+      target.router.register(nextRow.address,
+        (envelope) => successor.leader.handleTransportMessage(envelope));
+      await network.connect(sender, target);
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, serviceRow);
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, nextRow);
+      await publish();
+      leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
+      const intent = {entryId: 'q11-after-transfer', intentKey: 'q11-transfer-intent', statement,
+        timeoutMs: REMOTE_TIMEOUT_MS};
+      const refused = await coordinator.admitPlacementStatement(intent);
+      assert.equal(refused.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER);
+      assert.equal(refused[RETAINED_PLACEMENT_ATTEMPT], true);
+      assert.deepEqual(ledgerRows(leader), []);
+      assert.deepEqual(ledgerRows(successor.leader), []);
+
+      await owner.publishCanonicalLeaderNodeId({...nextRow, updated_at: serviceRow.updated_at + 10},
+        successor.leader);
+      const recovered = await coordinator.admitPlacementStatement(intent);
+      assert.equal(recovered.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+      assert.equal(recovered.entryId, refused.entryId);
+      assert.equal(requests.length, 1);
+      assert.equal(successor.proposed.filter(({entryId}) => entryId === refused.entryId).length, 1);
+      assert.equal(ledgerRows(successor.leader).length, 1);
+      assert.equal(coordinator.uncertainPlacementAttempts.size, 0);
+    } finally {
+      await stop();
+      await shutdownAll(successor.leader);
+    }
+  }));
+
+it('placement retains and replays one committed entry after actual router response loss', async () =>
+  withRemotePlacementWire(async ({cache, serviceRow, publish, coordinator, leader,
+    proposed, requests, reply, statement}) => {
+    const held = Promise.withResolvers();
+    let firstAnswer;
+    reply.afterApply = (answer) => {
+      if (firstAnswer) return answer;
+      firstAnswer = answer;
+      return held.promise.then(() => answer);
+    };
+    try {
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, serviceRow);
+      await publish();
+      const intent = {entryId: 'q11-lost-reply', intentKey: 'q11-lost-intent', statement,
+        timeoutMs: REMOTE_TIMEOUT_MS};
+      const unknown = await coordinator.admitPlacementStatement(intent);
+      assert.equal(unknown[RETAINED_PLACEMENT_ATTEMPT], true);
+      assert.equal(firstAnswer?.placementResult.outcome, PLACEMENT_OUTCOME.ADMITTED);
+      assert.equal(ledgerRows(leader).length, 1);
+      const recovered = await coordinator.admitPlacementStatement(intent);
+      assert.deepEqual(recovered.placementResult, firstAnswer.placementResult);
+      assert.equal(recovered.entryId, unknown.entryId);
+      assert.equal(requests.length, 2);
+      assert.deepEqual(requests.map(({entryId, body}) => [entryId, body]),
+        [[intent.entryId, statement], [intent.entryId, statement]]);
+      assert.equal(proposed.filter(({entryId}) => entryId === intent.entryId).length, 1);
+      assert.equal(ledgerRows(leader).length, 1);
+      assert.equal(coordinator.uncertainPlacementAttempts.size, 0);
+    } finally {
+      held.resolve();
+    }
+  }));
 
 describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEMENT_ADMIT', () => {
   it('routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN', async () => {
@@ -256,28 +456,17 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
       try {
         const routedAddresses = [];
         const messageRouter = {
-          async sendToAddress(address, message) {
+          async deliver(address, message) {
             routedAddresses.push({address, type: message.type});
             assert.equal(
               message.type,
               PARTITION_SERVICE_MESSAGE_TYPE.PLACEMENT_ADMIT,
             );
-            return requestPlacementAdmission(leader, message);
+            return buildDeliveryEnvelope({acknowledged: true},
+              await requestPlacementAdmission(leader, message));
           },
         };
-        const coordinator = createCoordinatorWithLedger(leader, {
-          registerLocalLeader: false,
-          messageRouter,
-          servicesRows: [{
-            partition_id: LEDGER_PARTITION_ID,
-            entity_id: LEDGER_PARTITION_ID,
-            node_id: NODE.B,
-            replica_id: `${LEDGER_PARTITION_ID}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-            raft_role: RAFT_ROLE.LEADER,
-            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-          }],
-        });
+        const coordinator = remotePlacementCoordinator(leader, messageRouter);
 
         const addOp = await coordinator.createOperation({
           type: OperationType.ADD,
@@ -290,7 +479,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         assert.equal(routedAddresses.length, 1);
         assert.equal(
           routedAddresses[0].address,
-          `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
+          `${leader.nodeId}/partition/${leader.replicaId}`,
         );
         assert.ok(addOp.operationId.startsWith(`pl-${SERVICE_ID}-`));
       } finally {
@@ -682,7 +871,7 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         let firstCall = true;
         const sentEntries = [];
         const messageRouter = {
-          async sendToAddress(_address, message) {
+          async deliver(_address, message) {
             sentEntries.push({
               entryId: message.entryId,
               targets: message.body.moves.map((m) => m.targetNodeId),
@@ -690,29 +879,12 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
             const answer = await requestPlacementAdmission(leader, message);
             if (firstCall) {
               firstCall = false;
-              return {
-                success: false,
-                failureCode:
-                  PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
-                error: 'Simulated transport timeout after commit of REFUSED attempt A',
-              };
+              return unknownPlacementDelivery();
             }
-            return answer;
+            return buildDeliveryEnvelope({acknowledged: true}, answer);
           },
         };
-        const coordinator = createCoordinatorWithLedger(leader, {
-          registerLocalLeader: false,
-          messageRouter,
-          servicesRows: [{
-            partition_id: LEDGER_PARTITION_ID,
-            entity_id: LEDGER_PARTITION_ID,
-            node_id: NODE.B,
-            replica_id: `${LEDGER_PARTITION_ID}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-            raft_role: RAFT_ROLE.LEADER,
-            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-          }],
-        });
+        const coordinator = remotePlacementCoordinator(leader, messageRouter);
 
         const engine = Object.create(SQLQueryEngine.prototype);
         engine.nodeId = NODE.A;
@@ -757,14 +929,14 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
     });
   });
 
-  it('preserves retained placement attempt across real router timeout and transient NOT_LEADER refusal (Review 3 Item 1) and never synthesizes or overlays mismatched retry topology onto recovered FOUND cohort (Review 3 Item 2)', async () => {
+  it('preserves retained placement attempt across a delivery timeout and transient NOT_LEADER refusal (Review 3 Item 1) and never synthesizes or overlays mismatched retry topology onto recovered FOUND cohort (Review 3 Item 2)', async () => {
     await onLedgerLeader(async (leader, proposed) => {
       const stopAutoCommit = attachAutoCommitLoop(leader, proposed);
       try {
         let callCount = 0;
         const sentEntries = [];
         const messageRouter = {
-          async sendToAddress(_address, message) {
+          async deliver(_address, message) {
             callCount += 1;
             sentEntries.push({
               entryId: message.entryId,
@@ -772,40 +944,24 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
             });
             if (callCount === 1) {
               // Call 1: commit attempt A ([NODE.A, NODE.B, NODE.C]) on the
-              // leader, then lose the reply through the real router timeout
-              // path (delivered: false -> deliveryReadingOf transport failure).
+              // leader, then return the canonical delivery failure to this caller.
               await requestPlacementAdmission(leader, message);
-              return {
-                delivered: false,
-                error: 'Request timeout',
-                errorCode: 'TRANSPORT_TIMEOUT',
-              };
+              return unknownPlacementDelivery();
             }
             if (callCount === 2) {
               // Call 2: transient NOT_LEADER refusal before leadership settles.
-              return {
+              return buildDeliveryEnvelope({acknowledged: true}, {
                 success: false,
                 admitted: false,
                 partitionId: LEDGER_PARTITION_ID,
                 failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
-              };
+              });
             }
-            return requestPlacementAdmission(leader, message);
+            return buildDeliveryEnvelope({acknowledged: true},
+              await requestPlacementAdmission(leader, message));
           },
         };
-        const coordinator = createCoordinatorWithLedger(leader, {
-          registerLocalLeader: false,
-          messageRouter,
-          servicesRows: [{
-            partition_id: LEDGER_PARTITION_ID,
-            entity_id: LEDGER_PARTITION_ID,
-            node_id: NODE.B,
-            replica_id: `${LEDGER_PARTITION_ID}-r1`,
-            status: SERVICE_STATUS.ACTIVE,
-            raft_role: RAFT_ROLE.LEADER,
-            service_address: `node-b.partition.${LEDGER_PARTITION_ID}-r1`,
-          }],
-        });
+        const coordinator = remotePlacementCoordinator(leader, messageRouter);
 
         const engine = Object.create(SQLQueryEngine.prototype);
         engine.nodeId = NODE.A;

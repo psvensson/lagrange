@@ -11,6 +11,8 @@ import {placementStatement} from '../partition/placement-admission-fixture.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {requestPlacementAdmission} from '../../src/partition/partition-placement-admission.js';
+import {PartitionServiceRowOwner} from '../../src/partition/partition-service-row-owner.js';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
 import {classifyPlacementClass} from '../../src/rebalancer/replica-placement-owner-order.js';
 import {createOperationAt, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -23,6 +25,16 @@ const PARTITION_ID = 'sql_transactions-p1';
 const HISTORICAL_ID = 'native-s11-historical-holder';
 const LEDGER = 'replica_operations';
 const EFFECT_WHILE_LIVE = 'remove_with_live_committed_competitor';
+
+function activeLedgerServiceRow(leader) {
+  return PartitionServiceRowOwner.buildServiceRow({partitionId: leader.partitionId,
+    replicaId: leader.replicaId, nodeId: leader.nodeId, service: leader,
+    status: SERVICE_STATUS.ACTIVE});
+}
+
+function ledgerLeaderRow(leader) {
+  return {partition_id: leader.partitionId, leader_node_id: leader.nodeId};
+}
 
 function routeLedgerMessages(world, ledger, observation) {
   const {coordinator} = world;
@@ -42,9 +54,8 @@ function routeLedgerMessages(world, ledger, observation) {
     return original.deliver(address, payload, options);
   };
   coordinator.syncOwnerDependencies({messageRouter: routed});
-  coordinator.systemTableCache.upsert('services', {service_id: ledger.leader.replicaId,
-    replica_id: ledger.leader.replicaId, node_id: ledger.leader.nodeId,
-    partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'});
+  coordinator.systemTableCache.upsert('services', activeLedgerServiceRow(ledger.leader));
+  coordinator.systemTableCache.upsert('partitions', ledgerLeaderRow(ledger.leader));
 }
 
 function ledgerGatewayForWorld(world, ledger, original, incumbentId, observation) {
@@ -86,8 +97,8 @@ async function seedMissingHistoricalOwner(ledger, historicalType, clockOffsetMs)
   const repairAnswers = [];
   const holder = createTestCoordinator({nodeId: sourceNode,
     controlPlaneSystemTableGateway: ledger.gateway,
-    cacheData: {services: [{replica_id: ledger.leader.replicaId, node_id: ledger.leader.nodeId,
-      partition_id: 'replica_operations-p1', status: 'active', raft_role: 'leader'}]},
+    cacheData: {services: [activeLedgerServiceRow(ledger.leader)],
+      partitions: [ledgerLeaderRow(ledger.leader)]},
     replaceWitness: false, committedMembershipFixture: false,
     messageRouter: {async deliver(_address, payload) {
       const answer = await send(ledger.leader, payload);

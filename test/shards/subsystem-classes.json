@@ -28,7 +28,7 @@
   "censusSize": 2722,
   "digest": "fnv1a32-4a5c3fc8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-76a59a48",
+  "observationDigest": "fnv1a32-5cbdb0f8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14667,6 +14667,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-constants.js",
         "src/partition/partition-placement-admission.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",

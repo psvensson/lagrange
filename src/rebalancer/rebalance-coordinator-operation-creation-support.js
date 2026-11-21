@@ -15,8 +15,7 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {indexCommittedNodeRows} from '../control-plane/committed-node-rows.js';
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
-import {AddressManager} from '../address/address-manager.js';
-import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {LEDGER_PARTITION_ID} from '../partition/partition-placement-admission-decision.js';
 import {
   PLACEMENT_REPAIR_TYPE,
@@ -32,7 +31,6 @@ import {
 import {
   resolveEntryId,
 } from '../partition/partition-write-kernel.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {
   PLACEMENT_CLASS,
   PLACEMENT_FORMATION_GATED_CLASSES,
@@ -49,7 +47,8 @@ import {classifyPlacementClass, formationWaitingReasonOf} from
 import {attachReplicaPlacementOwner} from './replica-placement-owner.js';
 import {isBootstrapTopologyDispatchDeferred} from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
-import {wrapPlacementTransport} from './replica-placement-owner-transport.js';
+import {resolvePlacementLedgerDelivery, resolvePlacementLedgerRoute} from
+  './replica-placement-owner-transport.js';
 
 // ends-on: PLACEMENT_ADMIT response from replica_operations-p1 leader
 const DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS = 5000;
@@ -172,25 +171,6 @@ function buildBootstrapTopologyHoldReleaseOutcome(released, operation, reason = 
   });
 }
 
-function isLedgerServiceRow(row) {
-  return row &&
-    row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-    (row[COLUMN.PARTITION_ID] === LEDGER_PARTITION_ID ||
-      row[COLUMN.ENTITY_ID] === LEDGER_PARTITION_ID);
-}
-
-function formatLedgerReplicaAddress(row) {
-  if (!row) return null;
-  if (typeof row.service_address === 'string' && row.service_address.length > 0) {
-    return row.service_address;
-  }
-  const nodeId = row[COLUMN.NODE_ID];
-  const replicaId = row[COLUMN.REPLICA_ID];
-  if (typeof nodeId !== 'string' || typeof replicaId !== 'string') return null;
-  return AddressManager.getInstance().format(nodeId, SERVICE_TYPE.PARTITION, replicaId);
-}
-
-
 async function readPartitionVoterRemovalScope(coordinator, partitionId, move) {
   const readiness = coordinator.controlPlaneReadinessService;
   if (!readiness || !move.replicaId) return null;
@@ -250,29 +230,8 @@ const operationCreationSupportMethods = {
     return null;
   },
 
-  resolveRemoteLedgerLeaderAddress() {
-    return this.resolveRemoteLedgerLeader()?.address ?? null;
-  },
-
   resolveRemoteLedgerLeader() {
-    const cache = this.systemTableCache;
-    if (!cache?.getAll) return null;
-    const rows = (cache.getAll(TABLES.SERVICES) || []).filter(isLedgerServiceRow);
-    const roleLeader = rows.find((row) => row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER);
-    if (roleLeader) {
-      return {nodeId: roleLeader[COLUMN.NODE_ID],
-        replicaId: roleLeader[COLUMN.REPLICA_ID], address: formatLedgerReplicaAddress(roleLeader)};
-    }
-    const partitions = cache.getAll(TABLES.PARTITIONS) || [];
-    const ledgerPartition = partitions.find(
-      (row) => row?.[COLUMN.PARTITION_ID] === LEDGER_PARTITION_ID,
-    );
-    const leaderNodeId = ledgerPartition?.leader_node_id;
-    const nodeLeader = typeof leaderNodeId === 'string' ?
-      rows.find((row) => row[COLUMN.NODE_ID] === leaderNodeId) : null;
-    const selected = nodeLeader || rows[0];
-    return selected ? {nodeId: selected[COLUMN.NODE_ID], replicaId: selected[COLUMN.REPLICA_ID],
-      address: formatLedgerReplicaAddress(selected)} : null;
+    return resolvePlacementLedgerRoute(this.systemTableCache);
   },
 
   resolveFormationLatchEpochForPlacement(placementClass, partitionId) {
@@ -331,10 +290,10 @@ const operationCreationSupportMethods = {
   async submitRetainedPlacementRepair(payload) {
     const localLeader = this.resolveActiveLocalLedgerLeaderService();
     if (localLeader) return requestPlacementRepair(localLeader, payload);
-    const leaderAddress = this.resolveRemoteLedgerLeaderAddress();
-    const transport = wrapPlacementTransport(this.messageRouter);
-    if (!leaderAddress || !transport) return null;
-    const delivered = await transport.deliver(leaderAddress,
+    const delivery = resolvePlacementLedgerDelivery(this);
+    if (delivery === null) return null;
+    const {owner, transport} = delivery;
+    const delivered = await transport.deliver(owner.address,
       {type: PLACEMENT_REPAIR_TYPE, ...payload},
       {timeoutMs: DEFAULT_PLACEMENT_ADMISSION_TIMEOUT_MS});
     return deliveryReadingOf(delivered);
@@ -345,16 +304,16 @@ const operationCreationSupportMethods = {
     if (localLeader) {
       return requestPlacementAdmission(localLeader, payload);
     }
-    const leaderAddress = this.resolveRemoteLedgerLeaderAddress();
-    const transport = wrapPlacementTransport(this.messageRouter);
-    if (!leaderAddress || !transport) {
+    const delivery = resolvePlacementLedgerDelivery(this);
+    if (delivery === null) {
       const error = new Error(
         `Cannot route PLACEMENT_ADMIT: ledger leader unreachable (${LEDGER_PARTITION_ID})`,
       );
       error.code = PLACEMENT_LEDGER_LEADER_UNAVAILABLE_CODE;
       throw error;
     }
-    return routePlacementAdmission(transport, leaderAddress, payload, {timeoutMs});
+    const {owner, transport} = delivery;
+    return routePlacementAdmission(transport, owner.address, payload, {timeoutMs});
   },
 
   async resolveRetainedPlacementAttempt(intentKey, timeoutMs) {
