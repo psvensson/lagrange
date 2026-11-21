@@ -719,11 +719,15 @@ for (const order of ['CDC-before-answer', 'answer-before-CDC']) {
       const arrived = new Promise((resolve) => {
         received = resolve;
       });
+      let first = true;
       sender.repairRetainedPlacement = async (payload) => {
         const reply = await submit(payload);
-        assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
-        received();
-        await held;
+        if (first) {
+          first = false;
+          assert.equal(reply.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+          received();
+          await held;
+        }
         return reply;
       };
       const result = sender.repairRetainedOperation(retained);
