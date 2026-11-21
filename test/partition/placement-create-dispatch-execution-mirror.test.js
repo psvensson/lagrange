@@ -23,7 +23,7 @@ import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admis
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {REPAIR_AUTHORITY_REFUSAL} from '../../src/rebalancer/replica-operation-retained-repair-authority.js';
 import {REPAIR_OBSERVATION} from '../../src/rebalancer/replica-operation-retained-repair-observation.js';
-import {RETAINED_REPAIR_CONTINUATION} from
+import {RETAINED_REPAIR_CONTINUATION, RETAINED_REPAIR_ENTRY} from
   '../../src/rebalancer/replica-operation-retained-repair-record.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
@@ -246,6 +246,23 @@ test('a read served by another replica than the cached ledger route settles noth
     assert.equal(deliveries.length, 0, 'the serving replica or the cache is stale: no dispatch');
     assert.equal(proposed.length, proposals);
     assert.equal(ledgerRows(leader)[0].workflow_step, WORKFLOW_STEP.SENDING);
+    assertOwedToRoute(owner, initial, REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING);
+  }, {ledgerRoute: LEDGER_ROUTE.PREVIOUS_LEADER});
+});
+
+test('an absence served by another replica than the cached ledger route settles nothing: ' +
+  'nothing is prepared or presented, the route publication owns the reconsideration', async () => {
+  await withPlacementExecution(async ({owner, leader, initial, deliveries, proposed}) => {
+    const operation = owner.repository.rowToOperation(initial);
+    assert.equal(committedUpdate(leader, 'execution-mirror:absent-elsewhere',
+      'DELETE FROM replica_operations WHERE operation_id = ?', [initial.operation_id]), 1);
+    const proposals = proposed.length;
+    assert.equal(await owner.repository.ensureRetainedOperationRow(operation), false);
+    assert.equal(deliveries.length, 0);
+    assert.equal(proposed.length, proposals, 'an absence read elsewhere authorizes no proposal');
+    const record = owner.repository.retainedPlacementRepairs.get(initial.operation_id);
+    assert.equal(record?.entry.state, RETAINED_REPAIR_ENTRY.UNPINNED,
+      'nothing was prepared on that absence');
     assertOwedToRoute(owner, initial, REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING);
   }, {ledgerRoute: LEDGER_ROUTE.PREVIOUS_LEADER});
 });
