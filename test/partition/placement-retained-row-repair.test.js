@@ -1266,6 +1266,50 @@ test('real committed BUSY E0 lost reply replays across repositories without a fr
     }
   }));
 
+for (const order of ['clear-before-answer', 'answer-before-clear']) {
+  test(`unknown native BUSY retains its only clearing observation: ${order}`, () =>
+    withRepairLedger(async (world) => {
+      const retained = await retainMissing(world);
+      const competitor = await compete(world);
+      const receiver = world.coordinator.repository;
+      const native = receiver.repairRetainedPlacement;
+      const sends = [];
+      let committed;
+      let release;
+      const committedReady = new Promise((resolve) => { committed = resolve; });
+      const heldAnswer = new Promise((resolve) => { release = resolve; });
+      receiver.repairRetainedPlacement = async (payload) => {
+        sends.push(payload);
+        const answer = await native(payload);
+        if (sends.length === 1) {
+          assert.equal(answer.placementResult.reason, PLACEMENT_REFUSAL.PARTITION_BUSY);
+          committed();
+          await heldAnswer;
+          throw new Error('lost actual BUSY answer');
+        }
+        return answer;
+      };
+      const first = receiver.repairRetainedOperation(retained);
+      await committedReady;
+      const before = world.commands.filter((command) => command.type === 'PLACEMENT_REPAIR').length;
+      if (order === 'answer-before-clear') {
+        release();
+        assert.equal(await first, false);
+      }
+      await stepRetainedLedgerRow(world, competitor.operationIds[0], WORKFLOW_STEP.FAILED);
+      release();
+      assert.equal(await first, false);
+      await settleRepair(world);
+      assert.deepEqual(sends[1], sends[0], 'unknown E0 resolves with the original exact bytes');
+      assert.equal(world.commands.filter((command) => command.type === 'PLACEMENT_REPAIR').length,
+        before + 1, 'the sole genuine clear permits exactly one actual successor');
+      assert.equal(receiver.retainedPlacementRepairs.size, 0);
+      assert.equal(world.leader.db.prepare(
+        'SELECT created_at FROM replica_operations WHERE operation_id = ?')
+        .get(retained.operationId).created_at, retained.createdAt);
+    }));
+}
+
 test('registered owner read backoff recovers without a new caller or row/role event', () =>
   withRepairLedger(async (world) => {
     const retained = await retainMissing(world);
