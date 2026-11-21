@@ -1,3 +1,5 @@
+import {buildReplicaOperationWakeRow} from
+  '../rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {
   TABLES,
 } from '../constants/index.js';
@@ -541,7 +543,7 @@ class MembershipPublicationCoordinatorReads {
             isDispatchRetryOperation(normalizedOperation)
           );
         })
-        .map((operation) => this.buildDispatchRetryRowFromOperation(operation));
+        .map(buildReplicaOperationWakeRow);
       return mergeDispatchRetryRowsByOperationId(
         authoritativeRows,
         dispatchRows,
@@ -549,30 +551,6 @@ class MembershipPublicationCoordinatorReads {
     } catch (_error) {
       return dispatchRows;
     }
-  }
-
-  buildDispatchRetryRowFromOperation(operation) {
-    const normalizedOperation = normalizeReplicaOperationView(operation);
-    if (!normalizedOperation) {
-      return null;
-    }
-    return {
-      operation_id: normalizedOperation.operationId,
-      type: normalizedOperation.type,
-      partition_id: normalizedOperation.partitionId,
-      replica_id: normalizedOperation.replicaId,
-      source_node_id: normalizedOperation.sourceNodeId,
-      target_node_id: normalizedOperation.targetNodeId,
-      status: normalizedOperation.status,
-      workflow_step: normalizedOperation.workflowStep,
-      created_at: normalizedOperation.createdAt,
-      updated_at: normalizedOperation.updatedAt,
-      completed_at: normalizedOperation.completedAt,
-      error_message: normalizedOperation.errorMessage,
-      steps_history: JSON.stringify(normalizedOperation.stepsHistory),
-      entity_type: normalizedOperation.entityType,
-      entity_id: normalizedOperation.entityId,
-    };
   }
 
   isTerminalPublicationStatus(publicationStatus) {

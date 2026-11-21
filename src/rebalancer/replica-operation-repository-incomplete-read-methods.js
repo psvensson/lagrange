@@ -1,3 +1,9 @@
+import {GROWTH_PROMOTION_COHORT_UNRESOLVED} from './growth-promotion-subject.js';
+import {memoizedParseStepsHistoryString} from './steps-history-parse-memo.js';
+import {isGenesisFoundingCreateOperation, ReplicaOperationField} from
+  './replica-operation-constants.js';
+import {getOperationMetadataObject, OPERATION_METADATA_KEY} from './replica-status.js';
+import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
@@ -10,6 +16,59 @@ import {
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_STRING = 'string';
+
+const INCOMPLETE_ROW_DISPOSITION = Object.freeze({
+  EXECUTABLE: 'executable',
+  UNRESOLVED_GROWTH: 'unresolved_growth',
+});
+
+// Occupancy requires the real ledger coordinates and lifecycle timestamps,
+// but grants no promotion permission and does not decode a promotion cohort.
+function readOperationOccupancy(row) {
+  const {entityType, entityId} = assertCanonicalRebalancerEntityIdentity({
+    entityType: row.entity_type, entityId: row.entity_id,
+  });
+  const stepsHistory = memoizedParseStepsHistoryString(row.steps_history);
+  const founder = isGenesisFoundingCreateOperation({
+    type: row.type,
+    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
+      getOperationMetadataObject(stepsHistory, OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP),
+  });
+  return Object.freeze({
+    operationId: row.operation_id,
+    type: row.type,
+    partitionId: row.partition_id,
+    entityType,
+    entityId,
+    sourceNodeId: row.source_node_id,
+    targetNodeId: row.target_node_id,
+    replicaId: row.replica_id,
+    sourceReplicaId: row.source_replica_id,
+    status: row.status,
+    workflowStep: row.workflow_step,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at,
+    stepsHistory,
+    founder,
+  });
+}
+
+function observeIncompleteOperationRow(repository, row) {
+  try {
+    return Object.freeze({
+      disposition: INCOMPLETE_ROW_DISPOSITION.EXECUTABLE,
+      operation: repository.rowToOperation(row),
+    });
+  } catch (error) {
+    if (error?.reasonCode !== GROWTH_PROMOTION_COHORT_UNRESOLVED) throw error;
+    return Object.freeze({
+      disposition: INCOMPLETE_ROW_DISPOSITION.UNRESOLVED_GROWTH,
+      reasonCode: error.reasonCode,
+      occupancy: readOperationOccupancy(row),
+    });
+  }
+}
 
 function assignReplicaOperationRepositoryIncompleteReadMethods(
   ReplicaOperationRepository,
@@ -89,7 +148,16 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    */
     mapAndSortIncompleteOperations(rows = []) {
       return rows
-        .map((row) => this.rowToOperation(row))
+        .filter((row) => isIncompleteOperationRowStep(row.type, row.workflow_step))
+        .map((row) => observeIncompleteOperationRow(this, row))
+        .flatMap((outcome) => {
+          if (outcome.disposition === INCOMPLETE_ROW_DISPOSITION.EXECUTABLE) {
+            return [outcome.operation];
+          }
+          const {operationId, partitionId} = outcome.occupancy;
+          this.logger.warn(outcome.reasonCode, {operationId, partitionId});
+          return [];
+        })
         .filter((operation) =>
           this.shouldExposeIncompleteOperationToOwnerRead(operation))
         .sort((left, right) => {
@@ -293,7 +361,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    * @return {Promise<Array>}
    */
     /**
-   * Cluster-wide authoritative census of live ledger writers (every
+   * Cluster-wide authoritative occupancy of live ledger writers (every
    * coordinator-owned non-terminal row, any source or target node), read
    * through the owner-RPC lane. The dispatch-time idle check of a ledger
    * self-move consumes it (operation-workflow-dispatch-ledger-self-move-gate.js);
@@ -326,9 +394,8 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         );
         throw error;
       }
-      return result.rows
-        .map((row) => this.rowToOperation(row))
-        .filter((operation) => operation && !this.isOperationTerminal(operation));
+      return result.rows.map(readOperationOccupancy)
+        .filter((occupancy) => !this.isOperationTerminal(occupancy));
     }
 
     async queryIncompleteOperations(options = {}) {

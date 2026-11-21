@@ -66,17 +66,11 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  OPERATION_METADATA_KEY,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   OperationType, ReplicaStatus,
-  buildReplicaOperationSemanticWitnesses,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
   isTerminalReplicaOperationRecord,
   isReplaceRemoveDispatchPhase,
   isCoordinatorOwnedOperationType,
-  resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
 import {
   assignReplicaOperationRepositoryMessageGroupMembershipMethods,
@@ -621,24 +615,16 @@ assignReplicaOperationRepositoryVisibilityMethods(ReplicaOperationRepository, {
 
 assignReplicaOperationRepositoryRowMethods(ReplicaOperationRepository, {
   NUM,
-  OPERATION_METADATA_KEY,
-  OperationType,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_REPOSITORY_LITERAL,
   REPLICA_OPERATION_SEMANTIC_PHASE,
-  ReplicaOperationField,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
-  buildReplicaOperationSemanticWitnesses,
   classifySystemPartition,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
   isReplaceRemoveDispatchPhase,
   isTerminalReplicaOperationRecord,
-  resolveReplicaOperationSemanticPhase,
 });
 
 assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {

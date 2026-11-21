@@ -1,3 +1,6 @@
+import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, matchGrowthPromotionCohort,
+} from '../rebalancer/growth-promotion-subject.js';
 /**
  * Owner contract:
  * Owner: the replica handler's witness seam for the REPLACE owner (quest
@@ -100,37 +103,29 @@ function scopedLearnerRetirementOf(request) {
   return wellFormed ? Object.freeze(scope) : LEARNER_SCOPE_UNAVAILABLE;
 }
 
-async function settleScopedLearnerRemoval(handler, target, scope) {
-  const {service, fields: {operationId, partitionId, replicaId}} = target;
-  const durableScope = {...scope, operationId, partitionId, replicaId};
-  const role = await observeScopedLearner(service, replicaId);
-  if (role === COMMITTED_REPLICA_ROLE.VOTER) {
-    if (!await admitsLearnerRetirement(handler, durableScope)) {
-      return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
-    }
-    const held = await observeLearnerRetirementCustody(
-      handler.replicaStateMachine, durableScope);
-    if (held.state === LEARNER_LIFECYCLE_CUSTODY.UNKNOWN && held.row === null) {
-      return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
-    }
-    if (held.state === LEARNER_LIFECYCLE_CUSTODY.ACQUIRED &&
-        !await releaseLearnerRetirementCustody(
-          handler.replicaStateMachine, held.row, operationId)) {
-      return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
-    }
-  }
-  if (role === COMMITTED_REPLICA_ROLE.ABSENT) {
-    const custody = await handOffAbsentLearnerCleanup(handler, durableScope);
-    if (custody !== null) return {state: LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED, custody};
-  }
-  if (role !== COMMITTED_REPLICA_ROLE.LEARNER) return {state: scopedLearnerOutcome(role)};
+async function settleSupersededLearnerCustody(handler, durableScope) {
+  if (!await admitsLearnerRetirement(handler, durableScope)) return false;
+  const stateMachine = handler.replicaStateMachine;
+  const held = await observeLearnerRetirementCustody(stateMachine, durableScope);
+  if (held.state === LEARNER_LIFECYCLE_CUSTODY.UNKNOWN && held.row === null) return false;
+  if (held.state !== LEARNER_LIFECYCLE_CUSTODY.ACQUIRED) return true;
+  return Boolean(await releaseLearnerRetirementCustody(
+    stateMachine, held.row, durableScope.operationId));
+}
+
+async function removeScopedRaftLearner(handler, service, durableScope) {
+  const {operationId, replicaId, targetNodeId} = durableScope;
   const custody = await claimNativeLearnerRetirement(handler, durableScope);
-  if (custody.state !== LEARNER_LIFECYCLE_CUSTODY.ACQUIRED) {
-    return {state: custody.state === LEARNER_LIFECYCLE_CUSTODY.CHANGED ?
-      LEARNER_RETIREMENT_OUTCOME.SUPERSEDED : LEARNER_RETIREMENT_OUTCOME.DEFERRED};
+  switch (custody.state) {
+  case LEARNER_LIFECYCLE_CUSTODY.ACQUIRED:
+    break;
+  case LEARNER_LIFECYCLE_CUSTODY.CHANGED:
+    return {state: LEARNER_RETIREMENT_OUTCOME.SUPERSEDED};
+  default:
+    return {state: LEARNER_RETIREMENT_OUTCOME.DEFERRED};
   }
   const proposal = await turnChainValue(removePartitionRaftLearner(service, {
-    operationId, replicaIdentity: replicaId, expectedNodeId: scope.targetNodeId,
+    operationId, replicaIdentity: replicaId, expectedNodeId: targetNodeId,
   }));
   const observed = await observeScopedLearner(service, replicaId);
   if (observed === COMMITTED_REPLICA_ROLE.VOTER) {
@@ -141,6 +136,28 @@ async function settleScopedLearnerRemoval(handler, target, scope) {
   }
   return {state: scopedLearnerOutcome(observed), proposal,
     custody: learnerRetirementToken(operationId)};
+}
+
+async function settleScopedLearnerRemoval(handler, target, scope) {
+  const {service, fields: {operationId, partitionId, replicaId}} = target;
+  const durableScope = {...scope, operationId, partitionId, replicaId};
+  const role = await observeScopedLearner(service, replicaId);
+  switch (role) {
+  case COMMITTED_REPLICA_ROLE.VOTER: {
+    const settled = await settleSupersededLearnerCustody(handler, durableScope);
+    return {state: settled ? LEARNER_RETIREMENT_OUTCOME.SUPERSEDED :
+      LEARNER_RETIREMENT_OUTCOME.DEFERRED};
+  }
+  case COMMITTED_REPLICA_ROLE.ABSENT: {
+    const custody = await handOffAbsentLearnerCleanup(handler, durableScope);
+    return custody === null ? {state: LEARNER_RETIREMENT_OUTCOME.CLEARED} :
+      {state: LEARNER_RETIREMENT_OUTCOME.CLEANUP_OWNED, custody};
+  }
+  case COMMITTED_REPLICA_ROLE.LEARNER:
+    return removeScopedRaftLearner(handler, service, durableScope);
+  default:
+    return {state: scopedLearnerOutcome(role)};
+  }
 }
 
 function readRequestField(request, field) {
@@ -353,10 +370,17 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
     async handleProposeGrowthPromote(request) {
       const target = this.resolvePartitionAdministrationTarget(request);
       if (target.response) return target.response;
-      const promoteReplicaIds = Array.isArray(target.fields.promoteReplicaIds) &&
-          target.fields.promoteReplicaIds.length > 0 ?
-        target.fields.promoteReplicaIds :
-        [target.fields.replicaId, target.fields.sourceReplicaId].filter(Boolean);
+      const promoteReplicaIds = matchGrowthPromotionCohort({
+        replicaId: request?.[ReplicaOperationField.REPLICA_ID],
+        sourceReplicaId: request?.[ReplicaOperationField.SOURCE_REPLICA_ID],
+      }, target.fields.promoteReplicaIds);
+      if (promoteReplicaIds === null) {
+        return this.buildReplicaOperationResponse(ReplicaOperationResponseStatus.ERROR, {
+          error: GROWTH_PROMOTION_COHORT_UNRESOLVED,
+          errorCode: GROWTH_PROMOTION_COHORT_UNRESOLVED,
+          nodeId: this.nodeId,
+        });
+      }
       const beforeMembership = await readPartitionCommittedMembership(
         target.service,
       );

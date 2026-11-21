@@ -913,6 +913,7 @@ test(
               entryId: 'placement-owner:test',
               transitionKind: 'GROWTH_PROMOTE',
             },
+            promoteReplicaIds: [TEST_LEARNER_1, TEST_LEARNER_2],
           },
           {step: WORKFLOW_STEP.SYNCING, timestamp: 2000},
         ],

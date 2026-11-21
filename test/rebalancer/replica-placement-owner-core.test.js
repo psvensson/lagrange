@@ -1337,9 +1337,19 @@ test('WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding ->
         });
         assert.equal(catchUpResp.status, ReplicaOperationResponseStatus.COMPLETED);
         assert.ok(catchUpResp[ReplicaOperationField.CATCH_UP]);
+        const missingCohort = await handler.handleProposeGrowthPromote({
+          [ReplicaOperationField.OPERATION_ID]: ops[2].operation_id,
+          [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
+          [ReplicaOperationField.REPLICA_ID]: firstLearnerId,
+          [ReplicaOperationField.SOURCE_REPLICA_ID]: secondLearnerId,
+        });
+        assert.equal(missingCohort.status, ReplicaOperationResponseStatus.ERROR);
+        assert.equal(missingCohort.errorCode, 'growth_promotion_cohort_unresolved');
         const promoteResp = await handler.handleProposeGrowthPromote({
           [ReplicaOperationField.OPERATION_ID]: ops[2].operation_id,
           [ReplicaOperationField.PARTITION_ID]: leaderService.partitionId,
+          [ReplicaOperationField.REPLICA_ID]: firstLearnerId,
+          [ReplicaOperationField.SOURCE_REPLICA_ID]: secondLearnerId,
           [ReplicaOperationField.PROMOTE_REPLICA_IDS]: [firstLearnerId, secondLearnerId],
         });
         assert.equal(promoteResp.status, ReplicaOperationResponseStatus.INITIATED);

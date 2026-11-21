@@ -36,12 +36,6 @@ class OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
     );
   }
 
-  buildCoordinatorCreatedDispatchRow(operation) {
-    return DISPATCH_REARM_EVIDENCE.buildCoordinatorCreatedDispatchRow(
-      operation,
-    );
-  }
-
   shouldRetryCoordinatorCreatedRemoteHandoff(operation, options = {}) {
     return DISPATCH_REARM_EVIDENCE
       .shouldRetryCoordinatorCreatedRemoteHandoff(

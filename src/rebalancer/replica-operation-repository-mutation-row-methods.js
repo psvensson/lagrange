@@ -1,4 +1,9 @@
 import {
+  GROWTH_PROMOTION_COHORT_UNRESOLVED, readGrowthPromotionCohort,
+} from './growth-promotion-subject.js';
+import {OperationType} from './replica-operation-progress.js';
+import {invalidOperationPersistenceOutcome} from './replica-operation-update-outcome.js';
+import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
 import {
@@ -20,6 +25,10 @@ function nullableOperationValue(value) {
  * @return {Object} The row, keyed by column.
  */
 function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
+  if (operation.type === OperationType.GROWTH_PROMOTE &&
+      readGrowthPromotionCohort(operation) === null) {
+    throw invalidOperationPersistenceOutcome(GROWTH_PROMOTION_COHORT_UNRESOLVED);
+  }
   const {entityType, entityId} =
     assertCanonicalRebalancerEntityIdentity(operation);
   return {
@@ -41,8 +50,9 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
     entity_type: entityType,
     entity_id: entityId,
     membership_publication_epoch:
-      operation.membershipPublicationEpoch,
+      nullableOperationValue(operation.membershipPublicationEpoch),
     source_replica_id: nullableOperationValue(operation.sourceReplicaId),
+    copy_source_node_id: nullableOperationValue(operation.copySourceNodeId),
     message_group_membership_lane_key:
       nullableOperationValue(operation.messageGroupMembershipLaneKey),
     message_group_membership_phase:
@@ -52,6 +62,10 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
         operation.messageGroupMembershipObligationState),
     message_group_membership_identity:
       nullableOperationValue(operation.messageGroupMembershipIdentity),
+    message_group_membership_owner_claim:
+      nullableOperationValue(operation.messageGroupMembershipOwnerClaim),
+    message_group_membership_permit:
+      nullableOperationValue(operation.messageGroupMembershipPermit),
     message_group_learner_stamp:
       nullableOperationValue(operation.messageGroupLearnerStamp),
     message_group_voter_stamp:
@@ -77,6 +91,10 @@ function buildCanonicalReplicaOperationRow(operation, leaseExpiresAt) {
     create_admission_owner_incarnation:
       nullableOperationValue(operation.createAdmissionOwnerIncarnation),
   };
+}
+
+function buildReplicaOperationWakeRow(operation) {
+  return buildCanonicalReplicaOperationRow(operation, operation.ownerLeaseExpiresAt ?? null);
 }
 
 function assignReplicaOperationRepositoryMutationRowMethods(
@@ -209,4 +227,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
   }
 }
 
-export {assignReplicaOperationRepositoryMutationRowMethods, buildCanonicalReplicaOperationRow};
+export {
+  assignReplicaOperationRepositoryMutationRowMethods,
+  buildCanonicalReplicaOperationRow,
+  buildReplicaOperationWakeRow,
+};

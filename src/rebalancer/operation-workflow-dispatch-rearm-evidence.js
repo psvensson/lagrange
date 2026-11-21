@@ -28,7 +28,6 @@ import {
 } from './operation-workflow-transition-retry.js';
 import {
   buildCoordinatorCreatedDispatchIngress,
-  buildCoordinatorCreatedDispatchRow,
   buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
   canContinueCoordinatorCreatedRemoteHandoff,
   cloneOperationSnapshot,
@@ -739,7 +738,6 @@ function isOperationStepTimedOut(owner, operation, now = Date.now()) {
 }
 export {
   buildCoordinatorCreatedDispatchIngress,
-  buildCoordinatorCreatedDispatchRow,
   buildCoordinatorCreatedRemoteHandoffTimeoutDecision,
   buildDispatchRearmFromProgressReconcileEvidence,
   canContinueCoordinatorCreatedRemoteHandoff,
