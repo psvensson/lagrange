@@ -103,6 +103,7 @@ function projectPublicationIntent(intent, current) {
 
 function lifecycleRefreshConflicts(intent, current, actualSummary, desiredSummary) {
   if (intent.membershipLifecycleSummary === undefined ||
+      areMembershipLifecycleSummariesEqual(actualSummary, intent.baselineLifecycleSummary) ||
       areMembershipLifecycleSummariesEqual(actualSummary, desiredSummary)) {
     return false;
   }

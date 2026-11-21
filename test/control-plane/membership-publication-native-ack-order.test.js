@@ -554,3 +554,31 @@ for (const order of ['visible-before-read', 'committed-during-cas']) {
       }
     }));
 }
+
+test('refresh closes a durable open row that already contains the entire ACK set',
+  () => withPublicationLedger(async (ledger, writer) => {
+    const row = {...publicationRow(3, NODES, WRITER_TIME - 10),
+      acknowledged_node_ids: NODES,
+    };
+    const {leader} = ledger;
+    await writer.coordinator.persistPublicationBirth(row);
+    const before = leader.db.prepare(SELECT_ROW).get(row.publication_id);
+    const pending = normalizeControlPlanePublicationRow(before);
+    assert.equal(pending.status, STATUS.OPEN);
+    assert.deepEqual(pending.acknowledgedNodeIds, NODES);
+
+    const refresh = installLifecycleRefresh(writer, before);
+    await refresh();
+    const published = readDurablePublication(leader, row.publication_id);
+    assert.equal(published.status, STATUS.PUBLISHED);
+    assert.equal(published.transitionHistory.at(-1).state, STATUS.PUBLISHED);
+    assert.deepEqual(published.acknowledgedNodeIds, NODES);
+    assert.equal(published.membershipLifecycleSummary.lifecycleState,
+      MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE);
+    assert.deepEqual(published.membershipLifecycleSummary.formationPlacementNodeIds, [NODES[1]]);
+
+    const writes = ledger.applied.length;
+    await refresh();
+    assert.equal(ledger.applied.length, writes,
+      'the confirmed closure and metadata need no repeated proposal');
+  }));
