@@ -126,6 +126,16 @@ function supportAdmission(owner, parameters, nodeCount, retainedBinding = UNSET)
     retainedBinding,
   });
 }
+function retainedOperationIdentityMatches(owner, op, binding) {
+  return op.kind === OP_KIND.TRANSITION_RELEASE && typeof op.operationId === 'string' &&
+    op.operationId.length > 0 && owner.operations.get(op.operationId) === op &&
+    binding && binding.operationId === op.operationId &&
+    binding.lagrangeOperationId === op.lagrangeOperationId &&
+    binding.sourceVersion === owner.currentVersion &&
+    typeof op.parameters?.targetVersion === 'string' &&
+    binding.targetVersion === op.parameters.targetVersion;
+}
+
 function samePlanIdentity(binding, parameters, plan) {
   return Array.isArray(plan) && Array.isArray(binding.nodeIds) &&
     binding.nodeIds.length === plan.length &&
@@ -310,13 +320,7 @@ class RollingUpgradeOwner {
     const op = this.activeOperation;
     const binding = op?.supportBinding;
     return this.#restoredSourceMatches && this.capabilitySupported && this.hasActiveUpgrade() &&
-      op.kind === OP_KIND.TRANSITION_RELEASE && typeof op.operationId === 'string' &&
-      op.operationId.length > 0 && this.operations.get(op.operationId) === op &&
-      binding && binding.operationId === op.operationId &&
-      binding.lagrangeOperationId === op.lagrangeOperationId &&
-      binding.sourceVersion === this.currentVersion &&
-      typeof op.parameters?.targetVersion === 'string' &&
-      binding.targetVersion === op.parameters.targetVersion &&
+      retainedOperationIdentityMatches(this, op, binding) &&
       samePlanIdentity(binding, op.parameters, op.nodePlan) &&
       samePlanIdentity(binding, op.parameters, this.nodePlan) &&
       supportAdmission(this, op.parameters, this.nodePlan.length, binding)?.admitted === true;

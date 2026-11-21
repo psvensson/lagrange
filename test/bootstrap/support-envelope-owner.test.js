@@ -140,7 +140,8 @@ test('policy simulation checks refusal, in-memory restore and join without certi
     assert.equal(report.managementSummary.policyValid, true);
     assert.equal(report.managementSummary.valid, false);
     assert.deepEqual(report.managementSummary.certifiedDrillIds, []);
-    assert.equal(report.upgradeRefusal.reasonCode, SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
+    assert.equal(report.upgradeRefusal.reasonCode,
+      SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE);
     assert.equal(report.byocBackupRestore.backupSucceeded, true);
     assert.equal(report.byocBackupRestore.restoreSucceeded, true);
     assert.equal(report.byocBackupRestore.factsExposeSupportEnvelope, true);
@@ -168,7 +169,8 @@ test('runtime rejects a caller-supplied certification object without recorded or
   });
   const facts = owner.getManagementSummary();
   assert.equal(facts.policyValid, true);
-  assert.equal(facts.evidenceReasonCode, SUPPORT_ENVELOPE_REASON_CODE.PHYSICAL_EXECUTION_EVIDENCE_REFUSED);
+  assert.equal(facts.evidenceReasonCode,
+    SUPPORT_ENVELOPE_REASON_CODE.PHYSICAL_EXECUTION_EVIDENCE_REFUSED);
   assert.deepEqual(facts.certifiedDrillIds, []);
   assert.equal(owner.validateUpgradePair(envelope.versionPair).admitted, false);
 });

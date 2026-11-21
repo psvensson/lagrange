@@ -16,18 +16,53 @@ const ARTIFACT_DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const MAX_REQUIRED_WRITES = 100_000;
 const MAX_RECORDED_LOG_BYTES = 8 * 1024 * 1024;
 const ZERO = 0;
+const UTF8 = 'utf8';
+const RECORD_SEPARATOR = '\n';
+const RECORDED_FINDING = 'finding';
+const EVIDENCE_KIND = 'evidence';
+const TOPOLOGY_CONDITION = 'topology';
+const EXECUTION_ERROR = Object.freeze({
+  INVALID_LOG: 'invalid original certification record log',
+  MISSING_CERTIFICATION: 'missing recorded exact-run certification',
+  ARCHIVE_PATH: 'certification archive path leaves its configured root',
+  UNCERTIFIED_ARCHIVE: 'retained certification does not establish the requested physical run',
+  UNAVAILABLE_ROOT: 'original certification archive root unavailable',
+  WRONG_ARTIFACTS: 'original certification artifact identities do not match support policy',
+  MISSING_DRILLS: 'original physical drill observations are incomplete or outside the support policy',
+});
 const arrayIsArray = Array.isArray;
 
 function recordedCertifications(logPath) {
   const stat = lstatSync(logPath);
   if (!stat.isFile() || stat.size > MAX_RECORDED_LOG_BYTES) {
-    throw new Error('invalid original certification record log');
+    throw new Error(EXECUTION_ERROR.INVALID_LOG);
   }
-  const texts = readFileSync(logPath, 'utf8').split('\n').filter(Boolean)
+  const texts = readFileSync(logPath, UTF8).split(RECORD_SEPARATOR).filter(Boolean)
     .map((line) => JSON.parse(line))
-    .filter((entry) => entry.type === 'finding' && entry.kind === 'evidence')
+    .filter((entry) => entry.type === RECORDED_FINDING && entry.kind === EVIDENCE_KIND)
     .map((entry) => entry.text);
   return parseCertificationRecords(texts);
+}
+
+function archiveMatchesRecord(manifest, record, scenario) {
+  return manifest.schema === ARCHIVE_SCHEMA && manifest.scenario === scenario &&
+    manifest.runStartedAt === record.start && manifest.requestedSha === record.sha &&
+    manifest.sha === record.sha && manifest.outcome === PASSED && manifest.certified === true;
+}
+
+function physicalCaptureComplete(manifest, started) {
+  const controller = started?.controller;
+  return Number.isSafeInteger(controller?.pid) && controller.pid > ZERO &&
+    typeof controller.host === 'string' && controller.host.length > ZERO &&
+    Array.isArray(manifest.missingNodeLogs) && manifest.missingNodeLogs.length === ZERO;
+}
+
+function certificationPassed(entry, sha) {
+  const certification = entry.certification;
+  return certification.schema === CERTIFICATION_SCHEMA && certification.requested === true &&
+    certification.requestedSha === sha && certification.sha === sha &&
+    certification.certified === true && certification.failures?.length === ZERO &&
+    entry.outcome === PASSED;
 }
 
 function verifiedCertification(root, records, manifestDigest, scenario) {
@@ -35,27 +70,18 @@ function verifiedCertification(root, records, manifestDigest, scenario) {
     (candidate) => candidate.scenario === scenario && candidate.manifestDigest === manifestDigest);
   if (!record || record.scenario !== scenario || record.outcome !== CERTIFIED ||
     !record.manifestDigest || !FULL_SHA.test(record.sha)) {
-    throw new Error('missing recorded exact-run certification');
+    throw new Error(EXECUTION_ERROR.MISSING_CERTIFICATION);
   }
   const directory = resolve(root, safeName(record.sha), safeName(record.start));
   if (realpathSync(directory) !== directory) {
-    throw new Error('certification archive path leaves its configured root');
+    throw new Error(EXECUTION_ERROR.ARCHIVE_PATH);
   }
   const {entry, manifest, started} = verifyEvidenceDir(directory, {
     expectedManifestDigest: record.manifestDigest,
   });
-  const certification = entry.certification;
-  if (manifest.schema !== ARCHIVE_SCHEMA || manifest.scenario !== scenario ||
-    manifest.runStartedAt !== record.start || manifest.requestedSha !== record.sha ||
-    manifest.sha !== record.sha || manifest.outcome !== PASSED || manifest.certified !== true ||
-    !Number.isSafeInteger(started?.controller?.pid) || started.controller.pid <= ZERO ||
-    typeof started.controller.host !== 'string' || started.controller.host.length === ZERO ||
-    !Array.isArray(manifest.missingNodeLogs) || manifest.missingNodeLogs.length !== ZERO ||
-    certification.schema !== CERTIFICATION_SCHEMA || certification.requested !== true ||
-    certification.requestedSha !== record.sha || certification.sha !== record.sha ||
-    certification.certified !== true || certification.failures?.length !== ZERO ||
-    entry.outcome !== PASSED) {
-    throw new Error('retained certification does not establish the requested physical run');
+  if (!archiveMatchesRecord(manifest, record, scenario) ||
+      !physicalCaptureComplete(manifest, started) || !certificationPassed(entry, record.sha)) {
+    throw new Error(EXECUTION_ERROR.UNCERTIFIED_ARCHIVE);
   }
   return {entry, manifest, reference: record.manifestDigest};
 }
@@ -71,29 +97,36 @@ function verifyRunSubject(detail, policy, execution) {
     sameArtifact(detail.target, execution.target);
 }
 
+function placementWithinBounds(topology, detail, bounds) {
+  const {nodeCount, replicationFactor} = detail;
+  return topology.met === true && Number.isSafeInteger(nodeCount) &&
+    nodeCount >= bounds.minNodes && nodeCount <= bounds.maxNodes &&
+    replicationFactor === bounds.replicationFactor;
+}
+
+function placementMatchesHosts(placedNodes, hostSet, nodeCount) {
+  const hosts = new Set(placedNodes.map((node) => node.hostId));
+  return hosts.size === nodeCount && placedNodes.length === nodeCount &&
+    hostSet.length === nodeCount && new Set(hostSet).size === nodeCount &&
+    hostSet.every((host) => typeof host === 'string' && host.length > ZERO && hosts.has(host));
+}
+
 function deployedNodeIds(archive, detail, policy) {
   const topology = archive.entry.certification.conditions?.find(
-    (condition) => condition.condition === 'topology');
+    (condition) => condition.condition === TOPOLOGY_CONDITION);
   const placedNodes = topology?.evidence?.placedNodes;
   const hostSet = archive.manifest.hostSet;
-  const nodeCount = detail.nodeCount;
-  const bounds = policy.topologyEnvelope;
+  const {nodeCount} = detail;
   if (!Array.isArray(placedNodes) || !Array.isArray(hostSet) ||
-    topology.met !== true || !Number.isSafeInteger(nodeCount) ||
-    nodeCount < bounds.minNodes || nodeCount > bounds.maxNodes ||
-    detail.replicationFactor !== bounds.replicationFactor) return null;
+      !placementWithinBounds(topology, detail, policy.topologyEnvelope) ||
+      !placementMatchesHosts(placedNodes, hostSet, nodeCount)) return null;
 
-  const hosts = new Set(placedNodes.map((node) => node.hostId));
   const nodes = new Set(placedNodes.map((node) => node.nodeId));
   const memberPaths = new Set(archive.manifest.files
     .filter((file) => file.bytes > ZERO).map((file) => file.path));
-  const valid = hosts.size === nodeCount && nodes.size === nodeCount &&
-    placedNodes.length === nodeCount && hostSet.length === nodeCount &&
-    new Set(hostSet).size === nodeCount &&
-    hostSet.every((host) => typeof host === 'string' && host.length > ZERO && hosts.has(host)) &&
-    [...nodes].every((node) => typeof node === 'string' && node.length > ZERO &&
-      memberPaths.has(`logs/${safeName(node)}.log.gz`));
-  return valid ? nodes : null;
+  const captured = [...nodes].every((node) => typeof node === 'string' && node.length > ZERO &&
+    memberPaths.has(`logs/${safeName(node)}.log.gz`));
+  return nodes.size === nodeCount && captured ? nodes : null;
 }
 
 function writeMap(rows) {
@@ -141,6 +174,33 @@ function rollingMeasured(effect, execution, nodeIds) {
   return distinctNodes.size === nodeIds.size;
 }
 
+function wipedReplicaRebuilt(effect, nodeIds, maxReplicaBytes) {
+  return nodeIds.has(effect.nodeId) &&
+    typeof effect.wipedReplicaId === 'string' && Boolean(effect.wipedReplicaId) &&
+    typeof effect.rebuiltReplicaId === 'string' && Boolean(effect.rebuiltReplicaId) &&
+    effect.wipedReplicaId !== effect.rebuiltReplicaId &&
+    Number.isSafeInteger(effect.catchUpIndex) && effect.catchUpIndex > ZERO &&
+    Number.isSafeInteger(effect.rebuiltBytes) && effect.rebuiltBytes > ZERO &&
+    effect.rebuiltBytes <= maxReplicaBytes;
+}
+
+function serviceArtifactReplaced(effect, artifactAbi) {
+  return effect.artifactAbi === artifactAbi &&
+    ARTIFACT_DIGEST.test(effect.previousArtifactDigest) &&
+    ARTIFACT_DIGEST.test(effect.observedArtifactDigest) &&
+    effect.previousArtifactDigest !== effect.observedArtifactDigest &&
+    Number.isSafeInteger(effect.previousGeneration) &&
+    Number.isSafeInteger(effect.observedGeneration) &&
+    effect.previousGeneration >= ZERO && effect.observedGeneration > effect.previousGeneration;
+}
+
+function rollbackBoundaryObserved(effect, policy, execution, rollbackRefusal) {
+  return sameArtifact(effect.beforeCutoff?.restored, execution.source) &&
+    effect.beforeCutoff.phase === policy.rollback.rollbackCutoff &&
+    effect.afterCutoff?.reasonCode === rollbackRefusal &&
+    sameArtifact(effect.afterCutoff.retained, execution.target);
+}
+
 function drillEffectObserved(drillId, effect, requirements, policy, execution, nodeIds) {
   const {ids, rollbackRefusal} = requirements;
   if (!effect) return false;
@@ -148,30 +208,15 @@ function drillEffectObserved(drillId, effect, requirements, policy, execution, n
   case ids.ROLLING_UPGRADE:
     return rollingMeasured(effect, execution, nodeIds);
   case ids.DOWNGRADE_ROLLBACK_BOUNDARY:
-    return sameArtifact(effect.beforeCutoff?.restored, execution.source) &&
-      effect.beforeCutoff.phase === policy.rollback.rollbackCutoff &&
-      effect.afterCutoff?.reasonCode === rollbackRefusal &&
-      sameArtifact(effect.afterCutoff.retained, execution.target);
+    return rollbackBoundaryObserved(effect, policy, execution, rollbackRefusal);
   case ids.ONE_NODE_FAILURE_RECOVERY:
     return nodeIds.has(effect.failedNodeId) &&
       effect.failedNodeId === effect.recoveredNodeId &&
       sameArtifact(effect.recovered, execution.target);
   case ids.WIPED_REPLICA_REBUILD:
-    return nodeIds.has(effect.nodeId) &&
-      typeof effect.wipedReplicaId === 'string' && Boolean(effect.wipedReplicaId) &&
-      typeof effect.rebuiltReplicaId === 'string' && Boolean(effect.rebuiltReplicaId) &&
-      effect.wipedReplicaId !== effect.rebuiltReplicaId &&
-      Number.isSafeInteger(effect.catchUpIndex) && effect.catchUpIndex > ZERO &&
-      Number.isSafeInteger(effect.rebuiltBytes) && effect.rebuiltBytes > ZERO &&
-      effect.rebuiltBytes <= policy.rebuildEnvelope.maxReplicaBytes;
+    return wipedReplicaRebuilt(effect, nodeIds, policy.rebuildEnvelope.maxReplicaBytes);
   case ids.SERVICE_ARTIFACT_UPGRADE:
-    return effect.artifactAbi === policy.boundaries.artifactAbi &&
-      ARTIFACT_DIGEST.test(effect.previousArtifactDigest) &&
-      ARTIFACT_DIGEST.test(effect.observedArtifactDigest) &&
-      effect.previousArtifactDigest !== effect.observedArtifactDigest &&
-      Number.isSafeInteger(effect.previousGeneration) &&
-      Number.isSafeInteger(effect.observedGeneration) &&
-      effect.previousGeneration >= ZERO && effect.observedGeneration > effect.previousGeneration;
+    return serviceArtifactReplaced(effect, policy.boundaries.artifactAbi);
   default:
     return false;
   }
@@ -197,21 +242,24 @@ function verifyDependency(records, questId, execution, policy) {
   return archive.reference;
 }
 
+function verifyRequestedArtifacts({sourceVersion, targetVersion}, execution) {
+  if (execution.source?.version !== sourceVersion || execution.target?.version !== targetVersion ||
+      !ARTIFACT_DIGEST.test(execution.source.digest) ||
+      !ARTIFACT_DIGEST.test(execution.target.digest) ||
+      execution.source.digest === execution.target.digest) {
+    throw new Error(EXECUTION_ERROR.WRONG_ARTIFACTS);
+  }
+}
+
 // The release preparation owner supplies a local materialized archive root
 // and recorded run references. A supplied envelope, digest of result flags,
 // simulation, or source-only report is never an input to physical admission.
 function readSupportEnvelopeExecution(policy, execution, requirements) {
   if (!execution || typeof execution.root !== 'string' ||
     typeof execution.recordedRunLog !== 'string') {
-    throw new Error('original certification archive root unavailable');
+    throw new Error(EXECUTION_ERROR.UNAVAILABLE_ROOT);
   }
-  const {sourceVersion, targetVersion} = policy.versionPair;
-  if (execution.source?.version !== sourceVersion || execution.target?.version !== targetVersion ||
-    !ARTIFACT_DIGEST.test(execution.source.digest) ||
-    !ARTIFACT_DIGEST.test(execution.target.digest) ||
-    execution.source.digest === execution.target.digest) {
-    throw new Error('original certification artifact identities do not match support policy');
-  }
+  verifyRequestedArtifacts(policy.versionPair, execution);
   const records = recordedCertifications(execution.recordedRunLog);
   const archive = verifiedCertification(
     execution.root, records, execution.releaseRun, RELEASE_SCENARIO);
@@ -220,7 +268,7 @@ function readSupportEnvelopeExecution(policy, execution, requirements) {
     deployedNodeIds(archive, detail, policy) : null;
   if (nodes === null || !verifyRunSubject(detail, policy, execution) ||
     !verifyRequiredDrills(detail, policy, execution, requirements, nodes)) {
-    throw new Error('original physical drill observations are incomplete or outside the support policy');
+    throw new Error(EXECUTION_ERROR.MISSING_DRILLS);
   }
   const dependencyReferences = requirements.dependencyIds.map(
     (questId) => verifyDependency(records, questId, execution, policy));
@@ -253,4 +301,58 @@ function sameExecutionBinding(retained, current) {
     current.executionReferences.every((ref, index) => retained.executionReferences[index] === ref);
 }
 
-export {executionBinding, readSupportEnvelopeExecution, sameExecutionBinding};
+function loadSupportEnvelopeExecution(policy, execution, requirements) {
+  try {
+    return {
+      reasonCode: requirements.accepted,
+      observation: readSupportEnvelopeExecution(policy, execution, requirements),
+    };
+  } catch {
+    return requirements.refusal;
+  }
+}
+
+function measuredExecutionBinding(validation, execution, request) {
+  if (!validation.valid) return null;
+  const {observation} = execution;
+  const matches = request.nodeCount === observation.nodeCount &&
+    request.sourceArtifactDigest === observation.sourceArtifactDigest &&
+    request.targetArtifactDigest === observation.targetArtifactDigest;
+  return matches ? executionBinding(validation.actualDigest, observation) : null;
+}
+
+function rollbackBindingMatches(validation, execution, activeBinding, currentArtifactDigest) {
+  return validation.valid &&
+    sameExecutionBinding(activeBinding,
+      executionBinding(validation.actualDigest, execution.observation)) &&
+    [activeBinding.sourceArtifactDigest, activeBinding.targetArtifactDigest]
+      .includes(currentArtifactDigest);
+}
+
+function mixedArtifactsMatch(pair, execution, local, peer) {
+  const {observation} = execution;
+  const artifactIdentities = new Map([
+    [pair.sourceVersion, observation.sourceArtifactDigest],
+    [pair.targetVersion, observation.targetArtifactDigest],
+  ]);
+  return local.digest === artifactIdentities.get(local.version) &&
+    peer.digest === artifactIdentities.get(peer.version);
+}
+
+function nodeCountOutsideEnvelope(topology, validation, nodeCount) {
+  if (!validation.policyValid || nodeCount === undefined) return false;
+  return !Number.isSafeInteger(nodeCount) ||
+    nodeCount < topology.minNodes || nodeCount > topology.maxNodes;
+}
+
+function knownMixedVersions(pair, localVersion, peerVersion) {
+  const allowedVersions = new Set([pair.sourceVersion, pair.targetVersion]);
+  return typeof localVersion === 'string' && typeof peerVersion === 'string' &&
+    allowedVersions.has(localVersion) && allowedVersions.has(peerVersion);
+}
+
+export {
+  knownMixedVersions, loadSupportEnvelopeExecution, measuredExecutionBinding,
+  mixedArtifactsMatch, nodeCountOutsideEnvelope,
+  rollbackBindingMatches, sameExecutionBinding,
+};

@@ -235,6 +235,12 @@ function buildClusterSection(owner, incLin) {
   };
 }
 
+function rollingCapability(release) {
+  const state = release?.rollingUpgrade;
+  return state === undefined || state === null ?
+    CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED : state;
+}
+
 function buildFacts(owner, snap, incLin) {
   const supportEnvelope = owner.supportEnvelope;
   const release = owner.rollingUpgradeOwner?.getReleaseFacts?.();
@@ -248,7 +254,7 @@ function buildFacts(owner, snap, incLin) {
     capabilities: {
       backupRestore: resolveCapabilityState(owner.backupRestoreOwner?.capabilitySupported),
       decommissionNode: resolveCapabilityState(owner.decommissionSupported),
-      rollingUpgrade: release?.rollingUpgrade ?? CLUSTER_FACTS_CONSTANTS.CAPABILITY_UNSUPPORTED,
+      rollingUpgrade: rollingCapability(release),
     },
   };
   return supportEnvelope ?
@@ -420,7 +426,8 @@ class ManagementV1Owner {
     this.decommissionSupported = typeof options.onDecommissionNode === FUNCTION_TYPE;
     this.rollingUpgradeOwner = options.rollingUpgradeOwner ?? new RollingUpgradeOwner({
       ...pickPorts(options, ROLLING_UPGRADE_PORTS),
-      ...(typeof options.currentVersion === STRING_TYPE ? {currentVersion: options.currentVersion} : {}),
+      ...(typeof options.currentVersion === STRING_TYPE ?
+        {currentVersion: options.currentVersion} : {}),
       ...(typeof options.currentArtifactDigest === STRING_TYPE ?
         {currentArtifactDigest: options.currentArtifactDigest} : {}),
       supportEnvelopeOwner: this.supportEnvelopeOwner,

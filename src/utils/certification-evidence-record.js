@@ -28,6 +28,23 @@ const MAX_ARCHIVE_MEMBERS = 64;
 const MAX_ARCHIVE_MEMBER_BYTES = 128 * 1024 * 1024;
 const MAX_ARCHIVE_METADATA_BYTES = 8 * 1024 * 1024;
 
+const PARENT_PATH_PREFIX = '../';
+const DIGEST_PATH_SEPARATOR = ' ';
+const CERTIFICATION_RECORD_GROUP = Object.freeze({
+  SCENARIO: 1, SHA: 2, START: 3, OUTCOME: 4, MANIFEST: 5,
+});
+const ARCHIVE_ERROR = Object.freeze({
+  INVALID_MEMBER: 'invalid archive member',
+  ESCAPED_MEMBER: 'certification archive member escapes its original directory',
+  INVALID_FILE: 'invalid certification archive file',
+  INVALID_MANIFEST_MEMBERS: 'invalid original certification archive manifest members',
+  START_MISMATCH: 'started.json is not the manifest\'s run',
+  MANIFEST_MISMATCH: 'manifest.json does not match manifest.json.sha256',
+  RECORD_MISMATCH: 'certification manifest does not match the retained run record',
+  RUN_IDENTITY_MISMATCH: 'manifest runIdentity is not its run start, sha and hosts',
+  CERTIFICATION_MISMATCH: 'certification.json is not the entry\'s certification',
+});
+
 const EVIDENCE_FILE = Object.freeze({
   CERTIFICATION: 'certification.json',
   ENTRY: 'report-entry.json',
@@ -67,16 +84,16 @@ function readArchiveMember(dir, file) {
 }
 
 function readContainedMember(dir, file, maxBytes) {
-  if (typeof file !== 'string' || isAbsolute(file)) throw new Error('invalid archive member');
+  if (typeof file !== 'string' || isAbsolute(file)) throw new Error(ARCHIVE_ERROR.INVALID_MEMBER);
   const root = realpathSync(dir);
   const absolute = resolve(root, file);
   const path = relative(root, absolute);
-  if (path === '' || path === PARENT_DIRECTORY || stringStartsWith(path, '../') ||
+  if (path === '' || path === PARENT_DIRECTORY || stringStartsWith(path, PARENT_PATH_PREFIX) ||
     realpathSync(absolute) !== absolute) {
-    throw new Error('certification archive member escapes its original directory');
+    throw new Error(ARCHIVE_ERROR.ESCAPED_MEMBER);
   }
   const stat = lstatSync(absolute);
-  if (!stat.isFile() || stat.size > maxBytes) throw new Error('invalid certification archive file');
+  if (!stat.isFile() || stat.size > maxBytes) throw new Error(ARCHIVE_ERROR.INVALID_FILE);
   return readFileSync(absolute);
 }
 
@@ -84,7 +101,7 @@ function assertOriginalMemberList(manifest) {
   if (!Array.isArray(manifest.files) || manifest.files.length > MAX_ARCHIVE_MEMBERS ||
       new Set(manifest.files.map((file) => file.path)).size !== manifest.files.length ||
       !manifest.files.some((file) => file.path === EVIDENCE_FILE.GATES)) {
-    throw new Error('invalid original certification archive manifest members');
+    throw new Error(ARCHIVE_ERROR.INVALID_MANIFEST_MEMBERS);
   }
 }
 
@@ -118,9 +135,22 @@ function verifyStarted(dir, manifest, readMember) {
   if (started.runStartedAt !== manifest.runStartedAt ||
       started.requestedSha !== manifest.requestedSha ||
       started.scenario !== manifest.scenario) {
-    throw new Error('started.json is not the manifest\'s run');
+    throw new Error(ARCHIVE_ERROR.START_MISMATCH);
   }
   return started;
+}
+
+function verifyManifestDigest(dir, readMember, expectedManifestDigest) {
+  const manifestBytes = readMember(dir, EVIDENCE_FILE.MANIFEST, MAX_ARCHIVE_METADATA_BYTES);
+  const digestBytes = readMember(dir, EVIDENCE_FILE.MANIFEST_DIGEST, MAX_ARCHIVE_METADATA_BYTES);
+  const recorded = stringSplit(stringTrim(digestBytes.toString(UTF8)), DIGEST_PATH_SEPARATOR)[ZERO];
+  if (recorded !== sha256(manifestBytes)) {
+    throw new Error(ARCHIVE_ERROR.MANIFEST_MISMATCH);
+  }
+  if (expectedManifestDigest !== null && recorded !== expectedManifestDigest) {
+    throw new Error(ARCHIVE_ERROR.RECORD_MISMATCH);
+  }
+  return {manifestBytes, recorded};
 }
 
 /**
@@ -133,26 +163,18 @@ function verifyStarted(dir, manifest, readMember) {
 function verifyEvidenceDir(dir, {logsByDigest = false, expectedManifestDigest = null} = {}) {
   const strict = expectedManifestDigest !== null;
   const readMember = strict ? readContainedMember : readArchiveMember;
-  const manifestBytes = readMember(dir, EVIDENCE_FILE.MANIFEST, MAX_ARCHIVE_METADATA_BYTES);
-  const digestBytes = readMember(dir, EVIDENCE_FILE.MANIFEST_DIGEST, MAX_ARCHIVE_METADATA_BYTES);
-  const recorded = stringSplit(stringTrim(digestBytes.toString(UTF8)), ' ')[ZERO];
-  if (recorded !== sha256(manifestBytes)) {
-    throw new Error('manifest.json does not match manifest.json.sha256');
-  }
-  if (strict && recorded !== expectedManifestDigest) {
-    throw new Error('certification manifest does not match the retained run record');
-  }
+  const {manifestBytes, recorded} = verifyManifestDigest(dir, readMember, expectedManifestDigest);
   const manifest = JSON.parse(manifestBytes.toString(UTF8));
   if (strict) assertOriginalMemberList(manifest);
   verifyListedFiles(dir, manifest, logsByDigest && !strict, readMember, strict);
   if (manifest.runIdentity !== certificationRunIdentity(manifest)) {
-    throw new Error('manifest runIdentity is not its run start, sha and hosts');
+    throw new Error(ARCHIVE_ERROR.RUN_IDENTITY_MISMATCH);
   }
   const started = verifyStarted(dir, manifest, readMember);
   const entry = readVerifiedJson(dir, EVIDENCE_FILE.ENTRY, manifest, readMember);
   const certification = readVerifiedJson(dir, EVIDENCE_FILE.CERTIFICATION, manifest, readMember);
   if (jsonStringify(entry.certification) !== jsonStringify(certification)) {
-    throw new Error('certification.json is not the entry\'s certification');
+    throw new Error(ARCHIVE_ERROR.CERTIFICATION_MISMATCH);
   }
   return {entry, manifest, manifestDigest: recorded, ...(strict ? {started} : {})};
 }
@@ -162,8 +184,13 @@ function parseCertificationRecords(texts) {
   for (const text of texts || []) {
     const match = regExpExec(RECORD_PATTERN, String(text));
     if (match !== null) {
-      records.push({manifestDigest: match[5] === NO_MANIFEST ? null : match[5],
-        outcome: match[4], scenario: match[1], sha: match[2], start: match[3]});
+      const {SCENARIO, SHA, START, OUTCOME, MANIFEST} = CERTIFICATION_RECORD_GROUP;
+      const digest = match[MANIFEST];
+      records.push({
+        manifestDigest: digest === NO_MANIFEST ? null : digest,
+        outcome: match[OUTCOME], scenario: match[SCENARIO],
+        sha: match[SHA], start: match[START],
+      });
     }
   }
   return records;

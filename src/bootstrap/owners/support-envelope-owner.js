@@ -1,5 +1,9 @@
 import {createHash} from 'node:crypto';
-import {executionBinding, readSupportEnvelopeExecution, sameExecutionBinding} from
+import {
+  knownMixedVersions, loadSupportEnvelopeExecution, measuredExecutionBinding,
+  mixedArtifactsMatch, nodeCountOutsideEnvelope,
+  rollbackBindingMatches, sameExecutionBinding,
+} from
   './support-envelope-execution-evidence.js';
 
 const arrayFrom = Array.from; const arrayIsArray = Array.isArray;
@@ -30,7 +34,16 @@ const DEFAULT_SCHEMA_BOUNDARY_ID = 'raft-sqlite-schema-v1';
 const DEFAULT_ARTIFACT_ABI_ID = 'service-cell-v2'; const DIGEST_EXCLUDED_KEY = 'envelopeDigest';
 const DEFAULT_FINALIZED_PHASE = 'FINALIZED';
 const ROLLBACK_RESTORE_SUFFIX = 'restore from certified snapshot instead.';
-const SCHEMA_INCOMPATIBLE_SUFFIX = 'boundary is incompatible.';
+const SCHEMA_MISMATCH_SUFFIX = 'boundary is incompatible.';
+const NODE_COUNT_OUTSIDE_TOPOLOGY = 'Cluster node count is outside the declared support topology.';
+const SCHEMA_BOUNDARY_MATCH_FIELD = 'schemaBoundaryCompatible';
+const POLICY_SECTION_FIELDS = objectFreeze({
+  BOUNDARIES: objectFreeze(['artifactAbi', 'protocolBoundary', 'schemaBoundary']),
+  REBUILD: objectFreeze(['maxRebuildDurationMs', 'maxReplicaBytes']),
+  ROLLBACK: objectFreeze(['rollbackCutoff', 'eligiblePhases']),
+  VERSION_PAIR: objectFreeze(['sourceVersion', 'targetVersion']),
+  TOPOLOGY: objectFreeze(['minNodes', 'maxNodes', 'replicationFactor']),
+});
 const ENVELOPE_FIELD = objectFreeze({
   BOUNDARIES: 'boundaries', DEPENDENCY_RECEIPTS: 'dependencyReceipts', DRILLS: 'drills',
   ELIGIBLE_PHASES: 'eligiblePhases',
@@ -332,6 +345,23 @@ function uncertifiedEnvelopeRefusalMessage(formatRefusal, validation) {
     `${UNCERTIFIED_ENVELOPE_PREFIX}${validation.reasonCode}${UNCERTIFIED_ENVELOPE_SUFFIX}`;
 }
 
+function versionPairAdmissionRefusal(options, pair, exactMatch, formatRefusal, validation) {
+  const {sourceVersion, targetVersion} = options;
+  if ((exactMatch && !validation.valid) || formatRefusal !== null) {
+    return {
+      admitted: false,
+      reasonCode: validation.reasonCode,
+      message: uncertifiedEnvelopeRefusalMessage(formatRefusal, validation),
+    };
+  }
+  const message = `Version transition ${formatVersionOrPhaseLabel(sourceVersion)} -> ` +
+    `${formatVersionOrPhaseLabel(targetVersion)} ${OUTSIDE_CERTIFIED_PAIR_INFIX}` +
+    `${pair.sourceVersion} -> ${pair.targetVersion}).`;
+  return {
+    admitted: false, message, reasonCode: SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE,
+  };
+}
+
 function decideVersionPairAdmission(envelope, options = {}, execution = null) {
   const {sourceVersion, targetVersion, nodeCount, sourceArtifactDigest, targetArtifactDigest,
     retainedBinding = null} = options;
@@ -340,21 +370,16 @@ function decideVersionPairAdmission(envelope, options = {}, execution = null) {
   const pair = readEnvelopeVersionPair(snap.snapshot);
   const formatRefusal = outsideClusterFormatClaimRefusal(
     CLUSTER_FORMAT_SUBJECT.SUPPORT_ENVELOPE, snap.claim);
-  const exactMatch = typeof sourceVersion === 'string' &&
-    typeof targetVersion === 'string' &&
+  const exactMatch = typeof sourceVersion === 'string' && typeof targetVersion === 'string' &&
     sourceVersion === pair.sourceVersion && targetVersion === pair.targetVersion;
+  const binding = measuredExecutionBinding(validation, execution, {
+    nodeCount, sourceArtifactDigest, targetArtifactDigest,
+  });
   const topology = readOwnObjectProperty(snap.snapshot, ENVELOPE_FIELD.TOPOLOGY);
-  const measured = validation.valid && nodeCount === execution.observation.nodeCount &&
-    sourceArtifactDigest === execution.observation.sourceArtifactDigest &&
-    targetArtifactDigest === execution.observation.targetArtifactDigest;
-  const binding = measured ?
-    executionBinding(validation.actualDigest, execution.observation) : null;
-  if (validation.policyValid && nodeCount !== undefined &&
-      (!numberIsSafeInteger(nodeCount) || nodeCount < topology.minNodes ||
-        nodeCount > topology.maxNodes)) {
+  if (nodeCountOutsideEnvelope(topology, validation, nodeCount)) {
     return {
       admitted: false,
-      message: 'Cluster node count is outside the declared support topology.',
+      message: NODE_COUNT_OUTSIDE_TOPOLOGY,
       reasonCode: SUPPORT_ENVELOPE_REASON_CODE.TOPOLOGY_OUTSIDE_ENVELOPE,
     };
   } else if (exactMatch && binding &&
@@ -366,15 +391,8 @@ function decideVersionPairAdmission(envelope, options = {}, execution = null) {
       reasonCode: SUPPORT_ENVELOPE_REASON_CODE.OK,
     };
   }
-  const unavailable = exactMatch && !validation.valid;
-  const reasonCode = unavailable || formatRefusal !== null ? validation.reasonCode :
-    SUPPORT_ENVELOPE_REASON_CODE.OUTSIDE_SUPPORT_ENVELOPE;
-  const message = unavailable || formatRefusal !== null ?
-    uncertifiedEnvelopeRefusalMessage(formatRefusal, validation) :
-    `Version transition ${formatVersionOrPhaseLabel(sourceVersion)} -> ` +
-      `${formatVersionOrPhaseLabel(targetVersion)} ${OUTSIDE_CERTIFIED_PAIR_INFIX}` +
-      `${pair.sourceVersion} -> ${pair.targetVersion}).`;
-  return {admitted: false, message, reasonCode};
+  return versionPairAdmissionRefusal(
+    {sourceVersion, targetVersion}, pair, exactMatch, formatRefusal, validation);
 }
 
 function isRollbackPhaseEligible(eligiblePhases, currentPhase, cutoffExceeded) {
@@ -424,11 +442,8 @@ function decideRollbackEligibility(
     targetVersion === undefined || targetVersion === certified.sourceVersion;
   const phaseEligible = !schemaFinalized &&
     isRollbackPhaseEligible(rollbackSection.eligiblePhases, currentPhase, cutoffExceeded);
-  const eligibleBinding = validation.valid &&
-    sameExecutionBinding(activeBinding,
-      executionBinding(validation.actualDigest, execution.observation)) &&
-    [activeBinding.sourceArtifactDigest, activeBinding.targetArtifactDigest]
-      .includes(currentArtifactDigest);
+  const eligibleBinding = rollbackBindingMatches(
+    validation, execution, activeBinding, currentArtifactDigest);
   const state = resolveRollbackDecisionState({
     policyValid: validation.policyValid, validEnvelope: eligibleBinding,
     targetMatchesSource, phaseEligible,
@@ -473,7 +488,7 @@ function resolveMixedAdmissionState({policyValid, validEnvelope, boundaryMatched
 function decideMixedVersionNodeAdmission(
   envelope,
   {localVersion, peerVersion, localArtifactDigest, peerArtifactDigest,
-    schemaBoundaryCompatible = true} = {},
+    [SCHEMA_BOUNDARY_MATCH_FIELD]: schemaBoundaryMatches = true} = {},
   execution = null,
 ) {
   const snap = snapshotEnvelopeRecord(envelope);
@@ -481,20 +496,13 @@ function decideMixedVersionNodeAdmission(
   const certified = readEnvelopeVersionPair(snap.snapshot);
   const formatRefusal = outsideClusterFormatClaimRefusal(
     CLUSTER_FORMAT_SUBJECT.SUPPORT_ENVELOPE, snap.claim);
-  const allowedVersions = new Set([certified.sourceVersion, certified.targetVersion]);
-  const bothKnown = typeof localVersion === 'string' && typeof peerVersion === 'string' &&
-    allowedVersions.has(localVersion) && allowedVersions.has(peerVersion);
-  const observations = execution?.observation;
-  const artifactIdentities = new Map([
-    [certified.sourceVersion, observations?.sourceArtifactDigest],
-    [certified.targetVersion, observations?.targetArtifactDigest],
-  ]);
-  const artifactsMatch = validation.valid &&
-    localArtifactDigest === artifactIdentities.get(localVersion) &&
-    peerArtifactDigest === artifactIdentities.get(peerVersion);
+  const bothKnown = knownMixedVersions(certified, localVersion, peerVersion);
+  const artifactsMatch = validation.valid && mixedArtifactsMatch(certified, execution,
+    {version: localVersion, digest: localArtifactDigest},
+    {version: peerVersion, digest: peerArtifactDigest});
   const state = resolveMixedAdmissionState({
     policyValid: validation.policyValid, validEnvelope: artifactsMatch,
-    boundaryMatched: Boolean(schemaBoundaryCompatible), bothKnown,
+    boundaryMatched: Boolean(schemaBoundaryMatches), bothKnown,
   });
   switch (state) {
   case MIXED_ADMISSION_STATE.INVALID_ENVELOPE:
@@ -508,7 +516,7 @@ function decideMixedVersionNodeAdmission(
     return {
       admitted: false, localVersion, peerVersion,
       message: `Peer version ${formatVersionOrPhaseLabel(peerVersion)} rejected: ` +
-        `schema or wire ${SCHEMA_INCOMPATIBLE_SUFFIX}`,
+        `schema or wire ${SCHEMA_MISMATCH_SUFFIX}`,
       reasonCode: SUPPORT_ENVELOPE_REASON_CODE.SCHEMA_BOUNDARY_INCOMPATIBLE,
     };
   case MIXED_ADMISSION_STATE.OUTSIDE_ENVELOPE:
@@ -628,20 +636,20 @@ function hasValidPolicyFields(record) {
   const rebuild = readOwnObjectProperty(record, ENVELOPE_FIELD.REBUILD);
   const rollback = readOwnObjectProperty(record, ENVELOPE_FIELD.ROLLBACK);
   return hasOnlyFields(record, POLICY_FIELDS) &&
-    hasOnlyFields(boundaries, ['artifactAbi', 'protocolBoundary', 'schemaBoundary']) &&
+    hasOnlyFields(boundaries, POLICY_SECTION_FIELDS.BOUNDARIES) &&
     Object.values(boundaries).every(isNonEmptyString) &&
-    hasOnlyFields(rebuild, ['maxRebuildDurationMs', 'maxReplicaBytes']) &&
+    hasOnlyFields(rebuild, POLICY_SECTION_FIELDS.REBUILD) &&
     Object.values(rebuild).every((bound) => numberIsSafeInteger(bound) && bound > ZERO) &&
-    hasOnlyFields(rollback, ['rollbackCutoff', 'eligiblePhases']) &&
-    hasOnlyFields(record.versionPair, ['sourceVersion', 'targetVersion']) &&
-    hasOnlyFields(record.topologyEnvelope, ['minNodes', 'maxNodes', 'replicationFactor']);
+    hasOnlyFields(rollback, POLICY_SECTION_FIELDS.ROLLBACK) &&
+    hasOnlyFields(record.versionPair, POLICY_SECTION_FIELDS.VERSION_PAIR) &&
+    hasOnlyFields(record.topologyEnvelope, POLICY_SECTION_FIELDS.TOPOLOGY);
 }
 
 function validationResult(actualDigest, collectedCodes) {
   const reasonCodes = arrayFrom(new Set(collectedCodes));
   return {
     actualDigest, reasonCodes,
-    reasonCode: reasonCodes[ZERO] ?? SUPPORT_ENVELOPE_REASON_CODE.OK,
+    reasonCode: reasonCodes.length > ZERO ? reasonCodes[ZERO] : SUPPORT_ENVELOPE_REASON_CODE.OK,
     valid: reasonCodes.length === ZERO,
   };
 }
@@ -681,21 +689,22 @@ function validateEnvelopeSnapshot(snap, options = {}, execution = null) {
   };
 }
 
+const EXECUTION_EVIDENCE_REFUSAL = objectFreeze({
+  reasonCode: SUPPORT_ENVELOPE_REASON_CODE.PHYSICAL_EXECUTION_EVIDENCE_REFUSED,
+});
+
 function loadExecutionEvidence(record, executionEvidence) {
   const policy = validateSupportEnvelopePolicy(record);
   if (!executionEvidence || !policy.valid) return null;
-  try {
-    const observation = readSupportEnvelopeExecution(record, executionEvidence, {
-      ids: SUPPORT_ENVELOPE_DRILL_ID,
-      drillIds: REQUIRED_DRILL_IDS,
-      dependencyIds: REQUIRED_DEPENDENCY_QUEST_IDS,
-      availability: Object.values(SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME),
-      rollbackRefusal: SUPPORT_ENVELOPE_REASON_CODE.ROLLBACK_CUTOFF_EXCEEDED,
-    });
-    return {reasonCode: SUPPORT_ENVELOPE_REASON_CODE.OK, observation};
-  } catch {
-    return {reasonCode: SUPPORT_ENVELOPE_REASON_CODE.PHYSICAL_EXECUTION_EVIDENCE_REFUSED};
-  }
+  return loadSupportEnvelopeExecution(record, executionEvidence, {
+    ids: SUPPORT_ENVELOPE_DRILL_ID,
+    drillIds: REQUIRED_DRILL_IDS,
+    dependencyIds: REQUIRED_DEPENDENCY_QUEST_IDS,
+    availability: Object.values(SUPPORT_ENVELOPE_AVAILABILITY_OUTCOME),
+    rollbackRefusal: SUPPORT_ENVELOPE_REASON_CODE.ROLLBACK_CUTOFF_EXCEEDED,
+    accepted: SUPPORT_ENVELOPE_REASON_CODE.OK,
+    refusal: EXECUTION_EVIDENCE_REFUSAL,
+  });
 }
 
 function validateSupportEnvelopeRecord(record, options = {}) {
