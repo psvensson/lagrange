@@ -20,8 +20,9 @@
 // Composition: the real membership publication coordinator, the real
 // publications and nodes owners, the real gateway, the real CDC service on an
 // injected clock, and the real seed cleanup step
-// (SeedCleanupHandler.shutdownSqlQueryEngine). The one seam is the SQL engine,
-// modelled on the partition write lifecycle: a routed write is held in flight
+// (SeedCleanupHandler.shutdownSqlQueryEngine). The publication key is absent
+// on its live authoritative pre-read. The SQL engine models partition write
+// lifecycle: a routed write is held in flight
 // until it is accepted or released with the write kernel's own released
 // answer. Order is controlled by resolving that write or by the owner's retry
 // sleep, never by a sleep; timers are read from the owners' own state (the CDC
@@ -213,6 +214,15 @@ function composeSeedWriters({
   });
   cdcIntegrationService.bootstrapMode = false;
   cdcIntegrationService.logger = QUIET_LOGGER;
+  const read = cdcIntegrationService.executeAuthoritativeSystemTableRead
+    .bind(cdcIntegrationService);
+  cdcIntegrationService.executeAuthoritativeSystemTableRead =
+    async (tableName, sql, params, options) => {
+      if (shutdownState.begun) return read(tableName, sql, params, options);
+      assert.deepEqual(params, [PUBLICATION_ID]);
+      assert.match(sql, /FROM control_plane_publications WHERE publication_id = \?/iu);
+      return {success: true, rowSetComplete: true, rows: []};
+    };
   const engine = createInFlightEngine(shutdownState);
   if (withEngine) {
     cdcIntegrationService.sqlQueryEngine = engine;

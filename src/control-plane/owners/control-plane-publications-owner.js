@@ -1,5 +1,6 @@
 import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
   '../../bootstrap/system-table-schemas-constants.js';
+import {isControlPlaneWriterShutDown} from '../control-plane-error-classification.js';
 import {TABLES} from '../../constants/index.js';
 import {publicationRowsHaveSameRevision} from '../control-plane-publication-merge.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
@@ -96,6 +97,11 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
       this.buildPublicationReadOptions({
         ...options, leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
       }));
+    if (isControlPlaneWriterShutDown(observed)) {
+      throw Object.assign(new Error(observed.error), {
+        code: observed.code, writeOutcome: observed.writeOutcome, stage: observed.terminalStage,
+      });
+    }
     if (observed?.success !== true || observed.rowSetComplete !== true ||
         !Array.isArray(observed.rows) || observed.rows.length > 1 ||
         (observed.rows.length === 1 && observed.rows[0]?.publication_id !== publicationId)) {

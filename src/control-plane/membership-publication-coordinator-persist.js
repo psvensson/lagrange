@@ -272,6 +272,7 @@ class MembershipPublicationCoordinatorPersist extends
       try {
         current = await owner.getPublication(publicationId, readOptions);
       } catch (error) {
+        if (isControlPlaneWriterShutDown(error)) throw error;
         reportPublicationWriteUnconfirmed(this, {
           maxAttempts: attempt + 1, publicationId, row: candidate,
         });
