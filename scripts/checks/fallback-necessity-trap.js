@@ -53,6 +53,64 @@
  * lane outcome; such a file under data/fallback-census/traps/ is what a kept
  * arm must name (fallback-read-closure.js).
  *
+ * Lab collection (observe mode). The rule for this repository: heavy work
+ * reaches a lab host only through `lab test`, placement or `lab harness run`,
+ * never a raw ssh runner (docs/development/home-lab.md). Placement forwards
+ * only its retry, TAP-timeout and check-base policy to the host, runs the
+ * classified runner in a throwaway worktree, and has no step before or after
+ * the runner, so TODAY NO LAB ROUTE CAN RUN AN OBSERVE LANE. The smallest
+ * addition (not in this slice; about 40 lines plus its placement-script
+ * witness): scripts/lab/probe.js forwards LAGRANGE_NECESSITY_TRAP_MODE
+ * (PLACEMENT_FORWARDED_ENV, forwardedPolicy, forwardedArgs) and, when it is
+ * set, PLACEMENT_SCRIPT_TAIL in the worktree (a) builds the plan
+ * (`plan --no-census --out .tmp/trap/plan.json`: the census head 6a240d3de is
+ * reachable from no ref, so a host clone lacks it and could not bucket),
+ * (b) exports NODE_OPTIONS=--import=$wt/scripts/checks/fallback-necessity-trap-preload.js
+ * and the PLAN, OUT and MODE variables before the runner, and (c) after the
+ * runner, before cleanup removes the worktree, runs
+ * `merge --out "$HOME/necessity/$sha/merged-$(hostname).json" .tmp/trap/obs`.
+ * With that route, from the controller (one host per lane share, at most
+ * two hosts at once):
+ *
+ *   H=$(git rev-parse HEAD)          # the pushed head; never type a sha
+ *   LAGRANGE_LAB_AGENT=claude:SESSION LAGRANGE_NECESSITY_TRAP_MODE=observe \
+ *     node scripts/lab.js test all --lane unit --on HOST --sha "$H"
+ *   mkdir -p .tmp/necessity/"$H"
+ *   rsync --bwlimit=2500 HOST:necessity/"$H"/merged-'*'.json .tmp/necessity/"$H"/
+ *   node scripts/checks/fallback-necessity-trap.js merge \
+ *     --out .tmp/necessity/"$H"/merged.json .tmp/necessity/"$H"/merged-*.json
+ *
+ * Only the merged JSON crosses the network (per-process files stay on the
+ * host). Bucket labels come from a controller-side `plan` at "$H": site ids
+ * are the same on both sides. Throw mode runs the same way with
+ * LAGRANGE_NECESSITY_TRAP_SELECT forwarded, then `merge --run-id ID --lane
+ * LANE --lane-exit-code N` binds the result to the lane's outcome before it
+ * is committed under data/fallback-census/traps/.
+ *
+ * Physical three-host formation (observe mode; not in this slice, about
+ * 90-120 lines with its witness, no Dockerfile change: the preload's closure
+ * is three files and no packages):
+ * 1. test/distributed/harness/cluster-class-lifecycle-base.js, where the
+ *    container env is composed (beside memoryLeak.captureHeapArtifacts'
+ *    NODE_OPTIONS): when the harness runs with LAGRANGE_NECESSITY_TRAP_PLAN,
+ *    append --import=/tmp/necessity-trap/fallback-necessity-trap-preload.js
+ *    to NODE_OPTIONS and set PLAN=/tmp/necessity-trap/plan.json,
+ *    OUT=/tmp/necessity-trap/out, MODE=observe, ROOT=/app (about 15 lines);
+ * 2. test/distributed/harness/docker-provider.js: a putArchive of the
+ *    preload, fallback-necessity-trap-runtime.js,
+ *    fallback-branch-census-constants.js, the plan (built at the image's
+ *    head) and an out/ directory owned by uid 10001 into each created
+ *    container before start, beside the existing getContainerArchive (about
+ *    30 lines; no bind mount, so nothing is copied to the remote hosts;
+ *    confirm the distroless image's /tmp is writable, else use /data);
+ * 3. at teardown, before removal: getContainerArchive of
+ *    /tmp/necessity-trap/out per container into the run's evidence
+ *    directory, refusing a container with no main-thread observation file
+ *    (the roster the census lacks for dockerd-started processes), then
+ *    `merge` on the controller (about 30 lines). docker stop's 25 s grace
+ *    suffices: the node's own SIGTERM listener is followed and the exit
+ *    flush writes the counts; first hits are already on disk.
+ *
  * Governed by the ambient-intrinsic audit: prototype methods are captured at
  * module load.
  */
