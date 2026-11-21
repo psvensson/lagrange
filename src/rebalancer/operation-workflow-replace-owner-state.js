@@ -82,53 +82,53 @@ function replaceIntentEntryOf(operation) {
   return null;
 }
 
-// One process-local claim at the source effect, scoped to the durable
-// STOPPING generation. Only its own reply can publish delivery evidence.
+// A turn remembers the result visible before its authority reads. An older
+// turn cannot send after a concurrent attempt settles, even without a receipt.
 function replaceRemovalEffectIdentity(operation) {
   return JSON.stringify([
-    operation.createdAt, operation.workflowStep, operation.partitionId,
+    operation.createdAt, operation.partitionId,
     operation.sourceNodeId, operation.sourceReplicaId,
     operation.targetNodeId, operation.replicaId,
   ]);
 }
 
+function captureReplaceRemovalEffectTurn(owner, operation) {
+  const current = readOwnerState(owner).removalEffectByOperationId.get(operation.operationId);
+  const identity = replaceRemovalEffectIdentity(operation);
+  return {identity, observed: current?.identity === identity && current.inFlight ?
+    current.previous : current};
+}
+
 function removalEffectIsDue(owner, effect, identity) {
   return effect?.identity !== identity || (!effect.inFlight &&
-    nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS);
+    (effect.sentAtMs === null ||
+      nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS));
 }
 
-function isRemovalEffectResendDue(owner, operation) {
-  const effect = readOwnerState(owner).removalEffectByOperationId
-    .get(operation.operationId);
-  return removalEffectIsDue(owner, effect, replaceRemovalEffectIdentity(operation));
+function isRemovalEffectResendDue(owner, operation, turn) {
+  const current = readOwnerState(owner).removalEffectByOperationId.get(operation.operationId);
+  return current === turn.observed && removalEffectIsDue(owner, current, turn.identity);
 }
 
-function claimReplaceRemovalEffect(owner, operation) {
-  const effects = readOwnerState(owner).removalEffectByOperationId;
-  const previous = effects.get(operation.operationId);
-  const identity = replaceRemovalEffectIdentity(operation);
-  if (!removalEffectIsDue(owner, previous, identity)) return null;
+function claimReplaceRemovalEffect(owner, operation, turn) {
+  if (turn.identity !== replaceRemovalEffectIdentity(operation) ||
+      !isRemovalEffectResendDue(owner, operation, turn)) return null;
+  const previous = turn.observed;
   const claim = {
-    identity, inFlight: true,
-    previous: previous?.identity === identity ? previous : null,
+    identity: turn.identity, inFlight: true, previous,
+    sentAtMs: previous?.identity === turn.identity ? previous.sentAtMs : null,
   };
-  effects.set(operation.operationId, claim);
+  readOwnerState(owner).removalEffectByOperationId.set(operation.operationId, claim);
   return claim;
 }
 
 function finishReplaceRemovalEffect(owner, operationId, claim, receipt) {
   const effects = readOwnerState(owner).removalEffectByOperationId;
   if (effects.get(operationId) !== claim) return;
-  if (receipt) {
-    effects.set(operationId, {
-      identity: claim.identity, inFlight: false,
-      sentAtMs: nowMsOf(owner),
-    });
-  } else if (claim.previous) {
-    effects.set(operationId, claim.previous);
-  } else {
-    effects.delete(operationId);
-  }
+  effects.set(operationId, {
+    identity: claim.identity, inFlight: false,
+    sentAtMs: receipt ? nowMsOf(owner) : claim.sentAtMs,
+  });
 }
 
 /**
@@ -301,6 +301,7 @@ function isDeferredVisibilitySnapshot(operation) {
 
 export {
   admitReplaceOwnerHandBack,
+  captureReplaceRemovalEffectTurn,
   claimReplaceRemovalEffect,
   finishReplaceRemovalEffect,
   isRemovalEffectResendDue,

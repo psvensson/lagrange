@@ -771,7 +771,12 @@ function setTargetRow(world, status) {
 function answerRemoveEffect(world, payload) {
   world.removeEffects.push(payload);
   if (world.removeEffectAnswer) {
-    return world.removeEffectAnswer;
+    return {
+      operationId: payload[ReplicaOperationField.OPERATION_ID],
+      replicaId: payload[ReplicaOperationField.REPLICA_ID],
+      nodeId: world.sourceNodeId,
+      ...world.removeEffectAnswer,
+    };
   }
   if (world.sourceHandler !== null) {
     return world.sourceHandler.handler.handleRemoveReplica(payload);
@@ -782,7 +787,12 @@ function answerRemoveEffect(world, payload) {
   if (world.sourceStopsAtEffect) {
     world.group.kill(world.sourceReplicaId);
   }
-  return {status: ReplicaOperationResponseStatus.INITIATED};
+  return {
+    status: ReplicaOperationResponseStatus.INITIATED,
+    operationId: payload[ReplicaOperationField.OPERATION_ID],
+    replicaId: payload[ReplicaOperationField.REPLICA_ID],
+    nodeId: world.sourceNodeId,
+  };
 }
 
 const UNREACHABLE_ANSWER = Object.freeze({
@@ -868,14 +878,15 @@ const MESSAGE_ANSWERS = Object.freeze({
 });
 
 async function deliver(world, target, payload) {
-  world.deliveries.push({target, payload});
+  const messageId = `replace-fixture-send-${world.deliveries.length + 1}`;
+  const correlationId = payload?.[ReplicaOperationField.OPERATION_ID] ?? messageId;
+  world.deliveries.push({target, payload, messageId, correlationId});
   const answer = MESSAGE_ANSWERS[payload?.[ReplicaOperationField.TYPE]];
-  return answer ? buildDeliveryEnvelope({acknowledged: true}, {
-    ...await answer(world, payload),
-  }) :
-    buildDeliveryEnvelope({acknowledged: true}, {
-      status: ReplicaOperationResponseStatus.INITIATED,
-    });
+  return buildDeliveryEnvelope(
+    {acknowledged: true},
+    answer ? {...await answer(world, payload)} : {status: ReplicaOperationResponseStatus.INITIATED},
+    {messageId, correlationId},
+  );
 }
 
 // The fixture store calls this once per changed ledger row in a committed

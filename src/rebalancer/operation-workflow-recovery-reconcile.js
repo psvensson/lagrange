@@ -559,9 +559,9 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @param {Object} operation
    * @return {Promise<Object>}
    */
-  executeReplaceSourceRemovalEffect(operation) {
+  executeReplaceSourceRemovalEffect(operation, replaceRemovalEffectTurn) {
     return this.executeOperationInternal(operation, {
-      replaceStoppingEffect: true,
+      replaceStoppingEffect: true, replaceRemovalEffectTurn,
     });
   }
 
@@ -650,14 +650,14 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @param {Object} operation
    * @return {Promise<Object>}
    */
-  async runReplaceStoppingOwner(operation) {
+  async runReplaceStoppingOwner(operation, removalEffectTurn) {
     if (this.repository.isOperationTerminal(operation)) {
       return this.buildTerminalOperationDispatchResult(await this.completeOperation(operation),
         {operationId: operation.operationId, status: ReplicaOperationResponseStatus.COMPLETED});
     }
     const entryLevel = captureReplaceOwnerLevel(this, operation);
     const outcome = await reconcileReplaceStoppingOwner(
-      this, operation, {entryLevel});
+      this, operation, {entryLevel, removalEffectTurn});
     if (outcome && typeof outcome === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
       return outcome;
     }

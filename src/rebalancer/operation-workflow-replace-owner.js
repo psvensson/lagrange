@@ -75,6 +75,7 @@ import {
 } from './operation-workflow-replace-handoff-attempt.js';
 import {
   REPLACE_INTENT_FIELD,
+  captureReplaceRemovalEffectTurn,
   isDeferredVisibilitySnapshot,
   isRemovalEffectResendDue,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,
@@ -539,6 +540,7 @@ async function recordAdoptedReplaceIntent(owner, operation) {
  */
 async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   if (owner.repository.isOperationTerminal(operation)) return false;
+  const turn = context.removalEffectTurn ?? captureReplaceRemovalEffectTurn(owner, operation);
   if (replaceIntentEntryOf(operation) === null &&
       !await recordAdoptedReplaceIntent(owner, operation)) {
     return waitForReplaceOwner(owner, operation,
@@ -565,7 +567,7 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     isSourceUnreachableAtIntent(operation);
   const rowContext = {...waitContext, sourceRow, retirementAdmissible};
   if (!retirementAdmissible) {
-    if (!isRemovalEffectResendDue(owner, operation)) {
+    if (!isRemovalEffectResendDue(owner, operation, turn)) {
       // Another turn owns the send, or its acknowledgment is still recent.
       // Wait for source lifecycle or membership progress.
       return waitForReplaceOwner(owner, operation,
@@ -573,7 +575,7 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     }
     // T5': when the backstop is due and lifecycle has not retired, re-send
     // the removal effect through the same remove-safety evaluation.
-    const result = await owner.executeReplaceSourceRemovalEffect(operation);
+    const result = await owner.executeReplaceSourceRemovalEffect(operation, turn);
     const waitReason = result?.deferReason ||
       REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING;
     // Reinstall the dispatch-cleared wait against the entry level.
