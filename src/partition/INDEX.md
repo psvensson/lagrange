@@ -55,7 +55,7 @@ documentClass: generated
 - [partition-cdc-log-throttle.js](partition-cdc-log-throttle.js) - Shared throttle for the CDC row-fetch diagnostics (quest movielens-nodes-priority-recovery-escape). (importers: few)
 - [partition-cdc-obligation-constants.js](partition-cdc-obligation-constants.js) - The vocabulary of the durable CDC obligation (TX1 design revision 10, section 8.3; quest... (importers: hub)
 - [partition-cdc-obligation-delivery.js](partition-cdc-obligation-delivery.js) - Register the proposer a flush hands its CDC_DELIVERED command to. (importers: many)
-- [partition-cdc-obligation-lane.js](partition-cdc-obligation-lane.js) - State and retry policy of the CDC obligation delivery lane. (importers: one)
+- [partition-cdc-obligation-lane.js](partition-cdc-obligation-lane.js) - State and retry policy of the CDC obligation delivery lane. (importers: few)
 - [partition-cdc-obligation-ledger.js](partition-cdc-obligation-ledger.js) - The durable CDC obligation ledger (TX1 design revision 10, section 8.3): the one owner of the `_cdc_obligations`... (importers: hub)
 - [partition-cdc-obligation-progress.js](partition-cdc-obligation-progress.js) - The obligation lane's one metadata-only continuation. (importers: few)
 - [partition-cdc-obligation-range.js](partition-cdc-obligation-range.js) - The range one drive step of the CDC obligation lane ships (quest cdc-obligation-range-shipping; records S-1, S-2 and... (importers: one)
