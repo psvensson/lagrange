@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2697,
+    "ordinary": 2699,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-bf527212",
+  "censusSize": 2725,
+  "digest": "fnv1a32-348668f5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1516,6 +1516,7 @@
     "test/partition/placement-founder-origin.test.js": "ordinary",
     "test/partition/placement-founding-and-runtime-service-admission.test.js": "ordinary",
     "test/partition/placement-growth-dispatch-identity.test.js": "ordinary",
+    "test/partition/placement-owner-construction-orders.test.js": "ordinary",
     "test/partition/placement-retained-leadership.test.js": "ordinary",
     "test/partition/placement-retained-post-copy.test.js": "ordinary",
     "test/partition/placement-retained-row-repair.test.js": "ordinary",
@@ -2021,6 +2022,7 @@
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": "ordinary",
     "test/rebalancer/pending-move-tracking.property.test.js": "ordinary",
     "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "ordinary",
+    "test/rebalancer/placement-owner-authority-tenure.test.js": "ordinary",
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": "ordinary",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "ordinary",
     "test/rebalancer/planner-single-path-enforcement.test.js": "ordinary",

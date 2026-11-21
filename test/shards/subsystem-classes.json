@@ -12,23 +12,23 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 291,
+    "placement-rebalance": 292,
     "query-sql": 209,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 246,
+    "storage-partition": 247,
     "storage-raft": 159,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2723,
-  "digest": "fnv1a32-3a7bd656",
+  "censusSize": 2725,
+  "digest": "fnv1a32-a1b7b684",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f1f9e233",
+  "observationDigest": "fnv1a32-fb8e278e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1536,6 +1536,7 @@
     "test/partition/placement-founder-origin.test.js": "storage-partition",
     "test/partition/placement-founding-and-runtime-service-admission.test.js": "storage-partition",
     "test/partition/placement-growth-dispatch-identity.test.js": "storage-partition",
+    "test/partition/placement-owner-construction-orders.test.js": "storage-partition",
     "test/partition/placement-retained-leadership.test.js": "storage-partition",
     "test/partition/placement-retained-post-copy.test.js": "storage-partition",
     "test/partition/placement-retained-row-repair.test.js": "storage-partition",
@@ -2041,6 +2042,7 @@
     "test/rebalancer/partition-policy-unavailability-redrive.test.js": "placement-rebalance",
     "test/rebalancer/pending-move-tracking.property.test.js": "placement-rebalance",
     "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js": "placement-rebalance",
+    "test/rebalancer/placement-owner-authority-tenure.test.js": "placement-rebalance",
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
@@ -14782,6 +14784,31 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/placement-owner-construction-orders.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/shared/startup-runtime-surface-owner.js",
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/storage-capacity-accounting-service.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/placement-retained-leadership.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -19213,6 +19240,27 @@
         "src/diagnostics/formation-turn-attribution.js",
         "src/storage/data-directory-process-owner.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
+      ]
+    },
+    "test/rebalancer/placement-owner-authority-tenure.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/placement-removed-mechanism-and-caller-census.test.js": {

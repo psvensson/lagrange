@@ -249,7 +249,7 @@ documentClass: generated
 - [storage-admission-preflight.js](storage-admission-preflight.js) - No leading comment; first export: STORAGE_ADMISSION_PREFLIGHT_ACTION. (importers: one)
 - [storage-admission-result.js](storage-admission-result.js) - No leading comment; first export: buildStorageAdmissionResult. (importers: few)
 - [storage-admission-service.js](storage-admission-service.js) - Storage Admission Service - single gate for storage-increasing operations. (importers: many)
-- [storage-capacity-accounting-service.js](storage-capacity-accounting-service.js) - Storage Capacity Accounting Service - derives storage snapshots from metadata. (importers: many)
+- [storage-capacity-accounting-service.js](storage-capacity-accounting-service.js) - Storage Capacity Accounting Service - derives storage snapshots from metadata. (importers: hub)
 - [storage-capacity-constants.js](storage-capacity-constants.js) - Storage capacity constants for admission, reservation, and pressure-state behavior in the placement/rebalancing... (importers: hub)
 - [storage-capacity-metrics.js](storage-capacity-metrics.js) - Storage Capacity Metrics - collects per-node capacity metrics and tracks admission decision counters for observability. (importers: few)
 - [storage-capacity-migration.js](storage-capacity-migration.js) - Storage Capacity Migration - backfills node storage budgets and manages rollout mode transitions. (importers: few)
