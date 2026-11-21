@@ -1,4 +1,8 @@
 import {
+  OPERATION_RECONCILE_OUTCOME, isOperationReconcileTerminal,
+} from './operation-workflow-reconcile-outcome.js';
+import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
   OPERATION_RESERVATION_RECOVERY_OUTCOME,
   buildReservationAuthorityUnavailableError,
@@ -44,4 +48,17 @@ async function reconcileReservationBackedPendingOperation(
   return OPERATION_RESERVATION_RECOVERY_OUTCOME.NOT_APPLICABLE;
 }
 
-export {reconcileReservationBackedPendingOperation};
+async function reconcileReservationBackedBootstrap(owner, operation) {
+  if (!isDispatchReservationGateEngaged(owner)) return OPERATION_RECONCILE_OUTCOME.REFUSED;
+  const result = await owner.dispatchOperationInternal(operation, {
+    allowCreateReservation: false,
+  });
+  if (isOperationReconcileTerminal(result?.reconcileOutcome)) return result.reconcileOutcome;
+  if (result?.success === true) {
+    return OPERATION_RESERVATION_RECOVERY_OUTCOME.RESERVATION_BACKED_PENDING_REDRIVEN;
+  }
+  return result?.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING ?
+    OPERATION_RECONCILE_OUTCOME.WAITING : OPERATION_RECONCILE_OUTCOME.REFUSED;
+}
+
+export {reconcileReservationBackedPendingOperation, reconcileReservationBackedBootstrap};

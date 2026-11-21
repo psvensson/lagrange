@@ -5,8 +5,13 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
 } from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
-import {UNIFIED_SERVICE_TYPE} from '../constants/unified-service-lifecycle.js';
 import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {WORKFLOW_STEP_TO_STATUS} from './replica-operation-progress.js';
+import {OPERATION_TRANSITION_REASON} from './rebalancer-constants.js';
+import {
+  isPlacementBootstrapAwaitingAuthority, isPlacementBootstrapBeforeDeadline,
+  requiresPlacementCreateBootstrapTopology, PLACEMENT_BOOTSTRAP_WAIT,
+} from './operation-workflow-placement-bootstrap-phase.js';
 import {
   buildCommittedBootstrapTopology,
   readCommittedMembershipStamp,
@@ -17,8 +22,10 @@ import {
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {assertOperationUpdateSubject} from './replica-operation-update-outcome.js';
 import {OPERATION_METADATA_KEY} from './replica-operation-progress.js';
-import {PLACEMENT_TRANSITION_KIND} from './replica-placement-owner-constants.js';
 import {readOriginalCreateBootstrapMembership, OperationType} from './replica-status.js';
+
+// A strict observation or an exact confirmed CAS can be consumed by the
+// immediately following dispatch turn without a second routed ledger read.
 
 const BOOTSTRAP_BINDING_DEFERRED = Object.freeze({
   ROW_UNAVAILABLE: 'Placement CREATE bootstrap row is unavailable',
@@ -36,22 +43,6 @@ function needsReplaceCreateTargetBinding(
   return operation?.type === OperationType.REPLACE &&
     replaceRemoveDispatchPhase !== true &&
     (!operation.replicaId || operation.replicaId === sourceReplicaId);
-}
-
-function requiresPlacementCreateBootstrapTopology(
-  operation,
-  replaceRemoveDispatchPhase,
-) {
-  if (!operation || replaceRemoveDispatchPhase === true ||
-      (operation.type !== OperationType.ADD &&
-        operation.type !== OperationType.REPLACE) ||
-      operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
-      operation.entityType === UNIFIED_SERVICE_TYPE.MESSAGE_GROUP) {
-    return false;
-  }
-  const placementAdmission =
-    operation.stepsHistory?.[0]?.[OPERATION_METADATA_KEY.PLACEMENT_ADMISSION];
-  return placementAdmission?.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT;
 }
 
 function readServiceRowsForBootstrap(owner, partitionId) {
@@ -83,12 +74,13 @@ function projectBootstrapTopology(operation, topology) {
 function deferPlacementBootstrapBinding(owner, operation, reason, source) {
   const error = new Error(reason, {cause: source});
   error.deferRetry = true;
+  error.code = PLACEMENT_BOOTSTRAP_WAIT;
   error.retryAfterMs = source?.retryAfterMs;
   owner.deferDispatchRetry(operation, error);
   return null;
 }
 
-async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId) {
+async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId, claim) {
   const observation = await owner.repository.queryAuthoritativeOperationVisibilityObservation(
     operation.operationId,
     {
@@ -102,7 +94,8 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
       BOOTSTRAP_BINDING_DEFERRED.ROW_UNAVAILABLE, observation.deferredOutcome);
   }
   const current = observation.operation;
-  if (!current || current.completedAt !== null) return null;
+  if (!current || current.completedAt !== null ||
+      !owner.repository.isOperationLocallyOwned(current)) return null;
   assertOperationUpdateSubject(operation, current);
   if (!requiresPlacementCreateBootstrapTopology(current, false) ||
       !current.replicaId || current.replicaId !== operation.replicaId ||
@@ -117,35 +110,72 @@ async function bindPlacementBootstrapTopology(owner, operation, sourceReplicaId)
       BOOTSTRAP_BINDING_DEFERRED.ADMISSION_UNOBSERVED);
   }
   const recordedStamp = readOriginalCreateBootstrapMembership(current.stepsHistory);
-  if (committedStampOfAnswer(recordedStamp) !== null) return current;
+  const hasOriginal = committedStampOfAnswer(recordedStamp) !== null;
+  if (hasOriginal && (!claim || current.workflowStep === WORKFLOW_STEP.SENDING)) {
+    return current;
+  }
+  const claimPending = claim && current.workflowStep === WORKFLOW_STEP.PENDING;
+  if (claim && !claimPending && current.workflowStep !== WORKFLOW_STEP.SENDING) return null;
   // Once CREATE has been admitted, an absent stamp cannot be reconstructed
   // from a newer view of Raft membership. Retain that operation as unresolved.
-  if (recordedStamp != null || current.createAdmissionState != null ||
-      (current.workflowStep !== WORKFLOW_STEP.PENDING &&
-        current.workflowStep !== WORKFLOW_STEP.SENDING)) {
+  if (current.createAdmissionState != null ||
+      !hasOriginal && !isPlacementBootstrapAwaitingAuthority(current)) {
     return deferPlacementBootstrapBinding(owner, operation,
       BOOTSTRAP_BINDING_DEFERRED.MISSING_ORIGINAL);
   }
 
   try {
-    const topology = await buildCommittedBootstrapTopology({
+    if (!isPlacementBootstrapBeforeDeadline(current, owner.resolveTimeoutCheckNowMs())) {
+      return null;
+    }
+    const topology = hasOriginal ? null : await buildCommittedBootstrapTopology({
       partitionId: current.partitionId,
       targetNodeId: current.targetNodeId,
       targetReplicaId: current.replicaId,
       readStamp: () => readCommittedMembershipStamp(owner, current.partitionId),
       readAddressBook: () => readServiceRowsForBootstrap(owner, current.partitionId),
     });
-    const projected = projectBootstrapTopology(current, topology);
-    const persisted = await owner.repository.persistOperationUpdate(projected, {
+    const now = owner.resolveTimeoutCheckNowMs();
+    if (!isPlacementBootstrapBeforeDeadline(current, now)) return null;
+    const step = WORKFLOW_STEP.SENDING;
+    const reason = OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
+    const bound = topology ? projectBootstrapTopology(current, topology) : current;
+    const projected = claimPending ? owner.buildProjectedStepTransitionOperation(
+      bound, step, reason, WORKFLOW_STEP.PENDING, now, WORKFLOW_STEP_TO_STATUS[step],
+    ).projectedOperation : bound;
+    const persist = () => owner.repository.persistOperationUpdate(projected, {
       ...owner.buildOperationTransitionPersistOptions(),
+      ...(claimPending && owner.shouldUsePriorityDispatchClaimNarrowPath(current) ?
+        {timeoutBudget: owner.buildPriorityDispatchTransitionMutationBudget(current, now)} : {}),
       expectedWorkflowStep: current.workflowStep,
       expectedStepsHistory: current.stepsHistory,
       requireCreateAdmissionAbsent: true,
       requireExactCreateTarget: true,
+      // The repository's host admission hook runs immediately before each
+      // gateway submission, including a retry following an ambiguous answer.
+      terminalAdmission: () =>
+        isPlacementBootstrapBeforeDeadline(current, owner.resolveTimeoutCheckNowMs()),
     });
+    if (claimPending) {
+      const changed = structuredClone(current);
+      const outcome = await owner.executeAtomicTransition(changed,
+        step, reason, persist, {requestedOperation: projected});
+      if (outcome.committed) {
+        owner.commitProjectedStepTransition(changed, outcome.operation,
+          step, reason, WORKFLOW_STEP.PENDING);
+        return isPlacementBootstrapBeforeDeadline(changed, owner.resolveTimeoutCheckNowMs()) ?
+          changed : null;
+      }
+      return deferPlacementBootstrapBinding(owner, operation,
+        BOOTSTRAP_BINDING_DEFERRED.CAS_UNCOMMITTED);
+    }
+    const persisted = await persist();
     const outcome = buildOperationTransitionOutcome(persisted,
       {repository: owner.repository, requestedOperation: projected});
-    if (outcome.committed) return outcome.operation;
+    if (outcome.committed) {
+      return isPlacementBootstrapBeforeDeadline(current, owner.resolveTimeoutCheckNowMs()) ?
+        outcome.operation : null;
+    }
   } catch (error) {
     return deferPlacementBootstrapBinding(owner, operation,
       BOOTSTRAP_BINDING_DEFERRED.UNCONFIRMED, error);
@@ -170,7 +200,7 @@ async function bindReplaceCreateTargetReplicaId(
   sourceReplicaId,
 ) {
   if (requiresPlacementCreateBootstrapTopology(operation, replaceRemoveDispatchPhase)) {
-    return bindPlacementBootstrapTopology(owner, operation, sourceReplicaId);
+    return bindPlacementBootstrapTopology(owner, operation, sourceReplicaId, false);
   }
   if (!needsReplaceCreateTargetBinding(
     operation,
@@ -212,4 +242,34 @@ async function bindReplaceCreateTargetReplicaId(
   return operation;
 }
 
-export {bindReplaceCreateTargetReplicaId, requiresPlacementCreateBootstrapTopology};
+async function claimPlacementBootstrapDispatch(owner, operation) {
+  const result = await bindPlacementBootstrapTopology(owner, operation,
+    owner.repository.getReplaceSourceReplicaId(operation), true);
+  if (!result) return null;
+  const claimed = structuredClone(result);
+  owner.confirmedPlacementClaims ??= new WeakSet();
+  owner.confirmedPlacementClaims.add(claimed);
+  return claimed;
+}
+
+async function resolveDispatchTargetBinding(owner, operation, removePhase, sourceReplicaId) {
+  if (operation.workflowStep === WORKFLOW_STEP.PENDING &&
+      requiresPlacementCreateBootstrapTopology(operation, removePhase)) {
+    const claim = await owner.claimPendingDispatchCandidate(operation.operationId, operation);
+    owner.confirmedPlacementClaims?.delete(claim);
+    return claim;
+  }
+  if (owner.confirmedPlacementClaims?.delete(operation)) return operation;
+  return bindReplaceCreateTargetReplicaId(owner, operation, removePhase, sourceReplicaId);
+}
+
+function placementBootstrapDeliveryExpired(owner, operation, removePhase, hasAdmission) {
+  return !hasAdmission && requiresPlacementCreateBootstrapTopology(operation, removePhase) &&
+    !isPlacementBootstrapBeforeDeadline(operation, owner.resolveTimeoutCheckNowMs());
+}
+
+export {
+  bindReplaceCreateTargetReplicaId, claimPlacementBootstrapDispatch,
+  resolveDispatchTargetBinding, placementBootstrapDeliveryExpired,
+  requiresPlacementCreateBootstrapTopology,
+};
