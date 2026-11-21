@@ -21,6 +21,7 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {committedStampOfAnswer} from
   '../../src/raft/raft-committed-membership-stamp.js';
+import {COMMITTED_REPLICA_ROLE} from '../../src/raft/raft-rs-committed-membership-read.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {OPERATION_METADATA_KEY, OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationField, ReplicaOperationResponseStatus} from
@@ -436,7 +437,7 @@ for (const treatment of [
       const held = Promise.withResolvers();
       const reply = Promise.withResolvers();
       const voterChecks = [];
-      if (treatment.earlyCache) {
+      if (treatment.cacheLast) {
         const deliver = router.deliver.bind(router);
         router.deliver = async (address, payload, options) => {
           const result = await deliver(address, payload, options);
@@ -500,7 +501,8 @@ for (const treatment of [
           held.resolve();
           const voterEstablished = await waitForCondition(() =>
             learner.getRole() === RAFT_ROLE.FOLLOWER &&
-            learner.raft.readStatus().memberRole === 'voter', OBSERVATION_BOUND_MS);
+            learner.raft.readStatus().memberRole === COMMITTED_REPLICA_ROLE.VOTER,
+          OBSERVATION_BOUND_MS);
           assert.equal(voterEstablished, true, JSON.stringify({
             actor: 'real target before SERVICES arrives', role: learner.getRole(),
             memberRole: learner.raft.readStatus().memberRole,
@@ -509,6 +511,13 @@ for (const treatment of [
           }));
           assert.equal(cache.get(TABLES.SERVICES, replicaId).address, null,
             'the actual CDC projection is still missing its usable address');
+          if (!treatment.earlyCache) {
+            reply.resolve();
+            assert.equal(await waitForCondition(() => voterChecks.length > 0,
+              OBSERVATION_BOUND_MS), true,
+            'the original voter gate runs after real membership and before a usable address');
+            assert.deepEqual(voterChecks, [false]);
+          }
         }
         assert.equal(opened, 1);
         assert.equal(handler.getTrackedService(replicaId), learner);
@@ -580,15 +589,15 @@ for (const treatment of [
             'undelivered admission is owed to the existing rearm owner');
         }
         held.resolve();
-        const cadence = treatment.readiness ? runLearnerCadenceTurn(learner) : null;
-        assert.equal(await waitForCondition(() => leader.raft.readStatus().peers.some(
-          ({replicaIdentity}) => replicaIdentity === replicaId),
-        OBSERVATION_BOUND_MS), true, 'the delayed real answer changes native membership');
-        await cadence;
-        assert.equal(await waitForCondition(() =>
-          Boolean(learner.raft.readStatus().leaderAddress), OBSERVATION_BOUND_MS), true,
-        'the exact retained runtime observes its native group leader');
         if (!treatment.cacheLast) {
+          const cadence = treatment.readiness ? runLearnerCadenceTurn(learner) : null;
+          assert.equal(await waitForCondition(() => leader.raft.readStatus().peers.some(
+            ({replicaIdentity}) => replicaIdentity === replicaId),
+          OBSERVATION_BOUND_MS), true, 'the delayed real answer changes native membership');
+          await cadence;
+          assert.equal(await waitForCondition(() =>
+            Boolean(learner.raft.readStatus().leaderAddress), OBSERVATION_BOUND_MS), true,
+          'the retained learner observes its native group leader');
           assert.equal(await waitForCondition(() =>
             handler.replicaCreateAdmissionRecoveryRearmOwner.current() ||
             handler.replicaCreateAdmissionRecoveryTask !== previousRecovery,
