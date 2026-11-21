@@ -12,6 +12,9 @@ import {
 } from '../../src/node/replica-create-admission-owner.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildFailedCreateCleanupToken} from '../../src/rebalancer/failed-create-cleanup-token.js';
 import {runTerminalTransitionRepairAttempt} from
   '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
@@ -138,13 +141,14 @@ async function withExpiredStep(measure, {step = WORKFLOW_STEP.SENDING} = {}) {
         interceptFailureWrite: (intercept) => {
           nextFailureWrite = intercept;
         },
-        reportFailedTarget(evidence) {
+        reportTarget(evidence, status) {
           cache.upsert(SYSTEM_TABLE_NAME.SERVICES, {
             service_id: REPLICA_ID, replica_id: REPLICA_ID, node_id: NODE.B,
             partition_id: PARTITION_ID, group_id: null, service_type: SERVICE_TYPE.PARTITION,
-            status: ReplicaStatus.FAILED, previous_state: ReplicaStatus.CREATING,
+            status, previous_state: ReplicaStatus.CREATING, raft_role: RAFT_ROLE.LEADER,
             created_at: evidence.replicaCreatedAt, state_entered_at: Date.now(),
-            cleanup_token: buildFailedCreateCleanupToken(OPERATION_ID),
+            cleanup_token: status === ReplicaStatus.FAILED ?
+              buildFailedCreateCleanupToken(OPERATION_ID) : null,
             create_attempt_token: evidence.attemptToken,
           });
         },
@@ -182,11 +186,24 @@ test('CREATE admitted at the timeout CAS retains its exact physical worker and r
         return commit();
       });
       try {
-        await run.expire();
+        assert.equal(await run.expire(), OPERATION_RECONCILE_OUTCOME.WAITING);
         assert.equal(run.failWrites.length, 1, 'the competing timeout reached commit');
+        assert.equal(run.failWrites[0].whereClause.create_admission_state, null);
         assertRetained(run, admitted);
         assert.equal(await run.target.revalidatePhysicalWorker(claim), true);
-        assert.ok(await run.target.markMaterialized(admitted));
+        const materialized = await run.target.markMaterialized(admitted);
+        assert.ok(materialized);
+        const active = await run.target.markProgress(materialized, CREATE_ADMISSION_STATE.ACTIVE);
+        assert.ok(active, 'the same attempt can publish successful CREATE progress');
+        run.reportTarget(active, ReplicaStatus.ACTIVE);
+        const retry = run.owner.observedProgressRetryTimerByOperationId.get(OPERATION_ID);
+        assert.ok(retry, 'the existing observation owner received the wake');
+        run.owner.clearTimeoutFn(retry.timeoutHandle);
+        await run.owner.runObservedProgressRetry(OPERATION_ID, retry.timeoutHandle);
+        assert.equal(run.row().workflow_step, WORKFLOW_STEP.ACTIVE);
+        assert.equal(run.row().create_admission_attempt_token, admitted.attemptToken);
+        assert.ok(Number.isFinite(run.reservation().released_at));
+        assert.deepEqual(run.failures, []);
       } finally {
         if (claim) run.target.releasePhysicalWorker(claim);
       }
@@ -198,7 +215,7 @@ test('an already materialized CREATE retains custody when the sender step expire
     const admitted = await run.target.claim(run.request);
     const materialized = await run.target.markMaterialized(admitted);
     assert.ok(materialized);
-    await run.expire();
+    assert.equal(await run.expire(), OPERATION_RECONCILE_OUTCOME.WAITING);
     assertRetained(run, materialized);
     assert.equal(run.row().create_admission_state, CREATE_ADMISSION_STATE.MATERIALIZED);
   });
@@ -225,6 +242,9 @@ test('timeout terminal repair preserves a subsequent exact CREATE admission', as
     const admitted = await run.target.claim(run.request);
     await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
     assertRetained(run, admitted);
+    assert.equal(run.failWrites.length, 1, 'repair did not reassert FAILED past admission');
+    assert.equal(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID), false);
+    assert.equal(run.owner.observedProgressRetryTimerByOperationId.has(OPERATION_ID), true);
   });
 });
 
@@ -234,7 +254,7 @@ test('an observed claimed target failure still settles through ordinary failure 
       const admitted = await run.target.claim(run.request);
       const failed = await run.target.markProgress(admitted, CREATE_ADMISSION_STATE.FAILED);
       assert.ok(failed);
-      run.reportFailedTarget(failed);
+      run.reportTarget(failed, ReplicaStatus.FAILED);
       await run.expire();
       assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED);
       assert.ok(Number.isFinite(run.reservation().released_at));
