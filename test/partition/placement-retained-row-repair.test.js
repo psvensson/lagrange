@@ -1276,8 +1276,12 @@ for (const order of ['clear-before-answer', 'answer-before-clear']) {
       const sends = [];
       let committed;
       let release;
-      const committedReady = new Promise((resolve) => { committed = resolve; });
-      const heldAnswer = new Promise((resolve) => { release = resolve; });
+      const committedReady = new Promise((resolve) => {
+        committed = resolve;
+      });
+      const heldAnswer = new Promise((resolve) => {
+        release = resolve;
+      });
       receiver.repairRetainedPlacement = async (payload) => {
         sends.push(payload);
         const answer = await native(payload);
