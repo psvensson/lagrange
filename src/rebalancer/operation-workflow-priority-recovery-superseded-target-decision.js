@@ -194,4 +194,7 @@ async function resolvePriorityRecoverySupersededTargetDecision({
   });
 }
 
-export {resolvePriorityRecoverySupersededTargetDecision};
+export {
+  PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE,
+  resolvePriorityRecoverySupersededTargetDecision,
+};

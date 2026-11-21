@@ -10,6 +10,8 @@ import {
   isPartitionReplace, isReplaceExemptFromTimeBudget, isReplacePromotionInLog,
   isReplaceRemovalIntentDurable, recordReplaceBudgetDiagnostic,
 } from './operation-workflow-replace-owner.js';
+import {buildElapsedOperationFailureGuard} from
+  './operation-workflow-replace-terminal-admission.js';
 import {observedReplaceTargetStatus} from './operation-workflow-replace-surviving-membership.js';
 import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 const {
@@ -659,23 +661,12 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   }
 
   async failTimedOutOperation(operation, elapsed, stepMetadata) {
-    const partitionAdd = operation.type === OperationType.ADD &&
-      operation.entityType === UNIFIED_SERVICE_TYPE.PARTITION;
-    const replaceSendingCreate = isPartitionReplace(operation) &&
-      operation.workflowStep === WORKFLOW_STEP.SENDING && !isReplacePromotionInLog(operation);
-    const guardCreateAdmission = partitionAdd || replaceSendingCreate;
     const outcome = await this.failOperation(
       operation,
       `Timeout in ${operation.workflowStep} step ` + `after ${elapsed}ms`,
-      {
-        ...(guardCreateAdmission ? {
-          requireCreateAdmissionAbsent: true,
-          deferWhenCreateAdmissionWins: true,
-        } : {}),
-        stepMetadata,
-      },
+      {...buildElapsedOperationFailureGuard(operation), stepMetadata},
     );
-    if (guardCreateAdmission && outcome?.createAdmissionWon === true &&
+    if (outcome?.createAdmissionWon === true &&
         this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation)) {
       return OPERATION_RECONCILE_OUTCOME.WAITING;
     }

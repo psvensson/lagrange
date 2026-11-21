@@ -18,8 +18,12 @@ import {reconcileReservationBackedPendingOperation} from
 import {
   REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
   isPartitionReplace,
-  isTargetFailureDetectorDead,
 } from './operation-workflow-replace-owner.js';
+import {PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE} from
+  './operation-workflow-priority-recovery-superseded-target-decision.js';
+import {buildElapsedOperationFailureGuard} from
+  './operation-workflow-replace-terminal-admission.js';
+
 const {
   FAILURE_LOG_LEVEL, OPERATION_LIFECYCLE_ACTION, OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType, PRIORITY_RECOVERY_BLOCKER_REASON, PRIORITY_RECOVERY_COMPLETION_STATE,
@@ -47,6 +51,14 @@ const {
 } = SHARED;
 
 const HAND_BACK_VERDICT_SEPARATOR = '|';
+const REMOTE_DRAIN_SUPERSESSION_NOT_APPLICABLE = Object.freeze({
+  state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.NOT_APPLICABLE,
+  failure: null,
+});
+const REMOTE_DRAIN_SUPERSESSION_DEFER = Object.freeze({
+  state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
+  failure: null,
+});
 const UNAVAILABLE_ADD_TARGET_OBSERVATION = Object.freeze({
   state: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
   source: STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
@@ -162,59 +174,36 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  async resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
-    operation,
-    priorityRecoveryContext,
+  async resolvePriorityRecoveryRemoteSupersededTargetDrainDecision(
+    operation, priorityRecoveryContext,
   ) {
-    if (
-      !this.isPriorityRecoveryRemoteSupersededTargetDrainCandidate(operation) ||
-      !priorityRecoveryContext ||
-      typeof priorityRecoveryContext !== 'object'
-    ) {
-      return null;
+    if (!this.isPriorityRecoveryRemoteSupersededTargetDrainCandidate(operation) ||
+        typeof operation.targetNodeId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING) {
+      return REMOTE_DRAIN_SUPERSESSION_NOT_APPLICABLE;
     }
-    const decisionSnapshot = priorityRecoveryContext.decisionSnapshot;
-    const blockerReasons = Array.isArray(decisionSnapshot?.blockerReasons) ?
-      decisionSnapshot.blockerReasons :
-      [];
-    if (
-      !blockerReasons.includes(
-        PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
-      )
-    ) {
-      return null;
+    const blockerReasons = priorityRecoveryContext?.decisionSnapshot?.blockerReasons;
+    if (!Array.isArray(blockerReasons) ||
+        !blockerReasons.includes(PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED)) {
+      return REMOTE_DRAIN_SUPERSESSION_NOT_APPLICABLE;
     }
-    const targetNodeId = String(
-      operation.targetNodeId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-    ).trim();
-    const eligibleNodeIds = normalizeNodeIdList(
-      priorityRecoveryContext.effectiveEligibleNodeIds,
-    );
-    if (
-      targetNodeId.length === 0 ||
-      eligibleNodeIds.length === 0 ||
-      eligibleNodeIds.includes(targetNodeId)
-    ) {
-      return null;
+    const targetNodeId = operation.targetNodeId.trim();
+    const eligibleNodeIds = normalizeNodeIdList(priorityRecoveryContext.effectiveEligibleNodeIds);
+    if (!targetNodeId || eligibleNodeIds.length === 0 || eligibleNodeIds.includes(targetNodeId)) {
+      return REMOTE_DRAIN_SUPERSESSION_NOT_APPLICABLE;
     }
     const targetObservation = await this.observePriorityRecoveryTarget(operation);
     const targetState = resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
-      operation,
-      targetObservation,
+      operation, targetObservation,
     });
-    if (
-      targetState !== PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED &&
-      targetState !==
-        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.OBSERVED_NONMATERIALIZED
-    ) {
-      return null;
+    if (targetState !== PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED &&
+        targetState !== PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.OBSERVED_NONMATERIALIZED) {
+      return REMOTE_DRAIN_SUPERSESSION_DEFER;
     }
-    return this.buildPriorityRecoverySupersededTargetFailure(
-      operation,
-      targetNodeId,
-      eligibleNodeIds,
-      targetObservation,
-    );
+    return Object.freeze({
+      state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL,
+      failure: this.buildPriorityRecoverySupersededTargetFailure(
+        operation, targetNodeId, eligibleNodeIds, targetObservation),
+    });
   }
 
   extractAddDrainOperationIdentity(operation) {
@@ -617,11 +606,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation, planningSnapshot);
     const completion = this.buildPriorityRecoveryCompletionForOperation(
       operation, planningSnapshot) || priorityRecoveryContext?.completion || null;
-    const supersededTargetFailure =
-      await this.resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
-        operation, priorityRecoveryContext);
-    const supersededTargetState = supersededTargetFailure ?
-      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET : null;
+    const supersession = await this.resolvePriorityRecoveryRemoteSupersededTargetDrainDecision(
+      operation, priorityRecoveryContext);
+    const supersededTargetState =
+      supersession.state === PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL ?
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET : null;
     const completionState = completion?.state ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE;
     const sourceSnapshot = supersededTargetState ?
@@ -650,7 +639,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       sourceReplicaId: sourceSnapshot.sourceReplicaId,
       sourceObservationState: sourceSnapshot.observationState,
       sourceLifecycleStatus: sourceSnapshot.lifecycleStatus,
-      supersededTargetFailure,
+      supersededTargetFailure: supersession.failure,
     });
   }
 
@@ -671,6 +660,25 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         ownerState: drainSnapshot?.ownerState || null,
       },
     );
+  }
+
+  async settleStalePriorityRecoveryDrain(operation, ownerState) {
+    const confirmedTargetDeath = this.isReplaceDrainOwnerUnavailableWithDeadTarget(
+      operation,
+      {remoteOwnerUnavailable: ownerState ===
+        PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED},
+    );
+    const error = confirmedTargetDeath ? REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED :
+      OPERATION_WORKFLOW_OWNER_LITERAL
+        .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE;
+    const guard = confirmedTargetDeath ? null : buildElapsedOperationFailureGuard(operation);
+    const outcome = await this.failOperation(
+      operation, error, {logLevel: FAILURE_LOG_LEVEL.WARN, ...guard},
+    );
+    if (outcome?.createAdmissionWon === true) {
+      this.retainGuardedCreateAdmission(operation, outcome.createAdmissionOperation);
+    }
+    return isTerminalTransitionOutcomeSettled(outcome);
   }
 
   async reconcilePriorityRecoveryOperationDrain(
@@ -717,19 +725,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation,
         resolvedDrainSnapshot,
       );
-      return isTerminalTransitionOutcomeSettled(
-        await this.failOperation(
-          operation,
-          // R-1c names its own settlement; step-age staleness before the
-          // intent keeps the drain's message.
-          isPartitionReplace(operation) &&
-            isTargetFailureDetectorDead(this, operation) ?
-            REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED :
-            OPERATION_WORKFLOW_OWNER_LITERAL
-              .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
-          {logLevel: FAILURE_LOG_LEVEL.WARN},
-        ),
-      );
+      return this.settleStalePriorityRecoveryDrain(operation, resolvedDrainSnapshot.ownerState);
     }
     if (
       resolvedDrainSnapshot.action !==

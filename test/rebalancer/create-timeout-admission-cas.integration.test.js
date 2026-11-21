@@ -17,6 +17,8 @@ import {
   ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as DRAIN} from
+  '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {OPERATION_RECONCILE_OUTCOME} from
   '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildFailedCreateCleanupToken} from '../../src/rebalancer/failed-create-cleanup-token.js';
@@ -34,6 +36,8 @@ import {
 } from '../partition/placement-admission-fixture.js';
 import {readLeaderBootstrapStamp} from '../raft/raft-rs-backend/founding-growth-test-support.js';
 import {PartitionNodeCluster} from '../raft/raft-rs-backend/partition-node-cluster.js';
+import {buildPriorityDrainReadinessService} from
+  './rebalance-coordinator-stopping-reconcile-fixtures.js';
 import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {
   createCoordinatorSqlStore, createMockCache, createMockControlPlaneSystemTableGateway,
@@ -42,8 +46,7 @@ import {
 
 const OPERATION_ID = 'op-create-timeout-admission';
 const PARTITION_ID = 'create-timeout-race-p1';
-const REPLICA_ID = `${PARTITION_ID}-r2`;
-const SOURCE_ID = `${PARTITION_ID}-r1`;
+const PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const OWNER_BOOT = 101;
 const planner = new ControlPlaneSystemTableGateway();
 
@@ -67,14 +70,17 @@ function createRequest(row) {
 }
 
 async function withExpiredStep(measure, {
-  step = WORKFLOW_STEP.SENDING, sourceStamp = null,
+  step = WORKFLOW_STEP.SENDING, sourceStamp = null, partitionId = PARTITION_ID,
+  nodeId = NODE.A, controlPlaneReadinessService,
 } = {}) {
+  const sourceId = `${partitionId}-r1`;
+  const replicaId = `${partitionId}-r2`;
   await onLedgerLeader(async (leader) => {
     const source = sourceStamp ? {
-      service_id: SOURCE_ID, replica_id: SOURCE_ID, node_id: NODE.A,
-      partition_id: PARTITION_ID, group_id: null, service_type: SERVICE_TYPE.PARTITION,
+      service_id: sourceId, replica_id: sourceId, node_id: NODE.A,
+      partition_id: partitionId, group_id: null, service_type: SERVICE_TYPE.PARTITION,
       status: ReplicaStatus.ACTIVE, raft_role: RAFT_ROLE.LEADER,
-      address: `${NODE.A}/partition/${SOURCE_ID}`,
+      address: `${NODE.A}/partition/${sourceId}`,
     } : null;
     const cache = createMockCache({services: source ? [source] : []});
     const otherTables = createCoordinatorSqlStore(cache);
@@ -117,7 +123,8 @@ async function withExpiredStep(measure, {
     installCommittedOperationMutationFixture(gateway);
     gateway.updateSystemTableRow = gateway.cdcIntegrationService.updateSystemTableRow;
     const coordinator = createTestCoordinator({
-      nodeId: NODE.A, systemTableCache: cache, sqlQueryEngine: sql,
+      nodeId, systemTableCache: cache, sqlQueryEngine: sql,
+      ...(controlPlaneReadinessService ? {controlPlaneReadinessService} : {}),
       controlPlaneSystemTableGateway: gateway,
     });
     const owner = coordinator.workflowOwner;
@@ -126,20 +133,20 @@ async function withExpiredStep(measure, {
     });
     try {
       const now = Date.now();
-      const elapsedMs = owner.getTimeoutForStep(step, {partitionId: PARTITION_ID}) + 1;
+      const elapsedMs = owner.getTimeoutForStep(step, {partitionId}) + 1;
       assert.ok(elapsedMs < TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS);
       const startedAt = now - elapsedMs;
       const first = {step, timestamp: startedAt};
       if (sourceStamp) {
-        first[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] = SOURCE_ID;
+        first[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] = sourceId;
         first[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] = sourceStamp;
-        first[OPERATION_METADATA_KEY.REPLICA_IDS] = [SOURCE_ID, REPLICA_ID];
+        first[OPERATION_METADATA_KEY.REPLICA_IDS] = [sourceId, replicaId];
         first[OPERATION_METADATA_KEY.PEER_ADDRESSES] = [source.address];
       }
       const initial = {
-        operation_id: OPERATION_ID, partition_id: PARTITION_ID, replica_id: REPLICA_ID,
+        operation_id: OPERATION_ID, partition_id: partitionId, replica_id: replicaId,
         type: sourceStamp ? OperationType.REPLACE : OperationType.ADD,
-        entity_type: SERVICE_TYPE.PARTITION, entity_id: PARTITION_ID,
+        entity_type: SERVICE_TYPE.PARTITION, entity_id: partitionId,
         source_node_id: NODE.A, target_node_id: NODE.B, status: WORKFLOW_STEP_TO_STATUS[step],
         workflow_step: step, created_at: startedAt, updated_at: startedAt, completed_at: null,
         steps_history: JSON.stringify([first]),
@@ -160,14 +167,24 @@ async function withExpiredStep(measure, {
       const request = createRequest(row());
       await measure({
         owner, target, request, row, reservation, failures, failWrites, operation,
+        async drain() {
+          const current = operation();
+          const snapshot = await owner.buildPriorityRecoveryOperationDrainSnapshot(current);
+          assert.equal(snapshot.action,
+            DRAIN.OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE,
+            JSON.stringify(snapshot));
+          assert.equal(snapshot.ownerAction,
+            DRAIN.PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE);
+          return owner.reconcilePriorityRecoveryOperationDrain(current, snapshot);
+        },
         expire: () => owner.reconcileTimeoutOperation(operation(), now),
         interceptFailureWrite: (intercept) => {
           nextFailureWrite = intercept;
         },
         reportTarget(evidence, status) {
           cache.upsert(SYSTEM_TABLE_NAME.SERVICES, {
-            service_id: REPLICA_ID, replica_id: REPLICA_ID, node_id: NODE.B,
-            partition_id: PARTITION_ID, group_id: null, service_type: SERVICE_TYPE.PARTITION,
+            service_id: replicaId, replica_id: replicaId, node_id: NODE.B,
+            partition_id: partitionId, group_id: null, service_type: SERVICE_TYPE.PARTITION,
             status, previous_state: ReplicaStatus.CREATING, raft_role: RAFT_ROLE.LEADER,
             created_at: evidence.replicaCreatedAt, state_entered_at: Date.now(),
             cleanup_token: status === ReplicaStatus.FAILED ?
@@ -178,6 +195,7 @@ async function withExpiredStep(measure, {
       });
     } finally {
       try {
+        owner.clearCreatedOperationHandoffRetry(OPERATION_ID);
         await coordinator.shutdown();
       } finally {
         otherTables.suspend();
@@ -305,23 +323,25 @@ function admissionRequestOf(payload) {
   };
 }
 
-function assertSourceVoter(cluster) {
-  const source = cluster.node(SOURCE_ID).readStatus();
+function assertSourceVoter(cluster, sourceId) {
+  const source = cluster.node(sourceId).readStatus();
   assert.equal(source.role, RAFT_ROLE.LEADER);
   assert.ok(source.confState.voters.includes(source.peerId), 'the source remains a native voter');
 }
 
-async function withHeldReplaceCreate(measure) {
+async function withHeldReplaceCreate(measure, setup = {}) {
+  const {partitionId = PARTITION_ID} = setup;
+  const sourceId = `${partitionId}-r1`;
   const cluster = new PartitionNodeCluster({
-    partitionId: PARTITION_ID, replicaIds: [SOURCE_ID], founderNodeIds: {[SOURCE_ID]: NODE.A},
+    partitionId, replicaIds: [sourceId], founderNodeIds: {[sourceId]: NODE.A},
   });
   try {
-    cluster.node(SOURCE_ID).campaign();
+    cluster.node(sourceId).campaign();
     assert.ok(cluster.settle(() => {
-      const status = cluster.node(SOURCE_ID).readStatus();
+      const status = cluster.node(sourceId).readStatus();
       return status.role === RAFT_ROLE.LEADER && status.appliedIndex > 0;
     }), 'the native source elected and committed');
-    const sourceStamp = readLeaderBootstrapStamp(cluster, SOURCE_ID);
+    const sourceStamp = readLeaderBootstrapStamp(cluster, sourceId);
     await withExpiredStep(async (run) => {
       const delivered = Promise.withResolvers();
       const reply = Promise.withResolvers();
@@ -338,16 +358,16 @@ async function withHeldReplaceCreate(measure) {
           assert.fail(`the sender returned before delivering held CREATE: ${JSON.stringify(result)}`);
         })]);
         assert.deepEqual(request, run.request, 'the receiver consumes the actual dispatch tuple');
-        assert.equal(run.operation().sourceReplicaId, SOURCE_ID);
-        assertSourceVoter(cluster);
+        assert.equal(run.operation().sourceReplicaId, sourceId);
+        assertSourceVoter(cluster, sourceId);
         await measure({...run, request, execution, reply: reply.resolve});
-        assert.equal(run.operation().sourceReplicaId, SOURCE_ID);
-        assertSourceVoter(cluster);
+        assert.equal(run.operation().sourceReplicaId, sourceId);
+        assertSourceVoter(cluster, sourceId);
       } finally {
         reply.resolve({status: ReplicaOperationResponseStatus.ERROR});
         await execution;
       }
-    }, {sourceStamp});
+    }, {...setup, sourceStamp});
   } finally {
     cluster.dispose();
   }
@@ -436,3 +456,59 @@ test('a positively claimed pre-remove REPLACE target failure settles with the so
       assert.equal((await run.execution).success, false);
     });
   });
+
+const priorityDrains = [
+  {type: OperationType.ADD, fixture: withExpiredStep, nodeId: NODE.A},
+  {type: OperationType.REPLACE, fixture: withHeldReplaceCreate, nodeId: NODE.B},
+];
+
+for (const {type, fixture, nodeId} of priorityDrains) {
+  const setup = {
+    partitionId: PRIORITY_PARTITION_ID,
+    nodeId,
+    controlPlaneReadinessService: buildPriorityDrainReadinessService(
+      PRIORITY_PARTITION_ID, {readyNodeIds: [NODE.A, NODE.B, NODE.C]}),
+  };
+
+  test(`priority ${type} age-only drain yields to a CREATE admitted just before apply`,
+    async () => {
+      await fixture(async (run) => {
+        let admitted;
+        run.interceptFailureWrite(async (commit) => {
+          assert.equal(run.row().workflow_step, WORKFLOW_STEP.SENDING);
+          assert.equal(run.row().create_admission_state, null);
+          admitted = await run.target.claim(run.request);
+          return commit();
+        });
+        const settled = await run.drain();
+        assert.ok(admitted, 'the exact receiver admission won the pre-apply race');
+        assertRetained(run, admitted);
+        assert.equal(settled, false);
+        assert.equal(run.failWrites.length, 1);
+        assert.equal(run.failWrites[0].whereClause.create_admission_state, null);
+        assert.equal(run.owner.observedProgressRetryTimerByOperationId.has(OPERATION_ID), true);
+        assert.equal(run.owner.terminalTransitionRepairStateByOperationId.has(OPERATION_ID), false);
+        if (run.reply) {
+          run.reply({status: ReplicaOperationResponseStatus.INITIATED});
+          assert.equal((await run.execution).success, true);
+        }
+      }, setup);
+    });
+
+  test(`priority ${type} age-only drain that commits first rejects late CREATE`, async () => {
+    await fixture(async (run) => {
+      assert.equal(await run.drain(), true);
+      assert.equal(run.row().workflow_step, WORKFLOW_STEP.FAILED);
+      assert.ok(Number.isFinite(run.reservation().released_at));
+      assert.equal(run.failures.length, 1);
+      await assert.rejects(run.target.claim(run.request),
+        {code: CREATE_ADMISSION_ERROR_CODE.REFUSED_TERMINAL});
+      assert.equal(run.row().create_admission_state, null);
+      if (run.reply) {
+        run.reply({status: ReplicaOperationResponseStatus.ERROR,
+          error: CREATE_ADMISSION_ERROR_CODE.REFUSED_TERMINAL});
+        assert.equal((await run.execution).success, false);
+      }
+    }, setup);
+  });
+}

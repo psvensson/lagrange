@@ -6,6 +6,8 @@ import {
   armTerminalTransitionRepair, runTerminalTransitionRepairAttempt,
   TERMINAL_TRANSITION_REPAIR_CAUSE,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
+import {PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE} from
+  '../../src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js';
 import {OPERATION_RECONCILE_OUTCOME} from '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
@@ -744,7 +746,7 @@ test('priority superseded-target failure requires an exact authoritative observa
   };
   const decide = () => owner.getPriorityRecoverySupersededTargetFailureFromContext(
     operation, priorityContext);
-  const decideRemotely = () => owner.resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
+  const decideRemotely = () => owner.resolvePriorityRecoveryRemoteSupersededTargetDrainDecision(
     operation, priorityContext);
   const clockBase = Date.now();
   owner.timeSource = {now: () => clockBase + 3_600_000};
@@ -753,12 +755,16 @@ test('priority superseded-target failure requires an exact authoritative observa
   const staleState = PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.RETIREMENT_UNPROVEN_STALE;
   const restoreServicesRead = interruptServicesRead(fixture);
   t.equal(await decide(), null, 'unavailable target authority defers supersession');
-  t.equal(await decideRemotely(), null, 'remote supersession also defers');
+  t.equal((await decideRemotely()).state,
+    PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
+    'remote supersession also defers');
   t.not((await staleDrainSource()).state, staleState,
     'unavailable target authority cannot infer stale, unmaterialized failure');
   restoreServicesRead();
   t.match((await decide())?.error, /eligible cohort/i, 'genuine absence still permits supersession');
-  t.match((await decideRemotely())?.error, /eligible cohort/i, 'remote drain accepts genuine absence');
+  const remoteAbsent = await decideRemotely();
+  t.equal(remoteAbsent.state, PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL);
+  t.match(remoteAbsent.failure.error, /eligible cohort/i, 'remote drain accepts genuine absence');
   t.equal((await staleDrainSource()).state, staleState, 'genuine absence can be stale');
   const observeReplica = owner.repository.getActualReplicaObservation.bind(owner.repository);
   owner.repository.getActualReplicaObservation = async (...args) => ({
@@ -766,7 +772,9 @@ test('priority superseded-target failure requires an exact authoritative observa
     lifecycleStatus: ReplicaStatus.ACTIVE,
   });
   t.equal(await decide(), null, 'an ABSENT answer carrying ACTIVE is unavailable');
-  t.equal(await decideRemotely(), null, 'remote supersession rejects contradictory ABSENT');
+  t.equal((await decideRemotely()).state,
+    PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
+    'remote supersession rejects contradictory ABSENT');
   owner.repository.getActualReplicaObservation = observeReplica;
 
   const now = Date.now();
@@ -786,7 +794,9 @@ test('priority superseded-target failure requires an exact authoritative observa
   });
   t.equal(inserted.success, true);
   t.equal(await decide(), null, 'a materialized SQL target defers despite an empty cache');
-  t.equal(await decideRemotely(), null, 'remote drain defers a materialized SQL target');
+  t.equal((await decideRemotely()).state,
+    PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
+    'remote drain defers a materialized SQL target');
   t.not((await staleDrainSource()).state, staleState,
     'a materialized SQL target cannot enter the stale-target failure lane');
 });

@@ -1,4 +1,6 @@
 import {observeRemoteReentryAuthority} from './operation-workflow-reentry-authority.js';
+import {PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE} from
+  './operation-workflow-priority-recovery-superseded-target-decision.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   PRIORITY_RECOVERY_OPERATION_OWNER_EFFECT_EXECUTION,
@@ -714,13 +716,10 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
   const completion =
     priorityRecoveryContext.completion ||
     null;
-  const supersededTargetFailure =
-    await owner.resolvePriorityRecoveryRemoteSupersededTargetDrainFailure(
-      operation,
-      priorityRecoveryContext,
-    );
+  const supersession = await owner.resolvePriorityRecoveryRemoteSupersededTargetDrainDecision(
+    operation, priorityRecoveryContext);
   const supersededTargetState =
-    supersededTargetFailure ?
+    supersession.state === PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL ?
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET :
       null;
   const completionState =
@@ -779,7 +778,7 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
     sourceReplicaId: sourceSnapshot.sourceReplicaId,
     sourceObservationState: sourceSnapshot.observationState,
     sourceLifecycleStatus: sourceSnapshot.lifecycleStatus,
-    supersededTargetFailure,
+    supersededTargetFailure: supersession.failure,
   });
 }
 

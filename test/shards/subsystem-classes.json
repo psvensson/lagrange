@@ -28,7 +28,7 @@
   "censusSize": 2713,
   "digest": "fnv1a32-1220ab5d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-85703c3e",
+  "observationDigest": "fnv1a32-c4008419",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18364,10 +18364,12 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/operation-workflow-reconcile-outcome.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/operation-workflow-terminal-transition-repair.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "src/transport/transport-semantic-outcome.js",
+        "test/rebalancer/rebalance-coordinator-stopping-reconcile-fixtures.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -19912,6 +19914,7 @@
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/rebalance-coordinator.js",
         "test/rebalancer/rebalance-coordinator-stopping-reconcile-fixtures.js"
