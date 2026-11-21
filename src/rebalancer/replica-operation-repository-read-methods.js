@@ -7,6 +7,8 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
 import {
   assignReplicaOperationRepositoryIncompleteReadMethods,
 } from './replica-operation-repository-incomplete-read-methods.js';
+import {stableSerialize} from
+  '../control-plane/control-plane-system-table-gateway-normalizers.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -235,7 +237,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
 
     /**
    * Resolve a fairness key for replica_operations reads from the declared
-   * repository query shape.
+   * statement and complete parameter tuple. Explicit gateway keys replace
+   * the SQL and parameters in the gateway request identity.
    * @param {string} sql
    * @param {Array} params
    * @return {string|null}
@@ -245,32 +248,31 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       if (sql === SQL.SELECT_OPERATION_BY_ID) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_READ_BY_ID_COALESCING_KEY_PREFIX,
-          params[0],
+          params,
         );
       }
       if (sql === SQL.SELECT_INCOMPLETE_OPERATIONS) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_OWNER_READ_COALESCING_KEY_PREFIX,
-          this.nodeId,
+          params,
         );
       }
       if (sql === SQL.SELECT_OPERATIONS_BY_ENTITY) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX,
-          params[1],
+          params,
         );
       }
       if (sql === SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX,
-          params[0],
-          params[1],
+          params,
         );
       }
       if (sql === SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE) {
         return this.buildReplicaOperationReadCoalescingKey(
           REPLICA_OPERATION_MEMBERSHIP_LANE_READ_COALESCING_KEY_PREFIX,
-          params[0],
+          params,
         );
       }
       return null;
@@ -278,24 +280,14 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
 
     /**
    * @param {string} prefix
-   * @param {...string} values
-   * @return {string|null}
+   * @param {Array} params
+   * @return {string}
    * @private
    */
-    buildReplicaOperationReadCoalescingKey(prefix, ...values) {
-      const normalizedValues = values.filter((value) => {
-        return typeof value === 'string' && value.length > 0;
-      });
-      if (
-        typeof prefix !== 'string' ||
-        prefix.length === 0 ||
-        normalizedValues.length === 0
-      ) {
-        return null;
-      }
+    buildReplicaOperationReadCoalescingKey(prefix, params) {
       return [
         prefix,
-        ...normalizedValues,
+        stableSerialize(params),
       ].join(REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR);
     }
 
