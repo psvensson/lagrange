@@ -102,6 +102,7 @@ const STABLE_SERVICE_ROWS = [
 function createRemoveCoordinator({
   operationRow,
   otherOperationRows = [],
+  beforeRemoveReply,
   serviceRows = [buildActiveServiceRow(), ...STABLE_SERVICE_ROWS],
   removeResponseStatus = ReplicaOperationResponseStatus.INITIATED,
 }) {
@@ -129,6 +130,9 @@ function createRemoveCoordinator({
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
+        if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+          await beforeRemoveReply?.(payload);
+        }
         return buildDeliveryEnvelope({acknowledged: true}, {
           status: payload.type === ReplicaOperationMessageType.REMOVE_REPLICA ?
             removeResponseStatus :
@@ -445,4 +449,50 @@ for (const entityType of [SERVICE_TYPE.PARTITION, SERVICE_TYPE.MESSAGE_GROUP,
         await coordinator.shutdown();
       }
     });
+}
+
+
+for (const boundary of ['before response', 'before SQLite CAS']) {
+  for (const field of ['created_at', 'steps_history']) {
+    test(`the stranded REMOVE reply cannot replace moved ${field} ${boundary}`, async (t) => {
+      const operationRow = buildOperationRow({operationId: ACTIVE_OPERATION_ID,
+        workflowStep: WORKFLOW_STEP.ACTIVE, status: ReplicaStatus.ACTIVE});
+      const changed = field === 'created_at' ? operationRow.created_at + 1 :
+        JSON.stringify([...JSON.parse(operationRow.steps_history),
+          {step: WORKFLOW_STEP.ACTIVE, timestamp: operationRow.updated_at, reason: 'new owner turn'}]);
+      const {coordinator, deliveries} = createRemoveCoordinator({
+        operationRow, removeResponseStatus: ReplicaOperationResponseStatus.NOT_FOUND,
+        ...(boundary === 'before response' ? {beforeRemoveReply: movePreimage} : {}),
+      });
+      const {repository, controlPlaneSystemTableGateway: gateway} = coordinator;
+      let moved;
+      async function movePreimage() {
+        const result = await gateway.submitMutation({tableName: 'replica_operations',
+          operation: 'update', whereClause: {operation_id: ACTIVE_OPERATION_ID},
+          data: {[field]: changed}});
+        t.match(result, {success: true, partitionResult: {affectedRows: 1}},
+          'the independent writer moves the exact live preimage');
+        moved = await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID);
+      }
+      if (boundary === 'before SQLite CAS') {
+        const execute = gateway.executeQuery.bind(gateway);
+        gateway.executeQuery = async (sql, params, options) => {
+          if (!moved && sql.includes('UPDATE replica_operations') &&
+              sql.includes('AND steps_history = ?') && params[1] === WORKFLOW_STEP.STOPPING) {
+            await movePreimage();
+          }
+          return execute(sql, params, options);
+        };
+      }
+      try {
+        await coordinator.reconcileOrphanedOperations();
+        t.equal(removeDeliveries(deliveries).length, 1, 'the old preimage admitted one send');
+        t.equal(moved?.workflowStep, WORKFLOW_STEP.ACTIVE, 'the original row changed after send');
+        t.same(await repository.queryAuthoritativeOperationById(ACTIVE_OPERATION_ID), moved,
+          'the late response cannot write over the changed row or report progress');
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+  }
 }
