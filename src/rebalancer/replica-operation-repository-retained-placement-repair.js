@@ -33,9 +33,9 @@ const READ_BLOCKER_SQL = 'SELECT created_at, workflow_step, completed_at FROM re
 const REPAIR_LOG = Object.freeze({ANSWER_UNAVAILABLE: 'Retained placement repair answer unavailable',
   DEFERRED: 'Retained placement repair deferred'});
 
-// One immutable process-retained envelope per operation; no timer, no durable
-// reconstruction promise. Native ledger commits and committed CDC are triggers,
-// never substitute admission authority. Every retry reaches native apply.
+// One immutable process-retained envelope per operation; no durable reconstruction
+// promise. Owned commits/CDC and read-dependency backoff trigger revalidation,
+// never substitute admission authority. Every write reaches native apply.
 function sameBlocker(row, blocker) {
   return row?.created_at === blocker.createdAt &&
     row.workflow_step === blocker.workflowStep && row.completed_at === blocker.completedAt;
