@@ -1,4 +1,4 @@
-import {NUM} from '../constants/index.js';
+import {NUM, TABLES} from '../constants/index.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {canonicalizeSystemTableRow} from './system-row-normalizers.js';
 import {
@@ -133,7 +133,10 @@ function canonicalizeControlPlaneMutation(
     (operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE)
   ) {
-    const canonicalized = canonicalizeSystemTableRow(tableName, whereClause);
+    // A publication predicate names stored SQLite values. Decoding a complete
+    // data row here would deserialize JSON TEXT and add unrelated defaults.
+    const canonicalized = tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ?
+      whereClause : canonicalizeSystemTableRow(tableName, whereClause);
     if (allowedColumns) {
       whereClause = {};
       for (const [key, value] of Object.entries(canonicalized)) {

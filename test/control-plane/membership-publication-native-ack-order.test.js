@@ -10,6 +10,8 @@ import {CONTROL_PLANE_PUBLICATIONS_SCHEMA} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {isControlPlanePublicationsWriteLeader} from
+  '../../src/control-plane/control-plane-publications-leadership.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {MembershipPublicationCoordinator} from
@@ -68,6 +70,8 @@ function createPublicationWriter(leader, nodeId, nowMs) {
   });
   const coordinator = new MembershipPublicationCoordinator({
     nodeId, now: () => nowMs, controlPlanePublicationsOwner: owner,
+    resolveIsControlPlanePublicationsWriteLeader: () =>
+      isControlPlanePublicationsWriteLeader(null, nodeId, cdc),
   });
   return {cdc, owner, coordinator};
 }
