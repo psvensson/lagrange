@@ -29,6 +29,7 @@ const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
   IN_FLIGHT: 'in-flight',
   NOOP: 'noop',
   OBSERVED_STATE_CHANGED: 'observed-state-changed',
+  OUTCOME_UNKNOWN: 'outcome-unknown',
   OWNER_NOT_READY: 'owner-not-ready',
   REJECTED: 'rejected',
   SKIPPED: 'skipped',
@@ -77,6 +78,10 @@ GATEWAY_OUTCOME_MUTATION_REASON[
 GATEWAY_OUTCOME_MUTATION_REASON[
   CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED
 ] = AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED;
+// Handed over, not proven: neither rejected nor not-ready (its retry is the
+// helper's, as for every non-applied answer).
+GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN] =
+  AUTHORITATIVE_ROW_MUTATION_REASON.OUTCOME_UNKNOWN;
 objectFreeze(GATEWAY_OUTCOME_MUTATION_REASON);
 
 function readOwnRetryAfterMs(result, valid) {

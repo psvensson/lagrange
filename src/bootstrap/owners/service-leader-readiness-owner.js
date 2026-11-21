@@ -35,7 +35,6 @@ import {
 
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
-const LOCAL_STR_ALL_SERVICE_LEADERS_READY = 'All service leaders ready';
 const SEED_PARTITION_LEADERS_WAIT = Object.freeze({
   wait: 'leadershipWaitTimeoutMs',
   awaited: 'any live system partition leader among local partition services',
@@ -591,7 +590,7 @@ class ServiceLeaderReadinessOwner {
 
     if (ready) {
       this.getLogger().info(
-        BOOTSTRAP_API_LOG_MSG.LEADERS_READY || LOCAL_STR_ALL_SERVICE_LEADERS_READY,
+        BOOTSTRAP_API_LOG_MSG.LEADERS_READY,
         {
           seedNodeId: this.getSeedNodeId(),
           elapsedMs: 0,

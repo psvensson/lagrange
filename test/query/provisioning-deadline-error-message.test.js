@@ -88,9 +88,16 @@ test('CREATE TABLE provisioning past its deadline rejects with the typed, non-em
     assert.deepEqual(admissionChecks, [], 'no admission read was spent past the deadline');
   });
 
-test('a managed split child provisioning past its deadline answers the same typed error', () => {
+// The managed split's guard throws the timeout owner's error as built
+// (typed by `errorCode`; only the founding path also copies it to `code`).
+test('a managed split child provisioning past its deadline answers the same named error', () => {
   assert.throws(() => assertChildProvisioningAttempt({timeoutBudget: exhaustedBudget()}, () => 5),
-    assertTypedNonEmptyTimeout);
+    (error) => {
+      assert.equal(error?.errorCode, TIMEOUT_CODE, 'the typed timeout code');
+      assert.equal(error.message, QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DEADLINE_EXHAUSTED,
+        'the one named, non-empty provisioning-deadline error');
+      return true;
+    });
 });
 
 function querySourceFiles(directory) {

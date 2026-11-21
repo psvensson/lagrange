@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 352,
+    "bootstrap-membership": 353,
     "cdc-metadata": 72,
     "cli-tooling": 99,
     "control-plane": 237,
@@ -22,13 +22,13 @@
     "storage-raft": 159,
     "test-infrastructure": 168,
     "transactions": 17,
-    "transport-messaging": 115,
+    "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2733,
-  "digest": "fnv1a32-59935b58",
+  "censusSize": 2735,
+  "digest": "fnv1a32-3ef9c24c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f9f9c188",
+  "observationDigest": "fnv1a32-76fdc285",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -288,6 +288,7 @@
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "bootstrap-membership",
     "test/bootstrap/schema-operations-table-schema.test.js": "bootstrap-membership",
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap-membership",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
@@ -2656,6 +2657,7 @@
     "test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js": "transport-messaging",
+    "test/transport/router-in-process-address-in-use.test.js": "transport-messaging",
     "test/transport/router-server-manager.test.js": "transport-messaging",
     "test/transport/routing-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-client.test.js": "transport-messaging",
@@ -4180,6 +4182,15 @@
     },
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
+      ]
+    },
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
         "test/test-helpers/fresh-seed-activation-public-child.js"
       ]
     },
