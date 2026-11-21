@@ -25,6 +25,8 @@ import {buildFailedCreateCleanupToken} from '../../src/rebalancer/failed-create-
 import {runTerminalTransitionRepairAttempt} from
   '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
+import {REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE} from
+  '../../src/rebalancer/replica-operation-repository.js';
 import {
   buildReplicaCreateAdmissionToken, buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
@@ -231,7 +233,11 @@ async function withExpiredStep(measure, {
             assert.ok(unavailableExactPointReads > previousFaultCount,
               'the gateway returned pressure at the exact operation key');
             assert.equal(observation?.operation, null, 'the sweep point read returned no operation');
-            if (strictPointRead) assert.equal(observation?.deferredOutcome?.deferRetry, true);
+            if (strictPointRead) {
+              assert.equal(observation?.deferredOutcome?.confirmationState,
+                REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED);
+              assert.equal(observation.deferredOutcome.operationId, OPERATION_ID);
+            }
           } finally {
             repository.getOperationByIdVisibilityObservation = observeVisibility;
             repository.queryAuthoritativeOperationVisibilityObservation = observeAuthority;
