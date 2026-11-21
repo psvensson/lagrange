@@ -413,6 +413,8 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     ) {
       return false;
     }
+    const expectedTimeoutHandle =
+      this.observedProgressRetryTimerByOperationId.get(operationId)?.timeoutHandle;
     const visibilityObservation =
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
@@ -426,7 +428,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     const routeAction =
       this.resolveObservedProgressOperationRouteAction(routeEvidence);
     if (routeAction === OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.SKIP) {
-      this.clearObservedProgressRetry(operationId);
+      this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
       return false;
     }
     if (
@@ -434,13 +436,13 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.WAKE_REMOTE_OWNER
     ) {
       const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
-      this.clearObservedProgressRetry(operationId);
+      this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
       return woken;
     }
     const progressed = await this.reconcileOperationLifecycle(operation, {
       cause: 'observed_progress',
     });
-    this.clearObservedProgressRetry(operationId);
+    this.clearObservedProgressRetry(operationId, {expectedTimeoutHandle});
     return progressed;
   }
 

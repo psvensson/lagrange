@@ -18,6 +18,8 @@ const {
   classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const EXPECTED_TIMEOUT_HANDLE = 'expectedTimeoutHandle';
+
 const OBSERVED_PROGRESS_RETRY_KIND = Object.freeze({
   OBSERVED_PROGRESS: 'observed_progress',
   DELIVERED_CREATE_PROGRESS: 'delivered_create_progress',
@@ -75,7 +77,8 @@ function withObservedProgressRetention(Base) {
     clearObservedProgressRetry(operationId, options = {}) {
       const retryEntry =
         this.observedProgressRetryTimerByOperationId.get(operationId);
-      if (!retryEntry) {
+      if (!retryEntry || (Object.hasOwn(options, EXPECTED_TIMEOUT_HANDLE) &&
+          retryEntry.timeoutHandle !== options.expectedTimeoutHandle)) {
         return;
       }
       if (
@@ -152,20 +155,16 @@ function withObservedProgressRetention(Base) {
     }
 
     mergeObservedProgressRetryEvidence(existing, incoming) {
-      if (
-        incoming.kind !==
-          OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS
-      ) {
-        return;
-      }
-      existing.kind = incoming.kind;
-      existing.operationSnapshot = this.cloneOperationSnapshot(
-        incoming.operationSnapshot || existing.operationSnapshot,
-      );
       if (Number.isFinite(incoming.deadlineMs)) {
         existing.deadlineMs = Number.isFinite(existing.deadlineMs) ?
           Math.min(existing.deadlineMs, incoming.deadlineMs) :
           incoming.deadlineMs;
+      }
+      if (incoming.kind === OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS) {
+        existing.kind = incoming.kind;
+        existing.operationSnapshot = this.cloneOperationSnapshot(
+          incoming.operationSnapshot || existing.operationSnapshot,
+        );
       }
     }
 
@@ -198,6 +197,19 @@ function withObservedProgressRetention(Base) {
         tableName,
         cacheOperation,
         delayMs,
+      });
+    }
+
+    scheduleActiveReplicaHandoffRetry(operation) {
+      const deadlineMs = operation.createdAt + TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+      const remainingMs = deadlineMs - this.resolveTimeoutCheckNowMs();
+      if (!Number.isFinite(remainingMs) || remainingMs <= 0) return false;
+      return this.armObservedProgressRetry({
+        operationId: operation.operationId,
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        cacheOperation: OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+        delayMs: Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs),
+        deadlineMs,
       });
     }
 
@@ -363,11 +375,17 @@ function withObservedProgressRetention(Base) {
       ) {
         this.rearmDeliveredCreateProgress(retryEntry);
       } else if (this.isInitialized) {
-        this.scheduleObservedProgressRetry(
+        const remainingMs = Number.isFinite(retryEntry.deadlineMs) ?
+          retryEntry.deadlineMs - this.resolveTimeoutCheckNowMs() :
+          OBSERVED_PROGRESS_RETRY_DELAY_MS;
+        if (remainingMs <= 0) return;
+        this.armObservedProgressRetry({
           operationId,
-          retryEntry.tableName,
-          retryEntry.cacheOperation,
-        );
+          tableName: retryEntry.tableName,
+          cacheOperation: retryEntry.cacheOperation,
+          delayMs: Math.min(OBSERVED_PROGRESS_RETRY_DELAY_MS, remainingMs),
+          deadlineMs: retryEntry.deadlineMs,
+        });
       }
     }
   };

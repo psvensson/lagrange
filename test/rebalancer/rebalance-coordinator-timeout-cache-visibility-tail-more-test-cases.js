@@ -1,3 +1,4 @@
+import {CDC_OPERATION} from '../../src/constants/index.js';
 import {
   createCommittedTimeoutLedger, createTimeoutVisibilityCache,
 } from './rebalance-coordinator-timeout-cache-visibility-fixture.js';
@@ -535,14 +536,18 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       };
       const gatewayCalls = [];
 
-      const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow]);
+      const notifications = [];
+      const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow], {
+        scheduleCacheChangeNotification: (notify) => notifications.push(notify),
+      });
+      const authorityRow = {...observedServiceRow, updated_at: nowMs, state_entered_at: nowMs};
       let activeAuthority = false;
       const ledger = createCommittedTimeoutLedger(operationRow, {
         cache,
         readServices(sql, params) {
           gatewayCalls.push({sql, params});
           const rows = activeAuthority && params[0] === observedServiceRow.service_id ?
-            [{...observedServiceRow, updated_at: nowMs}] : [];
+            [authorityRow] : [];
           return {success: true, rows, rowSetComplete: rows.length === 1};
         },
       });
@@ -563,6 +568,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           },
         },
         enableTimeouts: false,
+        setTimeoutFn: (callback) => ({callback}),
+        clearTimeoutFn() {},
       });
 
       coordinator.initialize();
@@ -577,17 +584,30 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         t.same(ledger.terminalChanges, [], 'incomplete services proof cannot fail the ADD');
         t.ok(gatewayCalls.some(({params}) => params[0] === observedServiceRow.service_id),
           'the authoritative services lookup targets exactly the nominated replica');
-        const retry = owner.observedProgressRetryTimerByOperationId.get(operationId);
+        const pendingRetry = () => owner.observedProgressRetryTimerByOperationId.get(operationId);
+        const retry = pendingRetry();
         t.ok(retry, 'cache ACTIVE preserves the existing owner wake');
+        let consumed = retry;
+        for (let turn = 0; turn < 2 && consumed; turn++) {
+          await consumed.timeoutHandle.callback();
+          const successor = pendingRetry();
+          t.ok(successor && successor.timeoutHandle !== consumed.timeoutHandle,
+            'each unavailable turn retains a distinct successor wake');
+          t.equal(ledger.read().workflow_step, 'CREATING');
+          consumed = successor;
+        }
 
         activeAuthority = true;
-        owner.clearTimeoutFn(retry.timeoutHandle);
-        await owner.runObservedProgressRetry(operationId, retry.timeoutHandle);
+        cache.applySystemTableChange('services', CDC_OPERATION.UPSERT, authorityRow);
+        for (const deliver of notifications.splice(0)) deliver();
+        await owner.operationWorkflowRunExclusive(
+          owner.getOperationOwnerSingleFlightKey(operationId), () => null);
         const committed = ledger.read();
-        t.equal(committed.workflow_step, 'ACTIVE', 'the retained wake completes the original ADD');
+        t.equal(committed.workflow_step, 'ACTIVE', 'the real services CDC wakes and completes the original ADD');
         t.equal(committed.status, 'active');
-        t.equal(cache.get('services', observedServiceRow.service_id)?.updated_at, nowMs,
-          'the production CDC handoff aligned the exact services row');
+        const aligned = cache.get('services', observedServiceRow.service_id);
+        t.match(aligned, authorityRow,
+          'the production CDC handoff observes the exact target and its new lifecycle version');
         t.equal(owner.observedProgressRetryTimerByOperationId.has(operationId), false);
       } finally {
         try {
@@ -894,14 +914,18 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
       };
       const gatewayCalls = [];
 
-      const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow]);
+      const notifications = [];
+      const cache = createTimeoutVisibilityCache(operationRow, [observedServiceRow], {
+        scheduleCacheChangeNotification: (notify) => notifications.push(notify),
+      });
+      const authorityRow = {...observedServiceRow, updated_at: nowMs, state_entered_at: nowMs};
       let activeAuthority = false;
       const ledger = createCommittedTimeoutLedger(operationRow, {
         cache,
         readServices(sql, params) {
           gatewayCalls.push({sql, params});
           const rows = activeAuthority && params[0] === observedServiceRow.service_id ?
-            [{...observedServiceRow, updated_at: nowMs}] : [];
+            [authorityRow] : [];
           return {success: true, rows, rowSetComplete: rows.length === 1};
         },
       });
@@ -922,6 +946,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           },
         },
         enableTimeouts: false,
+        setTimeoutFn: (callback) => ({callback}),
+        clearTimeoutFn() {},
       });
 
       coordinator.initialize();
@@ -940,13 +966,13 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
         t.ok(retry, 'cache ACTIVE preserves the existing owner wake');
 
         activeAuthority = true;
-        owner.clearTimeoutFn(retry.timeoutHandle);
-        await owner.runObservedProgressRetry(operationId, retry.timeoutHandle);
+        await retry.timeoutHandle.callback();
         const committed = ledger.read();
         t.equal(committed.workflow_step, 'ACTIVE', 'the retained wake completes the original ADD');
         t.equal(committed.status, 'active');
-        t.equal(cache.get('services', observedServiceRow.service_id)?.updated_at, nowMs,
-          'the production CDC handoff aligned the exact services row');
+        const aligned = cache.get('services', observedServiceRow.service_id);
+        t.match(aligned, authorityRow,
+          'the production CDC handoff observes the exact target and its new lifecycle version');
         t.equal(owner.observedProgressRetryTimerByOperationId.has(operationId), false);
       } finally {
         try {
